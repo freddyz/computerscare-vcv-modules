@@ -10,11 +10,14 @@
 
 struct ComputerscareRouter : Module {
 	enum ParamIds {
-    SWITCHES,
-	NUM_PARAMS = SWITCHES + 102
+    STEPS_PARAM,
+    MANUAL_CLOCK_PARAM,
+    EDIT_PARAM,
+    ENUMS(SWITCHES,100),
+	NUM_PARAMS
 	};  
 	enum InputIds {
-    	TRG_INPUT,
+		TRG_INPUT,
 		ENUMS(INPUT_JACKS, 10),
 		NUM_INPUTS
 	};
@@ -206,12 +209,14 @@ void ComputerscareRouter::step() {
    }
   }
 
-  if(nextAddressEdit.process(params[SWITCHES + 100].value) ) {
+  if(nextAddressEdit.process(params[EDIT_PARAM].value) ) {
     editAddress = editAddress + 1;
     editAddress = editAddress % numAddresses;
   }
 
-  if(nextAddressRead.process(params[SWITCHES + 101].value) || clockTrigger.process(inputs[TRG_INPUT].value / 2.f)) {
+  if(nextAddressRead.process(params[MANUAL_CLOCK_PARAM].value) || clockTrigger.process(inputs[TRG_INPUT].value / 2.f)) {
+    numAddresses =  (int) clamp(roundf(params[STEPS_PARAM].value /*+ inputs[STEPS_INPUT].value*/), 1.0f, 16.0f);
+
     address = address + 1;
     address = address % numAddresses;
   }
@@ -301,16 +306,27 @@ struct ComputerscareRouterWidget : ModuleWidget {
    }
 	} 
   //address button
- 	 addParam(ParamWidget::create<LEDButton>(Vec(15 , 50), module, ComputerscareRouter::SWITCHES + 9 + 9 * 10 +2, 0.0, 1.0, 0.0)); 
+ 	 addParam(ParamWidget::create<LEDButton>(Vec(15 , 50), module, ComputerscareRouter::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
 
   //editAddress button
- 	 addParam(ParamWidget::create<LEDButton>(Vec(160 , 50), module, ComputerscareRouter::SWITCHES + 9 + 9 * 10 +1, 0.0, 1.0, 0.0)); 
+ 	 addParam(ParamWidget::create<LEDButton>(Vec(160 , 50), module, ComputerscareRouter::EDIT_PARAM, 0.0, 1.0, 0.0)); 
 
   NumberDisplayWidget3 *display = new NumberDisplayWidget3();
   display->box.pos = Vec(40,40);
   display->box.size = Vec(50, 20);
   display->value = &module->address;
   addChild(display);
+
+  NumberDisplayWidget3 *stepsDisplay = new NumberDisplayWidget3();
+  stepsDisplay->box.pos = Vec(40,10);
+  stepsDisplay->box.size = Vec(50, 20);
+  stepsDisplay->value = &module->numAddresses;
+  addChild(stepsDisplay);
+
+  addParam(ParamWidget::create<RoundBlackSnapKnob>(Vec(120,40), module, ComputerscareRouter::STEPS_PARAM, 1.0f, 16.0f, 16.0f));
+
+
+
   addInput(Port::create<InPort>(Vec(20, 40), Port::INPUT, module, ComputerscareRouter::TRG_INPUT));
 
   NumberDisplayWidget3 *displayEdit = new NumberDisplayWidget3();
