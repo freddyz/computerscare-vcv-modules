@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   id="Layer_1"
+   data-name="Layer 1"
+   viewBox="0 0 20 17.32"
+   version="1.1"
+   sodipodi:docname="cs-input-plug.svg"
+   inkscape:version="0.92.2 5c3e80d, 2017-08-06">
+  <metadata
+     id="metadata14">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title>08 Input Plug</dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="1355"
+     inkscape:window-height="802"
+     id="namedview12"
+     showgrid="false"
+     inkscape:zoom="13.625866"
+     inkscape:cx="10"
+     inkscape:cy="8.6599998"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="Input_Plug" />
+  <defs
+     id="defs4">
+    <style
+       id="style2">.cls-1{fill:#245559;}.cls-2{fill:#24c9a6;}</style>
+  </defs>
+  <title
+     id="title6">08 Input Plug</title>
+  <g
+     id="Input_Plug"
+     data-name="Input Plug">
+    <path
+       id="Hexagon"
+       class="cls-1"
+       d="M15,0H5L0,8.66l5,8.66H15l5-8.66ZM10,14.16a5.5,5.5,0,1,1,5.5-5.5A5.51,5.51,0,0,1,10,14.16Z" />
+    <path
+       id="Inner_Circle"
+       data-name="Inner Circle"
+       class="cls-2"
+       d="M10,3.16a5.5,5.5,0,1,0,5.5,5.5A5.51,5.51,0,0,0,10,3.16Zm0,10a4.5,4.5,0,1,1,4.5-4.5A4.51,4.51,0,0,1,10,13.16Z" />
+  </g>
+</svg>
