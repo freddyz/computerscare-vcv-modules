@@ -13,10 +13,10 @@ struct ComputerscareRouter : Module {
     SWITCHES,
 	NUM_PARAMS = SWITCHES + 102
 	};  
-	enum InputIds {		
-		INPUTS,
-    	NUM_INPUTS = INPUTS + 10,
-    	TRG_INPUT
+	enum InputIds {
+    	TRG_INPUT,
+		ENUMS(INPUT_JACKS, 10),
+		NUM_INPUTS
 	};
 	enum OutputIds {
 		OUTPUTS,    
@@ -218,7 +218,7 @@ void ComputerscareRouter::step() {
   // get inputs
   for (int i = 0 ; i < 10 ; i++)
   {
-    input_values[i] = inputs[INPUTS + i].value;
+    input_values[i] = inputs[INPUT_JACKS + i].value;
   }
   
   // add inputs 
@@ -290,7 +290,7 @@ struct ComputerscareRouterWidget : ModuleWidget {
 
 	for (int i = 0 ; i < 10 ; i++)
   {
-	 addInput(Port::create<InPort>(Vec(3, i * row_spacing + top_row), Port::INPUT, module, ComputerscareRouter::INPUTS + i));  
+	 addInput(Port::create<InPort>(Vec(3, i * row_spacing + top_row), Port::INPUT, module, ComputerscareRouter::INPUT_JACKS + i));  
    addOutput(Port::create<InPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), Port::OUTPUT, module, ComputerscareRouter::OUTPUTS + i));
    for(int j = 0 ; j < 10 ; j++ )
    {
