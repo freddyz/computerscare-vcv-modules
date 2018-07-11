@@ -11,6 +11,8 @@
 struct ComputerscareDebug : Module {
 	enum ParamIds {
 		PITCH_PARAM,
+		MANUAL_TRIGGER,
+		MANUAL_CLEAR_TRIGGER,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -39,6 +41,8 @@ struct ComputerscareDebug : Module {
 
 	SchmittTrigger clockTrigger;
 	SchmittTrigger clearTrigger;
+	SchmittTrigger manualClockTrigger;
+  SchmittTrigger manualClearTrigger;
 
 	ComputerscareDebug() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
@@ -52,7 +56,7 @@ struct ComputerscareDebug : Module {
 
 void ComputerscareDebug::step() {
 	std::string thisVal;
-	if (clockTrigger.process(inputs[TRG_INPUT].value / 2.f)) {
+	if (clockTrigger.process(inputs[TRG_INPUT].value / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value)) {
 		//textField->text = inputs[VAL_INPUT].value;
 		//std::stringstream ss;
 		//ss << "Hello, world, " << myInt << niceToSeeYouString;
@@ -77,9 +81,10 @@ void ComputerscareDebug::step() {
 		//thisVal = std::to_string(inputs[VAL_INPUT].value).substr(0,10);
 		strValue = thisVal;
 	}
-	if(clearTrigger.process(inputs[CLR_INPUT].value / 2.f)) {
+	if(clearTrigger.process(inputs[CLR_INPUT].value / 2.f) || manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].value)) {
 		strValue = "";
 	}
+
 
 }
 
@@ -132,10 +137,14 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		//addParam(ParamWidget::create<Davies1900hBlackKnob>(Vec(28, 287), module, ComputerscareDebug::PITCH_PARAM, -3.0, 3.0, 0.0));
 
-		addInput(Port::create<PJ301MPort>(Vec(3, 330), Port::INPUT, module, ComputerscareDebug::TRG_INPUT));
-		addInput(Port::create<PJ301MPort>(Vec(33, 330), Port::INPUT, module, ComputerscareDebug::VAL_INPUT));
-		addInput(Port::create<PJ301MPort>(Vec(63, 330), Port::INPUT, module, ComputerscareDebug::CLR_INPUT));
+		addInput(Port::create<InPort>(Vec(3, 330), Port::INPUT, module, ComputerscareDebug::TRG_INPUT));
+		addInput(Port::create<InPort>(Vec(33, 330), Port::INPUT, module, ComputerscareDebug::VAL_INPUT));
+		addInput(Port::create<InPort>(Vec(63, 330), Port::INPUT, module, ComputerscareDebug::CLR_INPUT));
 	
+		addParam(ParamWidget::create<LEDButton>(Vec(3, 290), module, ComputerscareDebug::MANUAL_TRIGGER, 0.0, 1.0, 0.0));
+		addParam(ParamWidget::create<LEDButton>(Vec(63, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER, 0.0, 1.0, 0.0));
+
+
 		StringDisplayWidget3 *display = new StringDisplayWidget3();
 		  display->box.pos = Vec(1,24);
 		  display->box.size = Vec(88, 250);

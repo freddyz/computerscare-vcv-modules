@@ -11,11 +11,12 @@
 struct ComputerscareRouter : Module {
 	enum ParamIds {
     SWITCHES,
-		NUM_PARAMS = SWITCHES + 102
+	NUM_PARAMS = SWITCHES + 102
 	};  
 	enum InputIds {		
 		INPUTS,
-    NUM_INPUTS = INPUTS + 10
+    	NUM_INPUTS = INPUTS + 10,
+    	TRG_INPUT
 	};
 	enum OutputIds {
 		OUTPUTS,    
@@ -30,7 +31,7 @@ struct ComputerscareRouter : Module {
 
   SchmittTrigger nextAddressRead;
   SchmittTrigger nextAddressEdit;
-
+  SchmittTrigger clockTrigger;
 
   int address = 0;
   int editAddress = 0;
@@ -185,7 +186,7 @@ ComputerscareRouter() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) 
 
 
 void ComputerscareRouter::step() {
-	
+
   for ( int i = 0 ; i < 10 ; i++)
   {
    sums[i] = 0.0;
@@ -205,12 +206,12 @@ void ComputerscareRouter::step() {
    }
   }
 
-  if(nextAddressEdit.process(params[SWITCHES + 100].value)) {
+  if(nextAddressEdit.process(params[SWITCHES + 100].value) ) {
     editAddress = editAddress + 1;
     editAddress = editAddress % numAddresses;
   }
 
-  if(nextAddressRead.process(params[SWITCHES + 101].value)) {
+  if(nextAddressRead.process(params[SWITCHES + 101].value) || clockTrigger.process(inputs[TRG_INPUT].value / 2.f)) {
     address = address + 1;
     address = address % numAddresses;
   }
@@ -310,6 +311,7 @@ struct ComputerscareRouterWidget : ModuleWidget {
   display->box.size = Vec(50, 20);
   display->value = &module->address;
   addChild(display);
+  addInput(Port::create<InPort>(Vec(20, 40), Port::INPUT, module, ComputerscareRouter::TRG_INPUT));
 
   NumberDisplayWidget3 *displayEdit = new NumberDisplayWidget3();
   displayEdit->box.pos = Vec(185,40);
