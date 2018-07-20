@@ -20,6 +20,7 @@ struct ComputerscareRouter : Module {
 	enum InputIds {
 		TRG_INPUT,
 		ENUMS(INPUT_JACKS, 10),
+		RANDOMIZE_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -37,6 +38,7 @@ struct ComputerscareRouter : Module {
   SchmittTrigger nextAddressEdit;
   SchmittTrigger prevAddressEdit;
   SchmittTrigger clockTrigger;
+  SchmittTrigger randomizeTrigger;
 
   int address = 0;
   int editAddress = 0;
@@ -239,19 +241,31 @@ ComputerscareRouter() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) 
     }
 		}  
   } 
-  	void randomize() override;
+  	void onRandomize() override {
+  		randomizePatchMatrix();
+  	}
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
 	// - onSampleRateChange: event triggered by a change of sample rate
 	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
 
-	void makeFarties()
+	void randomizePatchMatrix()
 	{
+		int randomIndex;
 		for (int i = 0; i < 10; i++) 
 		{
+			randomIndex = floor(randomUniform()*10);
+
 			for (int j = 0; j < 10; j++) 
-		{
-			switch_states[editAddress][i][j] =  (randomUniform() > 0.5f);
+			{
+				if(j==randomIndex) 
+					switch_states[editAddress][j][i] = 1;
+				
+				else 
+					switch_states[editAddress][j][i]=0;
+				
+			//fully randomize everything.  a bit intense for its use in patching
+			//switch_states[editAddress][i][j] =  (randomUniform() > 0.5f);
 			}			
 		}	
 
@@ -295,6 +309,9 @@ void ComputerscareRouter::step() {
    }
   }
 
+  if(randomizeTrigger.process(inputs[RANDOMIZE_INPUT].value / 2.f)) {
+  	randomizePatchMatrix();
+  }
   if(nextAddressEdit.process(params[EDIT_PARAM].value) ) {
     editAddress = editAddress + 1;
     editAddress = editAddress % 16;
@@ -313,7 +330,7 @@ void ComputerscareRouter::step() {
     address = address + 1;
     address = address % numAddresses;
   }
-  // get inputs
+
   for (int i = 0 ; i < 10 ; i++)
   {
     input_values[i] = inputs[INPUT_JACKS + i].value;
@@ -351,11 +368,7 @@ struct NumberDisplayWidget3 : TransparentWidget {
   {
     // Background
     NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
-    // NVGcolor StrokeColor = nvgRGB(0x00, 0x47, 0x7e);
-    // nvgBeginPath(vg);
-    // nvgRoundedRect(vg, -1.0, -1.0, box.size.x+2, box.size.y+2, 4.0);
-    // nvgFillColor(vg, StrokeColor);
-    // nvgFill(vg);
+
     nvgBeginPath(vg);
     nvgRoundedRect(vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
     nvgFillColor(vg, backgroundColor);
@@ -390,25 +403,31 @@ struct ComputerscareRouterWidget : ModuleWidget {
 	for (int i = 0 ; i < 10 ; i++)
   {
 	 addInput(Port::create<InPort>(Vec(3, i * row_spacing + top_row), Port::INPUT, module, ComputerscareRouter::INPUT_JACKS + i));  
-   addOutput(Port::create<InPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), Port::OUTPUT, module, ComputerscareRouter::OUTPUTS + i));
-   for(int j = 0 ; j < 10 ; j++ )
-   {
-     addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j, top_row + row_spacing * i), module, ComputerscareRouter::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
-     
-     addChild(ModuleLightWidget::create<LargeLight<GreenLight>>(Vec(35 + column_spacing * j +1.4, top_row + row_spacing * i +1.4 ), module, ComputerscareRouter::SWITCH_LIGHTS  + i + j * 10));
-   	 addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(35 + column_spacing * j + 4.3, top_row + row_spacing * i + 4.3), module, ComputerscareRouter::SWITCH_LIGHTS  + i + j * 10+100));
+   	 addOutput(Port::create<InPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), Port::OUTPUT, module, ComputerscareRouter::OUTPUTS + i));
+	   for(int j = 0 ; j < 10 ; j++ )
+	   {
+	     addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j, top_row + row_spacing * i), module, ComputerscareRouter::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
+	     
+	     addChild(ModuleLightWidget::create<LargeLight<GreenLight>>(Vec(35 + column_spacing * j +1.4, top_row + row_spacing * i +1.4 ), module, ComputerscareRouter::SWITCH_LIGHTS  + i + j * 10));
+	   	 addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(35 + column_spacing * j + 4.3, top_row + row_spacing * i + 4.3), module, ComputerscareRouter::SWITCH_LIGHTS  + i + j * 10+100));
 
-   }
-	} 
+	   }
+		} 
 
 	//clock input
-  addInput(Port::create<InPort>(Vec(15, 12), Port::INPUT, module, ComputerscareRouter::TRG_INPUT));
-  //address button
- addParam(ParamWidget::create<LEDButton>(Vec(19 , 41), module, ComputerscareRouter::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
+  	addInput(Port::create<InPort>(Vec(3, 12), Port::INPUT, module, ComputerscareRouter::TRG_INPUT));
+  	 //manual clock button
+ 	addParam(ParamWidget::create<LEDButton>(Vec(7 , 41), module, ComputerscareRouter::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
 
 
+  	//randomize input
+  	addInput(Port::create<InPort>(Vec(270, 0), Port::INPUT, module, ComputerscareRouter::RANDOMIZE_INPUT));
+  	
+
+
+ 	//active step display
   NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-  display->box.pos = Vec(40,40);
+  display->box.pos = Vec(30,40);
   display->box.size = Vec(50, 20);
   display->value = &module->address;
   addChild(display);
@@ -419,33 +438,29 @@ struct ComputerscareRouterWidget : ModuleWidget {
   stepsDisplay->box.size = Vec(50, 20);
   stepsDisplay->value = &module->numAddresses;
   addChild(stepsDisplay);
-//RoundBlackSnapKnob
+  
+  //number-of-steps dial.   Discrete - 16 positions
   ParamWidget* stepsKnob =  ParamWidget::create<LrgKnob>(Vec(108,30), module, ComputerscareRouter::STEPS_PARAM, 1.0f, 16.0f, 2.0f);
-  //addParam(ParamWidget::create<RoundBlackSnapKnob>(Vec(128,36), module, ComputerscareRouter::STEPS_PARAM, 1.0f, 16.0f, 2.0f));
   addParam(stepsKnob);
+
   //editAddress button
   addParam(ParamWidget::create<LEDButton>(Vec(227 , 41), module, ComputerscareRouter::EDIT_PARAM, 0.0, 1.0, 0.0));
-//editAddressPrevious button
+
+  //editAddressPrevious button
   addParam(ParamWidget::create<LEDButton>(Vec(208 , 41), module, ComputerscareRouter::EDIT_PREV_PARAM, 0.0, 1.0, 0.0));
+  
   // currently editing step #:
   NumberDisplayWidget3 *displayEdit = new NumberDisplayWidget3();
   displayEdit->box.pos = Vec(245,40);
   displayEdit->box.size = Vec(50, 20);
   displayEdit->value = &module->editAddress;
   addChild(displayEdit);
-
-		//addParam(ParamWidget::create<Davies1900hBlackKnob>(Vec(28, 287), module, ComputerscareRouter::PITCH_PARAM, -3.0, 3.0, 0.0));
-
-
-
 	}
 };
-void ComputerscareRouter::randomize() {
-	return;
-}
+
 
 // Specify the Module and ModuleWidget subclass, human-readable
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
 // (found in `include/tags.hpp`) separated by commas.
-Model *modelComputerscareRouter = Model::create<ComputerscareRouter, ComputerscareRouterWidget>("computerscare", "ComputerscareRouter", "Father & Son Router", UTILITY_TAG);
+Model *modelComputerscareRouter = Model::create<ComputerscareRouter, ComputerscareRouterWidget>("computerscare", "computerscare-patch-sequencer", "Father & Son Patch Sequencer", UTILITY_TAG,SEQUENCER_TAG);
