@@ -40,6 +40,9 @@ struct ComputerscarePatchSequencer : Module {
 
   int address = 0;
   int editAddress = 0;
+  int addressPlusOne = 1;
+  int editAddressPlusOne = 1;
+  
   int numAddresses = 2;
   bool switch_states[16][10][10] = 
   {{{0,0,0,0,0,0,0,0,0,0},
@@ -334,6 +337,8 @@ void ComputerscarePatchSequencer::step() {
     address = address + 1;
     address = address % numAddresses;
   }
+  addressPlusOne = address + 1;
+  editAddressPlusOne = editAddress + 1;
 
   for (int i = 0 ; i < 10 ; i++)
   {
@@ -437,7 +442,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   NumberDisplayWidget3 *display = new NumberDisplayWidget3();
   display->box.pos = Vec(30,40);
   display->box.size = Vec(50, 20);
-  display->value = &module->address;
+  display->value = &module->addressPlusOne;
   addChild(display);
 
   // number of steps
@@ -461,7 +466,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   NumberDisplayWidget3 *displayEdit = new NumberDisplayWidget3();
   displayEdit->box.pos = Vec(245,40);
   displayEdit->box.size = Vec(50, 20);
-  displayEdit->value = &module->editAddress;
+  displayEdit->value = &module->editAddressPlusOne;
   addChild(displayEdit);
 	}
 };

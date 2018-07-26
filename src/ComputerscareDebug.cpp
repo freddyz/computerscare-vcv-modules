@@ -30,7 +30,7 @@ struct ComputerscareDebug : Module {
 		NUM_LIGHTS
 	};
 
-	std::string strValue = "inoot";
+	std::string strValue = "";
 
 	float logLines[NUM_LINES] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
