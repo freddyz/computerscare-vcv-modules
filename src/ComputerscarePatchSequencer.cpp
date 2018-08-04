@@ -405,9 +405,9 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   ComputerscarePatchSequencerWidget(ComputerscarePatchSequencer *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscarePatchSequencer.svg")));
 
-  int top_row = 75;
-  int row_spacing = 25; 
-  int column_spacing = 25;
+  int top_row = 70;
+  int row_spacing = 26; 
+  int column_spacing = 26;
 
 	for (int i = 0 ; i < 10 ; i++)
   {
@@ -429,34 +429,32 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
 	//clock input
   	addInput(Port::create<InPort>(Vec(3, 0), Port::INPUT, module, ComputerscarePatchSequencer::TRG_INPUT));
-  	 //manual clock button
+  	
+  	//manual clock button
  	addParam(ParamWidget::create<LEDButton>(Vec(7 , 41), module, ComputerscarePatchSequencer::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
-
 
   	//randomize input
   	addInput(Port::create<InPort>(Vec(270, 0), Port::INPUT, module, ComputerscarePatchSequencer::RANDOMIZE_INPUT));
-  	
 
-
- 	//active step display
+  //active step display
   NumberDisplayWidget3 *display = new NumberDisplayWidget3();
   display->box.pos = Vec(30,40);
   display->box.size = Vec(50, 20);
   display->value = &module->addressPlusOne;
   addChild(display);
 
-  // number of steps
+  // number of steps display
   NumberDisplayWidget3 *stepsDisplay = new NumberDisplayWidget3();
   stepsDisplay->box.pos = Vec(150,40);
   stepsDisplay->box.size = Vec(50, 20);
   stepsDisplay->value = &module->numAddresses;
   addChild(stepsDisplay);
   
-  //number-of-steps dial.   Discrete - 16 positions
+  //number-of-steps dial.   Discrete, 16 positions
   ParamWidget* stepsKnob =  ParamWidget::create<LrgKnob>(Vec(108,30), module, ComputerscarePatchSequencer::STEPS_PARAM, 1.0f, 16.0f, 2.0f);
   addParam(stepsKnob);
 
-  //editAddress button
+  //editAddressNext button
   addParam(ParamWidget::create<LEDButton>(Vec(227 , 41), module, ComputerscarePatchSequencer::EDIT_PARAM, 0.0, 1.0, 0.0));
 
   //editAddressPrevious button
@@ -468,9 +466,8 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   displayEdit->box.size = Vec(50, 20);
   displayEdit->value = &module->editAddressPlusOne;
   addChild(displayEdit);
-	}
+  }
 };
-
 
 // Specify the Module and ModuleWidget subclass, human-readable
 // author name for categorization per plugin, module slug (should never

@@ -36,13 +36,10 @@ struct ComputerscareDebug : Module {
 
 	int lineCounter = 0;
 
-	float phase = 0.0;
-	float blinkPhase = 0.0;
-
 	SchmittTrigger clockTrigger;
 	SchmittTrigger clearTrigger;
 	SchmittTrigger manualClockTrigger;
-  SchmittTrigger manualClearTrigger;
+  	SchmittTrigger manualClearTrigger;
 
 	ComputerscareDebug() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
@@ -57,28 +54,18 @@ struct ComputerscareDebug : Module {
 void ComputerscareDebug::step() {
 	std::string thisVal;
 	if (clockTrigger.process(inputs[TRG_INPUT].value / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value)) {
-		//textField->text = inputs[VAL_INPUT].value;
-		//std::stringstream ss;
-		//ss << "Hello, world, " << myInt << niceToSeeYouString;
-		//std::string s = ss.str();
 		 for( unsigned int a = NUM_LINES-1; a > 0; a = a - 1 )
 		 {
 		 	logLines[a] = logLines[a-1];
-		     //cout << "value of a: " << texts[a] << endl;
 		 }
 		logLines[0] = inputs[VAL_INPUT].value;
 
 		thisVal = std::to_string(logLines[0]).substr(0,10);
 		for( unsigned int a = 1; a < NUM_LINES; a = a + 1 )
 		 {
-		 	//logLines[a] = logLines[a-1];
 		 	thisVal =  thisVal + "\n" + std::to_string(logLines[a]).substr(0,10);
-			//strValue = strValue;
-		     //cout << "value of a: " << texts[a] << endl;
 		 }
 
-			
-		//thisVal = std::to_string(inputs[VAL_INPUT].value).substr(0,10);
 		strValue = thisVal;
 	}
 	if(clearTrigger.process(inputs[CLR_INPUT].value / 2.f) || manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].value)) {
@@ -123,7 +110,6 @@ struct StringDisplayWidget3 : TransparentWidget {
     Vec textPos = Vec(6.0f, 12.0f);   
     NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
     nvgFillColor(vg, textColor);
-   // nvgText(vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
  	nvgTextBox(vg, textPos.x, textPos.y,80,to_display.str().c_str(), NULL);
 
   }
@@ -135,15 +121,12 @@ struct ComputerscareDebugWidget : ModuleWidget {
 	ComputerscareDebugWidget(ComputerscareDebug *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareDebugVectorGradient.svg")));
 
-		//addParam(ParamWidget::create<Davies1900hBlackKnob>(Vec(28, 287), module, ComputerscareDebug::PITCH_PARAM, -3.0, 3.0, 0.0));
-
 		addInput(Port::create<InPort>(Vec(3, 330), Port::INPUT, module, ComputerscareDebug::TRG_INPUT));
 		addInput(Port::create<InPort>(Vec(33, 330), Port::INPUT, module, ComputerscareDebug::VAL_INPUT));
 		addInput(Port::create<InPort>(Vec(63, 330), Port::INPUT, module, ComputerscareDebug::CLR_INPUT));
 	
 		addParam(ParamWidget::create<LEDButton>(Vec(3, 290), module, ComputerscareDebug::MANUAL_TRIGGER, 0.0, 1.0, 0.0));
 		addParam(ParamWidget::create<LEDButton>(Vec(63, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER, 0.0, 1.0, 0.0));
-
 
 		StringDisplayWidget3 *display = new StringDisplayWidget3();
 		  display->box.pos = Vec(1,24);
@@ -159,4 +142,4 @@ struct ComputerscareDebugWidget : ModuleWidget {
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
 // (found in `include/tags.hpp`) separated by commas.
-Model *modelComputerscareDebug = Model::create<ComputerscareDebug, ComputerscareDebugWidget>("computerscare", "ComputerscareDebug", "Debug", UTILITY_TAG);
+Model *modelComputerscareDebug = Model::create<ComputerscareDebug, ComputerscareDebugWidget>("computerscare", "computerscare-debug", "Debug", UTILITY_TAG);
