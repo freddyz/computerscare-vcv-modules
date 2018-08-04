@@ -5,7 +5,11 @@ Modules for VCV Rack.  I take great pride in the graphic design.
 
 ## Father & Son Patch Sequencer
 
+
+
 If you've ever wished that patch cables could be sequenced, this is the module for you.
+
+![ComputerscarePatchSequencer](./doc/computerscare-patch-sequencer-basic.png)
 
 Father & Son Patch Sequencer allows for the sequencing of connections.  It's somewhat like a giant sequential switch.
 
@@ -41,6 +45,8 @@ Father & Son Patch Sequencer allows for the sequencing of connections.  It's som
 *Inspired by Strum's Patch Matrix, Bidoo's ACnE Mixer, and Fundamental Sequential Switch*
 
 ## Debug
+
+![ComputerscareDebug](./doc/computerscare-debug-basic.png)
 
 A simple module for debugging.  Displays a list of the last 16 voltages read from IN, with the most recent one at the top.
 
