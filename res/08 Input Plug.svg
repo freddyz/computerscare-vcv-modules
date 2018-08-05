@@ -1,8 +1,0 @@
-<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 17.32">
-<defs><style>.cls-1{fill:#245559;}.cls-2{fill:#24c9a6;}</style></defs>
-<title>08 Input Plug</title>
-<g id="Input_Plug" data-name="Input Plug">
-<path id="Hexagon" class="cls-1" d="M15,0H5L0,8.66l5,8.66H15l5-8.66ZM10,14.16a5.5,5.5,0,1,1,5.5-5.5A5.51,5.51,0,0,1,10,14.16Z"/>
-<path id="Inner_Circle" data-name="Inner Circle" class="cls-2" d="M10,3.16a5.5,5.5,0,1,0,5.5,5.5A5.51,5.51,0,0,0,10,3.16Zm0,10a4.5,4.5,0,1,1,4.5-4.5A4.51,4.51,0,0,1,10,13.16Z"/>
-</g>
-</svg>

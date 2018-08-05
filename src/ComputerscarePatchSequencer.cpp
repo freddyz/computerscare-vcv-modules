@@ -403,7 +403,7 @@ struct NumberDisplayWidget3 : TransparentWidget {
 struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
   ComputerscarePatchSequencerWidget(ComputerscarePatchSequencer *module) : ModuleWidget(module) {
-		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscarePatchSequencer.svg")));
+		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscarePatchSequencerPanel.svg")));
 
   int top_row = 70;
   int row_spacing = 26; 

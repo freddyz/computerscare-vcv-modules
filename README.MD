@@ -45,10 +45,9 @@ Father & Son Patch Sequencer allows for the sequencing of connections.  It's som
 *Inspired by Strum's Patch Matrix, Bidoo's ACnE Mixer, and Fundamental Sequential Switch*
 
 ## Debug
+A simple module for debugging.  Displays a list of the last 16 voltages read from IN, with the most recent one at the top.
 
 ![ComputerscareDebug](./doc/computerscare-debug-basic.png)
-
-A simple module for debugging.  Displays a list of the last 16 voltages read from IN, with the most recent one at the top.
 
 ### Inputs:
 **Trigger:** When a trigger signal is detected, the voltage at the Input will be placed at the top of the list of voltages, and the voltage at the bottom will be discarded from the display.
@@ -56,3 +55,9 @@ A simple module for debugging.  Displays a list of the last 16 voltages read fro
 **Input:** Any sort of signal you wish to probe.
 
 **Clear:** Reset the list of voltages back to all zeros.
+
+### Buttons:
+**Trigger:** Manual Trigger
+
+**Clear:** Manual Clear
+

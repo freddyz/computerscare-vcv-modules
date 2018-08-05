@@ -30,7 +30,8 @@ struct ComputerscareDebug : Module {
 		NUM_LIGHTS
 	};
 
-	std::string strValue = "";
+	std::string defaultStrValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
+	std::string strValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
 
 	float logLines[NUM_LINES] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 
@@ -69,7 +70,11 @@ void ComputerscareDebug::step() {
 		strValue = thisVal;
 	}
 	if(clearTrigger.process(inputs[CLR_INPUT].value / 2.f) || manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].value)) {
-		strValue = "";
+		for( unsigned int a = 0; a < NUM_LINES; a++ )
+		 {
+		 	logLines[a] = 0;
+		 }
+		strValue = defaultStrValue;
 	}
 
 
@@ -119,14 +124,14 @@ struct StringDisplayWidget3 : TransparentWidget {
 struct ComputerscareDebugWidget : ModuleWidget {
 
 	ComputerscareDebugWidget(ComputerscareDebug *module) : ModuleWidget(module) {
-		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareDebugVectorGradient.svg")));
+		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareDebugPanel.svg")));
 
 		addInput(Port::create<InPort>(Vec(3, 330), Port::INPUT, module, ComputerscareDebug::TRG_INPUT));
 		addInput(Port::create<InPort>(Vec(33, 330), Port::INPUT, module, ComputerscareDebug::VAL_INPUT));
 		addInput(Port::create<InPort>(Vec(63, 330), Port::INPUT, module, ComputerscareDebug::CLR_INPUT));
 	
-		addParam(ParamWidget::create<LEDButton>(Vec(3, 290), module, ComputerscareDebug::MANUAL_TRIGGER, 0.0, 1.0, 0.0));
-		addParam(ParamWidget::create<LEDButton>(Vec(63, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER, 0.0, 1.0, 0.0));
+		addParam(ParamWidget::create<LEDButton>(Vec(6, 290), module, ComputerscareDebug::MANUAL_TRIGGER, 0.0, 1.0, 0.0));
+		addParam(ParamWidget::create<LEDButton>(Vec(66, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER, 0.0, 1.0, 0.0));
 
 		StringDisplayWidget3 *display = new StringDisplayWidget3();
 		  display->box.pos = Vec(1,24);
