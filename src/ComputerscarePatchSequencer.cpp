@@ -291,25 +291,27 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
 
 void ComputerscarePatchSequencer::step() {
 
-  //int numStepsKnobPosition = (int) clamp(roundf(params[STEPS_PARAM].value,1.0f,16.0f));
-  int numStepsKnobPosition = (int) clamp(roundf(params[STEPS_PARAM].value /*+ inputs[STEPS_INPUT].value*/), 1.0f, 16.0f);
+  int numStepsKnobPosition = (int) clamp(roundf(params[STEPS_PARAM].value), 1.0f, 16.0f);
 
 
   for ( int i = 0 ; i < 10 ; i++)
   {
    sums[i] = 0.0;
   }
-  // deal with buttons
+
   for (int i = 0 ; i < 10 ; i++)
   {
    for (int j = 0 ; j < 10 ; j++)
    {
      if (switch_triggers[i][j].process(params[SWITCHES+j*10 + i].value))
      {
-		   switch_states[editAddress][i][j] = !switch_states[editAddress][i][j];
-	   }
+     	// handle button clicks in the patch matrix
+		switch_states[editAddress][i][j] = !switch_states[editAddress][i][j];
+	 }
+
+	 // update the green lights (step you are editing) and the red lights (current active step)
      lights[SWITCH_LIGHTS + i + j * 10].value  = (switch_states[editAddress][i][j]) ? 1.0 : 0.0;
-   		lights[SWITCH_LIGHTS + i + j * 10+100].value  = (switch_states[address][i][j]) ? 1.0 : 0.0;
+   	 lights[SWITCH_LIGHTS + i + j * 10+100].value  = (switch_states[address][i][j]) ? 1.0 : 0.0;
    	
    }
   }
@@ -345,13 +347,11 @@ void ComputerscarePatchSequencer::step() {
     input_values[i] = inputs[INPUT_JACKS + i].value;
   }
   
-  // add inputs 
-  
   for (int i = 0 ; i < 10 ; i++)
   {
    for (int j = 0 ; j < 10 ; j++)
    {
-   	// todo: toggle for each output of how to combine
+   	// todo: toggle for each output of how to combine multiple signals
    	// sum, average, and, or etc
      if (switch_states[address][j][i]) sums[i] += input_values[j];
    }
