@@ -351,7 +351,7 @@ void ComputerscarePatchSequencer::step() {
   {
    for (int j = 0 ; j < 10 ; j++)
    {
-   	// todo: toggle for each output of how to combine multiple signals
+   	// todo: toggle for each output of how to combine multiple active signals in a column
    	// sum, average, and, or etc
      if (switch_states[address][j][i]) sums[i] += input_values[j];
    }
