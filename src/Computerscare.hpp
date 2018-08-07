@@ -35,21 +35,7 @@ struct InPort : SVGPort {
 		box.size = background->box.size;
 	}
 };
-struct CS_Knob : RoundKnob {
-	 CS_Knob() {
-		 //box.size = Vec(20, 20);		//TS_RoundBlackKnob_20
-		 //setSVG(SVG::load(assetPlugin(plugin, "res/ComponentLibrary/TS_RoundBlackKnob_20.svg")));
-		 ///// TODO: Make small SVG. Make all original SVGs (no more reliance on built-in controls except for base class for behavior).
-		 //this->sw->svg = SVG::load(assetGlobal("res/ComponentLibrary/RoundSmallBlackKnob.svg"));
-		 ////sw->setSVG(svg);
-		 //sw->box.size = box.size;
-		 //tw->box.size = sw->box.size;
-		 ////box.size = sw->box.size;
-		 //shadow->box.size = sw->box.size;
-		 //shadow->box.pos = Vec(0, sw->box.size.y * 0.1);
 
-	 }
- };
 
 
  // Knobs
@@ -62,18 +48,3 @@ struct LrgKnob : RoundBlackSnapKnob {
 	}
 	void randomize() override { return; }	
 };
-
-/*struct MedKnob : RoundKnob {
-	MedKnob() {
-		setSVG(SVG::load(assetPlugin(plugin, "res/components/MedKnob.svg")));
-		box.size = Vec(24,24);
-
-	}
-};
-
-struct SmlKnob : RoundKnob {
-	SmlKnob() {
-		setSVG(SVG::load(assetPlugin(plugin, "res/components/SmlKnob.svg")));
-		box.size = Vec(20,20);
-	}
-};*/
