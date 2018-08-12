@@ -1,3 +1,4 @@
-/build
+build
+dist
 .DS_Store
-/distplugin.dylib
+plugin.*
