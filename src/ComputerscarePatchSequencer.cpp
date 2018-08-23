@@ -439,16 +439,16 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 		} 
 
 	//clock input
-  	addInput(Port::create<InPort>(Vec(24, 33), Port::INPUT, module, ComputerscarePatchSequencer::TRG_INPUT));
+  	addInput(Port::create<InPort>(Vec(24, 37), Port::INPUT, module, ComputerscarePatchSequencer::TRG_INPUT));
 
   	//reset input
-  	addInput(Port::create<InPort>(Vec(3, 3), Port::INPUT, module, ComputerscarePatchSequencer::RESET_INPUT));
+  	addInput(Port::create<InPort>(Vec(24, 3), Port::INPUT, module, ComputerscarePatchSequencer::RESET_INPUT));
   	
   	//manual clock button
- 	addParam(ParamWidget::create<LEDButton>(Vec(7 , 52), module, ComputerscarePatchSequencer::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
+ 	addParam(ParamWidget::create<LEDButton>(Vec(7 , 37), module, ComputerscarePatchSequencer::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
 
  	//reset button
- 	addParam(ParamWidget::create<LEDButton>(Vec(33 , 3), module, ComputerscarePatchSequencer::RESET_PARAM, 0.0, 1.0, 0.0)); 
+ 	addParam(ParamWidget::create<LEDButton>(Vec(7 , 3), module, ComputerscarePatchSequencer::RESET_PARAM, 0.0, 1.0, 0.0)); 
 
 
   	//randomize input
