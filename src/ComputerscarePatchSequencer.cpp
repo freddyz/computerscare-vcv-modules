@@ -13,12 +13,14 @@ struct ComputerscarePatchSequencer : Module {
     EDIT_PARAM,
     EDIT_PREV_PARAM,
     ENUMS(SWITCHES,100),
+    RESET_PARAM,
 	NUM_PARAMS
 	};  
 	enum InputIds {
 		TRG_INPUT,
 		ENUMS(INPUT_JACKS, 10),
 		RANDOMIZE_INPUT,
+		RESET_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -37,6 +39,8 @@ struct ComputerscarePatchSequencer : Module {
   SchmittTrigger prevAddressEdit;
   SchmittTrigger clockTrigger;
   SchmittTrigger randomizeTrigger;
+  SchmittTrigger resetTriggerInput;
+  SchmittTrigger resetTriggerButton;
 
   int address = 0;
   int editAddress = 0;
@@ -339,6 +343,13 @@ void ComputerscarePatchSequencer::step() {
     address = address + 1;
     address = address % numAddresses;
   }
+
+  if(resetTriggerButton.process(params[RESET_PARAM].value) || resetTriggerInput.process(inputs[RESET_INPUT].value / 2.f)) {
+    numAddresses =  (int) clamp(roundf(params[STEPS_PARAM].value), 1.0f, 16.0f);
+
+    address = 0;
+  }
+
   addressPlusOne = address + 1;
   editAddressPlusOne = editAddress + 1;
 
@@ -428,17 +439,24 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 		} 
 
 	//clock input
-  	addInput(Port::create<InPort>(Vec(3, 0), Port::INPUT, module, ComputerscarePatchSequencer::TRG_INPUT));
+  	addInput(Port::create<InPort>(Vec(24, 33), Port::INPUT, module, ComputerscarePatchSequencer::TRG_INPUT));
+
+  	//reset input
+  	addInput(Port::create<InPort>(Vec(3, 3), Port::INPUT, module, ComputerscarePatchSequencer::RESET_INPUT));
   	
   	//manual clock button
- 	addParam(ParamWidget::create<LEDButton>(Vec(7 , 41), module, ComputerscarePatchSequencer::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
+ 	addParam(ParamWidget::create<LEDButton>(Vec(7 , 52), module, ComputerscarePatchSequencer::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
+
+ 	//reset button
+ 	addParam(ParamWidget::create<LEDButton>(Vec(33 , 3), module, ComputerscarePatchSequencer::RESET_PARAM, 0.0, 1.0, 0.0)); 
+
 
   	//randomize input
   	addInput(Port::create<InPort>(Vec(270, 0), Port::INPUT, module, ComputerscarePatchSequencer::RANDOMIZE_INPUT));
 
   //active step display
   NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-  display->box.pos = Vec(30,40);
+  display->box.pos = Vec(56,40);
   display->box.size = Vec(50, 20);
   display->value = &module->addressPlusOne;
   addChild(display);
@@ -462,7 +480,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   
   // currently editing step #:
   NumberDisplayWidget3 *displayEdit = new NumberDisplayWidget3();
-  displayEdit->box.pos = Vec(245,40);
+  displayEdit->box.pos = Vec(246,40);
   displayEdit->box.size = Vec(50, 20);
   displayEdit->value = &module->editAddressPlusOne;
   addChild(displayEdit);
