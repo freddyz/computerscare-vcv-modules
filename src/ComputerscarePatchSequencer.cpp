@@ -196,10 +196,15 @@ struct ComputerscarePatchSequencer : Module {
   {0,0,0,0,0,0,0,0,0,0}}
 };
    
+  bool onlyRandomizeActive = false;
+  bool neg5ToPos5 = false;
   
   float input_values[10] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
   float sums[10] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}; 
   
+  int randomizationStepEnum = 0; //0: edit step, 1: active step, 2: all steps
+
+
 ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
 
@@ -221,31 +226,43 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
         }
 		  }
     }
-		json_object_set_new(rootJ, "buttons", button_statesJ);
-    
+	json_object_set_new(rootJ, "buttons", button_statesJ);
+    json_object_set_new(rootJ, "onlyRandomizeActive", json_boolean(onlyRandomizeActive));
+    json_object_set_new(rootJ, "randomizationStepEnum", json_integer(getRandomizationStepEnum()));
     return rootJ;
   } 
   
   void fromJson(json_t *rootJ) override
   {
     // button states
-		json_t *button_statesJ = json_object_get(rootJ, "buttons");
-		if (button_statesJ)
+	json_t *button_statesJ = json_object_get(rootJ, "buttons");
+	if (button_statesJ)
     {
-          for(int k = 0; k < 16; k++) {
+        for(int k = 0; k < 16; k++) {
 
-			for (int i = 0; i < 10; i++)
-      {
-        for (int j = 0; j < 10; j++)
-        {
-				  json_t *button_stateJ = json_array_get(button_statesJ, k*100+i*10 + j);
-				  if (button_stateJ)
-					  switch_states[k][i][j] = !!json_integer_value(button_stateJ);
+			for (int i = 0; i < 10; i++) {
+        		for (int j = 0; j < 10; j++) {
+					json_t *button_stateJ = json_array_get(button_statesJ, k*100+i*10 + j);
+					if (button_stateJ)
+						switch_states[k][i][j] = !!json_integer_value(button_stateJ);
         }
       }
     }
-		}  
+	}
+	json_t *onlyRandomizeActiveJ = json_object_get(rootJ, "onlyRandomizeActive");
+	if (onlyRandomizeActiveJ){ onlyRandomizeActive = json_is_true(onlyRandomizeActiveJ); }  
+
+	json_t *randomizationStepEnumJ = json_object_get(rootJ, "randomizationStepEnum");
+	if (randomizationStepEnumJ){ setRandomizationStepEnum(json_integer_value(randomizationStepEnumJ)); }  
   } 
+  	int getRandomizationStepEnum() {
+		return randomizationStepEnum;
+	}
+
+	void setRandomizationStepEnum(int randomizationStep) {
+		randomizationStepEnum = randomizationStep;
+	}
+
   	void onRandomize() override {
   		randomizePatchMatrix();
   	}
@@ -254,25 +271,71 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
 	// - onSampleRateChange: event triggered by a change of sample rate
 	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
 
+  	void randomizeMatrixOnlyActive() {
+  		int randomIndex;
+
+  		bool connectedInputs[10];
+  		bool connectedOutputs[10];
+  		int numConnectedInputs=0;
+  		int numConnectedOutputs=0;
+
+  		std::vector<int> connectedInputIndices;
+
+  		for (int i = 0; i < 10; i++) 
+		{
+			if(inputs[INPUT_JACKS + i].active) {
+				numConnectedInputs++;
+				connectedInputIndices.push_back(i);
+			}
+			connectedInputs[i] = inputs[INPUT_JACKS + i].active;
+			connectedOutputs[i] = outputs[OUTPUTS + i].active; 
+		}
+		for(int k = 0; k < 16; k++) {
+			if((randomizationStepEnum == 0 && k == editAddress) || (randomizationStepEnum == 1 && k == address) || randomizationStepEnum == 2) {
+				for(int i = 0; i < 10; i++) {
+					randomIndex = connectedInputIndices[floor(randomUniform()*numConnectedInputs)];
+					if(connectedOutputs[i]) {
+						for (int j = 0; j < 10; j++) {
+							if(j==randomIndex) 
+								switch_states[k][j][i] = 1;		
+							else 
+								switch_states[k][j][i]=0;
+						}
+					}
+				}
+			}
+		}
+
+  	}
+
+  	void randomizeMatrixOnePerOutput() {
+		int randomIndex;
+		for(int k = 0; k < 16; k++) {
+			if((randomizationStepEnum == 0 && k == editAddress) || (randomizationStepEnum == 1 && k == address) || randomizationStepEnum == 2) {
+				for (int i = 0; i < 10; i++) 
+				{
+					randomIndex = floor(randomUniform()*10);
+
+					for (int j = 0; j < 10; j++) 
+					{
+						if(j==randomIndex) 
+							switch_states[k][j][i] = 1;				
+						else 
+							switch_states[k][j][i]=0;
+					}			
+				}	
+			}
+		}
+
+  	}
 	void randomizePatchMatrix()
 	{
-		int randomIndex;
-		for (int i = 0; i < 10; i++) 
-		{
-			randomIndex = floor(randomUniform()*10);
-
-			for (int j = 0; j < 10; j++) 
-			{
-				if(j==randomIndex) 
-					switch_states[editAddress][j][i] = 1;
-				
-				else 
-					switch_states[editAddress][j][i]=0;
-				
-			//fully randomize everything.  a bit intense for its use in patching
-			//switch_states[editAddress][i][j] =  (randomUniform() > 0.5f);
-			}			
-		}	
+		if(onlyRandomizeActive) {
+			randomizeMatrixOnlyActive();
+		}
+		else {
+			randomizeMatrixOnePerOutput();
+		}
 
 	}; // end randomize()
 	void onReset() override
@@ -427,13 +490,13 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 	   for(int j = 0 ; j < 10 ; j++ )
 	   {
 	   	 // the part you click
-	     addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j, top_row + row_spacing * i), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
+	     addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
 	     
 	     // green light indicates the state of the matrix that is being edited
-	     addChild(ModuleLightWidget::create<LargeLight<GreenLight>>(Vec(35 + column_spacing * j +1.4, top_row + row_spacing * i +1.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10));
+	     addChild(ModuleLightWidget::create<LargeLight<GreenLight>>(Vec(35 + column_spacing * j +3.4, top_row + row_spacing * i +5.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10));
 	   	 
 	   	 // red light indicates the state of the matrix that is the active step
-	   	 addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(35 + column_spacing * j + 4.3, top_row + row_spacing * i + 4.3), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
+	   	 addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(35 + column_spacing * j + 6.3, top_row + row_spacing * i + 8.3), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
 
 	   		}
 		} 
@@ -485,8 +548,64 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   displayEdit->value = &module->editAddressPlusOne;
   addChild(displayEdit);
   }
+  Menu *createContextMenu() override;
+};
+struct OnlyRandomizeActiveMenuItem : MenuItem {
+	ComputerscarePatchSequencer *patchSequencer;
+	void onAction(EventAction &e) override {
+		patchSequencer->onlyRandomizeActive = !patchSequencer->onlyRandomizeActive;
+	}
+	void step() override {
+		rightText = patchSequencer->onlyRandomizeActive ? "✔" : "";
+	}
 };
 
+struct Neg5MenuItem : MenuItem {
+	ComputerscarePatchSequencer *patchSequencer;
+	void onAction(EventAction &e) override {
+		patchSequencer->neg5ToPos5 = !patchSequencer->neg5ToPos5;
+	}
+	void step() override {
+		rightText = patchSequencer->neg5ToPos5 ? "✔" : "";
+	}
+};
+struct WhichStepToRandomizeItem : MenuItem {
+	ComputerscarePatchSequencer *patchSequencer;
+	int stepEnum;
+	void onAction(EventAction &e) override {
+		patchSequencer->setRandomizationStepEnum(stepEnum);
+	}
+	void step() override {
+		rightText = CHECKMARK(patchSequencer->getRandomizationStepEnum() == stepEnum);
+		MenuItem::step();
+	}
+};
+Menu *ComputerscarePatchSequencerWidget::createContextMenu() {
+	Menu *menu = ModuleWidget::createContextMenu();
+	ComputerscarePatchSequencer *patchSequencer = dynamic_cast<ComputerscarePatchSequencer*>(module);
+	assert(patchSequencer);
+
+	MenuLabel *spacerLabel = new MenuLabel();
+	menu->addChild(spacerLabel);
+	
+	MenuLabel *modeLabel = new MenuLabel();
+	modeLabel->text = "Randomization Options";
+	menu->addChild(modeLabel);
+	
+	OnlyRandomizeActiveMenuItem *onlyRandomizeActiveMenuItem = new OnlyRandomizeActiveMenuItem();
+	onlyRandomizeActiveMenuItem->text = "Only Randomize Active Connections";
+	onlyRandomizeActiveMenuItem->patchSequencer = patchSequencer;
+	menu->addChild(onlyRandomizeActiveMenuItem);
+
+
+	menu->addChild(construct<MenuLabel>());
+	menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Which Step to Randomize"));
+	menu->addChild(construct<WhichStepToRandomizeItem>(&MenuItem::text, "Edit step", &WhichStepToRandomizeItem::patchSequencer, patchSequencer, &WhichStepToRandomizeItem::stepEnum, 0));
+	menu->addChild(construct<WhichStepToRandomizeItem>(&MenuItem::text, "Active step", &WhichStepToRandomizeItem::patchSequencer, patchSequencer, &WhichStepToRandomizeItem::stepEnum, 1));
+	menu->addChild(construct<WhichStepToRandomizeItem>(&MenuItem::text, "All steps", &WhichStepToRandomizeItem::patchSequencer, patchSequencer, &WhichStepToRandomizeItem::stepEnum, 2));
+
+	return menu;
+}
 // Specify the Module and ModuleWidget subclass, human-readable
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
