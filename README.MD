@@ -32,15 +32,15 @@ Father & Son Patch Sequencer allows for the sequencing of connections.  It's som
 
 **Randomize:** Randomizes the patch matrix.  Does the same thing as the 'randomize' selection from the right-click menu.  There are some randomization options available via the right-click menu:
 
-***Only Randomize Active Connections:*** Only input rows/output columns with patch cables connected will be randomized.  Default is un-checked.
+Only Randomize Active Connections: Only input rows/output columns with patch cables connected will be randomized.  Default is un-checked.
 
-***Which Step to Randomize:*** 3 options:
+Which Step to Randomize: 3 options:
 
-****Edit step:**** The patch matrix for the step that is currently being edited will be randomized
+Edit step: The patch matrix for the step that is currently being edited will be randomized
 
-****Active step:**** The patch matrix for the step that is currently active will be randomized
+Active step: The patch matrix for the step that is currently active will be randomized
 
-****All steps:**** All patch matrices for all steps will be randomized
+All steps: All patch matrices for all steps will be randomized
 
 
 **Input Column:** 10 input jacks for any sort of signal you want.
