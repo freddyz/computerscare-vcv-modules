@@ -32,6 +32,8 @@ Father & Son Patch Sequencer allows for the sequencing of connections.  It's som
 
 **Randomize:** Randomizes the patch matrix.  Does the same thing as the 'randomize' selection from the right-click menu.  There are some randomization options available via the right-click menu:
 
+![ComputerscarePatchSequencerRightClickOptions](./doc/patch-sequencer-right-click-options.png)
+
 Only Randomize Active Connections: Only input rows/output columns with patch cables connected will be randomized.  Default is un-checked.
 
 Which Step to Randomize: 3 options:
