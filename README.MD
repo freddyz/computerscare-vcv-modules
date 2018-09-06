@@ -18,6 +18,8 @@ Father & Son Patch Sequencer allows for the sequencing of connections.  It's som
 
 **Next Active Step:** Moves to the next active step.  If the sequence length is set to greater than 1, the red lights in the patch matrix will change.
 
+**Reset:** Resets the patch sequencer to step 1.
+
 **Previous/Next Editing Step:** Move to edit the previous or next step.  Note that this will always cycle from 1 to 16 no matter what number of steps the knob is set to.
 
 ### Knobs:
@@ -26,7 +28,14 @@ Father & Son Patch Sequencer allows for the sequencing of connections.  It's som
 ### Inputs:
 **Clock:** Moves to the next active step.  If the currently active step is equal to the number-of-steps, it will go back to step 1.  Does the same thing as the 'Next Active Step Button'.
 
-**Randomize:** Randomizes the patch matrix for the current editing step.  Randomly enables exactly one input for each output.  Does the same thing as the 'randomize' selection from the right-click menu.
+**Reset:** Resets the patch sequencer to step 1.  Does the same thing as the 'RST' button.
+
+**Randomize:** Randomizes the patch matrix.  Does the same thing as the 'randomize' selection from the right-click menu.  There are some randomization options available via the right-click menu:
+***Only Randomize Active Connections:*** Only input rows/output columns with patch cables connected will be randomized.  Default is un-checked.
+***Which Step to Randomize:*** 3 options:
+****Edit step:**** The patch matrix for the step that is currently being edited will be randomized
+****Active step:**** The patch matrix for the step that is currently active will be randomized
+****All steps:**** All patch matrices for all steps will be randomized
 
 **Input Column:** 10 input jacks for any sort of signal you want.
 
