@@ -277,7 +277,6 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
   		bool connectedInputs[10];
   		bool connectedOutputs[10];
   		int numConnectedInputs=0;
-  		int numConnectedOutputs=0;
 
   		std::vector<int> connectedInputIndices;
 

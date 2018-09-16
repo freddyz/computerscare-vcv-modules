@@ -19,6 +19,7 @@ extern Plugin *plugin;
 // Forward-declare each Model, defined in each module source file
 extern Model *modelComputerscareDebug;
 extern Model *modelComputerscarePatchSequencer;
+extern Model *modelComputerscareLaundrySoup;
 
 struct OutPort : SVGPort {
 	OutPort() {
