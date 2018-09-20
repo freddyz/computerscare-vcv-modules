@@ -8,7 +8,7 @@
 
 struct ComputerscareLaundrySoup;
 
-const int numFields = 2;
+const int numFields = 5;
 
 class MyTextField : public LedDisplayTextField {
 public:
@@ -48,11 +48,10 @@ struct ComputerscareLaundrySoup : Module {
   std::vector<int> sequences[numFields];
   std::vector<int> sequenceSums[numFields];
 
-  int stepCity = 0;
-  int stepState = 0;
-  int stepCounty = 0;
+  int stepCity[numFields];
+  int stepState[numFields];
+  int stepCounty[numFields];
   int currentChar = 0;
-  int numSteps = 0;
   int numStepBlocks[numFields];
   
   bool compiled = false;
@@ -82,31 +81,11 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
 	// - onSampleRateChange: event triggered by a change of sample rate
 	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
 
-  
-void parseFormulas(MyTextField* textFields) {
-  std::string expr;
-  for(int i = 0; i < numFields; i++) {
-    sequences[i].resize(0);
-    sequenceSums[i].resize(0);
-    sequenceSums[i].push_back(0);
-    numSteps = 0;
-    //expr = textFields[i]->text;
-      for(char& c : expr) {
-        
-        //do_things_with(c);
-        currentChar = c - '0';
-        numSteps += currentChar;
-        sequenceSums[i].push_back(numSteps);
-        sequences[i].push_back(currentChar);
-      }
-      numStepBlocks[i] = sequences[i].size();
-    }
-  }
   void parseFormula(std::string expr, int index) {
     sequences[index].resize(0);
     sequenceSums[index].resize(0);
     sequenceSums[index].push_back(0);
-    numSteps = 0;
+    int numSteps = 0;
     //expr = textFields[i]->text;
       for(char& c : expr) {
         
@@ -126,55 +105,47 @@ void onCreate () override
         parseFormula(textFields[i]->text,i);
       }
     }
-    compiled = false;
-    /*
-    if (textFields[0]->text.size() > 0) {
-        parseFormulas(textFields);
-        compiled = true;
-    }*/
+    compiled = true;
   }
 
   void onReset () override
   {
     onCreate();
   }
-  void incrementInternalStep() {
-    this->stepCity += 1;
-    this->stepState += 1;
-    if(this->stepCity >= sequences[0][this->stepCounty]) {
-      this->stepCity = 0;
-      this->stepCounty += 1;
+  void incrementInternalStep(int i) {
+    this->stepCity[i] += 1;
+    this->stepState[i] += 1;
+    if(this->stepCity[i] >= sequences[i][this->stepCounty[i]]) {
+      this->stepCity[i] = 0;
+      this->stepCounty[i] += 1;
     }
-    if(this->stepCounty >= this->numStepBlocks[0]) {
-      this->stepCounty = 0;
-      this->stepCity = 0;
-      this->stepState = 0;
+    if(this->stepCounty[i] >= this->numStepBlocks[i]) {
+      this->stepCounty[i] = 0;
+      this->stepCity[i] = 0;
+      this->stepState[i] = 0;
     }
   }
-
 };
 
 
 
 void ComputerscareLaundrySoup::step() {
   // fun
-bool gateIn = false;
-bool activeStep = false;
+  bool gateIn = clockTrigger.isHigh();;
+  bool activeStep = false;
+  bool clocked = clockTrigger.process(inputs[CLOCK_INPUT].value);
 
-if(this->numStepBlocks[0] > 0) {
-      if (inputs[CLOCK_INPUT].active) {
-        // External clock
-        if (clockTrigger.process(inputs[CLOCK_INPUT].value)) {
-          incrementInternalStep();
-        }
-        gateIn = clockTrigger.isHigh();
+  for(int i = 0; i < numFields; i++) {
+    activeStep = false;
+    if(this->numStepBlocks[i] > 0) {
+      if (inputs[CLOCK_INPUT].active && clocked) {
+          incrementInternalStep(i);   
       }
-      activeStep = (sequenceSums[0][this->stepCounty] == this->stepState);
+      activeStep = (sequenceSums[i][this->stepCounty[i]] == this->stepState[i]);
+    }
 
-}
-  // 112
-  // [0,1,2]
-  outputs[TRG_OUTPUT].value = (gateIn && activeStep) ? 10.0f : 0.0f;
+    outputs[TRG_OUTPUT + i].value = (gateIn && activeStep) ? 10.0f : 0.0f;
+  }
 }
 
 ////////////////////////////////////
@@ -228,22 +199,24 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
   addInput(Port::create<InPort>(Vec(54, 13), Port::INPUT, module, ComputerscareLaundrySoup::RESET_INPUT));
   
   for(int i = 0; i < numFields; i++) {
-    addOutput(Port::create<InPort>(Vec(33 , 130 + 100*i), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
+    addOutput(Port::create<InPort>(mm2px(Vec(55 , 25 + 22*i)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
 
-    textField = Widget::create<MyTextField>(mm2px(Vec(1, 25 + 30*i)));
+    textField = Widget::create<MyTextField>(mm2px(Vec(1, 25 + 22*i)));
     textField->setModule(module);
-    textField->box.size = mm2px(Vec(63, 20));
+    textField->box.size = mm2px(Vec(53, 10));
     textField->multiline = true;
     addChild(textField);
     module->textFields[i] = textField;
+
+      //active step display
+    NumberDisplayWidget3 *display = new NumberDisplayWidget3();
+    display->box.pos = mm2px(Vec(3,18+22*i));
+    display->box.size = Vec(50, 20);
+    display->value = &module->stepState[i];
+    addChild(display);
   }
-  //active step display
-  NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-  display->box.pos = Vec(56,40);
-  display->box.size = Vec(50, 20);
-  display->value = &module->stepState;
-  addChild(display);
+
 
   }
   MyTextField* textField;
