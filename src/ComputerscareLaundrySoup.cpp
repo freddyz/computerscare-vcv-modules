@@ -8,6 +8,8 @@
 
 struct ComputerscareLaundrySoup;
 
+const int numFields = 2;
+
 class MyTextField : public LedDisplayTextField {
 public:
   MyTextField() : LedDisplayTextField() {}
@@ -31,7 +33,7 @@ struct ComputerscareLaundrySoup : Module {
 	};
 	enum OutputIds { 
     TRG_OUTPUT, 
-		NUM_OUTPUTS
+		NUM_OUTPUTS = TRG_OUTPUT + numFields
 	};
   enum LightIds {
 		SWITCH_LIGHTS,
@@ -41,17 +43,17 @@ struct ComputerscareLaundrySoup : Module {
   SchmittTrigger clockTrigger;
   SchmittTrigger resetTriggerInput;
 
-  MyTextField* textField;
+  MyTextField* textFields[numFields];
 
-  std::vector<int> sequence;
-  std::vector<int> sequenceSums;
+  std::vector<int> sequences[numFields];
+  std::vector<int> sequenceSums[numFields];
 
   int stepCity = 0;
   int stepState = 0;
   int stepCounty = 0;
   int currentChar = 0;
   int numSteps = 0;
-  int numStepBlocks = 0;
+  int numStepBlocks[numFields];
   
   bool compiled = false;
 
@@ -70,40 +72,66 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
   void fromJson(json_t *rootJ) override
   {
 
-  } 
+  }
  
-  	void onRandomize() override {
-  		
-  	}
+	void onRandomize() override {
+		
+	}
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
 	// - onSampleRateChange: event triggered by a change of sample rate
 	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
 
   
-void parseFormula(std::string expr) {
-  int current;
-  sequence.resize(0);
-  sequenceSums.resize(0);
-  sequenceSums.push_back(0);
-  numSteps = 0;
-    for(char& c : expr) {
-      //do_things_with(c);
-      currentChar = c - '0';
-      numSteps += currentChar;
-      sequenceSums.push_back(numSteps);
-      sequence.push_back(currentChar);
+void parseFormulas(MyTextField* textFields) {
+  std::string expr;
+  for(int i = 0; i < numFields; i++) {
+    sequences[i].resize(0);
+    sequenceSums[i].resize(0);
+    sequenceSums[i].push_back(0);
+    numSteps = 0;
+    //expr = textFields[i]->text;
+      for(char& c : expr) {
+        
+        //do_things_with(c);
+        currentChar = c - '0';
+        numSteps += currentChar;
+        sequenceSums[i].push_back(numSteps);
+        sequences[i].push_back(currentChar);
+      }
+      numStepBlocks[i] = sequences[i].size();
     }
-    numStepBlocks = sequence.size();
+  }
+  void parseFormula(std::string expr, int index) {
+    sequences[index].resize(0);
+    sequenceSums[index].resize(0);
+    sequenceSums[index].push_back(0);
+    numSteps = 0;
+    //expr = textFields[i]->text;
+      for(char& c : expr) {
+        
+        //do_things_with(c);
+        currentChar = c - '0';
+        numSteps += currentChar;
+        sequenceSums[index].push_back(numSteps);
+        sequences[index].push_back(currentChar);
+      }
+      numStepBlocks[index] = sequences[index].size();
   }
 
 void onCreate () override
   {
-    compiled = false;
-    if (textField->text.size() > 0) {
-        parseFormula(textField->text);
-        compiled = true;
+    for(int i = 0; i < numFields; i++) {
+      if(textFields[i]->text.size() > 0) {
+        parseFormula(textFields[i]->text,i);
+      }
     }
+    compiled = false;
+    /*
+    if (textFields[0]->text.size() > 0) {
+        parseFormulas(textFields);
+        compiled = true;
+    }*/
   }
 
   void onReset () override
@@ -113,11 +141,11 @@ void onCreate () override
   void incrementInternalStep() {
     this->stepCity += 1;
     this->stepState += 1;
-    if(this->stepCity >= sequence[this->stepCounty]) {
+    if(this->stepCity >= sequences[0][this->stepCounty]) {
       this->stepCity = 0;
       this->stepCounty += 1;
     }
-    if(this->stepCounty >= this->numStepBlocks) {
+    if(this->stepCounty >= this->numStepBlocks[0]) {
       this->stepCounty = 0;
       this->stepCity = 0;
       this->stepState = 0;
@@ -133,7 +161,7 @@ void ComputerscareLaundrySoup::step() {
 bool gateIn = false;
 bool activeStep = false;
 
-if(this->numStepBlocks > 0) {
+if(this->numStepBlocks[0] > 0) {
       if (inputs[CLOCK_INPUT].active) {
         // External clock
         if (clockTrigger.process(inputs[CLOCK_INPUT].value)) {
@@ -141,7 +169,7 @@ if(this->numStepBlocks > 0) {
         }
         gateIn = clockTrigger.isHigh();
       }
-      activeStep = (sequenceSums[this->stepCounty] == this->stepState);
+      activeStep = (sequenceSums[0][this->stepCounty] == this->stepState);
 
 }
   // 112
@@ -199,16 +227,17 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
   //reset input
   addInput(Port::create<InPort>(Vec(54, 13), Port::INPUT, module, ComputerscareLaundrySoup::RESET_INPUT));
   
-  addOutput(Port::create<InPort>(Vec(33 , 200), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT));
+  for(int i = 0; i < numFields; i++) {
+    addOutput(Port::create<InPort>(Vec(33 , 130 + 100*i), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
 
-  textField = Widget::create<MyTextField>(mm2px(Vec(1, 25)));
-  textField->setModule(module);
-  textField->box.size = mm2px(Vec(63, 20));
-  textField->multiline = true;
-  addChild(textField);
-  module->textField = textField;
-
+    textField = Widget::create<MyTextField>(mm2px(Vec(1, 25 + 30*i)));
+    textField->setModule(module);
+    textField->box.size = mm2px(Vec(63, 20));
+    textField->multiline = true;
+    addChild(textField);
+    module->textFields[i] = textField;
+  }
   //active step display
   NumberDisplayWidget3 *display = new NumberDisplayWidget3();
   display->box.pos = Vec(56,40);

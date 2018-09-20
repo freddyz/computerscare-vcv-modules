@@ -6,6 +6,10 @@
 #include <sstream>
 #include <iomanip>
 
+const int maxSteps = 16;
+const int numInputs = 10;
+const int numOutputs = 10;
+
 struct ComputerscarePatchSequencer : Module {
 	enum ParamIds {
     STEPS_PARAM,
@@ -48,159 +52,13 @@ struct ComputerscarePatchSequencer : Module {
   int editAddressPlusOne = 1;
   
   int numAddresses = 2;
-  bool switch_states[16][10][10] = 
-  {{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}},{{0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0},
-  {0,0,0,0,0,0,0,0,0,0}}
-};
+  bool switch_states[maxSteps][10][10] = {};
    
   bool onlyRandomizeActive = false;
   bool neg5ToPos5 = false;
   
-  float input_values[10] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-  float sums[10] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}; 
+  float input_values[numInputs] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
+  float sums[numOutputs] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}; 
   
   int randomizationStepEnum = 0; //0: edit step, 1: active step, 2: all steps
 
@@ -216,7 +74,7 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
     
     // button states
 		json_t *button_statesJ = json_array();
-    for(int k = 0; k < 16; k++) {
+    for(int k = 0; k < maxSteps; k++) {
 		for (int i = 0; i < 10; i++)
     {
 			for (int j = 0; j < 10; j++)
@@ -238,7 +96,7 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
 	json_t *button_statesJ = json_object_get(rootJ, "buttons");
 	if (button_statesJ)
     {
-        for(int k = 0; k < 16; k++) {
+        for(int k = 0; k < maxSteps; k++) {
 
 			for (int i = 0; i < 10; i++) {
         		for (int j = 0; j < 10; j++) {
@@ -281,35 +139,35 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
   		std::vector<int> connectedInputIndices;
 
   		for (int i = 0; i < 10; i++) 
-		{
-			if(inputs[INPUT_JACKS + i].active) {
-				numConnectedInputs++;
-				connectedInputIndices.push_back(i);
-			}
-			connectedInputs[i] = inputs[INPUT_JACKS + i].active;
-			connectedOutputs[i] = outputs[OUTPUTS + i].active; 
-		}
-		for(int k = 0; k < 16; k++) {
-			if((randomizationStepEnum == 0 && k == editAddress) || (randomizationStepEnum == 1 && k == address) || randomizationStepEnum == 2) {
-				for(int i = 0; i < 10; i++) {
-					randomIndex = connectedInputIndices[floor(randomUniform()*numConnectedInputs)];
-					if(connectedOutputs[i]) {
-						for (int j = 0; j < 10; j++) {
-							if(j==randomIndex) 
-								switch_states[k][j][i] = 1;		
-							else 
-								switch_states[k][j][i]=0;
-						}
-					}
-				}
-			}
-		}
+  		{
+  			if(inputs[INPUT_JACKS + i].active) {
+  				numConnectedInputs++;
+  				connectedInputIndices.push_back(i);
+  			}
+  			connectedInputs[i] = inputs[INPUT_JACKS + i].active;
+  			connectedOutputs[i] = outputs[OUTPUTS + i].active; 
+  		}
+  		for(int k = 0; k < maxSteps; k++) {
+  			if((randomizationStepEnum == 0 && k == editAddress) || (randomizationStepEnum == 1 && k == address) || randomizationStepEnum == 2) {
+  				for(int i = 0; i < 10; i++) {
+  					randomIndex = connectedInputIndices[floor(randomUniform()*numConnectedInputs)];
+  					if(connectedOutputs[i]) {
+  						for (int j = 0; j < 10; j++) {
+  							if(j==randomIndex) 
+  								switch_states[k][j][i] = 1;		
+  							else 
+  								switch_states[k][j][i]=0;
+  						}
+  					}
+  				}
+  			}
+  		}
 
   	}
 
   	void randomizeMatrixOnePerOutput() {
 		int randomIndex;
-		for(int k = 0; k < 16; k++) {
+		for(int k = 0; k < maxSteps; k++) {
 			if((randomizationStepEnum == 0 && k == editAddress) || (randomizationStepEnum == 1 && k == address) || randomizationStepEnum == 2) {
 				for (int i = 0; i < 10; i++) 
 				{
@@ -320,7 +178,7 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
 						if(j==randomIndex) 
 							switch_states[k][j][i] = 1;				
 						else 
-							switch_states[k][j][i]=0;
+							switch_states[k][j][i] = 0;
 					}			
 				}	
 			}
@@ -339,7 +197,7 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
 	}; // end randomize()
 	void onReset() override
 	{
-		for(int k =0; k < 16; k++) {
+		for(int k =0; k < maxSteps; k++) {
 
 				
 		for (int i = 0; i < 10; i++) 
@@ -372,13 +230,11 @@ void ComputerscarePatchSequencer::step() {
      if (switch_triggers[i][j].process(params[SWITCHES+j*10 + i].value))
      {
      	// handle button clicks in the patch matrix
-		switch_states[editAddress][i][j] = !switch_states[editAddress][i][j];
-	 }
-
-	 // update the green lights (step you are editing) and the red lights (current active step)
+		  switch_states[editAddress][i][j] = !switch_states[editAddress][i][j];
+	   }
+	   // update the green lights (step you are editing) and the red lights (current active step)
      lights[SWITCH_LIGHTS + i + j * 10].value  = (switch_states[editAddress][i][j]) ? 1.0 : 0.0;
    	 lights[SWITCH_LIGHTS + i + j * 10+100].value  = (switch_states[address][i][j]) ? 1.0 : 0.0;
-   	
    }
   }
 
@@ -391,12 +247,12 @@ void ComputerscarePatchSequencer::step() {
   }
   if(nextAddressEdit.process(params[EDIT_PARAM].value) ) {
     editAddress = editAddress + 1;
-    editAddress = editAddress % 16;
+    editAddress = editAddress % maxSteps;
   }
   if(prevAddressEdit.process(params[EDIT_PREV_PARAM].value) ) {
     editAddress = editAddress - 1;
-    editAddress = editAddress + 16;
-    editAddress = editAddress % 16;
+    editAddress = editAddress + maxSteps;
+    editAddress = editAddress % maxSteps;
   }
 
   if(nextAddressRead.process(params[MANUAL_CLOCK_PARAM].value) || clockTrigger.process(inputs[TRG_INPUT].value / 2.f)) {
@@ -426,7 +282,9 @@ void ComputerscarePatchSequencer::step() {
    {
    	// todo: toggle for each output of how to combine multiple active signals in a column
    	// sum, average, and, or etc
-     if (switch_states[address][j][i]) sums[i] += input_values[j];
+     if (switch_states[address][j][i]) {
+        sums[i] += input_values[j];
+      }
    }
   }
   /// outputs  
