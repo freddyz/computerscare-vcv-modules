@@ -27,8 +27,8 @@ struct ComputerscareLaundrySoup : Module {
 	   NUM_PARAMS
 	};  
 	enum InputIds {
-    CLOCK_INPUT,
-    RESET_INPUT,
+    GLOBAL_CLOCK_INPUT,
+    GLOBAL_RESET_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds { 
@@ -51,26 +51,43 @@ struct ComputerscareLaundrySoup : Module {
   int stepCity[numFields];
   int stepState[numFields];
   int stepCounty[numFields];
+  int numStepStates[numFields];
   int currentChar = 0;
   int numStepBlocks[numFields];
+  int offsets[numFields];
   
   bool compiled = false;
 
 ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
 
-
-
 	json_t *toJson() override
   {
 		json_t *rootJ = json_object();
     
+    // gates
+    json_t *sequencesJ = json_array();
+    for (int i = 0; i < numFields; i++) {
+      json_t *sequenceJ = json_string(textFields[i]->text.c_str());
+      json_array_append_new(sequencesJ, sequenceJ);
+    }
+    json_object_set_new(rootJ, "sequences", sequencesJ);
+
     return rootJ;
   } 
   
   void fromJson(json_t *rootJ) override
   {
-
+    // gates
+    json_t *sequencesJ = json_object_get(rootJ, "sequences");
+    if (sequencesJ) {
+      for (int i = 0; i < numFields; i++) {
+        json_t *sequenceJ = json_array_get(sequencesJ, i);
+        if (sequenceJ)
+          textFields[i]->text = json_string_value(sequenceJ);
+      }
+    }
+    onCreate();
   }
  
 	void onRandomize() override {
@@ -82,19 +99,35 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
 	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
 
   void parseFormula(std::string expr, int index) {
+    int numSteps = 0;
+    
+    std::stringstream test(expr);
+    std::string segment;
+    std::vector<std::string> seglist;
+
+    while(std::getline(test, segment, ','))
+    {
+       seglist.push_back(segment);
+    }
+
     sequences[index].resize(0);
     sequenceSums[index].resize(0);
     sequenceSums[index].push_back(0);
-    int numSteps = 0;
-    //expr = textFields[i]->text;
-      for(char& c : expr) {
+
+      for(char& c : seglist[0]) {
         
-        //do_things_with(c);
         currentChar = c - '0';
         numSteps += currentChar;
         sequenceSums[index].push_back(numSteps);
         sequences[index].push_back(currentChar);
+        if(seglist.size() > 1) {
+          offsets[index] = std::stoi( seglist[1] );
+        }
+        else {
+          offsets[index] = 0;
+        }
       }
+      numStepStates[index] = numSteps;
       numStepBlocks[index] = sequences[index].size();
   }
 
@@ -110,8 +143,21 @@ void onCreate () override
 
   void onReset () override
   {
+    for(int i = 0; i < numFields; i++) {
+      resetOneOfThem(i);
+    }
     onCreate();
   }
+
+  /*
+  lets say the sequence "332" is entered in the 0th (first)
+  numStepBlocks[0] would then be 8 (3 + 3 + 2)
+  sequences[0] would be the vector (3,3,2)
+  stepState[0] will go from 0 to 7
+  stepCounty[0] will go from 0 to 2
+  stepCity[0] will count for each "inner" step ie: 0 to 2, 0 to 2, and then 0 to 1
+
+  */
   void incrementInternalStep(int i) {
     this->stepCity[i] += 1;
     this->stepState[i] += 1;
@@ -125,23 +171,31 @@ void onCreate () override
       this->stepState[i] = 0;
     }
   }
+
+  void resetOneOfThem(int i) {
+    this->stepCity[i] = 0;
+    this->stepState[i] = 0;
+    this->stepCounty[i] = 0;
+  }
 };
 
 
 
 void ComputerscareLaundrySoup::step() {
-  // fun
+
   bool gateIn = clockTrigger.isHigh();;
   bool activeStep = false;
-  bool clocked = clockTrigger.process(inputs[CLOCK_INPUT].value);
+  bool clocked = clockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
 
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
+
+    // check if this clock input is active, and read the value
     if(this->numStepBlocks[i] > 0) {
-      if (inputs[CLOCK_INPUT].active && clocked) {
+      if (inputs[GLOBAL_CLOCK_INPUT].active && clocked) {
           incrementInternalStep(i);   
       }
-      activeStep = (sequenceSums[i][this->stepCounty[i]] == this->stepState[i]);
+      activeStep = (sequenceSums[i][this->stepCounty[i]] == (this->stepState[i] + this->offsets[i]) % this->numStepStates[i]);
     }
 
     outputs[TRG_OUTPUT + i].value = (gateIn && activeStep) ? 10.0f : 0.0f;
@@ -189,20 +243,22 @@ void MyTextField::onTextChange() {
 
 struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
+  int verticalSpacing = 22;
+  int verticalStart = 23;
   ComputerscareLaundrySoupWidget(ComputerscareLaundrySoup *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareLaundrySoupPanel.svg")));
 
     //clock input
-  addInput(Port::create<InPort>(Vec(14, 13), Port::INPUT, module, ComputerscareLaundrySoup::CLOCK_INPUT));
+  addInput(Port::create<InPort>(Vec(14, 13), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_CLOCK_INPUT));
 
   //reset input
-  addInput(Port::create<InPort>(Vec(54, 13), Port::INPUT, module, ComputerscareLaundrySoup::RESET_INPUT));
+  addInput(Port::create<InPort>(Vec(54, 13), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
   
   for(int i = 0; i < numFields; i++) {
-    addOutput(Port::create<InPort>(mm2px(Vec(55 , 25 + 22*i)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
+    addOutput(Port::create<InPort>(mm2px(Vec(55 , verticalStart + verticalSpacing*i)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
 
-    textField = Widget::create<MyTextField>(mm2px(Vec(1, 25 + 22*i)));
+    textField = Widget::create<MyTextField>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
     textField->setModule(module);
     textField->box.size = mm2px(Vec(53, 10));
     textField->multiline = true;
@@ -211,9 +267,14 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
       //active step display
     NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-    display->box.pos = mm2px(Vec(3,18+22*i));
+    display->box.pos = mm2px(Vec(3,verticalStart - 7 +verticalSpacing*i));
     display->box.size = Vec(50, 20);
-    display->value = &module->stepState[i];
+    if(&module->numStepBlocks[i]) {
+      display->value = &module->stepState[i];
+    }
+    else {
+      display->value = 0;
+    }
     addChild(display);
   }
 
