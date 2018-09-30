@@ -199,7 +199,7 @@ void ComputerscareLaundrySoup::step() {
     // check if this clock input is active, and read the value
     if(this->numStepBlocks[i] > 0) {
       if (inputs[CLOCK_INPUT + i].active) {
-        //currentTriggerIsHigh = 
+       // currentTriggerIsHigh = 
       }
       else {
         if (inputs[GLOBAL_CLOCK_INPUT].active && clocked) {
@@ -260,39 +260,38 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareLaundrySoupPanel.svg")));
 
     //clock input
-  addInput(Port::create<InPort>(mm2px(Vec(2 , 2)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_CLOCK_INPUT));
+    addInput(Port::create<InPort>(mm2px(Vec(2 , 2)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_CLOCK_INPUT));
 
-  //reset input
-  addInput(Port::create<InPort>(mm2px(Vec(12 , 2)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
-  
-  for(int i = 0; i < numFields; i++) {
-    addOutput(Port::create<InPort>(mm2px(Vec(55 , verticalStart + verticalSpacing*i)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
+    //reset input
+    addInput(Port::create<InPort>(mm2px(Vec(12 , 2)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
+    
+    for(int i = 0; i < numFields; i++) {
+      addOutput(Port::create<InPort>(mm2px(Vec(55 , verticalStart + verticalSpacing*i)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
-    addInput(Port::create<InPort>(mm2px(Vec(2, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::CLOCK_INPUT + i));
+      addInput(Port::create<InPort>(mm2px(Vec(2, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::CLOCK_INPUT + i));
 
-    addInput(Port::create<InPort>(mm2px(Vec(12, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::RESET_INPUT + i));
+      addInput(Port::create<InPort>(mm2px(Vec(12, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::RESET_INPUT + i));
 
 
-    textField = Widget::create<MyTextField>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
-    textField->setModule(module);
-    textField->box.size = mm2px(Vec(53, 10));
-    textField->multiline = true;
-    addChild(textField);
-    module->textFields[i] = textField;
+      textField = Widget::create<MyTextField>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
+      textField->setModule(module);
+      textField->box.size = mm2px(Vec(53, 10));
+      textField->multiline = true;
+      addChild(textField);
+      module->textFields[i] = textField;
 
-      //active step display
-    NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-    display->box.pos = mm2px(Vec(25,verticalStart - 9.2 +verticalSpacing*i));
-    display->box.size = Vec(50, 20);
-    if(&module->numStepBlocks[i]) {
-      display->value = &module->stepState[i];
+        //active step display
+      NumberDisplayWidget3 *display = new NumberDisplayWidget3();
+      display->box.pos = mm2px(Vec(25,verticalStart - 9.2 +verticalSpacing*i));
+      display->box.size = Vec(50, 20);
+      if(&module->numStepBlocks[i]) {
+        display->value = &module->stepState[i];
+      }
+      else {
+        display->value = 0;
+      }
+      addChild(display);
     }
-    else {
-      display->value = 0;
-    }
-    addChild(display);
-  }
-
 
   }
   MyTextField* textField;
