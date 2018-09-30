@@ -29,6 +29,8 @@ struct ComputerscareLaundrySoup : Module {
 	enum InputIds {
     GLOBAL_CLOCK_INPUT,
     GLOBAL_RESET_INPUT,
+    CLOCK_INPUT = GLOBAL_RESET_INPUT + numFields,
+    RESET_INPUT = CLOCK_INPUT + numFields,
 		NUM_INPUTS
 	};
 	enum OutputIds { 
@@ -40,8 +42,11 @@ struct ComputerscareLaundrySoup : Module {
     NUM_LIGHTS
 	};
 
-  SchmittTrigger clockTrigger;
-  SchmittTrigger resetTriggerInput;
+  SchmittTrigger globalClockTrigger;
+  SchmittTrigger globalResetTriggerInput;
+
+  SchmittTrigger clockTriggers[numFields];
+  SchmittTrigger resetTriggers[numFields];
 
   MyTextField* textFields[numFields];
 
@@ -183,22 +188,28 @@ void onCreate () override
 
 void ComputerscareLaundrySoup::step() {
 
-  bool gateIn = clockTrigger.isHigh();;
+  bool globalGateIn = globalClockTrigger.isHigh();;
   bool activeStep = false;
-  bool clocked = clockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
+  bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
+  bool currentTriggerIsHigh;
 
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
 
     // check if this clock input is active, and read the value
     if(this->numStepBlocks[i] > 0) {
-      if (inputs[GLOBAL_CLOCK_INPUT].active && clocked) {
-          incrementInternalStep(i);   
+      if (inputs[CLOCK_INPUT + i].active) {
+        //currentTriggerIsHigh = 
+      }
+      else {
+        if (inputs[GLOBAL_CLOCK_INPUT].active && clocked) {
+            incrementInternalStep(i);   
+        }
       }
       activeStep = (sequenceSums[i][this->stepCounty[i]] == (this->stepState[i] + this->offsets[i]) % this->numStepStates[i]);
     }
 
-    outputs[TRG_OUTPUT + i].value = (gateIn && activeStep) ? 10.0f : 0.0f;
+    outputs[TRG_OUTPUT + i].value = (globalGateIn && activeStep) ? 10.0f : 0.0f;
   }
 }
 
@@ -249,13 +260,17 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareLaundrySoupPanel.svg")));
 
     //clock input
-  addInput(Port::create<InPort>(Vec(14, 13), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_CLOCK_INPUT));
+  addInput(Port::create<InPort>(mm2px(Vec(2 , 2)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_CLOCK_INPUT));
 
   //reset input
-  addInput(Port::create<InPort>(Vec(54, 13), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
+  addInput(Port::create<InPort>(mm2px(Vec(12 , 2)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
   
   for(int i = 0; i < numFields; i++) {
     addOutput(Port::create<InPort>(mm2px(Vec(55 , verticalStart + verticalSpacing*i)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
+
+    addInput(Port::create<InPort>(mm2px(Vec(2, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::CLOCK_INPUT + i));
+
+    addInput(Port::create<InPort>(mm2px(Vec(12, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::RESET_INPUT + i));
 
 
     textField = Widget::create<MyTextField>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
@@ -267,7 +282,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
       //active step display
     NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-    display->box.pos = mm2px(Vec(3,verticalStart - 7 +verticalSpacing*i));
+    display->box.pos = mm2px(Vec(25,verticalStart - 9.2 +verticalSpacing*i));
     display->box.size = Vec(50, 20);
     if(&module->numStepBlocks[i]) {
       display->value = &module->stepState[i];

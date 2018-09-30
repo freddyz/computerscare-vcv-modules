@@ -34,11 +34,11 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="2.8284272"
-     inkscape:cx="80.124849"
-     inkscape:cy="407.39552"
+     inkscape:zoom="1.4142136"
+     inkscape:cx="108.40912"
+     inkscape:cy="209.82193"
      inkscape:document-units="mm"
-     inkscape:current-layer="text917"
+     inkscape:current-layer="text1651"
      showgrid="false"
      units="px"
      inkscape:snap-bbox="true"
@@ -61,7 +61,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -148,7 +148,7 @@
          inkscape:connector-curvature="0" />
       <g
          aria-label="Laundry Soup"
-         transform="matrix(1.0079983,-0.0441007,0.12576363,0.9865629,0,0)"
+         transform="matrix(0.90564519,-0.03962266,0.17899209,1.4041179,-4.5120953,-83.688431)"
          style="font-style:normal;font-weight:normal;font-size:5.44763088px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.03603381"
          id="text917">
         <path
@@ -199,7 +199,8 @@
         <path
            d="m -11.933519,203.21522 v -1.80346 h 0.489436 v 1.78484 q 0,0.42294 0.164918,0.63574 0.164919,0.21013 0.494756,0.21013 0.396336,0 0.625094,-0.25269 0.2314181,-0.2527 0.2314181,-0.68894 v -1.68908 h 0.4894356 v 2.97917 h -0.4894356 v -0.45752 q -0.1782181,0.27132 -0.4149561,0.40432 -0.234078,0.13034 -0.545295,0.13034 -0.513376,0 -0.779373,-0.3192 -0.265998,-0.31919 -0.265998,-0.93365 z"
            style="stroke-width:0.03603381"
-           id="path937" />
+           id="path937"
+           inkscape:connector-curvature="0" />
         <path
            d="m -7.9658571,203.80978 -0.024652,1.71981 -0.4921605,3.5e-4 0.06416,-4.47613 0.4921449,7.2e-4 -0.00706,0.49221 q 0.1584465,-0.28946 0.3945437,-0.42835 0.2387989,-0.14178 0.5660138,-0.14165 0.5426939,5.1e-4 0.8738313,0.46939 0.3337932,0.46918 0.322837,1.23353 -0.010956,0.76437 -0.3581958,1.23327 -0.3445794,0.46891 -0.8872775,0.4687 -0.3272152,-1.1e-4 -0.5619882,-0.1392 -0.2320716,-0.14197 -0.3822179,-0.43156 z m 1.6815651,-1.13142 q 0.00842,-0.58774 -0.2102668,-0.92078 -0.2159894,-0.33596 -0.604391,-0.33611 -0.3884028,-6e-5 -0.6166797,0.33563 -0.2255762,0.33287 -0.2340008,0.92061 -0.00842,0.58776 0.2075647,0.9237 0.2186915,0.33304 0.6070931,0.33319 0.3884028,7e-5 0.6139776,-0.3327 0.2282782,-0.33578 0.2367029,-0.92354 z"
            style="stroke-width:0.03759631"
