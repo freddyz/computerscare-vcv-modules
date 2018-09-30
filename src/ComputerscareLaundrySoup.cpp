@@ -29,9 +29,9 @@ struct ComputerscareLaundrySoup : Module {
 	enum InputIds {
     GLOBAL_CLOCK_INPUT,
     GLOBAL_RESET_INPUT,
-    CLOCK_INPUT = GLOBAL_RESET_INPUT + numFields,
+    CLOCK_INPUT,
     RESET_INPUT = CLOCK_INPUT + numFields,
-		NUM_INPUTS
+		NUM_INPUTS = RESET_INPUT + numFields
 	};
 	enum OutputIds { 
     TRG_OUTPUT, 
@@ -53,13 +53,13 @@ struct ComputerscareLaundrySoup : Module {
   std::vector<int> sequences[numFields];
   std::vector<int> sequenceSums[numFields];
 
-  int stepCity[numFields];
-  int stepState[numFields];
-  int stepCounty[numFields];
-  int numStepStates[numFields];
+  int stepCity[numFields] = {0};
+  int stepState[numFields] = {0};
+  int stepCounty[numFields] = {0};
+  int numStepStates[numFields] = {0};
   int currentChar = 0;
-  int numStepBlocks[numFields];
-  int offsets[numFields];
+  int numStepBlocks[numFields] = {0};
+  int offsets[numFields] = {0};
   
   bool compiled = false;
 
@@ -70,7 +70,6 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
   {
 		json_t *rootJ = json_object();
     
-    // gates
     json_t *sequencesJ = json_array();
     for (int i = 0; i < numFields; i++) {
       json_t *sequenceJ = json_string(textFields[i]->text.c_str());
@@ -83,7 +82,6 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
   
   void fromJson(json_t *rootJ) override
   {
-    // gates
     json_t *sequencesJ = json_object_get(rootJ, "sequences");
     if (sequencesJ) {
       for (int i = 0; i < numFields; i++) {
@@ -199,7 +197,6 @@ void ComputerscareLaundrySoup::step() {
     currentTriggerIsHigh = clockTriggers[i].isHigh();
     currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].value);
 
-    // check if this clock input is active, and read the value
     if(this->numStepBlocks[i] > 0) {
       if (inputs[CLOCK_INPUT + i].active) {
         if(currentTriggerClocked) {
@@ -222,7 +219,7 @@ void ComputerscareLaundrySoup::step() {
   }
 }
 
-////////////////////////////////////
+/////////////////////////////////////////////////
 struct NumberDisplayWidget3 : TransparentWidget {
 
   int *value;
