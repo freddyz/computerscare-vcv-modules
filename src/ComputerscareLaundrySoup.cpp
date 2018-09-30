@@ -188,28 +188,37 @@ void onCreate () override
 
 void ComputerscareLaundrySoup::step() {
 
-  bool globalGateIn = globalClockTrigger.isHigh();;
+  bool globalGateIn = globalClockTrigger.isHigh();
   bool activeStep = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool currentTriggerIsHigh;
+  bool currentTriggerClocked;
 
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
+    currentTriggerIsHigh = clockTriggers[i].isHigh();
+    currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].value);
 
     // check if this clock input is active, and read the value
     if(this->numStepBlocks[i] > 0) {
       if (inputs[CLOCK_INPUT + i].active) {
-       // currentTriggerIsHigh = 
+        if(currentTriggerClocked) {
+          incrementInternalStep(i);
+        }
       }
       else {
         if (inputs[GLOBAL_CLOCK_INPUT].active && clocked) {
-            incrementInternalStep(i);   
+          incrementInternalStep(i);   
         }
       }
       activeStep = (sequenceSums[i][this->stepCounty[i]] == (this->stepState[i] + this->offsets[i]) % this->numStepStates[i]);
     }
-
-    outputs[TRG_OUTPUT + i].value = (globalGateIn && activeStep) ? 10.0f : 0.0f;
+    if(inputs[CLOCK_INPUT + i].active) {
+      outputs[TRG_OUTPUT + i].value = (currentTriggerIsHigh && activeStep) ? 10.0f : 0.0f;
+    }
+    else {
+      outputs[TRG_OUTPUT + i].value = (globalGateIn && activeStep) ? 10.0f : 0.0f;
+    }
   }
 }
 
