@@ -1,6 +1,7 @@
 #include "Computerscare.hpp"
 #include "dsp/digital.hpp"
 #include "dsp/filter.hpp"
+#include "window.hpp"
 
 #include <string>
 #include <sstream>
@@ -17,6 +18,32 @@ public:
     module = _module;
   }
   virtual void onTextChange() override;
+  void draw(NVGcontext *vg) override {
+    nvgScissor(vg, 0, 0, box.size.x, box.size.y);
+
+    // Background
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 5.0);
+    nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
+    nvgFill(vg);
+
+    // Text
+    if (font->handle >= 0) {
+      bndSetFont(font->handle);
+
+      NVGcolor highlightColor = color;
+      highlightColor.a = 0.5;
+      int begin = min(cursor, selection);
+      int end = (this == gFocusedWidget) ? max(cursor, selection) : -1;
+      bndIconLabelCaret(vg, textOffset.x, textOffset.y+2,
+        box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
+        -1, color, 22, text.c_str(), highlightColor, begin, end);
+
+      bndSetFont(gGuiFont->handle);
+    }
+
+    nvgResetScissor(vg);
+  };
 
 private:
   ComputerscareLaundrySoup* module;
@@ -272,7 +299,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
     addInput(Port::create<InPort>(mm2px(Vec(12 , 2)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
     
     for(int i = 0; i < numFields; i++) {
-      addOutput(Port::create<InPort>(mm2px(Vec(55 , verticalStart + verticalSpacing*i)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
+      addOutput(Port::create<InPort>(mm2px(Vec(55 , verticalStart + verticalSpacing*i - 10)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
       addInput(Port::create<InPort>(mm2px(Vec(2, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::CLOCK_INPUT + i));
 
@@ -281,8 +308,9 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
       textField = Widget::create<MyTextField>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
       textField->setModule(module);
-      textField->box.size = mm2px(Vec(53, 10));
-      textField->multiline = true;
+      textField->box.size = mm2px(Vec(63, 10));
+      textField->multiline = false;
+      textField->color = nvgRGB(0xC0, 0xE7, 0xDE);
       addChild(textField);
       module->textFields[i] = textField;
 
