@@ -218,9 +218,14 @@ void ComputerscareLaundrySoup::step() {
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool currentTriggerIsHigh;
   bool currentTriggerClocked;
+  bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].value / 2.f);
+  bool currentResetActive;
+  bool currentResetTriggered;
 
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
+    currentResetActive = inputs[RESET_INPUT + i].active;
+    currentResetTriggered = resetTriggers[i].process(inputs[RESET_INPUT+i].value / 2.f);
     currentTriggerIsHigh = clockTriggers[i].isHigh();
     currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].value);
 
@@ -235,6 +240,10 @@ void ComputerscareLaundrySoup::step() {
           incrementInternalStep(i);   
         }
       }
+      if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
+        resetOneOfThem(i);
+      }
+
       activeStep = (sequenceSums[i][this->stepCounty[i]] == (this->stepState[i] + this->offsets[i]) % this->numStepStates[i]);
     }
     if(inputs[CLOCK_INPUT + i].active) {
