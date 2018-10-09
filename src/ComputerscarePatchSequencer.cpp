@@ -54,14 +54,12 @@ struct ComputerscarePatchSequencer : Module {
   int numAddresses = 2;
   bool switch_states[maxSteps][10][10] = {};
    
-  bool onlyRandomizeActive = false;
-  bool neg5ToPos5 = false;
+  bool onlyRandomizeActive = true;
   
   float input_values[numInputs] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
   float sums[numOutputs] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}; 
   
   int randomizationStepEnum = 0; //0: edit step, 1: active step, 2: all steps
-
 
 ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
@@ -359,20 +357,19 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 		} 
 
 	//clock input
-  	addInput(Port::create<InPort>(Vec(24, 37), Port::INPUT, module, ComputerscarePatchSequencer::TRG_INPUT));
+	addInput(Port::create<InPort>(Vec(24, 37), Port::INPUT, module, ComputerscarePatchSequencer::TRG_INPUT));
 
-  	//reset input
-  	addInput(Port::create<InPort>(Vec(24, 3), Port::INPUT, module, ComputerscarePatchSequencer::RESET_INPUT));
-  	
-  	//manual clock button
+	//reset input
+	addInput(Port::create<InPort>(Vec(24, 3), Port::INPUT, module, ComputerscarePatchSequencer::RESET_INPUT));
+	
+	//manual clock button
  	addParam(ParamWidget::create<LEDButton>(Vec(7 , 37), module, ComputerscarePatchSequencer::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
 
  	//reset button
  	addParam(ParamWidget::create<LEDButton>(Vec(7 , 3), module, ComputerscarePatchSequencer::RESET_PARAM, 0.0, 1.0, 0.0)); 
 
-
-  	//randomize input
-  	addInput(Port::create<InPort>(Vec(270, 0), Port::INPUT, module, ComputerscarePatchSequencer::RANDOMIZE_INPUT));
+	//randomize input
+	addInput(Port::create<InPort>(Vec(270, 0), Port::INPUT, module, ComputerscarePatchSequencer::RANDOMIZE_INPUT));
 
   //active step display
   NumberDisplayWidget3 *display = new NumberDisplayWidget3();
@@ -417,15 +414,6 @@ struct OnlyRandomizeActiveMenuItem : MenuItem {
 	}
 };
 
-struct Neg5MenuItem : MenuItem {
-	ComputerscarePatchSequencer *patchSequencer;
-	void onAction(EventAction &e) override {
-		patchSequencer->neg5ToPos5 = !patchSequencer->neg5ToPos5;
-	}
-	void step() override {
-		rightText = patchSequencer->neg5ToPos5 ? "✔" : "";
-	}
-};
 struct WhichStepToRandomizeItem : MenuItem {
 	ComputerscarePatchSequencer *patchSequencer;
 	int stepEnum;
