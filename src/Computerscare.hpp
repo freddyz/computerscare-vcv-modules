@@ -23,7 +23,15 @@ extern Model *modelComputerscareLaundrySoup;
 
 struct OutPort : SVGPort {
 	OutPort() {
-		background->svg = SVG::load(assetPlugin(plugin, "res/09 Output Plug.svg"));
+		background->svg = SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
+		background->wrap();
+		box.size = background->box.size;
+	}
+};
+
+struct PointingUpPort : SVGPort {
+	PointingUpPort() {
+		background->svg = SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-pointing-up.svg"));
 		background->wrap();
 		box.size = background->box.size;
 	}

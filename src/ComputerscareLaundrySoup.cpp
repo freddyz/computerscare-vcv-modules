@@ -12,7 +12,9 @@ struct ComputerscareLaundrySoup;
 const int numFields = 5;
 
 class MyTextField : public LedDisplayTextField {
+
 public:
+  int fontSize = 18;
   MyTextField() : LedDisplayTextField() {}
   void setModule(ComputerscareLaundrySoup* _module) {
     module = _module;
@@ -22,7 +24,7 @@ public:
     bndSetFont(font->handle);
     int textPos = bndIconLabelTextPosition(gVg, textOffset.x, textOffset.y,
       box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
-      -1, 22, text.c_str(), mousePos.x, mousePos.y);
+      -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
     bndSetFont(gGuiFont->handle);
     return textPos;
   }
@@ -30,7 +32,7 @@ public:
     nvgScissor(vg, 0, 0, box.size.x, box.size.y);
 
     // Background
-    nvgFontSize(vg, 22);
+    nvgFontSize(vg, fontSize);
     nvgBeginPath(vg);
     nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 5.0);
     nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
@@ -45,9 +47,9 @@ public:
       int begin = min(cursor, selection);
       int end = (this == gFocusedWidget) ? max(cursor, selection) : -1;
       //bndTextField(vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
-      bndIconLabelCaret(vg, textOffset.x, textOffset.y+2,
+      bndIconLabelCaret(vg, textOffset.x, textOffset.y - 2,
         box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
-        -1, color, 22, text.c_str(), highlightColor, begin, end);
+        -1, color, fontSize, text.c_str(), highlightColor, begin, end);
 
       bndSetFont(gGuiFont->handle);
     }
@@ -318,7 +320,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
     addInput(Port::create<InPort>(mm2px(Vec(12 , 0)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
     
     for(int i = 0; i < numFields; i++) {
-      addOutput(Port::create<InPort>(mm2px(Vec(55 , verticalStart + verticalSpacing*i - 10)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
+      addOutput(Port::create<OutPort>(mm2px(Vec(55 , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
       addInput(Port::create<InPort>(mm2px(Vec(2, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::CLOCK_INPUT + i));
 
@@ -327,7 +329,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
       textField = Widget::create<MyTextField>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
       textField->setModule(module);
-      textField->box.size = mm2px(Vec(63, 10));
+      textField->box.size = mm2px(Vec(63, 8));
       textField->multiline = false;
       textField->color = nvgRGB(0xC0, 0xE7, 0xDE);
       addChild(textField);

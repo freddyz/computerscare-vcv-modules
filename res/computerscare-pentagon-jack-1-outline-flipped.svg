@@ -9,21 +9,21 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="27"
-   height="29"
-   viewBox="0 0 7.1437501 7.6729167"
+   width="32"
+   height="34"
+   viewBox="0 0 8.4666666 8.9958332"
    version="1.1"
    id="svg4524"
    inkscape:version="0.92.2 5c3e80d, 2017-08-06"
-   sodipodi:docname="computerscare-pentagon-jack-1-outline.svg">
+   sodipodi:docname="computerscare-pentagon-jack-1-outline-flipped.svg">
   <defs
      id="defs4518">
     <inkscape:perspective
        sodipodi:type="inkscape:persp3d"
-       inkscape:vp_x="0 : 99.999999 : 1"
-       inkscape:vp_y="0 : 999.99999 : 0"
-       inkscape:vp_z="200 : 99.999999 : 1"
-       inkscape:persp3d-origin="100 : 66.666668 : 1"
+       inkscape:vp_x="0 : 99.999997 : 1"
+       inkscape:vp_y="0 : 999.99997 : 0"
+       inkscape:vp_z="200 : 99.999997 : 1"
+       inkscape:persp3d-origin="99.999998 : 66.666666 : 1"
        id="perspective5087" />
   </defs>
   <sodipodi:namedview
@@ -34,8 +34,8 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="15.839192"
-     inkscape:cx="17.668885"
-     inkscape:cy="4.2468642"
+     inkscape:cx="17.38478"
+     inkscape:cy="14.146193"
      inkscape:document-units="mm"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -61,17 +61,24 @@
      inkscape:label="Layer 1"
      inkscape:groupmode="layer"
      id="layer1"
-     transform="translate(0,-289.32708)">
+     transform="translate(0,-288.00418)"
+     style="display:inline">
     <path
-       style="fill:#eaeaea;fill-opacity:1;stroke:#000000;stroke-width:0.15000001;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       inkscape:transform-center-y="0.34786668"
-       d="m 3.5701275,296.80329 -3.46468092,-2.51722 1.32339032,-4.07301 h 4.2825813 l 1.3233906,4.07301 z"
+       style="fill:#eaeaea;fill-opacity:1;stroke:#000000;stroke-width:0.235;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       inkscape:transform-center-y="-0.32699901"
+       d="m 4.2550057,289.04768 -3.25680009,2.36619 1.24398689,3.82863 H 6.267819 l 1.2439871,-3.82863 z"
        id="path5105"
        inkscape:connector-curvature="0" />
     <path
        style="fill:#000000;fill-opacity:1;stroke:#198c73;stroke-width:0.44999999;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 5.6643686,292.94689 a 2.094241,2.094241 0 0 1 -2.0942411,2.09425 2.094241,2.094241 0 0 1 -2.094241,-2.09425 2.094241,2.094241 0 0 1 2.094241,-2.09424 2.094241,2.094241 0 0 1 2.0942411,2.09424 z"
+       d="m 6.3492468,292.70726 a 2.094241,2.094241 0 0 0 -2.0942411,-2.09425 2.094241,2.094241 0 0 0 -2.094241,2.09425 2.094241,2.094241 0 0 0 2.094241,2.09424 2.094241,2.094241 0 0 0 2.0942411,-2.09424 z"
        id="path5129"
        inkscape:connector-curvature="0" />
+    <path
+       inkscape:connector-curvature="0"
+       id="path894"
+       d="m 4.2609653,288.31605 -3.98869272,2.89794 1.52354502,4.68902 h 4.9302956 l 1.5235452,-4.68902 z"
+       inkscape:transform-center-y="-0.40048513"
+       style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.368;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
   </g>
 </svg>
