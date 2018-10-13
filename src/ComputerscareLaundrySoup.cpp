@@ -18,10 +18,19 @@ public:
     module = _module;
   }
   virtual void onTextChange() override;
+  int getTextPosition(Vec mousePos) override {
+    bndSetFont(font->handle);
+    int textPos = bndIconLabelTextPosition(gVg, textOffset.x, textOffset.y,
+      box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
+      -1, 22, text.c_str(), mousePos.x, mousePos.y);
+    bndSetFont(gGuiFont->handle);
+    return textPos;
+  }
   void draw(NVGcontext *vg) override {
     nvgScissor(vg, 0, 0, box.size.x, box.size.y);
 
     // Background
+    nvgFontSize(vg, 22);
     nvgBeginPath(vg);
     nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 5.0);
     nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
@@ -35,6 +44,7 @@ public:
       highlightColor.a = 0.5;
       int begin = min(cursor, selection);
       int end = (this == gFocusedWidget) ? max(cursor, selection) : -1;
+      //bndTextField(vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
       bndIconLabelCaret(vg, textOffset.x, textOffset.y+2,
         box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
         -1, color, 22, text.c_str(), highlightColor, begin, end);
@@ -194,7 +204,7 @@ void onCreate () override
   absoluteStep[0] would run from 0 to 7
 
   332-4 (332 offset by 4)
-  
+
 
   */
   void incrementInternalStep(int i) {
@@ -323,7 +333,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       addChild(textField);
       module->textFields[i] = textField;
 
-        //active step display
+      //active step display
       NumberDisplayWidget3 *display = new NumberDisplayWidget3();
       display->box.pos = mm2px(Vec(25,verticalStart - 9.2 +verticalSpacing*i));
       display->box.size = Vec(50, 20);
