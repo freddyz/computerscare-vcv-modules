@@ -347,7 +347,6 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 	   }
      else {
       addOutput(Port::create<InPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), Port::OUTPUT, module, ComputerscarePatchSequencer::OUTPUTS + i));
-
      }
 
      for(int j = 0 ; j < 10 ; j++ )
