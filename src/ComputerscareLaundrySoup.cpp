@@ -10,7 +10,7 @@
 struct ComputerscareLaundrySoup;
 
 const int numFields = 5;
-
+const std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
 
 class MyTextField : public LedDisplayTextField {
 
@@ -96,9 +96,9 @@ struct ComputerscareLaundrySoup : Module {
 
   int absoluteStep[numFields] = {0};
   int numStepStates[numFields] = {0};
-  int currentChar = 0;
+
   int numStepBlocks[numFields] = {0};
-  int offsets[numFields] = {0};
+
   
   bool compiled = false;
 
@@ -132,9 +132,27 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
     onCreate();
   }
  
-	void onRandomize() override {
-		
-	}
+  void onRandomize() override {
+    randomizeAllFields();
+  }
+  void randomizeAllFields() {
+    std::string mainlookup ="111111111111111111122223333333344444444444444445556667778888888888888999abcdefgggggggggg";
+    std::string string;
+    std::string randchar;
+    int length;
+
+    for (int i = 0; i < numFields; i++) {
+      length = rand() % 12 + 1;
+      string = "";
+      for(int j = 0; j < length; j++) {
+        randchar = mainlookup[rand() % mainlookup.size()];
+        string = string + randchar;
+      }
+      textFields[i]->text = string;
+    }
+    onCreate();
+
+  }
   /*
     8-4
     sequenceSums wants to be (0,8) -> (4, 4)
@@ -142,40 +160,77 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
   void parseFormula(std::string expr, int index) {
     int numSteps = 0;
     int mappedIndex = 0;
+    int currentVal = 0;
+    int hashnum;
+        int thisoffset;
 
     std::stringstream test(expr);
+    
     std::string segment;
+    std::string insegment;
+
+
+    
+    std::vector<std::string> commasep;
     std::vector<std::string> seglist;
+    std::vector<std::string> hashlist;
+    std::vector<int> offsets;
 
-    while(std::getline(test, segment, '-'))
-    {
-       seglist.push_back(segment);
-    }
-
-    if(seglist.size() > 1) {
-      offsets[index] = std::stoi( seglist[1] );
-    }
-    else {
-      offsets[index] = 0;
-    }
     sequences[index].resize(0);
     sequenceSums[index].resize(0);
     sequenceSums[index].push_back(0);
     absoluteSequences[index].resize(0);
 
-    for(char& c : seglist[0]) {
-      currentChar = c - '0';
-      numSteps += currentChar;
-      sequenceSums[index].push_back(numSteps);
-      sequences[index].push_back(currentChar);
+    while(std::getline(test,insegment,',')) {
+      std::stringstream inseg(insegment);
+      hashlist.resize(0);
+      while(std::getline(inseg, segment, '#'))
+      {
+         hashlist.push_back(segment);
+      }
+      if(hashlist.size() > 1) {
+        hashnum = std::stoi( hashlist[1] );
+      }
+      else {
+        hashnum = 1;
+      }
+      for(int i = 0; i < hashnum; i++ ) {
+        seglist.resize(0);
+        std::stringstream leftofhash(hashlist[0]);
+        while(std::getline(leftofhash, segment, '-'))
+        {
+           seglist.push_back(segment);
+        }
+        if(i==0) {
+          if(seglist.size() > 1) {
+            thisoffset = std::stoi( seglist[1] );
+          }
+          else {
+            thisoffset = 0;
+          }
+          offsets.push_back(thisoffset);
+        }
+
+
+        for(char& c : seglist[0]) {
+          currentVal = b64lookup.find(c);
+          if (currentVal != -1) {
+            numSteps += currentVal + 1;
+            sequenceSums[index].push_back(numSteps);
+            sequences[index].push_back(currentVal + 1);
+          }
+        }
+      }
     }
+
+
 
     numStepStates[index] = numSteps;
     numStepBlocks[index] = sequences[index].size();
 
     absoluteSequences[index].resize(numSteps);
     for(unsigned i = 0; i < sequenceSums[index].size() - 1; i++) {
-      mappedIndex = (sequenceSums[index][i] + offsets[index] ) % numSteps;
+      mappedIndex = (sequenceSums[index][i] + offsets[0] ) % numSteps;
       absoluteSequences[index][mappedIndex] = true;
     }
   }
@@ -186,15 +241,13 @@ void onCreate () override
       if(textFields[i]->text.size() > 0) {
         parseFormula(textFields[i]->text,i);
       }
+      resetOneOfThem(i);
     }
     compiled = true;
   }
 
   void onReset () override
   {
-    for(int i = 0; i < numFields; i++) {
-      resetOneOfThem(i);
-    }
     onCreate();
   }
 
