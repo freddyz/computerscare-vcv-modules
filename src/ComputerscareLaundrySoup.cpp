@@ -9,7 +9,7 @@
 
 struct ComputerscareLaundrySoup;
 
-const int numFields = 5;
+const int numFields = 6;
 const std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
 
 class MyTextField : public LedDisplayTextField {
@@ -48,7 +48,7 @@ public:
       int begin = min(cursor, selection);
       int end = (this == gFocusedWidget) ? max(cursor, selection) : -1;
       //bndTextField(vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
-      bndIconLabelCaret(vg, textOffset.x, textOffset.y - 2,
+      bndIconLabelCaret(vg, textOffset.x, textOffset.y - 3,
         box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
         -1, color, fontSize, text.c_str(), highlightColor, begin, end);
 
@@ -137,9 +137,9 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
   }
   void randomizeAllFields() {
     std::string mainlookup ="111111111111111111122223333333344444444444444445556667778888888888888999abcdefgggggggggg";
-    std::string string;
-    std::string randchar;
-    int length;
+    std::string string = "";
+    std::string randchar = "";
+    int length = 0;
 
     for (int i = 0; i < numFields; i++) {
       length = rand() % 12 + 1;
@@ -161,8 +161,8 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
     int numSteps = 0;
     int mappedIndex = 0;
     int currentVal = 0;
-    int hashnum;
-        int thisoffset;
+    int hashnum = 1;
+        int thisoffset = 0;
 
     std::stringstream test(expr);
     
@@ -222,8 +222,6 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
         }
       }
     }
-
-
 
     numStepStates[index] = numSteps;
     numStepBlocks[index] = sequences[index].size();
@@ -362,8 +360,8 @@ void MyTextField::onTextChange() {
 
 struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
-  int verticalSpacing = 22;
-  int verticalStart = 23;
+  double verticalSpacing = 18.4;
+  int verticalStart = 22;
   ComputerscareLaundrySoupWidget(ComputerscareLaundrySoup *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareLaundrySoupPanel.svg")));
 
@@ -374,7 +372,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
     addInput(Port::create<InPort>(mm2px(Vec(12 , 0)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
     
     for(int i = 0; i < numFields; i++) {
-      addOutput(Port::create<OutPort>(mm2px(Vec(55 , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
+      addOutput(Port::create<OutPort>(mm2px(Vec(54 , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
       addInput(Port::create<InPort>(mm2px(Vec(2, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::CLOCK_INPUT + i));
 
@@ -383,7 +381,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
       textField = Widget::create<MyTextField>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
       textField->setModule(module);
-      textField->box.size = mm2px(Vec(63, 8));
+      textField->box.size = mm2px(Vec(63, 7));
       textField->multiline = false;
       textField->color = nvgRGB(0xC0, 0xE7, 0xDE);
       addChild(textField);
