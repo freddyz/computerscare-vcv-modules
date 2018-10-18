@@ -16,10 +16,33 @@ extern Plugin *plugin;
 	#define COLOR_PINK nvgRGB(250, 190, 190)
 #endif
 
+//#245559
+// 24c9a6
+
+
+static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
+
+static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
+
+//36 201 166
+
 // Forward-declare each Model, defined in each module source file
 extern Model *modelComputerscareDebug;
 extern Model *modelComputerscarePatchSequencer;
 extern Model *modelComputerscareLaundrySoup;
+
+struct ComputerscareGreenLight : GrayModuleLightWidget {
+	ComputerscareGreenLight() {
+		addBaseColor(COLOR_COMPUTERSCARE_GREEN);
+	}
+};
+
+template <typename BASE>
+struct ComputerscareHugeLight : BASE {
+	ComputerscareHugeLight() {
+		this->box.size = mm2px(Vec(8.179, 8.179));
+	}
+};
 
 struct OutPort : SVGPort {
 	OutPort() {

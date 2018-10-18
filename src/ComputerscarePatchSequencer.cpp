@@ -60,6 +60,7 @@ struct ComputerscarePatchSequencer : Module {
   float sums[numOutputs] = {0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0}; 
   
   int randomizationStepEnum = 0; //0: edit step, 1: active step, 2: all steps
+  int randomizationOutputBoundsEnum = 1; //0: randomize exactly one per output, 1: randomize exactly one per output, 2: randomize 1 or more, 3: randomize 0 or more
 
 ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
@@ -85,6 +86,7 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
 	json_object_set_new(rootJ, "buttons", button_statesJ);
     json_object_set_new(rootJ, "onlyRandomizeActive", json_boolean(onlyRandomizeActive));
     json_object_set_new(rootJ, "randomizationStepEnum", json_integer(getRandomizationStepEnum()));
+    json_object_set_new(rootJ, "randomizationOutputBoundsEnum", json_integer(getRandomizationOutputBoundsEnum()));
     return rootJ;
   } 
   
@@ -110,18 +112,41 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
 
 	json_t *randomizationStepEnumJ = json_object_get(rootJ, "randomizationStepEnum");
 	if (randomizationStepEnumJ){ setRandomizationStepEnum(json_integer_value(randomizationStepEnumJ)); }  
+  
+json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOutputBoundsEnum");
+  if (randomizationOutputBoundsEnumJ){ setRandomizationOutputBoundsEnum(json_integer_value(randomizationOutputBoundsEnumJ)); }  
+  
   } 
-  	int getRandomizationStepEnum() {
+  int getRandomizationStepEnum() {
 		return randomizationStepEnum;
 	}
+   
+    int getRandomizationOutputBoundsEnum() {
+    return randomizationOutputBoundsEnum;
+  }
 
 	void setRandomizationStepEnum(int randomizationStep) {
 		randomizationStepEnum = randomizationStep;
 	}
+  void setRandomizationOutputBoundsEnum(int randomizationOutputBounds) {
+    randomizationOutputBoundsEnum = randomizationOutputBounds;
+  }
 
-  	void onRandomize() override {
-  		randomizePatchMatrix();
-  	}
+	void onRandomize() override {
+		randomizePatchMatrix();
+	}
+
+  void randomizePatchMatrix()
+  {
+    if(onlyRandomizeActive) {
+      randomizeMatrixOnlyActive();
+    }
+    else {
+      randomizeMatrixIncludingDisconnected();
+    }
+  };
+
+
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
 	// - onSampleRateChange: event triggered by a change of sample rate
@@ -163,7 +188,7 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
 
   	}
 
-  	void randomizeMatrixOnePerOutput() {
+  	void randomizeMatrixIncludingDisconnected() {
 		int randomIndex;
 		for(int k = 0; k < maxSteps; k++) {
 			if((randomizationStepEnum == 0 && k == editAddress) || (randomizationStepEnum == 1 && k == address) || randomizationStepEnum == 2) {
@@ -183,16 +208,7 @@ ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_
 		}
 
   	}
-	void randomizePatchMatrix()
-	{
-		if(onlyRandomizeActive) {
-			randomizeMatrixOnlyActive();
-		}
-		else {
-			randomizeMatrixOnePerOutput();
-		}
 
-	}; // end randomize()
 	void onReset() override
 	{
 		for(int k =0; k < maxSteps; k++) {
@@ -355,10 +371,12 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 	     addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
 	     
 	     // green light indicates the state of the matrix that is being edited
-	     addChild(ModuleLightWidget::create<LargeLight<GreenLight>>(Vec(35 + column_spacing * j +3.4, top_row + row_spacing * i +5.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10));
+	     addChild(ModuleLightWidget::create<ComputerscareHugeLight<ComputerscareGreenLight>>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10));
 	   	 
+       double xpos = 35 + column_spacing * j + 6.3;
+       double ypos = top_row + row_spacing * i + 8.3;
 	   	 // red light indicates the state of the matrix that is the active step
-	   	 addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(35 + column_spacing * j + 6.3, top_row + row_spacing * i + 8.3), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
+	   	 addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
 
 	   		}
 		} 
@@ -432,6 +450,19 @@ struct WhichStepToRandomizeItem : MenuItem {
 		MenuItem::step();
 	}
 };
+
+struct WhichRandomizationOutputBoundsItem : MenuItem {
+  ComputerscarePatchSequencer *patchSequencer;
+  int boundsEnum;
+  void onAction(EventAction &e) override {
+    patchSequencer->setRandomizationOutputBoundsEnum(boundsEnum);
+  }
+  void step() override {
+    rightText = CHECKMARK(patchSequencer->getRandomizationOutputBoundsEnum() == boundsEnum);
+    MenuItem::step();
+  }
+};
+
 Menu *ComputerscarePatchSequencerWidget::createContextMenu() {
 	Menu *menu = ModuleWidget::createContextMenu();
 	ComputerscarePatchSequencer *patchSequencer = dynamic_cast<ComputerscarePatchSequencer*>(module);
@@ -455,6 +486,15 @@ Menu *ComputerscarePatchSequencerWidget::createContextMenu() {
 	menu->addChild(construct<WhichStepToRandomizeItem>(&MenuItem::text, "Edit step", &WhichStepToRandomizeItem::patchSequencer, patchSequencer, &WhichStepToRandomizeItem::stepEnum, 0));
 	menu->addChild(construct<WhichStepToRandomizeItem>(&MenuItem::text, "Active step", &WhichStepToRandomizeItem::patchSequencer, patchSequencer, &WhichStepToRandomizeItem::stepEnum, 1));
 	menu->addChild(construct<WhichStepToRandomizeItem>(&MenuItem::text, "All steps", &WhichStepToRandomizeItem::patchSequencer, patchSequencer, &WhichStepToRandomizeItem::stepEnum, 2));
+ 
+ // randomization output bounds
+  menu->addChild(construct<MenuLabel>());
+ menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "None", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 0));
+  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or none", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 1));
+  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Exactly one", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 2));
+  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Zero or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 3));
+ menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 4));
+
 
 	return menu;
 }
