@@ -52,8 +52,8 @@ struct OutPort : SVGPort {
 	}
 };
 
-struct PointingUpPort : SVGPort {
-	PointingUpPort() {
+struct PointingUpPentagonPort : SVGPort {
+	PointingUpPentagonPort() {
 		background->svg = SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-pointing-up.svg"));
 		background->wrap();
 		box.size = background->box.size;

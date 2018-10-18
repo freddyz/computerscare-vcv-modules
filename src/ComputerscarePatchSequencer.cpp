@@ -198,16 +198,28 @@ json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOu
 
 					for (int j = 0; j < 10; j++) 
 					{
-						if(j==randomIndex) 
-							switch_states[k][j][i] = 1;				
-						else 
-							switch_states[k][j][i] = 0;
-					}			
+            if(randomizationOutputBoundsEnum == 3) {
+              switch_states[k][j][i] = (j==randomIndex || randomUniform() < 0.2) ? 1 : 0;
+            }
+            else if(randomizationOutputBoundsEnum == 2) {
+               switch_states[k][j][i] = randomUniform() < 0.2 ? 1 : 0;
+            }
+            else if(randomizationOutputBoundsEnum == 0) {
+               switch_states[k][j][i] = (j==randomIndex && randomUniform() < 0.7) ? 1 : 0;
+            }
+             else {
+            
+					 	if(j==randomIndex) 
+					 		switch_states[k][j][i] = 1;				
+					 	else 
+					 		switch_states[k][j][i] = 0;
+					 }		
+          }	
 				}	
 			}
 		}
 
-  	}
+  }
 
 	void onReset() override
 	{
@@ -354,12 +366,15 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   int row_spacing = 26; 
   int column_spacing = 26;
 
+  int rdx = rand()%8;
+  int rdy  = rand()%8;
+
 	for (int i = 0 ; i < 10 ; i++)
   {
 	 addInput(Port::create<InPort>(Vec(3, i * row_spacing + top_row), Port::INPUT, module, ComputerscarePatchSequencer::INPUT_JACKS + i));  
    	 
      if(i%2) {
-      addOutput(Port::create<PointingUpPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), Port::OUTPUT, module, ComputerscarePatchSequencer::OUTPUTS + i));
+      addOutput(Port::create<PointingUpPentagonPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), Port::OUTPUT, module, ComputerscarePatchSequencer::OUTPUTS + i));
 	   }
      else {
       addOutput(Port::create<InPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), Port::OUTPUT, module, ComputerscarePatchSequencer::OUTPUTS + i));
@@ -367,18 +382,19 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
      for(int j = 0 ; j < 10 ; j++ )
 	   {
-	   	 // the part you click
-	     addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
-	     
-	     // green light indicates the state of the matrix that is being edited
-	     addChild(ModuleLightWidget::create<ComputerscareHugeLight<ComputerscareGreenLight>>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10));
-	   	 
-       double xpos = 35 + column_spacing * j + 6.3;
-       double ypos = top_row + row_spacing * i + 8.3;
-	   	 // red light indicates the state of the matrix that is the active step
-	   	 addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
+   	 // the part you click
+     addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
+     
+     // green light indicates the state of the matrix that is being edited
+     addChild(ModuleLightWidget::create<ComputerscareHugeLight<ComputerscareGreenLight>>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10));
+   	 
+     double xpos = 35 + column_spacing * j + 6.3 + rand()%4;
+     double ypos = top_row + row_spacing * i + 8.3 + rand()%4;
+   	 // red light indicates the state of the matrix that is the active step
+	   	addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
+      addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos+rdx, ypos+rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
 
-	   		}
+	   	}
 		} 
 
 	//clock input
@@ -489,11 +505,10 @@ Menu *ComputerscarePatchSequencerWidget::createContextMenu() {
  
  // randomization output bounds
   menu->addChild(construct<MenuLabel>());
- menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "None", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 0));
-  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or none", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 1));
-  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Exactly one", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 2));
-  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Zero or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 3));
- menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 4));
+  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or none", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 0));
+  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Exactly one", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 1));
+  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Zero or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 2));
+ menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 3));
 
 
 	return menu;
