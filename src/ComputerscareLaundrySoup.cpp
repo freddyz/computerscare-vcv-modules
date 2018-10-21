@@ -162,7 +162,7 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
     int mappedIndex = 0;
     int currentVal = 0;
     int hashnum = 1;
-        int thisoffset = 0;
+    int thisoffset = 0;
 
     std::stringstream test(expr);
     
@@ -188,12 +188,8 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
       {
          hashlist.push_back(segment);
       }
-      if(hashlist.size() > 1) {
-        hashnum = std::stoi( hashlist[1] );
-      }
-      else {
-        hashnum = 1;
-      }
+      hashnum = hashlist.size() > 1 ? std::stoi(hashlist[1]) : 1;
+
       for(int i = 0; i < hashnum; i++ ) {
         seglist.resize(0);
         std::stringstream leftofhash(hashlist[0]);
@@ -202,12 +198,7 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
            seglist.push_back(segment);
         }
         if(i==0) {
-          if(seglist.size() > 1) {
-            thisoffset = std::stoi( seglist[1] );
-          }
-          else {
-            thisoffset = 0;
-          }
+          thisoffset = seglist.size() > 1 ? std::stoi(seglist[1]) : 0;
           offsets.push_back(thisoffset);
         }
 
@@ -237,7 +228,7 @@ void onCreate () override
   {
     for(int i = 0; i < numFields; i++) {
       if(textFields[i]->text.size() > 0) {
-        parseFormula(textFields[i]->text,i);
+        absoluteFormulas[i] = parseFormula(textFields[i]->text,i);
       }
       resetOneOfThem(i);
     }
