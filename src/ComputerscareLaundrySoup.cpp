@@ -153,10 +153,72 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
     onCreate();
 
   }
+  // split by 
+std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
+  std::vector <int> absoluteSequence;
+  
+  std::vector <int> sequenceSums;
+  absoluteSequence.resize(0);
+  sequenceSums.push_back(0);
+    int numSteps = 0;
+    int mappedIndex = 0;
+    int currentVal = 0;
+    
+    for(unsigned int i = 0; i < input.length(); i++) {
+      currentVal = lookup.find(input[i]) + 1;
+        if (currentVal != 0) {
+            numSteps += currentVal;
+            sequenceSums.push_back(numSteps);
+        }
+    }
+
+    absoluteSequence.resize(numSteps);
+    for(unsigned i = 0; i < sequenceSums.size() - 1; i++) {
+      mappedIndex = (sequenceSums[i] + offset ) % numSteps;
+      absoluteSequence[mappedIndex] = 1;
+    }
+    //std::rotate(absoluteSequence.begin(),absoluteSequence.end() - offset, absoluteSequence.end());
+    return absoluteSequence;
+}
+std::string atExpand(std::string input, int atnum, std::string lookup) {
+  std::string output="";
+  int length = input.length();
+  int total = 0;
+  int index = 0;
+  int lookupVal;
+  while(total < atnum) {
+    lookupVal = b64lookup.find(input[index]) + 1;
+    lookupVal = lookupVal == 0 ? 1 : lookupVal;
+    if(total + lookupVal <= atnum) {
+      output += lookup[lookupVal-1];
+      total += lookupVal;
+    }
+    else {
+      output += b64lookup[atnum-total - 1];
+      total = atnum;
+    }
+    index++;
+    index = index%length;
+  }
+  return output;
+}
+
+std::string hashExpand(std::string input, int hashnum) {
+  std::string output="";
+  int length = input.length();
+  for(int i = 0; i < hashnum; i++) {
+    for(int j = 0; j< length; j++) {
+      output += input[j];
+    }
+  }
+  return output;
+}
+
   /*
     8-4
     sequenceSums wants to be (0,8) -> (4, 4)
   */
+
   void parseFormula(std::string expr, int index) {
     int numSteps = 0;
     int mappedIndex = 0;
@@ -202,7 +264,6 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
           offsets.push_back(thisoffset);
         }
 
-
         for(char& c : seglist[0]) {
           currentVal = b64lookup.find(c);
           if (currentVal != -1) {
@@ -211,7 +272,7 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
             sequences[index].push_back(currentVal + 1);
           }
         }
-      }
+      } // end for(int i = 0; i < hashnum; i++ ) {
     }
 
     numStepStates[index] = numSteps;
@@ -226,9 +287,11 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
 
 void onCreate () override
   {
+std::string test = hashExpand("123",3);
+    printf("hashExpand: %s\n",test.c_str());
     for(int i = 0; i < numFields; i++) {
       if(textFields[i]->text.size() > 0) {
-        absoluteFormulas[i] = parseFormula(textFields[i]->text,i);
+        parseFormula(textFields[i]->text,i);
       }
       resetOneOfThem(i);
     }
@@ -237,6 +300,9 @@ void onCreate () override
 
   void onReset () override
   {
+    printf("jim\n");
+    std::string test = hashExpand("123",3);
+
     onCreate();
   }
 
