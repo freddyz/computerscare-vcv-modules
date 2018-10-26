@@ -92,13 +92,10 @@ struct ComputerscareLaundrySoup : Module {
 
   std::vector<int> sequences[numFields];
   std::vector<int> sequenceSums[numFields];
-  std::vector<bool> absoluteSequences[numFields];
+  std::vector<int> absoluteSequences[numFields];
 
   int absoluteStep[numFields] = {0};
   int numStepStates[numFields] = {0};
-
-  int numStepBlocks[numFields] = {0};
-
   
   bool compiled = false;
 
@@ -135,6 +132,7 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
   void onRandomize() override {
     randomizeAllFields();
   }
+
   void randomizeAllFields() {
     std::string mainlookup ="111111111111111111122223333333344444444444444445556667778888888888888999abcdefgggggggggg";
     std::string string = "";
@@ -153,10 +151,56 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
     onCreate();
 
   }
-  // split by 
+
+std::vector<int> parseEntireString(std::string input,std::string lookup) {
+        std::vector<int> absoluteSequence;
+        if(input.length() == 0) {
+          absoluteSequence.push_back(1);
+          return absoluteSequence;
+        }
+        absoluteSequence.resize(0);
+
+        std::vector<int> commaVec;
+        std::vector<std::string> atVec;
+        std::vector<std::string> offsetVec;
+
+        std::string commaseg;
+        std::string atseg;
+        std::string offsetseg;
+        std::string atlhs;
+        std::string commalhs;
+        
+        int atnum;
+        int offsetnum;
+
+        std::stringstream inputstream(input);
+        std::stringstream atstream(input);
+        std::stringstream offsetstream(input);
+        while(std::getline(inputstream,commaseg,',')) {
+              std::stringstream atstream(commaseg);
+              atVec.resize(0);
+              while(std::getline(atstream,atseg,'@')) {
+                atVec.push_back(atseg);
+              }
+              atnum  = atVec.size() > 1 ? std::stoi(atVec[1]) : -1;
+              std::stringstream offsetstream(atVec[0]);
+              offsetVec.resize(0);
+              while(std::getline(offsetstream,offsetseg,'-')) {
+                offsetVec.push_back(offsetseg);
+              }
+              offsetnum  = offsetVec.size() > 1 ? std::stoi(offsetVec[1]) : 0;
+              commaVec.resize(0);
+              commaVec = parseDt(atExpand(offsetVec[0],atnum,lookup),offsetnum,lookup); 
+              absoluteSequence.insert(absoluteSequence.end(),commaVec.begin(),commaVec.end());
+            }
+        return absoluteSequence;
+}
 std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
   std::vector <int> absoluteSequence;
-  
+  if(input.length() == 0) {
+    absoluteSequence.push_back(0);
+    return absoluteSequence;
+  }
   std::vector <int> sequenceSums;
   absoluteSequence.resize(0);
   sequenceSums.push_back(0);
@@ -177,7 +221,6 @@ std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
       mappedIndex = (sequenceSums[i] + offset ) % numSteps;
       absoluteSequence[mappedIndex] = 1;
     }
-    //std::rotate(absoluteSequence.begin(),absoluteSequence.end() - offset, absoluteSequence.end());
     return absoluteSequence;
 }
 std::string atExpand(std::string input, int atnum, std::string lookup) {
@@ -186,6 +229,12 @@ std::string atExpand(std::string input, int atnum, std::string lookup) {
   int total = 0;
   int index = 0;
   int lookupVal;
+  if(atnum == -1) {
+    return input;
+  }
+  else if(atnum ==0) {
+    return "";
+  }
   while(total < atnum) {
     lookupVal = b64lookup.find(input[index]) + 1;
     lookupVal = lookupVal == 0 ? 1 : lookupVal;
@@ -214,81 +263,15 @@ std::string hashExpand(std::string input, int hashnum) {
   return output;
 }
 
-  /*
-    8-4
-    sequenceSums wants to be (0,8) -> (4, 4)
-  */
-
   void parseFormula(std::string expr, int index) {
-    int numSteps = 0;
-    int mappedIndex = 0;
-    int currentVal = 0;
-    int hashnum = 1;
-    int thisoffset = 0;
-
-    std::stringstream test(expr);
-    
-    std::string segment;
-    std::string insegment;
-
-
-    
-    std::vector<std::string> commasep;
-    std::vector<std::string> seglist;
-    std::vector<std::string> hashlist;
-    std::vector<int> offsets;
-
-    sequences[index].resize(0);
-    sequenceSums[index].resize(0);
-    sequenceSums[index].push_back(0);
-    absoluteSequences[index].resize(0);
-
-    while(std::getline(test,insegment,',')) {
-      std::stringstream inseg(insegment);
-      hashlist.resize(0);
-      while(std::getline(inseg, segment, '#'))
-      {
-         hashlist.push_back(segment);
-      }
-      hashnum = hashlist.size() > 1 ? std::stoi(hashlist[1]) : 1;
-
-      for(int i = 0; i < hashnum; i++ ) {
-        seglist.resize(0);
-        std::stringstream leftofhash(hashlist[0]);
-        while(std::getline(leftofhash, segment, '-'))
-        {
-           seglist.push_back(segment);
-        }
-        if(i==0) {
-          thisoffset = seglist.size() > 1 ? std::stoi(seglist[1]) : 0;
-          offsets.push_back(thisoffset);
-        }
-
-        for(char& c : seglist[0]) {
-          currentVal = b64lookup.find(c);
-          if (currentVal != -1) {
-            numSteps += currentVal + 1;
-            sequenceSums[index].push_back(numSteps);
-            sequences[index].push_back(currentVal + 1);
-          }
-        }
-      } // end for(int i = 0; i < hashnum; i++ ) {
-    }
-
-    numStepStates[index] = numSteps;
-    numStepBlocks[index] = sequences[index].size();
-
-    absoluteSequences[index].resize(numSteps);
-    for(unsigned i = 0; i < sequenceSums[index].size() - 1; i++) {
-      mappedIndex = (sequenceSums[index][i] + offsets[0] ) % numSteps;
-      absoluteSequences[index][mappedIndex] = true;
-    }
+    std::vector<int> absoluteSequence;
+    absoluteSequence = parseEntireString(expr,b64lookup);
+    numStepStates[index] = absoluteSequence.size();
+    absoluteSequences[index] = absoluteSequence;
   }
 
 void onCreate () override
   {
-std::string test = hashExpand("123",3);
-    printf("hashExpand: %s\n",test.c_str());
     for(int i = 0; i < numFields; i++) {
       if(textFields[i]->text.size() > 0) {
         parseFormula(textFields[i]->text,i);
@@ -350,7 +333,7 @@ void ComputerscareLaundrySoup::step() {
     currentTriggerIsHigh = clockTriggers[i].isHigh();
     currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].value);
 
-    if(this->numStepBlocks[i] > 0) {
+    if(this->numStepStates[i] > 0) {
       if (inputs[CLOCK_INPUT + i].active) {
         if(currentTriggerClocked) {
           incrementInternalStep(i);
@@ -365,7 +348,7 @@ void ComputerscareLaundrySoup::step() {
         resetOneOfThem(i);
       }
 
-      activeStep = absoluteSequences[i][this->absoluteStep[i]];
+      activeStep = absoluteSequences[i][this->absoluteStep[i]]==1;
     }
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[TRG_OUTPUT + i].value = (currentTriggerIsHigh && activeStep) ? 10.0f : 0.0f;
@@ -448,7 +431,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       NumberDisplayWidget3 *display = new NumberDisplayWidget3();
       display->box.pos = mm2px(Vec(25,verticalStart - 9.2 +verticalSpacing*i));
       display->box.size = Vec(50, 20);
-      if(&module->numStepBlocks[i]) {
+      if(&module->numStepStates[i]) {
         display->value = &module->absoluteStep[i];
       }
       else {

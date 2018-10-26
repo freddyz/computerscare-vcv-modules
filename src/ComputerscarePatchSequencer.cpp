@@ -313,7 +313,7 @@ void ComputerscarePatchSequencer::step() {
   for (int i = 0 ; i < 10 ; i++)
   {
     outputs[OUTPUTS + i].value = sums[i];    
-  }  
+  }
 }
 
 ////////////////////////////////////
@@ -362,8 +362,8 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   int row_spacing = 26; 
   int column_spacing = 26;
 
-  int rdx = rand()%8;
-  int rdy  = rand()%8;
+  int rdx = rand() % 8;
+  int rdy  = rand() % 8;
 
 	for (int i = 0 ; i < 10 ; i++)
   {
@@ -371,19 +371,19 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
      for(int j = 0 ; j < 10 ; j++ )
 	   {
-   	 // the part you click
-     addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
-     
-     // green light indicates the state of the matrix that is being edited
-     ModuleLightWidget *bigOne = ModuleLightWidget::create<ComputerscareHugeLight<ComputerscareGreenLight>>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10);
+     	 // the part you click
+       addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
+       
+       // green light indicates the state of the matrix that is being edited
+       ModuleLightWidget *bigOne = ModuleLightWidget::create<ComputerscareHugeLight<ComputerscareGreenLight>>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10);
 
-     addChild(bigOne);
-   	 
-     double xpos = 35 + column_spacing * j + 6.3 + rand()%8-4;
-     double ypos = top_row + row_spacing * i + 8.3 + rand()%8-4;
-   	 // red light indicates the state of the matrix that is the active step
-	   	addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
-      addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos+rdx, ypos+rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
+       addChild(bigOne);
+     	 
+       double xpos = 35 + column_spacing * j + 6.3 + rand()%8-4;
+       double ypos = top_row + row_spacing * i + 8.3 + rand()%8-4;
+     	 // red light indicates the state of the matrix that is the active step
+	   	 addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
+       addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos+rdx, ypos+rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
 
 	   	}
          addInput(Port::create<InPort>(Vec(3, i * row_spacing + top_row), Port::INPUT, module, ComputerscarePatchSequencer::INPUT_JACKS + i));  
