@@ -24,32 +24,42 @@ You can see this illustrated on the scope in the screenshot above.
 
 The input and output of the 2nd row is:
 
-`31 ---> x--x`
+~~~~
+31 ---> x--x  (repeating after 4 beats)
+~~~~
 
 
 The 3rd row's input, the "@8" means: repeat the pattern every 8 clock signals.  In this case the original pattern has length 7 (2 + 1 + 3 + 1 = 7), so normally it would repeat every 7 clock signals.  But since the "@8 is there, when it repeats, it triggers for the first "2", but then has to repeat
 
 ~~~~
-2131   ---> x-xx--xx-xx--xx-xxx--x
-2131@8 ---> x-xx--xxx-xx--xxx-xx--xx
+2131   ---> x-xx--x  (repeating after 7 beats)
+2131@8 ---> x-xx--xx (repeating after 8 beats)
 ~~~~
            
 
 
-The 4th row's input is `8-4`.  This means the pattern "8", offset by 4 triggers.  I find this useful for triggering the backbeat snare drum or other sound.
+The 4th row's input is `8-4`.  This means the pattern "8", offset by 4 triggers.  When triggered by 16th notes, I find this pattern useful for triggering a backbeat snare drum.
 
-`8    ---> x-------
- 8-1  ---> -x------
- 8-4  ---> ----x---`
+~~~~
+8    ---> x-------
+8-1  ---> -x------
+8-4  ---> ----x---
+~~~~
  
 
 The 5th row shows how multiple patterns can be combined.  `311@16,2@16` means: `311` for 16 beats, and then `2` for 16 beats.
-
-`311@16      ---> x--xxx--xxx--xxx
-   2@16      --->                 x-x-x-x-x-x-x-x-
+~~~~
+311@16      ---> x--xxx--xxx--xxx
+  2@16      --->                 x-x-x-x-x-x-x-x-
    
- 311@16,2@16 ---> x--xxx--xxx--xxxx-x-x-x-x-x-x-x-`
+311@16,2@16 ---> x--xxx--xxx--xxxx-x-x-x-x-x-x-x-
+~~~~
 
+
+The 6th row shows a way to "skip" beats.  `@4` all by itself means: wait 4 beats with no trigger.  This is another way to generate the backbeat pattern as the 4th row example.
+~~~~
+@4,4    ---> ----x---
+~~~~
 
  
  
@@ -60,18 +70,31 @@ The 5th row shows how multiple patterns can be combined.  `311@16,2@16` means: `
 
 **Global Reset (rst):** Resets each row's absoluteStep to 0.
 
-**Individual Clock (clk):** Increases this row's absoluteStep by 1.  If a cable is plugged in, this row ignores the Global Clock.
+**Individual Clock (clk):** Increases the row's absoluteStep by 1.  If a cable is plugged in, the row ignores the Global Clock.
 
-**Individual Reset (rst):** Resets this row's absoluteStep to 0.  If a cable is plugged in, this row ignores the Global Reset.
+**Individual Reset (rst):** Resets the row's absoluteStep to 0.  If a cable is plugged in, the row ignores the Global Reset.
 
 
 ### Output Jacks:
 
-**Individual Row Output (out):** The output of the row's pattern.
+**Individual Row Output (out):** The output of the row's pattern.  Outputs 10 volts if:
+~~~~
+A) The clock signal is sent to the Global Clock or Individual Clock input jack
+           AND
+B) The pattern ought to trigger on this absoluteStep
+~~~~
 
-**Individual Row First Step Output (one):** Sends a trigger on the 1st step of this row's pattern.
+**Individual Row First Step Output (one):** Sends a trigger on the 1st step of the row's pattern.
 
 
+### Displays:
+
+**absoluteStep Display:** Shows the absoluteStep of the row.  The absoluteStep will increase by 1 every clock signal, until 
+~~~~
+A) The end of the pattern is reached
+           OR
+B) A reset trigger is sent to the Global Reset or Individual Reset input jack
+~~~~
 
 
 *Inspired by Frank Buss's Formula, Ryan Kirkbride's FoxDot, SuperCollider*
