@@ -30,8 +30,8 @@ The input and output of the 2nd row is:
 The 3rd row's input, the "@8" means: repeat the pattern every 8 clock signals.  In this case the original pattern has length 7 (2 + 1 + 3 + 1 = 7), so normally it would repeat every 7 clock signals.  But since the "@8 is there, when it repeats, it triggers for the first "2", but then has to repeat
 
 ~~~~
-2131   ---> **x-xx--x** x-xx--x **x-xxx--x**
-2131@8 ---> **x-xx--xx** x-xx--xx **x-xx--xx**
+2131   ---> x-xx--xx-xx--xx-xxx--x
+2131@8 ---> x-xx--xxx-xx--xxx-xx--xx
 ~~~~
            
 
