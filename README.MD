@@ -3,6 +3,50 @@
 
 Modules for VCV Rack.  I take great pride in the graphic design.
 
+# Laundry Soup
+Laundry Soup is a trigger sequencer that takes text as input.  If you connect a clock signal to the "clk" input, and type "1" in the top text box, the top "out" output will send a trigger each clock.  "2" sends a trigger every 2 clock signals.  "31" sends a trigger on the 1st and 4th clock signals, and then repeats this pattern forever or until reset.
+
+![ComputerscarePatchSequencer](./doc/laundry-soup-basic-1.png)
+
+
+### Buttons:
+No buttons on Laundry Soup lol!
+
+### Knobs:
+Laundry Soup doesn't have any knobs either
+
+### Text Input:
+Lets represent a clock signal like this:
+`xxxxxxxx`
+If the value
+`2`
+is input into a text field, the output signal will be:
+`x-x-x-x-`
+
+
+### Input Jacks:
+**Global Clock (clk):** Increases each row's absoluteStep by 1.
+
+**Global Reset (rst):** Resets each row's absoluteStep to 0.
+
+**Individual Clock (clk):** Increases this row's absoluteStep by 1.  If a cable is plugged in, this row ignores the Global Clock.
+
+**Individual Reset (rst):** Resets this row's absoluteStep to 0.  If a cable is plugged in, this row ignores the Global Reset.
+
+
+### Output Jacks:
+
+**Individual Row Output (out):** The output of the row's pattern.
+
+**Individual Row First Step Output (one):** Sends a trigger on the 1st step of this row's pattern.
+
+
+
+
+*Inspired by Frank Buss's Formula, Ryan Kirkbride's FoxDot, SuperCollider*
+
+--/-_\-_--\-_/  \ _ -_   \/_ \ -_\\/   /_\\-/-\-_ \\/\ _\\\/\//-/\ __ -___ _-__- --_//_ ----_-\__-_  _-\\-_\/\ _/_\\_\\-_-\- 
+
 ## Father & Son Patch Sequencer
 
 
@@ -60,6 +104,12 @@ All steps: All patch matrices for all steps will be randomized
 
 
 *Inspired by Strum's Patch Matrix, Bidoo's ACnE Mixer, and Fundamental Sequential Switch*
+
+
+
+淴淴⊻淴  ⊻ ⊻  淴 淴 淴  淴     淴 淴⊻ 淴⊻淴⊻ ⊻  ⊻ ⊻  淴淴⊻淴  ⊻ ⊻  淴 淴 淴  淴     淴 淴⊻ 淴⊻淴⊻ ⊻  ⊻ ⊻ 
+
+
 
 ## Debug
 A simple module for debugging.  Displays a list of the last 16 voltages read from IN, with the most recent one at the top.
