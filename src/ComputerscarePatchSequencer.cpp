@@ -18,8 +18,8 @@ struct ComputerscarePatchSequencer : Module {
     EDIT_PREV_PARAM,
     ENUMS(SWITCHES,100),
     RESET_PARAM,
-	NUM_PARAMS
-	};  
+	  NUM_PARAMS
+	};
 	enum InputIds {
 		TRG_INPUT,
 		ENUMS(INPUT_JACKS, 10),
