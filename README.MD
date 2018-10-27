@@ -1,3 +1,10 @@
+# computerscare modules for VCV Rack.
+
+
+ ┭ ۳┭┭  ۳۳┭┭ ┭  ┭  ┭┭┭  ┭۳┭۳۳┭۳۳۳۳┭۳ ┭   ۳ ۳┭┭┭  ┭۳  ۳  
+۳  ۳┭ ۳۳۳┭۳  ┭  ┭  ┭ ┭۳  ┭ ┭    ۳۳۳۳۳  ۳۳┭┭┭ ۳┭   ┭ ۳۳   
+┭┭   ┭۳ ┭ ┭ ┭ ┭┭   ۳۳۳┭۳ ۳┭┭  ۳ ┭۳ ۳┭   ┭ ۳ ۳ ┭  ۳۳ ┭۳┭۳ 
+
 # Laundry Soup
 Laundry Soup is a trigger sequencer that takes text as input.  If you connect a clock signal to the "clk" input, and type "1" in the top text box, the top "out" output will send a trigger each clock.  "2" sends a trigger every 2 clock signals.  "31" sends a trigger on the 1st and 4th clock signals, and then repeats this pattern forever or until reset.
 
@@ -104,14 +111,12 @@ B) A reset trigger is sent to the Global Reset or Individual Reset input jack
 
 *Inspired by Frank Buss's Formula, Ryan Kirkbride's FoxDot, SuperCollider*
 
- _/__-_\/ \_ _-\ -\/\- -_ - _/ \_-/\\-/-\\\-- -__\_/\_//-\/ \-///\\- \_-/__/__-/ /  --\_//\ --// --/  \\    \-  /- 
--/_//\\\\\-// _\__   \ -/ \-//_--_/  / //__ \ _- //- --_/__-___ _//   -\ / /__  /- \ _--\-- \/--- --_\\-\_ //- / - 
-_\ _\__  -/\\/-_ /\ -/ /\-\\-- \ //_/-/---\\_ // / _ //_-\_\/-/- \// -\\//-__\/_  -   \ /\- __/\ _ --_   ___  \\-  
--/_-\_\-  \\_\/ \/ -   -/-/-\  -  /-\/\\-/-_\ \ \/ /\\_\- /\/_-- \/_  --    /\_/_ \- / \-/_  --/\ -/\ -- __\_/// - 
-/\\-/\ _\/\ --_\/\\___ \/   _\-   -\ _--_\_-\ \ \-_ -\- \_ -\- /  /_ -- -_--\ \\_  //_-_\-  /-  \_/ \/\/__/-_ \/\/ 
-- \__-_ /\_-_\//\/_--- /_-/-__  \_\//_/__\_/\ \\\ \////\-- --_/\ -_\ -/---\/-\\/\\\/-_-_\ /  _-/--\// //-\\-_\_/-\ 
 
-
+莅  氊  莅 氊 氊莅氊 氊氊莅莅  莅氊 莅氊氊莅 氊  莅莅 氊  氊氊 莅 
+莅 氊氊   氊      莅莅   莅 氊莅  莅        氊莅 氊莅 氊 
+  氊氊  莅 莅氊 氊  莅 氊 氊氊  氊  氊  莅 氊莅氊  莅 氊    
+  
+  
 ## Father & Son Patch Sequencer
 
 Patch matrix with 16 scenes.  If multiple buttons are active for a single row, the 2 active input signals will be summed.
@@ -173,13 +178,11 @@ Patch matrix with 16 scenes.  If multiple buttons are active for a single row, t
 
 *Inspired by Strum's Patch Matrix, Bidoo's ACnE Mixer, and Fundamental Sequential Switch*
 
- _/__-_\/ \_ _-\ -\/\- -_ - _/ \_-/\\-/-\\\-- -__\_/\_//-\/ \-///\\- \_-/__/__-/ /  --\_//\ --// --/  \\    \-  /- 
--/_//\\\\\-// _\__   \ -/ \-//_--_/  / //__ \ _- //- --_/__-___ _//   -\ / /__  /- \ _--\-- \/--- --_\\-\_ //- / - 
-_\ _\__  -/\\/-_ /\ -/ /\-\\-- \ //_/-/---\\_ // / _ //_-\_\/-/- \// -\\//-__\/_  -   \ /\- __/\ _ --_   ___  \\-  
--/_-\_\-  \\_\/ \/ -   -/-/-\  -  /-\/\\-/-_\ \ \/ /\\_\- /\/_-- \/_  --    /\_/_ \- / \-/_  --/\ -/\ -- __\_/// - 
-/\\-/\ _\/\ --_\/\\___ \/   _\-   -\ _--_\_-\ \ \-_ -\- \_ -\- /  /_ -- -_--\ \\_  //_-_\-  /-  \_/ \/\/__/-_ \/\/ 
-- \__-_ /\_-_\//\/_--- /_-/-__  \_\//_/__\_/\ \\\ \////\-- --_/\ -_\ -/---\/-\\/\\\/-_-_\ /  _-/--\// //-\\-_\_/-\ 
 
+ඦ蔩 蔩 ඦ蔩槑ඦඦ        蔩 钧 钧     槑  ඦ蔩 猤槑蔩钧 钧钧 槑蔩 槑 猤蔩蔩蔩   槑   钧 蔩    钧ඦ 猤 猤 猤 蔩       钧 
+钧   钧钧蔩槑ඦ       ඦ  槑 蔩 蔩猤   槑  钧槑ඦ   蔩 钧ඦ 钧蔩猤ඦ钧槑  蔩蔩猤猤槑   槑  猤    槑 ඦ   ඦ槑 蔩    ඦ蔩  
+ 猤  槑钧猤钧      猤  蔩   ඦ钧     钧槑ඦ 蔩   ඦ猤钧槑猤 槑    蔩蔩  钧猤   猤  ඦ 蔩猤  ඦ槑槑猤   ඦඦ蔩  ඦ   槑ඦ 
+ 
 
 ## Debug
 A simple module for debugging.  Displays a list of the last 16 voltages read from IN, with the most recent one at the top.
