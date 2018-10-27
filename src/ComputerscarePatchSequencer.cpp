@@ -504,6 +504,7 @@ Menu *ComputerscarePatchSequencerWidget::createContextMenu() {
  
  // randomization output bounds
   menu->addChild(construct<MenuLabel>());
+  menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Output Row Randomization Method"));
   menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or none", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 0));
   menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Exactly one", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 1));
   menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Zero or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 2));
