@@ -6,7 +6,9 @@ Laundry Soup is a trigger sequencer that takes text as input.  If you connect a 
 
 ### Text Input:
 Lets represent a clock signal like this:
+
 `xxxxxxxx`
+
 If the value
 
 `2`
@@ -15,6 +17,40 @@ is input into a text field, the output signal will be:
 
 `x-x-x-x-`
 
+You can see this illustrated on the scope in the screenshot above.
+
+
+
+
+The input and output of the 2nd row is:
+
+`31 ---> x--x`
+
+
+The 3rd row's input, the "@8" means: repeat the pattern every 8 clock signals.  In this case the original pattern has length 7 (2 + 1 + 3 + 1 = 7), so normally it would repeat every 7 clock signals.  But since the "@8 is there, when it repeats, it triggers for the first "2", but then has to repeat
+
+`2131 ---> x-xx--xx-xx--x-xx--
+           2 13  12 13  2 13  `
+           
+
+
+The 4th row's input is `8-4`.  This means the pattern "8", offset by 4 triggers.  I find this useful for triggering the backbeat snare drum or other sound.
+
+`8    ---> x-------
+ 8-1  ---> -x------
+ 8-4  ---> ----x---`
+ 
+
+The 5th row shows how multiple patterns can be combined.  `311@16,2@16` means: `311` for 16 beats, and then `2` for 16 beats.
+
+`311@16      ---> x--xxx--xxx--xxx
+   2@16      --->                 x-x-x-x-x-x-x-x-
+   
+ 311@16,2@16 ---> x--xxx--xxx--xxxx-x-x-x-x-x-x-x-`
+
+
+ 
+ 
 
 
 ### Input Jacks:
