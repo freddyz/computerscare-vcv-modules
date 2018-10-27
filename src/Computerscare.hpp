@@ -75,9 +75,14 @@ struct InPort : SVGPort {
 
 struct LrgKnob : RoundBlackSnapKnob {
 	LrgKnob() {
-		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-big-knob-effed.svg")));
-	//void randomize() override;	
+		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-big-knob-effed.svg")));	
 		box.size = Vec(32,32);
 	}
 	void randomize() override { return; }	
+};
+struct SmoothKnob : RoundBlackKnob {
+	SmoothKnob() {
+		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-medium-knob-effed.svg")));
+		box.size = Vec(20,20);
+	}
 };

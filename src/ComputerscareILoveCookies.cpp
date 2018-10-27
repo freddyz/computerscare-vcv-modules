@@ -11,7 +11,9 @@
 struct ComputerscareILoveCookies;
 
 const int numFields = 3;
-const std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
+const int numKnobRows = 5;
+const int numKnobColumns = 5;
+const std::string knoblookup = "abcdefghijklmnopqrstuvwxy";
 
 class MyTextFieldCookie : public LedDisplayTextField {
 
@@ -65,7 +67,8 @@ private:
 
 struct ComputerscareILoveCookies : Module {
 	enum ParamIds {
-	   NUM_PARAMS
+     KNOB_PARAM,
+	   NUM_PARAMS = KNOB_PARAM + numKnobRows * numKnobColumns
 	};  
 	enum InputIds {
     GLOBAL_CLOCK_INPUT,
@@ -132,7 +135,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
   }
 
   void randomizeAllFields() {
-    std::string mainlookup ="111111111111111111122223333333344444444444444445556667778888888888888999";
+    std::string mainlookup =knoblookup;
     std::string string = "";
     std::string randchar = "";
     int length = 0;
@@ -150,9 +153,16 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
 
   }
 
-  void parseFormula(std::string expr, int index) {
+  void parseFormula(std::string input, int index) {
     std::vector<int> absoluteSequence;
-    absoluteSequence = parseEntireString(expr,b64lookup);
+    int currentVal;
+    absoluteSequence.resize(0);
+
+    for(unsigned int i = 0; i < input.length(); i++) {
+      currentVal = knoblookup.find(input[i]);
+      absoluteSequence.push_back(currentVal);
+    }
+
     numSteps[index] = absoluteSequence.size();
     absoluteSequences[index] = absoluteSequence;
   }
@@ -195,7 +205,8 @@ void onCreate () override
 void ComputerscareILoveCookies::step() {
 
   bool globalGateIn = globalClockTrigger.isHigh();
-  bool activeStep = false;
+  bool activeStep = 0;
+  int activeKnob;
   bool atFirstStep = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool currentTriggerIsHigh;
@@ -226,15 +237,18 @@ void ComputerscareILoveCookies::step() {
         resetOneOfThem(i);
       }
 
-      activeStep = absoluteSequences[i][this->absoluteStep[i]]==1;
+      activeKnob = absoluteSequences[i][this->absoluteStep[i]];
+      //printf("%i, %f",i,activeKnob);
+
       atFirstStep = (this->absoluteStep[i] == 0);
     }
     if(inputs[CLOCK_INPUT + i].active) {
-      outputs[TRG_OUTPUT + i].value = (currentTriggerIsHigh && activeStep) ? 10.0f : 0.0f;
+      outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
+      
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
     }
     else {
-      outputs[TRG_OUTPUT + i].value = (globalGateIn && activeStep) ? 10.0f : 0.0f;
+      outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
       outputs[FIRST_STEP_OUTPUT + i].value = (globalGateIn && atFirstStep) ? 10.f : 0.0f;
     }
   }
@@ -283,8 +297,21 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
   double verticalSpacing = 18.4;
   int verticalStart = 82;
+
+  double knobXStart = 6;
+  double knobYStart = 8;
+  double knobRowWidth = 12;
+  double knobColumnHeight = 9;
   ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareILoveCookiesPanel.svg")));
+
+
+    for(int i = 0; i < numKnobRows; i++) {
+      for(int j = 0; j < numKnobColumns; j++) {
+        ParamWidget* knob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(knobXStart + j*knobRowWidth,knobYStart + i*knobColumnHeight)), module, ComputerscareILoveCookies::KNOB_PARAM +numKnobColumns*i + j,  0.0f, 10.0f, 0.0f);
+        addParam(knob);
+      }
+    }
 
     //global clock input
     addInput(Port::create<InPort>(mm2px(Vec(2 , 59)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_CLOCK_INPUT));
