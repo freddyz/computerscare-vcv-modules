@@ -296,7 +296,7 @@ void MyTextFieldCookie::onTextChange() {
 struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
   double verticalSpacing = 18.4;
-  int verticalStart = 82;
+  int verticalStart = 80;
 
   double knobXStart = 6;
   double knobYStart = 8;
@@ -308,7 +308,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
     for(int i = 0; i < numKnobRows; i++) {
       for(int j = 0; j < numKnobColumns; j++) {
-        ParamWidget* knob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(knobXStart + j*knobRowWidth,knobYStart + i*knobColumnHeight)), module, ComputerscareILoveCookies::KNOB_PARAM +numKnobColumns*i + j,  0.0f, 10.0f, 0.0f);
+        ParamWidget* knob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(knobXStart + j*knobRowWidth,knobYStart + i*knobColumnHeight)), module, ComputerscareILoveCookies::KNOB_PARAM +numKnobColumns*i + j,  -10.0f, 10.0f, 0.0f);
         addParam(knob);
       }
     }
