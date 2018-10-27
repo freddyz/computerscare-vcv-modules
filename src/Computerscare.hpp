@@ -30,6 +30,7 @@ static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
 extern Model *modelComputerscareDebug;
 extern Model *modelComputerscarePatchSequencer;
 extern Model *modelComputerscareLaundrySoup;
+extern Model *modelComputerscareILoveCookies;
 
 struct ComputerscareGreenLight : GrayModuleLightWidget {
 	ComputerscareGreenLight() {
