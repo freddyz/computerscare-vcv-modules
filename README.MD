@@ -144,11 +144,11 @@ Patch matrix with 16 scenes.  If multiple buttons are active for a single row, t
 ### Buttons:
 **Patch Matrix:** Grid of 100 buttons.  When the button is lit in green, it means that the input column and output row is connected for the step that is being edited.  When the button is lit in red, it means that the input column and output row is connected for the currently active step.
 
-**Next Active Step:** Moves to the next active step.  If the sequence length is set to greater than 1, the red lights in the patch matrix will change.
+**Clock (clk):** Moves to the next active step.  If the sequence length is set to greater than 1, the red lights in the patch matrix will change.
 
-**Reset:** Resets the patch sequencer to step 1.
+**Reset (rst):** Resets the patch sequencer to step 1.
 
-**Previous/Next Editing Step:** Move to edit the previous or next step.  Note that this will always cycle from 1 to 16 no matter what number of steps the knob is set to.
+**Previous/Next Editing Step (< and >):** Move to edit the previous or next step.  Note that this will always cycle from 1 to 16 no matter what number of steps the knob is set to.
 
 ### Knobs:
 **Number of Steps:** Choose between 1 and 16 steps.
