@@ -4,7 +4,11 @@ std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST
 std::vector<int> parseEntireString(std::string input,std::string lookup) {
         std::vector<int> absoluteSequence;
         absoluteSequence.resize(0);
-        if(input.empty()) {
+				bool noNumbers = true;
+				for(int i = 0; i < input.length(); i++) {
+								noNumbers= noNumbers && (lookup.find(input[i]) == std::string::npos);
+				}
+        if(input.empty() || noNumbers) {
           absoluteSequence.push_back(0);
           return absoluteSequence;
         }
