@@ -350,7 +350,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   double knobPosX;
   double knobPosY;
   double knobXStart = 2;
-  double knobYStart = 8;
+  double knobYStart = 16;
   double knobRowWidth = 13;
   double knobColumnHeight = 10;
   ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) : ModuleWidget(module) {
@@ -383,10 +383,10 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
     }
 
     //global clock input
-    addInput(Port::create<InPort>(mm2px(Vec(2 , 57)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_CLOCK_INPUT));
+    addInput(Port::create<InPort>(mm2px(Vec(2 , 0)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_CLOCK_INPUT));
 
     //global reset input
-    addInput(Port::create<InPort>(mm2px(Vec(12 , 57)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
+    addInput(Port::create<InPort>(mm2px(Vec(12 , 0)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
     
     for(int i = 0; i < numFields; i++) {
       //first-step output
@@ -412,7 +412,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
       //active step display
       NumberDisplayWidget3cookie *display = new NumberDisplayWidget3cookie();
-      display->box.pos = mm2px(Vec(24,verticalStart - 9.2 +verticalSpacing*i));
+      display->box.pos = mm2px(Vec(23,verticalStart - 9.2 +verticalSpacing*i));
       display->box.size = Vec(50, 20);
       display->outlineColor = outlineColorMap[i];
       if(&module->numSteps[i]) {
@@ -423,7 +423,6 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       }
       addChild(display);
     }
-
   }
   MyTextFieldCookie* textField;
 };
