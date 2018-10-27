@@ -66,6 +66,7 @@ The 6th row shows a way to "skip" beats.  `@4` all by itself means: wait 4 beats
 
 
 ### Input Jacks:
+![ComputerscarePatchSequencer](./doc/laundry-soup-inputs-1.png)
 **Global Clock (clk):** Increases each row's absoluteStep by 1.
 
 **Global Reset (rst):** Resets each row's absoluteStep to 0.
@@ -76,6 +77,8 @@ The 6th row shows a way to "skip" beats.  `@4` all by itself means: wait 4 beats
 
 
 ### Output Jacks:
+
+![ComputerscarePatchSequencer](./doc/laundry-soup-outputs-1.png
 
 **Individual Row Output (out):** The output of the row's pattern.  Outputs 10 volts if:
 ~~~~
@@ -99,17 +102,19 @@ B) A reset trigger is sent to the Global Reset or Individual Reset input jack
 
 *Inspired by Frank Buss's Formula, Ryan Kirkbride's FoxDot, SuperCollider*
 
---/-_\-_--\-_/  \ _ -_   \/_ \ -_\\/   /_\\-/-\-_ \\/\ _\\\/\//-/\ __ -___ _-__- --_//_ ----_-\__-_  _-\\-_\/\ _/_\\_\\-_-\- 
+ _/__-_\/ \_ _-\ -\/\- -_ - _/ \_-/\\-/-\\\-- -__\_/\_//-\/ \-///\\- \_-/__/__-/ /  --\_//\ --// --/  \\    \-  /- 
+-/_//\\\\\-// _\__   \ -/ \-//_--_/  / //__ \ _- //- --_/__-___ _//   -\ / /__  /- \ _--\-- \/--- --_\\-\_ //- / - 
+_\ _\__  -/\\/-_ /\ -/ /\-\\-- \ //_/-/---\\_ // / _ //_-\_\/-/- \// -\\//-__\/_  -   \ /\- __/\ _ --_   ___  \\-  
+-/_-\_\-  \\_\/ \/ -   -/-/-\  -  /-\/\\-/-_\ \ \/ /\\_\- /\/_-- \/_  --    /\_/_ \- / \-/_  --/\ -/\ -- __\_/// - 
+/\\-/\ _\/\ --_\/\\___ \/   _\-   -\ _--_\_-\ \ \-_ -\- \_ -\- /  /_ -- -_--\ \\_  //_-_\-  /-  \_/ \/\/__/-_ \/\/ 
+- \__-_ /\_-_\//\/_--- /_-/-__  \_\//_/__\_/\ \\\ \////\-- --_/\ -_\ -/---\/-\\/\\\/-_-_\ /  _-/--\// //-\\-_\_/-\ 
+
 
 ## Father & Son Patch Sequencer
 
-
-
-If you've ever wished that patch cables could be sequenced, this is the module for you.
+Patch matrix with 16 scenes.  If multiple buttons are active for a single row, the 2 active input signals will be summed.
 
 ![ComputerscarePatchSequencer](./doc/computerscare-patch-sequencer-basic.png)
-
-Father & Son Patch Sequencer allows for the sequencing of connections.  It's somewhat like a giant sequential switch.
 
 ### Buttons:
 **Patch Matrix:** Grid of 100 buttons.  When the button is lit in green, it means that the input column and output row is connected for the step that is being edited.  When the button is lit in red, it means that the input column and output row is connected for the currently active step.
@@ -123,46 +128,55 @@ Father & Son Patch Sequencer allows for the sequencing of connections.  It's som
 ### Knobs:
 **Number of Steps:** Choose between 1 and 16 steps.
 
-### Inputs:
-**Clock:** Moves to the next active step.  If the currently active step is equal to the number-of-steps, it will go back to step 1.  Does the same thing as the 'Next Active Step Button'.
-
-**Reset:** Resets the patch sequencer to step 1.  Does the same thing as the 'RST' button.
-
-**Randomize:** Randomizes the patch matrix.  Does the same thing as the 'randomize' selection from the right-click menu.  There are some randomization options available via the right-click menu:
-
-![ComputerscarePatchSequencerRightClickOptions](./doc/patch-sequencer-right-click-options.png)
-
-Only Randomize Active Connections: Only input rows/output columns with patch cables connected will be randomized.  Default is un-checked.
-
-Which Step to Randomize: 3 options:
-
-Edit step: The patch matrix for the step that is currently being edited will be randomized
-
-Active step: The patch matrix for the step that is currently active will be randomized
-
-All steps: All patch matrices for all steps will be randomized
-
+### Input Jacks:
 
 **Input Column:** 10 input jacks for any sort of signal you want.
 
-### Outputs:
+**Clock (clk):** Moves to the next active step.  If the currently active step is equal to the number-of-steps, it will go back to step 1.  Does the same thing as the 'Next Active Step Button'.
+
+**Reset (rst):** Resets the patch sequencer to step 1.  Does the same thing as the 'RST' button.
+
+
+**Randomize (shuf):** Randomizes the patch matrix.  Does the same thing as the 'randomize' selection from the right-click menu.  There are some randomization options available via the right-click menu:
+
+### Randomization Options:
+![ComputerscarePatchSequencerRightClickOptions](./doc/patch-sequencer-right-click-options.png)
+
+**Only Randomize Active Connections:** Only input rows/output columns with patch cables connected will be randomized.  Default is un-checked.
+
+## Which Step to Randomize (3 options):
+
+**Edit step:** The patch matrix for the step that is currently being edited will be randomized
+
+**Active step:** The patch matrix for the step that is currently active will be randomized
+
+**All steps:** All patch matrices for all steps will be randomized
+
+## Output Row Randomization Method (4 options):
+
+**One or none:** 70% chance that one randomly-selected input button will be enabled
+
+**Exactly one:** Exactly one randomly-selected input button will be enabled
+
+**Zero or more** Each input button has a 20% chance of being enabled
+
+**One or more:** One randomly-selected input button will be enabled, and the rest have a 20% chance each of being enabled
+
+
+### Output Jacks:
+
 **Output Row:** 10 output jacks which output the sum of the signals in that particular column.
 
-### Possible applications:
-
-**Triggers:**
-
-**Envelopes / CV:**
-
-**Audio:**
 
 
 *Inspired by Strum's Patch Matrix, Bidoo's ACnE Mixer, and Fundamental Sequential Switch*
 
-
-
-淴淴⊻淴  ⊻ ⊻  淴 淴 淴  淴     淴 淴⊻ 淴⊻淴⊻ ⊻  ⊻ ⊻  淴淴⊻淴  ⊻ ⊻  淴 淴 淴  淴     淴 淴⊻ 淴⊻淴⊻ ⊻  ⊻ ⊻ 
-
+ _/__-_\/ \_ _-\ -\/\- -_ - _/ \_-/\\-/-\\\-- -__\_/\_//-\/ \-///\\- \_-/__/__-/ /  --\_//\ --// --/  \\    \-  /- 
+-/_//\\\\\-// _\__   \ -/ \-//_--_/  / //__ \ _- //- --_/__-___ _//   -\ / /__  /- \ _--\-- \/--- --_\\-\_ //- / - 
+_\ _\__  -/\\/-_ /\ -/ /\-\\-- \ //_/-/---\\_ // / _ //_-\_\/-/- \// -\\//-__\/_  -   \ /\- __/\ _ --_   ___  \\-  
+-/_-\_\-  \\_\/ \/ -   -/-/-\  -  /-\/\\-/-_\ \ \/ /\\_\- /\/_-- \/_  --    /\_/_ \- / \-/_  --/\ -/\ -- __\_/// - 
+/\\-/\ _\/\ --_\/\\___ \/   _\-   -\ _--_\_-\ \ \-_ -\- \_ -\- /  /_ -- -_--\ \\_  //_-_\-  /-  \_/ \/\/__/-_ \/\/ 
+- \__-_ /\_-_\//\/_--- /_-/-__  \_\//_/__\_/\ \\\ \////\-- --_/\ -_\ -/---\/-\\/\\\/-_-_\ /  _-/--\// //-\\-_\_/-\ 
 
 
 ## Debug
