@@ -382,8 +382,8 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
        double xpos = 35 + column_spacing * j + 6.3 + rand()%8-4;
        double ypos = top_row + row_spacing * i + 8.3 + rand()%8-4;
      	 // red light indicates the state of the matrix that is the active step
-	   	 addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
-       addChild(ModuleLightWidget::create<MediumLight<RedLight>>(Vec(xpos+rdx, ypos+rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
+	   	 addChild(ModuleLightWidget::create<ComputerscareSmallLight<ComputerscareRedLight>>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
+       addChild(ModuleLightWidget::create<ComputerscareSmallLight<ComputerscareRedLight>>(Vec(xpos+rdx, ypos+rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10+100));
 
 	   	}
          addInput(Port::create<InPort>(Vec(3, i * row_spacing + top_row), Port::INPUT, module, ComputerscarePatchSequencer::INPUT_JACKS + i));  

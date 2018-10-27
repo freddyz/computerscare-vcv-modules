@@ -14,6 +14,7 @@ const int numFields = 3;
 const int numKnobRows = 5;
 const int numKnobColumns = 5;
 const std::string knoblookup = "abcdefghijklmnopqrstuvwxy";
+const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED,COLOR_COMPUTERSCARE_YELLOW,COLOR_COMPUTERSCARE_BLUE};
 
 class MyTextFieldCookie : public LedDisplayTextField {
 
@@ -84,7 +85,7 @@ struct ComputerscareILoveCookies : Module {
 	};
   enum LightIds {
 		SWITCH_LIGHTS,
-    NUM_LIGHTS
+    NUM_LIGHTS = SWITCH_LIGHTS + numKnobRows * numKnobColumns * numFields
 	};
 
   SchmittTrigger globalClockTrigger;
@@ -141,7 +142,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     int length = 0;
 
     for (int i = 0; i < numFields; i++) {
-      length = rand() % 12 + 1;
+      length = rand() % 12 + 2;
       string = "";
       for(int j = 0; j < length; j++) {
         randchar = mainlookup[rand() % mainlookup.size()];
@@ -166,7 +167,12 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     numSteps[index] = absoluteSequence.size();
     absoluteSequences[index] = absoluteSequence;
   }
-
+  int getAbsoluteStep(int index) {
+    return this->absoluteStep[index];
+  }
+  int getCurrentStep(int index) {
+    return absoluteSequences[index][getAbsoluteStep(index)];
+  }
 void onCreate () override
   {
     for(int i = 0; i < numFields; i++) {
@@ -241,6 +247,9 @@ void ComputerscareILoveCookies::step() {
       //printf("%i, %f",i,activeKnob);
 
       atFirstStep = (this->absoluteStep[i] == 0);
+      for(int k = 0; k < numKnobRows * numKnobColumns; k++) {
+        lights[SWITCH_LIGHTS + i*numKnobRows*numKnobColumns + k].value  = (k==activeKnob) ? 1.0 : 0.0;
+      }
     }
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
@@ -255,12 +264,13 @@ void ComputerscareILoveCookies::step() {
 }
 
 /////////////////////////////////////////////////
-struct NumberDisplayWidget3 : TransparentWidget {
+struct NumberDisplayWidget3cookie : TransparentWidget {
 
   int *value;
   std::shared_ptr<Font> font;
+  NVGcolor outlineColor;
 
-  NumberDisplayWidget3() {
+  NumberDisplayWidget3cookie() {
     font = Font::load(assetPlugin(plugin, "res/digital-7.ttf"));
   };
 
@@ -268,6 +278,11 @@ struct NumberDisplayWidget3 : TransparentWidget {
   {
     // Background
     NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, -2, -4, box.size.x+4, box.size.y+8, 4.0);
+    nvgFillColor(vg, outlineColor);
+    nvgFill(vg);    
 
     nvgBeginPath(vg);
     nvgRoundedRect(vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
@@ -288,7 +303,41 @@ struct NumberDisplayWidget3 : TransparentWidget {
     nvgText(vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
   }
 };
+////////////////////////////////////
+struct SmallLetterDisplay : TransparentWidget {
 
+  std::string value;
+  std::shared_ptr<Font> font;
+  bool active = false;
+
+  SmallLetterDisplay() {
+    font = Font::load(assetPlugin(plugin, "res/Oswald-Regular.ttf"));
+  };
+
+  void draw(NVGcontext *vg) override
+  {  
+    // Background
+    NVGcolor backgroundColor = nvgRGB(0xC0, 0xE7, 0xDE);
+
+    if(active) {
+      nvgBeginPath(vg);
+      nvgRoundedRect(vg, -1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
+      nvgFillColor(vg, backgroundColor);
+      nvgFill(vg);
+    }
+
+    // text 
+    nvgFontSize(vg, 19);
+    nvgFontFaceId(vg, font->handle);
+    nvgTextLetterSpacing(vg, 2.5);
+
+    Vec textPos = Vec(6.0f, 12.0f);   
+    NVGcolor textColor = nvgRGB(0x10, 0x10, 0x00);
+    nvgFillColor(vg, textColor);
+    nvgTextBox(vg, textPos.x, textPos.y,80,value.c_str(), NULL);
+
+  }
+};
 void MyTextFieldCookie::onTextChange() {
   module->onCreate();
 }
@@ -297,27 +346,47 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
   double verticalSpacing = 18.4;
   int verticalStart = 80;
-
-  double knobXStart = 6;
+  int index;
+  double knobPosX;
+  double knobPosY;
+  double knobXStart = 2;
   double knobYStart = 8;
-  double knobRowWidth = 12;
-  double knobColumnHeight = 9;
+  double knobRowWidth = 13;
+  double knobColumnHeight = 10;
   ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareILoveCookiesPanel.svg")));
 
 
     for(int i = 0; i < numKnobRows; i++) {
       for(int j = 0; j < numKnobColumns; j++) {
-        ParamWidget* knob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(knobXStart + j*knobRowWidth,knobYStart + i*knobColumnHeight)), module, ComputerscareILoveCookies::KNOB_PARAM +numKnobColumns*i + j,  -10.0f, 10.0f, 0.0f);
+        knobPosX = knobXStart + j*knobRowWidth;
+        knobPosY = knobYStart + i*knobColumnHeight;
+        index = numKnobColumns*i + j;
+
+        addChild(ModuleLightWidget::create<ComputerscareMediumLight<ComputerscareRedLight>>(mm2px(Vec(knobPosX-3, knobPosY - 2)), module, ComputerscareILoveCookies::SWITCH_LIGHTS  + index));
+        addChild(ModuleLightWidget::create<ComputerscareMediumLight<ComputerscareYellowLight>>(mm2px(Vec(knobPosX-3, knobPosY )), module, ComputerscareILoveCookies::SWITCH_LIGHTS  + index + numKnobColumns*numKnobRows));
+        addChild(ModuleLightWidget::create<ComputerscareMediumLight<ComputerscareBlueLight>>(mm2px(Vec(knobPosX-3, knobPosY +2)), module, ComputerscareILoveCookies::SWITCH_LIGHTS  + index + numKnobColumns*numKnobRows*2));
+
+        SmallLetterDisplay *letterDisplay = new SmallLetterDisplay();
+        letterDisplay->box.pos = mm2px(Vec(knobPosX-3,knobPosY-2));
+        letterDisplay->box.size = Vec(20, 20);
+        letterDisplay->value = knoblookup[index];
+        //letterDisplay->active = (module->absoluteSequences[i][module->absoluteStep[i]]==index);
+        addChild(letterDisplay);
+
+
+
+        ParamWidget* knob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(knobPosX,knobPosY)), module, ComputerscareILoveCookies::KNOB_PARAM +index,  -10.0f, 10.0f, 0.0f);
         addParam(knob);
+        
       }
     }
 
     //global clock input
-    addInput(Port::create<InPort>(mm2px(Vec(2 , 59)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_CLOCK_INPUT));
+    addInput(Port::create<InPort>(mm2px(Vec(2 , 57)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_CLOCK_INPUT));
 
     //global reset input
-    addInput(Port::create<InPort>(mm2px(Vec(12 , 59)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
+    addInput(Port::create<InPort>(mm2px(Vec(12 , 57)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
     
     for(int i = 0; i < numFields; i++) {
       //first-step output
@@ -342,9 +411,10 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       module->textFields[i] = textField;
 
       //active step display
-      NumberDisplayWidget3 *display = new NumberDisplayWidget3();
+      NumberDisplayWidget3cookie *display = new NumberDisplayWidget3cookie();
       display->box.pos = mm2px(Vec(24,verticalStart - 9.2 +verticalSpacing*i));
       display->box.size = Vec(50, 20);
+      display->outlineColor = outlineColorMap[i];
       if(&module->numSteps[i]) {
         display->value = &module->absoluteStep[i];
       }

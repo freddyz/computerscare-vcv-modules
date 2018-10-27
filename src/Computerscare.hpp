@@ -21,8 +21,15 @@ extern Plugin *plugin;
 
 
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
-
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
+static const NVGcolor COLOR_COMPUTERSCARE_RED = nvgRGB(0xC4, 0x34, 0x21);
+static const NVGcolor COLOR_COMPUTERSCARE_YELLOW = nvgRGB(0xE4, 0xC4, 0x21);
+static const NVGcolor COLOR_COMPUTERSCARE_BLUE = nvgRGB(0x24, 0x44, 0xC1);
+
+
+static const NVGcolor COLOR_COMPUTERSCARE_TRANSPARENT = nvgRGBA(0x00, 0x00,0x00,0x00);
+
+
 
 //36 201 166
 
@@ -38,12 +45,50 @@ struct ComputerscareGreenLight : GrayModuleLightWidget {
 	}
 };
 
+
+struct ComputerscareRedLight : ModuleLightWidget {
+	ComputerscareRedLight() {
+		bgColor = nvgRGBA(0x5a, 0x5a, 0x5a, 0x00);
+		borderColor = nvgRGBA(0, 0, 0, 0x00);
+		addBaseColor(COLOR_COMPUTERSCARE_RED);
+	}	
+};
+struct ComputerscareYellowLight : ModuleLightWidget {
+	ComputerscareYellowLight() {
+		bgColor = nvgRGBA(0x5a, 0x5a, 0x5a, 0x00);
+		borderColor = nvgRGBA(0, 0, 0, 0x00);
+		addBaseColor(COLOR_COMPUTERSCARE_YELLOW);
+	}	
+};
+struct ComputerscareBlueLight : ModuleLightWidget {
+	ComputerscareBlueLight() {
+		bgColor = nvgRGBA(0x5a, 0x5a, 0x5a, 0x00);
+		borderColor = nvgRGBA(0, 0, 0, 0x00);
+		addBaseColor(COLOR_COMPUTERSCARE_BLUE);
+	}	
+};
+
+
+
 template <typename BASE>
 struct ComputerscareHugeLight : BASE {
 	ComputerscareHugeLight() {
 		this->box.size = mm2px(Vec(8.179, 8.179));
 	}
 };
+template <typename BASE>
+struct ComputerscareMediumLight : BASE {
+	ComputerscareMediumLight() {
+		this->box.size = mm2px(Vec(6,6));
+	}
+};
+template <typename BASE>
+struct ComputerscareSmallLight : BASE {
+	ComputerscareSmallLight() {
+		this->box.size = mm2px(Vec(3,3));
+	}
+};
+
 
 struct OutPort : SVGPort {
 	OutPort() {
@@ -83,6 +128,5 @@ struct LrgKnob : RoundBlackSnapKnob {
 struct SmoothKnob : RoundBlackKnob {
 	SmoothKnob() {
 		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-medium-knob-effed.svg")));
-		box.size = Vec(20,20);
 	}
 };
