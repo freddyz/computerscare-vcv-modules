@@ -1,6 +1,6 @@
 # computerscare modules for VCV Rack.
 
-
+~~~~
  ┭ ۳┭┭  ۳۳┭┭ ┭  ┭  ┭┭┭  ┭۳┭۳۳┭
 ۳  ۳┭ ۳۳۳┭۳  ┭  ┭  ┭ ┭۳  ┭   
 ┭┭   ┭۳ ┭ ┭ ┭ ┭┭   ۳۳۳┭۳ ۳┭┭  ۳ ┭۳ ۳
@@ -12,7 +12,7 @@
  ┭ ۳┭┭  ۳۳┭┭ ┭  ┭  ┭┭┭  ┭۳┭۳۳┭
 ۳  ۳┭ ۳۳۳┭۳  ┭  ┭  ┭ ┭۳  ┭   
 ┭┭   ┭۳ ┭ ┭ ┭ ┭┭   ۳۳۳┭۳ ۳┭┭  ۳ ┭۳ ۳
-
+~~~~
 
 
 # Laundry Soup
@@ -122,6 +122,7 @@ B) A reset trigger is sent to the Global Reset or Individual Reset input jack
 *Inspired by Frank Buss's Formula, Ryan Kirkbride's FoxDot, SuperCollider*
 
 
+~~~~
 莅  氊  莅 氊 氊莅氊 氊氊莅莅  莅氊 莅氊
 莅 氊氊   氊      莅莅   莅 氊莅  莅
   氊氊  莅 莅氊 氊  莅 氊 氊氊  氊  
@@ -133,7 +134,7 @@ B) A reset trigger is sent to the Global Reset or Individual Reset input jack
 莅  氊  莅 氊 氊莅氊 氊氊莅莅  莅氊 莅氊
 莅 氊氊   氊      莅莅   莅 氊莅  莅
   氊氊  莅 莅氊 氊  莅 氊 氊氊  氊    
-    
+~~~~    
   
 ## Father & Son Patch Sequencer
 
@@ -197,6 +198,7 @@ Patch matrix with 16 scenes.  If multiple buttons are active for a single row, t
 *Inspired by Strum's Patch Matrix, Bidoo's ACnE Mixer, and Fundamental Sequential Switch*
 
 
+~~~~
 ඦ蔩 蔩 ඦ蔩槑ඦඦ        蔩 钧 钧     槑  ඦ
 钧   钧钧蔩槑ඦ       ඦ  槑 蔩 蔩猤  
  猤  槑钧猤钧      猤  蔩   ඦ钧     钧
@@ -208,7 +210,7 @@ Patch matrix with 16 scenes.  If multiple buttons are active for a single row, t
 ඦ蔩 蔩 ඦ蔩槑ඦඦ        蔩 钧 钧     槑  ඦ
 钧   钧钧蔩槑ඦ       ඦ  槑 蔩 蔩猤  
  猤  槑钧猤钧      猤  蔩   ඦ钧     钧
- 
+~~~~ 
 
 
 ## Debug
@@ -231,6 +233,7 @@ A simple module for debugging.  Displays a list of the last 16 voltages read fro
 *Inspired by ML Modules Volt Meter*
 
 
+~~~~
 ⼛ೊ ⼛蠍ೊ ೊ  ⼛ೊ蠍ʬ     ⼛
     ʬ    ʬ  蠍⼛     蠍ೊ蠍ʬ蠍⼛ 
  蠍 ⼛ೊ⼛   蠍蠍ೊʬ     蠍  ⼛⼛
@@ -242,8 +245,4 @@ A simple module for debugging.  Displays a list of the last 16 voltages read fro
 ⼛ೊ ⼛蠍ೊ ೊ  ⼛ೊ蠍ʬ     ⼛
     ʬ    ʬ  蠍⼛     蠍ೊ蠍ʬ蠍⼛ 
  蠍 ⼛ೊ⼛   蠍蠍ೊʬ     蠍  ⼛⼛
-
-
-
-
-
+~~~~
