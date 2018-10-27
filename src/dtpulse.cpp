@@ -5,8 +5,8 @@ std::vector<int> parseEntireString(std::string input,std::string lookup) {
         std::vector<int> absoluteSequence;
         absoluteSequence.resize(0);
 				bool noNumbers = true;
-				for(int i = 0; i < input.length(); i++) {
-								noNumbers= noNumbers && (lookup.find(input[i]) == std::string::npos);
+				for(unsigned int i = 0; i < input.length(); i++) {
+					noNumbers= noNumbers && (lookup.find(input[i]) == std::string::npos);
 				}
         if(input.empty() || noNumbers) {
           absoluteSequence.push_back(0);

@@ -94,10 +94,8 @@ struct ComputerscareLaundrySoup : Module {
   std::vector<int> absoluteSequences[numFields];
 
   int absoluteStep[numFields] = {0};
-  int numStepStates[numFields] = {0};
+  int numSteps[numFields] = {0};
   
-  bool compiled = false;
-
 ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
 
@@ -133,7 +131,7 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
   }
 
   void randomizeAllFields() {
-    std::string mainlookup ="111111111111111111122223333333344444444444444445556667778888888888888999abcdefgggggggggg";
+    std::string mainlookup ="111111111111111111122223333333344444444444444445556667778888888888888999";
     std::string string = "";
     std::string randchar = "";
     int length = 0;
@@ -154,7 +152,7 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
   void parseFormula(std::string expr, int index) {
     std::vector<int> absoluteSequence;
     absoluteSequence = parseEntireString(expr,b64lookup);
-    numStepStates[index] = absoluteSequence.size();
+    numSteps[index] = absoluteSequence.size();
     absoluteSequences[index] = absoluteSequence;
   }
 
@@ -166,7 +164,6 @@ void onCreate () override
       }
       resetOneOfThem(i);
     }
-    compiled = true;
   }
 
   void onReset () override
@@ -176,21 +173,16 @@ void onCreate () override
 
   /*
   lets say the sequence "332" is entered in the 0th (first)
-  numStepBlocks[0] would then be 8 (3 + 3 + 2)
-  sequences[0] would be the vector (3,3,2)
-  sequenceSums[0] would be the vector (0,3,6,8)
+  numSteps[0] would then be 8 (3 + 3 + 2)
   absoluteSequences[0] would be the vector (1,0,0,1,0,0,1,0)
   absoluteStep[0] would run from 0 to 7
 
   332-4 (332 offset by 4)
 
-
   */
   void incrementInternalStep(int i) {
     this->absoluteStep[i] +=1;
-    if(this->absoluteStep[i] >= this->numStepStates[i]) {
-      this->absoluteStep[i] = 0;
-    }
+    this->absoluteStep[i] %= this->numSteps[i];
   }
 
   void resetOneOfThem(int i) {
@@ -217,7 +209,7 @@ void ComputerscareLaundrySoup::step() {
     currentTriggerIsHigh = clockTriggers[i].isHigh();
     currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].value);
 
-    if(this->numStepStates[i] > 0) {
+    if(this->numSteps[i] > 0) {
       if (inputs[CLOCK_INPUT + i].active) {
         if(currentTriggerClocked) {
           incrementInternalStep(i);
@@ -289,20 +281,23 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
   ComputerscareLaundrySoupWidget(ComputerscareLaundrySoup *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareLaundrySoupPanel.svg")));
 
-    //clock input
+    //global clock input
     addInput(Port::create<InPort>(mm2px(Vec(2 , 0)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_CLOCK_INPUT));
 
-    //reset input
+    //global reset input
     addInput(Port::create<InPort>(mm2px(Vec(12 , 0)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
     
     for(int i = 0; i < numFields; i++) {
+      //individual output
       addOutput(Port::create<OutPort>(mm2px(Vec(54 , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
+      //individual clock input
       addInput(Port::create<InPort>(mm2px(Vec(2, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::CLOCK_INPUT + i));
 
+      //individual reset input
       addInput(Port::create<InPort>(mm2px(Vec(12, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::RESET_INPUT + i));
 
-
+      //sequence input field
       textField = Widget::create<MyTextField>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
       textField->setModule(module);
       textField->box.size = mm2px(Vec(63, 7));
@@ -315,7 +310,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       NumberDisplayWidget3 *display = new NumberDisplayWidget3();
       display->box.pos = mm2px(Vec(25,verticalStart - 9.2 +verticalSpacing*i));
       display->box.size = Vec(50, 20);
-      if(&module->numStepStates[i]) {
+      if(&module->numSteps[i]) {
         display->value = &module->absoluteStep[i];
       }
       else {
@@ -328,8 +323,4 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
   MyTextField* textField;
 };
 
-// Specify the Module and ModuleWidget subclass, human-readable
-// author name for categorization per plugin, module slug (should never
-// change), human-readable module name, and any number of tags
-// (found in `include/tags.hpp`) separated by commas.
 Model *modelComputerscareLaundrySoup = Model::create<ComputerscareLaundrySoup, ComputerscareLaundrySoupWidget>("computerscare", "computerscare-laundry-soup", "Laundry Soup", SEQUENCER_TAG);
