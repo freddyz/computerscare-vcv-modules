@@ -29,7 +29,7 @@ The input and output of the 2nd row is:
 ~~~~
 
 
-The 3rd row's input, the "@8" means: repeat the pattern every 8 clock signals.  In this case the original pattern has length 7 (2 + 1 + 3 + 1 = 7), so normally it would repeat every 7 clock signals.  But since the "@8 is there, when it repeats, it triggers for the first "2", but then has to repeat
+In The 3rd row:`2131@8`, the "@8" means: repeat the pattern every 8 clock signals.  In this case the original pattern has length 7 (2 + 1 + 3 + 1 = 7), so normally it would repeat every 7 clock signals.
 
 ~~~~
 2131   ---> x-xx--x  (repeating after 7 beats)
@@ -66,7 +66,9 @@ The 6th row shows a way to "skip" beats.  `@4` all by itself means: wait 4 beats
 
 
 ### Input Jacks:
+
 ![ComputerscarePatchSequencer](./doc/laundry-soup-inputs-1.png)
+
 **Global Clock (clk):** Increases each row's absoluteStep by 1.
 
 **Global Reset (rst):** Resets each row's absoluteStep to 0.
@@ -78,7 +80,7 @@ The 6th row shows a way to "skip" beats.  `@4` all by itself means: wait 4 beats
 
 ### Output Jacks:
 
-![ComputerscarePatchSequencer](./doc/laundry-soup-outputs-1.png
+![ComputerscarePatchSequencer](./doc/laundry-soup-outputs-1.png)
 
 **Individual Row Output (out):** The output of the row's pattern.  Outputs 10 volts if:
 ~~~~
