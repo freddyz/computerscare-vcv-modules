@@ -1,5 +1,11 @@
 #include "dtpulse.hpp"
 std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
+std::string integerlookup = "0123456789";
+
+bool is_digits(const std::string &str)
+{
+    return str.find_first_not_of(integerlookup) == std::string::npos;
+}
 
 std::vector<int> parseEntireString(std::string input,std::string lookup) {
         std::vector<int> absoluteSequence;
@@ -38,7 +44,8 @@ std::vector<int> parseEntireString(std::string input,std::string lookup) {
               while(std::getline(atstream,atseg,'@')) {
                 atVec.push_back(atseg);
               }
-              atnum  = atVec.size() > 1 ? std::stoi(atVec[1]) : -1;
+
+              atnum  = (atVec.size() > 1 && is_digits(atVec[1]) )? std::stoi(atVec[1]) : -1;
               if(atVec[0].empty() && atnum > 0) {
                 for(int i = 0; i < atnum; i++) {
                   absoluteSequence.push_back(0);
@@ -57,7 +64,7 @@ std::vector<int> parseEntireString(std::string input,std::string lookup) {
                   absoluteSequence.push_back(0);
                 }
                 else {
-                  offsetnum  = offsetVec.size() > 1 ? std::stoi(offsetVec[1]) : 0;
+                  offsetnum  = (offsetVec.size() > 1  && is_digits(offsetVec[1]))? std::stoi(offsetVec[1]) : 0;
                   commaVec.resize(0);
                   commaVec = parseDt(atExpand(offsetVec[0],atnum,lookup),offsetnum,lookup); 
                   absoluteSequence.insert(absoluteSequence.end(),commaVec.begin(),commaVec.end());

@@ -75,8 +75,9 @@ struct ComputerscareLaundrySoup : Module {
 		NUM_INPUTS = RESET_INPUT + numFields
 	};
 	enum OutputIds { 
-    TRG_OUTPUT, 
-		NUM_OUTPUTS = TRG_OUTPUT + numFields
+    TRG_OUTPUT,
+    FIRST_STEP_OUTPUT = TRG_OUTPUT + numFields,
+		NUM_OUTPUTS = FIRST_STEP_OUTPUT + numFields
 	};
   enum LightIds {
 		SWITCH_LIGHTS,
@@ -195,6 +196,7 @@ void ComputerscareLaundrySoup::step() {
 
   bool globalGateIn = globalClockTrigger.isHigh();
   bool activeStep = false;
+  bool atFirstStep = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool currentTriggerIsHigh;
   bool currentTriggerClocked;
@@ -225,12 +227,15 @@ void ComputerscareLaundrySoup::step() {
       }
 
       activeStep = absoluteSequences[i][this->absoluteStep[i]]==1;
+      atFirstStep = (this->absoluteStep[i] == 0);
     }
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[TRG_OUTPUT + i].value = (currentTriggerIsHigh && activeStep) ? 10.0f : 0.0f;
+      outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
     }
     else {
       outputs[TRG_OUTPUT + i].value = (globalGateIn && activeStep) ? 10.0f : 0.0f;
+      outputs[FIRST_STEP_OUTPUT + i].value = (globalGateIn && atFirstStep) ? 10.f : 0.0f;
     }
   }
 }
@@ -291,6 +296,8 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       //individual output
       addOutput(Port::create<OutPort>(mm2px(Vec(54 , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
+      addOutput(Port::create<OutPort>(mm2px(Vec(42 , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareLaundrySoup::FIRST_STEP_OUTPUT + i));
+
       //individual clock input
       addInput(Port::create<InPort>(mm2px(Vec(2, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareLaundrySoup::CLOCK_INPUT + i));
 
@@ -308,7 +315,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
       //active step display
       NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-      display->box.pos = mm2px(Vec(25,verticalStart - 9.2 +verticalSpacing*i));
+      display->box.pos = mm2px(Vec(24,verticalStart - 9.2 +verticalSpacing*i));
       display->box.size = Vec(50, 20);
       if(&module->numSteps[i]) {
         display->value = &module->absoluteStep[i];
