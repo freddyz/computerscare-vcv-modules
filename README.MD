@@ -139,7 +139,7 @@ B) A reset trigger is sent to the Global Reset or Individual Reset input jack
 
 Patch matrix with 16 scenes.  If multiple buttons are active for a single row, the 2 active input signals will be summed.
 
-![ComputerscarePatchSequencer](./doc/computerscare-patch-sequencer-basic.png)
+![ComputerscarePatchSequencer](./doc/patch-sequencer-basic-2.png)
 
 ### Buttons:
 **Patch Matrix:** Grid of 100 buttons.  When the button is lit in green, it means that the input column and output row is connected for the step that is being edited.  When the button is lit in red, it means that the input column and output row is connected for the currently active step.
