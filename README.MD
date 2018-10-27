@@ -1,27 +1,20 @@
-
-# computerscare modules
-
-Modules for VCV Rack.  I take great pride in the graphic design.
-
 # Laundry Soup
 Laundry Soup is a trigger sequencer that takes text as input.  If you connect a clock signal to the "clk" input, and type "1" in the top text box, the top "out" output will send a trigger each clock.  "2" sends a trigger every 2 clock signals.  "31" sends a trigger on the 1st and 4th clock signals, and then repeats this pattern forever or until reset.
 
-![ComputerscarePatchSequencer](./doc/laundry-soup-basic-1.png)
+![ComputerscarePatchSequencer](./doc/laundry-soup-basic-2.png)
 
-
-### Buttons:
-No buttons on Laundry Soup lol!
-
-### Knobs:
-Laundry Soup doesn't have any knobs either
 
 ### Text Input:
 Lets represent a clock signal like this:
 `xxxxxxxx`
 If the value
+
 `2`
+
 is input into a text field, the output signal will be:
+
 `x-x-x-x-`
+
 
 
 ### Input Jacks:
