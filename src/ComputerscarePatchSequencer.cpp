@@ -173,7 +173,7 @@ json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOu
   		for(int k = 0; k < maxSteps; k++) {
   			if((randomizationStepEnum == 0 && k == editAddress) || (randomizationStepEnum == 1 && k == address) || randomizationStepEnum == 2) {
   				for(int i = 0; i < 10; i++) {
-  					randomIndex = connectedInputIndices[floor(randomUniform()*numConnectedInputs)];
+  					randomIndex = numConnectedInputs > 0 ? connectedInputIndices[floor(randomUniform()*numConnectedInputs)] : 0;
   					if(connectedOutputs[i]) {
   						for (int j = 0; j < 10; j++) {
   							if(j==randomIndex) 
