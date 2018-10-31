@@ -16,22 +16,13 @@ extern Plugin *plugin;
 	#define COLOR_PINK nvgRGB(250, 190, 190)
 #endif
 
-//#245559
-// 24c9a6
-
-
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
 static const NVGcolor COLOR_COMPUTERSCARE_RED = nvgRGB(0xC4, 0x34, 0x21);
 static const NVGcolor COLOR_COMPUTERSCARE_YELLOW = nvgRGB(0xE4, 0xC4, 0x21);
 static const NVGcolor COLOR_COMPUTERSCARE_BLUE = nvgRGB(0x24, 0x44, 0xC1);
-
-
 static const NVGcolor COLOR_COMPUTERSCARE_TRANSPARENT = nvgRGBA(0x00, 0x00,0x00,0x00);
 
-
-
-//36 201 166
 
 // Forward-declare each Model, defined in each module source file
 extern Model *modelComputerscareDebug;
@@ -44,7 +35,6 @@ struct ComputerscareGreenLight : GrayModuleLightWidget {
 		addBaseColor(COLOR_COMPUTERSCARE_GREEN);
 	}
 };
-
 
 struct ComputerscareRedLight : ModuleLightWidget {
 	ComputerscareRedLight() {
@@ -67,7 +57,6 @@ struct ComputerscareBlueLight : ModuleLightWidget {
 		addBaseColor(COLOR_COMPUTERSCARE_BLUE);
 	}	
 };
-
 
 
 template <typename BASE>
