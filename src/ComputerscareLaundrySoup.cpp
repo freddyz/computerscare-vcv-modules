@@ -276,6 +276,15 @@ struct NumberDisplayWidget3 : TransparentWidget {
 };
 
 void MyTextField::onTextChange() {
+	/*
+		a) switch on next step one
+		b) do not automatically switch
+		c) swtich on next reset
+
+	parse and create new proposed absolute sequence
+	in step method, check which transport option is selected, and apply if so
+	
+	*/
   module->onCreate();
 }
 
