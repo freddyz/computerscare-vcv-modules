@@ -16,7 +16,8 @@ const std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMN
 class MyTextField : public LedDisplayTextField {
 
 public:
-  int fontSize = 18;
+  int fontSize = 16;
+  int rowIndex;
   MyTextField() : LedDisplayTextField() {}
   void setModule(ComputerscareLaundrySoup* _module) {
     module = _module;
@@ -93,9 +94,12 @@ struct ComputerscareLaundrySoup : Module {
   MyTextField* textFields[numFields];
 
   std::vector<int> absoluteSequences[numFields];
+  std::vector<int> nextAbsoluteSequences[numFields];
 
   int absoluteStep[numFields] = {0};
   int numSteps[numFields] = {0};
+
+  bool shouldChange[numFields] = {false};
   
 ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
@@ -145,8 +149,8 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
         string = string + randchar;
       }
       textFields[i]->text = string;
+      setNextAbsoluteSequence(i);
     }
-    onCreate();
 
   }
 
@@ -157,6 +161,24 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
     absoluteSequences[index] = absoluteSequence;
   }
 
+void setNextAbsoluteSequence(int index) {
+  shouldChange[index] = true;
+  if(textFields[index]->text.size() > 0) {
+    nextAbsoluteSequences[index].resize(0);
+    nextAbsoluteSequences[index]  = parseEntireString(textFields[index]->text,b64lookup);  
+  }
+}
+void setAbsoluteSequenceFromQueue(int index) {
+  absoluteSequences[index].resize(0);
+  absoluteSequences[index] = nextAbsoluteSequences[index];
+  numSteps[index] = nextAbsoluteSequences[index].size() > 0 ? nextAbsoluteSequences[index].size() : 1;
+}
+void checkIfShouldChange(int index) {
+  if(shouldChange[index]) {
+    setAbsoluteSequenceFromQueue(index);
+    shouldChange[index] = false;
+  }
+}
 void onCreate () override
   {
     for(int i = 0; i < numFields; i++) {
@@ -222,12 +244,20 @@ void ComputerscareLaundrySoup::step() {
           incrementInternalStep(i);   
         }
       }
+
+      atFirstStep = (this->absoluteStep[i] == 0);
+
       if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
+        checkIfShouldChange(i);
         resetOneOfThem(i);
       }
-
+      else {
+        if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].active) {
+          checkIfShouldChange(i);
+        }
+      }
       activeStep = absoluteSequences[i][this->absoluteStep[i]]==1;
-      atFirstStep = (this->absoluteStep[i] == 0);
+
     }
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[TRG_OUTPUT + i].value = (currentTriggerIsHigh && activeStep) ? 10.0f : 0.0f;
@@ -284,8 +314,12 @@ void MyTextField::onTextChange() {
 	parse and create new proposed absolute sequence
 	in step method, check which transport option is selected, and apply if so
 	
+  best is switch on next reset if there is one, otherwise switch on this modules next zero
+
+  check reset if active
 	*/
-  module->onCreate();
+  printf("my index:%i \n",this->rowIndex);
+  module->setNextAbsoluteSequence(this->rowIndex);
 }
 
 struct ComputerscareLaundrySoupWidget : ModuleWidget {
@@ -318,6 +352,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       textField = Widget::create<MyTextField>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
       textField->setModule(module);
       textField->box.size = mm2px(Vec(63, 7));
+      textField->rowIndex = i;
       textField->multiline = false;
       textField->color = nvgRGB(0xC0, 0xE7, 0xDE);
       addChild(textField);

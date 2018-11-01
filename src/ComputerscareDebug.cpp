@@ -22,8 +22,8 @@ struct ComputerscareDebug : Module {
 		NUM_INPUTS
 	};
 	enum OutputIds {
-		SINE_OUTPUT,
-		NUM_OUTPUTS
+		SAMPLE_OUTPUTS,
+		NUM_OUTPUTS = SAMPLE_OUTPUTS + 16
 	};
 	enum LightIds {
 		BLINK_LIGHT,
@@ -76,6 +76,11 @@ void ComputerscareDebug::step() {
 		 }
 		strValue = defaultStrValue;
 	}
+	for(int i = 0; i < 16; i++ ){
+
+    	outputs[SAMPLE_OUTPUTS + i].value = logLines[i];    
+	}
+
 
 
 }
@@ -138,6 +143,17 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		  display->box.size = Vec(88, 250);
 		  display->value = &module->strValue;
 		  addChild(display);
+		for(int i = 0; i < 16; i++ ) {
+			Vec fun = Vec(54 + 10*(i%2),20+20*i);
+			if(i % 2) {
+				
+		      addOutput(Port::create<PointingUpPentagonPort>(fun, Port::OUTPUT, module, ComputerscareDebug::SAMPLE_OUTPUTS + i));
+		     }
+		     else {
+
+		      addOutput(Port::create<InPort>(fun, Port::OUTPUT, module, ComputerscareDebug::SAMPLE_OUTPUTS + i));
+		     }
+		}
 
 	}
 };
