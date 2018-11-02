@@ -13,12 +13,14 @@ struct ComputerscareDebug : Module {
 		PITCH_PARAM,
 		MANUAL_TRIGGER,
 		MANUAL_CLEAR_TRIGGER,
+		MANUAL_FORWARD_TRIGGER,
 		NUM_PARAMS
 	};
 	enum InputIds {
 		VAL_INPUT,
 		TRG_INPUT,
 		CLR_INPUT,
+		FORWARD_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -39,8 +41,11 @@ struct ComputerscareDebug : Module {
 
 	SchmittTrigger clockTrigger;
 	SchmittTrigger clearTrigger;
+	SchmittTrigger forwardTrigger;
+	
 	SchmittTrigger manualClockTrigger;
   	SchmittTrigger manualClearTrigger;
+  	SchmittTrigger manualForwardTrigger;
 
 	ComputerscareDebug() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
@@ -75,6 +80,22 @@ void ComputerscareDebug::step() {
 		 	logLines[a] = 0;
 		 }
 		strValue = defaultStrValue;
+	}
+	if (forwardTrigger.process(inputs[FORWARD_INPUT].value / 2.f) || manualForwardTrigger.process(params[MANUAL_FORWARD_TRIGGER].value)) {
+		 float newFirstVal = logLines[NUM_LINES-1];
+		 	 for( unsigned int a = NUM_LINES-1; a > 0; a = a - 1 )
+		 {
+		 	logLines[a] = logLines[a-1];
+		 }
+		 logLines[0] = newFirstVal;
+
+		thisVal = std::to_string(logLines[0]).substr(0,10);
+		for( unsigned int a = 1; a < NUM_LINES; a = a + 1 )
+		 {
+		 	thisVal =  thisVal + "\n" + std::to_string(logLines[a]).substr(0,10);
+		 }
+
+		strValue = thisVal;
 	}
 	for(int i = 0; i < 16; i++ ){
 
@@ -135,8 +156,13 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		addInput(Port::create<InPort>(Vec(33, 330), Port::INPUT, module, ComputerscareDebug::VAL_INPUT));
 		addInput(Port::create<InPort>(Vec(63, 330), Port::INPUT, module, ComputerscareDebug::CLR_INPUT));
 	
+
 		addParam(ParamWidget::create<LEDButton>(Vec(6, 290), module, ComputerscareDebug::MANUAL_TRIGGER, 0.0, 1.0, 0.0));
+		addInput(Port::create<InPort>(Vec(33, 290), Port::INPUT, module, ComputerscareDebug::FORWARD_INPUT));
+			addParam(ParamWidget::create<LEDButton>(Vec(33, 280), module, ComputerscareDebug::MANUAL_FORWARD_TRIGGER, 0.0, 1.0, 0.0));
+
 		addParam(ParamWidget::create<LEDButton>(Vec(66, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER, 0.0, 1.0, 0.0));
+
 
 		StringDisplayWidget3 *display = new StringDisplayWidget3();
 		  display->box.pos = Vec(1,24);
