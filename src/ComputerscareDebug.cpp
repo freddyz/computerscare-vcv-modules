@@ -61,10 +61,10 @@ void ComputerscareDebug::step() {
 		 }
 		logLines[0] = inputs[VAL_INPUT].value;
 
-		thisVal = std::to_string(logLines[0]).substr(0,10);
+		thisVal = std::to_string(logLines[0]).substr(0,6);
 		for( unsigned int a = 1; a < NUM_LINES; a = a + 1 )
 		 {
-		 	thisVal =  thisVal + "\n" + std::to_string(logLines[a]).substr(0,10);
+		 	thisVal =  thisVal + "\n" + std::to_string(logLines[a]).substr(0,6);
 		 }
 
 		strValue = thisVal;
@@ -140,11 +140,11 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		StringDisplayWidget3 *display = new StringDisplayWidget3();
 		  display->box.pos = Vec(1,24);
-		  display->box.size = Vec(88, 250);
+		  display->box.size = Vec(48, 250);
 		  display->value = &module->strValue;
 		  addChild(display);
 		for(int i = 0; i < 16; i++ ) {
-			Vec fun = Vec(54 + 10*(i%2),20+20*i);
+			Vec fun = Vec(51 + 10*(i%2),20*i);
 			if(i % 2) {
 				
 		      addOutput(Port::create<PointingUpPentagonPort>(fun, Port::OUTPUT, module, ComputerscareDebug::SAMPLE_OUTPUTS + i));
