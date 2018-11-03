@@ -13,14 +13,12 @@ struct ComputerscareDebug : Module {
 		PITCH_PARAM,
 		MANUAL_TRIGGER,
 		MANUAL_CLEAR_TRIGGER,
-		MANUAL_FORWARD_TRIGGER,
 		NUM_PARAMS
 	};
 	enum InputIds {
 		VAL_INPUT,
 		TRG_INPUT,
 		CLR_INPUT,
-		FORWARD_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -41,11 +39,8 @@ struct ComputerscareDebug : Module {
 
 	SchmittTrigger clockTrigger;
 	SchmittTrigger clearTrigger;
-	SchmittTrigger forwardTrigger;
-	
 	SchmittTrigger manualClockTrigger;
   	SchmittTrigger manualClearTrigger;
-  	SchmittTrigger manualForwardTrigger;
 
 	ComputerscareDebug() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
