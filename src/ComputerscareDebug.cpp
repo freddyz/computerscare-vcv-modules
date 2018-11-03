@@ -22,8 +22,8 @@ struct ComputerscareDebug : Module {
 		NUM_INPUTS
 	};
 	enum OutputIds {
-		SAMPLE_OUTPUTS,
-		NUM_OUTPUTS = SAMPLE_OUTPUTS + 16
+		SINE_OUTPUT,
+		NUM_OUTPUTS
 	};
 	enum LightIds {
 		BLINK_LIGHT,
@@ -61,10 +61,10 @@ void ComputerscareDebug::step() {
 		 }
 		logLines[0] = inputs[VAL_INPUT].value;
 
-		thisVal = std::to_string(logLines[0]).substr(0,6);
+		thisVal = std::to_string(logLines[0]).substr(0,10);
 		for( unsigned int a = 1; a < NUM_LINES; a = a + 1 )
 		 {
-		 	thisVal =  thisVal + "\n" + std::to_string(logLines[a]).substr(0,6);
+		 	thisVal =  thisVal + "\n" + std::to_string(logLines[a]).substr(0,10);
 		 }
 
 		strValue = thisVal;
@@ -76,27 +76,6 @@ void ComputerscareDebug::step() {
 		 }
 		strValue = defaultStrValue;
 	}
-	if (forwardTrigger.process(inputs[FORWARD_INPUT].value / 2.f) || manualForwardTrigger.process(params[MANUAL_FORWARD_TRIGGER].value)) {
-		 float newFirstVal = logLines[NUM_LINES-1];
-		 	 for( unsigned int a = NUM_LINES-1; a > 0; a = a - 1 )
-		 {
-		 	logLines[a] = logLines[a-1];
-		 }
-		 logLines[0] = newFirstVal;
-
-		thisVal = std::to_string(logLines[0]).substr(0,10);
-		for( unsigned int a = 1; a < NUM_LINES; a = a + 1 )
-		 {
-		 	thisVal =  thisVal + "\n" + std::to_string(logLines[a]).substr(0,10);
-		 }
-
-		strValue = thisVal;
-	}
-	for(int i = 0; i < 16; i++ ){
-
-    	outputs[SAMPLE_OUTPUTS + i].value = logLines[i];    
-	}
-
 
 
 }
@@ -151,30 +130,14 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		addInput(Port::create<InPort>(Vec(33, 330), Port::INPUT, module, ComputerscareDebug::VAL_INPUT));
 		addInput(Port::create<InPort>(Vec(63, 330), Port::INPUT, module, ComputerscareDebug::CLR_INPUT));
 	
-
 		addParam(ParamWidget::create<LEDButton>(Vec(6, 290), module, ComputerscareDebug::MANUAL_TRIGGER, 0.0, 1.0, 0.0));
-		addInput(Port::create<InPort>(Vec(33, 290), Port::INPUT, module, ComputerscareDebug::FORWARD_INPUT));
-			addParam(ParamWidget::create<LEDButton>(Vec(33, 280), module, ComputerscareDebug::MANUAL_FORWARD_TRIGGER, 0.0, 1.0, 0.0));
-
 		addParam(ParamWidget::create<LEDButton>(Vec(66, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER, 0.0, 1.0, 0.0));
-
 
 		StringDisplayWidget3 *display = new StringDisplayWidget3();
 		  display->box.pos = Vec(1,24);
-		  display->box.size = Vec(48, 250);
+		  display->box.size = Vec(88, 250);
 		  display->value = &module->strValue;
 		  addChild(display);
-		for(int i = 0; i < 16; i++ ) {
-			Vec fun = Vec(51 + 10*(i%2),20*i);
-			if(i % 2) {
-				
-		      addOutput(Port::create<PointingUpPentagonPort>(fun, Port::OUTPUT, module, ComputerscareDebug::SAMPLE_OUTPUTS + i));
-		     }
-		     else {
-
-		      addOutput(Port::create<InPort>(fun, Port::OUTPUT, module, ComputerscareDebug::SAMPLE_OUTPUTS + i));
-		     }
-		}
 
 	}
 };
