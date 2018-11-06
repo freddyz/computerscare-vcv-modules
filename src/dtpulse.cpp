@@ -54,6 +54,9 @@ std::vector<int> parseEntireString(std::string input,std::string lookup) {
               else if(atVec[0].empty() && atnum == -1) {
                 absoluteSequence.push_back(0);
               }
+							else if(atnum ==0) {
+								absoluteSequence.push_back(0);
+							}
               else {
                 std::stringstream offsetstream(atVec[0]);
                 offsetVec.resize(0);
