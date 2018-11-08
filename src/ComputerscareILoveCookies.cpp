@@ -19,7 +19,8 @@ const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED,COLOR_COM
 class MyTextFieldCookie : public LedDisplayTextField {
 
 public:
-  int fontSize = 18;
+  int fontSize = 15;
+  int rowIndex=0;
   MyTextFieldCookie() : LedDisplayTextField() {}
   void setModule(ComputerscareILoveCookies* _module) {
     module = _module;
@@ -97,6 +98,9 @@ struct ComputerscareILoveCookies : Module {
   MyTextFieldCookie* textFields[numFields];
 
   std::vector<int> absoluteSequences[numFields];
+  std::vector<int> nextAbsoluteSequences[numFields];
+
+  bool shouldChange[numFields] = {false};
 
   int absoluteStep[numFields] = {0};
   int numSteps[numFields] = {0};
@@ -136,7 +140,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
   }
 
   void randomizeAllFields() {
-    std::string mainlookup =knoblookup;
+    std::string mainlookup = knoblookup;
     std::string string = "";
     std::string randchar = "";
     int length = 0;
@@ -149,23 +153,32 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
         string = string + randchar;
       }
       textFields[i]->text = string;
+      setNextAbsoluteSequence(i);
     }
-    onCreate();
-
   }
 
   void parseFormula(std::string input, int index) {
     std::vector<int> absoluteSequence;
-    int currentVal;
     absoluteSequence.resize(0);
-
-    for(unsigned int i = 0; i < input.length(); i++) {
-      currentVal = knoblookup.find(input[i]);
-      absoluteSequence.push_back(currentVal);
-    }
-
+    absoluteSequence = parseStringAsValues(input,knoblookup);
     numSteps[index] = absoluteSequence.size();
     absoluteSequences[index] = absoluteSequence;
+  }
+  void setNextAbsoluteSequence(int index) {
+    shouldChange[index] = true;
+    nextAbsoluteSequences[index].resize(0);
+    nextAbsoluteSequences[index]  = parseStringAsValues(textFields[index]->text,knoblookup);  
+  }
+  void setAbsoluteSequenceFromQueue(int index) {
+    absoluteSequences[index].resize(0);
+    absoluteSequences[index] = nextAbsoluteSequences[index];
+    numSteps[index] = nextAbsoluteSequences[index].size() > 0 ? nextAbsoluteSequences[index].size() : 1;
+  }
+  void checkIfShouldChange(int index) {
+    if(shouldChange[index]) {
+      setAbsoluteSequenceFromQueue(index);
+      shouldChange[index] = false;
+    }
   }
   int getAbsoluteStep(int index) {
     return this->absoluteStep[index];
@@ -176,9 +189,8 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
 void onCreate () override
   {
     for(int i = 0; i < numFields; i++) {
-      if(textFields[i]->text.size() > 0) {
-        parseFormula(textFields[i]->text,i);
-      }
+      setNextAbsoluteSequence(i);
+      checkIfShouldChange(i);
       resetOneOfThem(i);
     }
   }
@@ -212,7 +224,7 @@ void ComputerscareILoveCookies::step() {
 
   bool globalGateIn = globalClockTrigger.isHigh();
   bool activeStep = 0;
-  int activeKnob;
+  int activeKnob = 0;;
   bool atFirstStep = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool currentTriggerIsHigh;
@@ -243,8 +255,19 @@ void ComputerscareILoveCookies::step() {
         resetOneOfThem(i);
       }
 
+      atFirstStep = (this->absoluteStep[i] == 0);
+
+      if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
+        checkIfShouldChange(i);
+        resetOneOfThem(i);
+      }
+      else {
+        if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].active) {
+          checkIfShouldChange(i);
+        }
+      }
+
       activeKnob = absoluteSequences[i][this->absoluteStep[i]];
-      //printf("%i, %f",i,activeKnob);
 
       atFirstStep = (this->absoluteStep[i] == 0);
       for(int k = 0; k < numKnobRows * numKnobColumns; k++) {
@@ -253,7 +276,6 @@ void ComputerscareILoveCookies::step() {
     }
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
-      
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
     }
     else {
@@ -339,16 +361,16 @@ struct SmallLetterDisplay : TransparentWidget {
   }
 };
 void MyTextFieldCookie::onTextChange() {
-  module->onCreate();
+  module->setNextAbsoluteSequence(this->rowIndex);
 }
 
 struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
   double verticalSpacing = 18.4;
   int verticalStart = 80;
-  int index;
-  double knobPosX;
-  double knobPosY;
+  int index=0;
+  double knobPosX=0.0;
+  double knobPosY=0.0;
   double knobXStart = 2;
   double knobYStart = 16;
   double knobRowWidth = 13;
@@ -407,6 +429,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       textField->box.size = mm2px(Vec(63, 7));
       textField->multiline = false;
       textField->color = nvgRGB(0xC0, 0xE7, 0xDE);
+      textField->rowIndex = i;
       addChild(textField);
       module->textFields[i] = textField;
 
@@ -414,6 +437,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       NumberDisplayWidget3cookie *display = new NumberDisplayWidget3cookie();
       display->box.pos = mm2px(Vec(23,verticalStart - 9.2 +verticalSpacing*i));
       display->box.size = Vec(50, 20);
+
       display->outlineColor = outlineColorMap[i];
       if(&module->numSteps[i]) {
         display->value = &module->absoluteStep[i];
@@ -423,6 +447,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       }
       addChild(display);
     }
+    module->onCreate();
   }
   MyTextFieldCookie* textField;
 };

@@ -156,11 +156,9 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
   }
 
 void setNextAbsoluteSequence(int index) {
-  //if(textFields[index]->text.size() > 0) {
-    shouldChange[index] = true;
-    nextAbsoluteSequences[index].resize(0);
-    nextAbsoluteSequences[index]  = parseEntireString(textFields[index]->text,b64lookup);  
-  //}
+  shouldChange[index] = true;
+  nextAbsoluteSequences[index].resize(0);
+  nextAbsoluteSequences[index]  = parseStringAsTimes(textFields[index]->text,b64lookup);  
 }
 void setAbsoluteSequenceFromQueue(int index) {
   absoluteSequences[index].resize(0);
@@ -184,7 +182,6 @@ void onCreate () override
 
   void onReset () override
   {
-
     onCreate();
   }
 

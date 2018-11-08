@@ -6,13 +6,18 @@ bool is_digits(const std::string &str)
 {
     return str.find_first_not_of(integerlookup) == std::string::npos;
 }
-std::vector<int> parseStringAsValues(std::string input, std::string lookup) {
+
+std::vector<int> parseStringAsTimes(std::string input, std::string lookup) {
 // "113" -> {1,1,3}
-	std::vector<int> absoluteSequence;
-	absoluteSequence.resize(0);
-	return absoluteSequence;
+  return parseEntireString(input,lookup,0);
 }
-std::vector<int> parseEntireString(std::string input,std::string lookup) {
+
+std::vector<int> parseStringAsValues(std::string input, std::string lookup) {
+  // "113" -> {1,1,3}
+	return parseEntireString(input,lookup,1);
+}
+
+std::vector<int> parseEntireString(std::string input,std::string lookup,int type) {
 // "113" -> {1,1,1,0,0}
         std::vector<int> absoluteSequence;
         absoluteSequence.resize(0);
@@ -34,8 +39,8 @@ std::vector<int> parseEntireString(std::string input,std::string lookup) {
         std::string atlhs;
         std::string commalhs;
         
-        int atnum;
-        int offsetnum;
+        int atnum=-1;
+        int offsetnum=0;
 
         std::stringstream inputstream(input);
         std::stringstream atstream(input);
@@ -50,7 +55,6 @@ std::vector<int> parseEntireString(std::string input,std::string lookup) {
               while(std::getline(atstream,atseg,'@')) {
                 atVec.push_back(atseg);
               }
-
               atnum  = (atVec.size() > 1 && is_digits(atVec[1]) )? std::stoi(atVec[1]) : -1;
               if(atVec[0].empty() && atnum > 0) {
                 for(int i = 0; i < atnum; i++) {
@@ -76,13 +80,30 @@ std::vector<int> parseEntireString(std::string input,std::string lookup) {
                   offsetnum  = (offsetVec.size() > 1  && is_digits(offsetVec[1]))? std::stoi(offsetVec[1]) : 0;
                   commaVec.resize(0);
 									// below may be the only line that has to change for a by value parse
-                  commaVec = parseDt(atExpand(offsetVec[0],atnum,lookup),offsetnum,lookup); 
+                  if(type==0) {
+                    commaVec = parseDt(atExpand(offsetVec[0],atnum,lookup),offsetnum,lookup); 
+                  }
+                  else {
+                    commaVec = parseLookup(countExpand(offsetVec[0],atnum),offsetnum,lookup);
+                  }
+                  
                   absoluteSequence.insert(absoluteSequence.end(),commaVec.begin(),commaVec.end());
                 }
               }
             }
           }
         return absoluteSequence;
+}
+std::vector<int> parseLookup(std::string input, int offset, std::string lookup) {
+  std::vector<int> absoluteSequence;
+  int currentVal;
+  absoluteSequence.resize(0);
+
+  for(unsigned int i = 0; i < input.length(); i++) {
+    currentVal = lookup.find(input[i]);
+    absoluteSequence.push_back(currentVal);
+  }
+  return absoluteSequence;
 }
 std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
   std::vector <int> absoluteSequence;
@@ -134,6 +155,24 @@ std::string atExpand(std::string input, int atnum, std::string lookup) {
     }
     index++;
     index = index%length;
+  }
+  return output;
+}
+
+std::string countExpand(std::string input, int atnum) {
+  std::string output="";
+  int length = input.length();
+  int total = 0;
+  int index = 0;
+  int lookupVal;
+  if(atnum == -1) {
+    return input;
+  }
+  else if(atnum == 0) {
+    return "";
+  }
+  for(index = 0; index < atnum; index++) {
+    output += input[index % length];
   }
   return output;
 }
