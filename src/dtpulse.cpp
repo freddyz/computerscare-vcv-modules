@@ -6,15 +6,21 @@ bool is_digits(const std::string &str)
 {
     return str.find_first_not_of(integerlookup) == std::string::npos;
 }
-
+std::vector<int> parseStringAsValues(std::string input, std::string lookup) {
+// "113" -> {1,1,3}
+	std::vector<int> absoluteSequence;
+	absoluteSequence.resize(0);
+	return absoluteSequence;
+}
 std::vector<int> parseEntireString(std::string input,std::string lookup) {
+// "113" -> {1,1,1,0,0}
         std::vector<int> absoluteSequence;
         absoluteSequence.resize(0);
 				bool noNumbers = true;
 				for(unsigned int i = 0; i < input.length(); i++) {
 					noNumbers= noNumbers && (lookup.find(input[i]) == std::string::npos);
 				}
-        if(input.empty() || noNumbers) {
+        if(noNumbers) {
           absoluteSequence.push_back(0);
           return absoluteSequence;
         }
@@ -36,7 +42,7 @@ std::vector<int> parseEntireString(std::string input,std::string lookup) {
         std::stringstream offsetstream(input);
         while(std::getline(inputstream,commaseg,',')) {
           if(commaseg.empty()) {
-            absoluteSequence.push_back(0);
+            //absoluteSequence.push_back(0);
           }
           else {
               std::stringstream atstream(commaseg);
@@ -69,6 +75,7 @@ std::vector<int> parseEntireString(std::string input,std::string lookup) {
                 else {
                   offsetnum  = (offsetVec.size() > 1  && is_digits(offsetVec[1]))? std::stoi(offsetVec[1]) : 0;
                   commaVec.resize(0);
+									// below may be the only line that has to change for a by value parse
                   commaVec = parseDt(atExpand(offsetVec[0],atnum,lookup),offsetnum,lookup); 
                   absoluteSequence.insert(absoluteSequence.end(),commaVec.begin(),commaVec.end());
                 }
