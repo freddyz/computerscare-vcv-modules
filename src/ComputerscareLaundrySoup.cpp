@@ -17,7 +17,7 @@ class MyTextField : public LedDisplayTextField {
 
 public:
   int fontSize = 16;
-  int rowIndex;
+  int rowIndex=0;
   MyTextField() : LedDisplayTextField() {}
   void setModule(ComputerscareLaundrySoup* _module) {
     module = _module;
@@ -123,6 +123,7 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
     json_t *sequencesJ = json_object_get(rootJ, "sequences");
     if (sequencesJ) {
       for (int i = 0; i < numFields; i++) {
+
         json_t *sequenceJ = json_array_get(sequencesJ, i);
         if (sequenceJ)
           textFields[i]->text = json_string_value(sequenceJ);
@@ -154,19 +155,12 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
 
   }
 
-  void parseFormula(std::string expr, int index) {
-    std::vector<int> absoluteSequence;
-    absoluteSequence = parseEntireString(expr,b64lookup);
-    numSteps[index] = absoluteSequence.size();
-    absoluteSequences[index] = absoluteSequence;
-  }
-
 void setNextAbsoluteSequence(int index) {
-  shouldChange[index] = true;
-  if(textFields[index]->text.size() > 0) {
+  //if(textFields[index]->text.size() > 0) {
+    shouldChange[index] = true;
     nextAbsoluteSequences[index].resize(0);
     nextAbsoluteSequences[index]  = parseEntireString(textFields[index]->text,b64lookup);  
-  }
+  //}
 }
 void setAbsoluteSequenceFromQueue(int index) {
   absoluteSequences[index].resize(0);
@@ -182,15 +176,15 @@ void checkIfShouldChange(int index) {
 void onCreate () override
   {
     for(int i = 0; i < numFields; i++) {
-      if(textFields[i]->text.size() > 0) {
-        parseFormula(textFields[i]->text,i);
-      }
+      setNextAbsoluteSequence(i);
+      checkIfShouldChange(i);
       resetOneOfThem(i);
     }
   }
 
   void onReset () override
   {
+
     onCreate();
   }
 
@@ -220,11 +214,11 @@ void ComputerscareLaundrySoup::step() {
   bool activeStep = false;
   bool atFirstStep = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
-  bool currentTriggerIsHigh;
-  bool currentTriggerClocked;
+  bool currentTriggerIsHigh = false;
+  bool currentTriggerClocked = false;
   bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].value / 2.f);
-  bool currentResetActive;
-  bool currentResetTriggered;
+  bool currentResetActive = false;
+  bool currentResetTriggered = false;
 
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
@@ -306,19 +300,6 @@ struct NumberDisplayWidget3 : TransparentWidget {
 };
 
 void MyTextField::onTextChange() {
-	/*
-		a) switch on next step one
-		b) do not automatically switch
-		c) swtich on next reset
-
-	parse and create new proposed absolute sequence
-	in step method, check which transport option is selected, and apply if so
-	
-  best is switch on next reset if there is one, otherwise switch on this modules next zero
-
-  check reset if active
-	*/
-  printf("my index:%i \n",this->rowIndex);
   module->setNextAbsoluteSequence(this->rowIndex);
 }
 
@@ -370,7 +351,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       }
       addChild(display);
     }
-
+    module->onCreate();
   }
   MyTextField* textField;
 };
