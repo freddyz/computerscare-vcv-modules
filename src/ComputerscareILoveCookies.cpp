@@ -217,6 +217,26 @@ void onCreate () override
   void resetOneOfThem(int i) {
     this->absoluteStep[i] = 0;
   }
+	float mapKnobValue(float rawValue, int rowIndex) {
+		// raw value is between -10 and +10
+		/*
+		0:	-10,10
+		1:	-5,5
+		2:	0,10
+		3:	0,5
+		4:	0,1
+		*/
+		float mappedValue = 0.f;
+		int mapEnum = 0;
+		switch(mapEnum) {
+			case 0: mappedValue = rawValue; break;
+			case 1: mappedValue = rawValue / 2.f; break;
+			case 2: mappedValue = (rawValue + 10.f) / 2.f; break;
+			case 3: mappedValue = (rawValue + 10.f) / 4.f; break;
+			case 4: mappedValue = (rawValue + 10.f) / 20.f; break;
+		}
+		return mappedValue;
+	}
 };
 
 
@@ -224,7 +244,7 @@ void ComputerscareILoveCookies::step() {
 
   bool globalGateIn = globalClockTrigger.isHigh();
   bool activeStep = 0;
-  int activeKnob = 0;;
+  int activeKnob = 0;
   bool atFirstStep = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool currentTriggerIsHigh;
@@ -232,7 +252,7 @@ void ComputerscareILoveCookies::step() {
   bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].value / 2.f);
   bool currentResetActive;
   bool currentResetTriggered;
-
+	float knobRawValue = 0.f;
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
     currentResetActive = inputs[RESET_INPUT + i].active;
@@ -274,12 +294,12 @@ void ComputerscareILoveCookies::step() {
         lights[SWITCH_LIGHTS + i*numKnobRows*numKnobColumns + k].value  = (k==activeKnob) ? 1.0 : 0.0;
       }
     }
+		knobRawValue = params[KNOB_PARAM + activeKnob].value;
+    outputs[TRG_OUTPUT + i].value =	mapKnobValue(knobRawValue,i); 
     if(inputs[CLOCK_INPUT + i].active) {
-      outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
     }
     else {
-      outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
       outputs[FIRST_STEP_OUTPUT + i].value = (globalGateIn && atFirstStep) ? 10.f : 0.0f;
     }
   }
