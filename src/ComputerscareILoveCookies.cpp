@@ -401,7 +401,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   int index=0;
   double knobPosX=0.0;
   double knobPosY=0.0;
-  double knobXStart = 2+xStart;
+  double knobXStart = 3+xStart;
   double knobYStart = 16;
   double knobRowWidth = 13;
   double knobColumnHeight = 10;
@@ -410,8 +410,8 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   double inputPosY = 0.0;
   double inputXStart = 0;
   double inputYStart = 0;
-  double inputRowWidth = 7;
-  double inputColumnHeight = 9.5;
+  double inputRowWidth = 8;
+  double inputColumnHeight = 9.7;
   ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareILoveCookiesPanel.svg")));
 
@@ -445,7 +445,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
     for(int k = 0; k < numInputRows; k++) {
       for(int m=0; m<numInputColumns; m++) {
         inputPosX = inputXStart + m*inputRowWidth;
-        inputPosY = inputYStart + k*inputColumnHeight + m*4.9;
+        inputPosY = inputYStart + k*inputColumnHeight + m * 2.0;
         index = numInputColumns*k + m;
 
         if(m%2) {
@@ -455,7 +455,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
          addInput(Port::create<PointingUpPentagonPort>(mm2px(Vec(inputPosX , inputPosY)), Port::INPUT, module, ComputerscareILoveCookies::SIGNAL_INPUT + index));
         }
         SmallLetterDisplay *letterDisplay = new SmallLetterDisplay();
-        letterDisplay->box.pos = mm2px(Vec(inputPosX-3,inputPosY-2));
+        letterDisplay->box.pos = mm2px(Vec(inputPosX-1,inputPosY));
         letterDisplay->box.size = Vec(20, 20);
         letterDisplay->value = inputlookup[index];
 
