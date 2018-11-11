@@ -13,7 +13,11 @@ struct ComputerscareILoveCookies;
 const int numFields = 3;
 const int numKnobRows = 5;
 const int numKnobColumns = 5;
+const int numInputRows = 13;
+const int numInputColumns = 2;
+
 const std::string knoblookup = "abcdefghijklmnopqrstuvwxy";
+const std::string inputlookup= "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED,COLOR_COMPUTERSCARE_YELLOW,COLOR_COMPUTERSCARE_BLUE};
 
 class MyTextFieldCookie : public LedDisplayTextField {
@@ -76,7 +80,8 @@ struct ComputerscareILoveCookies : Module {
     GLOBAL_CLOCK_INPUT,
     GLOBAL_RESET_INPUT,
     CLOCK_INPUT,
-    RESET_INPUT = CLOCK_INPUT + numFields,
+    SIGNAL_INPUT= CLOCK_INPUT + numInputRows * numInputColumns,
+    RESET_INPUT = SIGNAL_INPUT + numFields,
 		NUM_INPUTS = RESET_INPUT + numFields
 	};
 	enum OutputIds { 
@@ -389,13 +394,21 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
   double verticalSpacing = 18.4;
   int verticalStart = 80;
+  double xStart = 16;
   int index=0;
   double knobPosX=0.0;
   double knobPosY=0.0;
-  double knobXStart = 2;
+  double knobXStart = 2+xStart;
   double knobYStart = 16;
   double knobRowWidth = 13;
   double knobColumnHeight = 10;
+
+  double inputPosX = 0.0;
+  double inputPosY = 0.0;
+  double inputXStart = 0;
+  double inputYStart = 0;
+  double inputRowWidth = 7;
+  double inputColumnHeight = 9.5;
   ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareILoveCookiesPanel.svg")));
 
@@ -420,32 +433,49 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
 
         ParamWidget* knob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(knobPosX,knobPosY)), module, ComputerscareILoveCookies::KNOB_PARAM +index,  0.f, 10.0f, 0.0f);
+        
+
         addParam(knob);
         
       }
     }
+    for(int k = 0; k < numInputRows; k++) {
+      for(int m=0; m<numInputColumns; m++) {
+        inputPosX = inputXStart + m*inputRowWidth;
+        inputPosY = inputYStart + k*inputColumnHeight;
+        index = numInputColumns*k + m;
+
+        if(m%2) {
+          addInput(Port::create<InPort>(mm2px(Vec(inputPosX , inputPosY)), Port::INPUT, module, ComputerscareILoveCookies::SIGNAL_INPUT + index));
+        }
+        else {
+         addInput(Port::create<PointingUpPentagonPort>(mm2px(Vec(inputPosX , inputPosY+4.9)), Port::INPUT, module, ComputerscareILoveCookies::SIGNAL_INPUT + index));
+
+        }
+      }
+    }
 
     //global clock input
-    addInput(Port::create<InPort>(mm2px(Vec(2 , 0)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_CLOCK_INPUT));
+    addInput(Port::create<InPort>(mm2px(Vec(2+xStart , 0)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_CLOCK_INPUT));
 
     //global reset input
-    addInput(Port::create<InPort>(mm2px(Vec(12 , 0)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
+    addInput(Port::create<InPort>(mm2px(Vec(12+xStart , 0)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
     
     for(int i = 0; i < numFields; i++) {
       //first-step output
-      addOutput(Port::create<OutPort>(mm2px(Vec(42 , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareILoveCookies::FIRST_STEP_OUTPUT + i));
+      addOutput(Port::create<OutPort>(mm2px(Vec(42+xStart , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareILoveCookies::FIRST_STEP_OUTPUT + i));
 
       //individual output
-      addOutput(Port::create<OutPort>(mm2px(Vec(54 , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareILoveCookies::TRG_OUTPUT + i));
+      addOutput(Port::create<OutPort>(mm2px(Vec(54+xStart , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareILoveCookies::TRG_OUTPUT + i));
 
       //individual clock input
-      addInput(Port::create<InPort>(mm2px(Vec(2, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareILoveCookies::CLOCK_INPUT + i));
+      addInput(Port::create<InPort>(mm2px(Vec(2+xStart, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareILoveCookies::CLOCK_INPUT + i));
 
       //individual reset input
-      addInput(Port::create<InPort>(mm2px(Vec(12, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareILoveCookies::RESET_INPUT + i));
+      addInput(Port::create<InPort>(mm2px(Vec(12+xStart, verticalStart + verticalSpacing*i-10)), Port::INPUT, module, ComputerscareILoveCookies::RESET_INPUT + i));
 
       //sequence input field
-      textField = Widget::create<MyTextFieldCookie>(mm2px(Vec(1, verticalStart + verticalSpacing*i)));
+      textField = Widget::create<MyTextFieldCookie>(mm2px(Vec(1+xStart, verticalStart + verticalSpacing*i)));
       textField->setModule(module);
       textField->box.size = mm2px(Vec(63, 7));
       textField->multiline = false;
@@ -456,7 +486,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
       //active step display
       NumberDisplayWidget3cookie *display = new NumberDisplayWidget3cookie();
-      display->box.pos = mm2px(Vec(23,verticalStart - 9.2 +verticalSpacing*i));
+      display->box.pos = mm2px(Vec(23+xStart,verticalStart - 9.2 +verticalSpacing*i));
       display->box.size = Vec(50, 20);
 
       display->outlineColor = outlineColorMap[i];

@@ -9,9 +9,9 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   width="200"
+   width="240"
    height="380"
-   viewBox="0 0 52.916669 100.54167"
+   viewBox="0 0 63.500003 100.54167"
    version="1.1"
    id="svg8"
    inkscape:version="0.92.2 5c3e80d, 2017-08-06"
@@ -34,7 +34,7 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="4.0000001"
+     inkscape:zoom="1"
      inkscape:cx="86.288455"
      inkscape:cy="164.40634"
      inkscape:document-units="mm"
@@ -61,7 +61,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title />
+        <dc:title></dc:title>
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -74,11 +74,11 @@
     <path
        inkscape:connector-curvature="0"
        id="path1647"
-       d="M 0,196.45832 H 52.916667 V 297 H 0 Z"
-       style="opacity:1;vector-effect:none;fill:#f9f9f9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.72459143;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:normal" />
+       d="M 0,196.45832 H 63.5 V 297 H 0 Z"
+       style="opacity:1;vector-effect:none;fill:#f9f9f9;fill-opacity:1;fill-rule:evenodd;stroke:none;stroke-width:0.79375011;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:normal" />
     <g
        aria-label="computerscare"
-       transform="matrix(0.98656289,0.0441007,-0.12576361,1.0079983,50.102321,-2.779225)"
+       transform="matrix(0.98656289,0.0441007,-0.12576361,1.0079983,61.743995,-2.779225)"
        style="font-style:normal;font-weight:normal;font-size:10.58333302px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.26458332"
        id="text1651">
       <path
@@ -356,7 +356,7 @@
        id="text1057" />
     <g
        id="g8072"
-       transform="matrix(0.26889251,-0.01002392,-0.03200614,0.19788514,10.15233,292.24297)">
+       transform="matrix(0.26889251,-0.01002392,-0.03200614,0.19788514,21.794004,292.24297)">
       <g
          style="display:inline"
          inkscape:label="Layer 1"
