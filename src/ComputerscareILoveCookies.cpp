@@ -18,6 +18,7 @@ const int numInputColumns = 2;
 
 const std::string knoblookup = "abcdefghijklmnopqrstuvwxy";
 const std::string inputlookup= "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const std::string knobandinputlookup = knoblookup + inputlookup;
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED,COLOR_COMPUTERSCARE_YELLOW,COLOR_COMPUTERSCARE_BLUE};
 
 class MyTextFieldCookie : public LedDisplayTextField {
@@ -80,9 +81,9 @@ struct ComputerscareILoveCookies : Module {
     GLOBAL_CLOCK_INPUT,
     GLOBAL_RESET_INPUT,
     CLOCK_INPUT,
-    SIGNAL_INPUT= CLOCK_INPUT + numInputRows * numInputColumns,
-    RESET_INPUT = SIGNAL_INPUT + numFields,
-		NUM_INPUTS = RESET_INPUT + numFields
+    RESET_INPUT = CLOCK_INPUT + numFields,
+    SIGNAL_INPUT = RESET_INPUT + numFields ,
+		NUM_INPUTS = RESET_INPUT+ numInputRows * numInputColumns
 	};
 	enum OutputIds { 
     TRG_OUTPUT,
@@ -162,17 +163,11 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     }
   }
 
-  void parseFormula(std::string input, int index) {
-    std::vector<int> absoluteSequence;
-    absoluteSequence.resize(0);
-    absoluteSequence = parseStringAsValues(input,knoblookup);
-    numSteps[index] = absoluteSequence.size();
-    absoluteSequences[index] = absoluteSequence;
-  }
   void setNextAbsoluteSequence(int index) {
     shouldChange[index] = true;
     nextAbsoluteSequences[index].resize(0);
-    nextAbsoluteSequences[index]  = parseStringAsValues(textFields[index]->text,knoblookup);  
+    nextAbsoluteSequences[index]  = parseStringAsValues(textFields[index]->text,knobandinputlookup);
+    printf("index:%i,val[0]:%i\n",index,nextAbsoluteSequences[index][0]);
   }
   void setAbsoluteSequenceFromQueue(int index) {
     absoluteSequences[index].resize(0);
@@ -217,6 +212,7 @@ void onCreate () override
   void incrementInternalStep(int i) {
     this->absoluteStep[i] +=1;
     this->absoluteStep[i] %= this->numSteps[i];
+    printf("row:%i, step:%i, val:%i\n",i,this->absoluteStep[i],this->absoluteSequences[i][this->absoluteStep[i]]);
   }
 
   void resetOneOfThem(int i) {
@@ -232,7 +228,7 @@ void onCreate () override
 		4:	0,1
 		*/
 		float mappedValue = 0.f;
-		int mapEnum = 2;
+		int mapEnum = 0;
 		switch(mapEnum) {
 			case 0: mappedValue = rawValue; break;
 			case 1: mappedValue = rawValue / 2.f; break;
@@ -295,12 +291,19 @@ void ComputerscareILoveCookies::step() {
       activeKnob = absoluteSequences[i][this->absoluteStep[i]];
 
       atFirstStep = (this->absoluteStep[i] == 0);
+
       for(int k = 0; k < numKnobRows * numKnobColumns; k++) {
         lights[SWITCH_LIGHTS + i*numKnobRows*numKnobColumns + k].value  = (k==activeKnob) ? 1.0 : 0.0;
       }
     }
     //outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
-		knobRawValue = params[KNOB_PARAM + activeKnob].value;
+    if(activeKnob < 25) {
+      knobRawValue = params[SIGNAL_INPUT + activeKnob].value;
+    }
+    else {
+      knobRawValue = inputs[SIGNAL_INPUT + activeKnob - 25].value;
+    }
+
     outputs[TRG_OUTPUT + i].value =	mapKnobValue(knobRawValue,i); 
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
@@ -442,16 +445,22 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
     for(int k = 0; k < numInputRows; k++) {
       for(int m=0; m<numInputColumns; m++) {
         inputPosX = inputXStart + m*inputRowWidth;
-        inputPosY = inputYStart + k*inputColumnHeight;
+        inputPosY = inputYStart + k*inputColumnHeight + m*4.9;
         index = numInputColumns*k + m;
 
         if(m%2) {
           addInput(Port::create<InPort>(mm2px(Vec(inputPosX , inputPosY)), Port::INPUT, module, ComputerscareILoveCookies::SIGNAL_INPUT + index));
         }
         else {
-         addInput(Port::create<PointingUpPentagonPort>(mm2px(Vec(inputPosX , inputPosY+4.9)), Port::INPUT, module, ComputerscareILoveCookies::SIGNAL_INPUT + index));
-
+         addInput(Port::create<PointingUpPentagonPort>(mm2px(Vec(inputPosX , inputPosY)), Port::INPUT, module, ComputerscareILoveCookies::SIGNAL_INPUT + index));
         }
+        SmallLetterDisplay *letterDisplay = new SmallLetterDisplay();
+        letterDisplay->box.pos = mm2px(Vec(inputPosX-3,inputPosY-2));
+        letterDisplay->box.size = Vec(20, 20);
+        letterDisplay->value = inputlookup[index];
+
+        addChild(letterDisplay);
+
       }
     }
 
