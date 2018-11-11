@@ -227,7 +227,7 @@ void onCreate () override
 		4:	0,1
 		*/
 		float mappedValue = 0.f;
-		int mapEnum = 0;
+		int mapEnum = 2;
 		switch(mapEnum) {
 			case 0: mappedValue = rawValue; break;
 			case 1: mappedValue = rawValue / 2.f; break;
@@ -294,6 +294,7 @@ void ComputerscareILoveCookies::step() {
         lights[SWITCH_LIGHTS + i*numKnobRows*numKnobColumns + k].value  = (k==activeKnob) ? 1.0 : 0.0;
       }
     }
+    //outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
 		knobRawValue = params[KNOB_PARAM + activeKnob].value;
     outputs[TRG_OUTPUT + i].value =	mapKnobValue(knobRawValue,i); 
     if(inputs[CLOCK_INPUT + i].active) {
@@ -413,12 +414,12 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
         letterDisplay->box.pos = mm2px(Vec(knobPosX-3,knobPosY-2));
         letterDisplay->box.size = Vec(20, 20);
         letterDisplay->value = knoblookup[index];
-        //letterDisplay->active = (module->absoluteSequences[i][module->absoluteStep[i]]==index);
+
         addChild(letterDisplay);
 
 
 
-        ParamWidget* knob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(knobPosX,knobPosY)), module, ComputerscareILoveCookies::KNOB_PARAM +index,  -10.0f, 10.0f, 0.0f);
+        ParamWidget* knob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(knobPosX,knobPosY)), module, ComputerscareILoveCookies::KNOB_PARAM +index,  0.f, 10.0f, 0.0f);
         addParam(knob);
         
       }
