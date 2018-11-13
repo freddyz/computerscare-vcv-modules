@@ -305,8 +305,8 @@ void ComputerscareILoveCookies::step() {
       }
     }
     //outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
-    if(activeKnobIndex[i] < 25) {
-      knobRawValue = params[SIGNAL_INPUT + activeKnobIndex[i]].value;
+    if(activeKnobIndex[i] < 26) {
+      knobRawValue = params[activeKnobIndex[i]].value;
     }
     else {
       knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].value;
