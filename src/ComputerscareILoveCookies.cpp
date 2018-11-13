@@ -10,7 +10,7 @@
 
 struct ComputerscareILoveCookies;
 
-const int numFields = 3;
+const int numFields = 6;
 const int numKnobRows = 13;
 const int numKnobColumns = 2;
 const int numInputRows = 13;
@@ -86,7 +86,7 @@ struct ComputerscareILoveCookies : Module {
     CLOCK_INPUT,
     RESET_INPUT = CLOCK_INPUT + numFields,
     SIGNAL_INPUT = RESET_INPUT + numFields ,
-		NUM_INPUTS = RESET_INPUT+ numInputs
+		NUM_INPUTS = SIGNAL_INPUT + numInputs
 	};
 	enum OutputIds { 
     TRG_OUTPUT,
@@ -309,7 +309,7 @@ void ComputerscareILoveCookies::step() {
       knobRawValue = params[SIGNAL_INPUT + activeKnobIndex[i]].value;
     }
     else {
-      knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 25].value;
+      knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].value;
     }
 
     outputs[TRG_OUTPUT + i].value =	mapKnobValue(knobRawValue,i); 
@@ -405,7 +405,7 @@ void MyTextFieldCookie::onTextChange() {
 struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
   double verticalSpacing = 18.4;
-  int verticalStart = 80;
+  int verticalStart = 24;
   double xStart = 41;
   int index=0;
   int inputindex=0;
