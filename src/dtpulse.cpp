@@ -8,7 +8,7 @@ bool is_digits(const std::string &str)
 }
 
 std::vector<int> parseStringAsTimes(std::string input, std::string lookup) {
-// "113" -> {1,1,3}
+// "113" -> {1,1,1,0,0}
   return parseEntireString(input,lookup,0);
 }
 
@@ -18,7 +18,6 @@ std::vector<int> parseStringAsValues(std::string input, std::string lookup) {
 }
 
 std::vector<int> parseEntireString(std::string input,std::string lookup,int type) {
-// "113" -> {1,1,1,0,0}
         std::vector<int> absoluteSequence;
         absoluteSequence.resize(0);
 				bool noNumbers = true;
@@ -129,6 +128,33 @@ std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
       absoluteSequence[mappedIndex] = 1;
     }
     return absoluteSequence;
+}
+std::string interleaveExpand(std::vector<std::string> blocks) {
+	std::vector<int> indices;
+	std::vector<int> lengths;
+	int outerIndex = 0;
+	int outerLength = blocks.size();
+	int steps = 0;
+	bool allAtZero = false;
+	std::string output="";
+	for(int i = 0; i < outerLength; i++) {
+		indices.push_back(0);
+		lengths.push_back(blocks[i].length());
+	}
+	while((!allAtZero && steps < 6000 ) || steps == 0) {
+	  output+=blocks[outerIndex][indices[outerIndex]];
+		indices[outerIndex]++;
+		indices[outerIndex]%=lengths[outerIndex];
+		outerIndex++;
+		outerIndex%=outerLength;
+		steps++;
+		allAtZero = outerIndex==0;
+
+		for(int i = 0; i < outerLength; i++) {
+			allAtZero &= (indices[i] == 0);	
+		}
+	}
+	return output;
 }
 std::string atExpand(std::string input, int atnum, std::string lookup) {
   std::string output="";

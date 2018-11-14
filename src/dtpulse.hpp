@@ -12,6 +12,7 @@ std::vector<int> parseEntireString(std::string input,std::string lookup, int typ
 std::vector<int> parseStringAsValues(std::string input,std::string lookup);
 std::vector<int> parseStringAsTimes(std::string input,std::string lookup);
 void printVector(std::vector <int> intVector); 
+std::string interleaveExpand(std::vector<std::string> blocks);
 std::string hashExpand(std::string input, int hashnum);
 std::string atExpand(std::string input, int atnum, std::string lookup);
 std::string countExpand(std::string input, int atnum);
