@@ -17,3 +17,7 @@ std::string interleaveExpand(std::vector<std::string> blocks);
 std::string hashExpand(std::string input, int hashnum);
 std::string atExpand(std::string input, int atnum, std::string lookup);
 std::string countExpand(std::string input, int atnum);
+std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
+std::string integerlookup = "0123456789";
+std::string knoblookup = "abcdefghijklmnopqrstuvwxyz";
+std::string inputlookup= "ABCDEFGHIJKLMNOPQRSTUVWXYZ";

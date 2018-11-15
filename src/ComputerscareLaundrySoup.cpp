@@ -11,7 +11,6 @@
 struct ComputerscareLaundrySoup;
 
 const int numFields = 6;
-const std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
 
 class MyTextField : public LedDisplayTextField {
 

@@ -19,9 +19,6 @@ const int numInputColumns = 2;
 const int numKnobs = numKnobRows * numKnobColumns;
 const int numInputs = numInputRows * numInputColumns;
 
-const std::string knoblookup = "abcdefghijklmnopqrstuvwxyz";
-const std::string inputlookup= "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const std::string knobandinputlookup = knoblookup + inputlookup;
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED,COLOR_COMPUTERSCARE_YELLOW,COLOR_COMPUTERSCARE_BLUE};
 
 class MyTextFieldCookie : public LedDisplayTextField {
@@ -108,7 +105,7 @@ struct ComputerscareILoveCookies : Module {
 
   std::vector<int> absoluteSequences[numFields];
   std::vector<int> nextAbsoluteSequences[numFields];
-
+  std::string knobandinputlookup = knoblookup + inputlookup;
   bool shouldChange[numFields] = {false};
 
   int absoluteStep[numFields] = {0};

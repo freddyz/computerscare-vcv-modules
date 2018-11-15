@@ -1,10 +1,10 @@
 #include "dtpulse.cpp"
-std::string knoblookup = "abcdefghijklmnopqrstuvwxy";
 int main(int argc, char** argv)
 {
 				int type = 0;
 				std::vector<int> output;
 				std::string strResult = "";
+				std::string strParens = "";
 				if(argv[2]) {
 					type = std::stoi(argv[2]); 
 				}
@@ -20,7 +20,8 @@ int main(int argc, char** argv)
 						input.push_back(argv[i+3]);
 					}
 					strResult = interleaveExpand(input);
-					printf("%s\n",strResult.c_str());	
+					strParens = splitRecur(argv[1]);
+					printf("splitRecur:%s\ninterleaveExpand:%s\n",strParens.c_str(),strResult.c_str());	
 				}
 				printVector(output);
 				return 0;

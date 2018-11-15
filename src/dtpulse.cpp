@@ -1,6 +1,5 @@
 #include "dtpulse.hpp"
-std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
-std::string integerlookup = "0123456789";
+
 
 bool is_digits(const std::string &str)
 {
@@ -133,15 +132,15 @@ std::string splitRecur(std::string input) {
   std::vector<std::string> outputVec;
   std::string tempStack;
   std::string output;
-  std::stringstream inputstream(input);
+  std::string c;
   bool inside = false;
   for(int i = 0; i < input.length(); i++) {
-    char c = input[i];
-    if(c == '(') {
+    c = input[i];
+    if(c == "(") {
       tempStack = "";
       inside = true;
     }
-    else if(c == ')') {
+    else if(c == ")") {
       outputVec.push_back(tempStack);
       tempStack = "";
       inside = false;
@@ -152,7 +151,7 @@ std::string splitRecur(std::string input) {
         tempStack += c;
       }
       else {
-        outputVec.push_back(c);
+        outputVec.push_back(c.c_str());
       }
     }
 
