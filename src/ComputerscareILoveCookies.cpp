@@ -305,13 +305,14 @@ void ComputerscareILoveCookies::step() {
       }
     }
     //outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
+		// how to handle a randomization input here?
+		// negative integers?
     if(activeKnobIndex[i] < 26) {
       knobRawValue = params[activeKnobIndex[i]].value;
     }
     else {
       knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].value;
     }
-
     outputs[TRG_OUTPUT + i].value =	mapKnobValue(knobRawValue,i); 
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
