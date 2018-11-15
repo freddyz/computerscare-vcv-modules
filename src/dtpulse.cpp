@@ -4,7 +4,7 @@ std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST
 std::string integerlookup = "0123456789";
 std::string knoblookup = "abcdefghijklmnopqrstuvwxyz";
 std::string inputlookup= "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
+std::string knobandinputlookup=knoblookup+inputlookup;
 
 bool is_digits(const std::string &str)
 {
@@ -134,34 +134,31 @@ std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
     return absoluteSequence;
 }
 std::string splitRecur(std::string input) {
-  std::vector<std::string> outputVec;
-  std::string tempStack;
+  std::vector<std::string> tempVec;
+	std::vector<std::vector<std::string>> stackVec;
+  std::string tempString;
   std::string output;
   std::string c;
-  bool inside = false;
+	stackVec.push_back({});
   for(unsigned int i = 0; i < input.length(); i++) {
     c = input[i];
     if(c == "(") {
-      tempStack = "";
-      inside = true;
+			stackVec.push_back({});
     }
     else if(c == ")") {
-      outputVec.push_back(tempStack);
-      tempStack = "";
-      inside = false;
+			//evaluate top of stack
+			tempString = interleaveExpand(stackVec.back()); 
+			//pop top of stack
+			stackVec.pop_back();
+			//push this evaluated string to new top
+			stackVec.back().push_back(tempString);
     }
     else {
-      // any other character
-      if(inside) {
-        tempStack += c;
-      }
-      else {
-        outputVec.push_back(c.c_str());
-      }
+			stackVec.back().push_back(c);
     }
 
   }
-  output = interleaveExpand(outputVec);
+  output = interleaveExpand(stackVec[0]);
   return output;
 }
 

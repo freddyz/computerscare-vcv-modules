@@ -5,6 +5,7 @@ int main(int argc, char** argv)
 				std::vector<int> output;
 				std::string strResult = "";
 				std::string strParens = "";
+				std::vector <std::string> input;
 				if(argv[2]) {
 					type = std::stoi(argv[2]); 
 				}
@@ -15,13 +16,14 @@ int main(int argc, char** argv)
 					output = parseEntireString(argv[1],knoblookup,1);
 				}
 				else if(type==2) {
-					std::vector <std::string> input;
+					strParens = splitRecur(argv[1]);
+					printf("      splitRecur:  %s\n",strParens.c_str());	
+				}
+				else if(type==3) {
 					for(int i = 0; i < argc-3; i++) {
 						input.push_back(argv[i+3]);
 					}
 					strResult = interleaveExpand(input);
-					strParens = splitRecur(argv[1]);
-					printf("      splitRecur:  %s\ninterleaveExpand:  %s\n",strParens.c_str(),strResult.c_str());	
 				}
 				printVector(output);
 				return 0;
