@@ -18,7 +18,7 @@ const int numInputColumns = 2;
 
 const int numKnobs = numKnobRows * numKnobColumns;
 const int numInputs = numInputRows * numInputColumns;
-
+const std::string knobandinputlookup = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED,COLOR_COMPUTERSCARE_YELLOW,COLOR_COMPUTERSCARE_BLUE};
 
 class MyTextFieldCookie : public LedDisplayTextField {
@@ -105,7 +105,7 @@ struct ComputerscareILoveCookies : Module {
 
   std::vector<int> absoluteSequences[numFields];
   std::vector<int> nextAbsoluteSequences[numFields];
-  std::string knobandinputlookup = knoblookup + inputlookup;
+  
   bool shouldChange[numFields] = {false};
 
   int absoluteStep[numFields] = {0};
@@ -171,12 +171,13 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     shouldChange[index] = true;
     nextAbsoluteSequences[index].resize(0);
     nextAbsoluteSequences[index]  = parseStringAsValues(textFields[index]->text,knobandinputlookup);
-    printf("index:%i,val[0]:%i\n",index,nextAbsoluteSequences[index][0]);
+    printf("setNextAbsoluteSequence index:%i,val[0]:%i\n",index,nextAbsoluteSequences[index][0]);
   }
   void setAbsoluteSequenceFromQueue(int index) {
     absoluteSequences[index].resize(0);
     absoluteSequences[index] = nextAbsoluteSequences[index];
     numSteps[index] = nextAbsoluteSequences[index].size() > 0 ? nextAbsoluteSequences[index].size() : 1;
+    printf("setAbsoluteSequenceFromQueue index:%i,val[0]:%i\n",index,nextAbsoluteSequences[index][0]);
   }
   void checkIfShouldChange(int index) {
     if(shouldChange[index]) {
@@ -216,7 +217,9 @@ void onCreate () override
   void incrementInternalStep(int i) {
     this->absoluteStep[i] +=1;
     this->absoluteStep[i] %= this->numSteps[i];
-    printf("row:%i, step:%i, val:%i\n",i,this->absoluteStep[i],this->absoluteSequences[i][this->absoluteStep[i]]);
+    if(i==0) {
+      printf("row:%i, step:%i, val:%i\n",i,this->absoluteStep[i],this->absoluteSequences[i][this->absoluteStep[i]]);
+    }
   }
 
   void resetOneOfThem(int i) {

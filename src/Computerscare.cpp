@@ -1,6 +1,5 @@
 #include "Computerscare.hpp"
 
-
 Plugin *plugin;
 
 

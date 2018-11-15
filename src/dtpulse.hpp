@@ -1,9 +1,19 @@
+
 #include <string>
 #include <sstream>
 #include <iomanip>
 #include <iostream>
 #include <vector>
 #include <algorithm>
+
+#ifndef MY_GLOBALS_H
+#define MY_GLOBALS_H
+extern std::string b64lookup;
+extern std::string integerlookup;
+extern std::string knoblookup;
+extern std::string inputlookup;
+#endif
+
 bool is_digits(const std::string &str);
 std::vector <int> parseString(std::string expr);
 std::vector <int> parseDt(std::string input, int offset, std::string lookup);
@@ -17,7 +27,3 @@ std::string interleaveExpand(std::vector<std::string> blocks);
 std::string hashExpand(std::string input, int hashnum);
 std::string atExpand(std::string input, int atnum, std::string lookup);
 std::string countExpand(std::string input, int atnum);
-std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
-std::string integerlookup = "0123456789";
-std::string knoblookup = "abcdefghijklmnopqrstuvwxyz";
-std::string inputlookup= "ABCDEFGHIJKLMNOPQRSTUVWXYZ";

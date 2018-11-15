@@ -1,4 +1,4 @@
-#include "dtpulse.cpp"
+#include "dtpulse.hpp"
 int main(int argc, char** argv)
 {
 				int type = 0;
@@ -21,7 +21,7 @@ int main(int argc, char** argv)
 					}
 					strResult = interleaveExpand(input);
 					strParens = splitRecur(argv[1]);
-					printf("splitRecur:%s\ninterleaveExpand:%s\n",strParens.c_str(),strResult.c_str());	
+					printf("      splitRecur:  %s\ninterleaveExpand:  %s\n",strParens.c_str(),strResult.c_str());	
 				}
 				printVector(output);
 				return 0;

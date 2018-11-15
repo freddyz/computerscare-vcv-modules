@@ -1,5 +1,10 @@
 #include "dtpulse.hpp"
 
+std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
+std::string integerlookup = "0123456789";
+std::string knoblookup = "abcdefghijklmnopqrstuvwxyz";
+std::string inputlookup= "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
 
 bool is_digits(const std::string &str)
 {
@@ -134,7 +139,7 @@ std::string splitRecur(std::string input) {
   std::string output;
   std::string c;
   bool inside = false;
-  for(int i = 0; i < input.length(); i++) {
+  for(unsigned int i = 0; i < input.length(); i++) {
     c = input[i];
     if(c == "(") {
       tempStack = "";
@@ -222,9 +227,7 @@ std::string atExpand(std::string input, int atnum, std::string lookup) {
 std::string countExpand(std::string input, int atnum) {
   std::string output="";
   int length = input.length();
-  int total = 0;
   int index = 0;
-  int lookupVal;
   if(atnum == -1) {
     return input;
   }
