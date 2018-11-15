@@ -36,6 +36,7 @@ std::vector<int> parseEntireString(std::string input,std::string lookup,int type
         std::vector<std::string> atVec;
         std::vector<std::string> offsetVec;
 
+				std::string interleaved;
         std::string commaseg;
         std::string atseg;
         std::string offsetseg;
@@ -82,12 +83,13 @@ std::vector<int> parseEntireString(std::string input,std::string lookup,int type
                 else {
                   offsetnum  = (offsetVec.size() > 1  && is_digits(offsetVec[1]))? std::stoi(offsetVec[1]) : 0;
                   commaVec.resize(0);
+									interleaved = splitRecur(offsetVec[0]); 
 									// below may be the only line that has to change for a by value parse
                   if(type==0) {
-                    commaVec = parseDt(atExpand(offsetVec[0],atnum,lookup),offsetnum,lookup); 
+                    commaVec = parseDt(atExpand(interleaved,atnum,lookup),offsetnum,lookup); 
                   }
                   else {
-                    commaVec = parseLookup(countExpand(offsetVec[0],atnum),offsetnum,lookup);
+                    commaVec = parseLookup(countExpand(interleaved,atnum),offsetnum,lookup);
                   }
                   
                   absoluteSequence.insert(absoluteSequence.end(),commaVec.begin(),commaVec.end());
@@ -134,7 +136,6 @@ std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
     return absoluteSequence;
 }
 std::string splitRecur(std::string input) {
-  std::vector<std::string> tempVec;
 	std::vector<std::vector<std::string>> stackVec;
   std::string tempString;
   std::string output;
