@@ -129,7 +129,42 @@ std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
     }
     return absoluteSequence;
 }
+std::string splitRecur(std::string input) {
+  std::vector<std::string> outputVec;
+  std::string tempStack;
+  std::string output;
+  std::stringstream inputstream(input);
+  bool inside = false;
+  for(int i = 0; i < input.length(); i++) {
+    char c = input[i];
+    if(c == '(') {
+      tempStack = "";
+      inside = true;
+    }
+    else if(c == ')') {
+      outputVec.push_back(tempStack);
+      tempStack = "";
+      inside = false;
+    }
+    else {
+      // any other character
+      if(inside) {
+        tempStack += c;
+      }
+      else {
+        outputVec.push_back(c);
+      }
+    }
+
+  }
+  output = interleaveExpand(outputVec);
+  return output;
+}
+
 std::string interleaveExpand(std::vector<std::string> blocks) {
+  // take a vector of strings and return a string interleave
+  // somewhat like bash shell expansion
+  // perhaps exactly like
 	std::vector<int> indices;
 	std::vector<int> lengths;
 	int outerIndex = 0;
