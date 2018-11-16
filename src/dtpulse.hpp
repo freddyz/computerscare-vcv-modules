@@ -12,6 +12,7 @@ extern std::string b64lookup;
 extern std::string integerlookup;
 extern std::string knoblookup;
 extern std::string inputlookup;
+extern std::string knobandinputlookup;
 #endif
 
 bool is_digits(const std::string &str);
@@ -27,3 +28,4 @@ std::string interleaveExpand(std::vector<std::string> blocks);
 std::string hashExpand(std::string input, int hashnum);
 std::string atExpand(std::string input, int atnum, std::string lookup);
 std::string countExpand(std::string input, int atnum);
+std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup);

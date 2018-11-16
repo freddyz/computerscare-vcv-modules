@@ -4,7 +4,7 @@ std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRST
 std::string integerlookup = "0123456789";
 std::string knoblookup = "abcdefghijklmnopqrstuvwxyz";
 std::string inputlookup= "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-std::string knobandinputlookup=knoblookup+inputlookup;
+std::string knobandinputlookup="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 bool is_digits(const std::string &str)
 {
@@ -102,10 +102,13 @@ std::vector<int> parseEntireString(std::string input,std::string lookup,int type
 std::vector<int> parseLookup(std::string input, int offset, std::string lookup) {
   std::vector<int> absoluteSequence;
   int currentVal;
+	int mappedIndex=0;
+	int length = input.length();
   absoluteSequence.resize(0);
 
-  for(unsigned int i = 0; i < input.length(); i++) {
-    currentVal = lookup.find(input[i]);
+  for(unsigned int i = 0; i < length; i++) {
+		mappedIndex = (i + offset) % length;
+    currentVal = lookup.find(input[mappedIndex]);
     absoluteSequence.push_back(currentVal);
   }
   return absoluteSequence;
@@ -166,7 +169,8 @@ std::string splitRecur(std::string input) {
 std::string interleaveExpand(std::vector<std::string> blocks) {
   // take a vector of strings and return a string interleave
   // somewhat like bash shell expansion
-  // perhaps exactly like
+	// ["a","b","cd"] --> "abcabd"
+	// ["ab","cde"] ----> "acbdaebcadbe"
 	std::vector<int> indices;
 	std::vector<int> lengths;
 	int outerIndex = 0;
@@ -247,4 +251,11 @@ std::string hashExpand(std::string input, int hashnum) {
     }
   }
   return output;
+}
+std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup) {
+	std::string output="";
+	for (int i = 0; i < vector.size(); i++){
+			output+=lookup[vector[i]];
+		}
+	return output;
 }

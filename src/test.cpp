@@ -11,13 +11,15 @@ int main(int argc, char** argv)
 				}
 				if(type == 0) {
 					output = parseEntireString(argv[1],b64lookup,0);
+					printVector(output);
 				}
 				else if(type==1) {
-					output = parseEntireString(argv[1],knoblookup,1);
+					output = parseEntireString(argv[1],knobandinputlookup,1);
+					printVector(output);
 				}
 				else if(type==2) {
 					strParens = splitRecur(argv[1]);
-					printf("      splitRecur:  %s\n",strParens.c_str());	
+					printf("%s\n",strParens.c_str());	
 				}
 				else if(type==3) {
 					for(int i = 0; i < argc-3; i++) {
@@ -25,7 +27,12 @@ int main(int argc, char** argv)
 					}
 					strResult = interleaveExpand(input);
 				}
-				printVector(output);
+				else if(type==4) {
+					output = parseEntireString(argv[1],knobandinputlookup,1);
+					strResult = concatVectorFromLookup(output,knobandinputlookup);
+					printf("%s\n",strResult.c_str()); 	
+				}
+
 				return 0;
 }
 void printVector(std::vector <int> intVector) {
