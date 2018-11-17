@@ -111,7 +111,10 @@ private:
 struct ComputerscareILoveCookies : Module {
 	enum ParamIds {
      KNOB_PARAM,
-	   NUM_PARAMS = KNOB_PARAM + numKnobs
+     MANUAL_CLOCK_PARAM = KNOB_PARAM + numKnobs,
+     MANUAL_RESET_PARAM,
+     INDIVIDUAL_RESET_PARAM,
+	   NUM_PARAMS = INDIVIDUAL_RESET_PARAM + numFields
 	};  
 	enum InputIds {
     GLOBAL_CLOCK_INPUT,
