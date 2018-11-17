@@ -18,7 +18,6 @@ const int numInputColumns = 2;
 
 const int numKnobs = numKnobRows * numKnobColumns;
 const int numInputs = numInputRows * numInputColumns;
-const std::string knobandinputlookup = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED,COLOR_COMPUTERSCARE_YELLOW,COLOR_COMPUTERSCARE_BLUE};
 
 class MyTextFieldCookie : public LedDisplayTextField {
@@ -109,6 +108,9 @@ struct ComputerscareILoveCookies : Module {
   bool shouldChange[numFields] = {false};
 
   int absoluteStep[numFields] = {0};
+  int displayVal[numFields] = {0};
+  int currentVal[numFields] = {0};
+  std::string displayString[numFields];
   int activeKnobIndex[numFields] = {0};
   int numSteps[numFields] = {0};
 
@@ -217,13 +219,20 @@ void onCreate () override
   void incrementInternalStep(int i) {
     this->absoluteStep[i] +=1;
     this->absoluteStep[i] %= this->numSteps[i];
+    this->displayVal[i] = this->absoluteStep[i];
+    this->currentVal[i] = this->absoluteSequences[i][this->absoluteStep[i]];
+    this->displayString[i] = this->getDisplayString(i);
     if(i==0) {
-      printf("row:%i, step:%i, val:%i\n",i,this->absoluteStep[i],this->absoluteSequences[i][this->absoluteStep[i]]);
+      printf("row:%i, step:%i, displayString[i]:%s\n",i,this->absoluteStep[i],this->displayString[i].c_str());
     }
   }
 
   void resetOneOfThem(int i) {
     this->absoluteStep[i] = 0;
+  }
+  std::string getDisplayString(int index) {
+    std::string val = std::to_string(this->absoluteStep[index]) + "/" + std::to_string(this->numSteps[index]);
+    return val;
   }
 	float mapKnobValue(float rawValue, int rowIndex) {
 		// raw value is between -10 and +10
