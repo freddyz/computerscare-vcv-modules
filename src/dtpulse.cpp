@@ -10,7 +10,11 @@ bool is_digits(const std::string &str)
 {
     return str.find_first_not_of(integerlookup) == std::string::npos;
 }
-
+void padTo(std::string &str, const size_t num, const char paddingChar = ' ')
+{
+    if(num > str.size())
+        str.insert(0, num - str.size(), paddingChar);
+}
 std::vector<int> parseStringAsTimes(std::string input, std::string lookup) {
 // "113" -> {1,1,1,0,0}
   return parseEntireString(input,lookup,0);

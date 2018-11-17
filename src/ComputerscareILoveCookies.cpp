@@ -26,6 +26,7 @@ struct SmallLetterDisplay : TransparentWidget {
   std::string value;
   std::shared_ptr<Font> font;
   bool active = false;
+  bool blink = false;
 
   SmallLetterDisplay() {
     font = Font::load(assetPlugin(plugin, "res/Oswald-Regular.ttf"));
@@ -34,9 +35,9 @@ struct SmallLetterDisplay : TransparentWidget {
   void draw(NVGcontext *vg) override
   {  
     // Background
-    NVGcolor backgroundColor = nvgRGB(0xC0, 0xE7, 0xDE);
+    NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
 
-    if(active) {
+    if(blink) {
       nvgBeginPath(vg);
       nvgRoundedRect(vg, -1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
       nvgFillColor(vg, backgroundColor);
@@ -49,7 +50,7 @@ struct SmallLetterDisplay : TransparentWidget {
     nvgTextLetterSpacing(vg, 2.5);
 
     Vec textPos = Vec(6.0f, 12.0f);   
-    NVGcolor textColor = nvgRGB(0x10, 0x10, 0x00);
+    NVGcolor textColor = !blink ? nvgRGB(0x10, 0x10, 0x00) : COLOR_COMPUTERSCARE_YELLOW;
     nvgFillColor(vg, textColor);
     nvgTextBox(vg, textPos.x, textPos.y,80,value.c_str(), NULL);
 
@@ -133,8 +134,14 @@ struct ComputerscareILoveCookies : Module {
   SchmittTrigger globalClockTrigger;
   SchmittTrigger globalResetTriggerInput;
 
+  SchmittTrigger globalManualClockTrigger;
+  SchmittTrigger globalManualResetTrigger;
+
+
   SchmittTrigger clockTriggers[numFields];
   SchmittTrigger resetTriggers[numFields];
+
+  SchmittTrigger manualResetTriggers[numFields];
 
   MyTextFieldCookie* textFields[numFields];
   SmallLetterDisplay* smallLetterDisplays[numFields];
@@ -145,7 +152,6 @@ struct ComputerscareILoveCookies : Module {
   bool shouldChange[numFields] = {false};
 
   int absoluteStep[numFields] = {0};
-  int displayVal[numFields] = {0};
   int currentVal[numFields] = {0};
   std::string displayString[numFields];
   int activeKnobIndex[numFields] = {0};
@@ -216,7 +222,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     absoluteSequences[index].resize(0);
     absoluteSequences[index] = nextAbsoluteSequences[index];
     numSteps[index] = nextAbsoluteSequences[index].size() > 0 ? nextAbsoluteSequences[index].size() : 1;
-    printf("setAbsoluteSequenceFromQueue index:%i,val[0]:%i\n",index,nextAbsoluteSequences[index][0]);
+    printf("setAbsoluteSequenceFromQueue index:%i,absoluteSequences[i]:%i\n",index,nextAbsoluteSequences[index][0]);
   }
   void checkIfShouldChange(int index) {
     if(shouldChange[index]) {
@@ -256,10 +262,10 @@ void onCreate () override
   void incrementInternalStep(int i) {
     this->absoluteStep[i] +=1;
     this->absoluteStep[i] %= this->numSteps[i];
-    this->displayVal[i] = this->absoluteStep[i];
     this->currentVal[i] = this->absoluteSequences[i][this->absoluteStep[i]];
     this->displayString[i] = this->getDisplayString(i);
     this->smallLetterDisplays[i]->value = this->displayString[i];
+    this->smallLetterDisplays[i]->blink = this->shouldChange[i];
     if(i==0) {
       printf("row:%i, step:%i, displayString[i]:%s\n",i,this->absoluteStep[i],this->displayString[i].c_str());
     }
@@ -269,7 +275,14 @@ void onCreate () override
     this->absoluteStep[i] = 0;
   }
   std::string getDisplayString(int index) {
-    std::string val = std::to_string(this->absoluteStep[index]) + "/" + std::to_string(this->numSteps[index]);
+    std::string lhs = std::to_string(this->absoluteStep[index]);
+    std::string rhs =  std::to_string(this->numSteps[index]);
+
+    padTo(lhs, 3,' ');
+    padTo(rhs, 3,' ');
+    
+    
+    std::string val =  lhs + "/" + rhs;
     return val;
   }
 	float mapKnobValue(float rawValue, int rowIndex) {
@@ -535,8 +548,8 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
       //string display
         smallLetterDisplay = new SmallLetterDisplay();
-        smallLetterDisplay->box.pos = mm2px(Vec(23+xStart,verticalStart - 9.2 +verticalSpacing*i));
-        smallLetterDisplay->box.size = Vec(40, 20);
+        smallLetterDisplay->box.pos = mm2px(Vec(21+xStart,verticalStart - 9.2 +verticalSpacing*i));
+        smallLetterDisplay->box.size = Vec(60, 20);
         smallLetterDisplay->value = "?/?";
        // smallLetterDisplay->value = module->displayString[i].c_str();
         addChild(smallLetterDisplay);
