@@ -1,4 +1,20 @@
 # computerscare modules for VCV Rack
+~~~~
+ oo                   o     Q         6       6  Q     6                
+                     o       o                Q                6 6 6    
+           Q      6         QQ          o     Q       6         Qo      
+Q                    Q       66       o         QQ    QQ                
+ 6                    6                               6 o       Q       
+ Q                Q         6  6    Q         6       Q  Qo             
+   oo                o      6                 o       Q Q      Q 6     
+
+YLX    LY5    2X5    Y2L    2LY    X25    YLX    YLL    
+2LY    X22    25L    52L    YXY    X5Y    55Y    225    
+5YX    XLX    5YX    25X    LY5    L2Y    L5X    55L   
+~~~~
+# I Love Cookies
+Because, after all, don't we all love cookies?
+
 
 ~~~~
  ┭ ۳┭┭  ۳۳┭┭ ┭  ┭  ┭┭┭  ┭۳┭۳۳┭
