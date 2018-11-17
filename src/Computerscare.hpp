@@ -31,6 +31,22 @@ extern Model *modelComputerscarePatchSequencer;
 extern Model *modelComputerscareLaundrySoup;
 extern Model *modelComputerscareILoveCookies;
 
+
+struct ComputerscareResetButton : SVGSwitch,MomentarySwitch {
+	ComputerscareResetButton() {
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-rst-text.svg")));
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-rst-text-red.svg")));
+		//SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
+	}
+};
+struct ComputerscareInvisibleButton : SVGSwitch,MomentarySwitch {
+	ComputerscareInvisibleButton() {
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-invisible-button.svg")));
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-invisible-button-frame2.svg")));
+		//SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
+	}
+};
+
 struct ComputerscareGreenLight : GrayModuleLightWidget {
 	ComputerscareGreenLight() {
 		addBaseColor(COLOR_COMPUTERSCARE_GREEN);

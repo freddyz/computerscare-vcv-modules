@@ -48,6 +48,7 @@ struct SmallLetterDisplay : TransparentWidget {
     nvgFontSize(vg, 19);
     nvgFontFaceId(vg, font->handle);
     nvgTextLetterSpacing(vg, 2.5);
+    nvgTextLineHeight(vg, 0.7);
 
     Vec textPos = Vec(6.0f, 12.0f);   
     NVGcolor textColor = !blink ? nvgRGB(0x10, 0x10, 0x00) : COLOR_COMPUTERSCARE_YELLOW;
@@ -285,7 +286,7 @@ void onCreate () override
     padTo(rhs, 3,' ');
     
     
-    std::string val =  lhs + "/" + rhs;
+    std::string val =  lhs + "/" + rhs + "\n" + knobandinputlookup[this->absoluteSequences[index][this->absoluteStep[index]]];
     return val;
   }
 	float mapKnobValue(float rawValue, int rowIndex) {
@@ -317,16 +318,20 @@ void ComputerscareILoveCookies::step() {
   bool activeStep = 0;
   bool atFirstStep = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
+  bool globalManualResetClicked = globalManualResetTrigger.process(params[MANUAL_RESET_PARAM].value);
   bool currentTriggerIsHigh;
   bool currentTriggerClocked;
   bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].value / 2.f);
   bool currentResetActive;
   bool currentResetTriggered;
+  bool currentManualResetClicked;
 	float knobRawValue = 0.f;
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
     currentResetActive = inputs[RESET_INPUT + i].active;
     currentResetTriggered = resetTriggers[i].process(inputs[RESET_INPUT+i].value / 2.f);
+    currentManualResetClicked = manualResetTriggers[i].process(params[INDIVIDUAL_RESET_PARAM + i].value);
+
     currentTriggerIsHigh = clockTriggers[i].isHigh();
     currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].value);
 
@@ -347,7 +352,7 @@ void ComputerscareILoveCookies::step() {
 
       atFirstStep = (this->absoluteStep[i] == 0);
 
-      if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
+      if(globalManualResetClicked || currentManualResetClicked || (currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
         checkIfShouldChange(i);
         resetOneOfThem(i);
       }
@@ -511,7 +516,9 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
     //global reset input
     addInput(Port::create<InPort>(mm2px(Vec(12+xStart , 0)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
-    
+    addParam(ParamWidget::create<ComputerscareResetButton>(mm2px(Vec(12+xStart , 9)), module, ComputerscareILoveCookies::MANUAL_RESET_PARAM, 0.0, 1.0, 0.0));
+  
+
     for(int i = 0; i < numFields; i++) {
       //first-step output
       addOutput(Port::create<OutPort>(mm2px(Vec(42+xStart , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareILoveCookies::FIRST_STEP_OUTPUT + i));
@@ -535,29 +542,15 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       addChild(textField);
       module->textFields[i] = textField;
 
-      //active step display
-      //  NumberDisplayWidget3cookie *display = new NumberDisplayWidget3cookie();
-      // display->box.pos = mm2px(Vec(23+xStart,verticalStart - 9.2 +verticalSpacing*i));
-      // display->box.size = Vec(50, 20);
-
-      // display->outlineColor = outlineColorMap[i];
-      // if(&module->numSteps[i]) {
-      //   display->value = &module->absoluteStep[i];
-      // }
-      // else {
-      //   display->value = 0;
-      // }
-      // addChild(display);
-
-      //string display
-        smallLetterDisplay = new SmallLetterDisplay();
-        smallLetterDisplay->box.pos = mm2px(Vec(21+xStart,verticalStart - 9.2 +verticalSpacing*i));
-        smallLetterDisplay->box.size = Vec(60, 20);
-        smallLetterDisplay->value = "?/?";
-       // smallLetterDisplay->value = module->displayString[i].c_str();
-        addChild(smallLetterDisplay);
-        module->smallLetterDisplays[i] = smallLetterDisplay;
-
+      //active/total steps display
+      smallLetterDisplay = new SmallLetterDisplay();
+      smallLetterDisplay->box.pos = mm2px(Vec(21+xStart,verticalStart - 9.2 +verticalSpacing*i));
+      smallLetterDisplay->box.size = Vec(60, 30);
+      smallLetterDisplay->value = "?/?";
+      addChild(smallLetterDisplay);
+      module->smallLetterDisplays[i] = smallLetterDisplay;
+      
+      addParam(ParamWidget::create<ComputerscareInvisibleButton>(mm2px(Vec(21+xStart,verticalStart - 9.9 +verticalSpacing*i)), module, ComputerscareILoveCookies::INDIVIDUAL_RESET_PARAM + i, 0.0, 1.0, 0.0));
     }
 
 
