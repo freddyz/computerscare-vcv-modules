@@ -20,6 +20,42 @@ const int numKnobs = numKnobRows * numKnobColumns;
 const int numInputs = numInputRows * numInputColumns;
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED,COLOR_COMPUTERSCARE_YELLOW,COLOR_COMPUTERSCARE_BLUE};
 
+////////////////////////////////////
+struct SmallLetterDisplay : TransparentWidget {
+
+  std::string value;
+  std::shared_ptr<Font> font;
+  bool active = false;
+
+  SmallLetterDisplay() {
+    font = Font::load(assetPlugin(plugin, "res/Oswald-Regular.ttf"));
+  };
+
+  void draw(NVGcontext *vg) override
+  {  
+    // Background
+    NVGcolor backgroundColor = nvgRGB(0xC0, 0xE7, 0xDE);
+
+    if(active) {
+      nvgBeginPath(vg);
+      nvgRoundedRect(vg, -1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
+      nvgFillColor(vg, backgroundColor);
+      nvgFill(vg);
+    }
+
+    // text 
+    nvgFontSize(vg, 19);
+    nvgFontFaceId(vg, font->handle);
+    nvgTextLetterSpacing(vg, 2.5);
+
+    Vec textPos = Vec(6.0f, 12.0f);   
+    NVGcolor textColor = nvgRGB(0x10, 0x10, 0x00);
+    nvgFillColor(vg, textColor);
+    nvgTextBox(vg, textPos.x, textPos.y,80,value.c_str(), NULL);
+
+  }
+};
+
 class MyTextFieldCookie : public LedDisplayTextField {
 
 public:
@@ -101,6 +137,7 @@ struct ComputerscareILoveCookies : Module {
   SchmittTrigger resetTriggers[numFields];
 
   MyTextFieldCookie* textFields[numFields];
+  SmallLetterDisplay* smallLetterDisplays[numFields];
 
   std::vector<int> absoluteSequences[numFields];
   std::vector<int> nextAbsoluteSequences[numFields];
@@ -222,6 +259,7 @@ void onCreate () override
     this->displayVal[i] = this->absoluteStep[i];
     this->currentVal[i] = this->absoluteSequences[i][this->absoluteStep[i]];
     this->displayString[i] = this->getDisplayString(i);
+    this->smallLetterDisplays[i]->value = this->displayString[i];
     if(i==0) {
       printf("row:%i, step:%i, displayString[i]:%s\n",i,this->absoluteStep[i],this->displayString[i].c_str());
     }
@@ -373,41 +411,6 @@ struct NumberDisplayWidget3cookie : TransparentWidget {
     nvgText(vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
   }
 };
-////////////////////////////////////
-struct SmallLetterDisplay : TransparentWidget {
-
-  std::string value;
-  std::shared_ptr<Font> font;
-  bool active = false;
-
-  SmallLetterDisplay() {
-    font = Font::load(assetPlugin(plugin, "res/Oswald-Regular.ttf"));
-  };
-
-  void draw(NVGcontext *vg) override
-  {  
-    // Background
-    NVGcolor backgroundColor = nvgRGB(0xC0, 0xE7, 0xDE);
-
-    if(active) {
-      nvgBeginPath(vg);
-      nvgRoundedRect(vg, -1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
-      nvgFillColor(vg, backgroundColor);
-      nvgFill(vg);
-    }
-
-    // text 
-    nvgFontSize(vg, 19);
-    nvgFontFaceId(vg, font->handle);
-    nvgTextLetterSpacing(vg, 2.5);
-
-    Vec textPos = Vec(6.0f, 12.0f);   
-    NVGcolor textColor = nvgRGB(0x10, 0x10, 0x00);
-    nvgFillColor(vg, textColor);
-    nvgTextBox(vg, textPos.x, textPos.y,80,value.c_str(), NULL);
-
-  }
-};
 void MyTextFieldCookie::onTextChange() {
   module->setNextAbsoluteSequence(this->rowIndex);
 }
@@ -517,19 +520,32 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       module->textFields[i] = textField;
 
       //active step display
-      NumberDisplayWidget3cookie *display = new NumberDisplayWidget3cookie();
-      display->box.pos = mm2px(Vec(23+xStart,verticalStart - 9.2 +verticalSpacing*i));
-      display->box.size = Vec(50, 20);
+      //  NumberDisplayWidget3cookie *display = new NumberDisplayWidget3cookie();
+      // display->box.pos = mm2px(Vec(23+xStart,verticalStart - 9.2 +verticalSpacing*i));
+      // display->box.size = Vec(50, 20);
 
-      display->outlineColor = outlineColorMap[i];
-      if(&module->numSteps[i]) {
-        display->value = &module->absoluteStep[i];
-      }
-      else {
-        display->value = 0;
-      }
-      addChild(display);
+      // display->outlineColor = outlineColorMap[i];
+      // if(&module->numSteps[i]) {
+      //   display->value = &module->absoluteStep[i];
+      // }
+      // else {
+      //   display->value = 0;
+      // }
+      // addChild(display);
+
+      //string display
+        smallLetterDisplay = new SmallLetterDisplay();
+        smallLetterDisplay->box.pos = mm2px(Vec(23+xStart,verticalStart - 9.2 +verticalSpacing*i));
+        smallLetterDisplay->box.size = Vec(40, 20);
+        smallLetterDisplay->value = "?/?";
+       // smallLetterDisplay->value = module->displayString[i].c_str();
+        addChild(smallLetterDisplay);
+        module->smallLetterDisplays[i] = smallLetterDisplay;
+
     }
+
+
+
     module->onCreate();
   }
   MyTextFieldCookie* textField;
