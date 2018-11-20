@@ -26,6 +26,7 @@ int main(int argc, char** argv)
 						input.push_back(argv[i+3]);
 					}
 					strResult = interleaveExpand(input);
+					printf("%s\n",strResult.c_str());
 				}
 				else if(type==4) {
 					output = parseEntireString(argv[1],knobandinputlookup,1);

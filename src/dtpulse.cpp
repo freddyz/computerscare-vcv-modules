@@ -164,9 +164,9 @@ std::string splitRecur(std::string input) {
     else {
 			stackVec.back().push_back(c);
     }
-
   }
-  output = interleaveExpand(stackVec[0]);
+	std::vector<std::string> last = stackVec.back();
+  output = interleaveExpand(last);
   return output;
 }
 
@@ -175,6 +175,7 @@ std::string interleaveExpand(std::vector<std::string> blocks) {
   // somewhat like bash shell expansion
 	// ["a","b","cd"] --> "abcabd"
 	// ["ab","cde"] ----> "acbdaebcadbe"
+	printf("interleaveExpand %i\n",blocks.size());
 	std::vector<int> indices;
 	std::vector<int> lengths;
 	int outerIndex = 0;
@@ -185,11 +186,15 @@ std::string interleaveExpand(std::vector<std::string> blocks) {
 	for(int i = 0; i < outerLength; i++) {
 		indices.push_back(0);
 		lengths.push_back(blocks[i].length());
+		printf("len: %i\n",blocks[i].length());
 	}
-	while((!allAtZero && steps < 6000 ) || steps == 0) {
-	  output+=blocks[outerIndex][indices[outerIndex]];
-		indices[outerIndex]++;
-		indices[outerIndex]%=lengths[outerIndex];
+	while(outerLength && ((!allAtZero && steps < 6000 ) || steps == 0)) {
+		if(lengths[outerIndex]) {
+	  	output+=blocks[outerIndex][indices[outerIndex]];
+			printf("output:%s\n",output.c_str());
+			indices[outerIndex]++;
+			indices[outerIndex]%=lengths[outerIndex];
+		}
 		outerIndex++;
 		outerIndex%=outerLength;
 		steps++;
