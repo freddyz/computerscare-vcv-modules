@@ -32,7 +32,12 @@ int main(int argc, char** argv)
 					strResult = concatVectorFromLookup(output,knobandinputlookup);
 					printf("%s\n",strResult.c_str()); 	
 				}
-
+				else if(type==5) {
+					std::vector<Token> stack = tokenizeString(argv[1]);
+					for(int i = 0; i < stack.size(); i++) {
+						stack[i].print();
+					}
+				}
 				return 0;
 }
 void printVector(std::vector <int> intVector) {
