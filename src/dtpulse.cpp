@@ -270,3 +270,18 @@ std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup) 
 		}
 	return output;
 }
+Token::Token(int i, std::string v) {
+	type = i;
+	val = v;
+}
+void Token::print() {
+	printf("type:%i, val:%s\n",type,val.c_str());
+}
+std::vector<Token> tokenizeString(std::string input) {
+	std::vector<Token> stack;
+	for(unsigned int i = 0; i < input.length(); i++) {
+		std::string token(1,input[i]);
+		stack.push_back(Token(0,token));
+	}
+	return stack;
+}

@@ -14,7 +14,13 @@ extern std::string knoblookup;
 extern std::string inputlookup;
 extern std::string knobandinputlookup;
 #endif
-
+class Token {
+	public:
+		int type;
+		std::string val;
+		Token(int t, std::string v);
+		void print();
+};
 bool is_digits(const std::string &str);
 void padTo(std::string &str, const size_t num, const char paddingChar );
 std::vector <int> parseString(std::string expr);
@@ -30,3 +36,5 @@ std::string hashExpand(std::string input, int hashnum);
 std::string atExpand(std::string input, int atnum, std::string lookup);
 std::string countExpand(std::string input, int atnum);
 std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup);
+std::vector<Token> tokenizeString(std::string input);
+
