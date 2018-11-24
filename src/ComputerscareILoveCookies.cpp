@@ -215,7 +215,44 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
       setNextAbsoluteSequence(i);
     }
   }
-
+  bool matchParens(int index) {
+    std::string value=textFields[index]->text;
+    std::string c="";
+    int parensCount=0;
+    int squareCount=0;
+    int curlyCount=0;
+    int angleCount=0;
+    bool theyMatch=true;
+    for(unsigned int i = 0; i < value.length(); i++) {
+      c = value[i];
+      if(c=="(") {
+        parensCount+=1;
+      }
+      else if(c==")") {
+        parensCount-=1;
+      }
+      if(c=="[") {
+        squareCount+=1;
+      }
+      else if(c=="]") {
+        squareCount-=1;
+      }
+      if(c=="{") {
+        curlyCount+=1;
+      }
+      else if(c=="}") {
+        curlyCount-=1;
+      }
+      if(c=="<") {
+        angleCount+=1;
+      }
+      else if(c==">") {
+        angleCount-=1;
+      }
+    }
+    theyMatch = (parensCount==0) && (squareCount ==0) && (curlyCount==0) && (angleCount==0);
+    return theyMatch;
+  }
   void setNextAbsoluteSequence(int index) {
     shouldChange[index] = true;
     nextAbsoluteSequences[index].resize(0);
@@ -432,8 +469,12 @@ struct NumberDisplayWidget3cookie : TransparentWidget {
     nvgText(vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
   }
 };
+
 void MyTextFieldCookie::onTextChange() {
-  module->setNextAbsoluteSequence(this->rowIndex);
+  if(module->matchParens(this->rowIndex)) {
+    printf("row: %i\n",this->rowIndex);
+    module->setNextAbsoluteSequence(this->rowIndex);
+  }
 }
 
 struct ComputerscareILoveCookiesWidget : ModuleWidget {
