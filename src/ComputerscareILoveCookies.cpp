@@ -16,6 +16,10 @@ const int numKnobColumns = 2;
 const int numInputRows = 13;
 const int numInputColumns = 2;
 
+const int LG_FONT_SIZE = 18;
+const int MED_FONT_SIZE = 12;
+const int SM_FONT_SIZE = 8;
+
 const int numKnobs = numKnobRows * numKnobColumns;
 const int numInputs = numInputRows * numInputColumns;
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED,COLOR_COMPUTERSCARE_YELLOW,COLOR_COMPUTERSCARE_BLUE};
@@ -27,6 +31,7 @@ struct SmallLetterDisplay : TransparentWidget {
   std::shared_ptr<Font> font;
   bool active = false;
   bool blink = false;
+  bool doubleblink = false;
 
   SmallLetterDisplay() {
     font = Font::load(assetPlugin(plugin, "res/Oswald-Regular.ttf"));
@@ -36,12 +41,22 @@ struct SmallLetterDisplay : TransparentWidget {
   {  
     // Background
     NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
+    NVGcolor doubleblinkColor = COLOR_COMPUTERSCARE_YELLOW;
 
-    if(blink) {
+    
+    if(doubleblink) {
       nvgBeginPath(vg);
       nvgRoundedRect(vg, -1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
-      nvgFillColor(vg, backgroundColor);
+      nvgFillColor(vg, doubleblinkColor);
       nvgFill(vg);
+    }
+    else {
+        if(blink) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, -1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
+        nvgFillColor(vg, backgroundColor);
+        nvgFill(vg);
+      }
     }
 
     // text 
@@ -51,7 +66,7 @@ struct SmallLetterDisplay : TransparentWidget {
     nvgTextLineHeight(vg, 0.7);
 
     Vec textPos = Vec(6.0f, 12.0f);   
-    NVGcolor textColor = !blink ? nvgRGB(0x10, 0x10, 0x00) : COLOR_COMPUTERSCARE_YELLOW;
+    NVGcolor textColor = (!blink || doubleblink) ? nvgRGB(0x10, 0x10, 0x00) : COLOR_COMPUTERSCARE_YELLOW;
     nvgFillColor(vg, textColor);
     nvgTextBox(vg, textPos.x, textPos.y,80,value.c_str(), NULL);
 
@@ -61,7 +76,7 @@ struct SmallLetterDisplay : TransparentWidget {
 class MyTextFieldCookie : public LedDisplayTextField {
 
 public:
-  int fontSize = 15;
+  int fontSize = LG_FONT_SIZE;
   int rowIndex=0;
   MyTextFieldCookie() : LedDisplayTextField() {}
   void setModule(ComputerscareILoveCookies* _module) {
@@ -154,6 +169,7 @@ struct ComputerscareILoveCookies : Module {
   std::vector<int> nextAbsoluteSequences[numFields];
   
   bool shouldChange[numFields] = {false};
+  bool changeImminent[numFields] = {false};
 
   int absoluteStep[numFields] = {0};
   int currentVal[numFields] = {0};
@@ -215,6 +231,11 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
       setNextAbsoluteSequence(i);
     }
   }
+  void checkLength(int index) {
+    std::string value=textFields[index]->text;
+    int length = value.length();
+      textFields[index]->fontSize = length > 17 ? (length > 30 ? SM_FONT_SIZE : MED_FONT_SIZE) : LG_FONT_SIZE;
+  }
   bool matchParens(int index) {
     std::string value=textFields[index]->text;
     std::string c="";
@@ -269,6 +290,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     if(shouldChange[index]) {
       setAbsoluteSequenceFromQueue(index);
       shouldChange[index] = false;
+      //changeImminent[index] = false;
     }
   }
   int getAbsoluteStep(int index) {
@@ -290,7 +312,6 @@ void onCreate () override
   {
     onCreate();
   }
-
   /*
   lets say the sequence "332" is entered in the 0th (first)
   numSteps[0] would then be 8 (3 + 3 + 2)
@@ -307,13 +328,17 @@ void onCreate () override
     this->displayString[i] = this->getDisplayString(i);
     this->smallLetterDisplays[i]->value = this->displayString[i];
     this->smallLetterDisplays[i]->blink = this->shouldChange[i];
-    if(i==0) {
-      printf("row:%i, step:%i, displayString[i]:%s\n",i,this->absoluteStep[i],this->displayString[i].c_str());
+    
+    if(this->absoluteStep[i] == 0) {
+      this->setChangeImminent(i,false);
     }
   }
 
   void resetOneOfThem(int i) {
     this->absoluteStep[i] = 0;
+  }
+  void setChangeImminent(int i,bool value) {
+    this->smallLetterDisplays[i]->doubleblink = value;
   }
   std::string getDisplayString(int index) {
     std::string lhs = std::to_string(this->absoluteStep[index]);
@@ -388,10 +413,11 @@ void ComputerscareILoveCookies::step() {
       }
 
       atFirstStep = (this->absoluteStep[i] == 0);
-
+      if(globalManualResetClicked || currentManualResetClicked) {
+        setChangeImminent(i,true);
+      }
       if(globalManualResetClicked || currentManualResetClicked || (currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
-        checkIfShouldChange(i);
-        resetOneOfThem(i);
+        //resetOneOfThem(i);
       }
       else {
         if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].active) {
@@ -401,7 +427,6 @@ void ComputerscareILoveCookies::step() {
 
       activeKnobIndex[i] = absoluteSequences[i][this->absoluteStep[i]];
 
-      atFirstStep = (this->absoluteStep[i] == 0);
 
       for(int k = 0; k < (numKnobs + numInputs); k++) {
         //params[SIGNAL_INPUT + k].backgroundColor = (k==2) ? COLOR_COMPUTERSCARE_LIGHT_GREEN : COLOR_COMPUTERSCARE_TRANSPARENT;
@@ -471,6 +496,7 @@ struct NumberDisplayWidget3cookie : TransparentWidget {
 };
 
 void MyTextFieldCookie::onTextChange() {
+  module->checkLength(this->rowIndex);
   if(module->matchParens(this->rowIndex)) {
     printf("row: %i\n",this->rowIndex);
     module->setNextAbsoluteSequence(this->rowIndex);
