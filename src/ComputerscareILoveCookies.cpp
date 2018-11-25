@@ -290,18 +290,20 @@ void onCreate () override
 
   */
   void incrementInternalStep(int i) {
+    this->displayString[i] = this->getDisplayString(i);
+    if(this->absoluteStep[i] == 0) {
+      this->setChangeImminent(i,false);
+    }
     this->absoluteStep[i] +=1;
     this->absoluteStep[i] %= this->numSteps[i];
     this->currentVal[i] = this->absoluteSequences[i][this->absoluteStep[i]];
-    this->displayString[i] = this->getDisplayString(i);
+    
     this->smallLetterDisplays[i]->value = this->displayString[i];
     this->smallLetterDisplays[i]->blink = this->shouldChange[i];
     if(i==0) {
       printf("%i\n",this->absoluteStep[i]);
     }
-    if(this->absoluteStep[i] == 0) {
-      this->setChangeImminent(i,false);
-    }
+    
   }
 
   void resetOneOfThem(int i) {
@@ -386,7 +388,7 @@ void ComputerscareILoveCookies::step() {
       }
       else {
         if (inputs[GLOBAL_CLOCK_INPUT].active && clocked) {
-          incrementInternalStep(i);   
+          incrementInternalStep(i);
         }
       }
       if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
@@ -407,15 +409,7 @@ void ComputerscareILoveCookies::step() {
           checkIfShouldChange(i);
         }
       }
-
       activeKnobIndex[i] = absoluteSequences[i][this->absoluteStep[i]];
-
-
-      for(int k = 0; k < (numKnobs + numInputs); k++) {
-        //params[SIGNAL_INPUT + k].backgroundColor = (k==2) ? COLOR_COMPUTERSCARE_LIGHT_GREEN : COLOR_COMPUTERSCARE_TRANSPARENT;
-       // lights[SWITCH_LIGHTS + i].value  = (k==activeKnob) ? 1.0 : 0.0;
-      //currentActives[]
-      }
     }
     //outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
 		// how to handle a randomization input here?
@@ -425,11 +419,12 @@ void ComputerscareILoveCookies::step() {
     // dict[52] = [1,2,24] and then it must look this up and randomize
     if(activeKnobIndex[i] < 26) {
       knobRawValue = params[activeKnobIndex[i]].value;
+      outputs[TRG_OUTPUT + i].value = mapKnobValue(knobRawValue,i); 
     }
     else if(activeKnobIndex[i] < 52) {
       knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].value;
+      outputs[TRG_OUTPUT + i].value = knobRawValue; 
     }
-    outputs[TRG_OUTPUT + i].value =	mapKnobValue(knobRawValue,i); 
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
     }
