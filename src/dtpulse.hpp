@@ -16,9 +16,9 @@ extern std::string knobandinputlookup;
 #endif
 class Token {
 	public:
-		int type;
+		std::string type;
 		std::string val;
-		Token(int t, std::string v);
+		Token(std::string t, std::string v);
 		void print();
 };
 bool is_digits(const std::string &str);
@@ -37,4 +37,6 @@ std::string atExpand(std::string input, int atnum, std::string lookup);
 std::string countExpand(std::string input, int atnum);
 std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup);
 std::vector<Token> tokenizeString(std::string input);
-
+bool matchParens(std::string value);
+std::string evalToken(std::string input, std::string type,std::vector<Token> tStack);
+std::string whoKnows(std::string input);

@@ -263,6 +263,7 @@ std::string hashExpand(std::string input, int hashnum) {
   }
   return output;
 }
+
 std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup) {
 	std::string output="";
 	for (int i = 0; i < vector.size(); i++){
@@ -270,18 +271,114 @@ std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup) 
 		}
 	return output;
 }
-Token::Token(int i, std::string v) {
-	type = i;
+
+bool matchParens(std::string value) {
+    std::string c="";
+    int parensCount=0;
+    int squareCount=0;
+    int curlyCount=0;
+    int angleCount=0;
+    bool theyMatch=true;
+    for(unsigned int i = 0; i < value.length(); i++) {
+      c = value[i];
+      if(c=="(") {
+        parensCount+=1;
+      }
+      else if(c==")") {
+        parensCount-=1;
+      }
+      if(c=="[") {
+        squareCount+=1;
+      }
+      else if(c=="]") {
+        squareCount-=1;
+      }
+      if(c=="{") {
+        curlyCount+=1;
+      }
+      else if(c=="}") {
+        curlyCount-=1;
+      }
+      if(c=="<") {
+        angleCount+=1;
+      }
+      else if(c==">") {
+        angleCount-=1;
+      }
+    }
+    theyMatch = (parensCount==0) && (squareCount ==0) && (curlyCount==0) && (angleCount==0);
+    return theyMatch;
+  }
+
+
+Token::Token(std::string t, std::string v) {
+	type = t;
 	val = v;
 }
 void Token::print() {
-	printf("type:%i, val:%s\n",type,val.c_str());
+	printf("type:%s, val:%s\n",type.c_str(),val.c_str());
 }
 std::vector<Token> tokenizeString(std::string input) {
 	std::vector<Token> stack;
 	for(unsigned int i = 0; i < input.length(); i++) {
 		std::string token(1,input[i]);
-		stack.push_back(Token(0,token));
+    if(token=="(") stack.push_back(Token("LeftParen",token));
+    else if(token== ")") stack.push_back(Token("RightParen",token));
+    else if(token== "[") stack.push_back(Token("LeftSquare",token));
+    else if(token== "]") stack.push_back(Token("RightSquare",token));
+    else if(token== "{") stack.push_back(Token("LeftCurly",token));
+    else if(token== "}") stack.push_back(Token("RightCurly",token));
+    else if(token== "<") stack.push_back(Token("LeftAngle",token));
+    else if(token== ">") stack.push_back(Token("RightAngle",token));
+    else if(token== "@") stack.push_back(Token("At",token));
+    else if(token== ",") stack.push_back(Token("Comma",token));
+    else if(token== "+") stack.push_back(Token("Plus",token));
+    else if(token== "-") stack.push_back(Token("Minus",token));
+    else if(token== "*") stack.push_back(Token("Asterix",token));
+    else if(token== "/") stack.push_back(Token("Backslash",token));
+    else if(token== " ") stack.push_back(Token("Whitespace",token));
+    else if(token== ".") stack.push_back(Token("Period",token));
+    else if(token== "!") stack.push_back(Token("Bang",token));
+    else if(token== "?") stack.push_back(Token("Question",token));
+    else if(token== "#") stack.push_back(Token("Hash",token));
+    else if(token== "^") stack.push_back(Token("Caret",token));
+    else if(token== ":") stack.push_back(Token("Colon",token));
+    else if(token== ";") stack.push_back(Token("Semicolon",token));
+    else if(token== "|") stack.push_back(Token("Pipe",token));
+    else if(knobandinputlookup.find(token) != -1) stack.push_back(Token("Letter",token));
+    else if(integerlookup.find(token) != -1) stack.push_back(Token("Integer",token));
+    else stack.push_back(Token("Unknown",token));
 	}
 	return stack;
 }
+std::string whoKnows(std::string input) {
+  std::vector<Token> tStack = tokenizeString(input);
+  return evalToken("","Integer",tStack);
+}
+
+std::string evalToken(std::string input,std::string type, std::vector<Token> tStack) {
+  std::string output = input;
+  Token peek = Token("Unknown","~");
+  if(tStack.size()) {
+    peek = tStack.front();
+    if(type=="Integer") {
+      tStack.erase(tStack.begin());
+      if(peek.type=="Integer") output = evalToken(output+peek.val,"Integer",tStack);
+    }
+    else if(type=="Letter") {
+      tStack.erase(tStack.begin());
+      if(peek.type=="Letter") output = evalToken(output+peek.val,"Letter",tStack);
+    }
+    else if(type=="LeftCurly") {
+      tStack.erase(tStack.begin());
+      if(peek.type=="Letter") output = output + evalToken(output+peek.val,"rLetter",tStack);
+      else if(peek.type=="Integer") output = output+evalToken(peek.val,"rInt",tStack);
+    }
+    else if(type=="rLetter") {
+      //if(peek.type=="Letter") output = 
+    }
+
+  }
+  return output;
+}
+

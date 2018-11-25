@@ -213,11 +213,14 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
   void onRandomize() override {
     randomizeAllFields();
   }
+  void randomizeShuffle() {
 
+  }
   void randomizeAllFields() {
-    std::string mainlookup = knoblookup;
+    std::string mainlookup = knobandinputlookup;
     std::string string = "";
     std::string randchar = "";
+    float ru;
     int length = 0;
 
     for (int i = 0; i < numFields; i++) {
@@ -226,6 +229,10 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
       for(int j = 0; j < length; j++) {
         randchar = mainlookup[rand() % mainlookup.size()];
         string = string + randchar;
+        ru = randomUniform();
+        if(ru < 0.2) {
+          string = "(" + string + ")";
+        }
       }
       textFields[i]->text = string;
       setNextAbsoluteSequence(i);
@@ -235,44 +242,6 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     std::string value=textFields[index]->text;
     int length = value.length();
       textFields[index]->fontSize = length > 17 ? (length > 30 ? SM_FONT_SIZE : MED_FONT_SIZE) : LG_FONT_SIZE;
-  }
-  bool matchParens(int index) {
-    std::string value=textFields[index]->text;
-    std::string c="";
-    int parensCount=0;
-    int squareCount=0;
-    int curlyCount=0;
-    int angleCount=0;
-    bool theyMatch=true;
-    for(unsigned int i = 0; i < value.length(); i++) {
-      c = value[i];
-      if(c=="(") {
-        parensCount+=1;
-      }
-      else if(c==")") {
-        parensCount-=1;
-      }
-      if(c=="[") {
-        squareCount+=1;
-      }
-      else if(c=="]") {
-        squareCount-=1;
-      }
-      if(c=="{") {
-        curlyCount+=1;
-      }
-      else if(c=="}") {
-        curlyCount-=1;
-      }
-      if(c=="<") {
-        angleCount+=1;
-      }
-      else if(c==">") {
-        angleCount-=1;
-      }
-    }
-    theyMatch = (parensCount==0) && (squareCount ==0) && (curlyCount==0) && (angleCount==0);
-    return theyMatch;
   }
   void setNextAbsoluteSequence(int index) {
     shouldChange[index] = true;
@@ -290,7 +259,6 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     if(shouldChange[index]) {
       setAbsoluteSequenceFromQueue(index);
       shouldChange[index] = false;
-      //changeImminent[index] = false;
     }
   }
   int getAbsoluteStep(int index) {
@@ -328,7 +296,9 @@ void onCreate () override
     this->displayString[i] = this->getDisplayString(i);
     this->smallLetterDisplays[i]->value = this->displayString[i];
     this->smallLetterDisplays[i]->blink = this->shouldChange[i];
-    
+    if(i==0) {
+      printf("%i\n",this->absoluteStep[i]);
+    }
     if(this->absoluteStep[i] == 0) {
       this->setChangeImminent(i,false);
     }
@@ -352,25 +322,36 @@ void onCreate () override
     return val;
   }
 	float mapKnobValue(float rawValue, int rowIndex) {
-		// raw value is between -10 and +10
+		// raw value is between 0 and +10
 		/*
 		0:	-10,10
 		1:	-5,5
 		2:	0,10
 		3:	0,5
 		4:	0,1
+    5: -1,1
+    6: 0,2
+    7: 0,3
+    8: -2,2
 		*/
 		float mappedValue = 0.f;
-		int mapEnum = 0;
+		int mapEnum = 4;
 		switch(mapEnum) {
-			case 0: mappedValue = rawValue; break;
-			case 1: mappedValue = rawValue / 2.f; break;
-			case 2: mappedValue = (rawValue + 10.f) / 2.f; break;
-			case 3: mappedValue = (rawValue + 10.f) / 4.f; break;
-			case 4: mappedValue = (rawValue + 10.f) / 20.f; break;
+			case 0: mappedValue = mapValue(rawValue,-5.f,2.f); break;
+			case 1: mappedValue = mapValue(rawValue,-5.f,1.f); break;
+			case 2: mappedValue = rawValue; break;
+			case 3: mappedValue = mapValue(rawValue,0.f,0.5); break;
+			case 4: mappedValue = mapValue(rawValue,0.f,0.1); break;
+      case 5: mappedValue = mapValue(rawValue,-5,0.2); break;
+      case 6: mappedValue = mapValue(rawValue,0.f,0.2); break;
+      case 7: mappedValue = mapValue(rawValue,0.f,1/3); break;
+      case 8: mappedValue = mapValue(rawValue,-5.f,0.4); break;
 		}
 		return mappedValue;
 	}
+  float mapValue(float input, float offset, float multiplier) {
+    return (input + offset) * multiplier;
+  }
 };
 
 
@@ -415,9 +396,11 @@ void ComputerscareILoveCookies::step() {
       atFirstStep = (this->absoluteStep[i] == 0);
       if(globalManualResetClicked || currentManualResetClicked) {
         setChangeImminent(i,true);
+        resetOneOfThem(i);
       }
-      if(globalManualResetClicked || currentManualResetClicked || (currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
-        //resetOneOfThem(i);
+      if( (currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
+        resetOneOfThem(i);
+        setChangeImminent(i,false);
       }
       else {
         if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].active) {
@@ -437,10 +420,13 @@ void ComputerscareILoveCookies::step() {
     //outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
 		// how to handle a randomization input here?
 		// negative integers?
+    // values greater than 52 for randomization
+    // then must keep a separate dictionary
+    // dict[52] = [1,2,24] and then it must look this up and randomize
     if(activeKnobIndex[i] < 26) {
       knobRawValue = params[activeKnobIndex[i]].value;
     }
-    else {
+    else if(activeKnobIndex[i] < 52) {
       knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].value;
     }
     outputs[TRG_OUTPUT + i].value =	mapKnobValue(knobRawValue,i); 
@@ -497,7 +483,8 @@ struct NumberDisplayWidget3cookie : TransparentWidget {
 
 void MyTextFieldCookie::onTextChange() {
   module->checkLength(this->rowIndex);
-  if(module->matchParens(this->rowIndex)) {
+  std::string value = module->textFields[this->rowIndex]->text;
+  if(matchParens(value)) {
     printf("row: %i\n",this->rowIndex);
     module->setNextAbsoluteSequence(this->rowIndex);
   }
