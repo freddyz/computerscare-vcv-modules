@@ -167,6 +167,7 @@ struct ComputerscareILoveCookies : Module {
 
   std::vector<int> absoluteSequences[numFields];
   std::vector<int> nextAbsoluteSequences[numFields];
+  std::vector<float> otherOutputValues = {2.02};
   
   bool shouldChange[numFields] = {false};
   bool changeImminent[numFields] = {false};
@@ -300,10 +301,6 @@ void onCreate () override
     
     this->smallLetterDisplays[i]->value = this->displayString[i];
     this->smallLetterDisplays[i]->blink = this->shouldChange[i];
-    if(i==0) {
-      printf("%i\n",this->absoluteStep[i]);
-    }
-    
   }
 
   void resetOneOfThem(int i) {
@@ -337,7 +334,7 @@ void onCreate () override
     8: -2,2
 		*/
 		float mappedValue = 0.f;
-		int mapEnum = 4;
+		int mapEnum = 2;
 		switch(mapEnum) {
 			case 0: mappedValue = mapValue(rawValue,-5.f,2.f); break;
 			case 1: mappedValue = mapValue(rawValue,-5.f,1.f); break;
@@ -424,6 +421,9 @@ void ComputerscareILoveCookies::step() {
     else if(activeKnobIndex[i] < 52) {
       knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].value;
       outputs[TRG_OUTPUT + i].value = knobRawValue; 
+    }
+    else {
+      outputs[TRG_OUTPUT+i].value = otherOutputValues[activeKnobIndex[i]-52];
     }
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
