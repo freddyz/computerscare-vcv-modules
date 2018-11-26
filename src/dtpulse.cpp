@@ -309,17 +309,90 @@ bool matchParens(std::string value) {
     theyMatch = (parensCount==0) && (squareCount ==0) && (curlyCount==0) && (angleCount==0);
     return theyMatch;
   }
+void whoKnows(std::string input) {
+  //std::vector<Token> tStack = tokenizeString(input);
+  //return evalToken("","Integer",tStack);
+	AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
+	abs.print();
+}
 
-
+AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
+	Parser p = Parser(expr);
+	indexSequence = parseEntireString(expr,lookup,1);
+}
+void AbsoluteSequence::print() {
+	printVector(indexSequence);
+}
 Token::Token(std::string t, std::string v) {
 	type = t;
 	val = v;
+}
+Parser::Parser(std::string expr) {
+	setExpression(expr);
+	//tokens = tokenizeString(expr);
+}
+void Parser::setExpression(std::string expr) {
+	expression=expr;
+	currentIndex=0;
+	char c;
+	while ((c = peekChar())) {
+		switch (c) {
+			default:
+				if((c >= '0' && c <= '9') || c == '.') {
+					printf("num:%s\n",parseNumber(c).c_str());
+				}
+				else {
+					
+				}
+		}
+		skipChar();
+	}
+
+}
+char Parser::peekChar() {
+	if (currentIndex < (int) expression.size()) return expression[currentIndex];
+	return 0;
+}
+void Parser::skipChar() {
+	currentIndex++;
+	}
+char Parser::skipAndPeekChar() {
+	skipChar();
+	return peekChar();
+}
+std::string Parser::parseNumber(char c)
+{
+    std::string number;
+    if (c != '.')
+    {
+        // parse before '.'
+        while (c != 0 && c >= '0' && c <= '9' && c != '.' ) {
+            number += c;
+            c = skipAndPeekChar();
+        }
+    }
+    if (c == '.')
+    {
+        // parse after '.'
+        number += c;
+        c = skipAndPeekChar();
+        if (c != 0 && c >= '0' && c <= '9') {
+            while (c != 0 && c >= '0' && c <= '9' ) {
+                number += c;
+                c = skipAndPeekChar();
+            }
+        } else {
+            printf("Expected digit after '.', number: %s\n",number.c_str());
+        }
+    }
+    return number;
 }
 void Token::print() {
 	printf("type:%s, val:%s\n",type.c_str(),val.c_str());
 }
 std::vector<Token> tokenizeString(std::string input) {
 	std::vector<Token> stack;
+	int stringIndex=0;
 	for(unsigned int i = 0; i < input.length(); i++) {
 		std::string token(1,input[i]);
     if(token=="(") stack.push_back(Token("LeftParen",token));
@@ -345,15 +418,15 @@ std::vector<Token> tokenizeString(std::string input) {
     else if(token== ":") stack.push_back(Token("Colon",token));
     else if(token== ";") stack.push_back(Token("Semicolon",token));
     else if(token== "|") stack.push_back(Token("Pipe",token));
-    else if(knobandinputlookup.find(token) != -1) stack.push_back(Token("Letter",token));
-    else if(integerlookup.find(token) != -1) stack.push_back(Token("Integer",token));
+    else if(knobandinputlookup.find(token) != -1) {
+			stack.push_back(Token("Letter",token));
+		}
+    else if(integerlookup.find(token) != -1) {
+			stack.push_back(Token("Integer",token));
+		}
     else stack.push_back(Token("Unknown",token));
 	}
 	return stack;
-}
-std::string whoKnows(std::string input) {
-  std::vector<Token> tStack = tokenizeString(input);
-  return evalToken("","Integer",tStack);
 }
 
 std::string evalToken(std::string input,std::string type, std::vector<Token> tStack) {

@@ -34,12 +34,7 @@ int main(int argc, char** argv)
 					printf("%s\n",strResult.c_str()); 	
 				}
 				else if(type==5) {
-					std::vector<Token> stack = tokenizeString(argv[1]);
-
-					for(int i = 0; i < stack.size(); i++) {
-						stack[i].print();
-					}
-					printf("whoKnows:%s\n",whoKnows(argv[1]).c_str());
+					whoKnows(argv[1]);
 				}
 				return 0;
 }
