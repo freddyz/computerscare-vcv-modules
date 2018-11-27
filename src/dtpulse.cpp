@@ -271,7 +271,11 @@ std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup) 
 		}
 	return output;
 }
-
+void printFloatVector(std::vector<float> floatVector) {
+	for(int i = 0; i < floatVector.size(); i++) {
+		printf("%i : %f\n",i,floatVector[i]);
+	}
+}
 bool matchParens(std::string value) {
     std::string c="";
     int parensCount=0;
@@ -310,76 +314,107 @@ bool matchParens(std::string value) {
     return theyMatch;
   }
 void whoKnows(std::string input) {
-  //std::vector<Token> tStack = tokenizeString(input);
-  //return evalToken("","Integer",tStack);
 	AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
 	abs.print();
 }
 
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
 	Parser p = Parser(expr);
+	exactFloats = p.exactFloats;
 	indexSequence = parseEntireString(expr,lookup,1);
 }
 void AbsoluteSequence::print() {
-	printVector(indexSequence);
+	printFloatVector(exactFloats);	
 }
 Token::Token(std::string t, std::string v) {
 	type = t;
-	val = v;
+	value = v;
 }
 Parser::Parser(std::string expr) {
-	setExpression(expr);
-	//tokens = tokenizeString(expr);
-}
-void Parser::setExpression(std::string expr) {
-	expression=expr;
 	currentIndex=0;
-	char c;
-	while ((c = peekChar())) {
-		switch (c) {
-			default:
-				if((c >= '0' && c <= '9') || c == '.') {
-					printf("num:%s\n",parseNumber(c).c_str());
-				}
-				else {
-					
-				}
-		}
-		skipChar();
+	tokens = tokenizeString(expr);
+	expression=expr;
+	setExpression(tokens[0]);
+	for(int i = 0; i < tokenStack.size(); i++) {
+		tokenStack[i].print();
 	}
-
+	printf("\n");
 }
+void Parser::setExpression(Token t) {
+	while (t.type!="NULL") {
+		if(t.type=="LeftAngle") {
+			t=skipAndPeekToken();
+			ParseExactValue(t);	
+			setExpression(peekToken());
+		}
+		if(peekToken().type !="NULL") {
+			tokenStack.push_back(peekToken());
+		}
+		t = skipAndPeekToken();
+	}
+}
+void Parser::ParseExactValue(Token t) {
+	std::string num="";	
+			if(t.type=="Minus") {
+				num+="-";
+				t=skipAndPeekToken();
+			}
+			if(t.type=="Digit") {
+				num += parseNumber(t);
+			}
+			t=peekToken();
+			if(t.type=="RightAngle") {
+				skipToken();
+				tokenStack.push_back(Token("ExactValue",num));
+				exactFloats.push_back(std::stof(num));	
+			}
+			else {
+				printf("ERROR: no closing angle bracket\n");
+			}
+}
+
 char Parser::peekChar() {
 	if (currentIndex < (int) expression.size()) return expression[currentIndex];
 	return 0;
 }
-void Parser::skipChar() {
+Token Parser::peekToken() {
+	if (currentIndex < (int) tokens.size()) return tokens[currentIndex];
+	return Token("NULL","NULL");
+}
+void Parser::skipToken() {
 	currentIndex++;
 	}
+void Parser::skipChar() {
+	currentIndex++;
+}
 char Parser::skipAndPeekChar() {
 	skipChar();
 	return peekChar();
 }
-std::string Parser::parseNumber(char c)
+Token Parser::skipAndPeekToken() {
+	skipToken();
+	return peekToken();
+}
+std::string Parser::parseNumber(Token t)
 {
-    std::string number;
-    if (c != '.')
+    std::string number = "";
+    if (t.type != "Period")
     {
         // parse before '.'
-        while (c != 0 && c >= '0' && c <= '9' && c != '.' ) {
-            number += c;
-            c = skipAndPeekChar();
+        while (t.type!="NULL" && t.type=="Digit" && t.type != "Period" ) {
+            number += t.value;
+            t = skipAndPeekToken();
         }
     }
-    if (c == '.')
+    if (t.type=="Period")
     {
         // parse after '.'
-        number += c;
-        c = skipAndPeekChar();
-        if (c != 0 && c >= '0' && c <= '9') {
-            while (c != 0 && c >= '0' && c <= '9' ) {
-                number += c;
-                c = skipAndPeekChar();
+        number += t.value;
+        t = skipAndPeekToken();
+        if (t.type!="NULL" && t.type == "Digit") {
+            while (t.type!="NULL" && t.type=="Digit" ) {
+                number += t.value;
+                t = skipAndPeekToken();
             }
         } else {
             printf("Expected digit after '.', number: %s\n",number.c_str());
@@ -388,7 +423,7 @@ std::string Parser::parseNumber(char c)
     return number;
 }
 void Token::print() {
-	printf("type:%s, val:%s\n",type.c_str(),val.c_str());
+	printf("type:%s, val:%s\n",type.c_str(),value.c_str());
 }
 std::vector<Token> tokenizeString(std::string input) {
 	std::vector<Token> stack;
@@ -422,36 +457,9 @@ std::vector<Token> tokenizeString(std::string input) {
 			stack.push_back(Token("Letter",token));
 		}
     else if(integerlookup.find(token) != -1) {
-			stack.push_back(Token("Integer",token));
+			stack.push_back(Token("Digit",token));
 		}
     else stack.push_back(Token("Unknown",token));
 	}
 	return stack;
 }
-
-std::string evalToken(std::string input,std::string type, std::vector<Token> tStack) {
-  std::string output = input;
-  Token peek = Token("Unknown","~");
-  if(tStack.size()) {
-    peek = tStack.front();
-    if(type=="Integer") {
-      tStack.erase(tStack.begin());
-      if(peek.type=="Integer") output = evalToken(output+peek.val,"Integer",tStack);
-    }
-    else if(type=="Letter") {
-      tStack.erase(tStack.begin());
-      if(peek.type=="Letter") output = evalToken(output+peek.val,"Letter",tStack);
-    }
-    else if(type=="LeftCurly") {
-      tStack.erase(tStack.begin());
-      if(peek.type=="Letter") output = output + evalToken(output+peek.val,"rLetter",tStack);
-      else if(peek.type=="Integer") output = output+evalToken(peek.val,"rInt",tStack);
-    }
-    else if(type=="rLetter") {
-      //if(peek.type=="Letter") output = 
-    }
-
-  }
-  return output;
-}
-

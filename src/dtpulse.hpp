@@ -25,7 +25,7 @@ class AbsoluteSequence {
 class Token {
 	public:
 		std::string type;
-		std::string val;
+		std::string value;
 		Token(std::string t, std::string v);
 		void print();
 };
@@ -37,10 +37,17 @@ class Parser {
 		char peekChar();
 		char skipAndPeekChar();
 		void skipChar();
-		void setExpression(std::string expr);
-		std::string parseNumber(char c);
+
+		Token peekToken();
+		Token skipAndPeekToken();
+		void skipToken();
+		void setExpression(Token t);
+		std::string parseNumber(Token t);
+		std::vector<Token> tokenStack;
+		std::vector<float> exactFloats;
 	private:
 		int currentIndex;
+		void ParseExactValue(Token t);
 };
 bool is_digits(const std::string &str);
 void padTo(std::string &str, const size_t num, const char paddingChar );
@@ -51,6 +58,7 @@ std::vector<int> parseEntireString(std::string input,std::string lookup, int typ
 std::vector<int> parseStringAsValues(std::string input,std::string lookup);
 std::vector<int> parseStringAsTimes(std::string input,std::string lookup);
 void printVector(std::vector <int> intVector); 
+void printFloatVector(std::vector<float> floatVector);
 std::string splitRecur(std::string input);
 std::string interleaveExpand(std::vector<std::string> blocks);
 std::string hashExpand(std::string input, int hashnum);
