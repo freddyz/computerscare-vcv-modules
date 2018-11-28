@@ -54,6 +54,7 @@ class AbsoluteSequence {
 		std::vector<float> exactFloats;
 		std::vector<std::vector<int>> randomIndexes;
 		std::vector<std::vector<Token>> randomTokens;
+		std::vector<Token> tokenStack;
 		void print();
 };
 bool is_digits(const std::string &str);

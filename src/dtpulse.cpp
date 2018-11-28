@@ -110,7 +110,7 @@ std::vector<int> parseLookup(std::string input, int offset, std::string lookup) 
 	int length = input.length();
   absoluteSequence.resize(0);
 
-  for(unsigned int i = 0; i < length; i++) {
+  for(int i = 0; i < length; i++) {
 		mappedIndex = (i + offset) % length;
     currentVal = lookup.find(input[mappedIndex]);
     absoluteSequence.push_back(currentVal);
@@ -266,21 +266,21 @@ std::string hashExpand(std::string input, int hashnum) {
 
 std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup) {
 	std::string output="";
-	for (int i = 0; i < vector.size(); i++){
+	for (unsigned int i = 0; i < vector.size(); i++){
 			output+=lookup[vector[i]];
 		}
 	return output;
 }
 void printFloatVector(std::vector<float> floatVector) {
-	for(int i = 0; i < floatVector.size(); i++) {
+	for(unsigned int i = 0; i < floatVector.size(); i++) {
 		printf("floatVector[%i]: %f\n",i,floatVector[i]);
 	}
 }
 void printTokenVector(std::vector<std::vector<Token>> tokenVector) {
-  for(int i = 0; i < tokenVector.size(); i++) {
+  for(unsigned int i = 0; i < tokenVector.size(); i++) {
     printf("tokenVector[%i]: ",i);
-    for(int j = 0; j < tokenVector[i].size(); j++) {
-      printf("%s ",tokenVector[i][j].value.c_str());
+    for(unsigned int j = 0; j < tokenVector[i].size(); j++) {
+      printf("%i",tokenVector[i][j].index);
     }
     printf("\n");
     
@@ -333,13 +333,15 @@ AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
 	Parser p = Parser(expr);
   exactFloats = p.exactFloats;
   randomTokens=p.randomVector;
-
+  tokenStack = p.tokenStack;
 	indexSequence = parseEntireString(expr,lookup,1);
-
 }
 void AbsoluteSequence::print() {
 	printFloatVector(exactFloats);
   printTokenVector(randomTokens);
+  for(int i = 0; i < tokenStack.size(); i++) {
+    tokenStack[i].print();
+  }
 }
 Token::Token(std::string t, std::string v) {
 	type = t;
@@ -354,26 +356,11 @@ Parser::Parser(std::string expr) {
 	currentIndex=0;
 	tokens = tokenizeString(expr);
 	expression=expr;
-	
-
-  printf("\n\nafter setExpression:\n");
   setExpression(tokens[0]);
-	for(int i = 0; i < tokenStack.size(); i++) {
-		tokenStack[i].print();
-	}
-
   currentIndex=0;
   tokens=tokenStack;
   tokenStack = {};
-  printf("\n\nafter setForRandoms:\n");
   setForRandoms(tokens[0]);
-  for(int i = 0; i < tokenStack.size(); i++) {
-    tokenStack[i].print();
-  }
-
-
-
-	printf("\n\n\n");
 }
 void Parser::setExpression(Token t) {
 	while (t.type!="NULL") {
@@ -425,11 +412,11 @@ void Parser::ParseRandomSequence(Token t) {
     std::string num=""; 
     while(t.type=="Letter" || t.type=="ExactValue") {
       if(t.type=="Letter") {
-        proposedRandomVector.push_back(Token("LetterIndex",std::to_string(knobandinputlookup.find(t.value))));
+        proposedRandomVector.push_back(Token(t.type,t.value,knobandinputlookup.find(t.value)));
         t=skipAndPeekToken();
       }
       if(t.type=="ExactValue") {
-        proposedRandomVector.push_back(Token("ExactValueIndex",std::to_string(t.index + 52)));
+        proposedRandomVector.push_back(Token("ExactValue",t.value,t.index + 52));
         t=skipAndPeekToken();
       }
       t=peekToken();
@@ -437,7 +424,8 @@ void Parser::ParseRandomSequence(Token t) {
     if(t.type=="RightCurly") {
       skipToken();
       randomVector.push_back(proposedRandomVector);  
-      tokenStack.push_back(Token("RandomSequence",std::to_string(randomVector.size()-1 + 52 + 26)));
+      int myIndex = myIndex + 52 + 26 + randomVector.size();
+      tokenStack.push_back(Token("RandomSequence",std::to_string(myIndex),myIndex));
     }
     else {
       printf("ERROR: no closing RightCurly.  it was \"%s\" (%s)\n",t.value.c_str(),t.type.c_str());
@@ -495,7 +483,7 @@ std::string Parser::parseNumber(Token t)
     return number;
 }
 void Token::print() {
-	printf("type:%s, val:%s\n",type.c_str(),value.c_str());
+	printf("type:%s, value:%s, index:%i\n",type.c_str(),value.c_str(),index);
 }
 std::vector<Token> tokenizeString(std::string input) {
 	std::vector<Token> stack;
