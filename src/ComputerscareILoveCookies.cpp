@@ -480,6 +480,7 @@ void MyTextFieldCookie::onTextChange() {
   module->checkLength(this->rowIndex);
   std::string value = module->textFields[this->rowIndex]->text;
   if(matchParens(value)) {
+    whoKnows(module->textFields[this->rowIndex]->text);
     printf("row: %i\n",this->rowIndex);
     module->setNextAbsoluteSequence(this->rowIndex);
   }

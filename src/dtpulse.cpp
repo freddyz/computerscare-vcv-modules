@@ -273,9 +273,20 @@ std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup) 
 }
 void printFloatVector(std::vector<float> floatVector) {
 	for(int i = 0; i < floatVector.size(); i++) {
-		printf("%i : %f\n",i,floatVector[i]);
+		printf("floatVector[%i]: %f\n",i,floatVector[i]);
 	}
 }
+void printTokenVector(std::vector<std::vector<Token>> tokenVector) {
+  for(int i = 0; i < tokenVector.size(); i++) {
+    printf("tokenVector[%i]: ",i);
+    for(int j = 0; j < tokenVector[i].size(); j++) {
+      printf("%s ",tokenVector[i][j].value.c_str());
+    }
+    printf("\n");
+    
+  }
+}
+
 bool matchParens(std::string value) {
     std::string c="";
     int parensCount=0;
@@ -320,59 +331,120 @@ void whoKnows(std::string input) {
 
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
 	Parser p = Parser(expr);
-	exactFloats = p.exactFloats;
+  exactFloats = p.exactFloats;
+  randomTokens=p.randomVector;
+
 	indexSequence = parseEntireString(expr,lookup,1);
+
 }
 void AbsoluteSequence::print() {
-	printFloatVector(exactFloats);	
+	printFloatVector(exactFloats);
+  printTokenVector(randomTokens);
 }
 Token::Token(std::string t, std::string v) {
 	type = t;
 	value = v;
 }
+Token::Token(std::string t, std::string v, int dex) {
+  type = t;
+  value = v;
+  index = dex;
+}
 Parser::Parser(std::string expr) {
 	currentIndex=0;
 	tokens = tokenizeString(expr);
 	expression=expr;
-	setExpression(tokens[0]);
+	
+
+  printf("\n\nafter setExpression:\n");
+  setExpression(tokens[0]);
 	for(int i = 0; i < tokenStack.size(); i++) {
 		tokenStack[i].print();
 	}
-	printf("\n");
+
+  currentIndex=0;
+  tokens=tokenStack;
+  tokenStack = {};
+  printf("\n\nafter setForRandoms:\n");
+  setForRandoms(tokens[0]);
+  for(int i = 0; i < tokenStack.size(); i++) {
+    tokenStack[i].print();
+  }
+
+
+
+	printf("\n\n\n");
 }
 void Parser::setExpression(Token t) {
 	while (t.type!="NULL") {
-		if(t.type=="LeftAngle") {
-			t=skipAndPeekToken();
-			ParseExactValue(t);	
-			setExpression(peekToken());
-		}
+		ParseExactValue(t);	
 		if(peekToken().type !="NULL") {
 			tokenStack.push_back(peekToken());
 		}
 		t = skipAndPeekToken();
 	}
 }
-void Parser::ParseExactValue(Token t) {
-	std::string num="";	
-			if(t.type=="Minus") {
-				num+="-";
-				t=skipAndPeekToken();
-			}
-			if(t.type=="Digit") {
-				num += parseNumber(t);
-			}
-			t=peekToken();
-			if(t.type=="RightAngle") {
-				skipToken();
-				tokenStack.push_back(Token("ExactValue",num));
-				exactFloats.push_back(std::stof(num));	
-			}
-			else {
-				printf("ERROR: no closing angle bracket\n");
-			}
+void Parser::setForRandoms(Token t) {
+  while (t.type!="NULL") {
+    ParseRandomSequence(t); 
+    if(peekToken().type !="NULL") {
+      tokenStack.push_back(peekToken());
+    }
+    t = skipAndPeekToken();
+  }
 }
-
+void Parser::ParseExactValue(Token t) {
+  int currentSize;
+  if(t.type=="LeftAngle") {
+    t=skipAndPeekToken();
+  	std::string num="";	
+		if(t.type=="Minus") {
+			num+="-";
+			t=skipAndPeekToken();
+		}
+		if(t.type=="Digit" || t.type=="Period") {
+			num += parseNumber(t);
+		}
+		t=peekToken();
+		if(t.type=="RightAngle") {
+			skipToken();
+      currentSize = exactFloats.size();
+			tokenStack.push_back(Token("ExactValue",num,currentSize));
+			exactFloats.push_back(std::stof(num));	
+		} 
+    if(t.type !="RightAngle") {
+			printf("ERROR: no closing angle bracket.  it was (%s)\n",t.value.c_str());
+		}
+    setExpression(peekToken());
+  } // not a LeftAngle, dont do shit
+}
+void Parser::ParseRandomSequence(Token t) {
+  std::vector<Token> proposedRandomVector;
+  if(t.type=="LeftCurly") {
+    t=skipAndPeekToken();
+    std::string num=""; 
+    while(t.type=="Letter" || t.type=="ExactValue") {
+      if(t.type=="Letter") {
+        proposedRandomVector.push_back(Token("LetterIndex",std::to_string(knobandinputlookup.find(t.value))));
+        t=skipAndPeekToken();
+      }
+      if(t.type=="ExactValue") {
+        proposedRandomVector.push_back(Token("ExactValueIndex",std::to_string(t.index + 52)));
+        t=skipAndPeekToken();
+      }
+      t=peekToken();
+    }
+    if(t.type=="RightCurly") {
+      skipToken();
+      randomVector.push_back(proposedRandomVector);  
+      tokenStack.push_back(Token("RandomSequence",std::to_string(randomVector.size()-1 + 52 + 26)));
+    }
+    else {
+      printf("ERROR: no closing RightCurly.  it was \"%s\" (%s)\n",t.value.c_str(),t.type.c_str());
+    }
+    ParseRandomSequence(peekToken());
+  } // not a LeftAngle, dont do shit
+}
 char Parser::peekChar() {
 	if (currentIndex < (int) expression.size()) return expression[currentIndex];
 	return 0;

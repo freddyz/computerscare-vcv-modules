@@ -14,19 +14,14 @@ extern std::string knoblookup;
 extern std::string inputlookup;
 extern std::string knobandinputlookup;
 #endif
-class AbsoluteSequence {
-	public:
-		AbsoluteSequence(std::string expr, std::string lookup);
-		std::vector<int> indexSequence;
-		std::vector<float> exactFloats;
-		std::vector<std::vector<int>> randoms;
-		void print();
-};
+
 class Token {
 	public:
 		std::string type;
 		std::string value;
+		int index;
 		Token(std::string t, std::string v);
+		Token(std::string t, std::string v, int dex);
 		void print();
 };
 class Parser {
@@ -42,12 +37,24 @@ class Parser {
 		Token skipAndPeekToken();
 		void skipToken();
 		void setExpression(Token t);
+		void setForRandoms(Token t);
 		std::string parseNumber(Token t);
 		std::vector<Token> tokenStack;
 		std::vector<float> exactFloats;
+		std::vector<std::vector<Token>> randomVector;
 	private:
 		int currentIndex;
 		void ParseExactValue(Token t);
+		void ParseRandomSequence(Token t);
+};
+class AbsoluteSequence {
+	public:
+		AbsoluteSequence(std::string expr, std::string lookup);
+		std::vector<int> indexSequence;
+		std::vector<float> exactFloats;
+		std::vector<std::vector<int>> randomIndexes;
+		std::vector<std::vector<Token>> randomTokens;
+		void print();
 };
 bool is_digits(const std::string &str);
 void padTo(std::string &str, const size_t num, const char paddingChar );
@@ -59,6 +66,7 @@ std::vector<int> parseStringAsValues(std::string input,std::string lookup);
 std::vector<int> parseStringAsTimes(std::string input,std::string lookup);
 void printVector(std::vector <int> intVector); 
 void printFloatVector(std::vector<float> floatVector);
+void printTokenVector(std::vector<std::vector<Token>> tokenVector);
 std::string splitRecur(std::string input);
 std::string interleaveExpand(std::vector<std::string> blocks);
 std::string hashExpand(std::string input, int hashnum);
