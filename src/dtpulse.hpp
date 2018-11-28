@@ -5,6 +5,7 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <typeinfo>
 
 #ifndef MY_GLOBALS_H
 #define MY_GLOBALS_H
@@ -50,7 +51,10 @@ class Parser {
 class AbsoluteSequence {
 	public:
 		AbsoluteSequence(std::string expr, std::string lookup);
+
+		void randomizeIndex(int index);
 		std::vector<int> indexSequence;
+		std::vector<int> workingIndexSequence;
 		std::vector<float> exactFloats;
 		std::vector<std::vector<int>> randomIndexes;
 		std::vector<std::vector<Token>> randomTokens;
@@ -78,3 +82,5 @@ std::vector<Token> tokenizeString(std::string input);
 bool matchParens(std::string value);
 std::string evalToken(std::string input, std::string type,std::vector<Token> tStack);
 void whoKnows(std::string input);
+std::vector<int> getIndicesFromTokenStack(std::vector<Token> tokens);
+std::vector<int> duplicateIntVector(std::vector<int> input);

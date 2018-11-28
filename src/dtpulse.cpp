@@ -280,7 +280,7 @@ void printTokenVector(std::vector<std::vector<Token>> tokenVector) {
   for(unsigned int i = 0; i < tokenVector.size(); i++) {
     printf("tokenVector[%i]: ",i);
     for(unsigned int j = 0; j < tokenVector[i].size(); j++) {
-      printf("%i",tokenVector[i][j].index);
+      printf("%i ",tokenVector[i][j].index);
     }
     printf("\n");
     
@@ -334,14 +334,45 @@ AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
   exactFloats = p.exactFloats;
   randomTokens=p.randomVector;
   tokenStack = p.tokenStack;
-	indexSequence = parseEntireString(expr,lookup,1);
+	indexSequence = getIndicesFromTokenStack(tokenStack);
+	workingIndexSequence = duplicateIntVector(indexSequence);;
 }
+void AbsoluteSequence::randomizeIndex(int index) {
+	int randomTokenIndex = indexSequence[index] - 78;
+	std::vector<int> myRandomTokens = getIndicesFromTokenStack(randomTokens[randomTokenIndex]);
+	workingIndexSequence[index] = myRandomTokens[rand() % (1+myRandomTokens.size())]; 
+}
+std::vector<int> getIndicesFromTokenStack(std::vector<Token> tokens) {
+	std::vector<int> output;
+	for(unsigned int i = 0; i < tokens.size(); i++) {
+		output.push_back(tokens[i].index);
+	}
+	return output;
+}
+std::vector<int> duplicateIntVector(std::vector<int> input) {
+	std::vector<int> output;
+	for(unsigned int i = 0; i < input.size(); i++) {
+		output.push_back(input[i]);
+	}
+	return output;
+}
+
 void AbsoluteSequence::print() {
 	printFloatVector(exactFloats);
   printTokenVector(randomTokens);
+	printf("  stack:\n");
   for(int i = 0; i < tokenStack.size(); i++) {
     tokenStack[i].print();
   }
+	printf("  indexSequence:\n");
+	printVector(indexSequence);
+	printf("  workingIndexSequence:\n");
+	printVector(workingIndexSequence);
+	srand (time(NULL));
+	for(int j = 0; j < 3; j++) {
+		randomizeIndex(2);
+		printVector(workingIndexSequence);
+	}
 }
 Token::Token(std::string t, std::string v) {
 	type = t;
@@ -395,8 +426,8 @@ void Parser::ParseExactValue(Token t) {
 		t=peekToken();
 		if(t.type=="RightAngle") {
 			skipToken();
-      currentSize = exactFloats.size();
-			tokenStack.push_back(Token("ExactValue",num,currentSize));
+			int sizeInt = static_cast<int>(exactFloats.size());
+			tokenStack.push_back(Token("ExactValue",num,sizeInt + 52));
 			exactFloats.push_back(std::stof(num));	
 		} 
     if(t.type !="RightAngle") {
@@ -416,7 +447,7 @@ void Parser::ParseRandomSequence(Token t) {
         t=skipAndPeekToken();
       }
       if(t.type=="ExactValue") {
-        proposedRandomVector.push_back(Token("ExactValue",t.value,t.index + 52));
+        proposedRandomVector.push_back(Token("ExactValue",t.value,t.index));
         t=skipAndPeekToken();
       }
       t=peekToken();
@@ -424,14 +455,16 @@ void Parser::ParseRandomSequence(Token t) {
     if(t.type=="RightCurly") {
       skipToken();
       randomVector.push_back(proposedRandomVector);  
-      int myIndex = myIndex + 52 + 26 + randomVector.size();
-      tokenStack.push_back(Token("RandomSequence",std::to_string(myIndex),myIndex));
+			int sizeInt = static_cast<int>(randomVector.size());
+      int myIndex = 52 + 26 + sizeInt -1;
+			std::string stringDex = std::to_string(static_cast<long long>(myIndex));
+      tokenStack.push_back(Token("RandomSequence",stringDex,myIndex));
     }
     else {
       printf("ERROR: no closing RightCurly.  it was \"%s\" (%s)\n",t.value.c_str(),t.type.c_str());
     }
     ParseRandomSequence(peekToken());
-  } // not a LeftAngle, dont do shit
+  } // not a LeftCurly, dont do shit
 }
 char Parser::peekChar() {
 	if (currentIndex < (int) expression.size()) return expression[currentIndex];
@@ -514,7 +547,7 @@ std::vector<Token> tokenizeString(std::string input) {
     else if(token== ";") stack.push_back(Token("Semicolon",token));
     else if(token== "|") stack.push_back(Token("Pipe",token));
     else if(knobandinputlookup.find(token) != -1) {
-			stack.push_back(Token("Letter",token));
+			stack.push_back(Token("Letter",token,knobandinputlookup.find(token)));
 		}
     else if(integerlookup.find(token) != -1) {
 			stack.push_back(Token("Digit",token));
