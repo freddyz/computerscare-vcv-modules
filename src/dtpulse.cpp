@@ -327,21 +327,61 @@ bool matchParens(std::string value) {
 void whoKnows(std::string input) {
 	AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
 	abs.print();
+  printf("  indexSequence:\n");
+  printVector(abs.indexSequence);
+  printf("  workingIndexSequence:\n");
+  printVector(abs.workingIndexSequence);
+  srand (time(NULL));
+  for(int j = 0; j < 13; j++) {
+    //randomizeIndex(2);
+    abs.incrementAndCheck();
+    printVector(abs.workingIndexSequence);
+  }
 }
 
+AbsoluteSequence::AbsoluteSequence() {
+  AbsoluteSequence("",knobandinputlookup);
+}
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
 	Parser p = Parser(expr);
   exactFloats = p.exactFloats;
   randomTokens=p.randomVector;
   tokenStack = p.tokenStack;
+  readHead = 0;
 	indexSequence = getIndicesFromTokenStack(tokenStack);
 	workingIndexSequence = duplicateIntVector(indexSequence);;
 }
 void AbsoluteSequence::randomizeIndex(int index) {
 	int randomTokenIndex = indexSequence[index] - 78;
 	std::vector<int> myRandomTokens = getIndicesFromTokenStack(randomTokens[randomTokenIndex]);
-	workingIndexSequence[index] = myRandomTokens[rand() % (1+myRandomTokens.size())]; 
+	int size = myRandomTokens.size();
+  if(size) {
+    //random one from those enclosed by the {}
+    workingIndexSequence[index] = myRandomTokens[rand() % (myRandomTokens.size())];
+  }
+  else {
+     //random address ie: a-z,A-Z
+    workingIndexSequence[index] = rand() % 52;
+  }
 }
+void AbsoluteSequence::skipStep() {
+  readHead++;
+  readHead %= indexSequence.size();
+}
+int AbsoluteSequence::skipAndPeek() {
+  skipStep();
+  return peekStep();
+}
+int AbsoluteSequence::peekStep() {
+  return indexSequence[readHead];
+}
+void AbsoluteSequence::incrementAndCheck() {
+  //printf("readHead:%i,  peek:%i\n",readHead,peekStep());
+  if(skipAndPeek()>=78) {
+    randomizeIndex(readHead);
+  }
+}
+
 std::vector<int> getIndicesFromTokenStack(std::vector<Token> tokens) {
 	std::vector<int> output;
 	for(unsigned int i = 0; i < tokens.size(); i++) {
@@ -364,15 +404,6 @@ void AbsoluteSequence::print() {
   for(int i = 0; i < tokenStack.size(); i++) {
     tokenStack[i].print();
   }
-	printf("  indexSequence:\n");
-	printVector(indexSequence);
-	printf("  workingIndexSequence:\n");
-	printVector(workingIndexSequence);
-	srand (time(NULL));
-	for(int j = 0; j < 3; j++) {
-		randomizeIndex(2);
-		printVector(workingIndexSequence);
-	}
 }
 Token::Token(std::string t, std::string v) {
 	type = t;
@@ -387,11 +418,13 @@ Parser::Parser(std::string expr) {
 	currentIndex=0;
 	tokens = tokenizeString(expr);
 	expression=expr;
-  setExpression(tokens[0]);
-  currentIndex=0;
-  tokens=tokenStack;
-  tokenStack = {};
-  setForRandoms(tokens[0]);
+  if(tokens.size() > 0) {
+    setExpression(tokens[0]);
+    currentIndex=0;
+    tokens=tokenStack;
+    tokenStack = {};
+    setForRandoms(tokens[0]);
+  }
 }
 void Parser::setExpression(Token t) {
 	while (t.type!="NULL") {

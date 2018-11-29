@@ -51,7 +51,7 @@ class Parser {
 class AbsoluteSequence {
 	public:
 		AbsoluteSequence(std::string expr, std::string lookup);
-
+		AbsoluteSequence();
 		void randomizeIndex(int index);
 		std::vector<int> indexSequence;
 		std::vector<int> workingIndexSequence;
@@ -59,7 +59,14 @@ class AbsoluteSequence {
 		std::vector<std::vector<int>> randomIndexes;
 		std::vector<std::vector<Token>> randomTokens;
 		std::vector<Token> tokenStack;
+		int readHead;
 		void print();
+		void skipStep();
+		int peekStep();
+		int skipAndPeek();
+		void incrementAndCheck();
+		int getReadHead();
+		int getCurrentAddressAtReadHead();
 };
 bool is_digits(const std::string &str);
 void padTo(std::string &str, const size_t num, const char paddingChar );

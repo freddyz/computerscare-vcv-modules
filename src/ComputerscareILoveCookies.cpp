@@ -168,9 +168,11 @@ struct ComputerscareILoveCookies : Module {
   std::vector<int> absoluteSequences[numFields];
   std::vector<int> nextAbsoluteSequences[numFields];
   std::vector<float> otherOutputValues = {2.02};
+
+  AbsoluteSequence newABS[numFields];
   
-  bool shouldChange[numFields] = {false};
-  bool changeImminent[numFields] = {false};
+  bool shouldChange[numFields] = {true};
+  bool changeImminent[numFields] = {true};
 
   int absoluteStep[numFields] = {0};
   int currentVal[numFields] = {0};
@@ -231,7 +233,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
         randchar = mainlookup[rand() % mainlookup.size()];
         string = string + randchar;
         ru = randomUniform();
-        if(ru < 0.2) {
+        if(ru < 0.1) {
           string = "(" + string + ")";
         }
       }
@@ -351,6 +353,7 @@ void onCreate () override
   float mapValue(float input, float offset, float multiplier) {
     return (input + offset) * multiplier;
   }
+
 };
 
 
@@ -422,8 +425,14 @@ void ComputerscareILoveCookies::step() {
       knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].value;
       outputs[TRG_OUTPUT + i].value = knobRawValue; 
     }
+    else if(activeKnobIndex[i] < 78) {
+      outputs[TRG_OUTPUT + i].value = 1.11;
+    }
+    else if(activeKnobIndex[i] <104) {
+      outputs[TRG_OUTPUT + i].value = 2.22;
+    }
     else {
-      outputs[TRG_OUTPUT+i].value = otherOutputValues[activeKnobIndex[i]-52];
+      outputs[TRG_OUTPUT+i].value = otherOutputValues[activeKnobIndex[i]-104];
     }
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
