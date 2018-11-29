@@ -39,6 +39,7 @@ class Parser {
 		void skipToken();
 		void setExpression(Token t);
 		void setForRandoms(Token t);
+		void setForInterleave(Token t);
 		std::string parseNumber(Token t);
 		std::vector<Token> tokenStack;
 		std::vector<float> exactFloats;
@@ -47,6 +48,7 @@ class Parser {
 		int currentIndex;
 		void ParseExactValue(Token t);
 		void ParseRandomSequence(Token t);
+		void ParseInterleave(Token t);
 };
 class AbsoluteSequence {
 	public:
@@ -81,7 +83,9 @@ void printVector(std::vector <int> intVector);
 void printFloatVector(std::vector<float> floatVector);
 void printTokenVector(std::vector<std::vector<Token>> tokenVector);
 std::string splitRecur(std::string input);
+void  parseRecur(Token t);
 std::string interleaveExpand(std::vector<std::string> blocks);
+std::vector<Token> interleaveExpand(std::vector<std::vector<Token>> blocks);
 std::string hashExpand(std::string input, int hashnum);
 std::string atExpand(std::string input, int atnum, std::string lookup);
 std::string countExpand(std::string input, int atnum);

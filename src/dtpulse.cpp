@@ -208,6 +208,41 @@ std::string interleaveExpand(std::vector<std::string> blocks) {
 	}
 	return output;
 }
+std::vector<Token> interleaveExpand(std::vector<std::vector<Token>> blocks) {
+  // take a vector of strings and return a string interleave
+  // somewhat like bash shell expansion
+	// ["a","b","cd"] --> "abcabd"
+	// ["ab","cde"] ----> "acbdaebcadbe"
+	std::vector<Token> output;
+	std::vector<int> indices;
+	std::vector<int> lengths;
+	int outerIndex = 0;
+	int outerLength = blocks.size();
+	int steps = 0;
+	bool allAtZero = false;
+	for(int i = 0; i < outerLength; i++) {
+		indices.push_back(0);
+		lengths.push_back(blocks[i].size());
+	}
+	
+	while(outerLength && ((!allAtZero && steps < 6000 ) || steps == 0)) {
+		if(lengths[outerIndex]) {
+	  	output.push_back(blocks[outerIndex][indices[outerIndex]]);
+			indices[outerIndex]++;
+			indices[outerIndex]%=lengths[outerIndex];
+		}
+		outerIndex++;
+		outerIndex%=outerLength;
+		steps++;
+		allAtZero = outerIndex==0;
+
+		for(int i = 0; i < outerLength; i++) {
+			allAtZero &= (indices[i] == 0);	
+		}
+	}
+	return output;
+}
+
 std::string atExpand(std::string input, int atnum, std::string lookup) {
   std::string output="";
   int length = input.length();
@@ -331,9 +366,9 @@ void whoKnows(std::string input) {
   printVector(abs.indexSequence);
   printf("  workingIndexSequence:\n");
   printVector(abs.workingIndexSequence);
-  srand (time(NULL));
+  //srand (time(NULL));
+	printf("  iteration:\n");
   for(int j = 0; j < 13; j++) {
-    //randomizeIndex(2);
     abs.incrementAndCheck();
     printVector(abs.workingIndexSequence);
   }
@@ -347,9 +382,9 @@ AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
   exactFloats = p.exactFloats;
   randomTokens=p.randomVector;
   tokenStack = p.tokenStack;
-  readHead = 0;
 	indexSequence = getIndicesFromTokenStack(tokenStack);
 	workingIndexSequence = duplicateIntVector(indexSequence);;
+  readHead = -1 ;
 }
 void AbsoluteSequence::randomizeIndex(int index) {
 	int randomTokenIndex = indexSequence[index] - 78;
@@ -418,15 +453,21 @@ Token::Token(std::string t, std::string v, int dex) {
   index = dex;
 }
 Parser::Parser(std::string expr) {
-	currentIndex=0;
 	tokens = tokenizeString(expr);
 	expression=expr;
   if(tokens.size() > 0) {
+		currentIndex=0;
     setExpression(tokens[0]);
+
     currentIndex=0;
     tokens=tokenStack;
     tokenStack = {};
     setForRandoms(tokens[0]);
+
+		currentIndex = 0;
+		tokens = tokenStack;
+		tokenStack={};
+		setForInterleave(tokens[0]);
   }
 }
 void Parser::setExpression(Token t) {
@@ -447,6 +488,16 @@ void Parser::setForRandoms(Token t) {
     t = skipAndPeekToken();
   }
 }
+void Parser::setForInterleave(Token t) {
+  while (t.type!="NULL") {
+    ParseInterleave(t); 
+    if(peekToken().type !="NULL") {
+      tokenStack.push_back(peekToken());
+    }
+    t = skipAndPeekToken();
+  }
+}
+
 void Parser::ParseExactValue(Token t) {
   int currentSize;
   if(t.type=="LeftAngle") {
@@ -503,6 +554,68 @@ void Parser::ParseRandomSequence(Token t) {
     ParseRandomSequence(peekToken());
   } // not a LeftCurly, dont do shit
 }
+void Parser::ParseInterleave(Token t) {
+	std::vector<std::vector<std::vector<Token>>> stackVec;
+  std::vector<Token> tempStack;
+  std::vector<Token> output;
+	stackVec.push_back({});
+	stackVec[0].push_back({});
+	while(t.type=="Letter"||t.type=="ExactValue"||t.type=="RandomSequence"||t.type=="LeftParen"||t.type=="RightParen") {
+		if(t.type=="LeftParen") {
+			stackVec.push_back({});
+			stackVec.back().push_back({});
+		}
+		if(t.type=="RightParen") {
+				//evaluate top of stack
+			tempStack = interleaveExpand(stackVec.back()); 
+			//pop top of stack
+			stackVec.pop_back();
+			if(stackVec.size() > 0) {
+				//push this evaluated string to new top
+				stackVec.back().push_back(tempStack);
+			}
+			else {
+				
+			}
+		}
+		//Letter, ExactValue, or RandomSequence
+		else { 
+			stackVec.back().back().push_back(t);	
+		}
+		t=skipAndPeekToken();	
+	}
+	std::vector<std::vector<Token>> last = stackVec.back();
+	output = interleaveExpand(last);
+	tokenStack = output;
+}
+void parseRecur(Token t) {
+  /*for(unsigned int i = 0; i < input.length(); i++) {
+    c = input[i];
+    if(c == "(") {
+			stackVec.push_back({});
+    }
+    else if(c == ")") {
+			//evaluate top of stack
+			tempString = interleaveExpand(stackVec.back()); 
+			//pop top of stack
+			stackVec.pop_back();
+			if(stackVec.size() > 0) {
+			//push this evaluated string to new top
+			stackVec.back().push_back(tempString);
+			}
+			else {
+				return "";
+			}
+    }
+    else {
+			stackVec.back().push_back(c);
+    }
+  }
+	std::vector<std::string> last = stackVec.back();
+  output = interleaveExpand(last);
+	*/
+}
+
 char Parser::peekChar() {
 	if (currentIndex < (int) expression.size()) return expression[currentIndex];
 	return 0;
