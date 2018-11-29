@@ -340,7 +340,7 @@ void whoKnows(std::string input) {
 }
 
 AbsoluteSequence::AbsoluteSequence() {
-  AbsoluteSequence("",knobandinputlookup);
+  AbsoluteSequence("a",knobandinputlookup);
 }
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
 	Parser p = Parser(expr);
@@ -375,6 +375,9 @@ int AbsoluteSequence::skipAndPeek() {
 int AbsoluteSequence::peekStep() {
   return indexSequence[readHead];
 }
+int AbsoluteSequence::peekWorkingStep() {
+  return workingIndexSequence[readHead];
+}
 void AbsoluteSequence::incrementAndCheck() {
   //printf("readHead:%i,  peek:%i\n",readHead,peekStep());
   if(skipAndPeek()>=78) {
@@ -401,7 +404,7 @@ void AbsoluteSequence::print() {
 	printFloatVector(exactFloats);
   printTokenVector(randomTokens);
 	printf("  stack:\n");
-  for(int i = 0; i < tokenStack.size(); i++) {
+  for(unsigned int i = 0; i < tokenStack.size(); i++) {
     tokenStack[i].print();
   }
 }
@@ -460,6 +463,7 @@ void Parser::ParseExactValue(Token t) {
 		if(t.type=="RightAngle") {
 			skipToken();
 			int sizeInt = static_cast<int>(exactFloats.size());
+      num = ((num.length() == 0) || num==".") ? "0" : num;
 			tokenStack.push_back(Token("ExactValue",num,sizeInt + 52));
 			exactFloats.push_back(std::stof(num));	
 		} 

@@ -63,6 +63,7 @@ class AbsoluteSequence {
 		void print();
 		void skipStep();
 		int peekStep();
+		int peekWorkingStep();
 		int skipAndPeek();
 		void incrementAndCheck();
 		int getReadHead();

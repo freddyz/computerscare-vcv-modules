@@ -251,6 +251,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     nextAbsoluteSequences[index].resize(0);
     nextAbsoluteSequences[index]  = parseStringAsValues(textFields[index]->text,knobandinputlookup);
     printf("setNextAbsoluteSequence index:%i,val[0]:%i\n",index,nextAbsoluteSequences[index][0]);
+    newABS[index] = AbsoluteSequence(textFields[index]->text,knobandinputlookup);
   }
   void setAbsoluteSequenceFromQueue(int index) {
     absoluteSequences[index].resize(0);
@@ -293,6 +294,10 @@ void onCreate () override
 
   */
   void incrementInternalStep(int i) {
+    newABS[i].incrementAndCheck();
+    if(i==0) {
+      printVector(newABS[i].workingIndexSequence);
+    }
     this->displayString[i] = this->getDisplayString(i);
     if(this->absoluteStep[i] == 0) {
       this->setChangeImminent(i,false);
@@ -411,6 +416,8 @@ void ComputerscareILoveCookies::step() {
       }
       activeKnobIndex[i] = absoluteSequences[i][this->absoluteStep[i]];
     }
+
+    activeKnobIndex[i] = newABS[i].peekWorkingStep();
     //outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
 		// how to handle a randomization input here?
 		// negative integers?
@@ -426,7 +433,7 @@ void ComputerscareILoveCookies::step() {
       outputs[TRG_OUTPUT + i].value = knobRawValue; 
     }
     else if(activeKnobIndex[i] < 78) {
-      outputs[TRG_OUTPUT + i].value = 1.11;
+      outputs[TRG_OUTPUT + i].value = newABS[i].exactFloats[activeKnobIndex[i] - 52];
     }
     else if(activeKnobIndex[i] <104) {
       outputs[TRG_OUTPUT + i].value = 2.22;
@@ -489,7 +496,8 @@ void MyTextFieldCookie::onTextChange() {
   module->checkLength(this->rowIndex);
   std::string value = module->textFields[this->rowIndex]->text;
   if(matchParens(value)) {
-    whoKnows(value);
+    //whoKnows(value);
+    
     printf("row: %i\n",this->rowIndex);
     module->setNextAbsoluteSequence(this->rowIndex);
   }
