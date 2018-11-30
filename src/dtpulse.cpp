@@ -224,7 +224,8 @@ std::vector<Token> interleaveExpand(std::vector<std::vector<Token>> blocks) {
 		indices.push_back(0);
 		lengths.push_back(blocks[i].size());
 	}
-	
+	printf("interleaveExpand lengths:");
+	printVector(lengths);	
 	while(outerLength && ((!allAtZero && steps < 6000 ) || steps == 0)) {
 		if(lengths[outerIndex]) {
 	  	output.push_back(blocks[outerIndex][indices[outerIndex]]);
@@ -366,12 +367,12 @@ void whoKnows(std::string input) {
   printVector(abs.indexSequence);
   printf("  workingIndexSequence:\n");
   printVector(abs.workingIndexSequence);
-  //srand (time(NULL));
-	printf("  iteration:\n");
+  srand (time(NULL));
+	/*printf("  iteration:\n");
   for(int j = 0; j < 13; j++) {
     abs.incrementAndCheck();
     printVector(abs.workingIndexSequence);
-  }
+  }*/
 }
 
 AbsoluteSequence::AbsoluteSequence() {
@@ -561,11 +562,13 @@ void Parser::ParseInterleave(Token t) {
 	stackVec.push_back({});
 	stackVec[0].push_back({});
 	while(t.type=="Letter"||t.type=="ExactValue"||t.type=="RandomSequence"||t.type=="LeftParen"||t.type=="RightParen") {
+		printf("size:%i ",stackVec.size());			
+		t.print();
 		if(t.type=="LeftParen") {
 			stackVec.push_back({});
 			stackVec.back().push_back({});
 		}
-		if(t.type=="RightParen") {
+		else if(t.type=="RightParen") {
 				//evaluate top of stack
 			tempStack = interleaveExpand(stackVec.back()); 
 			//pop top of stack
@@ -584,6 +587,7 @@ void Parser::ParseInterleave(Token t) {
 		}
 		t=skipAndPeekToken();	
 	}
+		printf("stackVec.size::%i, stackVec.back().size:%i \n",stackVec.size(),stackVec.back().size());			
 	std::vector<std::vector<Token>> last = stackVec.back();
 	output = interleaveExpand(last);
 	tokenStack = output;
