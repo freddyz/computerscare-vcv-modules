@@ -214,6 +214,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
   }
  
   void onRandomize() override {
+    srand (time(NULL));
     randomizeAllFields();
   }
   void randomizeShuffle() {
@@ -252,6 +253,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     nextAbsoluteSequences[index]  = parseStringAsValues(textFields[index]->text,knobandinputlookup);
     printf("setNextAbsoluteSequence index:%i,val[0]:%i\n",index,nextAbsoluteSequences[index][0]);
     newABS[index] = AbsoluteSequence(textFields[index]->text,knobandinputlookup);
+    newABS[index].print(); 
   }
   void setAbsoluteSequenceFromQueue(int index) {
     absoluteSequences[index].resize(0);
@@ -295,8 +297,10 @@ void onCreate () override
   */
   void incrementInternalStep(int i) {
     newABS[i].incrementAndCheck();
+    activeKnobIndex[i] = newABS[i].peekWorkingStep();
+    
     if(i==0) {
-      printVector(newABS[i].workingIndexSequence);
+      //printVector(newABS[i].workingIndexSequence);
     }
     this->displayString[i] = this->getDisplayString(i);
     if(this->absoluteStep[i] == 0) {
@@ -414,10 +418,13 @@ void ComputerscareILoveCookies::step() {
           checkIfShouldChange(i);
         }
       }
-      activeKnobIndex[i] = absoluteSequences[i][this->absoluteStep[i]];
+      //activeKnobIndex[i] = absoluteSequences[i][this->absoluteStep[i]];
     }
 
-    activeKnobIndex[i] = newABS[i].peekWorkingStep();
+    //activeKnobIndex[i] = newABS[i].peekWorkingStep();
+    
+
+
     //outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
 		// how to handle a randomization input here?
 		// negative integers?
@@ -498,7 +505,7 @@ void MyTextFieldCookie::onTextChange() {
   if(matchParens(value)) {
     //whoKnows(value);
     
-    printf("row: %i\n",this->rowIndex);
+    //printf("row: %i\n",this->rowIndex);
     module->setNextAbsoluteSequence(this->rowIndex);
   }
 }

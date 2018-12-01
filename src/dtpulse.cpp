@@ -225,7 +225,7 @@ std::vector<Token> interleaveExpand(std::vector<std::vector<Token>> blocks) {
 		lengths.push_back(blocks[i].size());
 	}
 	printf("interleaveExpand lengths:");
-	printVector(lengths);	
+	//printVector(lengths);	
 	while(outerLength && ((!allAtZero && steps < 6000 ) || steps == 0)) {
 		if(lengths[outerIndex]) {
 	  	output.push_back(blocks[outerIndex][indices[outerIndex]]);
@@ -412,11 +412,11 @@ int AbsoluteSequence::peekStep() {
   return indexSequence[readHead];
 }
 int AbsoluteSequence::peekWorkingStep() {
-  return workingIndexSequence[readHead];
+  return readHead >=0 ? workingIndexSequence[readHead] : 0;
 }
 void AbsoluteSequence::incrementAndCheck() {
   //printf("readHead:%i,  peek:%i\n",readHead,peekStep());
-  if(skipAndPeek()>=78) {
+  if(myRandomTokens.size() > 0 && skipAndPeek()>=78) {
     randomizeIndex(readHead);
   }
 }
@@ -556,26 +556,28 @@ void Parser::ParseRandomSequence(Token t) {
   } // not a LeftCurly, dont do shit
 }
 void Parser::ParseInterleave(Token t) {
-	std::vector<std::vector<std::vector<Token>>> stackVec;
+	std::vector<std::vector<Token>> stackVec;
   std::vector<Token> tempStack;
   std::vector<Token> output;
 	stackVec.push_back({});
-	stackVec[0].push_back({});
 	while(t.type=="Letter"||t.type=="ExactValue"||t.type=="RandomSequence"||t.type=="LeftParen"||t.type=="RightParen") {
 		printf("size:%i ",stackVec.size());			
 		t.print();
 		if(t.type=="LeftParen") {
 			stackVec.push_back({});
-			stackVec.back().push_back({});
 		}
 		else if(t.type=="RightParen") {
 				//evaluate top of stack
-			tempStack = interleaveExpand(stackVec.back()); 
-			//pop top of stack
-			stackVec.pop_back();
+			 tempStack = interleaveExpand({stackVec.back()}); 
+      //tempStack = stackVec.back();
+      
+      //pop top of stack
+      stackVec.pop_back();
 			if(stackVec.size() > 0) {
+       
 				//push this evaluated string to new top
-				stackVec.back().push_back(tempStack);
+				stackVec.push_back(tempStack);
+        //stackVec.push_back({});
 			}
 			else {
 				
@@ -583,13 +585,13 @@ void Parser::ParseInterleave(Token t) {
 		}
 		//Letter, ExactValue, or RandomSequence
 		else { 
-			stackVec.back().back().push_back(t);	
+			stackVec.back().push_back(t);	
 		}
 		t=skipAndPeekToken();	
 	}
 		printf("stackVec.size::%i, stackVec.back().size:%i \n",stackVec.size(),stackVec.back().size());			
-	std::vector<std::vector<Token>> last = stackVec.back();
-	output = interleaveExpand(last);
+	//std::vector<std::vector<Token>> last = stackVec.back();
+	output = interleaveExpand(stackVec);
 	tokenStack = output;
 }
 void parseRecur(Token t) {
@@ -601,13 +603,16 @@ void parseRecur(Token t) {
     else if(c == ")") {
 			//evaluate top of stack
 			tempString = interleaveExpand(stackVec.back()); 
-			//pop top of stack
+			
+      //pop top of stack
 			stackVec.pop_back();
-			if(stackVec.size() > 0) {
+			
+      if(stackVec.size() > 0) {
 			//push this evaluated string to new top
 			stackVec.back().push_back(tempString);
 			}
-			else {
+			
+      else {
 				return "";
 			}
     }
