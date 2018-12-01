@@ -416,7 +416,7 @@ int AbsoluteSequence::peekWorkingStep() {
 }
 void AbsoluteSequence::incrementAndCheck() {
   //printf("readHead:%i,  peek:%i\n",readHead,peekStep());
-  if(myRandomTokens.size() > 0 && skipAndPeek()>=78) {
+  if(skipAndPeek()>=78) {
     randomizeIndex(readHead);
   }
 }
@@ -556,28 +556,23 @@ void Parser::ParseRandomSequence(Token t) {
   } // not a LeftCurly, dont do shit
 }
 void Parser::ParseInterleave(Token t) {
-	std::vector<std::vector<Token>> stackVec;
+	std::vector<std::vector<std::vector<Token>>> stackVec;
   std::vector<Token> tempStack;
   std::vector<Token> output;
 	stackVec.push_back({});
 	while(t.type=="Letter"||t.type=="ExactValue"||t.type=="RandomSequence"||t.type=="LeftParen"||t.type=="RightParen") {
-		printf("size:%i ",stackVec.size());			
-		t.print();
 		if(t.type=="LeftParen") {
 			stackVec.push_back({});
 		}
 		else if(t.type=="RightParen") {
-				//evaluate top of stack
-			 tempStack = interleaveExpand({stackVec.back()}); 
-      //tempStack = stackVec.back();
+			//evaluate top of stack
+			tempStack = interleaveExpand(stackVec.back()); 
       
       //pop top of stack
       stackVec.pop_back();
 			if(stackVec.size() > 0) {
-       
-				//push this evaluated string to new top
-				stackVec.push_back(tempStack);
-        //stackVec.push_back({});
+				//push this evaluated vector<Token> to new top
+				stackVec.back().push_back(tempStack);
 			}
 			else {
 				
@@ -585,44 +580,12 @@ void Parser::ParseInterleave(Token t) {
 		}
 		//Letter, ExactValue, or RandomSequence
 		else { 
-			stackVec.back().push_back(t);	
+			stackVec.back().push_back({t});	
 		}
 		t=skipAndPeekToken();	
 	}
-		printf("stackVec.size::%i, stackVec.back().size:%i \n",stackVec.size(),stackVec.back().size());			
-	//std::vector<std::vector<Token>> last = stackVec.back();
-	output = interleaveExpand(stackVec);
+	output = interleaveExpand(stackVec.back());
 	tokenStack = output;
-}
-void parseRecur(Token t) {
-  /*for(unsigned int i = 0; i < input.length(); i++) {
-    c = input[i];
-    if(c == "(") {
-			stackVec.push_back({});
-    }
-    else if(c == ")") {
-			//evaluate top of stack
-			tempString = interleaveExpand(stackVec.back()); 
-			
-      //pop top of stack
-			stackVec.pop_back();
-			
-      if(stackVec.size() > 0) {
-			//push this evaluated string to new top
-			stackVec.back().push_back(tempString);
-			}
-			
-      else {
-				return "";
-			}
-    }
-    else {
-			stackVec.back().push_back(c);
-    }
-  }
-	std::vector<std::string> last = stackVec.back();
-  output = interleaveExpand(last);
-	*/
 }
 
 char Parser::peekChar() {

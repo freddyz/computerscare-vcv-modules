@@ -297,8 +297,8 @@ void onCreate () override
   */
   void incrementInternalStep(int i) {
     newABS[i].incrementAndCheck();
-    activeKnobIndex[i] = newABS[i].peekWorkingStep();
-    
+    //activeKnobIndex[i] = newABS[i].peekWorkingStep();
+
     if(i==0) {
       //printVector(newABS[i].workingIndexSequence);
     }
@@ -421,7 +421,7 @@ void ComputerscareILoveCookies::step() {
       //activeKnobIndex[i] = absoluteSequences[i][this->absoluteStep[i]];
     }
 
-    //activeKnobIndex[i] = newABS[i].peekWorkingStep();
+    activeKnobIndex[i] = newABS[i].peekWorkingStep();
     
 
 
