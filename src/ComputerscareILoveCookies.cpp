@@ -321,14 +321,16 @@ void onCreate () override
     this->smallLetterDisplays[i]->doubleblink = value;
   }
   std::string getDisplayString(int index) {
-    std::string lhs = std::to_string(this->absoluteStep[index]);
-    std::string rhs =  std::to_string(this->numSteps[index]);
+    std::string lhs = std::to_string(this->newABS[index].readHead);
+    std::string rhs =  std::to_string(this->newABS[index].numTokens);
+    std::string thisVal = this->newABS[index].getWorkingStepDisplay();
+
 
     padTo(lhs, 3,' ');
     padTo(rhs, 3,' ');
     
     
-    std::string val =  lhs + "/" + rhs + "\n" + knobandinputlookup[this->absoluteSequences[index][this->absoluteStep[index]]];
+    std::string val =  lhs + "/" + rhs + "\n" + thisVal.substr(0,4);
     return val;
   }
 	float mapKnobValue(float rawValue, int rowIndex) {
@@ -422,8 +424,6 @@ void ComputerscareILoveCookies::step() {
     }
 
     activeKnobIndex[i] = newABS[i].peekWorkingStep();
-    
-
 
     //outputs[TRG_OUTPUT + i].value = params[KNOB_PARAM + activeKnob].value;
 		// how to handle a randomization input here?
@@ -442,11 +442,11 @@ void ComputerscareILoveCookies::step() {
     else if(activeKnobIndex[i] < 78) {
       outputs[TRG_OUTPUT + i].value = newABS[i].exactFloats[activeKnobIndex[i] - 52];
     }
-    else if(activeKnobIndex[i] <104) {
+    else if(activeKnobIndex[i] < 104) {
       outputs[TRG_OUTPUT + i].value = 2.22;
     }
     else {
-      outputs[TRG_OUTPUT+i].value = otherOutputValues[activeKnobIndex[i]-104];
+      outputs[TRG_OUTPUT+i].value = otherOutputValues[activeKnobIndex[i] - 104];
     }
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;

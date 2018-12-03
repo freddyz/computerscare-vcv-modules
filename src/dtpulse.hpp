@@ -61,7 +61,9 @@ class AbsoluteSequence {
 		std::vector<std::vector<int>> randomIndexes;
 		std::vector<std::vector<Token>> randomTokens;
 		std::vector<Token> tokenStack;
+
 		int readHead;
+		int numTokens;
 		void print();
 		void skipStep();
 		int peekStep();
@@ -70,6 +72,7 @@ class AbsoluteSequence {
 		void incrementAndCheck();
 		int getReadHead();
 		int getCurrentAddressAtReadHead();
+		std::string getWorkingStepDisplay();
 };
 bool is_digits(const std::string &str);
 void padTo(std::string &str, const size_t num, const char paddingChar );

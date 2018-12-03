@@ -224,8 +224,6 @@ std::vector<Token> interleaveExpand(std::vector<std::vector<Token>> blocks) {
 		indices.push_back(0);
 		lengths.push_back(blocks[i].size());
 	}
-	printf("interleaveExpand lengths:");
-	//printVector(lengths);	
 	while(outerLength && ((!allAtZero && steps < 6000 ) || steps == 0)) {
 		if(lengths[outerIndex]) {
 	  	output.push_back(blocks[outerIndex][indices[outerIndex]]);
@@ -383,6 +381,7 @@ AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
   exactFloats = p.exactFloats;
   randomTokens=p.randomVector;
   tokenStack = p.tokenStack;
+  numTokens = tokenStack.size();
 	indexSequence = getIndicesFromTokenStack(tokenStack);
 	workingIndexSequence = duplicateIntVector(indexSequence);;
   readHead = -1 ;
@@ -418,6 +417,16 @@ void AbsoluteSequence::incrementAndCheck() {
   //printf("readHead:%i,  peek:%i\n",readHead,peekStep());
   if(skipAndPeek()>=78) {
     randomizeIndex(readHead);
+  }
+}
+std::string AbsoluteSequence::getWorkingStepDisplay() {
+  int stepIndex = peekWorkingStep();
+  if(stepIndex < 52) {
+    std::string str(1,knobandinputlookup[stepIndex]);
+    return str;
+  }
+  else {
+    return std::to_string(exactFloats[stepIndex - 52]);
   }
 }
 
@@ -500,7 +509,6 @@ void Parser::setForInterleave(Token t) {
 }
 
 void Parser::ParseExactValue(Token t) {
-  int currentSize;
   if(t.type=="LeftAngle") {
     t=skipAndPeekToken();
   	std::string num="";	
@@ -642,7 +650,6 @@ void Token::print() {
 }
 std::vector<Token> tokenizeString(std::string input) {
 	std::vector<Token> stack;
-	int stringIndex=0;
 	for(unsigned int i = 0; i < input.length(); i++) {
 		std::string token(1,input[i]);
     if(token=="(") stack.push_back(Token("LeftParen",token));
