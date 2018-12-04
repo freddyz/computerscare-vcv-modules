@@ -426,7 +426,8 @@ std::string AbsoluteSequence::getWorkingStepDisplay() {
     return str;
   }
   else {
-    return std::to_string(exactFloats[stepIndex - 52]);
+		return "Horse";
+    //return std::to_string(exactFloats[stepIndex - 52]);
   }
 }
 
@@ -444,14 +445,17 @@ std::vector<int> duplicateIntVector(std::vector<int> input) {
 	}
 	return output;
 }
+void printTokenVector(std::vector<Token> tokenVector) {
 
+  for(unsigned int i = 0; i < tokenVector.size(); i++) {
+    tokenVector[i].print();
+  }
+}
 void AbsoluteSequence::print() {
 	printFloatVector(exactFloats);
   printTokenVector(randomTokens);
 	printf("  stack:\n");
-  for(unsigned int i = 0; i < tokenStack.size(); i++) {
-    tokenStack[i].print();
-  }
+	printTokenVector(tokenStack);
 }
 Token::Token(std::string t, std::string v) {
 	type = t;
@@ -469,15 +473,23 @@ Parser::Parser(std::string expr) {
 		currentIndex=0;
     setExpression(tokens[0]);
 
+	//printTokenVector(tokenStack);
     currentIndex=0;
     tokens=tokenStack;
     tokenStack = {};
     setForRandoms(tokens[0]);
 
+	//printTokenVector(tokenStack);
 		currentIndex = 0;
 		tokens = tokenStack;
 		tokenStack={};
 		setForInterleave(tokens[0]);
+		
+	//printTokenVector(tokenStack);
+		currentIndex = 0;
+		tokens = tokenStack;
+		tokenStack = {};
+		setForAtExpand(tokens[0]);
   }
 }
 void Parser::setExpression(Token t) {
@@ -501,6 +513,15 @@ void Parser::setForRandoms(Token t) {
 void Parser::setForInterleave(Token t) {
   while (t.type!="NULL") {
     ParseInterleave(t); 
+    if(peekToken().type !="NULL") {
+      tokenStack.push_back(peekToken());
+    }
+    t = skipAndPeekToken();
+  }
+}
+void Parser::setForAtExpand(Token t) {
+  while (t.type!="NULL") {
+    ParseAtExpand(t); 
     if(peekToken().type !="NULL") {
       tokenStack.push_back(peekToken());
     }
@@ -593,7 +614,15 @@ void Parser::ParseInterleave(Token t) {
 		t=skipAndPeekToken();	
 	}
 	output = interleaveExpand(stackVec.back());
-	tokenStack = output;
+  tokenStack.insert(tokenStack.end(),output.begin(),output.end());
+}
+void Parser::ParseAtExpand(Token t) {
+  std::vector<Token> proposedTokens;
+	while(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence" || t.type=="LeftSquare" || t.type=="RightSquare" || t.type=="At" || t.type == "Digit") {
+		proposedTokens.push_back(t);
+		t=skipAndPeekToken();
+	}
+  tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
 }
 
 char Parser::peekChar() {
