@@ -214,16 +214,15 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
   }
  
   void onRandomize() override {
-    srand (time(NULL));
-    randomizeAllFields();
   }
   void randomizeShuffle() {
 
   }
-  void randomizeAllFields() {
+  void randomizeTextFields() {
     std::string mainlookup = knobandinputlookup;
     std::string string = "";
     std::string randchar = "";
+    srand (time(NULL));
     float ru;
     int length = 0;
 
@@ -325,10 +324,8 @@ void onCreate () override
     std::string rhs =  std::to_string(this->newABS[index].numTokens);
     std::string thisVal = this->newABS[index].getWorkingStepDisplay();
 
-
     padTo(lhs, 3,' ');
     padTo(rhs, 3,' ');
-    
     
     std::string val =  lhs + "/" + rhs + "\n" + thisVal.substr(0,4);
     return val;
