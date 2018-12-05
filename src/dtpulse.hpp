@@ -45,12 +45,14 @@ class Parser {
 		std::vector<Token> tokenStack;
 		std::vector<float> exactFloats;
 		std::vector<std::vector<Token>> randomVector;
+		std::vector<Token> countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum);
 	private:
 		int currentIndex;
 		void ParseExactValue(Token t);
 		void ParseRandomSequence(Token t);
 		void ParseInterleave(Token t);
 		void ParseAtExpand(Token t);
+		int ParseAtPart(Token t);
 };
 class AbsoluteSequence {
 	public:

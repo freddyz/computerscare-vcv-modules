@@ -366,11 +366,11 @@ void whoKnows(std::string input) {
   printf("  workingIndexSequence:\n");
   printVector(abs.workingIndexSequence);
   srand (time(NULL));
-	/*printf("  iteration:\n");
+	printf("  iteration:\n");
   for(int j = 0; j < 13; j++) {
     abs.incrementAndCheck();
     printVector(abs.workingIndexSequence);
-  }*/
+  }
 }
 
 AbsoluteSequence::AbsoluteSequence() {
@@ -618,13 +618,81 @@ void Parser::ParseInterleave(Token t) {
 }
 void Parser::ParseAtExpand(Token t) {
   std::vector<Token> proposedTokens;
-	while(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence" || t.type=="LeftSquare" || t.type=="RightSquare" || t.type=="At" || t.type == "Digit") {
-		proposedTokens.push_back(t);
-		t=skipAndPeekToken();
+	int atNum;
+	std::vector<std::vector<Token>> insideOfBrackets;
+	std::vector<Token> insideOfBracketsTokens;
+	insideOfBrackets.push_back({});
+	while(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence" || t.type=="LeftSquare" || t.type=="RightSquare" || t.type=="Comma" || t.type=="At" || t.type=="Digit") {
+					if(t.type=="LeftSquare") {
+						t=skipAndPeekToken();
+						insideOfBrackets = {};
+						insideOfBrackets.push_back({});
+						while(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence" || t.type=="Comma") {
+							if(t.type=="Comma") {
+								insideOfBrackets.push_back({});
+							}
+							else {
+								insideOfBrackets.back().push_back(t);
+							}
+							t=skipAndPeekToken();
+						}
+						if(t.type=="RightSquare") {
+							t = skipAndPeekToken();
+							atNum = ParseAtPart(t);
+							insideOfBracketsTokens = countExpandTokens(insideOfBrackets,atNum);
+  						proposedTokens.insert(proposedTokens.end(),insideOfBracketsTokens.begin(),insideOfBracketsTokens.end());
+							insideOfBrackets={};
+							insideOfBrackets.push_back({});
+						}
+					}
+					// not inside a square bracket 
+					else if(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence") {
+						insideOfBrackets.back().push_back(t);
+					}
+					else if(t.type=="Comma") {
+						insideOfBracketsTokens = countExpandTokens(insideOfBrackets,-1);
+  					proposedTokens.insert(proposedTokens.end(),insideOfBracketsTokens.begin(),insideOfBracketsTokens.end());
+						insideOfBrackets = {};
+						insideOfBrackets.push_back({});
+					}
+					else if(t.type=="At") {
+						atNum = ParseAtPart(t);
+						insideOfBracketsTokens = countExpandTokens(insideOfBrackets,atNum);
+  					proposedTokens.insert(proposedTokens.end(),insideOfBracketsTokens.begin(),insideOfBracketsTokens.end());
+						insideOfBrackets = {};
+						insideOfBrackets.push_back({});
+					}
+					t=skipAndPeekToken();
 	}
-  tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
+			
+		insideOfBracketsTokens = countExpandTokens(insideOfBrackets,-1);
+  	proposedTokens.insert(proposedTokens.end(),insideOfBracketsTokens.begin(),insideOfBracketsTokens.end());
+  	tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
 }
-
+std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
+	std::vector<Token> output;
+	for(unsigned int i=0; i < tokenVecVec.size(); i++) { 
+		int sizeMod = (int) tokenVecVec[i].size();
+		atNum = atNum==-1 ? sizeMod : atNum;
+		for(int j = 0; j < atNum; j++) {
+			output.push_back(tokenVecVec[i][j % sizeMod]);
+		}
+	}
+	return output;
+}
+int Parser::ParseAtPart(Token t) {
+	std::string atString = "";
+	int atNum = -1;
+	if(t.type=="At") {
+		t=skipAndPeekToken();
+		while(t.type=="Digit") {
+			atString+=t.value;
+			t=skipAndPeekToken();
+		}
+    atNum  = std::stoi(atString);
+	}
+	return atNum;
+}
 char Parser::peekChar() {
 	if (currentIndex < (int) expression.size()) return expression[currentIndex];
 	return 0;
