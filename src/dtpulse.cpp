@@ -491,7 +491,7 @@ Parser::Parser(std::string expr) {
 		tokenStack = {};
 		setForAtExpand(tokens[0]);
   }
-}
+	}
 void Parser::setExpression(Token t) {
 	while (t.type!="NULL") {
 		ParseExactValue(t);	
@@ -538,7 +538,7 @@ void Parser::ParseExactValue(Token t) {
 			t=skipAndPeekToken();
 		}
 		if(t.type=="Digit" || t.type=="Period") {
-			num += parseNumber(t);
+			num += parseFloat(t);
 		}
 		t=peekToken();
 		if(t.type=="RightAngle") {
@@ -715,7 +715,7 @@ Token Parser::skipAndPeekToken() {
 	skipToken();
 	return peekToken();
 }
-std::string Parser::parseNumber(Token t)
+std::string Parser::parseFloat(Token t)
 {
     std::string number = "";
     if (t.type != "Period")

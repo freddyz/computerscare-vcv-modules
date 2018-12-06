@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <typeinfo>
+#include <stdexcept>
 
 #ifndef MY_GLOBALS_H
 #define MY_GLOBALS_H
@@ -41,7 +42,7 @@ class Parser {
 		void setForRandoms(Token t);
 		void setForInterleave(Token t);
 		void setForAtExpand(Token t);
-		std::string parseNumber(Token t);
+		std::string parseFloat(Token t);
 		std::vector<Token> tokenStack;
 		std::vector<float> exactFloats;
 		std::vector<std::vector<Token>> randomVector;
