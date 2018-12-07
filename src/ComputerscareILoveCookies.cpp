@@ -428,7 +428,10 @@ void ComputerscareILoveCookies::step() {
     // values greater than 52 for randomization
     // then must keep a separate dictionary
     // dict[52] = [1,2,24] and then it must look this up and randomize
-    if(activeKnobIndex[i] < 26) {
+		if(activeKnobIndex[i] == -1) {
+			outputs[TRG_OUTPUT + i].value = 0.f;
+		}
+		else if(activeKnobIndex[i] < 26) {
       knobRawValue = params[activeKnobIndex[i]].value;
       outputs[TRG_OUTPUT + i].value = mapKnobValue(knobRawValue,i); 
     }

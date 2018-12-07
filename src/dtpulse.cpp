@@ -377,6 +377,7 @@ AbsoluteSequence::AbsoluteSequence() {
   AbsoluteSequence("a",knobandinputlookup);
 }
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
+	expr = expr=="" ? "<0.0>" : expr;
 	Parser p = Parser(expr);
   exactFloats = p.exactFloats;
   randomTokens=p.randomVector;
@@ -460,6 +461,7 @@ void AbsoluteSequence::print() {
 Token::Token(std::string t, std::string v) {
 	type = t;
 	value = v;
+	index = -1;
 }
 Token::Token(std::string t, std::string v, int dex) {
   type = t;
@@ -670,12 +672,17 @@ void Parser::ParseAtExpand(Token t) {
   	tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
 }
 std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
-	std::vector<Token> output;
+	std::vector<Token> output;	
 	for(unsigned int i=0; i < tokenVecVec.size(); i++) { 
 		int sizeMod = (int) tokenVecVec[i].size();
 		atNum = atNum==-1 ? sizeMod : atNum;
 		for(int j = 0; j < atNum; j++) {
-			output.push_back(tokenVecVec[i][j % sizeMod]);
+			if(tokenVecVec[i].size()) {
+				output.push_back(tokenVecVec[i][j % sizeMod]);
+			}
+			else {
+				output.push_back(Token("Zero",""));
+			}
 		}
 	}
 	return output;
@@ -689,7 +696,7 @@ int Parser::ParseAtPart(Token t) {
 			atString+=t.value;
 			t=skipAndPeekToken();
 		}
-    atNum  = std::stoi(atString);
+    atNum  = atString != "" ? std::stoi(atString) : -1;
 	}
 	return atNum;
 }
