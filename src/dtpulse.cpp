@@ -377,15 +377,15 @@ AbsoluteSequence::AbsoluteSequence() {
   AbsoluteSequence("a",knobandinputlookup);
 }
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
-	expr = expr=="" ? "<0.0>" : expr;
+	expr = expr=="" ? "a" : expr;
 	Parser p = Parser(expr);
   exactFloats = p.exactFloats;
   randomTokens=p.randomVector;
   tokenStack = p.tokenStack;
   numTokens = tokenStack.size();
 	indexSequence = getIndicesFromTokenStack(tokenStack);
-	workingIndexSequence = duplicateIntVector(indexSequence);;
-  readHead = -1 ;
+	workingIndexSequence = duplicateIntVector(indexSequence);
+  readHead = -1;//((int)indexSequence.size())-1 ;
 }
 void AbsoluteSequence::randomizeIndex(int index) {
 	int randomTokenIndex = indexSequence[index] - 78;
@@ -397,7 +397,7 @@ void AbsoluteSequence::randomizeIndex(int index) {
   }
   else {
      //random address ie: a-z,A-Z
-    workingIndexSequence[index] = rand() % 52;
+    workingIndexSequence[index] = rand() % 26;
   }
 }
 void AbsoluteSequence::skipStep() {
@@ -412,10 +412,9 @@ int AbsoluteSequence::peekStep() {
   return indexSequence[readHead];
 }
 int AbsoluteSequence::peekWorkingStep() {
-  return readHead >=0 ? workingIndexSequence[readHead] : 0;
+  return (readHead >=0) ? workingIndexSequence[readHead] : 0;
 }
 void AbsoluteSequence::incrementAndCheck() {
-  //printf("readHead:%i,  peek:%i\n",readHead,peekStep());
   if(skipAndPeek()>=78) {
     randomizeIndex(readHead);
   }
@@ -427,8 +426,7 @@ std::string AbsoluteSequence::getWorkingStepDisplay() {
     return str;
   }
   else {
-		return "Horse";
-    //return std::to_string(exactFloats[stepIndex - 52]);
+    return std::to_string(exactFloats[stepIndex - 52]);
   }
 }
 

@@ -66,7 +66,6 @@ class AbsoluteSequence {
 		std::vector<std::vector<int>> randomIndexes;
 		std::vector<std::vector<Token>> randomTokens;
 		std::vector<Token> tokenStack;
-
 		int readHead;
 		int numTokens;
 		void print();

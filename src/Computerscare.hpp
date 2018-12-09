@@ -131,7 +131,7 @@ struct LrgKnob : RoundBlackSnapKnob {
 	}
 	void randomize() override { return; }	
 };
-struct SmoothKnob : RoundBlackKnob {
+struct SmoothKnob : RoundKnob {
 	SmoothKnob() {
 		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-medium-knob-effed.svg")));
 	}
