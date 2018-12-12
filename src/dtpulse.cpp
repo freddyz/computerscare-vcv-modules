@@ -377,10 +377,15 @@ AbsoluteSequence::AbsoluteSequence() {
   AbsoluteSequence("a",knobandinputlookup);
 }
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
-	expr = expr=="" ? "a" : expr;
+	std::vector<Token> defaultStack;
+  defaultStack.push_back(Token("Letter", "a"));
+  expr = expr=="" ? "a" : expr;
 	Parser p = Parser(expr);
   exactFloats = p.exactFloats;
   randomTokens=p.randomVector;
+  if(p.inError) { 
+    tokenStack = defaultStack;
+  }
   tokenStack = p.tokenStack;
   numTokens = tokenStack.size();
 	indexSequence = getIndicesFromTokenStack(tokenStack);
@@ -469,28 +474,34 @@ Token::Token(std::string t, std::string v, int dex) {
 Parser::Parser(std::string expr) {
 	tokens = tokenizeString(expr);
 	expression=expr;
+  inError = false;
   if(tokens.size() > 0) {
-		currentIndex=0;
-    setExpression(tokens[0]);
+  		currentIndex=0;
+      setExpression(tokens[0]);
 
-	//printTokenVector(tokenStack);
-    currentIndex=0;
-    tokens=tokenStack;
-    tokenStack = {};
-    setForRandoms(tokens[0]);
-
-	//printTokenVector(tokenStack);
-		currentIndex = 0;
-		tokens = tokenStack;
-		tokenStack={};
-		setForInterleave(tokens[0]);
-		
-	//printTokenVector(tokenStack);
-		currentIndex = 0;
-		tokens = tokenStack;
-		tokenStack = {};
-		setForAtExpand(tokens[0]);
-  }
+  	//printTokenVector(tokenStack);
+      if(!inError) {
+        currentIndex=0;
+        tokens=tokenStack;
+        tokenStack = {};
+        setForRandoms(tokens[0]);
+        if(!inError) {
+      	//printTokenVector(tokenStack);
+      		currentIndex = 0;
+      		tokens = tokenStack;
+      		tokenStack={};
+      		setForInterleave(tokens[0]);
+      		
+          if(!inError) {
+        	//printTokenVector(tokenStack);
+        		currentIndex = 0;
+        		tokens = tokenStack;
+        		tokenStack = {};
+        		setForAtExpand(tokens[0]);
+          }
+        }
+      }
+    }
 	}
 void Parser::setExpression(Token t) {
 	while (t.type!="NULL") {
@@ -549,6 +560,7 @@ void Parser::ParseExactValue(Token t) {
 			exactFloats.push_back(std::stof(num));	
 		} 
     if(t.type !="RightAngle") {
+      inError = true;
 			printf("ERROR: no closing angle bracket.  it was (%s)\n",t.value.c_str());
 		}
     setExpression(peekToken());
@@ -579,6 +591,7 @@ void Parser::ParseRandomSequence(Token t) {
       tokenStack.push_back(Token("RandomSequence",stringDex,myIndex));
     }
     else {
+      inError = true;
       printf("ERROR: no closing RightCurly.  it was \"%s\" (%s)\n",t.value.c_str(),t.type.c_str());
     }
     ParseRandomSequence(peekToken());
