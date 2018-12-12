@@ -378,7 +378,7 @@ AbsoluteSequence::AbsoluteSequence() {
 }
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
 	std::vector<Token> defaultStack;
-  defaultStack.push_back(Token("Letter", "a"));
+  defaultStack.push_back(Token("Error", "error",-1));
   expr = expr=="" ? "a" : expr;
 	Parser p = Parser(expr);
   exactFloats = p.exactFloats;
@@ -386,7 +386,9 @@ AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
   if(p.inError) { 
     tokenStack = defaultStack;
   }
-  tokenStack = p.tokenStack;
+	else {
+  	tokenStack = p.tokenStack;
+	}
   numTokens = tokenStack.size();
 	indexSequence = getIndicesFromTokenStack(tokenStack);
 	workingIndexSequence = duplicateIntVector(indexSequence);
@@ -555,13 +557,12 @@ void Parser::ParseExactValue(Token t) {
 		if(t.type=="RightAngle") {
 			skipToken();
 			int sizeInt = static_cast<int>(exactFloats.size());
-      num = ((num.length() == 0) || num==".") ? "0" : num;
+      num = ((num.length() == 0) || num=="." || num=="-") ? "0" : num;
 			tokenStack.push_back(Token("ExactValue",num,sizeInt + 52));
 			exactFloats.push_back(std::stof(num));	
 		} 
-    if(t.type !="RightAngle") {
+    else {
       inError = true;
-			printf("ERROR: no closing angle bracket.  it was (%s)\n",t.value.c_str());
 		}
     setExpression(peekToken());
   } // not a LeftAngle, dont do shit
@@ -592,7 +593,6 @@ void Parser::ParseRandomSequence(Token t) {
     }
     else {
       inError = true;
-      printf("ERROR: no closing RightCurly.  it was \"%s\" (%s)\n",t.value.c_str(),t.type.c_str());
     }
     ParseRandomSequence(peekToken());
   } // not a LeftCurly, dont do shit
@@ -657,6 +657,9 @@ void Parser::ParseAtExpand(Token t) {
 							insideOfBrackets={};
 							insideOfBrackets.push_back({});
 						}
+						else {
+							inError = true;
+						}
 					}
 					// not inside a square bracket 
 					else if(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence") {
@@ -675,6 +678,9 @@ void Parser::ParseAtExpand(Token t) {
 						insideOfBrackets = {};
 						insideOfBrackets.push_back({});
 					}
+					else {
+						inError = true;
+					}
 					t=skipAndPeekToken();
 	}
 			
@@ -687,13 +693,18 @@ std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tok
 	for(unsigned int i=0; i < tokenVecVec.size(); i++) { 
 		int sizeMod = (int) tokenVecVec[i].size();
 		atNum = atNum==-1 ? sizeMod : atNum;
-		for(int j = 0; j < atNum; j++) {
-			if(tokenVecVec[i].size()) {
-				output.push_back(tokenVecVec[i][j % sizeMod]);
+		if(sizeMod < 0 ) {
+			for(int j = 0; j < atNum; j++) {
+				if(tokenVecVec[i].size()) {
+					output.push_back(tokenVecVec[i][j % sizeMod]);
+				}
+				else {
+					output.push_back(Token("Zero",""));
+				}
 			}
-			else {
-				output.push_back(Token("Zero",""));
-			}
+		}
+		else {
+			output.push_back(Token("Zero",""));
 		}
 	}
 	return output;
@@ -755,7 +766,8 @@ std::string Parser::parseFloat(Token t)
                 t = skipAndPeekToken();
             }
         } else {
-            printf("Expected digit after '.', number: %s\n",number.c_str());
+					inError = true;
+          printf("Expected digit after '.', number: %s\n",number.c_str());
         }
     }
     return number;
