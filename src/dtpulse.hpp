@@ -42,6 +42,7 @@ class Parser {
 		void setForRandoms(Token t);
 		void setForInterleave(Token t);
 		void setForAtExpand(Token t);
+		bool inError = false;
 		std::string parseFloat(Token t);
 		std::vector<Token> tokenStack;
 		std::vector<float> exactFloats;
