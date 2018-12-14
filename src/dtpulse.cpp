@@ -683,13 +683,13 @@ void Parser::ParseAtExpand(Token t) {
 					}
 					t=skipAndPeekToken();
 	}
-			
 		insideOfBracketsTokens = countExpandTokens(insideOfBrackets,-1);
   	proposedTokens.insert(proposedTokens.end(),insideOfBracketsTokens.begin(),insideOfBracketsTokens.end());
   	tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
 }
 std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
 	std::vector<Token> output;	
+	printf("-----countExpand %i\n",atNum);
   printTokenVector(tokenVecVec);
 	for(unsigned int i=0; i < tokenVecVec.size(); i++) { 
 		int sizeMod = (int) tokenVecVec[i].size();
@@ -699,12 +699,12 @@ std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tok
 				if(tokenVecVec[i].size()) {
 					output.push_back(tokenVecVec[i][j % sizeMod]);
 				}
-				else {
-					output.push_back(Token("Zero",""));
+				else { //tokenVecVec[i].size()==0
+					//output.push_back(Token("Zero",""));
 				}
 			}
 		}
-		else {
+		else { //sizeMod <= 0
 			output.push_back(Token("Zero",""));
 		}
 	}
