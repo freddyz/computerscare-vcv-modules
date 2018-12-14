@@ -461,6 +461,7 @@ void MyTextFieldCookie::onTextChange() {
   module->checkLength(this->rowIndex);
   std::string value = module->textFields[this->rowIndex]->text;
   if(matchParens(value)) {
+    whoKnows(value);
     module->setNextAbsoluteSequence(this->rowIndex);
     module->updateDisplayBlink(this->rowIndex);
   }

@@ -690,10 +690,11 @@ void Parser::ParseAtExpand(Token t) {
 }
 std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
 	std::vector<Token> output;	
+  printTokenVector(tokenVecVec);
 	for(unsigned int i=0; i < tokenVecVec.size(); i++) { 
 		int sizeMod = (int) tokenVecVec[i].size();
 		atNum = atNum==-1 ? sizeMod : atNum;
-		if(sizeMod < 0 ) {
+		if(sizeMod > 0 ) {
 			for(int j = 0; j < atNum; j++) {
 				if(tokenVecVec[i].size()) {
 					output.push_back(tokenVecVec[i][j % sizeMod]);
