@@ -541,6 +541,15 @@ void Parser::setForAtExpand(Token t) {
     t = skipAndPeekToken();
   }
 }
+void Parser::setForSquareBrackets(Token t) {
+  while (t.type!="NULL") {
+    ParseSquareBrackets(t); 
+    if(peekToken().type !="NULL") {
+      tokenStack.push_back(peekToken());
+    }
+    t = skipAndPeekToken();
+  }
+}
 
 void Parser::ParseExactValue(Token t) {
   if(t.type=="LeftAngle") {
@@ -630,6 +639,19 @@ void Parser::ParseInterleave(Token t) {
   tokenStack.insert(tokenStack.end(),output.begin(),output.end());
 }
 void Parser::ParseAtExpand(Token t) {
+	std::vector<Token> proposedTokens;
+	int atNumn = -1;
+	while(t.type=="Letter" || t.type=="RandomSequence"||t.type=="ExactValue") {
+		proposedTokens.push_back(t);	
+		t = skipAndPeekToken();
+	}
+	if(t.type=="At") {
+		atNum = ParseAtPart(t);
+		//proposedTokens = countExpandTokens(insideTokens,atNum); 
+
+	}
+}
+void Parser::ParseSquareBrackets(Token t) {
   std::vector<Token> proposedTokens;
 	int atNum;
 	std::vector<std::vector<Token>> insideOfBrackets;
@@ -664,6 +686,7 @@ void Parser::ParseAtExpand(Token t) {
 					// not inside a square bracket 
 					else if(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence") {
 						insideOfBrackets.back().push_back(t);
+						printf("iob size:%lu\n",insideOfBrackets.size());
 					}
 					else if(t.type=="Comma") {
 						insideOfBracketsTokens = countExpandTokens(insideOfBrackets,-1);

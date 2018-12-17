@@ -42,6 +42,7 @@ class Parser {
 		void setForRandoms(Token t);
 		void setForInterleave(Token t);
 		void setForAtExpand(Token t);
+		void setForSquareBrackets(Token t);
 		bool inError;
 		std::string parseFloat(Token t);
 		std::vector<Token> tokenStack;
@@ -54,6 +55,7 @@ class Parser {
 		void ParseRandomSequence(Token t);
 		void ParseInterleave(Token t);
 		void ParseAtExpand(Token t);
+		void ParseSquareBrackets(Token t);
 		int ParseAtPart(Token t);
 };
 class AbsoluteSequence {
