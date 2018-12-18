@@ -500,6 +500,13 @@ Parser::Parser(std::string expr) {
         		tokens = tokenStack;
         		tokenStack = {};
         		setForAtExpand(tokens[0]);
+
+						if(!inError) {
+							currentIndex = 0;
+							tokens=tokenStack;
+							tokenStack = {};
+							setForSquareBrackets(tokens[0]);
+						}
           }
         }
       }
@@ -639,80 +646,51 @@ void Parser::ParseInterleave(Token t) {
   tokenStack.insert(tokenStack.end(),output.begin(),output.end());
 }
 void Parser::ParseAtExpand(Token t) {
+	// for letter,{},<> followed by an optional "@" and an integer
+	// ab@3  da@2  cad  
+	std::vector<std::vector<Token>> tokenVec;
 	std::vector<Token> proposedTokens;
-	int atNumn = -1;
-	while(t.type=="Letter" || t.type=="RandomSequence"||t.type=="ExactValue") {
-		proposedTokens.push_back(t);	
-		t = skipAndPeekToken();
-	}
-	if(t.type=="At") {
+	tokenVec.push_back({});
+	int atNum = -1;
+	if(t.type=="Letter" || t.type=="RandomSequence" || t.type=="ExactValue") {
+		while(t.type=="Letter" || t.type=="RandomSequence"||t.type=="ExactValue") {
+			tokenVec.back().push_back(t);	
+			t = skipAndPeekToken();
+		}
 		atNum = ParseAtPart(t);
-		//proposedTokens = countExpandTokens(insideTokens,atNum); 
-
+		proposedTokens = countExpandTokens(tokenVec,atNum); 
+		tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
 	}
 }
 void Parser::ParseSquareBrackets(Token t) {
   std::vector<Token> proposedTokens;
-	int atNum;
 	std::vector<std::vector<Token>> insideOfBrackets;
-	std::vector<Token> insideOfBracketsTokens;
-	insideOfBrackets.push_back({});
-	while(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence" || t.type=="LeftSquare" || t.type=="RightSquare" || t.type=="Comma" || t.type=="At" || t.type=="Digit") {
-					if(t.type=="LeftSquare") {
-						t=skipAndPeekToken();
-						insideOfBrackets = {};
-						insideOfBrackets.push_back({});
-						while(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence" || t.type=="Comma") {
-							if(t.type=="Comma") {
-								insideOfBrackets.push_back({});
-							}
-							else {
-								insideOfBrackets.back().push_back(t);
-							}
-							t=skipAndPeekToken();
-						}
-						if(t.type=="RightSquare") {
-							t = skipAndPeekToken();
-							atNum = ParseAtPart(t);
-							insideOfBracketsTokens = countExpandTokens(insideOfBrackets,atNum);
-  						proposedTokens.insert(proposedTokens.end(),insideOfBracketsTokens.begin(),insideOfBracketsTokens.end());
-							insideOfBrackets={};
-							insideOfBrackets.push_back({});
-						}
-						else {
-							inError = true;
-						}
-					}
-					// not inside a square bracket 
-					else if(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence") {
-						insideOfBrackets.back().push_back(t);
-						printf("iob size:%lu\n",insideOfBrackets.size());
-					}
-					else if(t.type=="Comma") {
-						insideOfBracketsTokens = countExpandTokens(insideOfBrackets,-1);
-  					proposedTokens.insert(proposedTokens.end(),insideOfBracketsTokens.begin(),insideOfBracketsTokens.end());
-						insideOfBrackets = {};
-						insideOfBrackets.push_back({});
-					}
-					else if(t.type=="At") {
-						atNum = ParseAtPart(t);
-						insideOfBracketsTokens = countExpandTokens(insideOfBrackets,atNum);
-  					proposedTokens.insert(proposedTokens.end(),insideOfBracketsTokens.begin(),insideOfBracketsTokens.end());
-						insideOfBrackets = {};
-						insideOfBrackets.push_back({});
-					}
-					else {
-						inError = true;
-					}
-					t=skipAndPeekToken();
+	int atNum;
+	if(t.type=="LeftSquare") {
+		t=skipAndPeekToken();
+		insideOfBrackets.push_back({});
+		while(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence" || t.type=="Comma") {
+			if(t.type=="Comma") {
+				insideOfBrackets.push_back({});
+			}
+			else {
+				insideOfBrackets.back().push_back(t);
+			}
+			t=skipAndPeekToken();
+		}
+		if(t.type=="RightSquare") {
+			t = skipAndPeekToken();
+			atNum = ParseAtPart(t);
+			proposedTokens = countExpandTokens(insideOfBrackets,atNum);
+  		tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
+		}
+		else {
+			inError = true;
+		}
 	}
-		insideOfBracketsTokens = countExpandTokens(insideOfBrackets,-1);
-  	proposedTokens.insert(proposedTokens.end(),insideOfBracketsTokens.begin(),insideOfBracketsTokens.end());
-  	tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
 }
 std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
 	std::vector<Token> output;	
-	printf("-----countExpand %i\n",atNum);
   printTokenVector(tokenVecVec);
 	for(unsigned int i=0; i < tokenVecVec.size(); i++) { 
 		int sizeMod = (int) tokenVecVec[i].size();
@@ -797,7 +775,7 @@ std::string Parser::parseFloat(Token t)
     return number;
 }
 void Token::print() {
-	printf("type:%s, value:%s, index:%i\n",type.c_str(),value.c_str(),index);
+	printf("type:%s   value:%s   index:%i\n",type.c_str(),value.c_str(),index);
 }
 std::vector<Token> tokenizeString(std::string input) {
 	std::vector<Token> stack;
