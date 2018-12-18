@@ -379,15 +379,20 @@ AbsoluteSequence::AbsoluteSequence() {
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
 	std::vector<Token> defaultStack;
   defaultStack.push_back(Token("Error", "error",-1));
-  expr = expr=="" ? "a" : expr;
-	Parser p = Parser(expr);
-  exactFloats = p.exactFloats;
-  randomTokens=p.randomVector;
-  if(p.inError) { 
-    tokenStack = defaultStack;
-  }
+  //expr = expr=="" ? "a" : expr;
+	if(expr != "") {
+		Parser p = Parser(expr);
+  	exactFloats = p.exactFloats;
+  	randomTokens=p.randomVector;
+  	if(p.inError || !p.tokenStack.size()) { 
+   	 	tokenStack = defaultStack;
+  	}
+		else {
+  		tokenStack = p.tokenStack;
+		}
+	}
 	else {
-  	tokenStack = p.tokenStack;
+		tokenStack = defaultStack;
 	}
   numTokens = tokenStack.size();
 	indexSequence = getIndicesFromTokenStack(tokenStack);
@@ -479,7 +484,7 @@ Parser::Parser(std::string expr) {
   inError = false;
   if(tokens.size() > 0) {
   		currentIndex=0;
-      setExpression(tokens[0]);
+      setExactValue(tokens[0]);
 
   	//printTokenVector(tokenStack);
       if(!inError) {
@@ -506,13 +511,35 @@ Parser::Parser(std::string expr) {
 							tokens=tokenStack;
 							tokenStack = {};
 							setForSquareBrackets(tokens[0]);
+						if(!inError) {
+							currentIndex = 0;
+							tokens=tokenStack;
+							tokenStack = {};
+							setFinal(tokens[0]);
+						}
 						}
           }
         }
       }
     }
 	}
-void Parser::setExpression(Token t) {
+void Parser::setFinal(Token t) {
+	while (t.type!="NULL") {
+		if(t.type=="Letter" || t.type=="ExactValue" || t.type=="RandomSequence" || t.type =="Zero") {
+			tokenStack.push_back(t);
+		}
+		else if(t.type=="Comma") {
+			
+		}
+		else {
+			inError = true;
+			break;
+		}
+		t = skipAndPeekToken();
+	}
+}
+
+void Parser::setExactValue(Token t) {
 	while (t.type!="NULL") {
 		ParseExactValue(t);	
 		if(peekToken().type !="NULL") {
@@ -568,19 +595,22 @@ void Parser::ParseExactValue(Token t) {
 		}
 		if(t.type=="Digit" || t.type=="Period") {
 			num += parseFloat(t);
+			t=peekToken();
+			if(!inError && t.type=="RightAngle") {
+				skipToken();
+				int sizeInt = static_cast<int>(exactFloats.size());
+				num = ((num.length() == 0) || num=="." || num=="-") ? "0" : num;
+				tokenStack.push_back(Token("ExactValue",num,sizeInt + 52));
+				exactFloats.push_back(std::stof(num));	
+ 				setExactValue(peekToken());
+			} 
+			else {
+				inError = true;
+			}
 		}
-		t=peekToken();
-		if(t.type=="RightAngle") {
-			skipToken();
-			int sizeInt = static_cast<int>(exactFloats.size());
-      num = ((num.length() == 0) || num=="." || num=="-") ? "0" : num;
-			tokenStack.push_back(Token("ExactValue",num,sizeInt + 52));
-			exactFloats.push_back(std::stof(num));	
-		} 
-    else {
-      inError = true;
+		else {
+			inError=true;
 		}
-    setExpression(peekToken());
   } // not a LeftAngle, dont do shit
 }
 void Parser::ParseRandomSequence(Token t) {
@@ -775,7 +805,7 @@ std::string Parser::parseFloat(Token t)
     return number;
 }
 void Token::print() {
-	printf("type:%s   value:%s   index:%i\n",type.c_str(),value.c_str(),index);
+	printf("type: %s   value: %s   index: %i\n",type.c_str(),value.c_str(),index);
 }
 std::vector<Token> tokenizeString(std::string input) {
 	std::vector<Token> stack;

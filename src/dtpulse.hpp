@@ -38,11 +38,12 @@ class Parser {
 		Token peekToken();
 		Token skipAndPeekToken();
 		void skipToken();
-		void setExpression(Token t);
+		void setExactValue(Token t);
 		void setForRandoms(Token t);
 		void setForInterleave(Token t);
 		void setForAtExpand(Token t);
 		void setForSquareBrackets(Token t);
+		void setFinal(Token t);
 		bool inError;
 		std::string parseFloat(Token t);
 		std::vector<Token> tokenStack;
