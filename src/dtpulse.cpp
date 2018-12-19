@@ -433,7 +433,10 @@ void AbsoluteSequence::incrementAndCheck() {
 }
 std::string AbsoluteSequence::getWorkingStepDisplay() {
   int stepIndex = peekWorkingStep();
-  if(stepIndex < 52) {
+  if(stepIndex < 0) {
+    return "error";
+  }
+  else if(stepIndex < 52) {
     std::string str(1,knobandinputlookup[stepIndex]);
     return str;
   }

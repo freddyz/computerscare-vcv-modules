@@ -39,6 +39,12 @@ struct ComputerscareResetButton : SVGSwitch,MomentarySwitch {
 		//SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
 	}
 };
+struct ComputerscareClockButton : SVGSwitch,MomentarySwitch {
+	ComputerscareClockButton() {
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-clk-text.svg")));
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-clk-text-red.svg")));
+	}
+};
 struct ComputerscareInvisibleButton : SVGSwitch,MomentarySwitch {
 	ComputerscareInvisibleButton() {
 		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-invisible-button.svg")));

@@ -337,6 +337,7 @@ void ComputerscareILoveCookies::step() {
   bool atFirstStep = false;
   bool globalTriggerClocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool globalManualResetClicked = globalManualResetTrigger.process(params[MANUAL_RESET_PARAM].value);
+  bool globalManualClockClicked = globalManualClockTrigger.process(params[MANUAL_CLOCK_PARAM].value);
   bool currentTriggerIsHigh;
   bool currentTriggerClocked;
   bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].value / 2.f);
@@ -361,7 +362,7 @@ void ComputerscareILoveCookies::step() {
         }
       }
       else {
-        if (inputs[GLOBAL_CLOCK_INPUT].active && globalTriggerClocked) {
+        if ((inputs[GLOBAL_CLOCK_INPUT].active && globalTriggerClocked) || globalManualClockClicked) {
           incrementInternalStep(i);
           activeKnobIndex[i] = newABS[i].peekWorkingStep();
         }
@@ -539,7 +540,8 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
     //global reset input
     addInput(Port::create<InPort>(mm2px(Vec(12+xStart , 0)), Port::INPUT, module, ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
     addParam(ParamWidget::create<ComputerscareResetButton>(mm2px(Vec(12+xStart , 9)), module, ComputerscareILoveCookies::MANUAL_RESET_PARAM, 0.0, 1.0, 0.0));
-  
+    addParam(ParamWidget::create<ComputerscareClockButton>(mm2px(Vec(2+xStart , 9)), module, ComputerscareILoveCookies::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0));
+ 
 
     for(int i = 0; i < numFields; i++) {
       //first-step output
