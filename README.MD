@@ -1,4 +1,7 @@
 # computerscare modules for VCV Rack
+
+![ComputerscarePatchSequencer](./doc/all-computerscare-modules.png)
+
 ~~~~
  oo                   o     Q         6       6  Q     6                
                      o       o                Q                6 6 6    
