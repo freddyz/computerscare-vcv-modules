@@ -1,3 +1,4 @@
+#pragma once
 #include "rack.hpp"
 
 
@@ -29,6 +30,22 @@ extern Model *modelComputerscareDebug;
 extern Model *modelComputerscarePatchSequencer;
 extern Model *modelComputerscareLaundrySoup;
 extern Model *modelComputerscareILoveCookies;
+
+
+struct ComputerscareResetButton : SVGSwitch,MomentarySwitch {
+	ComputerscareResetButton() {
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-rst-text.svg")));
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-rst-text-red.svg")));
+		//SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
+	}
+};
+struct ComputerscareInvisibleButton : SVGSwitch,MomentarySwitch {
+	ComputerscareInvisibleButton() {
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-invisible-button.svg")));
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-invisible-button-frame2.svg")));
+		//SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
+	}
+};
 
 struct ComputerscareGreenLight : GrayModuleLightWidget {
 	ComputerscareGreenLight() {
@@ -114,7 +131,7 @@ struct LrgKnob : RoundBlackSnapKnob {
 	}
 	void randomize() override { return; }	
 };
-struct SmoothKnob : RoundBlackKnob {
+struct SmoothKnob : RoundKnob {
 	SmoothKnob() {
 		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-medium-knob-effed.svg")));
 	}

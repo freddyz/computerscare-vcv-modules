@@ -9,12 +9,12 @@
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    id="Layer_1"
    data-name="Layer 1"
-   viewBox="0 0 28 28"
+   viewBox="0 0 25 25"
    version="1.1"
    sodipodi:docname="computerscare-medium-knob-effed.svg"
    inkscape:version="0.92.2 5c3e80d, 2017-08-06"
-   width="28"
-   height="28">
+   width="25"
+   height="25">
   <metadata
      id="metadata1289">
     <rdf:RDF>
@@ -41,7 +41,7 @@
      id="namedview1287"
      showgrid="false"
      inkscape:zoom="15.733333"
-     inkscape:cx="10.260513"
+     inkscape:cx="11.595259"
      inkscape:cy="14.442801"
      inkscape:window-x="0"
      inkscape:window-y="0"
@@ -57,16 +57,16 @@
   <g
      id="Big_Knob"
      data-name="Big Knob"
-     transform="translate(0,-32)">
+     transform="translate(0,-35)">
     <path
-       style="fill:#245559;stroke:#000000;stroke-width:0.44949234;stroke-opacity:1"
-       d="M 27.281965,45.86697 C 28.119596,55.806861 21.656355,60.098038 14.240308,59.415042 7.4209214,58.786996 -1.0884456,53.018905 0.75553789,45.930272 3.2325316,36.408223 8.7500225,31.88879 14.240308,32.445502 c 4.113807,0.417138 6.056174,1.699822 10.081252,4.298793 2.501437,1.615165 2.727415,6.357859 2.960405,9.122675 z"
+       style="fill:#245559;stroke:#000000;stroke-width:0.40182629;stroke-opacity:1"
+       d="M 24.481712,47.462047 C 25.230517,56.347871 19.452665,60.183994 12.823046,59.573425 6.7268169,59.011979 -0.88018101,53.855561 0.76825872,47.518636 2.9825816,39.006345 7.9149746,34.966172 12.823046,35.463848 c 3.677562,0.372903 5.413953,1.519566 9.012194,3.842931 2.236175,1.443886 2.438189,5.683646 2.646472,8.155268 z"
        id="Big_Button_Circle"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="ssssss" />
     <path
-       style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#24c9a6;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.27979493;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
-       d="m 14.045118,33.007491 c -0.901212,0.624222 -0.773465,3.36645 -0.773465,3.36645 l -0.45534,0.901175 -0.521089,0.915953 -0.04079,1.126303 0.828056,0.854017 -0.422931,0.983799 -0.574795,3.113605 c 1.538999,-0.310021 1.553591,-0.964526 4.197441,-0.729889 l -0.92262,-1.792916 -0.477568,-1.469672 -0.03868,-1.440186 0.304744,-0.623519 0.04412,-0.777177 -0.257525,-4.62905 c -0.733272,-0.06419 -0.832689,-0.08062 -0.838748,0.02061 -0.0042,0.06712 0,0 -0.05072,0.180496 0,0 -0.07689,0.06066 -0.09712,0.03956 -0.02032,-0.02109 0.09704,-0.03956 0.09704,-0.03956 z"
+       style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#24c9a6;fill-opacity:1;fill-rule:nonzero;stroke:none;stroke-width:0.25012431;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:10;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
+       d="m 12.648556,35.966241 c -0.805644,0.558027 -0.691444,3.009458 -0.691444,3.009458 l -0.407053,0.80561 -0.465831,0.818822 -0.03646,1.006865 0.740245,0.763454 -0.378082,0.879472 -0.51384,2.783426 c 1.375796,-0.277146 1.388841,-0.862244 3.752326,-0.652488 l -0.824782,-1.602788 -0.426925,-1.313821 -0.03457,-1.287464 0.272428,-0.557398 0.03944,-0.694762 -0.230216,-4.138167 c -0.655513,-0.05738 -0.744387,-0.07207 -0.749803,0.01842 -0.0038,0.06 0,0 -0.04534,0.161355 0,0 -0.06874,0.05423 -0.08683,0.03536 -0.01817,-0.01885 0.08676,-0.03536 0.08676,-0.03536 z"
        id="Button_Pointer"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="cccccccccccccccscacc" />

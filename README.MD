@@ -1,4 +1,7 @@
 # computerscare modules for VCV Rack
+
+![ComputerscarePatchSequencer](./doc/all-computerscare-modules.png)
+
 ~~~~
  oo                   o     Q         6       6  Q     6                
                      o       o                Q                6 6 6    
@@ -13,7 +16,18 @@ YLX    LY5    2X5    Y2L    2LY    X25    YLX    YLL
 5YX    XLX    5YX    25X    LY5    L2Y    L5X    55L   
 ~~~~
 # I Love Cookies
-Because, after all, don't we all love cookies?
+Signal & CV Sequencer.  Uses Text as input.  Because after all, don't we all love cookies?
+
+Knobs are labeled with lowercase letters: a-z.  Inputs are labeled with uppercase letters A-Z.  Programming in the sequence: ~abcd~ will sequentially output the values of knobs a, b, c, and finally d.  It will then loop back to step 0: knob a again.  An exact voltage can be programmed by enclosing the value in square brackets.  For example: ~<4.20>~.  Surrounding 
+
+All of the following are valid ILC programs:
+~~~~
+<4.20>
+{abc}
+ab(cd)
+def@10
+[abc,de]@6
+~~~~
 
 
 ~~~~
