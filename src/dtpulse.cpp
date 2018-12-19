@@ -494,31 +494,31 @@ Parser::Parser(std::string expr) {
         currentIndex=0;
         tokens=tokenStack;
         tokenStack = {};
-        setForRandoms(tokens[0]);
+        setForRandoms(peekToken());
         if(!inError) {
       	//printTokenVector(tokenStack);
       		currentIndex = 0;
       		tokens = tokenStack;
       		tokenStack={};
-      		setForInterleave(tokens[0]);
+      		setForInterleave(peekToken());
       		
           if(!inError) {
         	//printTokenVector(tokenStack);
         		currentIndex = 0;
         		tokens = tokenStack;
         		tokenStack = {};
-        		setForAtExpand(tokens[0]);
+        		setForAtExpand(peekToken());
 
 						if(!inError) {
 							currentIndex = 0;
 							tokens=tokenStack;
 							tokenStack = {};
-							setForSquareBrackets(tokens[0]);
+							setForSquareBrackets(peekToken());
 						if(!inError) {
 							currentIndex = 0;
 							tokens=tokenStack;
 							tokenStack = {};
-							setFinal(tokens[0]);
+							setFinal(peekToken());
 						}
 						}
           }
@@ -658,15 +658,15 @@ void Parser::ParseInterleave(Token t) {
 		else if(t.type=="RightParen") {
 			//evaluate top of stack
 			tempStack = interleaveExpand(stackVec.back()); 
-      
+  		printTokenVector(tempStack);    
       //pop top of stack
-      stackVec.pop_back();
+      	stackVec.pop_back();
 			if(stackVec.size() > 0) {
 				//push this evaluated vector<Token> to new top
 				stackVec.back().push_back(tempStack);
 			}
 			else {
-				
+				inError=true;	
 			}
 		}
 		//Letter, ExactValue, or RandomSequence
@@ -675,6 +675,7 @@ void Parser::ParseInterleave(Token t) {
 		}
 		t=skipAndPeekToken();	
 	}
+
 	output = interleaveExpand(stackVec.back());
   tokenStack.insert(tokenStack.end(),output.begin(),output.end());
 }
