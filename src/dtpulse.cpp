@@ -434,7 +434,7 @@ void AbsoluteSequence::incrementAndCheck() {
 std::string AbsoluteSequence::getWorkingStepDisplay() {
   int stepIndex = peekWorkingStep();
   if(stepIndex < 0) {
-    return "error";
+    return "?";
   }
   else if(stepIndex < 52) {
     std::string str(1,knobandinputlookup[stepIndex]);
@@ -651,23 +651,32 @@ void Parser::ParseInterleave(Token t) {
   std::vector<Token> tempStack;
   std::vector<Token> output;
 	stackVec.push_back({});
+  int parenCount = 0;
 	while(t.type=="Letter"||t.type=="ExactValue"||t.type=="RandomSequence"||t.type=="LeftParen"||t.type=="RightParen") {
 		if(t.type=="LeftParen") {
 			stackVec.push_back({});
+      parenCount++;
 		}
 		else if(t.type=="RightParen") {
 			//evaluate top of stack
-			tempStack = interleaveExpand(stackVec.back()); 
-  		printTokenVector(tempStack);    
-      //pop top of stack
-      	stackVec.pop_back();
-			if(stackVec.size() > 0) {
-				//push this evaluated vector<Token> to new top
-				stackVec.back().push_back(tempStack);
-			}
-			else {
-				inError=true;	
-			}
+      
+      if(parenCount > 0) {
+        parenCount--;
+  			tempStack = interleaveExpand(stackVec.back()); 
+    		printTokenVector(tempStack);    
+        //pop top of stack
+        	stackVec.pop_back();
+  			if(stackVec.size() > 0) {
+  				//push this evaluated vector<Token> to new top
+  				stackVec.back().push_back(tempStack);
+  			}
+  			else {
+  				inError=true;	
+  			}
+      }
+      else {
+        inError=true;
+      }
 		}
 		//Letter, ExactValue, or RandomSequence
 		else { 
@@ -675,9 +684,10 @@ void Parser::ParseInterleave(Token t) {
 		}
 		t=skipAndPeekToken();	
 	}
-
-	output = interleaveExpand(stackVec.back());
-  tokenStack.insert(tokenStack.end(),output.begin(),output.end());
+  if(parenCount == 0) {
+	 output = interleaveExpand(stackVec.back());
+    tokenStack.insert(tokenStack.end(),output.begin(),output.end());
+  }
 }
 void Parser::ParseAtExpand(Token t) {
 	// for letter,{},<> followed by an optional "@" and an integer

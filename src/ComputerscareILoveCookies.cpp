@@ -46,14 +46,14 @@ struct SmallLetterDisplay : TransparentWidget {
     
     if(doubleblink) {
       nvgBeginPath(vg);
-      nvgRoundedRect(vg, -1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
+      nvgRoundedRect(vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
       nvgFillColor(vg, doubleblinkColor);
       nvgFill(vg);
     }
     else {
         if(blink) {
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, -1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
+        nvgRoundedRect(vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
         nvgFillColor(vg, backgroundColor);
         nvgFill(vg);
       }
@@ -284,7 +284,7 @@ void onCreate () override
     this->smallLetterDisplays[i]->doubleblink = value;
   }
   std::string getDisplayString(int index) {
-    std::string lhs = std::to_string(this->newABS[index].readHead);
+    std::string lhs = std::to_string(this->newABS[index].readHead + 1);
     std::string rhs =  std::to_string(this->newABS[index].numTokens);
     std::string thisVal = this->newABS[index].getWorkingStepDisplay();
 
@@ -415,48 +415,6 @@ void ComputerscareILoveCookies::step() {
     }
   }
 }
-
-/////////////////////////////////////////////////
-struct NumberDisplayWidget3cookie : TransparentWidget {
-
-  int *value;
-  std::shared_ptr<Font> font;
-  NVGcolor outlineColor;
-  //NVGcolor circleColor;
-
-  NumberDisplayWidget3cookie() {
-    font = Font::load(assetPlugin(plugin, "res/digital-7.ttf"));
-  };
-
-  void draw(NVGcontext *vg) override
-  {
-    // Background
-    NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
-
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, -2, -4, box.size.x+4, box.size.y+8, 4.0);
-    nvgFillColor(vg, outlineColor);
-    nvgFill(vg);    
-
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, 0.0, 0.0, box.size.x, box.size.y, 8.0);
-    nvgFillColor(vg, backgroundColor);
-    nvgFill(vg);    
-    
-    // text 
-    nvgFontSize(vg, 13);
-    nvgFontFaceId(vg, font->handle);
-    nvgTextLetterSpacing(vg, 2.5);
-
-    std::stringstream to_display;   
-    to_display << std::setw(3) << *value;
-
-    Vec textPos = Vec(6.0f, 17.0f);   
-    NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-    nvgFillColor(vg, textColor);
-    nvgText(vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
-  }
-};
 
 void MyTextFieldCookie::onTextChange() {
   module->checkLength(this->rowIndex);
