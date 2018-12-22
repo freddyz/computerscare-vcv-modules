@@ -142,3 +142,53 @@ struct SmoothKnob : RoundKnob {
 		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-medium-knob-effed.svg")));
 	}
 };
+
+
+////////////////////////////////////
+struct SmallLetterDisplay : TransparentWidget {
+
+  std::string value;
+  std::shared_ptr<Font> font;
+  bool active = false;
+  bool blink = false;
+  bool doubleblink = false;
+
+  SmallLetterDisplay() {
+    font = Font::load(assetPlugin(plugin, "res/Oswald-Regular.ttf"));
+  };
+
+  void draw(NVGcontext *vg) override
+  {  
+    // Background
+    NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
+    NVGcolor doubleblinkColor = COLOR_COMPUTERSCARE_YELLOW;
+
+    
+    if(doubleblink) {
+      nvgBeginPath(vg);
+      nvgRoundedRect(vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
+      nvgFillColor(vg, doubleblinkColor);
+      nvgFill(vg);
+    }
+    else {
+        if(blink) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
+        nvgFillColor(vg, backgroundColor);
+        nvgFill(vg);
+      }
+    }
+
+    // text 
+    nvgFontSize(vg, 19);
+    nvgFontFaceId(vg, font->handle);
+    nvgTextLetterSpacing(vg, 2.5);
+    nvgTextLineHeight(vg, 0.7);
+
+    Vec textPos = Vec(6.0f, 12.0f);   
+    NVGcolor textColor = (!blink || doubleblink) ? nvgRGB(0x10, 0x10, 0x00) : COLOR_COMPUTERSCARE_YELLOW;
+    nvgFillColor(vg, textColor);
+    nvgTextBox(vg, textPos.x, textPos.y,80,value.c_str(), NULL);
+
+  }
+};

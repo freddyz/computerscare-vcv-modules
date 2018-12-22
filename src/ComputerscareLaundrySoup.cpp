@@ -65,8 +65,11 @@ private:
 
 struct ComputerscareLaundrySoup : Module {
 	enum ParamIds {
-	   NUM_PARAMS
-	};  
+     MANUAL_CLOCK_PARAM,
+     MANUAL_RESET_PARAM,
+     INDIVIDUAL_RESET_PARAM,
+     NUM_PARAMS = INDIVIDUAL_RESET_PARAM + numFields
+	};
 	enum InputIds {
     GLOBAL_CLOCK_INPUT,
     GLOBAL_RESET_INPUT,
@@ -87,10 +90,16 @@ struct ComputerscareLaundrySoup : Module {
   SchmittTrigger globalClockTrigger;
   SchmittTrigger globalResetTriggerInput;
 
+  SchmittTrigger globalManualClockTrigger;
+  SchmittTrigger globalManualResetTrigger;
+
   SchmittTrigger clockTriggers[numFields];
   SchmittTrigger resetTriggers[numFields];
 
   MyTextField* textFields[numFields];
+  SmallLetterDisplay* smallLetterDisplays[numFields];
+
+  SchmittTrigger manualResetTriggers[numFields];
 
   std::vector<int> absoluteSequences[numFields];
   std::vector<int> nextAbsoluteSequences[numFields];
@@ -194,12 +203,20 @@ void onCreate () override
 
   */
   void incrementInternalStep(int i) {
+
     this->absoluteStep[i] +=1;
     this->absoluteStep[i] %= this->numSteps[i];
-  }
 
+    this->smallLetterDisplays[i]->value = this->getDisplayString(i);
+  }
+  std::string getDisplayString(int i) {
+    std::string out = std::to_string(this->absoluteStep[i]+1);
+    out += "/" + std::to_string(this->numSteps[i]);
+    out+= "\n";
+    return out;
+  }
   void resetOneOfThem(int i) {
-    this->absoluteStep[i] = 0;
+    this->absoluteStep[i] = -1;
   }
 };
 
@@ -212,9 +229,14 @@ void ComputerscareLaundrySoup::step() {
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool currentTriggerIsHigh = false;
   bool currentTriggerClocked = false;
+
+  bool globalManualResetClicked = globalManualResetTrigger.process(params[MANUAL_RESET_PARAM].value);
+  bool globalManualClockClicked = globalManualClockTrigger.process(params[MANUAL_CLOCK_PARAM].value);
+
   bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].value / 2.f);
   bool currentResetActive = false;
   bool currentResetTriggered = false;
+  bool currentManualResetClicked;
 
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
@@ -223,21 +245,23 @@ void ComputerscareLaundrySoup::step() {
     currentTriggerIsHigh = clockTriggers[i].isHigh();
     currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].value);
 
+    currentManualResetClicked = manualResetTriggers[i].process(params[INDIVIDUAL_RESET_PARAM + i].value);
+
     if(this->numSteps[i] > 0) {
       if (inputs[CLOCK_INPUT + i].active) {
-        if(currentTriggerClocked) {
+        if(currentTriggerClocked || globalManualClockClicked) {
           incrementInternalStep(i);
         }
       }
       else {
-        if (inputs[GLOBAL_CLOCK_INPUT].active && clocked) {
+        if ((inputs[GLOBAL_CLOCK_INPUT].active && clocked) || globalManualClockClicked) {
           incrementInternalStep(i);   
         }
       }
 
       atFirstStep = (this->absoluteStep[i] == 0);
 
-      if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
+      if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered) || globalManualResetClicked || currentManualResetClicked) {
         checkIfShouldChange(i);
         resetOneOfThem(i);
       }
@@ -312,6 +336,9 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
     //global reset input
     addInput(Port::create<InPort>(mm2px(Vec(12 , 0)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
     
+    addParam(ParamWidget::create<ComputerscareClockButton>(mm2px(Vec(2 , 8)), module, ComputerscareLaundrySoup::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0));
+    addParam(ParamWidget::create<ComputerscareResetButton>(mm2px(Vec(12 , 8)), module, ComputerscareLaundrySoup::MANUAL_RESET_PARAM, 0.0, 1.0, 0.0));
+ 
     for(int i = 0; i < numFields; i++) {
       //first-step output
       addOutput(Port::create<OutPort>(mm2px(Vec(42 , verticalStart + verticalSpacing*i - 11)), Port::OUTPUT, module, ComputerscareLaundrySoup::FIRST_STEP_OUTPUT + i));
@@ -336,8 +363,8 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       module->textFields[i] = textField;
 
       //active step display
-      NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-      display->box.pos = mm2px(Vec(24,verticalStart - 9.2 +verticalSpacing*i));
+      /*NumberDisplayWidget3 *display = new NumberDisplayWidget3();
+      display->box.pos = mm2px(Vec(24,verticalStart - 7.2 +verticalSpacing*i));
       display->box.size = Vec(50, 20);
       if(&module->numSteps[i]) {
         display->value = &module->absoluteStep[i];
@@ -345,11 +372,22 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       else {
         display->value = 0;
       }
-      addChild(display);
+      addChild(display);*/
+
+      smallLetterDisplay = new SmallLetterDisplay();
+      smallLetterDisplay->box.pos = mm2px(Vec(20,verticalStart - 9.2 +verticalSpacing*i));
+      smallLetterDisplay->box.size = Vec(60, 30);
+      smallLetterDisplay->value = std::to_string(3);
+      addChild(smallLetterDisplay);
+      module->smallLetterDisplays[i] = smallLetterDisplay;
+
+       addParam(ParamWidget::create<ComputerscareInvisibleButton>(mm2px(Vec(20,verticalStart - 9.2 +verticalSpacing*i)), module, ComputerscareLaundrySoup::INDIVIDUAL_RESET_PARAM + i, 0.0, 1.0, 0.0));
+
     }
     module->onCreate();
   }
   MyTextField* textField;
+  SmallLetterDisplay* smallLetterDisplay;
 };
 
 Model *modelComputerscareLaundrySoup = Model::create<ComputerscareLaundrySoup, ComputerscareLaundrySoupWidget>("computerscare", "computerscare-laundry-soup", "Laundry Soup", SEQUENCER_TAG);
