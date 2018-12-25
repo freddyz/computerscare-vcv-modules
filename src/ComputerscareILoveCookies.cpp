@@ -115,13 +115,13 @@ struct ComputerscareILoveCookies : Module {
 
   MyTextFieldCookie* textFields[numFields];
   SmallLetterDisplay* smallLetterDisplays[numFields];
+  SmallLetterDisplay* currentWorkingStepDisplays[numFields];
 
   AbsoluteSequence newABS[numFields];
   
   bool shouldChange[numFields] = {false};
   bool changeImminent[numFields] = {false};
 
-  std::string displayString[numFields];
   int activeKnobIndex[numFields] = {0};
  
 ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
@@ -221,11 +221,11 @@ void onCreate () override
   void incrementInternalStep(int i) {
     newABS[i].incrementAndCheck();
 
-    this->displayString[i] = this->getDisplayString(i);
     if(newABS[i].readHead == 0) {
       this->setChangeImminent(i,false);
     }
-    this->smallLetterDisplays[i]->value = this->displayString[i];
+    this->smallLetterDisplays[i]->value = this->getDisplayString(i);
+    this->currentWorkingStepDisplays[i]->value = this->newABS[i].getWorkingStepDisplay();
   }
 
   void resetOneOfThem(int i) {
@@ -237,12 +237,12 @@ void onCreate () override
   std::string getDisplayString(int index) {
     std::string lhs = std::to_string(this->newABS[index].readHead + 1);
     std::string rhs =  std::to_string(this->newABS[index].numTokens);
-    std::string thisVal = this->newABS[index].getWorkingStepDisplay();
 
     padTo(lhs, 3,' ');
     padTo(rhs, 3,' ');
     
-    std::string val =  lhs + "/" + rhs + "\n" + thisVal.substr(0,4);
+    std::string val = lhs + "\n" + rhs;
+
     return val;
   }
 	float mapKnobValue(float rawValue, int rowIndex) {
@@ -479,9 +479,19 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       smallLetterDisplay = new SmallLetterDisplay();
       smallLetterDisplay->box.pos = mm2px(Vec(21+xStart,verticalStart - 9.2 +verticalSpacing*i));
       smallLetterDisplay->box.size = Vec(60, 30);
-      smallLetterDisplay->value = "?/?";
+      smallLetterDisplay->value = "?\n?";
       addChild(smallLetterDisplay);
       module->smallLetterDisplays[i] = smallLetterDisplay;
+
+      //active/total steps display
+      currentWorkingStepDisplay = new SmallLetterDisplay();
+      currentWorkingStepDisplay->box.pos = mm2px(Vec(11+xStart,verticalStart - 7.0 +verticalSpacing*i));
+      currentWorkingStepDisplay->box.size = mm2px(Vec(2,10));
+      currentWorkingStepDisplay->fontSize = 26;
+      currentWorkingStepDisplay->textAlign = 4;
+      currentWorkingStepDisplay->value = "?";
+      addChild(currentWorkingStepDisplay);
+      module->currentWorkingStepDisplays[i] = currentWorkingStepDisplay;
 
       addParam(ParamWidget::create<ComputerscareInvisibleButton>(mm2px(Vec(21+xStart,verticalStart - 9.9 +verticalSpacing*i)), module, ComputerscareILoveCookies::INDIVIDUAL_RESET_PARAM + i, 0.0, 1.0, 0.0));
     }
@@ -489,6 +499,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   }
   MyTextFieldCookie* textField;
   SmallLetterDisplay* smallLetterDisplay;
+  SmallLetterDisplay* currentWorkingStepDisplay;
 
 };
 

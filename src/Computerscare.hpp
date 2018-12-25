@@ -149,12 +149,20 @@ struct SmallLetterDisplay : TransparentWidget {
 
   std::string value;
   std::shared_ptr<Font> font;
+  int fontSize = 19;
+  std::string defaultFontPath = "res/Oswald-Regular.ttf";
+
+  float letterSpacing = 2.5;
+  int textAlign = 1;
   bool active = false;
   bool blink = false;
   bool doubleblink = false;
 
   SmallLetterDisplay() {
-    font = Font::load(assetPlugin(plugin, "res/Oswald-Regular.ttf"));
+    font = Font::load(assetPlugin(plugin,defaultFontPath));
+  };
+  SmallLetterDisplay(std::string fontPath) {
+    font = Font::load(assetPlugin(plugin,fontPath));
   };
 
   void draw(NVGcontext *vg) override
@@ -180,10 +188,11 @@ struct SmallLetterDisplay : TransparentWidget {
     }
 
     // text 
-    nvgFontSize(vg, 19);
+    nvgFontSize(vg, fontSize);
     nvgFontFaceId(vg, font->handle);
-    nvgTextLetterSpacing(vg, 2.5);
+    nvgTextLetterSpacing(vg, letterSpacing);
     nvgTextLineHeight(vg, 0.7);
+    nvgTextAlign(vg,textAlign);
 
     Vec textPos = Vec(6.0f, 12.0f);   
     NVGcolor textColor = (!blink || doubleblink) ? nvgRGB(0x10, 0x10, 0x00) : COLOR_COMPUTERSCARE_YELLOW;

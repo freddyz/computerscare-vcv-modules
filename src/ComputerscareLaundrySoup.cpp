@@ -204,15 +204,14 @@ void onCreate () override
   */
   void incrementInternalStep(int i) {
 
-    this->absoluteStep[i] +=1;
+    this->absoluteStep[i] += 1;
     this->absoluteStep[i] %= this->numSteps[i];
 
     this->smallLetterDisplays[i]->value = this->getDisplayString(i);
   }
   std::string getDisplayString(int i) {
     std::string out = std::to_string(this->absoluteStep[i]+1);
-    out += "/" + std::to_string(this->numSteps[i]);
-    out+= "\n";
+    out += "\n" + std::to_string(this->numSteps[i]);
     return out;
   }
   void resetOneOfThem(int i) {

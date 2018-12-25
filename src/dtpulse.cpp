@@ -441,7 +441,7 @@ std::string AbsoluteSequence::getWorkingStepDisplay() {
     return str;
   }
   else {
-		return std::to_string((long double) exactFloats[stepIndex - 52]);
+		return std::to_string((long double) exactFloats[stepIndex - 52]).substr(0,4);;
   }
 }
 
