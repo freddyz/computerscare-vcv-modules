@@ -389,13 +389,13 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   double knobXStart = 20;
   double knobYStart = 2;
   double knobRowWidth = 11;
-  double knobColumnHeight = 9.2;
+  double knobColumnHeight = 9.58;
 
   double inputPosX = 0.0;
   double inputPosY = 0.0;
   double inputXStart = 0;
   double inputYStart = 0;
-  double inputRowWidth = 8;
+  double inputRowWidth = 9.4;
   double inputColumnHeight = 9.7;
 
   ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) : ModuleWidget(module) {
@@ -479,6 +479,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       smallLetterDisplay = new SmallLetterDisplay();
       smallLetterDisplay->box.pos = mm2px(Vec(21+xStart,verticalStart - 9.2 +verticalSpacing*i));
       smallLetterDisplay->box.size = Vec(60, 30);
+      smallLetterDisplay->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
       smallLetterDisplay->value = "?\n?";
       addChild(smallLetterDisplay);
       module->smallLetterDisplays[i] = smallLetterDisplay;

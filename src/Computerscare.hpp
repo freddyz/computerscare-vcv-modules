@@ -151,6 +151,7 @@ struct SmallLetterDisplay : TransparentWidget {
   std::shared_ptr<Font> font;
   int fontSize = 19;
   std::string defaultFontPath = "res/Oswald-Regular.ttf";
+  NVGcolor baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
 
   float letterSpacing = 2.5;
   int textAlign = 1;
@@ -171,21 +172,22 @@ struct SmallLetterDisplay : TransparentWidget {
     NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
     NVGcolor doubleblinkColor = COLOR_COMPUTERSCARE_YELLOW;
 
-    
-    if(doubleblink) {
-      nvgBeginPath(vg);
+          nvgBeginPath(vg);
       nvgRoundedRect(vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
+    if(doubleblink) {
+
       nvgFillColor(vg, doubleblinkColor);
-      nvgFill(vg);
     }
     else {
         if(blink) {
-        nvgBeginPath(vg);
-        nvgRoundedRect(vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
         nvgFillColor(vg, backgroundColor);
-        nvgFill(vg);
+
+      }
+      else {
+      	nvgFillColor(vg, baseColor);
       }
     }
+    nvgFill(vg);
 
     // text 
     nvgFontSize(vg, fontSize);
