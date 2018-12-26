@@ -489,21 +489,18 @@ Parser::Parser(std::string expr) {
   		currentIndex=0;
       setExactValue(tokens[0]);
 
-  	//printTokenVector(tokenStack);
       if(!inError) {
         currentIndex=0;
         tokens=tokenStack;
         tokenStack = {};
         setForRandoms(peekToken());
         if(!inError) {
-      	//printTokenVector(tokenStack);
       		currentIndex = 0;
       		tokens = tokenStack;
       		tokenStack={};
       		setForInterleave(peekToken());
       		
           if(!inError) {
-        	//printTokenVector(tokenStack);
         		currentIndex = 0;
         		tokens = tokenStack;
         		tokenStack = {};
@@ -514,12 +511,12 @@ Parser::Parser(std::string expr) {
 							tokens=tokenStack;
 							tokenStack = {};
 							setForSquareBrackets(peekToken());
-						if(!inError) {
-							currentIndex = 0;
-							tokens=tokenStack;
-							tokenStack = {};
-							setFinal(peekToken());
-						}
+										if(!inError) {
+											currentIndex = 0;
+											tokens=tokenStack;
+											tokenStack = {};
+											setFinal(peekToken());
+										}
 						}
           }
         }
@@ -586,6 +583,22 @@ void Parser::setForSquareBrackets(Token t) {
     }
     t = skipAndPeekToken();
   }
+}
+void Parser::ParseExactInteger(Token t) {
+  if(t.type=="LeftAngle") {
+    t=skipAndPeekToken();
+		std::string num="";
+		while(t.type=="Digit") {
+			num+=t.value;
+			t = skipAndPeekToken();
+		}
+		if(t.type=="RightAngle") {
+			tokenStack.push_back(Token("Integer",num));				
+		}
+		else {
+			inError=true;
+		}
+	} // not a LeftAngle, dont do shit
 }
 
 void Parser::ParseExactValue(Token t) {

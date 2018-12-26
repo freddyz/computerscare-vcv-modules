@@ -53,6 +53,7 @@ class Parser {
 	private:
 		int currentIndex;
 		void ParseExactValue(Token t);
+		void ParseExactInteger(Token t);
 		void ParseRandomSequence(Token t);
 		void ParseInterleave(Token t);
 		void ParseAtExpand(Token t);
