@@ -37,8 +37,11 @@ class Parser {
 
 		Token peekToken();
 		Token skipAndPeekToken();
+		void setForCookies();
+		void setForLaundry();
 		void skipToken();
 		void setExactValue(Token t);
+		void setForExactIntegers(Token t);
 		void setForRandoms(Token t);
 		void setForInterleave(Token t);
 		void setForAtExpand(Token t);
@@ -107,5 +110,6 @@ std::vector<Token> tokenizeString(std::string input);
 bool matchParens(std::string value);
 std::string evalToken(std::string input, std::string type,std::vector<Token> tStack);
 void whoKnows(std::string input);
+void whoKnowsLaundry(std::string input);
 std::vector<int> getIndicesFromTokenStack(std::vector<Token> tokens);
 std::vector<int> duplicateIntVector(std::vector<int> input);

@@ -372,7 +372,11 @@ void whoKnows(std::string input) {
     printVector(abs.workingIndexSequence);
   }
 }
-
+void whoKnowsLaundry(std::string input) {
+	printf("ujje man\n");
+	Parser p = Parser(input);
+	p.setForLaundry();
+}
 AbsoluteSequence::AbsoluteSequence() {
   AbsoluteSequence("a",knobandinputlookup);
 }
@@ -382,6 +386,7 @@ AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
   //expr = expr=="" ? "a" : expr;
 	if(expr != "") {
 		Parser p = Parser(expr);
+		p.setForCookies();
   	exactFloats = p.exactFloats;
   	randomTokens=p.randomVector;
   	if(p.inError || !p.tokenStack.size()) { 
@@ -485,6 +490,20 @@ Parser::Parser(std::string expr) {
 	tokens = tokenizeString(expr);
 	expression=expr;
   inError = false;
+}
+void Parser::setForLaundry() {
+  if(tokens.size() > 0) {
+  		currentIndex=0;
+      setForExactIntegers(tokens[0]);
+
+      if(!inError) {
+        currentIndex=0;
+        tokens=tokenStack;
+			}
+	}
+	printTokenVector(tokens);
+}
+void Parser::setForCookies() {
   if(tokens.size() > 0) {
   		currentIndex=0;
       setExactValue(tokens[0]);
@@ -584,6 +603,15 @@ void Parser::setForSquareBrackets(Token t) {
     t = skipAndPeekToken();
   }
 }
+void Parser::setForExactIntegers(Token t) {
+	while(t.type!="NULL") {
+		ParseExactInteger(t);
+		if(peekToken().type !="NULL") {
+			tokenStack.push_back(peekToken());
+		}
+		t = skipAndPeekToken();
+	}
+}
 void Parser::ParseExactInteger(Token t) {
   if(t.type=="LeftAngle") {
     t=skipAndPeekToken();
@@ -594,6 +622,8 @@ void Parser::ParseExactInteger(Token t) {
 		}
 		if(t.type=="RightAngle") {
 			tokenStack.push_back(Token("Integer",num));				
+			t=skipAndPeekToken();
+			setForExactIntegers(t);
 		}
 		else {
 			inError=true;
