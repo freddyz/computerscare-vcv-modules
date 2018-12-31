@@ -498,7 +498,7 @@ Parser::Parser(std::string expr) {
   inError = false;
 }
 void Parser::setForLaundry() {
-	std::vector<std::string> laundryInterleaveAny = {"Letter","Integer","Digit","LeftParen","RightParen"};
+	std::vector<std::string> laundryInterleaveAny = {"Letter","Integer","ChanceOfInteger","Digit","LeftParen","RightParen"};
   if(tokens.size() > 0) {
   		currentIndex=0;
       setForExactIntegers(tokens[0]);
@@ -506,7 +506,13 @@ void Parser::setForLaundry() {
         currentIndex=0;
         tokens=tokenStack;
 				tokenStack = {};
+				setForChanceOfIntegers(peekToken());
+      if(!inError) {
+        currentIndex=0;
+        tokens=tokenStack;
+				tokenStack = {};
       	setForInterleave(peekToken(),laundryInterleaveAny);
+}
 			}
 	}
 	printTokenVector(tokenStack);
@@ -622,6 +628,31 @@ void Parser::setForExactIntegers(Token t) {
 		t = skipAndPeekToken();
 	}
 }
+void Parser::setForChanceOfIntegers(Token t) {
+	while(t.type!="NULL") {
+		ParseChanceOfInteger(t);
+		if(peekToken().type !="NULL") {
+			tokenStack.push_back(peekToken());
+		}
+		t = skipAndPeekToken();
+	}
+}
+
+void Parser::ParseChanceOfInteger(Token t) {
+	Token last = Token("NULL","-1");
+	if(t.type=="Integer" || t.type=="Digit") {
+		last = t;
+		t = skipAndPeekToken();
+		if(t.type=="Question") {
+			tokenStack.push_back(Token("ChanceOfInteger",last.value));	
+			t=skipAndPeekToken();
+		}
+		else {
+			tokenStack.push_back(Token("Integer",last.value));
+		}
+		setForChanceOfIntegers(t);
+	}
+}
 void Parser::ParseExactInteger(Token t) {
   if(t.type=="LeftAngle") {
     t=skipAndPeekToken();
@@ -631,8 +662,8 @@ void Parser::ParseExactInteger(Token t) {
 			t = skipAndPeekToken();
 		}
 		if(t.type=="RightAngle") {
-			tokenStack.push_back(Token("Integer",num));				
 			t=skipAndPeekToken();
+			tokenStack.push_back(Token("Integer",num));				
 			setForExactIntegers(t);
 		}
 		else {

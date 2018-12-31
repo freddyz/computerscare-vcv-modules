@@ -42,6 +42,7 @@ class Parser {
 		void skipToken();
 		void setExactValue(Token t);
 		void setForExactIntegers(Token t);
+		void setForChanceOfIntegers(Token t);
 		void setForRandoms(Token t);
 		void setForInterleave(Token t,std::vector<std::string> whitelist);
 		void setForAtExpand(Token t);
@@ -61,6 +62,7 @@ class Parser {
 		void ParseInterleave(Token t,std::vector<std::string> whitelist);
 		void ParseAtExpand(Token t);
 		void ParseSquareBrackets(Token t);
+		void ParseChanceOfInteger(Token t);
 		int ParseAtPart(Token t);
 };
 class AbsoluteSequence {
