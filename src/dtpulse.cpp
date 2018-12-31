@@ -5,7 +5,14 @@ std::string integerlookup = "0123456789";
 std::string knoblookup = "abcdefghijklmnopqrstuvwxyz";
 std::string inputlookup= "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 std::string knobandinputlookup="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
+bool matchesAny(std::string val, std::vector<std::string> whitelist) {
+	bool result = false;
+	std::vector<std::string>::iterator it;
+				for(it = whitelist.begin(); it != whitelist.end(); it++ )    {
+					result = result || (*it == val);
+				}
+	return result;		
+}
 bool is_digits(const std::string &str)
 {
     return str.find_first_not_of(integerlookup) == std::string::npos;
@@ -373,7 +380,6 @@ void whoKnows(std::string input) {
   }
 }
 void whoKnowsLaundry(std::string input) {
-	printf("ujje man\n");
 	Parser p = Parser(input);
 	p.setForLaundry();
 }
@@ -492,18 +498,22 @@ Parser::Parser(std::string expr) {
   inError = false;
 }
 void Parser::setForLaundry() {
+	std::vector<std::string> laundryInterleaveAny = {"Letter","Integer","Digit","LeftParen","RightParen"};
   if(tokens.size() > 0) {
   		currentIndex=0;
       setForExactIntegers(tokens[0]);
-
       if(!inError) {
         currentIndex=0;
         tokens=tokenStack;
+				tokenStack = {};
+      	setForInterleave(peekToken(),laundryInterleaveAny);
 			}
 	}
-	printTokenVector(tokens);
+	printTokenVector(tokenStack);
 }
 void Parser::setForCookies() {
+
+	std::vector<std::string> interleaveAny = {"Letter","ExactValue","RandomSequence","LeftParen","RightParen"};
   if(tokens.size() > 0) {
   		currentIndex=0;
       setExactValue(tokens[0]);
@@ -517,7 +527,7 @@ void Parser::setForCookies() {
       		currentIndex = 0;
       		tokens = tokenStack;
       		tokenStack={};
-      		setForInterleave(peekToken());
+      		setForInterleave(peekToken(),interleaveAny);
       		
           if(!inError) {
         		currentIndex = 0;
@@ -576,9 +586,9 @@ void Parser::setForRandoms(Token t) {
     t = skipAndPeekToken();
   }
 }
-void Parser::setForInterleave(Token t) {
+void Parser::setForInterleave(Token t,std::vector<std::string> whitelist) {
   while (t.type!="NULL") {
-    ParseInterleave(t); 
+    ParseInterleave(t,whitelist); 
     if(peekToken().type !="NULL") {
       tokenStack.push_back(peekToken());
     }
@@ -689,13 +699,14 @@ void Parser::ParseRandomSequence(Token t) {
     ParseRandomSequence(peekToken());
   } // not a LeftCurly, dont do shit
 }
-void Parser::ParseInterleave(Token t) {
+void Parser::ParseInterleave(Token t,std::vector<std::string> whitelist) {
 	std::vector<std::vector<std::vector<Token>>> stackVec;
   std::vector<Token> tempStack;
   std::vector<Token> output;
 	stackVec.push_back({});
   int parenCount = 0;
-	while(t.type=="Letter"||t.type=="ExactValue"||t.type=="RandomSequence"||t.type=="LeftParen"||t.type=="RightParen") {
+		
+	while(matchesAny(t.type,whitelist)) {
 		if(t.type=="LeftParen") {
 			stackVec.push_back({});
       parenCount++;
@@ -706,7 +717,6 @@ void Parser::ParseInterleave(Token t) {
       if(parenCount > 0) {
         parenCount--;
   			tempStack = interleaveExpand(stackVec.back()); 
-    		printTokenVector(tempStack);    
         //pop top of stack
         	stackVec.pop_back();
   			if(stackVec.size() > 0) {

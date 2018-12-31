@@ -43,7 +43,7 @@ class Parser {
 		void setExactValue(Token t);
 		void setForExactIntegers(Token t);
 		void setForRandoms(Token t);
-		void setForInterleave(Token t);
+		void setForInterleave(Token t,std::vector<std::string> whitelist);
 		void setForAtExpand(Token t);
 		void setForSquareBrackets(Token t);
 		void setFinal(Token t);
@@ -58,7 +58,7 @@ class Parser {
 		void ParseExactValue(Token t);
 		void ParseExactInteger(Token t);
 		void ParseRandomSequence(Token t);
-		void ParseInterleave(Token t);
+		void ParseInterleave(Token t,std::vector<std::string> whitelist);
 		void ParseAtExpand(Token t);
 		void ParseSquareBrackets(Token t);
 		int ParseAtPart(Token t);
@@ -86,6 +86,7 @@ class AbsoluteSequence {
 		int getCurrentAddressAtReadHead();
 		std::string getWorkingStepDisplay();
 };
+bool matchesAny(std::string val, std::vector<std::string> whitelist);
 bool is_digits(const std::string &str);
 void padTo(std::string &str, const size_t num, const char paddingChar );
 std::vector <int> parseString(std::string expr);
