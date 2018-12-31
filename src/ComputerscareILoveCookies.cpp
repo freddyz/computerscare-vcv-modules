@@ -124,6 +124,8 @@ struct ComputerscareILoveCookies : Module {
 
   int activeKnobIndex[numFields] = {0};
  
+  std::vector<ParamWidget*> smallLetterKnobs;
+
 ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
 	void step() override;
 
@@ -158,6 +160,16 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
   }
   void randomizeShuffle() {
 
+  }
+  void wiggleKnobs() {
+   for(int i = 0; i < numKnobs; i++) {
+      float prev = params[KNOB_PARAM+i].value;
+      if(randomUniform() < 0.7) {
+        float rv = (10*randomUniform()+prev)/2;
+        this->smallLetterKnobs[i]->setValue(rv);
+        params[KNOB_PARAM+i].value = rv;
+      }
+    }
   }
   void randomizeTextFields() {
     std::string mainlookup = knobandinputlookup;
@@ -376,6 +388,19 @@ void MyTextFieldCookie::onTextChange() {
     module->updateDisplayBlink(this->rowIndex);
   }
 }
+struct WiggleKnobsMenuItem : MenuItem {
+  ComputerscareILoveCookies *cookies;
+  void onAction(EventAction &e) override {
+   cookies->wiggleKnobs();
+  }
+};
+struct RandomizeTextFieldsMenuItem : MenuItem {
+  ComputerscareILoveCookies *cookies;
+  void onAction(EventAction &e) override {
+   cookies->randomizeTextFields();
+  }
+};
+
 
 struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
@@ -400,7 +425,11 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
   ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareILoveCookiesPanel.svg")));
-
+    /*
+ParamWidget *cellNoteKnob = ParamWidget::create<SmallWhiteKnob>(Vec(knobX, knobY), module, GridSeq::CELL_NOTE_PARAM + idx, 0.0, module->noteParamMax, 3.0);
+      addParam(cellNoteKnob);
+      seqKnobs.push_back(cellNoteKnob);
+    */
 
     for(int i = 0; i < numKnobRows; i++) {
       for(int j = 0; j < numKnobColumns; j++) {
@@ -417,6 +446,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
         ParamWidget* knob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(knobPosX,knobPosY)), module, ComputerscareILoveCookies::KNOB_PARAM +index,  0.f, 10.0f, 0.0f);   
 
+        module->smallLetterKnobs.push_back(knob);
         addParam(knob);
         
       }
@@ -501,7 +531,32 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   MyTextFieldCookie* textField;
   SmallLetterDisplay* smallLetterDisplay;
   SmallLetterDisplay* currentWorkingStepDisplay;
-
+  Menu *createContextMenu() override;
 };
+Menu *ComputerscareILoveCookiesWidget::createContextMenu() {
+  Menu *menu = ModuleWidget::createContextMenu();
+  ComputerscareILoveCookies *cookies = dynamic_cast<ComputerscareILoveCookies*>(module);
+  assert(cookies);
 
+  MenuLabel *spacerLabel = new MenuLabel();
+  menu->addChild(spacerLabel);
+  
+  MenuLabel *modeLabel = new MenuLabel();
+  modeLabel->text = "Horseman Optinos";
+  menu->addChild(modeLabel);
+  
+  WiggleKnobsMenuItem *wiggleKnobsMenuItem = new WiggleKnobsMenuItem();
+  wiggleKnobsMenuItem->text = "Wiggle Knobs";
+  wiggleKnobsMenuItem->cookies = cookies;
+  menu->addChild(wiggleKnobsMenuItem);
+
+  RandomizeTextFieldsMenuItem *randomizeTextFieldsMenuItem = new RandomizeTextFieldsMenuItem();
+  randomizeTextFieldsMenuItem->text = "Randomize Text Fields";
+  randomizeTextFieldsMenuItem->cookies = cookies;
+  menu->addChild(randomizeTextFieldsMenuItem);
+
+  
+
+  return menu;
+}
 Model *modelComputerscareILoveCookies = Model::create<ComputerscareILoveCookies, ComputerscareILoveCookiesWidget>("computerscare", "computerscare-i-love-cookies", "I Love Cookies", SEQUENCER_TAG);

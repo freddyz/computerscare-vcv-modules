@@ -172,16 +172,14 @@ struct SmallLetterDisplay : TransparentWidget {
     NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
     NVGcolor doubleblinkColor = COLOR_COMPUTERSCARE_YELLOW;
 
-          nvgBeginPath(vg);
-      nvgRoundedRect(vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 8.0);
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 4.0);
     if(doubleblink) {
-
       nvgFillColor(vg, doubleblinkColor);
     }
     else {
-        if(blink) {
+      if(blink) {
         nvgFillColor(vg, backgroundColor);
-
       }
       else {
       	nvgFillColor(vg, baseColor);
