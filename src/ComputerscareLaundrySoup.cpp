@@ -283,43 +283,10 @@ void ComputerscareLaundrySoup::step() {
   }
 }
 
-/////////////////////////////////////////////////
-struct NumberDisplayWidget3 : TransparentWidget {
-
-  int *value;
-  std::shared_ptr<Font> font;
-
-  NumberDisplayWidget3() {
-    font = Font::load(assetPlugin(plugin, "res/digital-7.ttf"));
-  };
-
-  void draw(NVGcontext *vg) override
-  {
-    // Background
-    NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
-
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
-    nvgFillColor(vg, backgroundColor);
-    nvgFill(vg);    
-    
-    // text 
-    nvgFontSize(vg, 13);
-    nvgFontFaceId(vg, font->handle);
-    nvgTextLetterSpacing(vg, 2.5);
-
-    std::stringstream to_display;   
-    to_display << std::setw(3) << *value;
-
-    Vec textPos = Vec(6.0f, 17.0f);   
-    NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-    nvgFillColor(vg, textColor);
-    nvgText(vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
-  }
-};
-
 void MyTextField::onTextChange() {
   module->setNextAbsoluteSequence(this->rowIndex);
+  std::string value = module->textFields[this->rowIndex]->text;
+  whoKnowsLaundry(value);
 }
 
 struct ComputerscareLaundrySoupWidget : ModuleWidget {
@@ -361,18 +328,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       addChild(textField);
       module->textFields[i] = textField;
 
-      //active step display
-      /*NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-      display->box.pos = mm2px(Vec(24,verticalStart - 7.2 +verticalSpacing*i));
-      display->box.size = Vec(50, 20);
-      if(&module->numSteps[i]) {
-        display->value = &module->absoluteStep[i];
-      }
-      else {
-        display->value = 0;
-      }
-      addChild(display);*/
-
+      // active / total steps display
       smallLetterDisplay = new SmallLetterDisplay();
       smallLetterDisplay->box.pos = mm2px(Vec(20,verticalStart - 9.2 +verticalSpacing*i));
       smallLetterDisplay->box.size = Vec(60, 30);

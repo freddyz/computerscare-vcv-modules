@@ -45,7 +45,7 @@ class Parser {
 		void setForChanceOfIntegers(Token t);
 		void setForRandoms(Token t);
 		void setForInterleave(Token t,std::vector<std::string> whitelist);
-		void setForAtExpand(Token t);
+		void setForAtExpand(Token t, std::vector<std::string> whitelist, bool laundryMode);
 		void setForSquareBrackets(Token t);
 		void setFinal(Token t);
 		bool inError;
@@ -54,13 +54,14 @@ class Parser {
 		std::vector<float> exactFloats;
 		std::vector<std::vector<Token>> randomVector;
 		std::vector<Token> countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum);
+		std::vector<Token> countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum, bool laundryMode);
 	private:
 		int currentIndex;
 		void ParseExactValue(Token t);
 		void ParseExactInteger(Token t);
 		void ParseRandomSequence(Token t);
 		void ParseInterleave(Token t,std::vector<std::string> whitelist);
-		void ParseAtExpand(Token t);
+		void ParseAtExpand(Token t, std::vector<std::string> whitelist, bool laundryMode);
 		void ParseSquareBrackets(Token t);
 		void ParseChanceOfInteger(Token t);
 		int ParseAtPart(Token t);
