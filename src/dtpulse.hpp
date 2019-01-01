@@ -53,8 +53,8 @@ class Parser {
 		std::vector<Token> tokenStack;
 		std::vector<float> exactFloats;
 		std::vector<std::vector<Token>> randomVector;
+		std::vector<Token> atExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum);
 		std::vector<Token> countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum);
-		std::vector<Token> countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum, bool laundryMode);
 	private:
 		int currentIndex;
 		void ParseExactValue(Token t);

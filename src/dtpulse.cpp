@@ -798,10 +798,10 @@ void Parser::ParseAtExpand(Token t, std::vector<std::string> whitelist, bool lau
 		}
 		atNum = ParseAtPart(t);
     if(laundryMode) {
-      
+      proposedTokens = atExpandTokens(tokenVec,atNum);
     }
     else {
-		  proposedTokens = countExpandTokens(tokenVec,atNum); 
+		  proposedTokens = countExpandTokens(tokenVec,atNum);
     }
 		tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
 	}
@@ -833,28 +833,65 @@ void Parser::ParseSquareBrackets(Token t) {
 		}
 	}
 }
-std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
-  return countExpandTokens(tokenVecVec,atNum,false);
+std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
+  std::vector<Token> output = {};
+  Token thisToken = Token("error","error");
+  int sum = 0;
+  int thisLength=0;
+  int innerDex = 0;
+  std::string thisVal;
+  for(unsigned int i = 0; i < tokenVecVec.size(); i++) {
+    int sectionSize = (int) tokenVecVec[i].size();
+    innerDex = 0;
+    if(atNum > -1) {
+      while(sum < atNum) {
+        thisToken = tokenVecVec[i][innerDex % sectionSize];
+        if(thisToken.type=="Digit" || thisToken.type=="Letter") {
+          thisLength = b64lookup.find(thisToken.value)+1;
+        }
+        else if(thisToken.type=="Integer" || thisToken.type=="ChanceOfInteger") {
+          thisLength = std::stoi(thisToken.value);
+        }
+
+        if((atNum - sum) < thisLength) {
+          thisLength = (atNum-sum);
+        }
+
+        sum += thisLength;
+        output.push_back(Token(thisToken.type,std::to_string(thisLength)));
+        innerDex++;
+      }
+    }
+    else {
+      output.insert( output.end(), tokenVecVec[i].begin(), tokenVecVec[i].end() );
+    }
+  }
+  return output;
 }
-std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum, bool laundryMode) {
+std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
 	std::vector<Token> output;	
   printTokenVector(tokenVecVec);
 	for(unsigned int i=0; i < tokenVecVec.size(); i++) { 
-		int sizeMod = (int) tokenVecVec[i].size();
-		atNum = atNum==-1 ? sizeMod : atNum;
-		if(sizeMod > 0 ) {
-			for(int j = 0; j < atNum; j++) {
-				if(tokenVecVec[i].size()) {
-					output.push_back(tokenVecVec[i][j % sizeMod]);
-				}
-				else { //tokenVecVec[i].size()==0
-					//output.push_back(Token("Zero",""));
-				}
-			}
-		}
-		else { //sizeMod <= 0
-			output.push_back(Token("Zero",""));
-		}
+    if(atNum > -1) {
+  		int sizeMod = (int) tokenVecVec[i].size();
+  		atNum = atNum==-1 ? sizeMod : atNum;
+  		if(sizeMod > 0 ) {
+  			for(int j = 0; j < atNum; j++) {
+  				if(tokenVecVec[i].size()) {
+  					output.push_back(tokenVecVec[i][j % sizeMod]);
+  				}
+  				else { //tokenVecVec[i].size()==0
+  					//output.push_back(Token("Zero",""));
+  				}
+  			}
+  		}
+  		else { //sizeMod <= 0
+  			output.push_back(Token("Zero",""));
+  		}
+    }
+    else {
+      output.insert( output.end(), tokenVecVec[i].begin(), tokenVecVec[i].end() );
+    }
 	}
 	return output;
 }
