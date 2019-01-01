@@ -46,8 +46,8 @@ class Parser {
 		void setForRandoms(Token t);
 		void setForInterleave(Token t,std::vector<std::string> whitelist);
 		void setForAtExpand(Token t, std::vector<std::string> whitelist, bool laundryMode);
-		void setForSquareBrackets(Token t);
-		void setFinal(Token t);
+		void setForSquareBrackets(Token t, std::vector<std::string> whitelist, bool laundryMode);
+		void setFinal(Token t, std::vector<std::string> whitelist);
 		bool inError;
 		std::string parseFloat(Token t);
 		std::vector<Token> tokenStack;
@@ -62,7 +62,7 @@ class Parser {
 		void ParseRandomSequence(Token t);
 		void ParseInterleave(Token t,std::vector<std::string> whitelist);
 		void ParseAtExpand(Token t, std::vector<std::string> whitelist, bool laundryMode);
-		void ParseSquareBrackets(Token t);
+		void ParseSquareBrackets(Token t, std::vector<std::string> whitelist, bool laundryMode);
 		void ParseChanceOfInteger(Token t);
 		int ParseAtPart(Token t);
 };

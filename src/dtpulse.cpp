@@ -498,9 +498,12 @@ Parser::Parser(std::string expr) {
   inError = false;
 }
 void Parser::setForLaundry() {
-	std::vector<std::string> laundryInterleaveAny = {"Letter","Integer","ChanceOfInteger","Digit","LeftParen","RightParen"};
+	//whitelists
+  std::vector<std::string> laundryInterleaveAny = {"Letter","Integer","ChanceOfInteger","Digit","LeftParen","RightParen"};
   std::vector<std::string> laundryAtExpandAny = {"Letter","Digit","ChanceOfInteger","Integer"};
-  
+  std::vector<std::string> laundrySquareAny = {"Letter","Digit","ChanceOfInteger","Integer", "Comma"};
+  std::vector<std::string> laundryFinalAny = {"Letter","Digit","ChanceOfInteger","Integer"};
+ 
   if(tokens.size() > 0) {
 		currentIndex=0;
     setForExactIntegers(tokens[0]);
@@ -519,6 +522,22 @@ void Parser::setForLaundry() {
           tokens=tokenStack;
           tokenStack = {};
           setForAtExpand(peekToken(),laundryAtExpandAny, true);
+
+          if(!inError) {
+              currentIndex = 0;
+              tokens=tokenStack;
+              printf("  Laundry tokenStack pre-setForSquare:\n");
+              printTokenVector(tokenStack);
+              tokenStack = {};
+
+              setForSquareBrackets(peekToken(),laundrySquareAny,true);
+              if(!inError) {
+                currentIndex = 0;
+                tokens=tokenStack;
+                tokenStack = {};
+                setFinal(peekToken(),laundryFinalAny);
+              }
+            }
         }
       }
 		}
@@ -530,6 +549,8 @@ void Parser::setForCookies() {
 
 	std::vector<std::string> interleaveAny = {"Letter","ExactValue","RandomSequence","LeftParen","RightParen"};
   std::vector<std::string> atExpandAny = {"Letter" ,"RandomSequence","ExactValue"};
+ std::vector<std::string> cookiesSquareAny = {"ExactValue","Letter","RandomSequence","Comma"};
+    std::vector<std::string> cookiesFinalAny = {"Letter","ExactValue","RandomSequence","Zero"};
 
   if(tokens.size() > 0) {
   		currentIndex=0;
@@ -556,12 +577,12 @@ void Parser::setForCookies() {
 							currentIndex = 0;
 							tokens=tokenStack;
 							tokenStack = {};
-							setForSquareBrackets(peekToken());
+							setForSquareBrackets(peekToken(),cookiesSquareAny,false);
 							if(!inError) {
 								currentIndex = 0;
 								tokens=tokenStack;
 								tokenStack = {};
-								setFinal(peekToken());
+								setFinal(peekToken(),cookiesFinalAny);
 							}
 						}
           }
@@ -569,9 +590,9 @@ void Parser::setForCookies() {
       }
     }
 	}
-void Parser::setFinal(Token t) {
+void Parser::setFinal(Token t, std::vector<std::string> whitelist) {
 	while (t.type!="NULL") {
-		if(t.type=="Letter" || t.type=="ExactValue" || t.type=="RandomSequence" || t.type =="Zero") {
+		if(matchesAny(t.type,whitelist)) {
 			tokenStack.push_back(t);
 		}
 		else if(t.type=="Comma") {
@@ -621,9 +642,9 @@ void Parser::setForAtExpand(Token t, std::vector<std::string> whitelist, bool la
     t = skipAndPeekToken();
   }
 }
-void Parser::setForSquareBrackets(Token t) {
+void Parser::setForSquareBrackets(Token t, std::vector<std::string> whitelist, bool laundryMode) {
   while (t.type!="NULL") {
-    ParseSquareBrackets(t); 
+    ParseSquareBrackets(t,whitelist, laundryMode); 
     if(peekToken().type !="NULL") {
       tokenStack.push_back(peekToken());
     }
@@ -806,14 +827,14 @@ void Parser::ParseAtExpand(Token t, std::vector<std::string> whitelist, bool lau
 		tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
 	}
 }
-void Parser::ParseSquareBrackets(Token t) {
+void Parser::ParseSquareBrackets(Token t,std::vector<std::string> whitelist, bool laundryMode) {
   std::vector<Token> proposedTokens;
 	std::vector<std::vector<Token>> insideOfBrackets;
 	int atNum;
 	if(t.type=="LeftSquare") {
 		t=skipAndPeekToken();
 		insideOfBrackets.push_back({});
-		while(t.type=="ExactValue" || t.type=="Letter" || t.type=="RandomSequence" || t.type=="Comma") {
+		while(matchesAny(t.type,whitelist)) {
 			if(t.type=="Comma") {
 				insideOfBrackets.push_back({});
 			}
@@ -825,7 +846,12 @@ void Parser::ParseSquareBrackets(Token t) {
 		if(t.type=="RightSquare") {
 			t = skipAndPeekToken();
 			atNum = ParseAtPart(t);
-			proposedTokens = countExpandTokens(insideOfBrackets,atNum);
+      if(laundryMode) {
+        proposedTokens = atExpandTokens(insideOfBrackets,atNum);
+      }
+      else {
+			 proposedTokens = countExpandTokens(insideOfBrackets,atNum);
+      }
   		tokenStack.insert(tokenStack.end(),proposedTokens.begin(),proposedTokens.end());
 		}
 		else {
@@ -841,9 +867,14 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
   int innerDex = 0;
   std::string thisVal;
   for(unsigned int i = 0; i < tokenVecVec.size(); i++) {
-    int sectionSize = (int) tokenVecVec[i].size();
-    innerDex = 0;
-    if(atNum > -1) {
+
+    if(atNum == -1) {
+      output.insert( output.end(), tokenVecVec[i].begin(), tokenVecVec[i].end() );
+    }
+    else {
+      int sectionSize = (int) tokenVecVec[i].size();
+      innerDex = 0;
+      sum=0;
       while(sum < atNum) {
         thisToken = tokenVecVec[i][innerDex % sectionSize];
         if(thisToken.type=="Digit" || thisToken.type=="Letter") {
@@ -862,15 +893,11 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
         innerDex++;
       }
     }
-    else {
-      output.insert( output.end(), tokenVecVec[i].begin(), tokenVecVec[i].end() );
-    }
   }
   return output;
 }
 std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
-	std::vector<Token> output;	
-  printTokenVector(tokenVecVec);
+	std::vector<Token> output;
 	for(unsigned int i=0; i < tokenVecVec.size(); i++) { 
     if(atNum > -1) {
   		int sizeMod = (int) tokenVecVec[i].size();
