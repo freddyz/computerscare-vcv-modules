@@ -380,8 +380,79 @@ void whoKnows(std::string input) {
   }
 }
 void whoKnowsLaundry(std::string input) {
-	Parser p = Parser(input);
-	p.setForLaundry();
+	LaundrySoupSequence laundry = LaundrySoupSequence(input);
+ srand (time(NULL));
+  printf("  Laundry tokenStack:\n");
+	printTokenVector(laundry.tokenStack);
+  printf("  Laundry pulseSequence:\n");
+	printVector(laundry.pulseSequence);
+
+	printf("  iteration:\n");
+  for(int j = 0; j < 13; j++) {
+    laundry.incrementAndCheck();
+    printVector(laundry.workingPulseSequence);
+  }
+
+}
+LaundrySoupSequence::LaundrySoupSequence() {
+	LaundrySoupSequence("");
+}
+LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
+	std::vector<Token> defaultStack;
+  defaultStack.push_back(Token("Error", "error",-1));
+	if(expr != "") {
+		Parser p = Parser(expr);
+		p.setForLaundry();
+  	if(p.inError || !p.tokenStack.size()) { 
+   	 	tokenStack = defaultStack;
+  	}
+		else {
+  		tokenStack = p.tokenStack;
+		}
+	}
+	else {
+		tokenStack = defaultStack;
+	}
+	pulseSequence = makePulseSequence(tokenStack);
+	workingPulseSequence = duplicateIntVector(pulseSequence);
+	numSteps = (int) pulseSequence.size();
+	readHead = -1;
+}
+std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> tokens) {
+	std::vector<int> output = {};
+	int thisVal;
+	int thisGate;
+	for(unsigned int i = 0; i < tokens.size(); i++) {
+		thisVal = tokens[i].duration;
+		thisGate = (tokens[i].type=="ChanceOfInteger" ? 2 : (tokens[i].value=="0" ? 0 : 1)); 
+		output.push_back(thisGate);
+		for(int j = 1; j<thisVal; j++) {
+			output.push_back(0);	
+		}
+	}
+	return output;
+}
+void LaundrySoupSequence::skipStep() {
+  readHead++;
+  readHead %= numSteps;
+}
+int LaundrySoupSequence::skipAndPeek() {
+  skipStep();
+  return peekStep();
+}
+int LaundrySoupSequence::peekStep() {
+  return pulseSequence[readHead];
+}
+int LaundrySoupSequence::peekWorkingStep() {
+	return workingPulseSequence[readHead];
+}
+void LaundrySoupSequence::incrementAndCheck() {
+	if(skipAndPeek() == 2) {
+    randomizePulseValue(readHead);
+	}
+}
+void LaundrySoupSequence::randomizePulseValue(int index) {
+	workingPulseSequence[index] = (rand() % 2);
 }
 AbsoluteSequence::AbsoluteSequence() {
   AbsoluteSequence("a",knobandinputlookup);
@@ -452,7 +523,7 @@ std::string AbsoluteSequence::getWorkingStepDisplay() {
     return str;
   }
   else {
-		return std::to_string((long double) exactFloats[stepIndex - 52]).substr(0,4);;
+		return std::to_string((long double) exactFloats[stepIndex - 52]).substr(0,4);
   }
 }
 
@@ -486,12 +557,21 @@ Token::Token(std::string t, std::string v) {
 	type = t;
 	value = v;
 	index = -1;
+	duration =1;
 }
 Token::Token(std::string t, std::string v, int dex) {
   type = t;
   value = v;
   index = dex;
+	duration=1;
 }
+Token::Token(std::string t, std::string v, int dex, int dur) {
+  type = t;
+  value = v;
+  index = dex;
+	duration = dur;
+}
+
 Parser::Parser(std::string expr) {
 	tokens = tokenizeString(expr);
 	expression=expr;
@@ -506,6 +586,11 @@ void Parser::setForLaundry() {
  
   if(tokens.size() > 0) {
 		currentIndex=0;
+		replaceLettersWithNumbers(tokens[0]);
+		currentIndex=0;
+		tokens=tokenStack;
+		tokenStack={};
+
     setForExactIntegers(tokens[0]);
     if(!inError) {
       currentIndex=0;
@@ -526,11 +611,9 @@ void Parser::setForLaundry() {
           if(!inError) {
               currentIndex = 0;
               tokens=tokenStack;
-              printf("  Laundry tokenStack pre-setForSquare:\n");
-              printTokenVector(tokenStack);
               tokenStack = {};
-
               setForSquareBrackets(peekToken(),laundrySquareAny,true);
+
               if(!inError) {
                 currentIndex = 0;
                 tokens=tokenStack;
@@ -542,8 +625,6 @@ void Parser::setForLaundry() {
       }
 		}
 	}
-  printf("  Laundry tokenStack:\n");
-	printTokenVector(tokenStack);
 }
 void Parser::setForCookies() {
 
@@ -660,6 +741,25 @@ void Parser::setForExactIntegers(Token t) {
 		t = skipAndPeekToken();
 	}
 }
+void Parser::replaceLettersWithNumbers(Token t) {
+	std::string letterVal;
+	int intVal;
+	while(t.type!="NULL") {
+		if(t.type =="Letter") {
+			intVal= b64lookup.find(t.value)+1;
+			letterVal=std::to_string(static_cast<long long>(intVal));
+			tokenStack.push_back(Token("Integer",letterVal,-1,intVal));
+		}
+		else if(t.type=="Digit") {
+			tokenStack.push_back(Token("Digit",t.value,-1,t.value=="0" ? 1 : std::stoi(t.value)));
+		}
+		else {
+			tokenStack.push_back(t);
+		}
+		t = skipAndPeekToken();
+	}
+}
+
 void Parser::setForChanceOfIntegers(Token t) {
 	while(t.type!="NULL") {
 		ParseChanceOfInteger(t);
@@ -676,11 +776,11 @@ void Parser::ParseChanceOfInteger(Token t) {
 		last = t;
 		t = skipAndPeekToken();
 		if(t.type=="Question") {
-			tokenStack.push_back(Token("ChanceOfInteger",last.value));	
+			tokenStack.push_back(Token("ChanceOfInteger",last.value,-1,std::stoi(last.value)));	
 			t=skipAndPeekToken();
 		}
 		else {
-			tokenStack.push_back(Token(last.type,last.value));
+			tokenStack.push_back(last);
 		}
 		setForChanceOfIntegers(t);
 	}
@@ -694,8 +794,9 @@ void Parser::ParseExactInteger(Token t) {
 			t = skipAndPeekToken();
 		}
 		if(t.type=="RightAngle") {
+			num=(num=="") ? "1" : num;
 			t=skipAndPeekToken();
-			tokenStack.push_back(Token("Integer",num));				
+			tokenStack.push_back(Token("Integer",num,-1,std::stoi(num)));				
 			setForExactIntegers(t);
 		}
 		else {
@@ -865,6 +966,7 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
   int sum = 0;
   int thisLength=0;
   int innerDex = 0;
+	std::string newType;
   std::string thisVal;
   for(unsigned int i = 0; i < tokenVecVec.size(); i++) {
 
@@ -877,10 +979,12 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
       sum=0;
       while(sum < atNum) {
         thisToken = tokenVecVec[i][innerDex % sectionSize];
-        if(thisToken.type=="Digit" || thisToken.type=="Letter") {
+        if( thisToken.type=="Letter") {
           thisLength = b64lookup.find(thisToken.value)+1;
+					newType="Integer";
         }
-        else if(thisToken.type=="Integer" || thisToken.type=="ChanceOfInteger") {
+        else if(thisToken.type =="Digit" || thisToken.type=="Integer" || thisToken.type=="ChanceOfInteger") {
+					newType = thisToken.type;
           thisLength = std::stoi(thisToken.value);
         }
 
@@ -889,7 +993,7 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
         }
 
         sum += thisLength;
-        output.push_back(Token(thisToken.type,std::to_string(thisLength)));
+        output.push_back(Token(newType,std::to_string(static_cast<long long>(thisLength)),-1,thisLength));
         innerDex++;
       }
     }
@@ -986,7 +1090,7 @@ std::string Parser::parseFloat(Token t)
     return number;
 }
 void Token::print() {
-	printf("type: %s   value: %s   index: %i\n",type.c_str(),value.c_str(),index);
+	printf("type: %s   value: %s   index: %i  dur:%i\n",type.c_str(),value.c_str(),index,duration);
 }
 std::vector<Token> tokenizeString(std::string input) {
 	std::vector<Token> stack;

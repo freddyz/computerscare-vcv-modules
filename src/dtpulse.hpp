@@ -22,7 +22,9 @@ class Token {
 		std::string type;
 		std::string value;
 		int index;
+		int duration;
 		Token(std::string t, std::string v);
+		Token(std::string t, std::string v, int dex, int dur);
 		Token(std::string t, std::string v, int dex);
 		void print();
 };
@@ -44,6 +46,7 @@ class Parser {
 		void setForExactIntegers(Token t);
 		void setForChanceOfIntegers(Token t);
 		void setForRandoms(Token t);
+		void replaceLettersWithNumbers(Token t);
 		void setForInterleave(Token t,std::vector<std::string> whitelist);
 		void setForAtExpand(Token t, std::vector<std::string> whitelist, bool laundryMode);
 		void setForSquareBrackets(Token t, std::vector<std::string> whitelist, bool laundryMode);
@@ -88,6 +91,24 @@ class AbsoluteSequence {
 		int getReadHead();
 		int getCurrentAddressAtReadHead();
 		std::string getWorkingStepDisplay();
+};
+class LaundrySoupSequence {
+	public:
+		LaundrySoupSequence(std::string expr);
+		LaundrySoupSequence();
+		std::vector<Token> tokenStack;
+		std::vector<int> pulseSequence;
+		std::vector<int> workingPulseSequence;
+		std::vector<int> makePulseSequence(std::vector<Token> tokens);
+		int readHead;
+		int numSteps;
+		void print();
+		int peekStep();
+		void skipStep();
+		int skipAndPeek();
+		int peekWorkingStep();
+		void incrementAndCheck();
+		void randomizePulseValue(int index);
 };
 bool matchesAny(std::string val, std::vector<std::string> whitelist);
 bool is_digits(const std::string &str);
