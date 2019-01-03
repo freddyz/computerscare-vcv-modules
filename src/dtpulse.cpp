@@ -988,15 +988,15 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
         }
         else if(thisToken.type =="Digit" || thisToken.type=="Integer" || thisToken.type=="ChanceOfInteger") {
 					newType = thisToken.type;
-          thisLength = std::stoi(thisToken.value);
+          thisLength = thisToken.duration; 
         }
 
         if((atNum - sum) < thisLength) {
           thisLength = (atNum-sum);
         }
-
+				thisVal = (thisToken.value=="0") ? "0" :std::to_string(static_cast<long long>(thisLength));
         sum += thisLength;
-        output.push_back(Token(newType,std::to_string(static_cast<long long>(thisLength)),-1,thisLength));
+        output.push_back(Token(newType,thisVal,-1,thisLength));
         innerDex++;
       }
     }
