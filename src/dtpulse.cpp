@@ -381,12 +381,8 @@ void whoKnows(std::string input) {
 }
 void whoKnowsLaundry(std::string input) {
 	LaundrySoupSequence laundry = LaundrySoupSequence(input);
- srand (time(NULL));
-  printf("  Laundry tokenStack:\n");
-	printTokenVector(laundry.tokenStack);
-  printf("  Laundry pulseSequence:\n");
-	printVector(laundry.pulseSequence);
-
+ 
+  laundry.print();
 	printf("  iteration:\n");
   for(int j = 0; j < 13; j++) {
     laundry.incrementAndCheck();
@@ -417,6 +413,12 @@ LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
 	workingPulseSequence = duplicateIntVector(pulseSequence);
 	numSteps = (int) pulseSequence.size();
 	readHead = -1;
+}
+void LaundrySoupSequence::print() {
+  printf("  Laundry tokenStack:\n");
+  printTokenVector(tokenStack);
+  printf("  Laundry pulseSequence:\n");
+  printVector(pulseSequence);
 }
 std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> tokens) {
 	std::vector<int> output = {};
@@ -460,6 +462,7 @@ AbsoluteSequence::AbsoluteSequence() {
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
 	std::vector<Token> defaultStack;
   defaultStack.push_back(Token("Error", "error",-1));
+   srand (time(NULL));
   //expr = expr=="" ? "a" : expr;
 	if(expr != "") {
 		Parser p = Parser(expr);

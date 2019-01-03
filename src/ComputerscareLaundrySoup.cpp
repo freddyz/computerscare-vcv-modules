@@ -107,6 +107,8 @@ struct ComputerscareLaundrySoup : Module {
   int absoluteStep[numFields] = {0};
   int numSteps[numFields] = {0};
 
+  LaundrySoupSequence laundrySequences[numFields];
+
   bool shouldChange[numFields] = {false};
   
 ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
@@ -172,6 +174,8 @@ void setAbsoluteSequenceFromQueue(int index) {
   absoluteSequences[index].resize(0);
   absoluteSequences[index] = nextAbsoluteSequences[index];
   numSteps[index] = nextAbsoluteSequences[index].size() > 0 ? nextAbsoluteSequences[index].size() : 1;
+  laundrySequences[index] = LaundrySoupSequence(textFields[index]->text);
+  laundrySequences[index].print(); 
 }
 void checkIfShouldChange(int index) {
   if(shouldChange[index]) {
@@ -204,17 +208,32 @@ void onCreate () override
   */
   void incrementInternalStep(int i) {
 
+    laundrySequences[i].incrementAndCheck();
+
+    if(laundrySequences[i].readHead == 0) {
+      this->setChangeImminent(i,false);
+    }
     this->absoluteStep[i] += 1;
     this->absoluteStep[i] %= this->numSteps[i];
 
     this->smallLetterDisplays[i]->value = this->getDisplayString(i);
   }
-  std::string getDisplayString(int i) {
-    std::string out = std::to_string(this->absoluteStep[i]+1);
-    out += "\n" + std::to_string(this->numSteps[i]);
-    return out;
+  std::string getDisplayString(int index) {
+    std::string lhs = std::to_string(this->laundrySequences[index].readHead + 1);
+    std::string rhs =  std::to_string(this->laundrySequences[index].numSteps);
+
+    padTo(lhs, 3,' ');
+    padTo(rhs, 3,' ');
+    
+    std::string val = lhs + "\n" + rhs;
+
+    return val;
+  }
+  void setChangeImminent(int i,bool value) {
+    this->smallLetterDisplays[i]->doubleblink = value;
   }
   void resetOneOfThem(int i) {
+    this->laundrySequences[i].readHead = -1;
     this->absoluteStep[i] = -1;
   }
 };
@@ -254,11 +273,12 @@ void ComputerscareLaundrySoup::step() {
       }
       else {
         if ((inputs[GLOBAL_CLOCK_INPUT].active && clocked) || globalManualClockClicked) {
-          incrementInternalStep(i);   
+          incrementInternalStep(i);
         }
       }
 
-      atFirstStep = (this->absoluteStep[i] == 0);
+      //atFirstStep = (this->absoluteStep[i] == 0);
+      atFirstStep = (this->laundrySequences[i].readHead == 0);
 
       if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered) || globalManualResetClicked || currentManualResetClicked) {
         checkIfShouldChange(i);
@@ -269,8 +289,8 @@ void ComputerscareLaundrySoup::step() {
           checkIfShouldChange(i);
         }
       }
-      activeStep = absoluteSequences[i][this->absoluteStep[i]]==1;
-
+      //activeStep = absoluteSequences[i][this->absoluteStep[i]]==1;
+      activeStep = (this->laundrySequences[i].peekWorkingStep() == 1);
     }
     if(inputs[CLOCK_INPUT + i].active) {
       outputs[TRG_OUTPUT + i].value = (currentTriggerIsHigh && activeStep) ? 10.0f : 0.0f;
@@ -284,9 +304,11 @@ void ComputerscareLaundrySoup::step() {
 }
 
 void MyTextField::onTextChange() {
-  module->setNextAbsoluteSequence(this->rowIndex);
   std::string value = module->textFields[this->rowIndex]->text;
-  whoKnowsLaundry(value);
+  if(matchParens(value)) {
+    module->setNextAbsoluteSequence(this->rowIndex);
+    whoKnowsLaundry(value);
+  }
 }
 
 struct ComputerscareLaundrySoupWidget : ModuleWidget {
