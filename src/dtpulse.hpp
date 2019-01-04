@@ -83,6 +83,7 @@ class AbsoluteSequence {
 		int readHead;
 		int numTokens;
 		void print();
+		bool inError;
 		void skipStep();
 		int peekStep();
 		int peekWorkingStep();
@@ -102,6 +103,7 @@ class LaundrySoupSequence {
 		std::vector<int> makePulseSequence(std::vector<Token> tokens);
 		int readHead;
 		int numSteps;
+		bool inError;
 		void print();
 		int peekStep();
 		void skipStep();

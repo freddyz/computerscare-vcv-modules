@@ -401,13 +401,16 @@ LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
 		p.setForLaundry();
   	if(p.inError || !p.tokenStack.size()) { 
    	 	tokenStack = defaultStack;
+      inError=true;
   	}
 		else {
   		tokenStack = p.tokenStack;
+      inError=false;
 		}
 	}
 	else {
 		tokenStack = defaultStack;
+    inError=false;
 	}
 	pulseSequence = makePulseSequence(tokenStack);
 	workingPulseSequence = duplicateIntVector(pulseSequence);
@@ -471,13 +474,16 @@ AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
   	randomTokens=p.randomVector;
   	if(p.inError || !p.tokenStack.size()) { 
    	 	tokenStack = defaultStack;
+      inError = true;
   	}
 		else {
   		tokenStack = p.tokenStack;
+      inError=false;
 		}
 	}
 	else {
 		tokenStack = defaultStack;
+    inError=false;
 	}
   numTokens = tokenStack.size();
 	indexSequence = getIndicesFromTokenStack(tokenStack);
