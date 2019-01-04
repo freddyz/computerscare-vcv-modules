@@ -987,7 +987,7 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
       innerDex = 0;
       sum=0;
       while(sum < atNum) {
-        thisToken = tokenVecVec[i][innerDex % sectionSize];
+        thisToken = tokenVecVec[i].size() ? tokenVecVec[i][innerDex % sectionSize] : Token("Integer","0",-1,1);
         if( thisToken.type=="Letter") {
           thisLength = b64lookup.find(thisToken.value)+1;
 					newType="Integer";
