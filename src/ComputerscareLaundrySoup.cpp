@@ -17,6 +17,7 @@ class MyTextField : public LedDisplayTextField {
 public:
   int fontSize = 16;
   int rowIndex=0;
+  bool inError = false;
   MyTextField() : LedDisplayTextField() {}
   void setModule(ComputerscareLaundrySoup* _module) {
     module = _module;
@@ -36,9 +37,17 @@ public:
     // Background
     nvgFontSize(vg, fontSize);
     nvgBeginPath(vg);
-    nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 5.0);
-    nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
-    nvgFill(vg);
+    nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 10.0);
+    
+    if(inError) {
+      nvgFillColor(vg, COLOR_COMPUTERSCARE_PINK);
+    }
+    else {
+      nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
+    //nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
+   
+    }
+     nvgFill(vg);
 
     // Text
     if (font->handle >= 0) {
@@ -174,8 +183,19 @@ void setAbsoluteSequenceFromQueue(int index) {
   absoluteSequences[index].resize(0);
   absoluteSequences[index] = nextAbsoluteSequences[index];
   numSteps[index] = nextAbsoluteSequences[index].size() > 0 ? nextAbsoluteSequences[index].size() : 1;
-  laundrySequences[index] = LaundrySoupSequence(textFields[index]->text);
-  laundrySequences[index].print(); 
+  
+  LaundrySoupSequence lss = LaundrySoupSequence(textFields[index]->text);
+  laundrySequences[index] = lss;
+  if(!lss.inError) {
+    laundrySequences[index] = lss;
+    laundrySequences[index].print(); 
+    textFields[index]->inError=false;
+  }
+  else {
+    printf("ERROR\n");
+    lss.print();
+    textFields[index]->inError=true;
+  }
 }
 void checkIfShouldChange(int index) {
   if(shouldChange[index]) {
@@ -305,6 +325,13 @@ void ComputerscareLaundrySoup::step() {
 
 void MyTextField::onTextChange() {
   std::string value = module->textFields[this->rowIndex]->text;
+  LaundrySoupSequence lss = LaundrySoupSequence(value);
+  if(!lss.inError) {
+    module->textFields[this->rowIndex]->inError=false;
+  }
+  else {
+    module->textFields[this->rowIndex]->inError=true;
+  }
   if(matchParens(value)) {
     module->setNextAbsoluteSequence(this->rowIndex);
     whoKnowsLaundry(value);

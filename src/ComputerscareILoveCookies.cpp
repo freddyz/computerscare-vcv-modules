@@ -30,6 +30,7 @@ class MyTextFieldCookie : public LedDisplayTextField {
 public:
   int fontSize = LG_FONT_SIZE;
   int rowIndex=0;
+  
   MyTextFieldCookie() : LedDisplayTextField() {}
   void setModule(ComputerscareILoveCookies* _module) {
     module = _module;
