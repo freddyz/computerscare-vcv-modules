@@ -44,8 +44,6 @@ public:
     }
     else {
       nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
-    //nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
-   
     }
      nvgFill(vg);
 
@@ -110,13 +108,9 @@ struct ComputerscareLaundrySoup : Module {
 
   SchmittTrigger manualResetTriggers[numFields];
 
-  std::vector<int> absoluteSequences[numFields];
-  std::vector<int> nextAbsoluteSequences[numFields];
-
-  int absoluteStep[numFields] = {0};
-  int numSteps[numFields] = {0};
-
   LaundrySoupSequence laundrySequences[numFields];
+
+  bool activeStep[numFields] = {false};
 
   bool shouldChange[numFields] = {false};
   
@@ -176,14 +170,8 @@ ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIG
 
 void setNextAbsoluteSequence(int index) {
   shouldChange[index] = true;
-  nextAbsoluteSequences[index].resize(0);
-  nextAbsoluteSequences[index]  = parseStringAsTimes(textFields[index]->text,b64lookup);  
 }
 void setAbsoluteSequenceFromQueue(int index) {
-  absoluteSequences[index].resize(0);
-  absoluteSequences[index] = nextAbsoluteSequences[index];
-  numSteps[index] = nextAbsoluteSequences[index].size() > 0 ? nextAbsoluteSequences[index].size() : 1;
-  
   LaundrySoupSequence lss = LaundrySoupSequence(textFields[index]->text);
   laundrySequences[index] = lss;
   if(!lss.inError) {
@@ -201,7 +189,11 @@ void checkIfShouldChange(int index) {
   if(shouldChange[index]) {
     setAbsoluteSequenceFromQueue(index);
     shouldChange[index] = false;
+    updateDisplayBlink(index);
   }
+}
+void updateDisplayBlink(int index) {
+  smallLetterDisplays[index]->blink = shouldChange[index];
 }
 void onCreate () override
   {
@@ -227,15 +219,10 @@ void onCreate () override
 
   */
   void incrementInternalStep(int i) {
-
     laundrySequences[i].incrementAndCheck();
-
     if(laundrySequences[i].readHead == 0) {
       this->setChangeImminent(i,false);
     }
-    this->absoluteStep[i] += 1;
-    this->absoluteStep[i] %= this->numSteps[i];
-
     this->smallLetterDisplays[i]->value = this->getDisplayString(i);
   }
   std::string getDisplayString(int index) {
@@ -254,7 +241,6 @@ void onCreate () override
   }
   void resetOneOfThem(int i) {
     this->laundrySequences[i].readHead = -1;
-    this->absoluteStep[i] = -1;
   }
 };
 
@@ -262,7 +248,6 @@ void onCreate () override
 void ComputerscareLaundrySoup::step() {
 
   bool globalGateIn = globalClockTrigger.isHigh();
-  bool activeStep = false;
   bool atFirstStep = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool currentTriggerIsHigh = false;
@@ -277,7 +262,6 @@ void ComputerscareLaundrySoup::step() {
   bool currentManualResetClicked;
 
   for(int i = 0; i < numFields; i++) {
-    activeStep = false;
     currentResetActive = inputs[RESET_INPUT + i].active;
     currentResetTriggered = resetTriggers[i].process(inputs[RESET_INPUT+i].value / 2.f);
     currentTriggerIsHigh = clockTriggers[i].isHigh();
@@ -285,19 +269,22 @@ void ComputerscareLaundrySoup::step() {
 
     currentManualResetClicked = manualResetTriggers[i].process(params[INDIVIDUAL_RESET_PARAM + i].value);
 
-    if(this->numSteps[i] > 0) {
+    if(this->laundrySequences[i].numSteps > 0) {
       if (inputs[CLOCK_INPUT + i].active) {
         if(currentTriggerClocked || globalManualClockClicked) {
           incrementInternalStep(i);
+          activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
+       
         }
       }
       else {
         if ((inputs[GLOBAL_CLOCK_INPUT].active && clocked) || globalManualClockClicked) {
           incrementInternalStep(i);
+          activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
+       
         }
       }
 
-      //atFirstStep = (this->absoluteStep[i] == 0);
       atFirstStep = (this->laundrySequences[i].readHead == 0);
 
       if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered) || globalManualResetClicked || currentManualResetClicked) {
@@ -309,15 +296,16 @@ void ComputerscareLaundrySoup::step() {
           checkIfShouldChange(i);
         }
       }
-      //activeStep = absoluteSequences[i][this->absoluteStep[i]]==1;
-      activeStep = (this->laundrySequences[i].peekWorkingStep() == 1);
+        //activeStep = true;
+      //activeStep = (this->laundrySequences[i].peekWorkingStep() == 1);
     }
+
     if(inputs[CLOCK_INPUT + i].active) {
-      outputs[TRG_OUTPUT + i].value = (currentTriggerIsHigh && activeStep) ? 10.0f : 0.0f;
+      outputs[TRG_OUTPUT + i].value = (currentTriggerIsHigh && activeStep[i]) ? 10.0f : 0.0f;
       outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
     }
     else {
-      outputs[TRG_OUTPUT + i].value = (globalGateIn && activeStep) ? 10.0f : 0.0f;
+      outputs[TRG_OUTPUT + i].value = (globalGateIn && activeStep[i]) ? 10.0f : 0.0f;
       outputs[FIRST_STEP_OUTPUT + i].value = (globalGateIn && atFirstStep) ? 10.f : 0.0f;
     }
   }
@@ -326,16 +314,17 @@ void ComputerscareLaundrySoup::step() {
 void MyTextField::onTextChange() {
   std::string value = module->textFields[this->rowIndex]->text;
   LaundrySoupSequence lss = LaundrySoupSequence(value);
-  if(!lss.inError) {
+  if(!lss.inError && matchParens(value)) {
     module->textFields[this->rowIndex]->inError=false;
+    
+      module->setNextAbsoluteSequence(this->rowIndex);
+      module->updateDisplayBlink(this->rowIndex);
+      whoKnowsLaundry(value);
   }
   else {
     module->textFields[this->rowIndex]->inError=true;
   }
-  if(matchParens(value)) {
-    module->setNextAbsoluteSequence(this->rowIndex);
-    whoKnowsLaundry(value);
-  }
+
 }
 
 struct ComputerscareLaundrySoupWidget : ModuleWidget {
@@ -382,10 +371,11 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       smallLetterDisplay->box.pos = mm2px(Vec(20,verticalStart - 9.2 +verticalSpacing*i));
       smallLetterDisplay->box.size = Vec(60, 30);
       smallLetterDisplay->value = std::to_string(3);
+      smallLetterDisplay->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
       addChild(smallLetterDisplay);
       module->smallLetterDisplays[i] = smallLetterDisplay;
 
-       addParam(ParamWidget::create<ComputerscareInvisibleButton>(mm2px(Vec(20,verticalStart - 9.2 +verticalSpacing*i)), module, ComputerscareLaundrySoup::INDIVIDUAL_RESET_PARAM + i, 0.0, 1.0, 0.0));
+      addParam(ParamWidget::create<ComputerscareInvisibleButton>(mm2px(Vec(20,verticalStart - 9.2 +verticalSpacing*i)), module, ComputerscareLaundrySoup::INDIVIDUAL_RESET_PARAM + i, 0.0, 1.0, 0.0));
 
     }
     module->onCreate();

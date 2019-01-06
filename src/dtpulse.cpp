@@ -449,7 +449,7 @@ int LaundrySoupSequence::peekStep() {
   return pulseSequence[readHead];
 }
 int LaundrySoupSequence::peekWorkingStep() {
-	return workingPulseSequence[readHead];
+	return (readHead >=0) ? workingPulseSequence[readHead] : 0;
 }
 void LaundrySoupSequence::incrementAndCheck() {
 	if(skipAndPeek() == 2) {
