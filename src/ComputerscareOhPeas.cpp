@@ -61,13 +61,22 @@ struct ComputerscareOhPeas : Module {
 void ComputerscareOhPeas::step() {
 	float A,B,C,D,a,b,c,d;
 	for(int i = 0; i < numChannels; i++) {
+		
 		a = params[SCALE_VAL+i].value;
+		
 		b = params[SCALE_TRIM+i].value;
-		c = params[OFFSET_TRIM+i].value;
-		d = params[OFFSET_VAL+i].value;
-		A = inputs[CHANNEL_INPUT+i].value;
 		B = inputs[SCALE_CV].value;
+
+
+		A = inputs[CHANNEL_INPUT+i].value;
+
+
+
+		c = params[OFFSET_TRIM+i].value;
 		C = inputs[OFFSET_CV].value;
+
+		d = params[OFFSET_VAL+i].value;
+
 
 		D = (a + b*B)*A + (c*C + d);
 		outputs[SCALED_OUTPUT + i].value = D;
