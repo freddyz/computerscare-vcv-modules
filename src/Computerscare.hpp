@@ -31,7 +31,7 @@ extern Model *modelComputerscareDebug;
 extern Model *modelComputerscarePatchSequencer;
 extern Model *modelComputerscareLaundrySoup;
 extern Model *modelComputerscareILoveCookies;
-
+extern Model *modelComputerscareOhPeas;
 
 struct ComputerscareResetButton : SVGSwitch,MomentarySwitch {
 	ComputerscareResetButton() {

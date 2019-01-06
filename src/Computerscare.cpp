@@ -12,4 +12,5 @@ void init(Plugin *p) {
 	p->addModel(modelComputerscarePatchSequencer);
 	p->addModel(modelComputerscareLaundrySoup);
 	p->addModel(modelComputerscareILoveCookies);
+	p->addModel(modelComputerscareOhPeas);
 }
