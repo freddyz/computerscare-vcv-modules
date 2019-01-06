@@ -286,18 +286,23 @@ void ComputerscareLaundrySoup::step() {
       }
 
       atFirstStep = (this->laundrySequences[i].readHead == 0);
-
-      if((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered) || globalManualResetClicked || currentManualResetClicked) {
+      if(globalManualResetClicked || currentManualResetClicked) {
+        setChangeImminent(i,true);
         checkIfShouldChange(i);
         resetOneOfThem(i);
+      }
+      if( (currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
+        
+        setChangeImminent(i,false);
+        checkIfShouldChange(i);
+        resetOneOfThem(i);
+
       }
       else {
         if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].active) {
           checkIfShouldChange(i);
         }
       }
-        //activeStep = true;
-      //activeStep = (this->laundrySequences[i].peekWorkingStep() == 1);
     }
 
     if(inputs[CLOCK_INPUT + i].active) {
@@ -368,7 +373,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
       // active / total steps display
       smallLetterDisplay = new SmallLetterDisplay();
-      smallLetterDisplay->box.pos = mm2px(Vec(20,verticalStart - 9.2 +verticalSpacing*i));
+      smallLetterDisplay->box.pos = mm2px(Vec(22,verticalStart - 9.2 +verticalSpacing*i));
       smallLetterDisplay->box.size = Vec(60, 30);
       smallLetterDisplay->value = std::to_string(3);
       smallLetterDisplay->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;

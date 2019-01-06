@@ -166,7 +166,7 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
    for(int i = 0; i < numKnobs; i++) {
       float prev = params[KNOB_PARAM+i].value;
       if(randomUniform() < 0.7) {
-        float rv = (10*randomUniform()+prev)/2;
+        float rv = (10*randomUniform()+2*prev)/3;
         this->smallLetterKnobs[i]->setValue(rv);
         params[KNOB_PARAM+i].value = rv;
       }
