@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <typeinfo>
 #include <stdexcept>
+#include <math.h>
 
 #ifndef MY_GLOBALS_H
 #define MY_GLOBALS_H
@@ -30,6 +31,7 @@ class Token {
 };
 class Parser {
 	public:
+		Parser();
 		Parser(std::string expr);
 		std::string expression;
 		std::vector<Token> tokens;
@@ -112,6 +114,21 @@ class LaundrySoupSequence {
 		void incrementAndCheck();
 		void randomizePulseValue(int index);
 };
+class Quantizer {
+	public:
+		Quantizer(std::string intervals, int divisions, int trans);
+		float quantize(float val);
+		int numDivisions;
+		int transpose;
+		bool parseError;
+		int numSteps;
+		float fTranspose;
+	private:
+		Parser scaleParser;
+		float findClosestValue(float input);
+		std::vector<float> mappedValues;
+		std::vector<float> generateMappedValues();
+};
 bool matchesAny(std::string val, std::vector<std::string> whitelist);
 bool is_digits(const std::string &str);
 void padTo(std::string &str, const size_t num, const char paddingChar );
@@ -138,5 +155,6 @@ bool matchParens(std::string value);
 std::string evalToken(std::string input, std::string type,std::vector<Token> tStack);
 void whoKnows(std::string input);
 void whoKnowsLaundry(std::string input);
+void whoKnowsQuantize(std::string input);
 std::vector<int> getIndicesFromTokenStack(std::vector<Token> tokens);
 std::vector<int> duplicateIntVector(std::vector<int> input);
