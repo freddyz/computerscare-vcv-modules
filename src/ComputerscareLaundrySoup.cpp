@@ -249,6 +249,7 @@ void ComputerscareLaundrySoup::step() {
 
   bool globalGateIn = globalClockTrigger.isHigh();
   bool atFirstStep = false;
+  bool atLastStepAfterIncrement = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
   bool currentTriggerIsHigh = false;
   bool currentTriggerClocked = false;
@@ -274,14 +275,16 @@ void ComputerscareLaundrySoup::step() {
         if(currentTriggerClocked || globalManualClockClicked) {
           incrementInternalStep(i);
           activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
-       
+          atLastStepAfterIncrement = this->laundrySequences[i].atLastStep();
+          if(atLastStepAfterIncrement) checkIfShouldChange(i);
         }
       }
       else {
         if ((inputs[GLOBAL_CLOCK_INPUT].active && clocked) || globalManualClockClicked) {
           incrementInternalStep(i);
           activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
-       
+          atLastStepAfterIncrement = this->laundrySequences[i].atLastStep();
+          if(atLastStepAfterIncrement) checkIfShouldChange(i);
         }
       }
 
@@ -300,7 +303,7 @@ void ComputerscareLaundrySoup::step() {
       }
       else {
         if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].active) {
-          checkIfShouldChange(i);
+          //checkIfShouldChange(i);
         }
       }
     }
@@ -319,12 +322,13 @@ void ComputerscareLaundrySoup::step() {
 void MyTextField::onTextChange() {
   std::string value = module->textFields[this->rowIndex]->text;
   LaundrySoupSequence lss = LaundrySoupSequence(value);
+
   if(!lss.inError && matchParens(value)) {
     module->textFields[this->rowIndex]->inError=false;
     
       module->setNextAbsoluteSequence(this->rowIndex);
       module->updateDisplayBlink(this->rowIndex);
-      whoKnowsLaundry(value);
+      //whoKnowsLaundry(value);
   }
   else {
     module->textFields[this->rowIndex]->inError=true;

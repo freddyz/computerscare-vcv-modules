@@ -39,6 +39,9 @@ int main(int argc, char** argv)
 				else if(type==6) {
 					whoKnowsLaundry(argv[1]);
 				}
+				else if(type==7) {
+					whoKnowsQuantize(argv[1]);
+				}
 				return 0;
 }
 void printVector(std::vector <int> intVector) {
