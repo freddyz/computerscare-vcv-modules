@@ -110,6 +110,7 @@ class LaundrySoupSequence {
 		int skipAndPeek();
 		int peekWorkingStep();
 		void incrementAndCheck();
+		bool atLastStep();
 		void randomizePulseValue(int index);
 };
 bool matchesAny(std::string val, std::vector<std::string> whitelist);

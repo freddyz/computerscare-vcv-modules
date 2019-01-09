@@ -456,6 +456,9 @@ void LaundrySoupSequence::incrementAndCheck() {
     randomizePulseValue(readHead);
 	}
 }
+bool LaundrySoupSequence::atLastStep() {
+  return (readHead == (numSteps -1 ));
+}
 void LaundrySoupSequence::randomizePulseValue(int index) {
 	workingPulseSequence[index] = (rand() % 2);
 }
