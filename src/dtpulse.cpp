@@ -589,6 +589,9 @@ Parser::Parser(std::string expr) {
 	expression=expr;
   inError = false;
 }
+Parser::Parser() {
+	Parser("");
+}
 void Parser::setForLaundry() {
 	//whitelists
   std::vector<std::string> laundryInterleaveAny = {"Letter","Integer","ChanceOfInteger","Digit","LeftParen","RightParen"};
@@ -1140,4 +1143,56 @@ std::vector<Token> tokenizeString(std::string input) {
     else stack.push_back(Token("Unknown",token));
 	}
 	return stack;
+}
+void whoKnowsQuantize(std::string input) {
+	Quantizer q = Quantizer("2212221",12,0);
+	float in = std::stof(input);
+	printf("%f\n",q.quantize(in));
+}
+Quantizer::Quantizer(std::string intervals, int divisions, int trans) {
+	scaleParser = Parser(intervals);
+	//printTokenVector(scaleParser.tokens);
+	numDivisions = divisions;
+	transpose=trans;
+	fTranspose = (float)transpose/(float)numDivisions;
+	mappedValues = generateMappedValues();
+	numSteps = (int) mappedValues.size();
+	printFloatVector(mappedValues);
+} 
+std::vector<float> Quantizer::generateMappedValues() {
+	std::vector<float> output;
+	float sum = 0.f;
+	float fNumDivisions = (float)numDivisions;
+	float currentVal = 0.f;
+	std::vector<Token> stack = scaleParser.tokens;
+	output.push_back(0.f);
+	for(unsigned int i = 0; i < stack.size(); i++) {
+		if(stack[i].type=="Digit") {
+			sum += std::stof(stack[i].value);
+			currentVal = sum/fNumDivisions; 
+			output.push_back(currentVal);
+		}
+	}
+	return output;
+}
+float Quantizer::findClosestValue(float input) {
+	float closestValue = 10.f;
+	float smallestDiff = 10.f;
+	float thisDiff = 0.f;
+	for(int i = 0; i < numSteps; i++) {
+		thisDiff = fabs(input - mappedValues[i]);	
+		if(thisDiff < smallestDiff) {
+			closestValue = mappedValues[i];
+			smallestDiff = thisDiff;
+		}
+	}
+	return closestValue;
+}
+float Quantizer::quantize(float input) {
+	float octavePart = floor(input);
+	float fractionalPart = input-octavePart;
+	float quantizedFractional = findClosestValue(fractionalPart);
+	float quantizedPreTranspose = octavePart + quantizedFractional;
+	float quantizedVal = quantizedPreTranspose + fTranspose;
+	return quantizedVal; 
 }
