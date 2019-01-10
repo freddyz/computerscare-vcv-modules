@@ -1147,7 +1147,8 @@ std::vector<Token> tokenizeString(std::string input) {
 void whoKnowsQuantize(std::string input) {
 	Quantizer q = Quantizer("2212221",12,0);
 	float in = std::stof(input);
-	printf("%f\n",q.quantize(in));
+	printf("closest: %f\n",q.quantize(in));
+	printf("even   : %f\n",q.quantizeEven(in));
 }
 Quantizer::Quantizer() {
   Quantizer("2212221",12,0);
@@ -1179,14 +1180,18 @@ std::vector<float> Quantizer::generateMappedValues() {
 	}
 	return output;
 }
-float Quantizer::findClosestValue(float input) {
+float Quantizer::findEvenSpacingValue(float input, std::vector<float> allowedValues) {
+	return allowedValues[floor(input*allowedValues.size())];
+}
+float Quantizer::findClosestValue(float input,std::vector<float> allowedValues) {
 	float closestValue = 10.f;
 	float smallestDiff = 10.f;
 	float thisDiff = 0.f;
-	for(int i = 0; i < numSteps; i++) {
-		thisDiff = fabs(input - mappedValues[i]);	
+	int size = (int)allowedValues.size();
+	for(int i = 0; i < size; i++) {
+		thisDiff = fabs(input - allowedValues[i]);	
 		if(thisDiff < smallestDiff) {
-			closestValue = mappedValues[i];
+			closestValue = allowedValues[i];
 			smallestDiff = thisDiff;
 		}
 	}
@@ -1195,7 +1200,15 @@ float Quantizer::findClosestValue(float input) {
 float Quantizer::quantize(float input) {
 	float octavePart = floor(input);
 	float fractionalPart = input-octavePart;
-	float quantizedFractional = findClosestValue(fractionalPart);
+	float quantizedFractional = findClosestValue(fractionalPart,mappedValues);
+	float quantizedPreTranspose = octavePart + quantizedFractional;
+	float quantizedVal = quantizedPreTranspose + fTranspose;
+	return quantizedVal; 
+}
+float Quantizer::quantizeEven(float input) {
+	float octavePart = floor(input);
+	float fractionalPart = input-octavePart;
+	float quantizedFractional = findEvenSpacingValue(fractionalPart,mappedValues);
 	float quantizedPreTranspose = octavePart + quantizedFractional;
 	float quantizedVal = quantizedPreTranspose + fTranspose;
 	return quantizedVal; 

@@ -120,6 +120,7 @@ class Quantizer {
 		Quantizer(std::string intervals, int divisions, int trans);
 		Quantizer();
 		float quantize(float val);
+		float quantizeEven(float val);
 		int numDivisions;
 		int transpose;
 		bool parseError;
@@ -127,7 +128,8 @@ class Quantizer {
 		float fTranspose;
 	private:
 		Parser scaleParser;
-		float findClosestValue(float input);
+		float findClosestValue(float input, std::vector<float> allowedValues);
+		float findEvenSpacingValue(float input, std::vector<float> allowedValues);
 		std::vector<float> mappedValues;
 		std::vector<float> generateMappedValues();
 };
