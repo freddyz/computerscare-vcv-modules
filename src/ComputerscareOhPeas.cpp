@@ -1,5 +1,7 @@
 #include "Computerscare.hpp"
+#include "dtpulse.hpp"
 #include "dsp/digital.hpp"
+#include "window.hpp"
 #include "dsp/filter.hpp"
 
 #include <string>
@@ -8,7 +10,67 @@
 
 #define NUM_LINES 16
 
+struct ComputerscareOhPeas;
+
 const int numChannels= 4;
+
+class PeasTextField : public LedDisplayTextField {
+
+public:
+  int fontSize = 16;
+  int rowIndex=0;
+  bool inError = false;
+  PeasTextField() : LedDisplayTextField() {}
+  void setModule(ComputerscareOhPeas* _module) {
+    module = _module;
+  }
+  virtual void onTextChange() override;
+  int getTextPosition(Vec mousePos) override {
+    bndSetFont(font->handle);
+    int textPos = bndIconLabelTextPosition(gVg, textOffset.x, textOffset.y,
+      box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
+      -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
+    bndSetFont(gGuiFont->handle);
+    return textPos;
+  }
+  void draw(NVGcontext *vg) override {
+    nvgScissor(vg, 0, 0, box.size.x, box.size.y);
+
+    // Background
+    nvgFontSize(vg, fontSize);
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 10.0);
+    
+    if(inError) {
+      nvgFillColor(vg, COLOR_COMPUTERSCARE_PINK);
+    }
+    else {
+      nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
+    }
+     nvgFill(vg);
+
+    // Text
+    if (font->handle >= 0) {
+      bndSetFont(font->handle);
+
+      NVGcolor highlightColor = color;
+      highlightColor.a = 0.5;
+      int begin = min(cursor, selection);
+      int end = (this == gFocusedWidget) ? max(cursor, selection) : -1;
+      //bndTextField(vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
+      bndIconLabelCaret(vg, textOffset.x, textOffset.y - 3,
+        box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
+        -1, color, fontSize, text.c_str(), highlightColor, begin, end);
+
+      bndSetFont(gGuiFont->handle);
+    }
+
+    nvgResetScissor(vg);
+  };
+
+private:
+  ComputerscareOhPeas* module;
+};
 
 struct ComputerscareOhPeas : Module {
 	enum ParamIds {
@@ -40,6 +102,7 @@ struct ComputerscareOhPeas : Module {
 	std::string strValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
 
 	float logLines[NUM_LINES] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	PeasTextField* textField;
 
 	int lineCounter = 0;
 
@@ -48,9 +111,20 @@ struct ComputerscareOhPeas : Module {
 	SchmittTrigger manualClockTrigger;
   	SchmittTrigger manualClearTrigger;
 
-	ComputerscareOhPeas() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
+  	Quantizer quantizers[numChannels];
+
+	ComputerscareOhPeas() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
+		for(int i = 0; i < numChannels; i++) {
+			quantizers[i] = Quantizer("2212221",12,0);
+
+		}
+
+	}
 	void step() override;
 
+	void setQuant(Quantizer quant) {
+		this->quantizers[0] = quant;
+	}
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
 	// - onSampleRateChange: event triggered by a change of sample rate
@@ -59,7 +133,7 @@ struct ComputerscareOhPeas : Module {
 
 
 void ComputerscareOhPeas::step() {
-	float A,B,C,D,a,b,c,d;
+	float A,B,C,D,Q,a,b,c,d;
 	for(int i = 0; i < numChannels; i++) {
 		
 		a = params[SCALE_VAL+i].value;
@@ -79,8 +153,10 @@ void ComputerscareOhPeas::step() {
 
 
 		D = (a + b*B)*A + (c*C + d);
+		Q = quantizers[0].quantize(D);
+
 		outputs[SCALED_OUTPUT + i].value = D;
-		outputs[QUANTIZED_OUTPUT + i].value = D;
+		outputs[QUANTIZED_OUTPUT + i].value = Q;
 	}
 }
 
@@ -124,6 +200,23 @@ struct StringDisplayWidget3 : TransparentWidget {
   }
 };
 
+void PeasTextField::onTextChange() {
+  std::string value = module->textField->text;
+  Quantizer quant = Quantizer(value,12,0);
+
+  if(!quant.parseError) {
+  	module->setQuant(quant);
+    //module->textFields[this->rowIndex]->inError=false;
+    
+      //module->setNextAbsoluteSequence(this->rowIndex);
+      //module->updateDisplayBlink(this->rowIndex);
+      //whoKnowsLaundry(value);
+  }
+  else {
+    //module->textFields[this->rowIndex]->inError=true;
+  }
+
+}
 
 struct ComputerscareOhPeasWidget : ModuleWidget {
 
@@ -151,6 +244,8 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 		double xx;
 		double yy;
   		for(int i = 0; i < numChannels; i++) {
+
+
   			xx = x + dx*i;
   			//if(i %2) {
   				addInput(Port::create<InPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
@@ -158,6 +253,15 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
   			else {
   				addInput(Port::create<PointingUpPentagonPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
   			}*/
+
+  				   textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+10)));
+      textFieldTemp->setModule(module);
+      textFieldTemp->box.size = mm2px(Vec(33, 7));
+      textFieldTemp->rowIndex = i;
+      textFieldTemp->multiline = false;
+      textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
+      addChild(textFieldTemp);
+      module->textField = textFieldTemp;
 
   			ParamWidget* scaleTrimKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+20)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
   			addParam(scaleTrimKnob);
@@ -182,6 +286,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 
 	}
 }
+  PeasTextField* textFieldTemp;
 };
 
 

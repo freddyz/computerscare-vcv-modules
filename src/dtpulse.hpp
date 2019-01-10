@@ -118,6 +118,7 @@ class LaundrySoupSequence {
 class Quantizer {
 	public:
 		Quantizer(std::string intervals, int divisions, int trans);
+		Quantizer();
 		float quantize(float val);
 		int numDivisions;
 		int transpose;

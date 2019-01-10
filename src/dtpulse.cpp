@@ -1149,6 +1149,9 @@ void whoKnowsQuantize(std::string input) {
 	float in = std::stof(input);
 	printf("%f\n",q.quantize(in));
 }
+Quantizer::Quantizer() {
+  Quantizer("2212221",12,0);
+}
 Quantizer::Quantizer(std::string intervals, int divisions, int trans) {
 	scaleParser = Parser(intervals);
 	//printTokenVector(scaleParser.tokens);
@@ -1157,6 +1160,7 @@ Quantizer::Quantizer(std::string intervals, int divisions, int trans) {
 	fTranspose = (float)transpose/(float)numDivisions;
 	mappedValues = generateMappedValues();
 	numSteps = (int) mappedValues.size();
+  printf("  mappedValues:\n");
 	printFloatVector(mappedValues);
 } 
 std::vector<float> Quantizer::generateMappedValues() {
