@@ -74,7 +74,8 @@ private:
 
 struct ComputerscareOhPeas : Module {
 	enum ParamIds {
-		ROOT,
+		GLOBAL_TRANSPOSE,
+		NUM_DIVISIONS,
 		SCALE_TRIM,
 		SCALE_VAL = SCALE_TRIM+numChannels,
 		OFFSET_TRIM = SCALE_VAL+numChannels,
@@ -122,7 +123,11 @@ struct ComputerscareOhPeas : Module {
 	}
 	void step() override;
 
-	void setQuant(Quantizer quant) {
+	void setQuant(Quantizer q) {
+		  std::string value = this->textField->text;
+		  int offset = (int)floor(params[GLOBAL_TRANSPOSE].value);
+		  Quantizer quant = Quantizer(value,12,offset);
+
 		this->quantizers[0] = quant;
 	}
 	// For more advanced Module features, read Rack's engine.hpp header file
@@ -243,6 +248,18 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 		double dx = 9.9;
 		double xx;
 		double yy;
+		  	
+		ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(10,10)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  7.f, 7.f, 0.0f);   
+  		addParam(rootKnob);
+  		  
+  		  textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+10)));
+	      textFieldTemp->setModule(module);
+	      textFieldTemp->box.size = mm2px(Vec(38, 7));
+	      textFieldTemp->multiline = false;
+	      textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
+	      addChild(textFieldTemp);
+	      module->textField = textFieldTemp;
+
   		for(int i = 0; i < numChannels; i++) {
 
 
@@ -254,14 +271,6 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
   				addInput(Port::create<PointingUpPentagonPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
   			}*/
 
-  				   textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+10)));
-      textFieldTemp->setModule(module);
-      textFieldTemp->box.size = mm2px(Vec(33, 7));
-      textFieldTemp->rowIndex = i;
-      textFieldTemp->multiline = false;
-      textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
-      addChild(textFieldTemp);
-      module->textField = textFieldTemp;
 
   			ParamWidget* scaleTrimKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+20)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
   			addParam(scaleTrimKnob);
