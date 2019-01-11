@@ -144,7 +144,7 @@ void ComputerscareOhPeas::step() {
 		a = params[SCALE_VAL+i].value;
 		
 		b = params[SCALE_TRIM+i].value;
-		B = inputs[SCALE_CV].value;
+		B = inputs[SCALE_CV+i].value;
 
 
 		A = inputs[CHANNEL_INPUT+i].value;
@@ -152,12 +152,12 @@ void ComputerscareOhPeas::step() {
 
 
 		c = params[OFFSET_TRIM+i].value;
-		C = inputs[OFFSET_CV].value;
+		C = inputs[OFFSET_CV+i].value;
 
 		d = params[OFFSET_VAL+i].value;
 
 
-		D = (a + b*B)*A + (c*C + d);
+		D = (b*B + a)*A + (c*C + d);
 		Q = quantizers[0].quantize(D);
 
 		outputs[SCALED_OUTPUT + i].value = D;
@@ -242,10 +242,10 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 		  addChild(display);
 */
 
-		double x = 0;
+		double x = 0.2;
 		double y = 7;
 		double dy = 18.4;
-		double dx = 9.9;
+		double dx = 9.95;
 		double xx;
 		double yy;
 		  	
@@ -277,7 +277,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
   			
   			addInput(Port::create<InPort>(mm2px(Vec(xx, y+30)), Port::INPUT, module, ComputerscareOhPeas::SCALE_CV+i));
 
-  			ParamWidget* scaleKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+40)), module, ComputerscareOhPeas::SCALE_VAL +i,  -2.f, 2.f, 0.0f);   
+  			ParamWidget* scaleKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+40)), module, ComputerscareOhPeas::SCALE_VAL +i,  -1.f, 1.f, 0.0f);   
   			addParam(scaleKnob);
 
   			ParamWidget* offsetTrimKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+60)), module, ComputerscareOhPeas::OFFSET_TRIM +i,  -1.f, 1.f, 0.0f);   
