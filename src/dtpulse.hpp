@@ -121,6 +121,10 @@ class Quantizer {
 		Quantizer();
 		float quantize(float val);
 		float quantizeEven(float val);
+		float findEvenSpacingValue(float input, std::vector<float> allowedValues);
+		float findEvenSpacingImpure(float input);
+
+		std::vector<float> mappedValues;
 		int numDivisions;
 		int transpose;
 		bool parseError;
@@ -129,8 +133,7 @@ class Quantizer {
 	private:
 		Parser scaleParser;
 		float findClosestValue(float input, std::vector<float> allowedValues);
-		float findEvenSpacingValue(float input, std::vector<float> allowedValues);
-		std::vector<float> mappedValues;
+
 		std::vector<float> generateMappedValues();
 };
 bool matchesAny(std::string val, std::vector<std::string> whitelist);

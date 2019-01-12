@@ -143,6 +143,11 @@ struct SmoothKnob : RoundKnob {
 		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-medium-knob-effed.svg")));
 	}
 };
+struct SmallKnob : RoundKnob {
+	SmallKnob() {
+		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-small-knob-effed.svg")));
+	}
+};
 struct BigSmoothKnob : RoundKnob {
 	BigSmoothKnob() {
 		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-big-knob-effed.svg")));

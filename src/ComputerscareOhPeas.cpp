@@ -113,12 +113,15 @@ struct ComputerscareOhPeas : Module {
   	SchmittTrigger manualClearTrigger;
 
   	Quantizer quantizers[numChannels];
+  	Quantizer quant;
+  	std::vector<float> vvv = {0.f, 0.4f, 0.7f, 0.95f};
 
 	ComputerscareOhPeas() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
 		for(int i = 0; i < numChannels; i++) {
 			quantizers[i] = Quantizer("2212221",12,0);
 
 		}
+		quant = quantizers[0];
 
 	}
 	void step() override;
@@ -138,27 +141,23 @@ struct ComputerscareOhPeas : Module {
 
 
 void ComputerscareOhPeas::step() {
-	float A,B,C,D,Q,a,b,c,d;
+	float A,B,C,D,Q,a,b,c,d,octavePart;
 	for(int i = 0; i < numChannels; i++) {
 		
 		a = params[SCALE_VAL+i].value;
 		
 		b = params[SCALE_TRIM+i].value;
 		B = inputs[SCALE_CV+i].value;
-
-
 		A = inputs[CHANNEL_INPUT+i].value;
 
 
 
 		c = params[OFFSET_TRIM+i].value;
 		C = inputs[OFFSET_CV+i].value;
-
 		d = params[OFFSET_VAL+i].value;
 
-
 		D = (b*B + a)*A + (c*C + d);
-		Q = quantizers[0].quantize(D);
+		Q = quant.quantizeEven(D);
 
 		outputs[SCALED_OUTPUT + i].value = D;
 		outputs[QUANTIZED_OUTPUT + i].value = Q;
@@ -244,15 +243,15 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 
 		double x = 0.2;
 		double y = 7;
-		double dy = 18.4;
+		//double dy = 18.4;
 		double dx = 9.95;
 		double xx;
-		double yy;
+		double yy=18;
 		  	
-		ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(10,10)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  7.f, 7.f, 0.0f);   
+		ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(30,yy)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  -7.f, 7.f, 0.0f);   
   		addParam(rootKnob);
   		  
-  		  textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+10)));
+  		  textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+20)));
 	      textFieldTemp->setModule(module);
 	      textFieldTemp->box.size = mm2px(Vec(38, 7));
 	      textFieldTemp->multiline = false;
@@ -272,15 +271,15 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
   			}*/
 
 
-  			ParamWidget* scaleTrimKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+20)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
+  			ParamWidget* scaleTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+34)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
   			addParam(scaleTrimKnob);
   			
-  			addInput(Port::create<InPort>(mm2px(Vec(xx, y+30)), Port::INPUT, module, ComputerscareOhPeas::SCALE_CV+i));
+  			addInput(Port::create<InPort>(mm2px(Vec(xx, y+40)), Port::INPUT, module, ComputerscareOhPeas::SCALE_CV+i));
 
-  			ParamWidget* scaleKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+40)), module, ComputerscareOhPeas::SCALE_VAL +i,  -1.f, 1.f, 0.0f);   
+  			ParamWidget* scaleKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+50)), module, ComputerscareOhPeas::SCALE_VAL +i,  -1.f, 1.f, 0.0f);   
   			addParam(scaleKnob);
 
-  			ParamWidget* offsetTrimKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+60)), module, ComputerscareOhPeas::OFFSET_TRIM +i,  -1.f, 1.f, 0.0f);   
+  			ParamWidget* offsetTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+64)), module, ComputerscareOhPeas::OFFSET_TRIM +i,  -1.f, 1.f, 0.0f);   
   			addParam(offsetTrimKnob);
   			
   			addInput(Port::create<InPort>(mm2px(Vec(xx, y+70)), Port::INPUT, module, ComputerscareOhPeas::OFFSET_CV+i));

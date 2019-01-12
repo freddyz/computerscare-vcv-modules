@@ -1183,6 +1183,9 @@ std::vector<float> Quantizer::generateMappedValues() {
 float Quantizer::findEvenSpacingValue(float input, std::vector<float> allowedValues) {
 	return allowedValues[floor(input*allowedValues.size())];
 }
+float Quantizer::findEvenSpacingImpure(float input) {
+  return mappedValues[floor(input*numSteps)];
+}
 float Quantizer::findClosestValue(float input,std::vector<float> allowedValues) {
 	float closestValue = 10.f;
 	float smallestDiff = 10.f;
@@ -1208,7 +1211,7 @@ float Quantizer::quantize(float input) {
 float Quantizer::quantizeEven(float input) {
 	float octavePart = floor(input);
 	float fractionalPart = input-octavePart;
-	float quantizedFractional = findEvenSpacingValue(fractionalPart,mappedValues);
+	float quantizedFractional = findEvenSpacingImpure(fractionalPart);
 	float quantizedPreTranspose = octavePart + quantizedFractional;
 	float quantizedVal = quantizedPreTranspose + fTranspose;
 	return quantizedVal; 
