@@ -117,11 +117,7 @@ struct ComputerscareOhPeas : Module {
   	std::vector<float> vvv = {0.f, 0.4f, 0.7f, 0.95f};
 
 	ComputerscareOhPeas() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
-		for(int i = 0; i < numChannels; i++) {
-			quantizers[i] = Quantizer("2212221",12,0);
-
-		}
-		quant = quantizers[0];
+		quant = Quantizer("221222",12,0);
 
 	}
 	void step() override;
@@ -129,9 +125,9 @@ struct ComputerscareOhPeas : Module {
 	void setQuant(Quantizer q) {
 		  std::string value = this->textField->text;
 		  int offset = (int)floor(params[GLOBAL_TRANSPOSE].value);
-		  Quantizer quant = Quantizer(value,12,offset);
 
-		this->quantizers[0] = quant;
+		this->quant = Quantizer(value,12,offset);
+		printf("numSteps:%i\n",this->quant.numSteps);
 	}
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
@@ -206,10 +202,11 @@ struct StringDisplayWidget3 : TransparentWidget {
 
 void PeasTextField::onTextChange() {
   std::string value = module->textField->text;
-  Quantizer quant = Quantizer(value,12,0);
+  Quantizer q = Quantizer(value,12,0);
 
-  if(!quant.parseError) {
-  	module->setQuant(quant);
+  if(true) {
+  	printf("no parse error\n");
+  	module->setQuant(q);
     //module->textFields[this->rowIndex]->inError=false;
     
       //module->setNextAbsoluteSequence(this->rowIndex);
@@ -217,6 +214,7 @@ void PeasTextField::onTextChange() {
       //whoKnowsLaundry(value);
   }
   else {
+  	printf("Parse Error\n");
     //module->textFields[this->rowIndex]->inError=true;
   }
 
