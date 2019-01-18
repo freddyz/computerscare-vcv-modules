@@ -121,6 +121,32 @@ struct ComputerscareOhPeas : Module {
 
 	}
 	void step() override;
+		json_t *toJson() override
+  {
+		json_t *rootJ = json_object();
+    
+    json_t *sequencesJ = json_array();
+    for (int i = 0; i < 1; i++) {
+      json_t *sequenceJ = json_string(textField->text.c_str());
+      json_array_append_new(sequencesJ, sequenceJ);
+    }
+    json_object_set_new(rootJ, "sequences", sequencesJ);
+
+    return rootJ;
+  } 
+  
+  void fromJson(json_t *rootJ) override
+  {
+    json_t *sequencesJ = json_object_get(rootJ, "sequences");
+    if (sequencesJ) {
+      for (int i = 0; i < 1; i++) {
+        json_t *sequenceJ = json_array_get(sequencesJ, i);
+        if (sequenceJ)
+          textField->text = json_string_value(sequenceJ);
+      }
+    }
+  }
+
 
 	void setQuant(Quantizer q) {
 		  std::string value = this->textField->text;
@@ -145,8 +171,6 @@ void ComputerscareOhPeas::step() {
 		b = params[SCALE_TRIM+i].value;
 		B = inputs[SCALE_CV+i].value;
 		A = inputs[CHANNEL_INPUT+i].value;
-
-
 
 		c = params[OFFSET_TRIM+i].value;
 		C = inputs[OFFSET_CV+i].value;
