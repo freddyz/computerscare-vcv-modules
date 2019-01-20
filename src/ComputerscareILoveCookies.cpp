@@ -30,7 +30,7 @@ class MyTextFieldCookie : public LedDisplayTextField {
 public:
   int fontSize = LG_FONT_SIZE;
   int rowIndex=0;
-  
+  bool inError = false;
   MyTextFieldCookie() : LedDisplayTextField() {}
   void setModule(ComputerscareILoveCookies* _module) {
     module = _module;
@@ -51,7 +51,12 @@ public:
     nvgFontSize(vg, fontSize);
     nvgBeginPath(vg);
     nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 5.0);
-    nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
+    if(inError) {
+      nvgFillColor(vg, COLOR_COMPUTERSCARE_PINK);
+    }
+    else {
+      nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
+    }
     nvgFill(vg);
 
     // Text
@@ -119,6 +124,7 @@ struct ComputerscareILoveCookies : Module {
   SmallLetterDisplay* currentWorkingStepDisplays[numFields];
 
   AbsoluteSequence newABS[numFields];
+  AbsoluteSequence newABSQueue[numFields];
   
   bool shouldChange[numFields] = {false};
   bool changeImminent[numFields] = {false};
@@ -173,25 +179,27 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     }
   }
   void randomizeTextFields() {
-    std::string mainlookup = knobandinputlookup;
-    std::string string = "";
+    std::string mainlookup = knoblookup;
+    std::string str = "";
     std::string randchar = "";
-    srand (time(NULL));
+    
+    int seed = rand();
     float ru;
     int length = 0;
 
     for (int i = 0; i < numFields; i++) {
-      length = rand() % 12 + 2;
-      string = "";
+      srand(time(0));
+      length = (rand()) % 12 + 2;
+      str = "";
       for(int j = 0; j < length; j++) {
-        randchar = mainlookup[rand() % mainlookup.size()];
-        string = string + randchar;
+        randchar = mainlookup[(rand()) % mainlookup.size()];
+        str = str + randchar;
         ru = randomUniform();
         if(ru < 0.1) {
-          string = "(" + string + ")";
+          str = "(" + str + ")";
         }
       }
-      textFields[i]->text = string;
+      textFields[i]->text = str;
       setNextAbsoluteSequence(i);
     }
   }
@@ -201,11 +209,12 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
       textFields[index]->fontSize = length > 17 ? (length > 30 ? SM_FONT_SIZE : MED_FONT_SIZE) : LG_FONT_SIZE;
   }
   void setNextAbsoluteSequence(int index) {
+    newABSQueue[index] = AbsoluteSequence(textFields[index]->text,knobandinputlookup);
     shouldChange[index] = true;
   }
   void setAbsoluteSequenceFromQueue(int index) {
-    newABS[index] = AbsoluteSequence(textFields[index]->text,knobandinputlookup);
-    newABS[index].print(); 
+    newABS[index] = newABSQueue[index];
+    newABS[index].incrementAndCheck();
   }
   void checkIfShouldChange(int index) {
     if(shouldChange[index]) {
@@ -233,9 +242,9 @@ void onCreate () override
 
   void incrementInternalStep(int i) {
     newABS[i].incrementAndCheck();
-
     if(newABS[i].readHead == 0) {
       this->setChangeImminent(i,false);
+      checkIfShouldChange(i);
     }
     this->smallLetterDisplays[i]->value = this->getDisplayString(i);
     this->currentWorkingStepDisplays[i]->value = this->newABS[i].getWorkingStepDisplay();
@@ -308,6 +317,7 @@ void ComputerscareILoveCookies::step() {
   bool currentResetActive;
   bool currentResetTriggered;
   bool currentManualResetClicked;
+  bool onLastStepAfterIncrement;
 	float knobRawValue = 0.f;
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
@@ -347,7 +357,7 @@ void ComputerscareILoveCookies::step() {
       }
       else {
         if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].active) {
-          checkIfShouldChange(i);
+          //checkIfShouldChange(i);
         }
       }
     }
@@ -383,10 +393,14 @@ void ComputerscareILoveCookies::step() {
 void MyTextFieldCookie::onTextChange() {
   module->checkLength(this->rowIndex);
   std::string value = module->textFields[this->rowIndex]->text;
-  if(matchParens(value)) {
-    whoKnows(value);
+  AbsoluteSequence abs = AbsoluteSequence(value,knobandinputlookup);
+  if((!abs.inError) && matchParens(value)) {
     module->setNextAbsoluteSequence(this->rowIndex);
     module->updateDisplayBlink(this->rowIndex);
+    module->textFields[this->rowIndex]->inError=false;
+  }
+  else {
+    module->textFields[this->rowIndex]->inError=true;
   }
 }
 struct WiggleKnobsMenuItem : MenuItem {
@@ -426,11 +440,6 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
   ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareILoveCookiesPanel.svg")));
-    /*
-ParamWidget *cellNoteKnob = ParamWidget::create<SmallWhiteKnob>(Vec(knobX, knobY), module, GridSeq::CELL_NOTE_PARAM + idx, 0.0, module->noteParamMax, 3.0);
-      addParam(cellNoteKnob);
-      seqKnobs.push_back(cellNoteKnob);
-    */
 
     for(int i = 0; i < numKnobRows; i++) {
       for(int j = 0; j < numKnobColumns; j++) {
