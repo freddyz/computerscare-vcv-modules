@@ -1158,6 +1158,7 @@ Quantizer::Quantizer(std::string intervals, int divisions, int trans) {
 	//printTokenVector(scaleParser.tokens);
 	numDivisions = divisions;
 	transpose=trans;
+  fNumDivisions = (float)numDivisions;
 	fTranspose = (float)transpose/(float)numDivisions;
 	mappedValues = generateMappedValues();
 	numSteps = (int) mappedValues.size();
@@ -1167,7 +1168,6 @@ Quantizer::Quantizer(std::string intervals, int divisions, int trans) {
 std::vector<float> Quantizer::generateMappedValues() {
 	std::vector<float> output;
 	float sum = 0.f;
-	float fNumDivisions = (float)numDivisions;
 	float currentVal = 0.f;
 	std::vector<Token> stack = scaleParser.tokens;
 	output.push_back(0.f);
@@ -1208,11 +1208,15 @@ float Quantizer::quantize(float input) {
 	float quantizedVal = quantizedPreTranspose + fTranspose;
 	return quantizedVal; 
 }
-float Quantizer::quantizeEven(float input) {
-	float octavePart = floor(input);
-	float fractionalPart = input-octavePart;
-	float quantizedFractional = findEvenSpacingImpure(fractionalPart);
-	float quantizedPreTranspose = octavePart + quantizedFractional;
-	float quantizedVal = quantizedPreTranspose + fTranspose;
-	return quantizedVal; 
+float Quantizer::quantizeEven(float input,int iTranspose) {
+  float octavePart = floor(input);
+  float fractionalPart = input-octavePart;
+  float quantizedFractional = findEvenSpacingImpure(fractionalPart);
+  float quantizedPreTranspose = octavePart + quantizedFractional;
+  float quantizedVal = quantizedPreTranspose + ((float)iTranspose)/fNumDivisions;
+  return quantizedVal;
 }
+float Quantizer::quantizeEven(float input) {
+  return quantizeEven(input,0);
+}
+

@@ -164,6 +164,7 @@ struct ComputerscareOhPeas : Module {
 
 void ComputerscareOhPeas::step() {
 	float A,B,C,D,Q,a,b,c,d,octavePart;
+	int t;
 	for(int i = 0; i < numChannels; i++) {
 		
 		a = params[SCALE_VAL+i].value;
@@ -177,7 +178,9 @@ void ComputerscareOhPeas::step() {
 		d = params[OFFSET_VAL+i].value;
 
 		D = (b*B + a)*A + (c*C + d);
-		Q = quant.quantizeEven(D);
+
+		t = floor(params[GLOBAL_TRANSPOSE].value);
+		Q = quant.quantizeEven(D,t);
 
 		outputs[SCALED_OUTPUT + i].value = D;
 		outputs[QUANTIZED_OUTPUT + i].value = Q;

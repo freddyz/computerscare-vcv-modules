@@ -183,16 +183,14 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     std::string str = "";
     std::string randchar = "";
     
-    int seed = rand();
     float ru;
     int length = 0;
-
     for (int i = 0; i < numFields; i++) {
-      srand(time(0));
-      length = (rand()) % 12 + 2;
+      
+      length = floor(randomUniform()*12) + 2;
       str = "";
       for(int j = 0; j < length; j++) {
-        randchar = mainlookup[(rand()) % mainlookup.size()];
+        randchar = mainlookup[floor(randomUniform()*mainlookup.size())];
         str = str + randchar;
         ru = randomUniform();
         if(ru < 0.1) {
@@ -412,7 +410,9 @@ struct WiggleKnobsMenuItem : MenuItem {
 struct RandomizeTextFieldsMenuItem : MenuItem {
   ComputerscareILoveCookies *cookies;
   void onAction(EventAction &e) override {
+   srand(time(0));
    cookies->randomizeTextFields();
+
   }
 };
 

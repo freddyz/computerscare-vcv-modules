@@ -121,9 +121,10 @@ class Quantizer {
 		Quantizer();
 		float quantize(float val);
 		float quantizeEven(float val);
+		float quantizeEven(float val, int iTranspose);
 		float findEvenSpacingValue(float input, std::vector<float> allowedValues);
 		float findEvenSpacingImpure(float input);
-
+		float fNumDivisions;
 		std::vector<float> mappedValues;
 		int numDivisions;
 		int transpose;
