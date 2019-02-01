@@ -106,6 +106,7 @@ struct ComputerscareOhPeas : Module {
 	PeasTextField* textField;
 
 	int lineCounter = 0;
+	int numDivisions = 12;
 
 	SchmittTrigger clockTrigger;
 	SchmittTrigger clearTrigger;
@@ -148,11 +149,10 @@ struct ComputerscareOhPeas : Module {
   }
 
 
-	void setQuant(Quantizer q) {
+	void setQuant() {
 		  std::string value = this->textField->text;
 		  int offset = (int)floor(params[GLOBAL_TRANSPOSE].value);
-
-		this->quant = Quantizer(value,12,offset);
+		this->quant = Quantizer(value,this->numDivisions,offset);
 		printf("numSteps:%i\n",this->quant.numSteps);
 	}
 	// For more advanced Module features, read Rack's engine.hpp header file
@@ -165,6 +165,12 @@ struct ComputerscareOhPeas : Module {
 void ComputerscareOhPeas::step() {
 	float A,B,C,D,Q,a,b,c,d,octavePart;
 	int t;
+	int numDivisionsKnobValue = (int) clamp(roundf(params[NUM_DIVISIONS].value), 1.0f, 24.0f);
+
+	if(numDivisionsKnobValue != numDivisions) {
+		numDivisions = numDivisionsKnobValue;
+		setQuant();
+	}
 	for(int i = 0; i < numChannels; i++) {
 		
 		a = params[SCALE_VAL+i].value;
@@ -233,7 +239,7 @@ void PeasTextField::onTextChange() {
 
   if(true) {
   	printf("no parse error\n");
-  	module->setQuant(q);
+  	module->setQuant();
     //module->textFields[this->rowIndex]->inError=false;
     
       //module->setNextAbsoluteSequence(this->rowIndex);
@@ -275,7 +281,10 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 		  	
 		ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(30,yy)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  -7.f, 7.f, 0.0f);   
   		addParam(rootKnob);
-  		  
+  		
+  		ParamWidget* numDivisionKnob =  ParamWidget::create<MediumSnapKnob>(mm2px(Vec(10,yy)), module, ComputerscareOhPeas::NUM_DIVISIONS ,  1.f, 24.f, 12.0f);   
+  		addParam(numDivisionKnob);
+  		   
   		  textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+20)));
 	      textFieldTemp->setModule(module);
 	      textFieldTemp->box.size = mm2px(Vec(38, 7));
