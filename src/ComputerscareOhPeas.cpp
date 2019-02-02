@@ -294,7 +294,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 		  addChild(display);
 */
 
-		double x = 0.2;
+		double x = 1;
 		double y = 7;
 		//double dy = 18.4;
 		double dx = 9.95;
@@ -309,7 +309,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
   		   
   		  textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+20)));
 	      textFieldTemp->setModule(module);
-	      textFieldTemp->box.size = mm2px(Vec(38, 7));
+	      textFieldTemp->box.size = mm2px(Vec(44, 7));
 	      textFieldTemp->multiline = false;
 	      textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
         textFieldTemp->text = "221222";
