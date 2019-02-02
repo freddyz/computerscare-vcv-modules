@@ -107,6 +107,10 @@ struct ComputerscareOhPeas : Module {
 
 	int lineCounter = 0;
 	int numDivisions = 12;
+  int globalTranspose = 0;
+  std::string numDivisionsString = "N";
+  SmallLetterDisplay* numDivisionsDisplay;
+  SmallLetterDisplay* globalTransposeDisplay;
 
 	SchmittTrigger clockTrigger;
 	SchmittTrigger clearTrigger;
@@ -150,11 +154,15 @@ struct ComputerscareOhPeas : Module {
 
 
 	void setQuant() {
-		  std::string value = this->textField->text;
-		  int offset = (int)floor(params[GLOBAL_TRANSPOSE].value);
-		this->quant = Quantizer(value,this->numDivisions,offset);
-		printf("numSteps:%i\n",this->quant.numSteps);
+		std::string value = this->textField->text;
+		this->quant = Quantizer(value,this->numDivisions,this->globalTranspose);
+    this->setNumDivisionsString();
 	}
+  void setNumDivisionsString() {
+    this->numDivisionsDisplay->value = std::to_string(this->numDivisions);
+    this->globalTransposeDisplay->value = std::to_string(this->globalTranspose);
+    
+  }
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
 	// - onSampleRateChange: event triggered by a change of sample rate
@@ -164,13 +172,28 @@ struct ComputerscareOhPeas : Module {
 
 void ComputerscareOhPeas::step() {
 	float A,B,C,D,Q,a,b,c,d,octavePart;
-	int t;
-	int numDivisionsKnobValue = (int) clamp(roundf(params[NUM_DIVISIONS].value), 1.0f, 24.0f);
+
+	int numDivisionsKnobValue = floor(params[NUM_DIVISIONS].value);
+  int iTranspose = floor(numDivisionsKnobValue * params[GLOBAL_TRANSPOSE].value);
+
+  //int globalTransposeKnobValue = (int) clamp(roundf(params[GLOBAL_TRANSPOSE].value), -fNumDiv, fNumDiv);
 
 	if(numDivisionsKnobValue != numDivisions) {
-		numDivisions = numDivisionsKnobValue;
-		setQuant();
+    printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
+		//what a hack!!!
+    if(numDivisionsKnobValue != 0){
+      
+      numDivisions = numDivisionsKnobValue;
+      setQuant();
+    }
+		
 	}
+  if(iTranspose != globalTranspose) {
+        printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
+
+    globalTranspose = iTranspose;
+    setQuant();
+  }
 	for(int i = 0; i < numChannels; i++) {
 		
 		a = params[SCALE_VAL+i].value;
@@ -185,8 +208,7 @@ void ComputerscareOhPeas::step() {
 
 		D = (b*B + a)*A + (c*C + d);
 
-		t = floor(params[GLOBAL_TRANSPOSE].value);
-		Q = quant.quantizeEven(D,t);
+		Q = quant.quantizeEven(D,iTranspose);
 
 		outputs[SCALED_OUTPUT + i].value = D;
 		outputs[QUANTIZED_OUTPUT + i].value = Q;
@@ -279,7 +301,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 		double xx;
 		double yy=18;
 		  	
-		ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(30,yy)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  -7.f, 7.f, 0.0f);   
+		ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(30,yy)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  -1.f, 1.f, 0.0f);   
   		addParam(rootKnob);
   		
   		ParamWidget* numDivisionKnob =  ParamWidget::create<MediumSnapKnob>(mm2px(Vec(10,yy)), module, ComputerscareOhPeas::NUM_DIVISIONS ,  1.f, 24.f, 12.0f);   
@@ -290,44 +312,64 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 	      textFieldTemp->box.size = mm2px(Vec(38, 7));
 	      textFieldTemp->multiline = false;
 	      textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
+        textFieldTemp->text = "221222";
 	      addChild(textFieldTemp);
 	      module->textField = textFieldTemp;
 
-  		for(int i = 0; i < numChannels; i++) {
+     	  ndd = new SmallLetterDisplay();
+        ndd->box.pos = mm2px(Vec(2,yy));
+        ndd->box.size = Vec(7, 7);
+        ndd->value = "Y";
+        ndd->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+        addChild(ndd);
+        module->numDivisionsDisplay = ndd;
+
+        gtd = new SmallLetterDisplay();
+        gtd->box.pos = mm2px(Vec(22,yy));
+        gtd->box.size = Vec(7, 7);
+        gtd->value = "Y";
+        gtd->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+        addChild(gtd);
+        module->globalTransposeDisplay = gtd;
+
+    		for(int i = 0; i < numChannels; i++) {
 
 
-  			xx = x + dx*i;
-  			//if(i %2) {
-  				addInput(Port::create<InPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
-  			/*}
-  			else {
-  				addInput(Port::create<PointingUpPentagonPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
-  			}*/
+    			xx = x + dx*i;
+    			//if(i %2) {
+    				addInput(Port::create<InPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
+    			/*}
+    			else {
+    				addInput(Port::create<PointingUpPentagonPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
+    			}*/
 
 
-  			ParamWidget* scaleTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+34)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
-  			addParam(scaleTrimKnob);
-  			
-  			addInput(Port::create<InPort>(mm2px(Vec(xx, y+40)), Port::INPUT, module, ComputerscareOhPeas::SCALE_CV+i));
+    			ParamWidget* scaleTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+34)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
+    			addParam(scaleTrimKnob);
+    			
+    			addInput(Port::create<InPort>(mm2px(Vec(xx, y+40)), Port::INPUT, module, ComputerscareOhPeas::SCALE_CV+i));
 
-  			ParamWidget* scaleKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+50)), module, ComputerscareOhPeas::SCALE_VAL +i,  -1.f, 1.f, 0.0f);   
-  			addParam(scaleKnob);
+    			ParamWidget* scaleKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+50)), module, ComputerscareOhPeas::SCALE_VAL +i,  -1.f, 1.f, 0.0f);   
+    			addParam(scaleKnob);
 
-  			ParamWidget* offsetTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+64)), module, ComputerscareOhPeas::OFFSET_TRIM +i,  -1.f, 1.f, 0.0f);   
-  			addParam(offsetTrimKnob);
-  			
-  			addInput(Port::create<InPort>(mm2px(Vec(xx, y+70)), Port::INPUT, module, ComputerscareOhPeas::OFFSET_CV+i));
+    			ParamWidget* offsetTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+64)), module, ComputerscareOhPeas::OFFSET_TRIM +i,  -1.f, 1.f, 0.0f);   
+    			addParam(offsetTrimKnob);
+    			
+    			addInput(Port::create<InPort>(mm2px(Vec(xx, y+70)), Port::INPUT, module, ComputerscareOhPeas::OFFSET_CV+i));
 
 
-  			ParamWidget* offsetKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+80)), module, ComputerscareOhPeas::OFFSET_VAL +i,  -5.f, 5.f, 0.0f);   
-  			addParam(offsetKnob);
+    			ParamWidget* offsetKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+80)), module, ComputerscareOhPeas::OFFSET_VAL +i,  -5.f, 5.f, 0.0f);   
+    			addParam(offsetKnob);
 
-  			addOutput(Port::create<OutPort>(mm2px(Vec(xx , y+93)), Port::OUTPUT, module, ComputerscareOhPeas::SCALED_OUTPUT + i));
+    			addOutput(Port::create<OutPort>(mm2px(Vec(xx , y+93)), Port::OUTPUT, module, ComputerscareOhPeas::SCALED_OUTPUT + i));
 
-     		addOutput(Port::create<OutPort>(mm2px(Vec(xx , y+105)), Port::OUTPUT, module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
+       		addOutput(Port::create<OutPort>(mm2px(Vec(xx , y+105)), Port::OUTPUT, module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
 
-	}
-}
+  	}
+  }
+  SmallLetterDisplay* ndd;
+  SmallLetterDisplay* gtd;
+
   PeasTextField* textFieldTemp;
 };
 
