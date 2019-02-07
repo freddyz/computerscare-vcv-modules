@@ -33,6 +33,7 @@ extern Model *modelComputerscareLaundrySoup;
 extern Model *modelComputerscareILoveCookies;
 extern Model *modelComputerscareOhPeas;
 
+
 struct ComputerscareResetButton : SVGSwitch,MomentarySwitch {
 	ComputerscareResetButton() {
 		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-rst-text.svg")));
@@ -131,6 +132,7 @@ struct InPort : SVGPort {
 
  // Knobs
 
+
 struct LrgKnob : RoundBlackSnapKnob {
 	LrgKnob() {
 		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-big-knob-effed.svg")));	
@@ -159,7 +161,11 @@ struct BigSmoothKnob : RoundKnob {
 		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-big-knob-effed.svg")));
 	}
 };
-
+struct ComputerscareDotKnob : SmallKnob {
+	ComputerscareDotKnob() {
+		
+	}
+};
 ////////////////////////////////////
 struct SmallLetterDisplay : TransparentWidget {
 

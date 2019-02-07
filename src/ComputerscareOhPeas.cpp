@@ -300,13 +300,14 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 		double dx = 9.95;
 		double xx;
 		double yy=18;
-		  	
-		ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(30,yy)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  -1.f, 1.f, 0.0f);   
-  		addParam(rootKnob);
+
   		
-  		ParamWidget* numDivisionKnob =  ParamWidget::create<MediumSnapKnob>(mm2px(Vec(10,yy)), module, ComputerscareOhPeas::NUM_DIVISIONS ,  1.f, 24.f, 12.0f);   
+  		ParamWidget* numDivisionKnob =  ParamWidget::create<MediumSnapKnob>(mm2px(Vec(11,yy-2)), module, ComputerscareOhPeas::NUM_DIVISIONS ,  1.f, 24.f, 12.0f);   
   		addParam(numDivisionKnob);
-  		   
+  		          
+    ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(21,yy-2)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  -1.f, 1.f, 0.0f);   
+      addParam(rootKnob);
+
   		  textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+20)));
 	      textFieldTemp->setModule(module);
 	      textFieldTemp->box.size = mm2px(Vec(44, 7));
@@ -318,24 +319,25 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 
      	  ndd = new SmallLetterDisplay();
         ndd->box.pos = mm2px(Vec(2,yy));
-        ndd->box.size = Vec(7, 7);
-        ndd->value = "Y";
-        ndd->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+        ndd->box.size = mm2px(Vec(9, 7));
+        ndd->value = "";
+        ndd->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
         addChild(ndd);
         module->numDivisionsDisplay = ndd;
 
         gtd = new SmallLetterDisplay();
-        gtd->box.pos = mm2px(Vec(22,yy));
-        gtd->box.size = Vec(7, 7);
-        gtd->value = "Y";
-        gtd->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+        gtd->box.pos = mm2px(Vec(31,yy));
+        gtd->box.size = mm2px(Vec(9, 7));
+        gtd->value = "";
+        gtd->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
         addChild(gtd);
         module->globalTransposeDisplay = gtd;
 
     		for(int i = 0; i < numChannels; i++) {
 
 
-    			xx = x + dx*i;
+    			xx = x + dx*i+2.4*randomUniform()-1.2;
+          y+=2.4*randomUniform()-1.2;
     			//if(i %2) {
     				addInput(Port::create<InPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
     			/*}
@@ -352,7 +354,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
     			ParamWidget* scaleKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+50)), module, ComputerscareOhPeas::SCALE_VAL +i,  -1.f, 1.f, 0.0f);   
     			addParam(scaleKnob);
 
-    			ParamWidget* offsetTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+64)), module, ComputerscareOhPeas::OFFSET_TRIM +i,  -1.f, 1.f, 0.0f);   
+    			ParamWidget* offsetTrimKnob =  ParamWidget::create<ComputerscareDotKnob>(mm2px(Vec(xx+2,y+64)), module, ComputerscareOhPeas::OFFSET_TRIM +i,  -1.f, 1.f, 0.0f);   
     			addParam(offsetTrimKnob);
     			
     			addInput(Port::create<InPort>(mm2px(Vec(xx, y+70)), Port::INPUT, module, ComputerscareOhPeas::OFFSET_CV+i));
@@ -363,7 +365,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 
     			addOutput(Port::create<OutPort>(mm2px(Vec(xx , y+93)), Port::OUTPUT, module, ComputerscareOhPeas::SCALED_OUTPUT + i));
 
-       		addOutput(Port::create<OutPort>(mm2px(Vec(xx , y+105)), Port::OUTPUT, module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
+       		addOutput(Port::create<InPort>(mm2px(Vec(xx+1 , y+108)), Port::OUTPUT, module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
 
   	}
   }
