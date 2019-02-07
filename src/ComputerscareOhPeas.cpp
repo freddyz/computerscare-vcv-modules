@@ -308,7 +308,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
     ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(21,yy-2)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  -1.f, 1.f, 0.0f);   
       addParam(rootKnob);
 
-  		  textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+20)));
+  		  textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+24)));
 	      textFieldTemp->setModule(module);
 	      textFieldTemp->box.size = mm2px(Vec(44, 7));
 	      textFieldTemp->multiline = false;
