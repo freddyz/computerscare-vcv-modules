@@ -1145,10 +1145,10 @@ std::vector<Token> tokenizeString(std::string input) {
 	return stack;
 }
 void whoKnowsQuantize(std::string input) {
-	Quantizer q = Quantizer("2212221",12,0);
-	float in = std::stof(input);
-	printf("closest: %f\n",q.quantize(in));
-	printf("even   : %f\n",q.quantizeEven(in));
+	//Quantizer q = Quantizer("2212221",12,0);
+	//float in = std::stof(input);
+	//printf("closest: %f\n",q.quantize(in));
+	//printf("even   : %f\n",q.quantizeEven(in));
 }
 Quantizer::Quantizer() {
   Quantizer("2212221",12,0);
@@ -1162,8 +1162,8 @@ Quantizer::Quantizer(std::string intervals, int divisions, int trans) {
 	fTranspose = (float)transpose/(float)numDivisions;
 	mappedValues = generateMappedValues();
 	numSteps = (int) mappedValues.size();
-  printf("  mappedValues:\n");
-	printFloatVector(mappedValues);
+ // printf("  mappedValues:\n");
+	//printFloatVector(mappedValues);
 } 
 std::vector<float> Quantizer::generateMappedValues() {
 	std::vector<float> output;

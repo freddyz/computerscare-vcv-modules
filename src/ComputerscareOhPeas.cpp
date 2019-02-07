@@ -179,7 +179,7 @@ void ComputerscareOhPeas::step() {
   //int globalTransposeKnobValue = (int) clamp(roundf(params[GLOBAL_TRANSPOSE].value), -fNumDiv, fNumDiv);
 
 	if(numDivisionsKnobValue != numDivisions) {
-    printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
+    //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
 		//what a hack!!!
     if(numDivisionsKnobValue != 0){
       
@@ -189,7 +189,7 @@ void ComputerscareOhPeas::step() {
 		
 	}
   if(iTranspose != globalTranspose) {
-        printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
+        //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
 
     globalTranspose = iTranspose;
     setQuant();
@@ -260,7 +260,7 @@ void PeasTextField::onTextChange() {
   Quantizer q = Quantizer(value,12,0);
 
   if(true) {
-  	printf("no parse error\n");
+  	//printf("no parse error\n");
   	module->setQuant();
     //module->textFields[this->rowIndex]->inError=false;
     
@@ -269,7 +269,7 @@ void PeasTextField::onTextChange() {
       //whoKnowsLaundry(value);
   }
   else {
-  	printf("Parse Error\n");
+  	//printf("Parse Error\n");
     //module->textFields[this->rowIndex]->inError=true;
   }
 
