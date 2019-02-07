@@ -276,7 +276,7 @@ void PeasTextField::onTextChange() {
 }
 
 struct ComputerscareOhPeasWidget : ModuleWidget {
-
+  float randAmt = 1.f;
 	ComputerscareOhPeasWidget(ComputerscareOhPeas *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareOhPeasPanel.svg")));
 /*
@@ -336,8 +336,8 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
     		for(int i = 0; i < numChannels; i++) {
 
 
-    			xx = x + dx*i+2.4*randomUniform()-1.2;
-          y+=2.4*randomUniform()-1.2;
+    			xx = x + dx*i+randAmt*(2*randomUniform()-.5);
+          y+=randAmt*(randomUniform()-.5);
     			//if(i %2) {
     				addInput(Port::create<InPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
     			/*}
