@@ -176,12 +176,12 @@ void setAbsoluteSequenceFromQueue(int index) {
   laundrySequences[index] = lss;
   if(!lss.inError) {
     laundrySequences[index] = lss;
-    laundrySequences[index].print(); 
+    //laundrySequences[index].print(); 
     textFields[index]->inError=false;
   }
   else {
     printf("ERROR\n");
-    lss.print();
+    //lss.print();
     textFields[index]->inError=true;
   }
 }

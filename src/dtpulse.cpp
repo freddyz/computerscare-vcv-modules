@@ -366,8 +366,8 @@ bool matchParens(std::string value) {
     return theyMatch;
   }
 void whoKnows(std::string input) {
-	AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
-	abs.print();
+	//AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
+	/*abs.print();
   printf("  indexSequence:\n");
   printVector(abs.indexSequence);
   printf("  workingIndexSequence:\n");
@@ -377,17 +377,17 @@ void whoKnows(std::string input) {
   for(int j = 0; j < 13; j++) {
     abs.incrementAndCheck();
     printVector(abs.workingIndexSequence);
-  }
+  }*/
 }
 void whoKnowsLaundry(std::string input) {
-	LaundrySoupSequence laundry = LaundrySoupSequence(input);
+	//LaundrySoupSequence laundry = LaundrySoupSequence(input);
  
-  laundry.print();
+  /*laundry.print();
 	printf("  iteration:\n");
   for(int j = 0; j < 13; j++) {
     laundry.incrementAndCheck();
     printVector(laundry.workingPulseSequence);
-  }
+  }*/
 
 }
 LaundrySoupSequence::LaundrySoupSequence() {
