@@ -315,7 +315,6 @@ void ComputerscareILoveCookies::step() {
   bool currentResetActive;
   bool currentResetTriggered;
   bool currentManualResetClicked;
-  bool onLastStepAfterIncrement;
 	float knobRawValue = 0.f;
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
@@ -552,7 +551,7 @@ Menu *ComputerscareILoveCookiesWidget::createContextMenu() {
   menu->addChild(spacerLabel);
   
   MenuLabel *modeLabel = new MenuLabel();
-  modeLabel->text = "Horseman Optinos";
+  modeLabel->text = "Premium Randomizations";
   menu->addChild(modeLabel);
   
   WiggleKnobsMenuItem *wiggleKnobsMenuItem = new WiggleKnobsMenuItem();
@@ -569,4 +568,4 @@ Menu *ComputerscareILoveCookiesWidget::createContextMenu() {
 
   return menu;
 }
-Model *modelComputerscareILoveCookies = Model::create<ComputerscareILoveCookies, ComputerscareILoveCookiesWidget>("computerscare", "computerscare-i-love-cookies", "I Love Cookies", SEQUENCER_TAG);
+Model *modelComputerscareILoveCookies = Model::create<ComputerscareILoveCookies, ComputerscareILoveCookiesWidget>("computerscare", "computerscare-i-love-cookies", "I Love Cookies", SEQUENCER_TAG, UTILITY_TAG);

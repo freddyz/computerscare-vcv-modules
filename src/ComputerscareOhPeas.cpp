@@ -8,8 +8,6 @@
 #include <sstream>
 #include <iomanip>
 
-#define NUM_LINES 16
-
 struct ComputerscareOhPeas;
 
 const int numChannels= 4;
@@ -99,27 +97,16 @@ struct ComputerscareOhPeas : Module {
 		NUM_LIGHTS
 	};
 
-	std::string defaultStrValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
-	std::string strValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
-
-	float logLines[NUM_LINES] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 	PeasTextField* textField;
 
-	int lineCounter = 0;
 	int numDivisions = 12;
   int globalTranspose = 0;
-  std::string numDivisionsString = "N";
+  bool evenQuantizeMode = true;
+  std::string numDivisionsString = "";
   SmallLetterDisplay* numDivisionsDisplay;
   SmallLetterDisplay* globalTransposeDisplay;
 
-	SchmittTrigger clockTrigger;
-	SchmittTrigger clearTrigger;
-	SchmittTrigger manualClockTrigger;
-  	SchmittTrigger manualClearTrigger;
-
-  	Quantizer quantizers[numChannels];
-  	Quantizer quant;
-  	std::vector<float> vvv = {0.f, 0.4f, 0.7f, 0.95f};
+  Quantizer quant;
 
 	ComputerscareOhPeas() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
 		quant = Quantizer("221222",12,0);
@@ -159,8 +146,9 @@ struct ComputerscareOhPeas : Module {
     this->setNumDivisionsString();
 	}
   void setNumDivisionsString() {
+    std::string transposeString =  (this->globalTranspose > 0 ? "+" : "" ) + std::to_string(this->globalTranspose);
     this->numDivisionsDisplay->value = std::to_string(this->numDivisions);
-    this->globalTransposeDisplay->value = std::to_string(this->globalTranspose);
+    this->globalTransposeDisplay->value = transposeString;
     
   }
 	// For more advanced Module features, read Rack's engine.hpp header file
@@ -171,7 +159,7 @@ struct ComputerscareOhPeas : Module {
 
 
 void ComputerscareOhPeas::step() {
-	float A,B,C,D,Q,a,b,c,d,octavePart;
+	float A,B,C,D,Q,a,b,c,d;
 
 	int numDivisionsKnobValue = floor(params[NUM_DIVISIONS].value);
   int iTranspose = floor(numDivisionsKnobValue * params[GLOBAL_TRANSPOSE].value);
@@ -256,27 +244,36 @@ struct StringDisplayWidget3 : TransparentWidget {
 };
 
 void PeasTextField::onTextChange() {
-  std::string value = module->textField->text;
-  Quantizer q = Quantizer(value,12,0);
-
-  if(true) {
-  	//printf("no parse error\n");
   	module->setQuant();
-    //module->textFields[this->rowIndex]->inError=false;
-    
-      //module->setNextAbsoluteSequence(this->rowIndex);
-      //module->updateDisplayBlink(this->rowIndex);
-      //whoKnowsLaundry(value);
-  }
-  else {
-  	//printf("Parse Error\n");
-    //module->textFields[this->rowIndex]->inError=true;
-  }
-
 }
+struct SetScaleMenuItem : MenuItem {
+  ComputerscareOhPeas *peas;
+  std::string scale="221222";
+  SetScaleMenuItem(std::string scaleInput) {
+    scale=scaleInput;
+  }
+  void onAction(EventAction &e) override {
+    peas->textField->text = scale;
+    peas->setQuant();
+  }
+};
+struct SetQuantizationModeMenuItem : MenuItem {
+ ComputerscareOhPeas *peas;
+ bool mode = true;
+  SetQuantizationModeMenuItem(bool evenMode) {
+    mode=evenMode;
+  }
+  void onAction(EventAction &e) override {
+    peas->evenQuantizeMode = mode;
+  }
+  void step() override {
+    rightText = CHECKMARK(peas->evenQuantizeMode == mode);
+    MenuItem::step();
+  }
+};
 
 struct ComputerscareOhPeasWidget : ModuleWidget {
-  float randAmt = 1.f;
+  float randAmt = 0.f;
 	ComputerscareOhPeasWidget(ComputerscareOhPeas *module) : ModuleWidget(module) {
 		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareOhPeasPanel.svg")));
 /*
@@ -325,36 +322,20 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
         addChild(ndd);
         module->numDivisionsDisplay = ndd;
 
-        gtd = new SmallLetterDisplay();
-        gtd->box.pos = mm2px(Vec(31,yy));
-        gtd->box.size = mm2px(Vec(9, 7));
-        gtd->value = "";
-        gtd->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
-        addChild(gtd);
-        module->globalTransposeDisplay = gtd;
+        transposeDisplay = new SmallLetterDisplay();
+        transposeDisplay->box.pos = mm2px(Vec(30,yy));
+        transposeDisplay->box.size = mm2px(Vec(11, 7));
+        transposeDisplay->letterSpacing = 2.f;
+        transposeDisplay->value = "";
+        transposeDisplay->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+        addChild(transposeDisplay);
+        module->globalTransposeDisplay = transposeDisplay;
 
     		for(int i = 0; i < numChannels; i++) {
 
-
     			xx = x + dx*i+randAmt*(2*randomUniform()-.5);
           y+=randAmt*(randomUniform()-.5);
-    			//if(i %2) {
-    				addInput(Port::create<InPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
-    			/*}
-    			else {
-    				addInput(Port::create<PointingUpPentagonPort>(mm2px(Vec(xx, y)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
-    			}*/
-
-
-    		
-
-         /*trimPlusMinus = new SmallLetterDisplay();
-        trimPlusMinus->box.pos = mm2px(Vec(xx+.4,y+30.5));
-        //ndd->box.size = mm2px(Vec(9, 7));
-        trimPlusMinus->value = "- +";
-        trimPlusMinus->fontSize = 20;
-        trimPlusMinus->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
-        addChild(trimPlusMinus);*/
+    			addInput(Port::create<InPort>(mm2px(Vec(xx, y-0.8)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
 
           ParamWidget* scaleTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+34)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
           addParam(scaleTrimKnob);
@@ -378,17 +359,78 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
        		addOutput(Port::create<InPort>(mm2px(Vec(xx+1 , y+108)), Port::OUTPUT, module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
 
   	}
+    module->setQuant();
   }
    SmallLetterDisplay* trimPlusMinus;
   SmallLetterDisplay* ndd;
-  SmallLetterDisplay* gtd;
+  SmallLetterDisplay* transposeDisplay;
 
   PeasTextField* textFieldTemp;
+  Menu *createContextMenu() override;
+
 };
 
+
+void scaleItemAdd(ComputerscareOhPeas* peas, Menu* menu, std::string scale, std::string label) {
+  SetScaleMenuItem *menuItem = new SetScaleMenuItem(scale);
+  menuItem->text = label;
+  menuItem->peas = peas;
+  menu->addChild(menuItem);
+}
+
+void quantizationModeMenuItemAdd(ComputerscareOhPeas* peas, Menu* menu, bool evenMode, std::string label) {
+  SetQuantizationModeMenuItem *menuItem = new SetQuantizationModeMenuItem(evenMode);
+  menuItem->text = label;
+  menuItem->peas = peas;
+  menu->addChild(menuItem);
+}
+ 
+Menu *ComputerscareOhPeasWidget::createContextMenu() {
+  Menu *menu = ModuleWidget::createContextMenu();
+  ComputerscareOhPeas *peas = dynamic_cast<ComputerscareOhPeas*>(module);
+  assert(peas);
+
+  MenuLabel *spacerLabel = new MenuLabel();
+  menu->addChild(spacerLabel);
+  
+  /*
+  // "closest" quantization mode is quite a bit slower than even
+  MenuLabel *quantModeLabel = new MenuLabel();
+  quantModeLabel->text = "Quantization Mode";
+  menu->addChild(quantModeLabel);
+
+  quantizationModeMenuItemAdd(peas,menu,true,"Even");
+  quantizationModeMenuItemAdd(peas,menu,false,"Closest");
+  
+
+
+  MenuLabel *spacerLabel2 = new MenuLabel();
+  menu->addChild(spacerLabel2);*/
+  
+
+  MenuLabel *modeLabel = new MenuLabel();
+  modeLabel->text = "Scale Presets";
+  menu->addChild(modeLabel);
+
+  scaleItemAdd(peas,menu,"221222","Major");
+  scaleItemAdd(peas,menu,"212212","Natural Minor");
+  scaleItemAdd(peas,menu,"2232","Major Pentatonic");
+  scaleItemAdd(peas,menu,"3223","Minor Pentatonic");
+  scaleItemAdd(peas,menu,"32113","Blues");
+  scaleItemAdd(peas,menu,"11111111111","Chromatic");
+  scaleItemAdd(peas,menu,"212213","Harmonic Minor");
+  scaleItemAdd(peas,menu,"43","Major Triad");
+  scaleItemAdd(peas,menu,"34","Minor Triad");
+  scaleItemAdd(peas,menu,"33","Diminished Triad");
+  scaleItemAdd(peas,menu,"434","Major 7 Tetrachord");
+  scaleItemAdd(peas,menu,"433","Dominant 7 Tetrachord");
+  scaleItemAdd(peas,menu,"343","Minor 7 Tetrachord");
+
+  return menu;
+}
 
 // Specify the Module and ModuleWidget subclass, human-readable
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
 // (found in `include/tags.hpp`) separated by commas.
-Model *modelComputerscareOhPeas = Model::create<ComputerscareOhPeas, ComputerscareOhPeasWidget>("computerscare", "computerscare-ohpeas", "Oh Peas!", UTILITY_TAG);
+Model *modelComputerscareOhPeas = Model::create<ComputerscareOhPeas, ComputerscareOhPeasWidget>("computerscare", "computerscare-ohpeas", "Oh Peas! Quad Quantenuverter", QUANTIZER_TAG, ATTENUATOR_TAG, QUAD_TAG, UTILITY_TAG);
