@@ -171,7 +171,7 @@ struct ComputerscareOhPeas : Module {
 
 
 void ComputerscareOhPeas::step() {
-	float A,B,C,D,Q,a,b,c,d,octavePart;
+	float A,B,C,D,Q,a,b,c,d;
 
 	int numDivisionsKnobValue = floor(params[NUM_DIVISIONS].value);
   int iTranspose = floor(numDivisionsKnobValue * params[GLOBAL_TRANSPOSE].value);
@@ -256,24 +256,19 @@ struct StringDisplayWidget3 : TransparentWidget {
 };
 
 void PeasTextField::onTextChange() {
-  std::string value = module->textField->text;
-  Quantizer q = Quantizer(value,12,0);
-
-  if(true) {
-  	//printf("no parse error\n");
   	module->setQuant();
-    //module->textFields[this->rowIndex]->inError=false;
-    
-      //module->setNextAbsoluteSequence(this->rowIndex);
-      //module->updateDisplayBlink(this->rowIndex);
-      //whoKnowsLaundry(value);
-  }
-  else {
-  	//printf("Parse Error\n");
-    //module->textFields[this->rowIndex]->inError=true;
-  }
-
 }
+struct SetMajorScaleMenuItem : MenuItem {
+  ComputerscareOhPeas *peas;
+  std::string scale="221222";
+  SetMajorScaleMenuItem(std::string scaleInput) {
+    scale=scaleInput;
+  }
+  void onAction(EventAction &e) override {
+    peas->textField->text = scale;
+    peas->setQuant();
+  }
+};
 
 struct ComputerscareOhPeasWidget : ModuleWidget {
   float randAmt = 1.f;
@@ -384,9 +379,51 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
   SmallLetterDisplay* gtd;
 
   PeasTextField* textFieldTemp;
+  Menu *createContextMenu() override;
 };
 
+ 
+Menu *ComputerscareOhPeasWidget::createContextMenu() {
+  Menu *menu = ModuleWidget::createContextMenu();
+  ComputerscareOhPeas *peas = dynamic_cast<ComputerscareOhPeas*>(module);
+  assert(peas);
 
+  MenuLabel *spacerLabel = new MenuLabel();
+  menu->addChild(spacerLabel);
+  
+  MenuLabel *modeLabel = new MenuLabel();
+  modeLabel->text = "Scale";
+  menu->addChild(modeLabel);
+  
+  SetMajorScaleMenuItem *setMajorScaleMenuItem = new SetMajorScaleMenuItem("221222");
+  setMajorScaleMenuItem->text = "Major";
+  setMajorScaleMenuItem->peas = peas;
+  menu->addChild(setMajorScaleMenuItem);
+
+  SetMajorScaleMenuItem *setMinorScaleMenuItem = new SetMajorScaleMenuItem("212212");
+  setMinorScaleMenuItem->text = "Natural Minor";
+  setMinorScaleMenuItem->peas = peas;
+  menu->addChild(setMinorScaleMenuItem);
+
+  SetMajorScaleMenuItem *setPentatonicScaleMenuItem = new SetMajorScaleMenuItem("2212");
+  setPentatonicScaleMenuItem->text = "Pentatonic Major";
+  setPentatonicScaleMenuItem->peas = peas;
+  menu->addChild(setPentatonicScaleMenuItem);
+  SetMajorScaleMenuItem *setChromaticScaleMenuItem = new SetMajorScaleMenuItem("11111111111");
+  setChromaticScaleMenuItem->text = "Chromatic";
+  setChromaticScaleMenuItem->peas = peas;
+  menu->addChild(setChromaticScaleMenuItem);
+
+  SetMajorScaleMenuItem *setHarmonicMinorScaleMenuItem = new SetMajorScaleMenuItem("212213");
+  setHarmonicMinorScaleMenuItem->text = "Harmonic Minor";
+  setHarmonicMinorScaleMenuItem->peas = peas;
+  menu->addChild(setHarmonicMinorScaleMenuItem);
+
+
+  
+
+  return menu;
+}
 // Specify the Module and ModuleWidget subclass, human-readable
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
