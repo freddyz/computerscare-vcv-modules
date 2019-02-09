@@ -346,8 +346,18 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
     			}*/
 
 
-    			ParamWidget* scaleTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+34)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
-    			addParam(scaleTrimKnob);
+    		
+
+         /*trimPlusMinus = new SmallLetterDisplay();
+        trimPlusMinus->box.pos = mm2px(Vec(xx+.4,y+30.5));
+        //ndd->box.size = mm2px(Vec(9, 7));
+        trimPlusMinus->value = "- +";
+        trimPlusMinus->fontSize = 20;
+        trimPlusMinus->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+        addChild(trimPlusMinus);*/
+
+          ParamWidget* scaleTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+34)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
+          addParam(scaleTrimKnob);
     			
     			addInput(Port::create<InPort>(mm2px(Vec(xx, y+40)), Port::INPUT, module, ComputerscareOhPeas::SCALE_CV+i));
 
@@ -369,6 +379,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 
   	}
   }
+   SmallLetterDisplay* trimPlusMinus;
   SmallLetterDisplay* ndd;
   SmallLetterDisplay* gtd;
 

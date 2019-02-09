@@ -1099,7 +1099,6 @@ std::string Parser::parseFloat(Token t)
             }
         } else {
 					inError = true;
-          printf("Expected digit after '.', number: %s\n",number.c_str());
         }
     }
     return number;
