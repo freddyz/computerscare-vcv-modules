@@ -40,14 +40,12 @@ struct ComputerscareIso : Module {
 struct ComputerscareIsoWidget : ModuleWidget {
   float randAmt = 1.f;
 	ComputerscareIsoWidget(ComputerscareIso *module) : ModuleWidget(module) {
-		//ComputerscareSVGPanel *csPanel = new ComputerscareSVGPanel();
 		box.size = Vec(15*9, 380);
 		{
-		ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
-		panel->box.size = box.size;
-		 panel->setBackground(SVG::load(assetPlugin(plugin,"res/ComputerscareIsoPanel.svg")));
-    addChild(panel);
-		//setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareTotallyEmptyPanel.svg")));
+			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
+				panel->box.size = box.size;
+			 	panel->setBackground(SVG::load(assetPlugin(plugin,"res/ComputerscareIsoPanel.svg")));
+	    		addChild(panel);
 		}
   }
   void drawShadow(NVGcontext *vg) {

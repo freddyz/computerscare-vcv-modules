@@ -34,9 +34,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="2.8284273"
-     inkscape:cx="59.481328"
-     inkscape:cy="281.43433"
+     inkscape:zoom="32.000002"
+     inkscape:cx="88.487053"
+     inkscape:cy="381.43432"
      inkscape:document-units="mm"
      inkscape:current-layer="g1669"
      showgrid="false"
@@ -298,21 +298,21 @@
     </g>
     <path
        sodipodi:nodetypes="ccccc"
-       style="opacity:1;vector-effect:none;fill:#f9f9f9;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.273;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:normal"
+       style="opacity:1;vector-effect:none;fill:#f9f9f9;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.273;stroke-linecap:butt;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:normal"
        d="m 0.18378203,196.58837 22.22692397,-0.009 c 0.222081,5.39584 0.0301,9.42735 -0.05309,14.44691 l -22.13030777,-1.5e-4 z"
        id="path4018"
        inkscape:connector-curvature="0" />
     <path
-       style="fill:#dedede;fill-opacity:1;stroke:#000000;stroke-width:0.26499999;stroke-linecap:butt;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 0.13229166,210.94426 3.17499974,3.04271 21.1987646,0.0387 -2.148766,-3.08146 z"
+       style="fill:#dedede;fill-opacity:1;stroke:#000000;stroke-width:0.26499999;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 0.22583599,210.93842 -0.007612,0.1447 3.10076081,2.90385 21.2862902,0.0222 -0.02052,-0.97531 -2.227465,-2.08961 z"
        id="path4020"
        inkscape:connector-curvature="0"
-       sodipodi:nodetypes="ccccc" />
+       sodipodi:nodetypes="ccccccc" />
     <path
        style="fill:#bababa;fill-opacity:1;stroke:#000000;stroke-width:0.26499999;stroke-linecap:butt;stroke-linejoin:bevel;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 22.291144,196.52448 2.315104,3.0427 -0.0066,14.55208 -2.24231,-3.175 z"
+       d="m 22.30768,196.58236 0.129574,0.0666 2.168994,2.91823 0.0017,14.38667 -0.0083,0.1158 -2.24231,-3.12539 z"
        id="path4022"
        inkscape:connector-curvature="0"
-       sodipodi:nodetypes="ccccc" />
+       sodipodi:nodetypes="ccccccc" />
   </g>
 </svg>
