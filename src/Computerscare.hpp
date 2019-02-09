@@ -1,7 +1,6 @@
 #pragma once
 #include "rack.hpp"
 
-
 using namespace rack;
 
 // Forward-declare the Plugin, defined in Template.cpp
@@ -33,6 +32,12 @@ extern Model *modelComputerscareLaundrySoup;
 extern Model *modelComputerscareILoveCookies;
 extern Model *modelComputerscareOhPeas;
 extern Model *modelComputerscareIso;
+struct ComputerscareSVGPanel;
+
+struct ComputerscareSVGPanel : FramebufferWidget {
+	void step() override;
+	void setBackground(std::shared_ptr<SVG> svg);
+};
 
 struct IsoButton : SVGSwitch, ToggleSwitch {
 	IsoButton() {

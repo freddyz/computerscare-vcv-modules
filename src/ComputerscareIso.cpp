@@ -40,9 +40,28 @@ struct ComputerscareIso : Module {
 struct ComputerscareIsoWidget : ModuleWidget {
   float randAmt = 1.f;
 	ComputerscareIsoWidget(ComputerscareIso *module) : ModuleWidget(module) {
-		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareIsoPanel.svg")));
-
+		//ComputerscareSVGPanel *csPanel = new ComputerscareSVGPanel();
+		box.size = Vec(15*9, 380);
+		{
+		ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
+		panel->box.size = box.size;
+		 panel->setBackground(SVG::load(assetPlugin(plugin,"res/ComputerscareIsoPanel.svg")));
+    addChild(panel);
+		//setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareTotallyEmptyPanel.svg")));
+		}
   }
+  void drawShadow(NVGcontext *vg) {
+	nvgBeginPath(vg);
+	float r = 20; // Blur radius
+	float c = 20; // Corner radius
+	Vec b = Vec(-10, 30); // Offset from each corner
+	nvgRect(vg, b.x - r, b.y - r, box.size.x - 2*b.x + 2*r, box.size.y - 2*b.y + 2*r);
+	NVGcolor shadowColor = nvgRGBAf(0, 220, 0, 0.2);
+	NVGcolor transparentColor = nvgRGBAf(0, 0, 0, 0);
+	nvgFillPaint(vg, nvgBoxGradient(vg, b.x, b.y, box.size.x - 2*b.x, box.size.y - 2*b.y, c, r, shadowColor, transparentColor));
+	nvgFill(vg);
+}
+
 };
 
 
