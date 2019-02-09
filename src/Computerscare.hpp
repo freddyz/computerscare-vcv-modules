@@ -32,8 +32,14 @@ extern Model *modelComputerscarePatchSequencer;
 extern Model *modelComputerscareLaundrySoup;
 extern Model *modelComputerscareILoveCookies;
 extern Model *modelComputerscareOhPeas;
+extern Model *modelComputerscareIso;
 
-
+struct IsoButton : SVGSwitch, ToggleSwitch {
+	IsoButton() {
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-iso-button-down.svg")));
+		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-iso-button-up.svg")));
+	}
+};
 struct ComputerscareResetButton : SVGSwitch,MomentarySwitch {
 	ComputerscareResetButton() {
 		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-rst-text.svg")));
