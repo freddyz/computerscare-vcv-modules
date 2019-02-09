@@ -433,4 +433,4 @@ Menu *ComputerscareOhPeasWidget::createContextMenu() {
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
 // (found in `include/tags.hpp`) separated by commas.
-Model *modelComputerscareOhPeas = Model::create<ComputerscareOhPeas, ComputerscareOhPeasWidget>("computerscare", "computerscare-ohpeas", "Oh Peas!", UTILITY_TAG);
+Model *modelComputerscareOhPeas = Model::create<ComputerscareOhPeas, ComputerscareOhPeasWidget>("computerscare", "computerscare-ohpeas", "Oh Peas! Quad Quantenuverter", QUANTIZER_TAG, ATTENUATOR_TAG, QUAD_TAG, UTILITY_TAG);
