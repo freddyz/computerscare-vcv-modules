@@ -325,10 +325,8 @@ void MyTextField::onTextChange() {
 
   if(!lss.inError && matchParens(value)) {
     module->textFields[this->rowIndex]->inError=false;
-    
       module->setNextAbsoluteSequence(this->rowIndex);
       module->updateDisplayBlink(this->rowIndex);
-      //whoKnowsLaundry(value);
   }
   else {
     module->textFields[this->rowIndex]->inError=true;

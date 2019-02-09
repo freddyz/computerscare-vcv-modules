@@ -1133,10 +1133,10 @@ std::vector<Token> tokenizeString(std::string input) {
     else if(token== ":") stack.push_back(Token("Colon",token));
     else if(token== ";") stack.push_back(Token("Semicolon",token));
     else if(token== "|") stack.push_back(Token("Pipe",token));
-    else if(knobandinputlookup.find(token) != -1) {
+    else if(knobandinputlookup.find(token) != std::string::npos) {
 			stack.push_back(Token("Letter",token,knobandinputlookup.find(token)));
 		}
-    else if(integerlookup.find(token) != -1) {
+    else if(integerlookup.find(token) != std::string::npos) {
 			stack.push_back(Token("Digit",token));
 		}
     else stack.push_back(Token("Unknown",token));
