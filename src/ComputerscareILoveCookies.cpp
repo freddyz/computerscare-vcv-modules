@@ -315,7 +315,6 @@ void ComputerscareILoveCookies::step() {
   bool currentResetActive;
   bool currentResetTriggered;
   bool currentManualResetClicked;
-  bool onLastStepAfterIncrement;
 	float knobRawValue = 0.f;
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
