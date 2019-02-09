@@ -552,7 +552,7 @@ Menu *ComputerscareILoveCookiesWidget::createContextMenu() {
   menu->addChild(spacerLabel);
   
   MenuLabel *modeLabel = new MenuLabel();
-  modeLabel->text = "Horseman Optinos";
+  modeLabel->text = "Premium Randomizations";
   menu->addChild(modeLabel);
   
   WiggleKnobsMenuItem *wiggleKnobsMenuItem = new WiggleKnobsMenuItem();

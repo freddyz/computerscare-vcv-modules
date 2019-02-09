@@ -258,10 +258,10 @@ struct StringDisplayWidget3 : TransparentWidget {
 void PeasTextField::onTextChange() {
   	module->setQuant();
 }
-struct SetMajorScaleMenuItem : MenuItem {
+struct SetScaleMenuItem : MenuItem {
   ComputerscareOhPeas *peas;
   std::string scale="221222";
-  SetMajorScaleMenuItem(std::string scaleInput) {
+  SetScaleMenuItem(std::string scaleInput) {
     scale=scaleInput;
   }
   void onAction(EventAction &e) override {
@@ -382,6 +382,13 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
   Menu *createContextMenu() override;
 };
 
+
+void scaleItemAdd(ComputerscareOhPeas* peas, Menu* menu, std::string scale, std::string label) {
+  SetScaleMenuItem *menuItem = new SetScaleMenuItem(scale);
+  menuItem->text = label;
+  menuItem->peas = peas;
+  menu->addChild(menuItem);
+}
  
 Menu *ComputerscareOhPeasWidget::createContextMenu() {
   Menu *menu = ModuleWidget::createContextMenu();
@@ -392,38 +399,23 @@ Menu *ComputerscareOhPeasWidget::createContextMenu() {
   menu->addChild(spacerLabel);
   
   MenuLabel *modeLabel = new MenuLabel();
-  modeLabel->text = "Scale";
+  modeLabel->text = "Scale Presets";
   menu->addChild(modeLabel);
-  
-  SetMajorScaleMenuItem *setMajorScaleMenuItem = new SetMajorScaleMenuItem("221222");
-  setMajorScaleMenuItem->text = "Major";
-  setMajorScaleMenuItem->peas = peas;
-  menu->addChild(setMajorScaleMenuItem);
 
-  SetMajorScaleMenuItem *setMinorScaleMenuItem = new SetMajorScaleMenuItem("212212");
-  setMinorScaleMenuItem->text = "Natural Minor";
-  setMinorScaleMenuItem->peas = peas;
-  menu->addChild(setMinorScaleMenuItem);
-
-  SetMajorScaleMenuItem *setPentatonicScaleMenuItem = new SetMajorScaleMenuItem("2212");
-  setPentatonicScaleMenuItem->text = "Pentatonic Major";
-  setPentatonicScaleMenuItem->peas = peas;
-  menu->addChild(setPentatonicScaleMenuItem);
-  SetMajorScaleMenuItem *setChromaticScaleMenuItem = new SetMajorScaleMenuItem("11111111111");
-  setChromaticScaleMenuItem->text = "Chromatic";
-  setChromaticScaleMenuItem->peas = peas;
-  menu->addChild(setChromaticScaleMenuItem);
-
-  SetMajorScaleMenuItem *setHarmonicMinorScaleMenuItem = new SetMajorScaleMenuItem("212213");
-  setHarmonicMinorScaleMenuItem->text = "Harmonic Minor";
-  setHarmonicMinorScaleMenuItem->peas = peas;
-  menu->addChild(setHarmonicMinorScaleMenuItem);
+  scaleItemAdd(peas,menu,"221222","Major");
+  scaleItemAdd(peas,menu,"212212","Natural Minor");
+  scaleItemAdd(peas,menu,"2232","Major Pentatonic");
+  scaleItemAdd(peas,menu,"3223","Minor Pentatonic");
+  scaleItemAdd(peas,menu,"32113","Blues");
+  scaleItemAdd(peas,menu,"11111111111","Chromatic");
+  scaleItemAdd(peas,menu,"212213","Harmonic Minor");
 
 
   
 
   return menu;
 }
+
 // Specify the Module and ModuleWidget subclass, human-readable
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
