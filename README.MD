@@ -15,6 +15,22 @@ YLX    LY5    2X5    Y2L    2LY    X25    YLX    YLL
 2LY    X22    25L    52L    YXY    X5Y    55Y    225    
 5YX    XLX    5YX    25X    LY5    L2Y    L5X    55L   
 ~~~~
+
+# Oh Peas! Quad Quantenuverter
+4-Channel attenuverter, offsetter, quantizer
+
+~~~~
+ЧxЧ-ፌፌ--   Ч  x䒜-᳹淧ፌ-   -  -淧xx-
+ ፌ᳹ 䒜ፌ   x-䒜ፌፌ  ᳹-      ᳹xx   淧 
+xx ᳹䒜  淧   -- ፌxЧ -᳹   xxx-x䒜x᳹ 
+   淧x- --ፌ᳹xx䒜䒜 䒜 䒜x Ч  -- ᳹x - 
+_==-=-=-__==-=-=-__==-=-=-__==-=-=-__==-=-=-_
+ЧxЧ-ፌፌ--   Ч  x䒜-᳹淧ፌ-   -  -淧xx-
+ ፌ᳹ 䒜ፌ   x-䒜ፌፌ  ᳹-      ᳹xx   淧 
+xx ᳹䒜  淧   -- ፌxЧ -᳹   xxx-x䒜x᳹ 
+   淧x- --ፌ᳹xx䒜䒜 䒜 䒜x Ч  -- ᳹x - 
+~~~~
+
 # I Love Cookies
 Signal & CV Sequencer.  Uses Text as input.  Because after all, don't we all love cookies?
 
