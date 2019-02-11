@@ -137,6 +137,7 @@ struct ComputerscareOhPeas : Module {
           textField->text = json_string_value(sequenceJ);
       }
     }
+    setQuant();
   }
 
 
