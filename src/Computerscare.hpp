@@ -4,9 +4,9 @@
 using namespace rack;
 
 // Forward-declare the Plugin, defined in Template.cpp
-extern Plugin *plugin;
+extern Plugin *computerscarePluginInstance;
 
-#ifndef COLOR_MAGENTA
+/*#ifndef COLOR_MAGENTA
 	#define COLOR_MAGENTA nvgRGB(240, 50, 230)
 #endif
 #ifndef COLOR_LIME
@@ -23,18 +23,19 @@ static const NVGcolor COLOR_COMPUTERSCARE_YELLOW = nvgRGB(0xE4, 0xC4, 0x21);
 static const NVGcolor COLOR_COMPUTERSCARE_BLUE = nvgRGB(0x24, 0x44, 0xC1);
 static const NVGcolor COLOR_COMPUTERSCARE_PINK = nvgRGB(0xAA, 0x18, 0x31);
 static const NVGcolor COLOR_COMPUTERSCARE_TRANSPARENT = nvgRGBA(0x00, 0x00,0x00,0x00);
-
+*/
 
 // Forward-declare each Model, defined in each module source file
-extern Model *modelComputerscareDebug;
-extern Model *modelComputerscarePatchSequencer;
-extern Model *modelComputerscareLaundrySoup;
-extern Model *modelComputerscareILoveCookies;
-extern Model *modelComputerscareOhPeas;
+//extern Model *modelComputerscareDebug;
+//extern Model *modelComputerscarePatchSequencer;
+//extern Model *modelComputerscareLaundrySoup;
+//extern Model *modelComputerscareILoveCookies;
+//extern Model *modelComputerscareOhPeas;
 extern Model *modelComputerscareIso;
-struct ComputerscareSVGPanel;
 
-struct ComputerscareSVGPanel : FramebufferWidget {
+//struct ComputerscareSVGPanel;
+
+/*struct ComputerscareSVGPanel : FramebufferWidget {
 	void step() override;
 	void setBackground(std::shared_ptr<SVG> svg);
 };
@@ -233,4 +234,4 @@ struct SmallLetterDisplay : TransparentWidget {
     nvgTextBox(vg, textPos.x, textPos.y,80,value.c_str(), NULL);
 
   }
-};
+};*/

@@ -1,8 +1,4 @@
 #include "Computerscare.hpp"
-#include "dtpulse.hpp"
-#include "dsp/digital.hpp"
-#include "window.hpp"
-#include "dsp/filter.hpp"
 
 #include <string>
 #include <sstream>
@@ -31,24 +27,33 @@ struct ComputerscareIso : Module {
 	};
 
 
-	ComputerscareIso() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
+	ComputerscareIso()  {
+
+	config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     printf("ujje\n");
 	}
 
 };
 
 struct ComputerscareIsoWidget : ModuleWidget {
-  float randAmt = 1.f;
-	ComputerscareIsoWidget(ComputerscareIso *module) : ModuleWidget(module) {
-		box.size = Vec(15*9, 380);
+	ComputerscareIsoWidget(ComputerscareIso *module) {
+		
+		setModule(module);
+		setPanel(APP->window->loadSvg(asset::plugin(computerscarePluginInstance, "res/ComputerscareIsoPanel.svg")));
+
+
+		/*box.size = Vec(15*9, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 				panel->box.size = box.size;
 			 	panel->setBackground(SVG::load(assetPlugin(plugin,"res/ComputerscareIsoPanel.svg")));
 	    		addChild(panel);
 		}
-  }
-  void drawShadow(NVGcontext *vg) {
+  */
+
+}
+
+  /*void drawShadow(NVGcontext *vg) {
 	nvgBeginPath(vg);
 	float r = 20; // Blur radius
 	float c = 20; // Corner radius
@@ -58,7 +63,7 @@ struct ComputerscareIsoWidget : ModuleWidget {
 	NVGcolor transparentColor = nvgRGBAf(0, 0, 0, 0);
 	nvgFillPaint(vg, nvgBoxGradient(vg, b.x, b.y, box.size.x - 2*b.x, box.size.y - 2*b.y, c, r, shadowColor, transparentColor));
 	nvgFill(vg);
-}
+}*/
 
 };
 
@@ -67,4 +72,6 @@ struct ComputerscareIsoWidget : ModuleWidget {
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
 // (found in `include/tags.hpp`) separated by commas.
-Model *modelComputerscareIso = Model::create<ComputerscareIso, ComputerscareIsoWidget>("computerscare", "computerscare-iso", "Isopig", UTILITY_TAG);
+
+//Model *modelComputerscareIso = Model::create<ComputerscareIso, ComputerscareIsoWidget>("computerscare", "computerscare-iso", "Isopig", UTILITY_TAG);
+Model *modelComputerscareIso = createModel<ComputerscareIso, ComputerscareIsoWidget>("Isopig");
