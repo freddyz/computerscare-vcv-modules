@@ -137,6 +137,7 @@ struct ComputerscareOhPeas : Module {
           textField->text = json_string_value(sequenceJ);
       }
     }
+    setQuant();
   }
 
 
@@ -168,9 +169,9 @@ void ComputerscareOhPeas::step() {
 
 	if(numDivisionsKnobValue != numDivisions) {
     //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
-		//what a hack!!!
-    if(numDivisionsKnobValue != 0){
-      
+		
+    //what a hack!!!
+    if(numDivisionsKnobValue != 0){  
       numDivisions = numDivisionsKnobValue;
       setQuant();
     }
