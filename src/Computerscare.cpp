@@ -1,10 +1,10 @@
 #include "Computerscare.hpp"
 
-Plugin *computerscarePluginInstance;
+Plugin *pluginInstance;
 
 
 void init(Plugin *p) {
-	computerscarePluginInstance = p;
+	pluginInstance = p;
 
 	//p->addModel(modelComputerscareDebug);
 	//p->addModel(modelComputerscarePatchSequencer);

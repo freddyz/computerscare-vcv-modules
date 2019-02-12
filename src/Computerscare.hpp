@@ -1,10 +1,12 @@
-#pragma once
 #include "rack.hpp"
+#include "component.hpp"
 
 using namespace rack;
 
 // Forward-declare the Plugin, defined in Template.cpp
-extern Plugin *computerscarePluginInstance;
+extern Plugin *pluginInstance;
+
+extern Model *modelComputerscareIso;
 
 /*#ifndef COLOR_MAGENTA
 	#define COLOR_MAGENTA nvgRGB(240, 50, 230)
@@ -31,7 +33,7 @@ static const NVGcolor COLOR_COMPUTERSCARE_TRANSPARENT = nvgRGBA(0x00, 0x00,0x00,
 //extern Model *modelComputerscareLaundrySoup;
 //extern Model *modelComputerscareILoveCookies;
 //extern Model *modelComputerscareOhPeas;
-extern Model *modelComputerscareIso;
+
 
 //struct ComputerscareSVGPanel;
 

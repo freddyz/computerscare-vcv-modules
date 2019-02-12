@@ -1,10 +1,5 @@
 #include "Computerscare.hpp"
 
-#include <string>
-#include <sstream>
-#include <iomanip>
-
-
 struct ComputerscareIso;
 
 
@@ -39,7 +34,7 @@ struct ComputerscareIsoWidget : ModuleWidget {
 	ComputerscareIsoWidget(ComputerscareIso *module) {
 		
 		setModule(module);
-		setPanel(APP->window->loadSvg(asset::plugin(computerscarePluginInstance, "res/ComputerscareIsoPanel.svg")));
+		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareIsoPanel.svg")));
 
 
 		/*box.size = Vec(15*9, 380);
