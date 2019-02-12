@@ -2,11 +2,15 @@
 
 struct ComputerscareIso;
 
+const int numKnobs = 16;
+
+const int numToggles = 16;
 
 struct ComputerscareIso : Module {
 	enum ParamIds {
-
-		NUM_PARAMS
+		KNOB,
+		TOGGLES = KNOB + numKnobs,
+		NUM_PARAMS = TOGGLES+numToggles
 		
 	};
 	enum InputIds {
@@ -14,7 +18,7 @@ struct ComputerscareIso : Module {
 		NUM_INPUTS
 	};
 	enum OutputIds {
-	
+		POLY_OUTPUT,
 		NUM_OUTPUTS
 	};
 	enum LightIds {
@@ -24,8 +28,23 @@ struct ComputerscareIso : Module {
 
 	ComputerscareIso()  {
 
-	config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-    printf("ujje\n");
+		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+		
+
+	    printf("ujje\n");
+	    for (int i = 0; i < numKnobs; i++) {
+
+				params[KNOB + i].config(0.0f, 10.0f, 0.0f);
+				params[KNOB+i].config(0.f, 10.f, 0.f, "Channel "+std::to_string(i) + " Voltage", " Volts");
+		}
+		params[TOGGLES].config(0.0f, 1.0f, 0.0f);
+		outputs[POLY_OUTPUT].setChannels(16);
+	}
+	void step() override {
+		for (int i = 0; i < numKnobs; i++) {
+			outputs[POLY_OUTPUT].setVoltage(params[KNOB+i].getValue(),i);
+		}
+
 	}
 
 };
@@ -34,17 +53,34 @@ struct ComputerscareIsoWidget : ModuleWidget {
 	ComputerscareIsoWidget(ComputerscareIso *module) {
 		
 		setModule(module);
-		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareIsoPanel.svg")));
+		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareIsoPanel.svg")));
 
 
-		/*box.size = Vec(15*9, 380);
+		box.size = Vec(15*9, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 				panel->box.size = box.size;
-			 	panel->setBackground(SVG::load(assetPlugin(plugin,"res/ComputerscareIsoPanel.svg")));
+			 	panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance,"res/ComputerscareIsoPanel.svg")));
+	    		
+
+
 	    		addChild(panel);
 		}
-  */
+		addParam(createParam<Davies1900hBlackKnob>(Vec(28, 87), module, ComputerscareIso::KNOB));
+		addParam(createParam<MediumSnapKnob>(Vec(68, 97), module, ComputerscareIso::KNOB+1));
+		addParam(createParam<SmoothKnob>(Vec(68, 127), module, ComputerscareIso::KNOB+2));
+		addParam(createParam<SmallKnob>(Vec(68, 157), module, ComputerscareIso::KNOB+3));
+		addParam(createParam<BigSmoothKnob>(Vec(68, 187), module, ComputerscareIso::KNOB+4));
+		addParam(createParam<MediumSnapKnob>(Vec(68, 267), module, ComputerscareIso::KNOB+5));
+
+		addParam(createParam<IsoButton>(Vec(20, 44), module, ComputerscareIso::TOGGLES));
+
+		//addInput(createInput<PJ301MPort>(Vec(33, 186), module, MyModule::PITCH_INPUT));
+
+		addOutput(createOutput<OutPort>(Vec(33, 275), module, ComputerscareIso::POLY_OUTPUT));
+
+		//addChild(createLight<MediumLight<RedLight>>(Vec(41, 59), module, MyModule::BLINK_LIGHT));
+  
 
 }
 

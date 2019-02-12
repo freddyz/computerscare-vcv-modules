@@ -1,41 +1,41 @@
-#include "app.hpp"
-#include "window.hpp"
+
 #include "Computerscare.hpp"
 
+namespace rack {
+namespace app {
 
 
-
-struct PanelBorder : TransparentWidget {
-	void draw(NVGcontext *vg) override {
-		NVGcolor borderColor = nvgRGBAf(0.5, 0.5, 0.5, 0.5);
-		nvgBeginPath(vg);
-		nvgRect(vg, 0.5, 0.5, box.size.x - 1.0, box.size.y - 1.0);
-		nvgStrokeColor(vg, borderColor);
-		nvgStrokeWidth(vg, 1.0);
-		//nvgStroke(vg);
-	}
-};
+void PanelBorder::draw(const widget::DrawContext &ctx) {
+	NVGcolor borderColor = nvgRGBAf(0.5, 0.5, 0.5, 0.5);
+	nvgBeginPath(ctx.vg);
+	nvgRect(ctx.vg, 0.5, 0.5, box.size.x - 1.0, box.size.y - 1.0);
+	nvgStrokeColor(ctx.vg, borderColor);
+	nvgStrokeWidth(ctx.vg, 1.0);
+	//nvgStroke(ctx.vg);
+}
 
 
 void ComputerscareSVGPanel::step() {
-	if (isNear(gPixelRatio, 1.0)) {
+	if (math::isNear(APP->window->pixelRatio, 1.0)) {
 		// Small details draw poorly at low DPI, so oversample when drawing to the framebuffer
 		oversample = 2.0;
 	}
-	FramebufferWidget::step();
+	widget::FramebufferWidget::step();
 }
 
-void ComputerscareSVGPanel::setBackground(std::shared_ptr<SVG> svg) {
-	SVGWidget *sw = new SVGWidget();
-	sw->setSVG(svg);
+void ComputerscareSVGPanel::setBackground(std::shared_ptr<Svg> svg) {
+	widget::SvgWidget *sw = new widget::SvgWidget;
+	sw->setSvg(svg);
 	addChild(sw);
 
 	// Set size
 	box.size = sw->box.size.div(RACK_GRID_SIZE).round().mult(RACK_GRID_SIZE);
 
-	PanelBorder *pb = new PanelBorder();
+	PanelBorder *pb = new PanelBorder;
 	pb->box.size = box.size;
 	addChild(pb);
 }
 
 
+} // namespace app
+} // namespace rack

@@ -1,22 +1,27 @@
+#pragma once
+
 #include "rack.hpp"
 #include "component.hpp"
+
+#include "app/common.hpp"
+#include "widget/TransparentWidget.hpp"
+#include "widget/FramebufferWidget.hpp"
+#include "widget/SvgWidget.hpp"
+#include "app.hpp"
+
 
 using namespace rack;
 
 // Forward-declare the Plugin, defined in Template.cpp
 extern Plugin *pluginInstance;
 
+// Forward-declare each Model, defined in each module source file
+//extern Model *modelComputerscareDebug;
+//extern Model *modelComputerscarePatchSequencer;
+//extern Model *modelComputerscareLaundrySoup;
+//extern Model *modelComputerscareILoveCookies;
+//extern Model *modelComputerscareOhPeas;
 extern Model *modelComputerscareIso;
-
-/*#ifndef COLOR_MAGENTA
-	#define COLOR_MAGENTA nvgRGB(240, 50, 230)
-#endif
-#ifndef COLOR_LIME
-	#define COLOR_LIME nvgRGB(210, 245, 60)
-#endif
-#ifndef COLOR_PINK
-	#define COLOR_PINK nvgRGB(250, 190, 190)
-#endif
 
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
@@ -25,47 +30,50 @@ static const NVGcolor COLOR_COMPUTERSCARE_YELLOW = nvgRGB(0xE4, 0xC4, 0x21);
 static const NVGcolor COLOR_COMPUTERSCARE_BLUE = nvgRGB(0x24, 0x44, 0xC1);
 static const NVGcolor COLOR_COMPUTERSCARE_PINK = nvgRGB(0xAA, 0x18, 0x31);
 static const NVGcolor COLOR_COMPUTERSCARE_TRANSPARENT = nvgRGBA(0x00, 0x00,0x00,0x00);
-*/
-
-// Forward-declare each Model, defined in each module source file
-//extern Model *modelComputerscareDebug;
-//extern Model *modelComputerscarePatchSequencer;
-//extern Model *modelComputerscareLaundrySoup;
-//extern Model *modelComputerscareILoveCookies;
-//extern Model *modelComputerscareOhPeas;
 
 
-//struct ComputerscareSVGPanel;
+namespace rack {
+namespace app {
 
-/*struct ComputerscareSVGPanel : FramebufferWidget {
+
+
+struct ComputerscareSVGPanel;
+
+struct ComputerscareSVGPanel : widget::FramebufferWidget {
 	void step() override;
-	void setBackground(std::shared_ptr<SVG> svg);
+	void setBackground(std::shared_ptr<Svg> svg);
 };
 
-struct IsoButton : SVGSwitch, ToggleSwitch {
+}
+}
+
+
+struct IsoButton : SvgSwitch {
 	IsoButton() {
-		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-iso-button-down.svg")));
-		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-iso-button-up.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-iso-button-down.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-iso-button-up.svg")));
 	}
 };
-struct ComputerscareResetButton : SVGSwitch,MomentarySwitch {
+
+struct ComputerscareResetButton : SvgSwitch,MomentarySwitch {
 	ComputerscareResetButton() {
-		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-rst-text.svg")));
-		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-rst-text-red.svg")));
-		//SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-rst-text.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-rst-text-red.svg")));
+		//APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
 	}
 };
+/*
 struct ComputerscareClockButton : SVGSwitch,MomentarySwitch {
 	ComputerscareClockButton() {
-		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-clk-text.svg")));
-		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-clk-text-red.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-clk-text.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-clk-text-red.svg")));
 	}
 };
 struct ComputerscareInvisibleButton : SVGSwitch,MomentarySwitch {
 	ComputerscareInvisibleButton() {
-		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-invisible-button.svg")));
-		addFrame(SVG::load(assetPlugin(plugin,"res/computerscare-invisible-button-frame2.svg")));
-		//SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-invisible-button.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-invisible-button-frame2.svg")));
+		//APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
 	}
 };
 
@@ -117,28 +125,30 @@ struct ComputerscareSmallLight : BASE {
 	}
 };
 
+*/
 
-struct OutPort : SVGPort {
+
+struct OutPort : SvgPort {
 	OutPort() {
-		background->svg = SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
-		background->wrap();
-		box.size = background->box.size;
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline-flipped.svg")));
+		//background->wrap();
+		//box.size = background->box.size;
 	}
 };
 
-struct PointingUpPentagonPort : SVGPort {
+struct PointingUpPentagonPort : SvgPort {
 	PointingUpPentagonPort() {
-		background->svg = SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-pointing-up.svg"));
-		background->wrap();
-		box.size = background->box.size;
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-pointing-up.svg")));
+		//background->wrap();
+		//box.size = background->box.size;
 	}
 };
 
-struct InPort : SVGPort {
+struct InPort : SvgPort {
 	InPort() {
-		background->svg = SVG::load(assetPlugin(plugin, "res/computerscare-pentagon-jack-1-outline.svg"));
-		background->wrap();
-		box.size = background->box.size;
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline.svg")));
+		//background->wrap();
+		//box.size = background->box.size;
 	}
 };
 
@@ -149,30 +159,31 @@ struct InPort : SVGPort {
 
 struct LrgKnob : RoundBlackSnapKnob {
 	LrgKnob() {
-		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-big-knob-effed.svg")));	
-		box.size = Vec(32,32);
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-big-knob-effed.svg")));	
 	}
-	void randomize() override { return; }	
+	//void randomize() override { return; }	
 };
+
 
 struct MediumSnapKnob : RoundBlackSnapKnob {
 	MediumSnapKnob() {
-		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-medium-knob-effed.svg")));	
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));	
 	}	
 };
+
 struct SmoothKnob : RoundKnob {
 	SmoothKnob() {
-		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-medium-knob-effed.svg")));
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
 	}
 };
 struct SmallKnob : RoundKnob {
 	SmallKnob() {
-		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-small-knob-effed.svg")));
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
 	}
 };
 struct BigSmoothKnob : RoundKnob {
 	BigSmoothKnob() {
-		setSVG(SVG::load(assetPlugin(plugin, "res/computerscare-big-knob-effed.svg")));
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-big-knob-effed.svg")));
 	}
 };
 struct ComputerscareDotKnob : SmallKnob {
@@ -180,6 +191,8 @@ struct ComputerscareDotKnob : SmallKnob {
 		
 	}
 };
+
+/*
 ////////////////////////////////////
 struct SmallLetterDisplay : TransparentWidget {
 
@@ -196,10 +209,10 @@ struct SmallLetterDisplay : TransparentWidget {
   bool doubleblink = false;
 
   SmallLetterDisplay() {
-    font = Font::load(assetPlugin(plugin,defaultFontPath));
+    font = Font::load(asset::plugin(pluginInstance,defaultFontPath));
   };
   SmallLetterDisplay(std::string fontPath) {
-    font = Font::load(assetPlugin(plugin,fontPath));
+    font = Font::load(asset::plugin(pluginInstance,fontPath));
   };
 
   void draw(NVGcontext *vg) override
