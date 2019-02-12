@@ -55,25 +55,24 @@ struct IsoButton : SvgSwitch {
 	}
 };
 
-struct ComputerscareResetButton : SvgSwitch,MomentarySwitch {
+struct ComputerscareResetButton : SvgSwitch {
 	ComputerscareResetButton() {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-rst-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-rst-text-red.svg")));
 		//APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
 	}
 };
-/*
-struct ComputerscareClockButton : SVGSwitch,MomentarySwitch {
+
+struct ComputerscareClockButton : SvgSwitch {
 	ComputerscareClockButton() {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-clk-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-clk-text-red.svg")));
 	}
 };
-struct ComputerscareInvisibleButton : SVGSwitch,MomentarySwitch {
+struct ComputerscareInvisibleButton : SvgSwitch {
 	ComputerscareInvisibleButton() {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-invisible-button.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-invisible-button-frame2.svg")));
-		//APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
 	}
 };
 
@@ -82,7 +81,7 @@ struct ComputerscareGreenLight : GrayModuleLightWidget {
 		addBaseColor(COLOR_COMPUTERSCARE_GREEN);
 	}
 };
-
+/*
 struct ComputerscareRedLight : ModuleLightWidget {
 	ComputerscareRedLight() {
 		bgColor = nvgRGBA(0x5a, 0x5a, 0x5a, 0x00);
@@ -192,7 +191,7 @@ struct ComputerscareDotKnob : SmallKnob {
 	}
 };
 
-/*
+
 ////////////////////////////////////
 struct SmallLetterDisplay : TransparentWidget {
 
@@ -209,44 +208,45 @@ struct SmallLetterDisplay : TransparentWidget {
   bool doubleblink = false;
 
   SmallLetterDisplay() {
-    font = Font::load(asset::plugin(pluginInstance,defaultFontPath));
+  	//APP->window->loadFont()
+    font = APP->window->loadFont(asset::plugin(pluginInstance,defaultFontPath));
   };
   SmallLetterDisplay(std::string fontPath) {
-    font = Font::load(asset::plugin(pluginInstance,fontPath));
+    font = APP->window->loadFont(asset::plugin(pluginInstance,fontPath));
   };
 
-  void draw(NVGcontext *vg) override
+  void draw(const DrawContext &ctx) override
   {  
     // Background
     NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
     NVGcolor doubleblinkColor = COLOR_COMPUTERSCARE_YELLOW;
 
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 4.0);
+    nvgBeginPath(ctx.vg);
+    nvgRoundedRect(ctx.vg, 1.0, -1.0, box.size.x-3, box.size.y-3, 4.0);
     if(doubleblink) {
-      nvgFillColor(vg, doubleblinkColor);
+      nvgFillColor(ctx.vg, doubleblinkColor);
     }
     else {
       if(blink) {
-        nvgFillColor(vg, backgroundColor);
+        nvgFillColor(ctx.vg, backgroundColor);
       }
       else {
-      	nvgFillColor(vg, baseColor);
+      	nvgFillColor(ctx.vg, baseColor);
       }
     }
-    nvgFill(vg);
+    nvgFill(ctx.vg);
 
     // text 
-    nvgFontSize(vg, fontSize);
-    nvgFontFaceId(vg, font->handle);
-    nvgTextLetterSpacing(vg, letterSpacing);
-    nvgTextLineHeight(vg, 0.7);
-    nvgTextAlign(vg,textAlign);
+    nvgFontSize(ctx.vg, fontSize);
+    nvgFontFaceId(ctx.vg, font->handle);
+    nvgTextLetterSpacing(ctx.vg, letterSpacing);
+    nvgTextLineHeight(ctx.vg, 0.7);
+    nvgTextAlign(ctx.vg,textAlign);
 
     Vec textPos = Vec(6.0f, 12.0f);   
     NVGcolor textColor = (!blink || doubleblink) ? nvgRGB(0x10, 0x10, 0x00) : COLOR_COMPUTERSCARE_YELLOW;
-    nvgFillColor(vg, textColor);
-    nvgTextBox(vg, textPos.x, textPos.y,80,value.c_str(), NULL);
+    nvgFillColor(ctx.vg, textColor);
+    nvgTextBox(ctx.vg, textPos.x, textPos.y,80,value.c_str(), NULL);
 
   }
-};*/
+};

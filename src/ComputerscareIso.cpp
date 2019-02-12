@@ -5,6 +5,7 @@ struct ComputerscareIso;
 const int numKnobs = 16;
 
 const int numToggles = 16;
+const int numOutputs = 16;
 
 struct ComputerscareIso : Module {
 	enum ParamIds {
@@ -19,7 +20,7 @@ struct ComputerscareIso : Module {
 	};
 	enum OutputIds {
 		POLY_OUTPUT,
-		NUM_OUTPUTS
+		NUM_OUTPUTS=POLY_OUTPUT + numOutputs
 	};
 	enum LightIds {
 		NUM_LIGHTS
@@ -55,7 +56,7 @@ struct ComputerscareIsoWidget : ModuleWidget {
 		setModule(module);
 		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareIsoPanel.svg")));
 
-
+		float outputY = 334;
 		box.size = Vec(15*9, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
@@ -66,36 +67,36 @@ struct ComputerscareIsoWidget : ModuleWidget {
 
 	    		addChild(panel);
 		}
+
+		addParam(createParam<IsoButton>(Vec(10, 5), module, ComputerscareIso::TOGGLES));
+		addParam(createParam<ComputerscareClockButton>(Vec(10,40),module,ComputerscareIso::TOGGLES+2));
+		addParam(createParam<ComputerscareResetButton>(Vec(55,40),module,ComputerscareIso::TOGGLES+1));
+
+
+		smallLetterDisplay = new SmallLetterDisplay();
+      smallLetterDisplay->box.pos = Vec(20,77);
+      smallLetterDisplay->box.size = Vec(60, 30);
+      smallLetterDisplay->value = "1";
+      smallLetterDisplay->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+      addChild(smallLetterDisplay);
+
+
 		addParam(createParam<Davies1900hBlackKnob>(Vec(28, 87), module, ComputerscareIso::KNOB));
 		addParam(createParam<MediumSnapKnob>(Vec(68, 97), module, ComputerscareIso::KNOB+1));
-		addParam(createParam<SmoothKnob>(Vec(68, 127), module, ComputerscareIso::KNOB+2));
-		addParam(createParam<SmallKnob>(Vec(68, 157), module, ComputerscareIso::KNOB+3));
+		
+
+		addParam(createParam<SmoothKnob>(Vec(30, 147), module, ComputerscareIso::KNOB+2));
+		addParam(createParam<SmallKnob>(Vec(62, 147), module, ComputerscareIso::KNOB+3));
 		addParam(createParam<BigSmoothKnob>(Vec(68, 187), module, ComputerscareIso::KNOB+4));
 		addParam(createParam<MediumSnapKnob>(Vec(68, 267), module, ComputerscareIso::KNOB+5));
 
-		addParam(createParam<IsoButton>(Vec(20, 44), module, ComputerscareIso::TOGGLES));
 
-		//addInput(createInput<PJ301MPort>(Vec(33, 186), module, MyModule::PITCH_INPUT));
-
-		addOutput(createOutput<OutPort>(Vec(33, 275), module, ComputerscareIso::POLY_OUTPUT));
-
-		//addChild(createLight<MediumLight<RedLight>>(Vec(41, 59), module, MyModule::BLINK_LIGHT));
-  
+		addOutput(createOutput<OutPort>(Vec(33, outputY), module, ComputerscareIso::POLY_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(63, outputY), module, ComputerscareIso::POLY_OUTPUT+1));
+		addOutput(createOutput<InPort>(Vec(93, outputY), module, ComputerscareIso::POLY_OUTPUT+2));
 
 }
-
-  /*void drawShadow(NVGcontext *vg) {
-	nvgBeginPath(vg);
-	float r = 20; // Blur radius
-	float c = 20; // Corner radius
-	Vec b = Vec(-10, 30); // Offset from each corner
-	nvgRect(vg, b.x - r, b.y - r, box.size.x - 2*b.x + 2*r, box.size.y - 2*b.y + 2*r);
-	NVGcolor shadowColor = nvgRGBAf(0, 220, 0, 0.2);
-	NVGcolor transparentColor = nvgRGBAf(0, 0, 0, 0);
-	nvgFillPaint(vg, nvgBoxGradient(vg, b.x, b.y, box.size.x - 2*b.x, box.size.y - 2*b.y, c, r, shadowColor, transparentColor));
-	nvgFill(vg);
-}*/
-
+SmallLetterDisplay* smallLetterDisplay;
 };
 
 
