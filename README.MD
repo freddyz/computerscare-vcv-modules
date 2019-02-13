@@ -18,6 +18,41 @@ YLX    LY5    2X5    Y2L    2LY    X25    YLX    YLL
 
 # Oh Peas! Quad Quantenuverter
 4-Channel attenuverter, offsetter, quantizer
+![Oh Peas! Basic](./doc/ohpeas-basic-1.png)
+
+### Text Input:
+The scale for quantization is programmed via the text field.  
+
+### Input Jacks:
+
+**Main Input (input):** Increases each row's absoluteStep by 1.
+
+**Range CV (range):** Resets each row's absoluteStep to 0.
+
+**Offset CV (offset):** Increases the row's absoluteStep by 1.  If a cable is plugged in, the row ignores the Global Clock.
+
+### Knobs:
+**Number of Divisions (divisions):** How many equal divisions the octave is split into.  Default is 12.
+
+**Transpose:** Amount to add or subtract to final output signal.  Values between -NumDivisions and +NumDivisions, which is equivalent to +/- 1 octave.
+
+**Range CV Attenuverter ("range", small knob):** Attenuverter for the Range CV input.  Scales Range CV between -1 and +1
+
+**Range Knob ("range", large knob):** Attenuverter for Main Input signal.  Scales Main Input between -1 and +1
+
+**Offset CV Attenuverter ("offset", small knob):** Attenuverter for the Range CV input.  Scales Range CV between -1 and +1
+
+**Offset Knob ("offset", large knob):** Constant offset to add after "range" section is applied.  +/- 5 volts.
+
+
+
+
+### Output Jacks:
+
+**Attenuverted, Offset Output (out):** The attenuverted and offset main input signal.  A*(a + B*b) + C*c + d
+
+**Quantized Output (quantized):** The attenuverted and offset main input signal, quantized to the desired scale.
+
 
 ~~~~
 ЧxЧ-ፌፌ--   Ч  x䒜-᳹淧ፌ-   -  -淧xx-
@@ -142,6 +177,8 @@ The 5th row shows how multiple patterns can be combined.  `311@16,2@16` means: `
   2@16      --->                 x-x-x-x-x-x-x-x-
    
 311@16,2@16 ---> x--xxx--xxx--xxxx-x-x-x-x-x-x-x-
+                                                   
+[311,2]@16  ---> x--xxx--xxx--xxxx-x-x-x-x-x-x-x-
 ~~~~
 
 
@@ -151,11 +188,15 @@ The 6th row shows a way to "skip" beats.  `@4` all by itself means: wait 4 beats
 ~~~~
 
 ### dtp64 Language:
-To program a rhythm that divides the incoming clock by 16, the proper input is NOT `16`.
+To program a rhythm that divides the incoming clock by 16, the proper input is NOT `16`.  Values greater than 9 steps must be enclosed in angle brackets `<16>`
 
 ~~~~
 16      --->   xx-----  (repeats every 7 beats)
+
+<16>    --->   x--------------- (repeats every 16 beats)
 ~~~~
+
+
 
 
 To represent lengths 10 thru 64, use a-z, then A-Z, &, $, and 0.  See the chart below for this quasi-base64 mapping which I call "pdt64"
@@ -233,15 +274,6 @@ Z       61
 &       62
 $       63
 0       64
-~~~~
-
-###Valid Input:
-
-
-~~~~
-<dtp64 sequence>@<integer>
-<dtp64 sequence>-<integer>
-<dtp64 sequence>-<integer>@<integer>
 ~~~~
 
 
