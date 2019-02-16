@@ -37,12 +37,16 @@ struct ComputerscareDebug : Module {
 
 	int lineCounter = 0;
 
-	SchmittTrigger clockTrigger;
-	SchmittTrigger clearTrigger;
-	SchmittTrigger manualClockTrigger;
-  	SchmittTrigger manualClearTrigger;
+	dsp::SchmittTrigger clockTrigger;
+	dsp::SchmittTrigger clearTrigger;
+	dsp::SchmittTrigger manualClockTrigger;
+  	dsp::SchmittTrigger manualClearTrigger;
 
-	ComputerscareDebug() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
+	ComputerscareDebug() {
+		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+				params[MANUAL_TRIGGER].config(0.0f, 1.0f, 0.0f);
+		params[MANUAL_CLEAR_TRIGGER].config(0.0f, 1.0f, 0.0f);
+	}
 	void step() override;
 
 	// For more advanced Module features, read Rack's engine.hpp header file
@@ -87,7 +91,7 @@ struct StringDisplayWidget3 : TransparentWidget {
   std::shared_ptr<Font> font;
 
   StringDisplayWidget3() {
-    font = Font::load(assetPlugin(plugin, "res/Oswald-Regular.ttf"));
+    font = APP->window->loadFont(asset::plugin(pluginInstance, "res/Oswald-Regular.ttf"));
   };
 
   void draw(NVGcontext *vg) override
@@ -123,22 +127,22 @@ struct StringDisplayWidget3 : TransparentWidget {
 
 struct ComputerscareDebugWidget : ModuleWidget {
 
-	ComputerscareDebugWidget(ComputerscareDebug *module) : ModuleWidget(module) {
-		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareDebugPanel.svg")));
+	ComputerscareDebugWidget(ComputerscareDebug *module) {
+		setModule(module);
+		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
 
-		addInput(Port::create<InPort>(Vec(3, 330), Port::INPUT, module, ComputerscareDebug::TRG_INPUT));
-		addInput(Port::create<InPort>(Vec(33, 330), Port::INPUT, module, ComputerscareDebug::VAL_INPUT));
-		addInput(Port::create<InPort>(Vec(63, 330), Port::INPUT, module, ComputerscareDebug::CLR_INPUT));
+		addInput(createInput<InPort>(Vec(3, 330), module, ComputerscareDebug::TRG_INPUT));
+		addInput(createInput<InPort>(Vec(33, 330),  module, ComputerscareDebug::VAL_INPUT));
+		addInput(createInput<InPort>(Vec(63, 330), module, ComputerscareDebug::CLR_INPUT));
 	
-		addParam(ParamWidget::create<LEDButton>(Vec(6, 290), module, ComputerscareDebug::MANUAL_TRIGGER, 0.0, 1.0, 0.0));
-		addParam(ParamWidget::create<LEDButton>(Vec(66, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER, 0.0, 1.0, 0.0));
+		addParam(createParam<LEDButton>(Vec(6, 290), module, ComputerscareDebug::MANUAL_TRIGGER));
+		addParam(createParam<LEDButton>(Vec(66, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
 
 		StringDisplayWidget3 *display = new StringDisplayWidget3();
 		  display->box.pos = Vec(1,24);
 		  display->box.size = Vec(88, 250);
 		  display->value = &module->strValue;
 		  addChild(display);
-
 	}
 };
 
@@ -147,4 +151,4 @@ struct ComputerscareDebugWidget : ModuleWidget {
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
 // (found in `include/tags.hpp`) separated by commas.
-Model *modelComputerscareDebug = Model::create<ComputerscareDebug, ComputerscareDebugWidget>("computerscare", "computerscare-debug", "Debug", UTILITY_TAG);
+Model *modelComputerscareDebug = createModel<ComputerscareDebug, ComputerscareDebugWidget>("Debug");

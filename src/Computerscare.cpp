@@ -6,7 +6,7 @@ Plugin *pluginInstance;
 void init(Plugin *p) {
 	pluginInstance = p;
 
-	//p->addModel(modelComputerscareDebug);
+	p->addModel(modelComputerscareDebug);
 	//p->addModel(modelComputerscarePatchSequencer);
 	//p->addModel(modelComputerscareLaundrySoup);
 	//p->addModel(modelComputerscareILoveCookies);

@@ -16,6 +16,8 @@ SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
 
 SOURCES += $(wildcard src/ComputerscareIso.cpp)
 
+SOURCES += $(wildcard src/ComputerscareDebug.cpp)
+
 SOURCES += $(wildcard src/Computerscare.cpp)
 
 # Add files to the ZIP package when running `make dist`

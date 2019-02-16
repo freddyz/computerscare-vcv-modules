@@ -16,7 +16,7 @@ using namespace rack;
 extern Plugin *pluginInstance;
 
 // Forward-declare each Model, defined in each module source file
-//extern Model *modelComputerscareDebug;
+extern Model *modelComputerscareDebug;
 //extern Model *modelComputerscarePatchSequencer;
 //extern Model *modelComputerscareLaundrySoup;
 //extern Model *modelComputerscareILoveCookies;
