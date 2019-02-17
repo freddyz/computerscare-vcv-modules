@@ -33,7 +33,7 @@ struct ComputerscareDebug : Module {
 		NUM_LIGHTS
 	};
 
-	std::string defaultStrValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
+	std::string defaultStrValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
 	std::string strValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
 
 	float logLines[NUM_LINES] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
@@ -42,6 +42,7 @@ struct ComputerscareDebug : Module {
 
 	int inputChannel = 0;
 
+	int stepCounter = 0;
 	dsp::SchmittTrigger clockTrigger;
 	dsp::SchmittTrigger clearTrigger;
 	dsp::SchmittTrigger manualClockTrigger;
@@ -71,27 +72,27 @@ struct ComputerscareDebug : Module {
 
 void ComputerscareDebug::step() {
 	std::string thisVal;
-	if (clockTrigger.process(inputs[TRG_INPUT].getVoltage() / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value)) {
-		 for( unsigned int a = NUM_LINES-1; a > 0; a = a - 1 )
-		 {
-		 	logLines[a] = logLines[a-1];
-		 }
-		 inputChannel = floor(params[CHANNEL_FOCUS].value);
-		logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
+	bool polyViewMode = params[SWITCH_VIEW].value < 0.5;
+		if (clockTrigger.process(inputs[TRG_INPUT].getVoltage() / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) || polyViewMode) {
+			if(polyViewMode) {
+				for(int i = 0; i < 16; i++) {
+					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+				}
+			}
+			else {
+				 for( unsigned int a = NUM_LINES-1; a > 0; a = a - 1 )
+				 {
+				 	logLines[a] = logLines[a-1];
+				 }
 
-		//thisVal = std::to_string(logLines[0]).substr(0,10);
-		//outputs[POLY_OUTPUT].setVoltage(logLines[0],0);
-		
-		thisVal = "";
-		for( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
-		 {
-		 	thisVal +=  a > 0 ? "\n" : "";
-		 	thisVal+=logLines[a] >=0 ? "+" : "";
-		 	thisVal+= std::to_string(logLines[a]).substr(0,10);
-		 	outputs[POLY_OUTPUT].setVoltage(logLines[a],a);
-		 }
-		strValue = thisVal;
-	}
+			inputChannel = floor(params[CHANNEL_FOCUS].value);
+			logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
+			}
+			//thisVal = std::to_string(logLines[0]).substr(0,10);
+			//outputs[POLY_OUTPUT].setVoltage(logLines[0],0);
+			
+			
+		}
 	if(clearTrigger.process(inputs[CLR_INPUT].getVoltage() / 2.f) || manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].value)) {
 		for( unsigned int a = 0; a < NUM_LINES; a++ )
 		 {
@@ -99,6 +100,20 @@ void ComputerscareDebug::step() {
 		 }
 		strValue = defaultStrValue;
 	}
+	stepCounter++;
+	if(stepCounter > 1025) {
+		stepCounter = 0;
+
+	thisVal = "";
+			for( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
+			 {
+			 	thisVal +=  a > 0 ? "\n" : "";
+			 	thisVal+=logLines[a] >=0 ? "+" : "";
+			 	thisVal+= std::to_string(logLines[a]).substr(0,10);
+			 	outputs[POLY_OUTPUT].setVoltage(logLines[a],a);
+			 }
+			strValue = thisVal;
+			}
 
 
 }
@@ -152,19 +167,25 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		addInput(createInput<InPort>(Vec(33, 330),  module, ComputerscareDebug::VAL_INPUT));
 		addInput(createInput<InPort>(Vec(63, 330), module, ComputerscareDebug::CLR_INPUT));
 	
-		addParam(createParam<LEDButton>(Vec(6, 290), module, ComputerscareDebug::MANUAL_TRIGGER));
-		addParam(createParam<LEDButton>(Vec(66, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
+		
+
+		addParam(createParam<ComputerscareClockButton>(Vec(2, 315), module, ComputerscareDebug::MANUAL_TRIGGER));
+		
+
+		addParam(createParam<ComputerscareResetButton>(Vec(62, 315), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
   		
+
+
   		addParam(createParam<MediumSnapKnob>(Vec(36,290),module,ComputerscareDebug::CHANNEL_FOCUS));
-
-  		//addParam(createParam<IsoButton>(Vec(20,280),module,ComputerscareDebug::SWITCH_VIEW));
-
-
-  		addOutput(createOutput<OutPort>(Vec(57, 1), module, ComputerscareDebug::POLY_OUTPUT));
-		StringDisplayWidget3 *stringDisplay = createWidget<StringDisplayWidget3>(Vec(1,34));
-		stringDisplay->box.size = Vec(88, 250);
+		addOutput(createOutput<OutPort>(Vec(57, 1), module, ComputerscareDebug::POLY_OUTPUT));
+		
+		StringDisplayWidget3 *stringDisplay = createWidget<StringDisplayWidget3>(Vec(11,34));
+		stringDisplay->box.size = Vec(77, 245);
 		stringDisplay->module = module;
-		addChild(stringDisplay);	
+		addChild(stringDisplay);
+
+		addParam(createParam<IsoButton>(Vec(4,279),module,ComputerscareDebug::SWITCH_VIEW));
+	
 
 	}
 };

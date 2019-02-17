@@ -57,6 +57,7 @@ struct IsoButton : SvgSwitch {
 
 struct ComputerscareResetButton : SvgSwitch {
 	ComputerscareResetButton() {
+		momentary=true;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-rst-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-rst-text-red.svg")));
 		//APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
@@ -65,6 +66,7 @@ struct ComputerscareResetButton : SvgSwitch {
 
 struct ComputerscareClockButton : SvgSwitch {
 	ComputerscareClockButton() {
+		momentary=true;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-clk-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-clk-text-red.svg")));
 	}
