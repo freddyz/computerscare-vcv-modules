@@ -7,12 +7,15 @@
 #include <iomanip>
 
 #define NUM_LINES 16
+struct ComputerscareDebug;
+
 
 struct ComputerscareDebug : Module {
 	enum ParamIds {
-		PITCH_PARAM,
 		MANUAL_TRIGGER,
 		MANUAL_CLEAR_TRIGGER,
+		CHANNEL_FOCUS,
+		SWITCH_VIEW,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -22,7 +25,7 @@ struct ComputerscareDebug : Module {
 		NUM_INPUTS
 	};
 	enum OutputIds {
-		SINE_OUTPUT,
+		POLY_OUTPUT,
 		NUM_OUTPUTS
 	};
 	enum LightIds {
@@ -37,15 +40,23 @@ struct ComputerscareDebug : Module {
 
 	int lineCounter = 0;
 
+	int inputChannel = 0;
+
 	dsp::SchmittTrigger clockTrigger;
 	dsp::SchmittTrigger clearTrigger;
 	dsp::SchmittTrigger manualClockTrigger;
   	dsp::SchmittTrigger manualClearTrigger;
 
+  	//StringDisplayWidget3* textDisplay;
+
 	ComputerscareDebug() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-				params[MANUAL_TRIGGER].config(0.0f, 1.0f, 0.0f);
+		params[MANUAL_TRIGGER].config(0.0f, 1.0f, 0.0f);
 		params[MANUAL_CLEAR_TRIGGER].config(0.0f, 1.0f, 0.0f);
+		params[SWITCH_VIEW].config(0.0f, 1.0f, 0.0f);
+		params[CHANNEL_FOCUS].config(0.f,15.f,0.f);
+		outputs[POLY_OUTPUT].setChannels(16);
+
 	}
 	void step() override;
 
@@ -53,27 +64,35 @@ struct ComputerscareDebug : Module {
 	// - toJson, fromJson: serialization of internal data
 	// - onSampleRateChange: event triggered by a change of sample rate
 	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
-};
 
+
+
+};
 
 void ComputerscareDebug::step() {
 	std::string thisVal;
-	if (clockTrigger.process(inputs[TRG_INPUT].value / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value)) {
+	if (clockTrigger.process(inputs[TRG_INPUT].getVoltage() / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value)) {
 		 for( unsigned int a = NUM_LINES-1; a > 0; a = a - 1 )
 		 {
 		 	logLines[a] = logLines[a-1];
 		 }
-		logLines[0] = inputs[VAL_INPUT].value;
+		 inputChannel = floor(params[CHANNEL_FOCUS].value);
+		logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
 
-		thisVal = std::to_string(logLines[0]).substr(0,10);
-		for( unsigned int a = 1; a < NUM_LINES; a = a + 1 )
+		//thisVal = std::to_string(logLines[0]).substr(0,10);
+		//outputs[POLY_OUTPUT].setVoltage(logLines[0],0);
+		
+		thisVal = "";
+		for( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
 		 {
-		 	thisVal =  thisVal + "\n" + std::to_string(logLines[a]).substr(0,10);
+		 	thisVal +=  a > 0 ? "\n" : "";
+		 	thisVal+=logLines[a] >=0 ? "+" : "";
+		 	thisVal+= std::to_string(logLines[a]).substr(0,10);
+		 	outputs[POLY_OUTPUT].setVoltage(logLines[a],a);
 		 }
-
 		strValue = thisVal;
 	}
-	if(clearTrigger.process(inputs[CLR_INPUT].value / 2.f) || manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].value)) {
+	if(clearTrigger.process(inputs[CLR_INPUT].getVoltage() / 2.f) || manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].value)) {
 		for( unsigned int a = 0; a < NUM_LINES; a++ )
 		 {
 		 	logLines[a] = 0;
@@ -83,47 +102,45 @@ void ComputerscareDebug::step() {
 
 
 }
-
 ////////////////////////////////////
-struct StringDisplayWidget3 : TransparentWidget {
+struct StringDisplayWidget3 : Widget {
 
-  std::string *value;
+  std::string value;
   std::shared_ptr<Font> font;
+  ComputerscareDebug *module;
 
   StringDisplayWidget3() {
     font = APP->window->loadFont(asset::plugin(pluginInstance, "res/Oswald-Regular.ttf"));
   };
 
-  void draw(NVGcontext *vg) override
+  void draw(const DrawArgs &ctx) override
   {
     // Background
     NVGcolor backgroundColor = nvgRGB(0x10, 0x00, 0x10);
     NVGcolor StrokeColor = nvgRGB(0xC0, 0xC7, 0xDE);
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, -1.0, -1.0, box.size.x+2, box.size.y+2, 4.0);
-    nvgFillColor(vg, StrokeColor);
-    nvgFill(vg);
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
-    nvgFillColor(vg, backgroundColor);
-    nvgFill(vg);    
+    nvgBeginPath(ctx.vg);
+    nvgRoundedRect(ctx.vg, -1.0, -1.0, box.size.x+2, box.size.y+2, 4.0);
+    nvgFillColor(ctx.vg, StrokeColor);
+    nvgFill(ctx.vg);
+    nvgBeginPath(ctx.vg);
+    nvgRoundedRect(ctx.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
+    nvgFillColor(ctx.vg, backgroundColor);
+    nvgFill(ctx.vg);    
+
     
-    // text 
-    nvgFontSize(vg, 15);
-    nvgFontFaceId(vg, font->handle);
-    nvgTextLetterSpacing(vg, 2.5);
+    nvgFontSize(ctx.vg, 15);
+    nvgFontFaceId(ctx.vg, font->handle);
+    nvgTextLetterSpacing(ctx.vg, 2.5);
 
-    std::stringstream to_display;   
-    to_display << std::setw(8) << *value;
-
+    std::string textToDraw = module ? module->strValue : "";
     Vec textPos = Vec(6.0f, 12.0f);   
     NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-    nvgFillColor(vg, textColor);
- 	nvgTextBox(vg, textPos.x, textPos.y,80,to_display.str().c_str(), NULL);
+    nvgFillColor(ctx.vg, textColor);
+
+ 	nvgTextBox(ctx.vg, textPos.x, textPos.y,80,textToDraw.c_str(), NULL);
 
   }
 };
-
 
 struct ComputerscareDebugWidget : ModuleWidget {
 
@@ -137,18 +154,20 @@ struct ComputerscareDebugWidget : ModuleWidget {
 	
 		addParam(createParam<LEDButton>(Vec(6, 290), module, ComputerscareDebug::MANUAL_TRIGGER));
 		addParam(createParam<LEDButton>(Vec(66, 290), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
+  		
+  		addParam(createParam<MediumSnapKnob>(Vec(36,290),module,ComputerscareDebug::CHANNEL_FOCUS));
 
-		StringDisplayWidget3 *display = new StringDisplayWidget3();
-		  display->box.pos = Vec(1,24);
-		  display->box.size = Vec(88, 250);
-		  display->value = &module->strValue;
-		  addChild(display);
+  		//addParam(createParam<IsoButton>(Vec(20,280),module,ComputerscareDebug::SWITCH_VIEW));
+
+
+  		addOutput(createOutput<OutPort>(Vec(57, 1), module, ComputerscareDebug::POLY_OUTPUT));
+		StringDisplayWidget3 *stringDisplay = createWidget<StringDisplayWidget3>(Vec(1,34));
+		stringDisplay->box.size = Vec(88, 250);
+		stringDisplay->module = module;
+		addChild(stringDisplay);	
+
 	}
 };
 
 
-// Specify the Module and ModuleWidget subclass, human-readable
-// author name for categorization per plugin, module slug (should never
-// change), human-readable module name, and any number of tags
-// (found in `include/tags.hpp`) separated by commas.
 Model *modelComputerscareDebug = createModel<ComputerscareDebug, ComputerscareDebugWidget>("Debug");

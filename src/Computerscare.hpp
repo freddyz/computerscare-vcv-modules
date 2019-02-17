@@ -208,14 +208,13 @@ struct SmallLetterDisplay : TransparentWidget {
   bool doubleblink = false;
 
   SmallLetterDisplay() {
-  	//APP->window->loadFont()
     font = APP->window->loadFont(asset::plugin(pluginInstance,defaultFontPath));
   };
   SmallLetterDisplay(std::string fontPath) {
     font = APP->window->loadFont(asset::plugin(pluginInstance,fontPath));
   };
 
-  void draw(const DrawContext &ctx) override
+  void draw(const DrawArgs &ctx) override
   {  
     // Background
     NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;

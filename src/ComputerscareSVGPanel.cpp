@@ -5,7 +5,7 @@ namespace rack {
 namespace app {
 
 
-void PanelBorder::draw(const widget::DrawContext &ctx) {
+void PanelBorder::draw(const DrawArgs &ctx) {
 	NVGcolor borderColor = nvgRGBAf(0.5, 0.5, 0.5, 0.5);
 	nvgBeginPath(ctx.vg);
 	nvgRect(ctx.vg, 0.5, 0.5, box.size.x - 1.0, box.size.y - 1.0);

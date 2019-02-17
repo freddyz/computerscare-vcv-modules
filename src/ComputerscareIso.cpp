@@ -62,7 +62,7 @@ struct ComputerscareIsoWidget : ModuleWidget {
 		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareIsoPanel.svg")));
 
 		float outputY = 334;
-		box.size = Vec(150, 380);
+		box.size = Vec(15*10, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
@@ -105,46 +105,34 @@ struct ComputerscareIsoWidget : ModuleWidget {
 void addLabeledKnob(std::string label,int x, int y, ComputerscareIso *module,int index,int type) {
 
       float ru = random::uniform();
-        		smallLetterDisplay = new SmallLetterDisplay();
+      smallLetterDisplay = new SmallLetterDisplay();
       smallLetterDisplay->box.size = Vec(60, 30);
       smallLetterDisplay->value = label;
       if(type == 0)  {
-      addParam(createParam<SmoothKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
-      smallLetterDisplay->box.pos = Vec(x+22,y+2);
-
+	      addParam(createParam<SmoothKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
+	      smallLetterDisplay->box.pos = Vec(x+22,y+2);
   		}
   		else if(type ==1) {
-  			      addParam(createParam<SmallKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
-      smallLetterDisplay->box.pos = Vec(x+12,y-10);
-
-
+  			addParam(createParam<SmallKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
+      		smallLetterDisplay->box.pos = Vec(x+12,y-10);
   		}
   		else if(type==2) {
-  			      addParam(createParam<BigSmoothKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
-      smallLetterDisplay->box.pos = Vec(x+22,y-12);
-
-
+  			addParam(createParam<BigSmoothKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
+      		smallLetterDisplay->box.pos = Vec(x+22,y-12);
   		}
   		else if (type==3) {
   			addParam(createParam<LrgKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
-      smallLetterDisplay->box.pos = Vec(x+22,y-12);
-
+      		smallLetterDisplay->box.pos = Vec(x+22,y-12);
   		}
   		else if (type==4) {
   			addParam(createParam<BigSmoothKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
-      smallLetterDisplay->box.pos = Vec(x+22,y-12);
-
+      		smallLetterDisplay->box.pos = Vec(x+22,y-12);
   		}
-
   		
   		else  {
-  			      addParam(createParam<MediumSnapKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
-      smallLetterDisplay->box.pos = Vec(x+12,y-10);
-
-
+  			addParam(createParam<MediumSnapKnob>(Vec(x,y),module,ComputerscareIso::KNOB+index));
+      		smallLetterDisplay->box.pos = Vec(x+12,y-10);
   		}
-
-      //smallLetterDisplay->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
       addChild(smallLetterDisplay);
 
 }
