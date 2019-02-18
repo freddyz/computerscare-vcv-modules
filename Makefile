@@ -13,8 +13,10 @@ LDFLAGS +=
 # Add .cpp and .c files to the build
 #SOURCES += $(wildcard src/*.cpp)
 SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
+SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
 
 SOURCES += $(wildcard src/ComputerscareIso.cpp)
+SOURCES += $(wildcard src/ComputerscareKnolyPobs.cpp)
 
 SOURCES += $(wildcard src/ComputerscareDebug.cpp)
 

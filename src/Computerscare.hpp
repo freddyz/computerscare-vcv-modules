@@ -7,7 +7,10 @@
 #include "widget/TransparentWidget.hpp"
 #include "widget/FramebufferWidget.hpp"
 #include "widget/SvgWidget.hpp"
+#include "app/PortWidget.hpp"
+#include "app/CircularShadow.hpp"
 #include "app.hpp"
+
 
 
 using namespace rack;
@@ -17,11 +20,13 @@ extern Plugin *pluginInstance;
 
 // Forward-declare each Model, defined in each module source file
 extern Model *modelComputerscareDebug;
+
 //extern Model *modelComputerscarePatchSequencer;
 //extern Model *modelComputerscareLaundrySoup;
 //extern Model *modelComputerscareILoveCookies;
 //extern Model *modelComputerscareOhPeas;
 extern Model *modelComputerscareIso;
+extern Model *modelComputerscareKnolyPobs;
 
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
@@ -44,8 +49,21 @@ struct ComputerscareSVGPanel : widget::FramebufferWidget {
 	void setBackground(std::shared_ptr<Svg> svg);
 };
 
-}
-}
+
+struct ComputerscareSvgPort : PortWidget {
+	widget::FramebufferWidget *fb;
+	widget::SvgWidget *sw;
+	CircularShadow *shadow;
+
+	ComputerscareSvgPort();
+	void setSvg(std::shared_ptr<Svg> svg);
+	DEPRECATED void setSVG(std::shared_ptr<Svg> svg) {setSvg(svg);}
+};
+
+
+
+} // namespace app
+} // namespace rack
 
 
 struct IsoButton : SvgSwitch {
@@ -129,11 +147,10 @@ struct ComputerscareSmallLight : BASE {
 */
 
 
-struct OutPort : SvgPort {
+struct OutPort : ComputerscareSvgPort {
 	OutPort() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline-flipped.svg")));
 		//background->wrap();
-		//box.size = background->box.size;
 	}
 };
 

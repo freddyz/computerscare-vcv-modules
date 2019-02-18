@@ -103,8 +103,6 @@ struct ComputerscareIsoWidget : ModuleWidget {
 
 }
 void addLabeledKnob(std::string label,int x, int y, ComputerscareIso *module,int index,int type) {
-
-      float ru = random::uniform();
       smallLetterDisplay = new SmallLetterDisplay();
       smallLetterDisplay->box.size = Vec(60, 30);
       smallLetterDisplay->value = label;
