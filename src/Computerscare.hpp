@@ -18,6 +18,11 @@ using namespace rack;
 // Forward-declare the Plugin, defined in Template.cpp
 extern Plugin *pluginInstance;
 
+
+/*
+	Toly Poolkit
+	Wally Porkshop
+*/
 // Forward-declare each Model, defined in each module source file
 extern Model *modelComputerscareDebug;
 
@@ -154,7 +159,7 @@ struct OutPort : ComputerscareSvgPort {
 	}
 };
 
-struct PointingUpPentagonPort : SvgPort {
+struct PointingUpPentagonPort : ComputerscareSvgPort {
 	PointingUpPentagonPort() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-pointing-up.svg")));
 		//background->wrap();

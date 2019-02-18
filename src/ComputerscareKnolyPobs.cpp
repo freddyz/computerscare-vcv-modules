@@ -74,14 +74,14 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 		float xx;
 		float yy;
 		for(int i = 0; i < numKnobs; i++) {
-			xx=0+25*(i%2);
+			xx=0.4f+25*(i%2);
 			yy=64 + 18.5*(i-i%2) + 11.3*(i%2);
 			addLabeledKnob(std::to_string(i+1),xx,yy,module,i,0,(i%2)*(11+5*(i<9))-4,0);
 		}
 		
 		
 
-		addOutput(createOutput<OutPort>(Vec(16, 34), module, ComputerscareKnolyPobs::POLY_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(28, 24), module, ComputerscareKnolyPobs::POLY_OUTPUT));
 
 }
 void addLabeledKnob(std::string label,int x, int y, ComputerscareKnolyPobs *module,int index,int type,float labelDx,float labelDy) {
