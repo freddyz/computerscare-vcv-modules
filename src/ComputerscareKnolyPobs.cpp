@@ -76,7 +76,7 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 		for(int i = 0; i < numKnobs; i++) {
 			xx=0+25*(i%2);
 			yy=64 + 18.5*(i-i%2) + 11.3*(i%2);
-			addLabeledKnob(std::to_string(i+1),xx,yy,module,i,0);
+			addLabeledKnob(std::to_string(i+1),xx,yy,module,i,0,(i%2)*(11+5*(i<9))-4,0);
 		}
 		
 		
@@ -84,30 +84,32 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 		addOutput(createOutput<OutPort>(Vec(16, 34), module, ComputerscareKnolyPobs::POLY_OUTPUT));
 
 }
-void addLabeledKnob(std::string label,int x, int y, ComputerscareKnolyPobs *module,int index,int type) {
+void addLabeledKnob(std::string label,int x, int y, ComputerscareKnolyPobs *module,int index,int type,float labelDx,float labelDy) {
 
       smallLetterDisplay = new SmallLetterDisplay();
-      smallLetterDisplay->box.size = Vec(60, 30);
+      smallLetterDisplay->box.size = Vec(5, 10);
+      smallLetterDisplay->fontSize=16;
       smallLetterDisplay->value = label;
+      smallLetterDisplay->textAlign = 1;
       if(type == 0)  {
 	      addParam(createParam<SmoothKnob>(Vec(x,y),module,ComputerscareKnolyPobs::KNOB+index));
-	      smallLetterDisplay->box.pos = Vec(x,y-12);
+	      smallLetterDisplay->box.pos = Vec(x+labelDx,y-12+labelDy);
   		}
   		else if(type ==1) {
   			addParam(createParam<SmallKnob>(Vec(x,y),module,ComputerscareKnolyPobs::KNOB+index));
-      		smallLetterDisplay->box.pos = Vec(x+12,y-10);
+      		smallLetterDisplay->box.pos = Vec(x+12+labelDx,y-10+labelDy);
   		}
   		else if(type==2) {
   			addParam(createParam<BigSmoothKnob>(Vec(x,y),module,ComputerscareKnolyPobs::KNOB+index));
-      		smallLetterDisplay->box.pos = Vec(x+22,y-12);
+      		smallLetterDisplay->box.pos = Vec(x+22+labelDx,y-12+labelDy);
   		}
   		else if (type==3) {
   			addParam(createParam<LrgKnob>(Vec(x,y),module,ComputerscareKnolyPobs::KNOB+index));
-      		smallLetterDisplay->box.pos = Vec(x+22,y-12);
+      		smallLetterDisplay->box.pos = Vec(x+22+labelDx,y-12+labelDy);
   		}
   		else if (type==4) {
   			addParam(createParam<BigSmoothKnob>(Vec(x,y),module,ComputerscareKnolyPobs::KNOB+index));
-      		smallLetterDisplay->box.pos = Vec(x+22,y-12);
+      		smallLetterDisplay->box.pos = Vec(x+22+labelDx,y-12+labelDy);
   		}
   		
   		else  {
