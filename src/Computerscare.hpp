@@ -77,7 +77,13 @@ struct IsoButton : SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/computerscare-iso-button-up.svg")));
 	}
 };
-
+struct ComputerscareIsoThree : app::SvgSwitch {
+	ComputerscareIsoThree() {
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/iso-3way-1.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/iso-3way-2.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/iso-3way-3.svg")));
+	}
+};
 struct ComputerscareResetButton : SvgSwitch {
 	ComputerscareResetButton() {
 		momentary=true;
