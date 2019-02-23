@@ -14,7 +14,8 @@ struct ComputerscareDebug : Module {
 	enum ParamIds {
 		MANUAL_TRIGGER,
 		MANUAL_CLEAR_TRIGGER,
-		CHANNEL_FOCUS,
+		CLOCK_CHANNEL_FOCUS,
+		INPUT_CHANNEL_FOCUS,
 		SWITCH_VIEW,
 		WHICH_CLOCK,
 		NUM_PARAMS
@@ -41,6 +42,7 @@ struct ComputerscareDebug : Module {
 
 	int lineCounter = 0;
 
+	int clockChannel = 0;
 	int inputChannel = 0;
 
 	int stepCounter = 0;
@@ -49,6 +51,11 @@ struct ComputerscareDebug : Module {
 	dsp::SchmittTrigger manualClockTrigger;
   	dsp::SchmittTrigger manualClearTrigger;
 
+  	enum clockMode {
+  		SINGLE_CLOCK,
+  		INTERNAL_CLOCK,
+  		POLY_CLOCK
+  	};
   	//StringDisplayWidget3* textDisplay;
 
 	ComputerscareDebug() {
@@ -57,7 +64,8 @@ struct ComputerscareDebug : Module {
 		params[MANUAL_CLEAR_TRIGGER].config(0.0f, 1.0f, 0.0f, "Clear");
 		params[SWITCH_VIEW].config(0.0f, 1.0f, 0.0f, "Single / All Channels");
 		params[WHICH_CLOCK].config(0.0f, 2.0f, 0.0f, "Clock Method");
-		params[CHANNEL_FOCUS].config(0.f,15.f,0.f,"Input Channel Selector");
+		params[CLOCK_CHANNEL_FOCUS].config(0.f,15.f,0.f,"Clock Channel Selector");
+		params[INPUT_CHANNEL_FOCUS].config(0.f,15.f,0.f,"Input Channel Selector");
 		outputs[POLY_OUTPUT].setChannels(16);
 
 	}
@@ -76,12 +84,13 @@ void ComputerscareDebug::step() {
 	std::string thisVal;
 	int whichClock = floor(params[WHICH_CLOCK].value);
 
-	bool polyViewMode = params[SWITCH_VIEW].value < 0.5;
-	//bool useExternalClock = params[USE_CLOCK].value > 0.5;
-	inputChannel = floor(params[CHANNEL_FOCUS].value);
-	if(whichClock == 0) {
-		if (clockTriggers[inputChannel].process(inputs[TRG_INPUT].getVoltage(inputChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
-			if(polyViewMode) {
+	bool polyInMode = params[SWITCH_VIEW].value < 0.5;
+
+	inputChannel = floor(params[INPUT_CHANNEL_FOCUS].value);
+	clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].value);
+	if(whichClock == SINGLE_CLOCK) {
+		if (clockTriggers[clockChannel].process(inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
+			if(polyInMode) {
 				for(int i = 0; i < 16; i++) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
 				}
@@ -101,34 +110,29 @@ void ComputerscareDebug::step() {
 			
 		}
 	}
-	else if(whichClock == 1) {
-		if(polyViewMode) {
+	else if(whichClock == INTERNAL_CLOCK) {
+		if(polyInMode) {
 			for(int i = 0; i < 16; i++) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
 				}
 		}
 		else {
-			inputChannel = floor(params[CHANNEL_FOCUS].value);
 			logLines[inputChannel] = inputs[VAL_INPUT].getVoltage(inputChannel);
 		}
 	}
-	else if(whichClock == 2) {
-		if(polyViewMode) {
+	else if(whichClock == POLY_CLOCK) {
+		if(polyInMode) {
 			for(int i = 0; i < 16; i++) {
 				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
-					logLines[i] = inputs[VAL_INPUT].getVoltage((i+inputChannel)%16);
+					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
 				}
 			}
 		}
 		else {
-			if(clockTriggers[inputChannel].process(inputs[TRG_INPUT].getVoltage(inputChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value)) {
-				for( unsigned int a = NUM_LINES-1; a > 0; a = a - 1 )
-				 {
-				 	logLines[a] = logLines[a-1];
-				 }
-
-				
-				logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
+			for(int i = 0; i < 16; i++) {
+				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
+					logLines[i] = inputs[VAL_INPUT].getVoltage(inputChannel);
+				}
 			}
 		}
 	}
@@ -237,7 +241,8 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		addParam(createParam<ComputerscareIsoThree>(Vec(4,279),module,ComputerscareDebug::WHICH_CLOCK));
 		addParam(createParam<IsoButton>(Vec(34,279),module,ComputerscareDebug::SWITCH_VIEW));
 	
-	addParam(createParam<MediumSnapKnob>(Vec(66,290),module,ComputerscareDebug::CHANNEL_FOCUS));
+	addParam(createParam<MediumSnapKnob>(Vec(6,290),module,ComputerscareDebug::CLOCK_CHANNEL_FOCUS));
+	addParam(createParam<MediumSnapKnob>(Vec(36,290),module,ComputerscareDebug::INPUT_CHANNEL_FOCUS));
 		addOutput(createOutput<OutPort>(Vec(57, 1), module, ComputerscareDebug::POLY_OUTPUT));
 
 	}
