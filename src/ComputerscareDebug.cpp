@@ -38,12 +38,15 @@ struct ComputerscareDebug : Module {
 	std::string defaultStrValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
 	std::string strValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
 
-	float logLines[NUM_LINES] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	float logLines[NUM_LINES] = {0.f};
 
 	int lineCounter = 0;
 
 	int clockChannel = 0;
 	int inputChannel = 0;
+
+	int clockMode = 0;
+	int inputMode = 0;
 
 	int stepCounter = 0;
 	dsp::SchmittTrigger clockTriggers[NUM_LINES];
@@ -51,10 +54,10 @@ struct ComputerscareDebug : Module {
 	dsp::SchmittTrigger manualClockTrigger;
   	dsp::SchmittTrigger manualClearTrigger;
 
-  	enum clockMode {
-  		SINGLE_CLOCK,
-  		INTERNAL_CLOCK,
-  		POLY_CLOCK
+  	enum clockAndInputModes {
+  		SINGLE_MODE,
+  		INTERNAL_MODE,
+  		POLY_MODE
   	};
   	//StringDisplayWidget3* textDisplay;
 
@@ -62,8 +65,8 @@ struct ComputerscareDebug : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		params[MANUAL_TRIGGER].config(0.0f, 1.0f, 0.0f, "Manual Trigger");
 		params[MANUAL_CLEAR_TRIGGER].config(0.0f, 1.0f, 0.0f, "Clear");
-		params[SWITCH_VIEW].config(0.0f, 1.0f, 0.0f, "Single / All Channels");
-		params[WHICH_CLOCK].config(0.0f, 2.0f, 0.0f, "Clock Method");
+		params[SWITCH_VIEW].config(0.0f, 2.0f, 0.0f, "Input Mode");
+		params[WHICH_CLOCK].config(0.0f, 2.0f, 0.0f, "Clock Mode");
 		params[CLOCK_CHANNEL_FOCUS].config(0.f,15.f,0.f,"Clock Channel Selector");
 		params[INPUT_CHANNEL_FOCUS].config(0.f,15.f,0.f,"Input Channel Selector");
 		outputs[POLY_OUTPUT].setChannels(16);
@@ -82,20 +85,21 @@ struct ComputerscareDebug : Module {
 
 void ComputerscareDebug::step() {
 	std::string thisVal;
-	int whichClock = floor(params[WHICH_CLOCK].value);
+	
+	clockMode = floor(params[WHICH_CLOCK].value);
 
-	bool polyInMode = params[SWITCH_VIEW].value < 0.5;
+	inputMode = floor(params[SWITCH_VIEW].value);
 
 	inputChannel = floor(params[INPUT_CHANNEL_FOCUS].value);
 	clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].value);
-	if(whichClock == SINGLE_CLOCK) {
+	if(clockMode == SINGLE_MODE) {
 		if (clockTriggers[clockChannel].process(inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
-			if(polyInMode) {
+			if(inputMode == POLY_MODE) {
 				for(int i = 0; i < 16; i++) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
 				}
 			}
-			else {
+			else if(inputMode == SINGLE_MODE) {
 				 for( unsigned int a = NUM_LINES-1; a > 0; a = a - 1 )
 				 {
 				 	logLines[a] = logLines[a-1];
@@ -104,34 +108,51 @@ void ComputerscareDebug::step() {
 				
 				logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
 			}
+			else if(inputMode == INTERNAL_MODE) {
+				for(int i = 0; i < 16; i++) {
+					logLines[i] = random::uniform();
+				}
+			}
 			//thisVal = std::to_string(logLines[0]).substr(0,10);
 			//outputs[POLY_OUTPUT].setVoltage(logLines[0],0);
 			
 			
 		}
 	}
-	else if(whichClock == INTERNAL_CLOCK) {
-		if(polyInMode) {
+	else if(clockMode == INTERNAL_MODE) {
+		if(inputMode == POLY_MODE) {
 			for(int i = 0; i < 16; i++) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
 				}
 		}
-		else {
+		else if(inputMode == SINGLE_MODE) {
 			logLines[inputChannel] = inputs[VAL_INPUT].getVoltage(inputChannel);
 		}
+		else if(inputMode == INTERNAL_MODE) {
+			for(int i = 0; i < 16; i++) {
+					logLines[i] = random::uniform();
+				}
+		}
 	}
-	else if(whichClock == POLY_CLOCK) {
-		if(polyInMode) {
+	else if(clockMode == POLY_MODE) {
+		if(inputMode == POLY_MODE) {
 			for(int i = 0; i < 16; i++) {
 				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
 				}
 			}
 		}
-		else {
+		else if(inputMode == SINGLE_MODE) {
 			for(int i = 0; i < 16; i++) {
 				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(inputChannel);
+				}
+			}
+		}
+		else if(inputMode == INTERNAL_MODE) {
+			for(int i = 0; i < 16; i++) {
+				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
+					logLines[i] = random::uniform();
 				}
 			}
 		}
@@ -161,6 +182,19 @@ void ComputerscareDebug::step() {
 
 
 }
+struct HidableSmallSnapKnob : SmallSnapKnob {
+	bool visible = true;
+	int hackIndex = 0;
+	ComputerscareDebug *module;
+	HidableSmallSnapKnob() {
+		SmallSnapKnob();
+	}
+	void draw(const DrawArgs &args) {
+		if(module ? (hackIndex == 0 ? module->clockMode == 0 : module->inputMode == 0) : true) {
+			Widget::draw(args);
+		}
+	};
+};
 ////////////////////////////////////
 struct StringDisplayWidget3 : Widget {
 
@@ -207,44 +241,50 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		setModule(module);
 		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
 
-		addInput(createInput<InPort>(Vec(3, 330), module, ComputerscareDebug::TRG_INPUT));
-		addInput(createInput<InPort>(Vec(33, 330),  module, ComputerscareDebug::VAL_INPUT));
-		addInput(createInput<InPort>(Vec(63, 330), module, ComputerscareDebug::CLR_INPUT));
+		addInput(createInput<InPort>(Vec(3, 335), module, ComputerscareDebug::TRG_INPUT));
+		addInput(createInput<InPort>(Vec(63, 335),  module, ComputerscareDebug::VAL_INPUT));
+		addInput(createInput<InPort>(Vec(33, 335), module, ComputerscareDebug::CLR_INPUT));
 	
 		
 
-		addParam(createParam<ComputerscareClockButton>(Vec(2, 315), module, ComputerscareDebug::MANUAL_TRIGGER));
+		addParam(createParam<ComputerscareClockButton>(Vec(2, 321), module, ComputerscareDebug::MANUAL_TRIGGER));
 		
 
-		addParam(createParam<ComputerscareResetButton>(Vec(62, 315), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
+		addParam(createParam<ComputerscareResetButton>(Vec(32, 320), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
   		
+		addParam(createParam<ThreeVerticalXSwitch>(Vec(2,279),module,ComputerscareDebug::WHICH_CLOCK));
+		addParam(createParam<ThreeVerticalXSwitch>(Vec(66,279),module,ComputerscareDebug::SWITCH_VIEW));
+	
 
-
-  		
+		HidableSmallSnapKnob *clockKnob = createParam<HidableSmallSnapKnob>(Vec(6,305),module,ComputerscareDebug::CLOCK_CHANNEL_FOCUS);
+		//clockKnob->visible = (module->clockMode == 0);
+		clockKnob->module = module;
+		clockKnob->hackIndex = 0;
+		addParam(clockKnob);
 		
+		HidableSmallSnapKnob *inputKnob =createParam<HidableSmallSnapKnob>(Vec(66,305),module,ComputerscareDebug::INPUT_CHANNEL_FOCUS);
+		inputKnob->module = module;
+		inputKnob->hackIndex = 1;
+
+		addParam(inputKnob);
+
+		addOutput(createOutput<OutPort>(Vec(57, 1), module, ComputerscareDebug::POLY_OUTPUT));
+
+
 		StringDisplayWidget3 *stringDisplay = createWidget<StringDisplayWidget3>(Vec(15,34));
 		stringDisplay->box.size = Vec(73, 245);
 		stringDisplay->module = module;
 		addChild(stringDisplay);
 
-
-		printf("ujj\n");
 		for(int i = 0; i < 16; i++) { 
 			SmallLetterDisplay *sld = new SmallLetterDisplay();
 			sld->fontSize = 15;
 			sld->textAlign=1;
-			sld->box.pos = Vec(-4,34+15.14*i);
+			sld->box.pos = Vec(-4,33.8+15.08*i);
 			sld->box.size = Vec(8, 10);
 			sld->value=std::to_string(i+1);
 			addChild(sld);
 		}
-		addParam(createParam<ComputerscareIsoThree>(Vec(4,279),module,ComputerscareDebug::WHICH_CLOCK));
-		addParam(createParam<IsoButton>(Vec(34,279),module,ComputerscareDebug::SWITCH_VIEW));
-	
-	addParam(createParam<MediumSnapKnob>(Vec(6,290),module,ComputerscareDebug::CLOCK_CHANNEL_FOCUS));
-	addParam(createParam<MediumSnapKnob>(Vec(36,290),module,ComputerscareDebug::INPUT_CHANNEL_FOCUS));
-		addOutput(createOutput<OutPort>(Vec(57, 1), module, ComputerscareDebug::POLY_OUTPUT));
-
 	}
 };
 

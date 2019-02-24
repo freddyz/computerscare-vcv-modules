@@ -1,7 +1,6 @@
 #pragma once
 
 #include "rack.hpp"
-#include "component.hpp"
 
 #include "app/common.hpp"
 #include "widget/TransparentWidget.hpp"
@@ -82,6 +81,22 @@ struct ComputerscareIsoThree : app::SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/iso-3way-1.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/iso-3way-2.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/iso-3way-3.svg")));
+	}
+};
+struct ThreeVerticalXSwitch : app::SvgSwitch {
+	ThreeVerticalXSwitch() {
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/vertical-x-1.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/vertical-x-2.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/vertical-x-3.svg")));
+	}
+};
+struct ComputerscareDebugFour : app::SvgSwitch {
+	ComputerscareDebugFour() {
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/debug-clock-selector-4way-template.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/debug-clock-selector-4way-template.svg")));
+
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/debug-clock-selector-4way-template.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance,"res/debug-clock-selector-4way-template.svg")));	
 	}
 };
 struct ComputerscareResetButton : SvgSwitch {
@@ -173,7 +188,7 @@ struct PointingUpPentagonPort : ComputerscareSvgPort {
 	}
 };
 
-struct InPort : SvgPort {
+struct InPort : ComputerscareSvgPort {
 	InPort() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline.svg")));
 		//background->wrap();
@@ -209,6 +224,20 @@ struct SmallKnob : RoundKnob {
 	SmallKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
 	}
+};
+struct SmallSnapKnob : RoundBlackSnapKnob {
+	//bool visible = true;
+	SmallSnapKnob() {
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
+	}
+	/*void draw(const DrawArgs &args) {
+		if(visible) {
+			Widget::draw(args);
+		}
+		else {
+			//Widget::draw(args);
+		}
+	};*/
 };
 struct BigSmoothKnob : RoundKnob {
 	BigSmoothKnob() {
