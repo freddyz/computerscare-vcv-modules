@@ -34,11 +34,11 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="16.000001"
+     inkscape:zoom="8.0000004"
      inkscape:cx="31.739768"
-     inkscape:cy="73.025649"
+     inkscape:cy="348.02564"
      inkscape:document-units="mm"
-     inkscape:current-layer="g1669"
+     inkscape:current-layer="text1667"
      showgrid="false"
      units="px"
      inkscape:snap-bbox="true"
@@ -255,8 +255,8 @@
          inkscape:connector-curvature="0"
          sodipodi:nodetypes="scccscccscccccccccccccc" />
       <path
-         d="m -4.2092392,200.57122 -0.4847638,-1.2161 0.6770831,-0.0788 0.3149372,1.30289 c 0.075784,0.19013 0.1902782,0.33533 0.343489,0.43563 0.1527062,0.099 0.5089884,0.054 0.7391429,0.0632 0.2764691,0.0109 0.3071356,0.0624 0.4214344,-0.0448 0.1161889,-0.10713 0.095756,-0.35574 0.01758,-0.55186 l -0.4145837,-1.04196 0.6771311,-0.0787 0.6359599,2.10824 -0.5122586,-0.0206 -0.1229709,-0.3085 c -0.07573,0.11697 -0.1842726,0.20202 -0.3256129,0.25518 -0.1399628,0.0521 -0.31848,0.0739 -0.5356668,0.065 -0.3581398,-0.0142 -0.6586658,-0.0969 -0.9014906,-0.24802 -0.2427901,-0.15095 -0.4192454,-0.36455 -0.5293578,-0.64078 z"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.01535606px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.24319558"
+         d="m -4.3868142,200.03445 0.5742718,-1.69609 0.6248429,-0.0275 -0.7848074,1.79337 c -0.089784,0.26517 -0.1113954,0.47426 -0.064846,0.62732 0.047175,0.15124 0.3788344,0.13194 0.5623481,0.17109 0.220595,0.0468 0.2046439,0.11985 0.3855086,-0.0114 0.1823702,-0.13092 0.3650247,-0.46852 0.4576392,-0.74205 l 0.4926639,-1.45312 0.6248031,-0.0274 -1.1651151,2.91658 -0.4083368,-0.0873 0.1456847,-0.43027 c -0.1567195,0.14891 -0.3150268,0.25097 -0.4749389,0.30622 -0.1579292,0.054 -0.3234788,0.0626 -0.4964538,0.0253 -0.2856052,-0.0609 -0.4685089,-0.20724 -0.5485817,-0.43924 -0.080185,-0.23176 -0.055053,-0.54028 0.075386,-0.92554 z"
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:5.01535606px;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;stroke-width:0.26770094"
          id="path1677"
          inkscape:connector-curvature="0"
          sodipodi:nodetypes="cccccccccccccccccc" />
