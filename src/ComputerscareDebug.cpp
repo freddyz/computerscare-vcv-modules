@@ -71,6 +71,9 @@ struct ComputerscareDebug : Module {
 		params[INPUT_CHANNEL_FOCUS].config(0.f,15.f,0.f,"Input Channel Selector");
 		outputs[POLY_OUTPUT].setChannels(16);
 
+		params[MANUAL_TRIGGER].randomizable=false;
+		params[MANUAL_CLEAR_TRIGGER].randomizable=false;
+
 	}
 	void step() override;
 
@@ -234,7 +237,19 @@ struct StringDisplayWidget3 : Widget {
 
   }
 };
-
+struct ConnectedSmallLetter : SmallLetterDisplay {
+	ComputerscareDebug *module;
+	int index;
+	ConnectedSmallLetter(int dex) {
+		index = dex;
+		value = std::to_string(dex+1);
+	}
+	void draw(const DrawArgs &ctx) override {
+		baseColor = (module->clockMode == 0) && (module->clockChannel == index) ? COLOR_COMPUTERSCARE_LIGHT_GREEN : COLOR_COMPUTERSCARE_TRANSPARENT;
+		value = (module->inputMode == 0) && (module->inputChannel == index) ? std::to_string(index+1) + "<" : std::to_string(index+1);
+		SmallLetterDisplay::draw(ctx);
+	}
+};
 struct ComputerscareDebugWidget : ModuleWidget {
 
 	ComputerscareDebugWidget(ComputerscareDebug *module) {
@@ -257,7 +272,6 @@ struct ComputerscareDebugWidget : ModuleWidget {
 	
 
 		HidableSmallSnapKnob *clockKnob = createParam<HidableSmallSnapKnob>(Vec(6,305),module,ComputerscareDebug::CLOCK_CHANNEL_FOCUS);
-		//clockKnob->visible = (module->clockMode == 0);
 		clockKnob->module = module;
 		clockKnob->hackIndex = 0;
 		addParam(clockKnob);
@@ -265,7 +279,6 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		HidableSmallSnapKnob *inputKnob =createParam<HidableSmallSnapKnob>(Vec(66,305),module,ComputerscareDebug::INPUT_CHANNEL_FOCUS);
 		inputKnob->module = module;
 		inputKnob->hackIndex = 1;
-
 		addParam(inputKnob);
 
 		addOutput(createOutput<OutPort>(Vec(57, 1), module, ComputerscareDebug::POLY_OUTPUT));
@@ -277,12 +290,12 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		addChild(stringDisplay);
 
 		for(int i = 0; i < 16; i++) { 
-			SmallLetterDisplay *sld = new SmallLetterDisplay();
+			ConnectedSmallLetter *sld = new ConnectedSmallLetter(i);
 			sld->fontSize = 15;
 			sld->textAlign=1;
 			sld->box.pos = Vec(-4,33.8+15.08*i);
-			sld->box.size = Vec(8, 10);
-			sld->value=std::to_string(i+1);
+			sld->box.size = Vec(18, 20);
+			sld->module = module;
 			addChild(sld);
 		}
 	}

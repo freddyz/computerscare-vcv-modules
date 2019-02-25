@@ -230,14 +230,7 @@ struct SmallSnapKnob : RoundBlackSnapKnob {
 	SmallSnapKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
 	}
-	/*void draw(const DrawArgs &args) {
-		if(visible) {
-			Widget::draw(args);
-		}
-		else {
-			//Widget::draw(args);
-		}
-	};*/
+
 };
 struct BigSmoothKnob : RoundKnob {
 	BigSmoothKnob() {
