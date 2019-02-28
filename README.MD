@@ -425,6 +425,39 @@ A simple module for debugging.  Displays a list of the last 16 voltages read fro
 
 **Clear (clr):** Manual Clear
 
+### Polyphonic Enhancements
+
+In the v1 branch, you can find the new version of Debug.  There are 3 clock modes (single, internal, poly), and 3 input modes (single, internal, poly).
+
+
+**Single Clock, Single Input:**
+Selected channel clock signal will place the current value of selected input channel signal at line 1 and will discard the last line in the display.
+
+**Single Clock, Internal Input:**
+Independent randomly generated uniform values (0 to 1) will replace each of the 16 lines of display
+
+**Single Clock, Poly Input:**
+Selected channel clock signal will place current value of each input channel in the corresponding line of the display.  (channel 4 of input gets recorded on line 4 of the display)
+
+**Internal Clock, Single Input:**
+"Realtime" updates whichever input channel is selected.  All other output channels remain at their existing values.
+
+**Internal Clock, Internal Input:**
+16 channel independent noise source.
+
+**Internal Clock, Poly Input:**
+"Realtime" 16-channel poly volt meter
+
+**Poly Clock, Single Input:**
+Each clock signal from poly clock input will update the corresponding display/output line with the current value of the selected input channel
+
+**Poly Clock, Internal Input:**
+Each clock signal from poly clock will update corresponding display line (a.k.a. output channel) with random value between (0 to 1)
+
+**Poly Clock, Poly Input:**
+16-channel sample-and-hold, clocked by poly clock
+
+
 *Inspired by ML Modules Volt Meter*
 
 
