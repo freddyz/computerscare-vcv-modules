@@ -245,8 +245,10 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
 		value = std::to_string(dex+1);
 	}
 	void draw(const DrawArgs &ctx) override {
-		baseColor = (module->clockMode == 0) && (module->clockChannel == index) ? COLOR_COMPUTERSCARE_LIGHT_GREEN : COLOR_COMPUTERSCARE_TRANSPARENT;
-		value = (module->inputMode == 0) && (module->inputChannel == index) ? std::to_string(index+1) + "<" : std::to_string(index+1);
+		if(module) {
+			baseColor = (module->clockMode == 0) && (module->clockChannel == index) ? COLOR_COMPUTERSCARE_LIGHT_GREEN : COLOR_COMPUTERSCARE_TRANSPARENT;
+			value = (module->inputMode == 0) && (module->inputChannel == index) ? std::to_string(index+1) + "<" : std::to_string(index+1);
+		}
 		SmallLetterDisplay::draw(ctx);
 	}
 };
@@ -256,9 +258,9 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		setModule(module);
 		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
 
-		addInput(createInput<InPort>(Vec(3, 335), module, ComputerscareDebug::TRG_INPUT));
-		addInput(createInput<InPort>(Vec(63, 335),  module, ComputerscareDebug::VAL_INPUT));
-		addInput(createInput<InPort>(Vec(33, 335), module, ComputerscareDebug::CLR_INPUT));
+		addInput(createInput<InPort>(Vec(2, 335), module, ComputerscareDebug::TRG_INPUT));
+		addInput(createInput<InPort>(Vec(61, 335),  module, ComputerscareDebug::VAL_INPUT));
+		addInput(createInput<InPort>(Vec(31, 335), module, ComputerscareDebug::CLR_INPUT));
 	
 		
 
@@ -281,7 +283,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		inputKnob->hackIndex = 1;
 		addParam(inputKnob);
 
-		addOutput(createOutput<OutPort>(Vec(57, 1), module, ComputerscareDebug::POLY_OUTPUT));
+		addOutput(createOutput<OutPort>(Vec(56, 1), module, ComputerscareDebug::POLY_OUTPUT));
 
 
 		StringDisplayWidget3 *stringDisplay = createWidget<StringDisplayWidget3>(Vec(15,34));
