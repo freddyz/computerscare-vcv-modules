@@ -246,8 +246,26 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
 	}
 	void draw(const DrawArgs &ctx) override {
 		if(module) {
-			baseColor = (module->clockMode == 0) && (module->clockChannel == index) ? COLOR_COMPUTERSCARE_LIGHT_GREEN : COLOR_COMPUTERSCARE_TRANSPARENT;
-			value = (module->inputMode == 0) && (module->inputChannel == index) ? std::to_string(index+1) + "<" : std::to_string(index+1);
+			int cm = module->clockMode;
+			int im = module->inputMode;
+			int cc = module->clockChannel;
+			int ic = module->inputChannel;
+
+			// both:pink
+			// clock: green
+			// input:yellow
+			baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+			if(cm == 0 && im == 0 && cc == index && ic == index)  {
+				baseColor = COLOR_COMPUTERSCARE_PINK;
+			} 
+			else {
+				if(cm == 0 && cc == index) {
+					baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+				}
+				if(im == 0 && ic == index) {
+					baseColor = COLOR_COMPUTERSCARE_YELLOW;
+				}
+			}
 		}
 		SmallLetterDisplay::draw(ctx);
 	}
@@ -260,18 +278,14 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		addInput(createInput<InPort>(Vec(2, 335), module, ComputerscareDebug::TRG_INPUT));
 		addInput(createInput<InPort>(Vec(61, 335),  module, ComputerscareDebug::VAL_INPUT));
-		addInput(createInput<InPort>(Vec(31, 335), module, ComputerscareDebug::CLR_INPUT));
-	
-		
+		addInput(createInput<InPort>(Vec(31, 335), module, ComputerscareDebug::CLR_INPUT));		
 
 		addParam(createParam<ComputerscareClockButton>(Vec(2, 321), module, ComputerscareDebug::MANUAL_TRIGGER));
-		
 
 		addParam(createParam<ComputerscareResetButton>(Vec(32, 320), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
   		
 		addParam(createParam<ThreeVerticalXSwitch>(Vec(2,279),module,ComputerscareDebug::WHICH_CLOCK));
 		addParam(createParam<ThreeVerticalXSwitch>(Vec(66,279),module,ComputerscareDebug::SWITCH_VIEW));
-	
 
 		HidableSmallSnapKnob *clockKnob = createParam<HidableSmallSnapKnob>(Vec(6,305),module,ComputerscareDebug::CLOCK_CHANNEL_FOCUS);
 		clockKnob->module = module;
@@ -285,21 +299,22 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		addOutput(createOutput<OutPort>(Vec(56, 1), module, ComputerscareDebug::POLY_OUTPUT));
 
+		for(int i = 0; i < 16; i++) { 
+			ConnectedSmallLetter *sld = new ConnectedSmallLetter(i);
+			sld->fontSize = 15;
+			sld->textAlign=1;
+			sld->box.pos = Vec(-4,33.8+15.08*i);
+			sld->box.size = Vec(28, 20);
+			sld->module = module;
+			addChild(sld);
+		}
 
 		StringDisplayWidget3 *stringDisplay = createWidget<StringDisplayWidget3>(Vec(15,34));
 		stringDisplay->box.size = Vec(73, 245);
 		stringDisplay->module = module;
 		addChild(stringDisplay);
 
-		for(int i = 0; i < 16; i++) { 
-			ConnectedSmallLetter *sld = new ConnectedSmallLetter(i);
-			sld->fontSize = 15;
-			sld->textAlign=1;
-			sld->box.pos = Vec(-4,33.8+15.08*i);
-			sld->box.size = Vec(18, 20);
-			sld->module = module;
-			addChild(sld);
-		}
+		
 	}
 };
 
