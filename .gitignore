@@ -2,6 +2,7 @@ build
 dist
 .DS_Store
 plugin.*
+!plugin.json
 a.out
 *.swp
 *.swo
