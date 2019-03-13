@@ -199,13 +199,6 @@ struct ComputerscareOhPeas : Module {
     printf("delta %s\n",this->currentFormula.c_str());
 		this->quant = Quantizer(this->currentFormula.c_str(),this->numDivisions,this->globalTranspose);
     printf("echo \n");
-    //this->setNumDivisionsString();
-	}
-  void setNumDivisionsString() {
-    /*std::string transposeString =  (this->globalTranspose > 0 ? "+" : "" ) + std::to_string(this->globalTranspose);
-    this->numDivisionsDisplay->value = std::to_string(this->numDivisions);
-    this->globalTransposeDisplay->value = transposeString;*/
-    
   }
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
@@ -351,12 +344,32 @@ struct PeasTF2 : LedDisplayTextField {
 };
 struct PeasSmallDisplay : SmallLetterDisplay {
   ComputerscareOhPeas *module;
-  PeasSmallDisplay() {
+  int type;
+  PeasSmallDisplay(int t) {
+    type = t;
     SmallLetterDisplay();
   };
   void draw(const DrawArgs &args) {
+      //this->setNumDivisionsString();
+    if(module) {
+      if(type==0) {
+      
+      std::string transposeString =  (module->globalTranspose > 0 ? "+" : "" ) + std::to_string(module->globalTranspose);
+      value = transposeString;
+    }
+    else {
+      std::string numDivisionsDisplay = std::to_string(module->numDivisions);
+      value = numDivisionsDisplay;
+    }
+//this->numDivisionsDisplay->value = std::to_string(this->numDivisions);
+    //this->globalTransposeDisplay->value = transposeString;
+      
+    }
     SmallLetterDisplay::draw(args);
+    
+    
   }
+
 };
 //this->numDivisions,this->globalTranspose
 struct ComputerscareOhPeasWidget : ModuleWidget {
@@ -380,24 +393,22 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 
   		  textFieldTemp = createWidget<PeasTF2>(mm2px(Vec(x,y+24)));
         textFieldTemp->module = module;
-	      //textFieldTemp->setModule(module);
 	      textFieldTemp->box.size = mm2px(Vec(44, 7));
 	      textFieldTemp->multiline = false;
-	      //textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
+	      textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
         textFieldTemp->text = "221222";
 	      addChild(textFieldTemp);
-	      //module->textField = textFieldTemp;
 
-     	  ndd = new PeasSmallDisplay();
+     	  ndd = new PeasSmallDisplay(1);
         ndd->module = module;
         ndd->box.pos = mm2px(Vec(2,yy));
         ndd->box.size = mm2px(Vec(9, 7));
         ndd->value = "";
         ndd->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
         addChild(ndd);
-        //module->numDivisionsDisplay = ndd;
 
-        transposeDisplay = new SmallLetterDisplay();
+        transposeDisplay = new PeasSmallDisplay(0);
+        transposeDisplay->module = module;
 
         transposeDisplay->box.pos = mm2px(Vec(30,yy));
         transposeDisplay->box.size = mm2px(Vec(11, 7));
@@ -405,7 +416,6 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
         transposeDisplay->value = "";
         transposeDisplay->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
         addChild(transposeDisplay);
-        //module->globalTransposeDisplay = transposeDisplay;
 
     		for(int i = 0; i < numChannels; i++) {
 
@@ -455,7 +465,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 PeasTF2 *textFieldTemp;
      SmallLetterDisplay* trimPlusMinus;
   PeasSmallDisplay* ndd;
-  SmallLetterDisplay* transposeDisplay;
+  PeasSmallDisplay* transposeDisplay;
   //PeasTextField* textFieldTemp;
   //Menu *createContextMenu();
 
