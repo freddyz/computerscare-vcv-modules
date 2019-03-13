@@ -2,9 +2,7 @@
 #include "Computerscare.hpp"
 
 #include "dtpulse.hpp"
-#include "dsp/digital.hpp"
-//#include "window.hpp"
-#include "dsp/filter.hpp"
+
 
 #include <string>
 #include <sstream>
@@ -320,11 +318,15 @@ struct SetQuantizationModeMenuItem : MenuItem {
     MenuItem::step();
   }
 };
-struct PeasTF2 : LedDisplayTextField {
+struct PeasTF2 : ComputerscareTextField {
   ComputerscareOhPeas *module;
+  int fontSize = 16;
+  int rowIndex=0;
+  bool inError = false;
   //ComputerscareDebug *module;
+
   PeasTF2() {
-      LedDisplayTextField();
+      ComputerscareTextField();
   };
   void draw(const DrawArgs &args) override {
     if(module) {
@@ -336,7 +338,7 @@ struct PeasTF2 : LedDisplayTextField {
         printf("charlie %s\n",text.c_str());
       }
     }
-    LedDisplayTextField::draw(args);
+    ComputerscareTextField::draw(args);
   }
 
   //void draw(const DrawArgs &args) override;
@@ -379,8 +381,18 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 	//TextField *textFieldTemp;
   ComputerscareOhPeasWidget(ComputerscareOhPeas *module) {
 		setModule(module);
-    setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareOhPeasPanel.svg")));
+    //setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareOhPeasPanel.svg")));
+    box.size = Vec(9*15, 380);
+    {
+      ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
+      panel->box.size = box.size;
+      panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance,"res/ComputerscareOhPeasPanel.svg")));
+        
+        //module->panelRef = panel;
 
+        addChild(panel);
+
+    }
 		double x = 1;
 		double y = 7;
 		//double dy = 18.4;

@@ -244,7 +244,46 @@ struct ComputerscareDotKnob : SmallKnob {
 	}
 };
 
+struct ComputerscareTextField : ui::TextField {
+	std::shared_ptr<Font> font;
+	math::Vec textOffset;
+	NVGcolor color = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+	ComputerscareTextField() {
 
+	font = APP->window->loadFont(asset::system("res/fonts/ShareTechMono-Regular.ttf"));
+	color = nvgRGB(0xff, 0xd7, 0x14);
+	textOffset = math::Vec(5, 5);
+}
+
+
+void draw(const DrawArgs &args) {
+	nvgScissor(args.vg, RECT_ARGS(args.clipBox));
+
+	// Background
+	nvgBeginPath(args.vg);
+	nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 5.0);
+	nvgFillColor(args.vg, nvgRGB(0x00, 0x00, 0x00));
+	nvgFill(args.vg);
+
+	// Text
+	if (font->handle >= 0) {
+		bndSetFont(font->handle);
+
+		NVGcolor highlightColor = color;
+		highlightColor.a = 0.5;
+		int begin = std::min(cursor, selection);
+		int end = (this == APP->event->selectedWidget) ? std::max(cursor, selection) : -1;
+		bndIconLabelCaret(args.vg, textOffset.x, textOffset.y,
+			box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
+			-1, color, 18, text.c_str(), highlightColor, begin, end);
+
+		bndSetFont(APP->window->uiFont->handle);
+	}
+
+	nvgResetScissor(args.vg);
+}
+	//int getTextPosition(math::Vec mousePos) override;
+};
 ////////////////////////////////////
 struct SmallLetterDisplay : Widget {
 
