@@ -14,15 +14,20 @@
 			"description": "Isopig testing",
 			"tags": ["Poly","Utility"]
 		},
-		"KnolyPobs":{
+		"computerscare-knolypobs":{
 			"name":"Knoly pobs",
 			"description":"Poly Knobs, 16 of them",
 			"tags":["Poly","Utility"]
 		},
-		"Debug":{
+		"computerscare-debug":{
 			"name":"Debug",
 			"description":"Debugger",
 			"tags":["Poly","Utility"]
+		},
+		"computerscare-ohpeas":{
+			"name":"Oh Peas!",
+			"description":"Quad Quantenuverter.  Attenuverter, Offsetter, Microtonal Quantizer",
+			"tags":["Poly"]
 		}
 	}
 }

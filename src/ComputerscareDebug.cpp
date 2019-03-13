@@ -71,11 +71,11 @@ struct ComputerscareDebug : Module {
 		params[INPUT_CHANNEL_FOCUS].config(0.f,15.f,0.f,"Input Channel Selector");
 		outputs[POLY_OUTPUT].setChannels(16);
 
-		params[MANUAL_TRIGGER].randomizable=false;
-		params[MANUAL_CLEAR_TRIGGER].randomizable=false;
+		//params[MANUAL_TRIGGER].randomizable=false;
+		//params[MANUAL_CLEAR_TRIGGER].randomizable=false;
 
 	}
-	void step() override;
+	void process(const ProcessArgs &args) override;
 
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
@@ -86,17 +86,17 @@ struct ComputerscareDebug : Module {
 
 };
 
-void ComputerscareDebug::step() {
+void ComputerscareDebug::process(const ProcessArgs &args) {
 	std::string thisVal;
 	
-	clockMode = floor(params[WHICH_CLOCK].value);
+	clockMode = floor(params[WHICH_CLOCK].getValue());
 
-	inputMode = floor(params[SWITCH_VIEW].value);
+	inputMode = floor(params[SWITCH_VIEW].getValue());
 
-	inputChannel = floor(params[INPUT_CHANNEL_FOCUS].value);
-	clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].value);
+	inputChannel = floor(params[INPUT_CHANNEL_FOCUS].getValue());
+	clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].getValue());
 	if(clockMode == SINGLE_MODE) {
-		if (clockTriggers[clockChannel].process(inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
+		if (clockTriggers[clockChannel].process(inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 			if(inputMode == POLY_MODE) {
 				for(int i = 0; i < 16; i++) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
@@ -140,28 +140,28 @@ void ComputerscareDebug::step() {
 	else if(clockMode == POLY_MODE) {
 		if(inputMode == POLY_MODE) {
 			for(int i = 0; i < 16; i++) {
-				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
+				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
 				}
 			}
 		}
 		else if(inputMode == SINGLE_MODE) {
 			for(int i = 0; i < 16; i++) {
-				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
+				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(inputChannel);
 				}
 			}
 		}
 		else if(inputMode == INTERNAL_MODE) {
 			for(int i = 0; i < 16; i++) {
-				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].value) ) {
+				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 					logLines[i] = random::uniform();
 				}
 			}
 		}
 	}
 		
-	if(clearTrigger.process(inputs[CLR_INPUT].getVoltage() / 2.f) || manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].value)) {
+	if(clearTrigger.process(inputs[CLR_INPUT].getVoltage() / 2.f) || manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].getValue())) {
 		for( unsigned int a = 0; a < NUM_LINES; a++ )
 		 {
 		 	logLines[a] = 0;
@@ -319,4 +319,4 @@ struct ComputerscareDebugWidget : ModuleWidget {
 };
 
 
-Model *modelComputerscareDebug = createModel<ComputerscareDebug, ComputerscareDebugWidget>("Debug");
+Model *modelComputerscareDebug = createModel<ComputerscareDebug, ComputerscareDebugWidget>("computerscare-debug");

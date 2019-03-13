@@ -40,7 +40,7 @@ struct ComputerscareKnolyPobs : Module {
 		params[TOGGLES].config(0.0f, 1.0f, 0.0f);
 		outputs[POLY_OUTPUT].setChannels(16);
 	}
-	void step() override {
+	void process(const ProcessArgs &args) override {
 		counter++;
 		if(counter > 5012) { 
 			//printf("%f \n",random::uniform());
@@ -122,4 +122,4 @@ void addLabeledKnob(std::string label,int x, int y, ComputerscareKnolyPobs *modu
 SmallLetterDisplay* smallLetterDisplay;
 };
 
-Model *modelComputerscareKnolyPobs = createModel<ComputerscareKnolyPobs, ComputerscareKnolyPobsWidget>("KnolyPobs");
+Model *modelComputerscareKnolyPobs = createModel<ComputerscareKnolyPobs, ComputerscareKnolyPobsWidget>("computerscare-knolypobs");

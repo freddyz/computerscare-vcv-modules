@@ -365,6 +365,9 @@ bool matchParens(std::string value) {
     theyMatch = (parensCount==0) && (squareCount ==0) && (curlyCount==0) && (angleCount==0);
     return theyMatch;
   }
+  void printVector(std::vector <int> intVector) {
+    printf("vector\n");
+  }
 void whoKnows(std::string input) {
 	//AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
 	/*abs.print();

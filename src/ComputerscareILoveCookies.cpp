@@ -44,20 +44,20 @@ public:
     bndSetFont(gGuiFont->handle);
     return textPos;
   }
-  void draw(NVGcontext *vg) override {
-    nvgScissor(vg, 0, 0, box.size.x, box.size.y);
+  void draw(const DrawArgs &args) override {
+    nvgScissor(args.vg, 0, 0, box.size.x, box.size.y);
 
     // Background
-    nvgFontSize(vg, fontSize);
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 5.0);
+    nvgFontSize(args.vg, fontSize);
+    nvgBeginPath(args.vg);
+    nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 5.0);
     if(inError) {
-      nvgFillColor(vg, COLOR_COMPUTERSCARE_PINK);
+      nvgFillColor(args.vg, COLOR_COMPUTERSCARE_PINK);
     }
     else {
-      nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
+      nvgFillColor(args.vg, nvgRGB(0x00, 0x00, 0x00));
     }
-    nvgFill(vg);
+    nvgFill(args.vg);
 
     // Text
     if (font->handle >= 0) {
@@ -67,15 +67,15 @@ public:
       highlightColor.a = 0.5;
       int begin = min(cursor, selection);
       int end = (this == gFocusedWidget) ? max(cursor, selection) : -1;
-      //bndTextField(vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
-      bndIconLabelCaret(vg, textOffset.x, textOffset.y - 3,
+      //bndTextField(args.vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
+      bndIconLabelCaret(args.vg, textOffset.x, textOffset.y - 3,
         box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
         -1, color, fontSize, text.c_str(), highlightColor, begin, end);
 
       bndSetFont(gGuiFont->handle);
     }
 
-    nvgResetScissor(vg);
+    nvgResetScissor(args.vg);
   };
 
 private:
@@ -133,8 +133,9 @@ struct ComputerscareILoveCookies : Module {
  
   std::vector<ParamWidget*> smallLetterKnobs;
 
-ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
-	void step() override;
+ComputerscareILoveCookies() {
+		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);}
+	void process(const ProcessArgs &args) override;
 
 	json_t *toJson() override
   {
@@ -170,11 +171,11 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
   }
   void wiggleKnobs() {
    for(int i = 0; i < numKnobs; i++) {
-      float prev = params[KNOB_PARAM+i].value;
-      if(randomUniform() < 0.7) {
-        float rv = (10*randomUniform()+2*prev)/3;
+      float prev = params[KNOB_PARAM+i].getValue();
+      if(random::uniform() < 0.7) {
+        float rv = (10*random::uniform()+2*prev)/3;
         this->smallLetterKnobs[i]->setValue(rv);
-        params[KNOB_PARAM+i].value = rv;
+        params[KNOB_PARAM+i].getValue() = rv;
       }
     }
   }
@@ -187,12 +188,12 @@ ComputerscareILoveCookies() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LI
     int length = 0;
     for (int i = 0; i < numFields; i++) {
       
-      length = floor(randomUniform()*12) + 2;
+      length = floor(random::uniform()*12) + 2;
       str = "";
       for(int j = 0; j < length; j++) {
-        randchar = mainlookup[floor(randomUniform()*mainlookup.size())];
+        randchar = mainlookup[floor(random::uniform()*mainlookup.size())];
         str = str + randchar;
-        ru = randomUniform();
+        ru = random::uniform();
         if(ru < 0.1) {
           str = "(" + str + ")";
         }
@@ -300,40 +301,40 @@ void onCreate () override
 };
 
 
-void ComputerscareILoveCookies::step() {
+void ComputerscareILoveCookies::process(const ProcessArgs &args) {
 
 
   bool globalGateIn = globalClockTrigger.isHigh();
   bool activeStep = 0;
   bool atFirstStep = false;
-  bool globalTriggerClocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
-  bool globalManualResetClicked = globalManualResetTrigger.process(params[MANUAL_RESET_PARAM].value);
-  bool globalManualClockClicked = globalManualClockTrigger.process(params[MANUAL_CLOCK_PARAM].value);
+  bool globalTriggerClocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].getVoltage());
+  bool globalManualResetClicked = globalManualResetTrigger.process(params[MANUAL_RESET_PARAM].getValue());
+  bool globalManualClockClicked = globalManualClockTrigger.process(params[MANUAL_CLOCK_PARAM].getValue());
   bool currentTriggerIsHigh;
   bool currentTriggerClocked;
-  bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].value / 2.f);
+  bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].getVoltage() / 2.f);
   bool currentResetActive;
   bool currentResetTriggered;
   bool currentManualResetClicked;
 	float knobRawValue = 0.f;
   for(int i = 0; i < numFields; i++) {
     activeStep = false;
-    currentResetActive = inputs[RESET_INPUT + i].active;
-    currentResetTriggered = resetTriggers[i].process(inputs[RESET_INPUT+i].value / 2.f);
-    currentManualResetClicked = manualResetTriggers[i].process(params[INDIVIDUAL_RESET_PARAM + i].value);
+    currentResetActive = inputs[RESET_INPUT + i].isConnected();
+    currentResetTriggered = resetTriggers[i].process(inputs[RESET_INPUT+i].getVoltage() / 2.f);
+    currentManualResetClicked = manualResetTriggers[i].process(params[INDIVIDUAL_RESET_PARAM + i].getValue());
 
     currentTriggerIsHigh = clockTriggers[i].isHigh();
-    currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].value);
+    currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].getVoltage());
 
     if(true) {
-      if (inputs[CLOCK_INPUT + i].active) {
+      if (inputs[CLOCK_INPUT + i].isConnected()) {
         if(currentTriggerClocked) {
           incrementInternalStep(i);
           activeKnobIndex[i] = newABS[i].peekWorkingStep();
         }
       }
       else {
-        if ((inputs[GLOBAL_CLOCK_INPUT].active && globalTriggerClocked) || globalManualClockClicked) {
+        if ((inputs[GLOBAL_CLOCK_INPUT].isConnected() && globalTriggerClocked) || globalManualClockClicked) {
           incrementInternalStep(i);
           activeKnobIndex[i] = newABS[i].peekWorkingStep();
         }
@@ -353,36 +354,36 @@ void ComputerscareILoveCookies::step() {
         setChangeImminent(i,false);
       }
       else {
-        if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].active) {
+        if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].isConnected()) {
           //checkIfShouldChange(i);
         }
       }
     }
 		if(activeKnobIndex[i] < 0) {
-			outputs[TRG_OUTPUT + i].value = 0.f;
+			outputs[TRG_OUTPUT + i].setVoltage(0.f);
 		}
 		else if(activeKnobIndex[i] < 26) {
-      knobRawValue = params[activeKnobIndex[i]].value;
-      outputs[TRG_OUTPUT + i].value = mapKnobValue(knobRawValue,i); 
+      knobRawValue = params[activeKnobIndex[i]].getValue();
+      outputs[TRG_OUTPUT + i].setVoltage(mapKnobValue(knobRawValue,i)); 
     }
     else if(activeKnobIndex[i] < 52) {
-      knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].value;
-      outputs[TRG_OUTPUT + i].value = knobRawValue;
+      knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].getVoltage();
+      outputs[TRG_OUTPUT + i].setVoltage(knobRawValue);
     }
     else if(activeKnobIndex[i] < 78) {
-      outputs[TRG_OUTPUT + i].value = newABS[i].exactFloats[activeKnobIndex[i] - 52];
+      outputs[TRG_OUTPUT + i].setVoltage(newABS[i].exactFloats[activeKnobIndex[i] - 52]);
     }
     else if(activeKnobIndex[i] < 104) {
-      outputs[TRG_OUTPUT + i].value = 2.22;
+      outputs[TRG_OUTPUT + i].setVoltage(2.22);
     }
     else {
-      outputs[TRG_OUTPUT+i].value = 0.f;
+      outputs[TRG_OUTPUT+i].setVoltage(0.f);
     }
-    if(inputs[CLOCK_INPUT + i].active) {
-      outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
+    if(inputs[CLOCK_INPUT + i].isConnected()) {
+      outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f);
     }
     else {
-      outputs[FIRST_STEP_OUTPUT + i].value = (globalGateIn && atFirstStep) ? 10.f : 0.0f;
+      outputs[FIRST_STEP_OUTPUT + i].setVoltage((globalGateIn && atFirstStep) ? 10.f : 0.0f);
     }
   }
 }
@@ -437,8 +438,9 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   double inputRowWidth = 9.4;
   double inputColumnHeight = 9.7;
 
-  ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) : ModuleWidget(module) {
-		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareILoveCookiesPanel.svg")));
+  ComputerscareILoveCookiesWidget(ComputerscareILoveCookies *module) {
+		setModule(module);
+		setPanel(APP->window->loadSvg(asset::plugin(plugin, "res/ComputerscareILoveCookiesPanel.svg")));
 
     for(int i = 0; i < numKnobRows; i++) {
       for(int j = 0; j < numKnobColumns; j++) {

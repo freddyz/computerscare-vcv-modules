@@ -19,8 +19,10 @@ SOURCES += $(wildcard src/ComputerscareIso.cpp)
 SOURCES += $(wildcard src/ComputerscareKnolyPobs.cpp)
 
 SOURCES += $(wildcard src/ComputerscareDebug.cpp)
+SOURCES += $(wildcard src/ComputerscareOhPeas.cpp)
 
 SOURCES += $(wildcard src/Computerscare.cpp)
+SOURCES += $(wildcard src/dtpulse.cpp)
 
 # Add files to the ZIP package when running `make dist`
 # The compiled plugin is automatically added.

@@ -25,10 +25,11 @@ extern Plugin *pluginInstance;
 // Forward-declare each Model, defined in each module source file
 extern Model *modelComputerscareDebug;
 
+
 //extern Model *modelComputerscarePatchSequencer;
 //extern Model *modelComputerscareLaundrySoup;
 //extern Model *modelComputerscareILoveCookies;
-//extern Model *modelComputerscareOhPeas;
+extern Model *modelComputerscareOhPeas;
 extern Model *modelComputerscareIso;
 extern Model *modelComputerscareKnolyPobs;
 
@@ -245,7 +246,7 @@ struct ComputerscareDotKnob : SmallKnob {
 
 
 ////////////////////////////////////
-struct SmallLetterDisplay : TransparentWidget {
+struct SmallLetterDisplay : Widget {
 
   std::string value;
   std::shared_ptr<Font> font;

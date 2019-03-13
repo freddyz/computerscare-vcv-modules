@@ -62,8 +62,9 @@ struct ComputerscarePatchSequencer : Module {
   int randomizationStepEnum = 0; //0: edit step, 1: active step, 2: all steps
   int randomizationOutputBoundsEnum = 1; //0: randomize exactly one per output, 1: randomize exactly one per output, 2: randomize 1 or more, 3: randomize 0 or more
 
-ComputerscarePatchSequencer() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
-	void step() override;
+ComputerscarePatchSequencer() {
+		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);}
+	void process(const ProcessArgs &args) override;
 
 
 
@@ -163,17 +164,17 @@ json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOu
 
   		for (int i = 0; i < 10; i++) 
   		{
-  			if(inputs[INPUT_JACKS + i].active) {
+  			if(inputs[INPUT_JACKS + i].isConnected()) {
   				numConnectedInputs++;
   				connectedInputIndices.push_back(i);
   			}
-  			connectedInputs[i] = inputs[INPUT_JACKS + i].active;
-  			connectedOutputs[i] = outputs[OUTPUTS + i].active; 
+  			connectedInputs[i] = inputs[INPUT_JACKS + i].isConnected();
+  			connectedOutputs[i] = outputs[OUTPUTS + i].isConnected(); 
   		}
   		for(int k = 0; k < maxSteps; k++) {
   			if((randomizationStepEnum == 0 && k == editAddress) || (randomizationStepEnum == 1 && k == address) || randomizationStepEnum == 2) {
   				for(int i = 0; i < 10; i++) {
-  					randomIndex = numConnectedInputs > 0 ? connectedInputIndices[floor(randomUniform()*numConnectedInputs)] : 0;
+  					randomIndex = numConnectedInputs > 0 ? connectedInputIndices[floor(random::uniform()*numConnectedInputs)] : 0;
   					if(connectedOutputs[i]) {
   						for (int j = 0; j < 10; j++) {
   							if(j==randomIndex) 
@@ -194,18 +195,18 @@ json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOu
 			if((randomizationStepEnum == 0 && k == editAddress) || (randomizationStepEnum == 1 && k == address) || randomizationStepEnum == 2) {
 				for (int i = 0; i < 10; i++) 
 				{
-					randomIndex = floor(randomUniform()*10);
+					randomIndex = floor(random::uniform()*10);
 
 					for (int j = 0; j < 10; j++) 
 					{
             if(randomizationOutputBoundsEnum == 3) {
-              switch_states[k][j][i] = (j==randomIndex || randomUniform() < 0.2) ? 1 : 0;
+              switch_states[k][j][i] = (j==randomIndex || random::uniform() < 0.2) ? 1 : 0;
             }
             else if(randomizationOutputBoundsEnum == 2) {
-               switch_states[k][j][i] = randomUniform() < 0.2 ? 1 : 0;
+               switch_states[k][j][i] = random::uniform() < 0.2 ? 1 : 0;
             }
             else if(randomizationOutputBoundsEnum == 0) {
-               switch_states[k][j][i] = (j==randomIndex && randomUniform() < 0.7) ? 1 : 0;
+               switch_states[k][j][i] = (j==randomIndex && random::uniform() < 0.7) ? 1 : 0;
             }
              else {
               switch_states[k][j][i] = j==randomIndex ? 1 : 0;
@@ -235,9 +236,9 @@ json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOu
 };
 
 
-void ComputerscarePatchSequencer::step() {
+void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
 
-  int numStepsKnobPosition = (int) clamp(roundf(params[STEPS_PARAM].value), 1.0f, 16.0f);
+  int numStepsKnobPosition = (int) clamp(roundf(params[STEPS_PARAM].getValue()), 1.0f, 16.0f);
 
 
   for ( int i = 0 ; i < 10 ; i++)
@@ -249,7 +250,7 @@ void ComputerscarePatchSequencer::step() {
   {
    for (int j = 0 ; j < 10 ; j++)
    {
-     if (switch_triggers[i][j].process(params[SWITCHES+j*10 + i].value))
+     if (switch_triggers[i][j].process(params[SWITCHES+j*10 + i].getValue()))
      {
      	// handle button clicks in the patch matrix
 		  switch_states[editAddress][i][j] = !switch_states[editAddress][i][j];
@@ -264,28 +265,28 @@ void ComputerscarePatchSequencer::step() {
   	numAddresses = numStepsKnobPosition;
   }
 
-  if(randomizeTrigger.process(inputs[RANDOMIZE_INPUT].value / 2.f)) {
+  if(randomizeTrigger.process(inputs[RANDOMIZE_INPUT].getVoltage() / 2.f)) {
   	randomizePatchMatrix();
   }
-  if(nextAddressEdit.process(params[EDIT_PARAM].value) ) {
+  if(nextAddressEdit.process(params[EDIT_PARAM].getValue()) ) {
     editAddress = editAddress + 1;
     editAddress = editAddress % maxSteps;
   }
-  if(prevAddressEdit.process(params[EDIT_PREV_PARAM].value) ) {
+  if(prevAddressEdit.process(params[EDIT_PREV_PARAM].getValue()) ) {
     editAddress = editAddress - 1;
     editAddress = editAddress + maxSteps;
     editAddress = editAddress % maxSteps;
   }
 
-  if(nextAddressRead.process(params[MANUAL_CLOCK_PARAM].value) || clockTrigger.process(inputs[TRG_INPUT].value / 2.f)) {
-    numAddresses =  (int) clamp(roundf(params[STEPS_PARAM].value /*+ inputs[STEPS_INPUT].value*/), 1.0f, 16.0f);
+  if(nextAddressRead.process(params[MANUAL_CLOCK_PARAM].getValue()) || clockTrigger.process(inputs[TRG_INPUT].getVoltage() / 2.f)) {
+    numAddresses =  (int) clamp(roundf(params[STEPS_PARAM].getValue() /*+ inputs[STEPS_INPUT].getVoltage()*/), 1.0f, 16.0f);
 
     address = address + 1;
     address = address % numAddresses;
   }
 
-  if(resetTriggerButton.process(params[RESET_PARAM].value) || resetTriggerInput.process(inputs[RESET_INPUT].value / 2.f)) {
-    numAddresses =  (int) clamp(roundf(params[STEPS_PARAM].value), 1.0f, 16.0f);
+  if(resetTriggerButton.process(params[RESET_PARAM].getValue()) || resetTriggerInput.process(inputs[RESET_INPUT].getVoltage() / 2.f)) {
+    numAddresses =  (int) clamp(roundf(params[STEPS_PARAM].getValue()), 1.0f, 16.0f);
 
     address = 0;
   }
@@ -295,7 +296,7 @@ void ComputerscarePatchSequencer::step() {
 
   for (int i = 0 ; i < 10 ; i++)
   {
-    input_values[i] = inputs[INPUT_JACKS + i].value;
+    input_values[i] = inputs[INPUT_JACKS + i].getVoltage();
   }
   
   for (int i = 0 ; i < 10 ; i++)
@@ -312,7 +313,7 @@ void ComputerscarePatchSequencer::step() {
   /// outputs  
   for (int i = 0 ; i < 10 ; i++)
   {
-    outputs[OUTPUTS + i].value = sums[i];    
+    outputs[OUTPUTS + i].setVoltage(sums[i]);    
   }
 }
 
@@ -323,31 +324,31 @@ struct NumberDisplayWidget3 : TransparentWidget {
   std::shared_ptr<Font> font;
 
   NumberDisplayWidget3() {
-    font = Font::load(assetPlugin(plugin, "res/digital-7.ttf"));
+    font = APP->window->loadFont(asset::plugin(plugin, "res/digital-7.ttf"));
   };
 
-  void draw(NVGcontext *vg) override
+  void draw(const DrawArgs &args) override
   {
     // Background
     NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
 
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
-    nvgFillColor(vg, backgroundColor);
-    nvgFill(vg);    
+    nvgBeginPath(args.vg);
+    nvgRoundedRect(args.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
+    nvgFillColor(args.vg, backgroundColor);
+    nvgFill(args.vg);    
     
     // text 
-    nvgFontSize(vg, 13);
-    nvgFontFaceId(vg, font->handle);
-    nvgTextLetterSpacing(vg, 2.5);
+    nvgFontSize(args.vg, 13);
+    nvgFontFaceId(args.vg, font->handle);
+    nvgTextLetterSpacing(args.vg, 2.5);
 
     std::stringstream to_display;   
     to_display << std::setw(3) << *value;
 
     Vec textPos = Vec(6.0f, 17.0f);   
     NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-    nvgFillColor(vg, textColor);
-    nvgText(vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
+    nvgFillColor(args.vg, textColor);
+    nvgText(args.vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
   }
 };
 
@@ -355,8 +356,9 @@ struct NumberDisplayWidget3 : TransparentWidget {
 
 struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
-  ComputerscarePatchSequencerWidget(ComputerscarePatchSequencer *module) : ModuleWidget(module) {
-		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscarePatchSequencerPanel.svg")));
+  ComputerscarePatchSequencerWidget(ComputerscarePatchSequencer *module) {
+		setModule(module);
+		setPanel(APP->window->loadSvg(asset::plugin(plugin, "res/ComputerscarePatchSequencerPanel.svg")));
 
   int top_row = 70;
   int row_spacing = 26; 
@@ -449,7 +451,7 @@ struct OnlyRandomizeActiveMenuItem : MenuItem {
 	void onAction(EventAction &e) override {
 		patchSequencer->onlyRandomizeActive = !patchSequencer->onlyRandomizeActive;
 	}
-	void step() override {
+	void process(const ProcessArgs &args) override {
 		rightText = patchSequencer->onlyRandomizeActive ? "✔" : "";
 	}
 };
@@ -460,7 +462,7 @@ struct WhichStepToRandomizeItem : MenuItem {
 	void onAction(EventAction &e) override {
 		patchSequencer->setRandomizationStepEnum(stepEnum);
 	}
-	void step() override {
+	void process(const ProcessArgs &args) override {
 		rightText = CHECKMARK(patchSequencer->getRandomizationStepEnum() == stepEnum);
 		MenuItem::step();
 	}
@@ -472,7 +474,7 @@ struct WhichRandomizationOutputBoundsItem : MenuItem {
   void onAction(EventAction &e) override {
     patchSequencer->setRandomizationOutputBoundsEnum(boundsEnum);
   }
-  void step() override {
+  void process(const ProcessArgs &args) override {
     rightText = CHECKMARK(patchSequencer->getRandomizationOutputBoundsEnum() == boundsEnum);
     MenuItem::step();
   }

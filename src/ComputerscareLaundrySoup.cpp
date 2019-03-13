@@ -31,21 +31,21 @@ public:
     bndSetFont(gGuiFont->handle);
     return textPos;
   }
-  void draw(NVGcontext *vg) override {
-    nvgScissor(vg, 0, 0, box.size.x, box.size.y);
+  void draw(const DrawArgs &args) override {
+    nvgScissor(args.vg, 0, 0, box.size.x, box.size.y);
 
     // Background
-    nvgFontSize(vg, fontSize);
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 10.0);
+    nvgFontSize(args.vg, fontSize);
+    nvgBeginPath(args.vg);
+    nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 10.0);
     
     if(inError) {
-      nvgFillColor(vg, COLOR_COMPUTERSCARE_PINK);
+      nvgFillColor(args.vg, COLOR_COMPUTERSCARE_PINK);
     }
     else {
-      nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
+      nvgFillColor(args.vg, nvgRGB(0x00, 0x00, 0x00));
     }
-     nvgFill(vg);
+     nvgFill(args.vg);
 
     // Text
     if (font->handle >= 0) {
@@ -55,15 +55,15 @@ public:
       highlightColor.a = 0.5;
       int begin = min(cursor, selection);
       int end = (this == gFocusedWidget) ? max(cursor, selection) : -1;
-      //bndTextField(vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
-      bndIconLabelCaret(vg, textOffset.x, textOffset.y - 3,
+      //bndTextField(args.vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
+      bndIconLabelCaret(args.vg, textOffset.x, textOffset.y - 3,
         box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
         -1, color, fontSize, text.c_str(), highlightColor, begin, end);
 
       bndSetFont(gGuiFont->handle);
     }
 
-    nvgResetScissor(vg);
+    nvgResetScissor(args.vg);
   };
 
 private:
@@ -114,8 +114,9 @@ struct ComputerscareLaundrySoup : Module {
 
   bool shouldChange[numFields] = {false};
   
-ComputerscareLaundrySoup() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {}
-	void step() override;
+ComputerscareLaundrySoup() {
+		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);}
+	void process(const ProcessArgs &args) override;
 
 	json_t *toJson() override
   {
@@ -245,33 +246,33 @@ void onCreate () override
 };
 
 
-void ComputerscareLaundrySoup::step() {
+void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
 
   bool globalGateIn = globalClockTrigger.isHigh();
   bool atFirstStep = false;
   bool atLastStepAfterIncrement = false;
-  bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].value);
+  bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].getVoltage());
   bool currentTriggerIsHigh = false;
   bool currentTriggerClocked = false;
 
-  bool globalManualResetClicked = globalManualResetTrigger.process(params[MANUAL_RESET_PARAM].value);
-  bool globalManualClockClicked = globalManualClockTrigger.process(params[MANUAL_CLOCK_PARAM].value);
+  bool globalManualResetClicked = globalManualResetTrigger.process(params[MANUAL_RESET_PARAM].getValue());
+  bool globalManualClockClicked = globalManualClockTrigger.process(params[MANUAL_CLOCK_PARAM].getValue());
 
-  bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].value / 2.f);
+  bool globalResetTriggered = globalResetTriggerInput.process(inputs[GLOBAL_RESET_INPUT].getVoltage() / 2.f);
   bool currentResetActive = false;
   bool currentResetTriggered = false;
   bool currentManualResetClicked;
 
   for(int i = 0; i < numFields; i++) {
-    currentResetActive = inputs[RESET_INPUT + i].active;
-    currentResetTriggered = resetTriggers[i].process(inputs[RESET_INPUT+i].value / 2.f);
+    currentResetActive = inputs[RESET_INPUT + i].isConnected();
+    currentResetTriggered = resetTriggers[i].process(inputs[RESET_INPUT+i].getVoltage() / 2.f);
     currentTriggerIsHigh = clockTriggers[i].isHigh();
-    currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].value);
+    currentTriggerClocked = clockTriggers[i].process(inputs[CLOCK_INPUT + i].getVoltage());
 
-    currentManualResetClicked = manualResetTriggers[i].process(params[INDIVIDUAL_RESET_PARAM + i].value);
+    currentManualResetClicked = manualResetTriggers[i].process(params[INDIVIDUAL_RESET_PARAM + i].getValue());
 
     if(this->laundrySequences[i].numSteps > 0) {
-      if (inputs[CLOCK_INPUT + i].active) {
+      if (inputs[CLOCK_INPUT + i].isConnected()) {
         if(currentTriggerClocked || globalManualClockClicked) {
           incrementInternalStep(i);
           activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
@@ -280,7 +281,7 @@ void ComputerscareLaundrySoup::step() {
         }
       }
       else {
-        if ((inputs[GLOBAL_CLOCK_INPUT].active && clocked) || globalManualClockClicked) {
+        if ((inputs[GLOBAL_CLOCK_INPUT].isConnected() && clocked) || globalManualClockClicked) {
           incrementInternalStep(i);
           activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
           atLastStepAfterIncrement = this->laundrySequences[i].atLastStep();
@@ -302,19 +303,19 @@ void ComputerscareLaundrySoup::step() {
 
       }
       else {
-        if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].active) {
+        if(atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].isConnected()) {
           //checkIfShouldChange(i);
         }
       }
     }
 
-    if(inputs[CLOCK_INPUT + i].active) {
-      outputs[TRG_OUTPUT + i].value = (currentTriggerIsHigh && activeStep[i]) ? 10.0f : 0.0f;
-      outputs[FIRST_STEP_OUTPUT + i].value = (currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f;
+    if(inputs[CLOCK_INPUT + i].isConnected()) {
+      outputs[TRG_OUTPUT + i].setVoltage((currentTriggerIsHigh && activeStep[i]) ? 10.0f : 0.0f);
+      outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f);
     }
     else {
-      outputs[TRG_OUTPUT + i].value = (globalGateIn && activeStep[i]) ? 10.0f : 0.0f;
-      outputs[FIRST_STEP_OUTPUT + i].value = (globalGateIn && atFirstStep) ? 10.f : 0.0f;
+      outputs[TRG_OUTPUT + i].setVoltage((globalGateIn && activeStep[i]) ? 10.0f : 0.0f);
+      outputs[FIRST_STEP_OUTPUT + i].setVoltage((globalGateIn && atFirstStep) ? 10.f : 0.0f);
     }
   }
 }
@@ -338,8 +339,9 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
   double verticalSpacing = 18.4;
   int verticalStart = 22;
-  ComputerscareLaundrySoupWidget(ComputerscareLaundrySoup *module) : ModuleWidget(module) {
-		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareLaundrySoupPanel.svg")));
+  ComputerscareLaundrySoupWidget(ComputerscareLaundrySoup *module) {
+		setModule(module);
+		setPanel(APP->window->loadSvg(asset::plugin(plugin, "res/ComputerscareLaundrySoupPanel.svg")));
 
     //global clock input
     addInput(Port::create<InPort>(mm2px(Vec(2 , 0)), Port::INPUT, module, ComputerscareLaundrySoup::GLOBAL_CLOCK_INPUT));
