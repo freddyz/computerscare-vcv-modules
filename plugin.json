@@ -8,26 +8,26 @@
 	"authorUrl": "https://github.com/freddyz/computerscare-vcv-modules",
 	"sourceUrl": "https://github.com/freddyz/computerscare-vcv-modules",
 	"version": "1.0.0",
-	"modules": {
-		"Isopig": {
+	"modules": [
+		{"slug":"Isopig",
 			"name": "Isopig",
 			"description": "Isopig testing",
 			"tags": ["Poly","Utility"]
 		},
-		"computerscare-knolypobs":{
+		{"slug":"computerscare-knolypobs",
 			"name":"Knoly pobs",
 			"description":"Poly Knobs, 16 of them",
 			"tags":["Poly","Utility"]
 		},
-		"computerscare-debug":{
+		{"slug":"computerscare-debug",
 			"name":"Debug",
-			"description":"Debugger",
+			"description":"Debugger, poly sample & hold, poly volt meter",
 			"tags":["Poly","Utility"]
 		},
-		"computerscare-ohpeas":{
+		{"slug":"computerscare-ohpeas",
 			"name":"Oh Peas!",
 			"description":"Quad Quantenuverter.  Attenuverter, Offsetter, Microtonal Quantizer",
-			"tags":["Poly"]
+			"tags":["Poly","Quantizer","Utility"]
 		}
-	}
+	]
 }
