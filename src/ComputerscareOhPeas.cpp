@@ -293,19 +293,10 @@ struct StringDisplayWidget3 : TransparentWidget {
 };
 
 
-struct SetScaleMenuItem : MenuItem {
-  ComputerscareOhPeas *peas;
-  std::string scale="221222";
-  SetScaleMenuItem(std::string scaleInput) {
-    scale=scaleInput;
-  }
-  void doAction() {
-    //peas->textField->text = scale;
-    peas->setQuant();
-  }
-};
+
 struct SetQuantizationModeMenuItem : MenuItem {
  ComputerscareOhPeas *peas;
+
  bool mode = true;
   SetQuantizationModeMenuItem(bool evenMode) {
     mode=evenMode;
@@ -323,7 +314,6 @@ struct PeasTF2 : ComputerscareTextField {
   int fontSize = 16;
   int rowIndex=0;
   bool inError = false;
-  //ComputerscareDebug *module;
 
   PeasTF2() {
       ComputerscareTextField();
@@ -331,11 +321,8 @@ struct PeasTF2 : ComputerscareTextField {
   void draw(const DrawArgs &args) override {
     if(module) {
       if(text.c_str()!=module->currentFormula) {
-        printf("alpha %s\n",text.c_str());
         module->currentFormula = text.c_str();
-        printf("bravo %s\n",text.c_str());
         module->setQuant();
-        printf("charlie %s\n",text.c_str());
       }
     }
     ComputerscareTextField::draw(args);
@@ -355,24 +342,29 @@ struct PeasSmallDisplay : SmallLetterDisplay {
       //this->setNumDivisionsString();
     if(module) {
       if(type==0) {
-      
-      std::string transposeString =  (module->globalTranspose > 0 ? "+" : "" ) + std::to_string(module->globalTranspose);
-      value = transposeString;
-    }
-    else {
-      std::string numDivisionsDisplay = std::to_string(module->numDivisions);
-      value = numDivisionsDisplay;
-    }
-//this->numDivisionsDisplay->value = std::to_string(this->numDivisions);
-    //this->globalTransposeDisplay->value = transposeString;
-      
+        
+        std::string transposeString =  (module->globalTranspose > 0 ? "+" : "" ) + std::to_string(module->globalTranspose);
+        value = transposeString;
+      }
+      else {
+        std::string numDivisionsDisplay = std::to_string(module->numDivisions);
+        value = numDivisionsDisplay;
+      }
+        
     }
     SmallLetterDisplay::draw(args);
-    
-    
   }
 
 };
+
+
+
+void quantizationModeMenuItemAdd(ComputerscareOhPeas* peas, Menu* menu, bool evenMode, std::string label) {
+  SetQuantizationModeMenuItem *menuItem = new SetQuantizationModeMenuItem(evenMode);
+  menuItem->text = label;
+  menuItem->peas = peas;
+  menu->addChild(menuItem);
+}
 //this->numDivisions,this->globalTranspose
 struct ComputerscareOhPeasWidget : ModuleWidget {
   float randAmt = 0.f;
@@ -473,35 +465,38 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
 
     //module->setQuant();
   }
+  
 
-PeasTF2 *textFieldTemp;
-     SmallLetterDisplay* trimPlusMinus;
+  PeasTF2 *textFieldTemp;
+  SmallLetterDisplay* trimPlusMinus;
   PeasSmallDisplay* ndd;
   PeasSmallDisplay* transposeDisplay;
-  //PeasTextField* textFieldTemp;
-  //Menu *createContextMenu();
+  void scaleItemAdd(ComputerscareOhPeas* peas, Menu* menu, std::string scale, std::string label);
+  void appendContextMenu(Menu *menu) override;
 
 };
+struct SetScaleMenuItem : MenuItem {
+  ComputerscareOhPeas *peas;
+  ComputerscareOhPeasWidget *peasWidget;
+  std::string scale="221222";
+  SetScaleMenuItem(std::string scaleInput) {
+    scale=scaleInput;
+  }
 
-
-void scaleItemAdd(ComputerscareOhPeas* peas, Menu* menu, std::string scale, std::string label) {
+  void onAction(const widget::ActionEvent &e) override {
+    peasWidget->textFieldTemp->text = scale;
+    peas->setQuant();
+  }
+};
+void ComputerscareOhPeasWidget::scaleItemAdd(ComputerscareOhPeas* peas, Menu* menu, std::string scale, std::string label) {
   SetScaleMenuItem *menuItem = new SetScaleMenuItem(scale);
   menuItem->text = label;
   menuItem->peas = peas;
+  menuItem->peasWidget = this;
   menu->addChild(menuItem);
 }
-
-void quantizationModeMenuItemAdd(ComputerscareOhPeas* peas, Menu* menu, bool evenMode, std::string label) {
-  SetQuantizationModeMenuItem *menuItem = new SetQuantizationModeMenuItem(evenMode);
-  menuItem->text = label;
-  menuItem->peas = peas;
-  menu->addChild(menuItem);
-}
- 
-/*Menu *ComputerscareOhPeasWidget::createContextMenu() {
-  Menu *menu = ModuleWidget::createContextMenu();
-  ComputerscareOhPeas *peas = dynamic_cast<ComputerscareOhPeas*>(module);
-  assert(peas);
+void ComputerscareOhPeasWidget::appendContextMenu(Menu *menu)  {
+  ComputerscareOhPeas *peas = dynamic_cast<ComputerscareOhPeas*>(this->module);
 
   MenuLabel *spacerLabel = new MenuLabel();
   menu->addChild(spacerLabel);
@@ -524,24 +519,8 @@ void quantizationModeMenuItemAdd(ComputerscareOhPeas* peas, Menu* menu, bool eve
   scaleItemAdd(peas,menu,"434","Major 7 Tetrachord");
   scaleItemAdd(peas,menu,"433","Dominant 7 Tetrachord");
   scaleItemAdd(peas,menu,"343","Minor 7 Tetrachord");
-
-  return menu;
-    
-  // "closest" quantization mode is quite a bit slower than even
-  MenuLabel *quantModeLabel = new MenuLabel();
-  quantModeLabel->text = "Quantization Mode";
-  menu->addChild(quantModeLabel);
-
-  quantizationModeMenuItemAdd(peas,menu,true,"Even");
-  quantizationModeMenuItemAdd(peas,menu,false,"Closest");
-  
-
-
-  MenuLabel *spacerLabel2 = new MenuLabel();
-  menu->addChild(spacerLabel2);
-  
-
-}*/
+  scaleItemAdd(peas,menu,"334","Minor 7 b5 Tetrachord");
+}
 
 // Specify the Module and ModuleWidget subclass, human-readable
 // author name for categorization per plugin, module slug (should never
