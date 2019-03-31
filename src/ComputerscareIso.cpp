@@ -34,10 +34,10 @@ struct ComputerscareIso : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 	
 	    for (int i = 0; i < numKnobs; i++) {
-				params[KNOB + i].config(0.0f, 10.0f, 0.0f);
-				params[KNOB+i].config(0.f, 10.f, 0.f, "Channel "+std::to_string(i+1) + " Voltage", " Volts");
+				configParam(KNOB + i, 0.0f, 10.0f, 0.0f);
+				configParam(KNOB+i, 0.f, 10.f, 0.f, "Channel "+std::to_string(i+1) + " Voltage", " Volts");
 		}
-		params[TOGGLES].config(0.0f, 1.0f, 0.0f);
+		configParam(TOGGLES, 0.0f, 1.0f, 0.0f);
 		outputs[POLY_OUTPUT].setChannels(16);
 	}
 	void process(const ProcessArgs &args) override {

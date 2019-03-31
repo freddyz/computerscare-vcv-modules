@@ -148,15 +148,15 @@ struct ComputerscareOhPeas : Module
     ComputerscareOhPeas()
     {
         config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-        params[GLOBAL_TRANSPOSE].config(-1.f, 1.f, 0.0f, "Global Transpose");
-        params[NUM_DIVISIONS].config(1.f, 24.f, 12.0f, "Number of Divisions");
+        configParam(GLOBAL_TRANSPOSE, -1.f, 1.f, 0.0f, "Global Transpose");
+        configParam(NUM_DIVISIONS, 1.f, 24.f, 12.0f, "Number of Divisions");
         for(int i = 0; i < numChannels; i++)
         {
             std::string chi = "Ch. " + std::to_string(i + 1);
-            params[ SCALE_TRIM + i].config(-1.f, 1.f, 0.0f, chi + " Scale CV Amount");
-            params[ SCALE_VAL + i].config(-5.f, 5.f, 0.0f, chi + " Scale Value");
-            params[ OFFSET_TRIM + i].config(-1.f, 1.f, 0.0f, chi + " Offset CV Amount");
-            params[ OFFSET_VAL + i].config(-5.f, 5.f, 0.0f, chi + " Offset Value");
+            configParam( SCALE_TRIM + i, -1.f, 1.f, 0.0f, chi + " Scale CV Amount");
+            configParam( SCALE_VAL + i, -5.f, 5.f, 0.0f, chi + " Scale Value");
+            configParam( OFFSET_TRIM + i, -1.f, 1.f, 0.0f, chi + " Offset CV Amount");
+            configParam( OFFSET_VAL + i, -5.f, 5.f, 0.0f, chi + " Offset Value");
 
         }
         /*
@@ -209,10 +209,7 @@ struct ComputerscareOhPeas : Module
 
     void setQuant()
     {
-        //std::string value = "23";//this->textField->text;
-        printf("delta %s\n", this->currentFormula.c_str());
         this->quant = Quantizer(this->currentFormula.c_str(), this->numDivisions, this->globalTranspose);
-        printf("echo \n");
     }
     // For more advanced Module features, read Rack's engine.hpp header file
     // - toJson, fromJson: serialization of internal data
