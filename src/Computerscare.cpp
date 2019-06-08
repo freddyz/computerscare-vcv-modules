@@ -12,6 +12,6 @@ void init(Plugin *p) {
 	//p->addModel(modelComputerscareLaundrySoup);
 	//p->addModel(modelComputerscareILoveCookies);
 	p->addModel(modelComputerscareOhPeas);
-	p->addModel(modelComputerscareIso);
+	//p->addModel(modelComputerscareIso);
 	p->addModel(modelComputerscareKnolyPobs);
 }

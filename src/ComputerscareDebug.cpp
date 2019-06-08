@@ -69,7 +69,6 @@ struct ComputerscareDebug : Module {
 		configParam(WHICH_CLOCK, 0.0f, 2.0f, 0.0f, "Clock Mode");
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f,15.f,0.f,"Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f,15.f,0.f,"Input Channel Selector");
-		outputs[POLY_OUTPUT].setChannels(16);
 
 		//params[MANUAL_TRIGGER].randomizable=false;
 		//params[MANUAL_CLEAR_TRIGGER].randomizable=false;
@@ -182,7 +181,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 	 }
 	strValue = thisVal;
 	}
-
+	outputs[POLY_OUTPUT].setChannels(16);
 
 }
 struct HidableSmallSnapKnob : SmallSnapKnob {

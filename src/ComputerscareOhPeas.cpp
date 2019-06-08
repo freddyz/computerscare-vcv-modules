@@ -33,7 +33,7 @@ struct PeasTextField : LedDisplayTextField
     {
         module = _module;
     }
-    void onEnter(const widget::EnterEvent &e) override;
+    void onEnter(const event::Enter &e) override;
 
     /*int getTextPosition(Vec mousePos) override {
       bndSetFont(font->handle);
@@ -216,7 +216,7 @@ struct ComputerscareOhPeas : Module
     // - onSampleRateChange: event triggered by a change of sample rate
     // - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
 };
-void PeasTextField::onEnter(const widget::EnterEvent &e)
+void PeasTextField::onEnter(const event::Enter &e)
 {
     module->setQuant();
 }
@@ -527,7 +527,7 @@ struct SetScaleMenuItem : MenuItem
         scale = scaleInput;
     }
 
-    void onAction(const widget::ActionEvent &e) override
+    void onAction(const event::Action &e) override
     {
         peasWidget->textFieldTemp->text = scale;
         peas->setQuant();

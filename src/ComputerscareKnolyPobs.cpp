@@ -38,7 +38,7 @@ struct ComputerscareKnolyPobs : Module {
 				configParam(KNOB+i, 0.f, 10.f, 0.f, "Channel "+std::to_string(i+1) + " Voltage", " Volts");
 		}
 		configParam(TOGGLES, 0.0f, 1.0f, 0.0f);
-		outputs[POLY_OUTPUT].setChannels(16);
+		
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
@@ -48,6 +48,7 @@ struct ComputerscareKnolyPobs : Module {
 			//rect4032
 			//south facing high wall
 		}
+		outputs[POLY_OUTPUT].setChannels(16);
 		for (int i = 0; i < numKnobs; i++) {
 			outputs[POLY_OUTPUT].setVoltage(params[KNOB+i].getValue(),i);
 		}

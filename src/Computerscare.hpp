@@ -30,7 +30,7 @@ extern Model *modelComputerscareDebug;
 //extern Model *modelComputerscareLaundrySoup;
 //extern Model *modelComputerscareILoveCookies;
 extern Model *modelComputerscareOhPeas;
-extern Model *modelComputerscareIso;
+//extern Model *modelComputerscareIso;
 extern Model *modelComputerscareKnolyPobs;
 
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);

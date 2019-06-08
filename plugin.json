@@ -1,6 +1,7 @@
 {
 	"slug": "computerscare",
 	"name": "computerscare",
+	"brand": "computerscare",
 	"author": "computerscare",
 	"license": "BSD-3-Clause",
 	"authorEmail": "aemalone@test.com",
@@ -9,14 +10,9 @@
 	"sourceUrl": "https://github.com/freddyz/computerscare-vcv-modules",
 	"version": "1.0.0",
 	"modules": [
-		{"slug":"Isopig",
-			"name": "Isopig",
-			"description": "Isopig testing",
-			"tags": ["Poly","Utility"]
-		},
 		{"slug":"computerscare-knolypobs",
-			"name":"Knoly pobs",
-			"description":"Poly Knobs, 16 of them",
+			"name":"Knoly Pobs",
+			"description":"16 knobs",
 			"tags":["Poly","Utility"]
 		},
 		{"slug":"computerscare-debug",
