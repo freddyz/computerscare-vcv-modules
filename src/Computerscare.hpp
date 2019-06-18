@@ -26,7 +26,7 @@ extern Plugin *pluginInstance;
 extern Model *modelComputerscareDebug;
 
 
-//extern Model *modelComputerscarePatchSequencer;
+extern Model *modelComputerscarePatchSequencer;
 //extern Model *modelComputerscareLaundrySoup;
 //extern Model *modelComputerscareILoveCookies;
 extern Model *modelComputerscareOhPeas;
@@ -152,27 +152,27 @@ struct ComputerscareBlueLight : ModuleLightWidget {
 };
 
 
-template <typename BASE>
-struct ComputerscareHugeLight : BASE {
+
+
+*/
+struct ComputerscareHugeLight : ParamWidget  {
 	ComputerscareHugeLight() {
 		this->box.size = mm2px(Vec(8.179, 8.179));
 	}
 };
-template <typename BASE>
-struct ComputerscareMediumLight : BASE {
+
+
+struct ComputerscareMediumLight : ParamWidget {
 	ComputerscareMediumLight() {
 		this->box.size = mm2px(Vec(6,6));
 	}
 };
-template <typename BASE>
-struct ComputerscareSmallLight : BASE {
+
+struct ComputerscareSmallLight :  ParamWidget {
 	ComputerscareSmallLight() {
 		this->box.size = mm2px(Vec(3,3));
 	}
 };
-
-*/
-
 
 struct OutPort : ComputerscareSvgPort {
 	OutPort() {
@@ -228,8 +228,13 @@ struct SmallKnob : RoundKnob {
 };
 struct SmallSnapKnob : RoundBlackSnapKnob {
 	//bool visible = true;
+
+	//CircularShadow *shadow;
 	SmallSnapKnob() {
+		
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
+		shadow->box.size = math::Vec(0,0);
+		shadow->opacity=0.f;
 	}
 
 };

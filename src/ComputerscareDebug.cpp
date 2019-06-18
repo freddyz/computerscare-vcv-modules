@@ -188,8 +188,11 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 	bool visible = true;
 	int hackIndex = 0;
 	ComputerscareDebug *module;
+
 	HidableSmallSnapKnob() {
+		
 		SmallSnapKnob();
+
 	}
 	void draw(const DrawArgs &args) {
 		if(module ? (hackIndex == 0 ? module->clockMode == 0 : module->inputMode == 0) : true) {

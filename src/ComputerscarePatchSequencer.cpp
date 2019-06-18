@@ -10,6 +10,8 @@ const int maxSteps = 16;
 const int numInputs = 10;
 const int numOutputs = 10;
 
+struct ComputerscareDebug;
+
 struct ComputerscarePatchSequencer : Module {
 	enum ParamIds {
     STEPS_PARAM,
@@ -36,15 +38,15 @@ struct ComputerscarePatchSequencer : Module {
     	NUM_LIGHTS = SWITCH_LIGHTS + 200
 	};
 
-  SchmittTrigger switch_triggers[10][10];
+  rack::dsp::SchmittTrigger switch_triggers[10][10];
 
-  SchmittTrigger nextAddressRead;
-  SchmittTrigger nextAddressEdit;
-  SchmittTrigger prevAddressEdit;
-  SchmittTrigger clockTrigger;
-  SchmittTrigger randomizeTrigger;
-  SchmittTrigger resetTriggerInput;
-  SchmittTrigger resetTriggerButton;
+  rack::dsp::SchmittTrigger nextAddressRead;
+  rack::dsp::SchmittTrigger nextAddressEdit;
+  rack::dsp::SchmittTrigger prevAddressEdit;
+  rack::dsp::SchmittTrigger clockTrigger;
+  rack::dsp::SchmittTrigger randomizeTrigger;
+  rack::dsp::SchmittTrigger resetTriggerInput;
+  rack::dsp::SchmittTrigger resetTriggerButton;
 
   int address = 0;
   int editAddress = 0;
@@ -63,61 +65,16 @@ struct ComputerscarePatchSequencer : Module {
   int randomizationOutputBoundsEnum = 1; //0: randomize exactly one per output, 1: randomize exactly one per output, 2: randomize 1 or more, 3: randomize 0 or more
 
 ComputerscarePatchSequencer() {
-		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);}
+		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+
+       // configParam(GLOBAL_TRANSPOSE, -1.f, 1.f, 0.0f, "Global Transpose");
+
+      }
 	void process(const ProcessArgs &args) override;
 
 
 
-	json_t *toJson() override
-  {
-		json_t *rootJ = json_object();
-    
-    // button states
-		json_t *button_statesJ = json_array();
-    for(int k = 0; k < maxSteps; k++) {
-		for (int i = 0; i < 10; i++)
-    {
-			for (int j = 0; j < 10; j++)
-      {
-        json_t *button_stateJ = json_integer((int) switch_states[k][i][j]);
-			   json_array_append_new(button_statesJ, button_stateJ);
-        }
-		  }
-    }
-	json_object_set_new(rootJ, "buttons", button_statesJ);
-    json_object_set_new(rootJ, "onlyRandomizeActive", json_boolean(onlyRandomizeActive));
-    json_object_set_new(rootJ, "randomizationStepEnum", json_integer(getRandomizationStepEnum()));
-    json_object_set_new(rootJ, "randomizationOutputBoundsEnum", json_integer(getRandomizationOutputBoundsEnum()));
-    return rootJ;
-  } 
-  
-  void fromJson(json_t *rootJ) override
-  {
-    // button states
-	json_t *button_statesJ = json_object_get(rootJ, "buttons");
-	if (button_statesJ)
-    {
-        for(int k = 0; k < maxSteps; k++) {
-
-			for (int i = 0; i < 10; i++) {
-        		for (int j = 0; j < 10; j++) {
-					json_t *button_stateJ = json_array_get(button_statesJ, k*100+i*10 + j);
-					if (button_stateJ)
-						switch_states[k][i][j] = !!json_integer_value(button_stateJ);
-        }
-      }
-    }
-	}
-	json_t *onlyRandomizeActiveJ = json_object_get(rootJ, "onlyRandomizeActive");
-	if (onlyRandomizeActiveJ){ onlyRandomizeActive = json_is_true(onlyRandomizeActiveJ); }  
-
-	json_t *randomizationStepEnumJ = json_object_get(rootJ, "randomizationStepEnum");
-	if (randomizationStepEnumJ){ setRandomizationStepEnum(json_integer_value(randomizationStepEnumJ)); }  
-  
-json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOutputBoundsEnum");
-  if (randomizationOutputBoundsEnumJ){ setRandomizationOutputBoundsEnum(json_integer_value(randomizationOutputBoundsEnumJ)); }  
-  
-  } 
+	
   int getRandomizationStepEnum() {
 		return randomizationStepEnum;
 	}
@@ -324,7 +281,7 @@ struct NumberDisplayWidget3 : TransparentWidget {
   std::shared_ptr<Font> font;
 
   NumberDisplayWidget3() {
-    font = APP->window->loadFont(asset::plugin(plugin, "res/digital-7.ttf"));
+    font = APP->window->loadFont(asset::plugin(pluginInstance, "res/digital-7.ttf"));
   };
 
   void draw(const DrawArgs &args) override
@@ -358,7 +315,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
   ComputerscarePatchSequencerWidget(ComputerscarePatchSequencer *module) {
 		setModule(module);
-		setPanel(APP->window->loadSvg(asset::plugin(plugin, "res/ComputerscarePatchSequencerPanel.svg")));
+		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscarePatchSequencerPanel.svg")));
 
   int top_row = 70;
   int row_spacing = 26; 
@@ -374,44 +331,57 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
      for(int j = 0 ; j < 10 ; j++ )
 	   {
      	 // the part you click
-       addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
-       
-       // green light indicates the state of the matrix that is being edited
-       ModuleLightWidget *bigOne = ModuleLightWidget::create<ComputerscareHugeLight<ComputerscareGreenLight>>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10);
+       //addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
+        addParam(createParam<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10));
 
-       addChild(bigOne);
+
+
+       // green light indicates the state of the matrix that is being edited
+       //ModuleLightWidget *bigOne = ModuleLightWidget::create<ComputerscareHugeLight<ComputerscareGreenLight>>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10);
+        addParam(createParam<ComputerscareHugeLight>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10));
+        
+
+
+        //addParam(createParam<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10));
+
+
+
+       //addChild(bigOne);
      	 
        double xpos = 35 + column_spacing * j + 6.3 + rand() % 8 - 4;
        double ypos = top_row + row_spacing * i + 8.3 + rand() % 8 - 4;
      	 // red light indicates the state of the matrix that is the active step
-	   	 addChild(ModuleLightWidget::create<ComputerscareSmallLight<ComputerscareRedLight>>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
-       addChild(ModuleLightWidget::create<ComputerscareSmallLight<ComputerscareRedLight>>(Vec(xpos + rdx, ypos + rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
+       //computerscarered
+	   	 addParam(createParam<ComputerscareSmallLight>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
+       addParam(createParam<ComputerscareSmallLight>(Vec(xpos + rdx, ypos + rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
 
 	   	}
-         addInput(Port::create<InPort>(Vec(3, i * row_spacing + top_row), Port::INPUT, module, ComputerscarePatchSequencer::INPUT_JACKS + i));  
+      //            addInput(createInput<InPort>(mm2px(Vec(xx, y - 0.8)), module, ComputerscareOhPeas::CHANNEL_INPUT + i));
+
+         addInput(createInput<InPort>(Vec(3, i * row_spacing + top_row), module, ComputerscarePatchSequencer::INPUT_JACKS + i));  
      
      if(i % 2) {
-      addOutput(Port::create<PointingUpPentagonPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), Port::OUTPUT, module, ComputerscarePatchSequencer::OUTPUTS + i));
+      addOutput(createOutput<PointingUpPentagonPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), module, ComputerscarePatchSequencer::OUTPUTS + i));
      }
      else {
-      addOutput(Port::create<InPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), Port::OUTPUT, module, ComputerscarePatchSequencer::OUTPUTS + i));
+      addOutput(createOutput<InPort>(Vec(33 + i * column_spacing , top_row + 10 * row_spacing), module, ComputerscarePatchSequencer::OUTPUTS + i));
      }
 		} 
 
 	//clock input
-	addInput(Port::create<InPort>(Vec(24, 37), Port::INPUT, module, ComputerscarePatchSequencer::TRG_INPUT));
+	addInput(createInput<InPort>(Vec(24, 37), module, ComputerscarePatchSequencer::TRG_INPUT));
 
 	//reset input
-	addInput(Port::create<InPort>(Vec(24, 3), Port::INPUT, module, ComputerscarePatchSequencer::RESET_INPUT));
+	addInput(createInput<InPort>(Vec(24, 3),  module, ComputerscarePatchSequencer::RESET_INPUT));
 	
 	//manual clock button
- 	addParam(ParamWidget::create<LEDButton>(Vec(7 , 37), module, ComputerscarePatchSequencer::MANUAL_CLOCK_PARAM, 0.0, 1.0, 0.0)); 
+ 	addParam(createParam<LEDButton>(Vec(7 , 37), module, ComputerscarePatchSequencer::MANUAL_CLOCK_PARAM)); 
 
  	//reset button
- 	addParam(ParamWidget::create<LEDButton>(Vec(7 , 3), module, ComputerscarePatchSequencer::RESET_PARAM, 0.0, 1.0, 0.0)); 
+ 	addParam(createParam<LEDButton>(Vec(7 , 3), module, ComputerscarePatchSequencer::RESET_PARAM)); 
 
 	//randomize input
-	addInput(Port::create<InPort>(Vec(270, 0), Port::INPUT, module, ComputerscarePatchSequencer::RANDOMIZE_INPUT));
+	addInput(createInput<InPort>(Vec(270, 0), module, ComputerscarePatchSequencer::RANDOMIZE_INPUT));
 
   //active step display
   NumberDisplayWidget3 *display = new NumberDisplayWidget3();
@@ -428,14 +398,14 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   addChild(stepsDisplay);
   
   //number-of-steps dial.   Discrete, 16 positions
-  ParamWidget* stepsKnob =  ParamWidget::create<LrgKnob>(Vec(108,30), module, ComputerscarePatchSequencer::STEPS_PARAM, 1.0f, 16.0f, 2.0f);
+  ParamWidget* stepsKnob =  createParam<LrgKnob>(Vec(108,30), module, ComputerscarePatchSequencer::STEPS_PARAM);
   addParam(stepsKnob);
 
   //editAddressNext button
-  addParam(ParamWidget::create<LEDButton>(Vec(227 , 41), module, ComputerscarePatchSequencer::EDIT_PARAM, 0.0, 1.0, 0.0));
+  addParam(createParam<LEDButton>(Vec(227 , 41), module, ComputerscarePatchSequencer::EDIT_PARAM));
 
   //editAddressPrevious button
-  addParam(ParamWidget::create<LEDButton>(Vec(208 , 41), module, ComputerscarePatchSequencer::EDIT_PREV_PARAM, 0.0, 1.0, 0.0));
+  addParam(createParam<LEDButton>(Vec(208 , 41), module, ComputerscarePatchSequencer::EDIT_PREV_PARAM));
   
   // currently editing step #:
   NumberDisplayWidget3 *displayEdit = new NumberDisplayWidget3();
@@ -443,8 +413,63 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   displayEdit->box.size = Vec(50, 20);
   displayEdit->value = &module->editAddressPlusOne;
   addChild(displayEdit);
+  printf("ujje\n");
+  fatherSon = module;
   }
-  Menu *createContextMenu() override;
+
+  json_t *toJson() override
+  {
+    json_t *rootJ = json_object();
+    
+    // button states
+    json_t *button_statesJ = json_array();
+    for(int k = 0; k < maxSteps; k++) {
+    for (int i = 0; i < 10; i++)
+    {
+      for (int j = 0; j < 10; j++)
+      {
+        json_t *button_stateJ = json_integer((int) fatherSon->switch_states[k][i][j]);
+         json_array_append_new(button_statesJ, button_stateJ);
+        }
+      }
+    }
+  json_object_set_new(rootJ, "buttons", button_statesJ);
+    json_object_set_new(rootJ, "onlyRandomizeActive", json_boolean(fatherSon->onlyRandomizeActive));
+    json_object_set_new(rootJ, "randomizationStepEnum", json_integer(fatherSon->getRandomizationStepEnum()));
+    json_object_set_new(rootJ, "randomizationOutputBoundsEnum", json_integer(fatherSon->getRandomizationOutputBoundsEnum()));
+    return rootJ;
+  } 
+  
+  void fromJson(json_t *rootJ) override
+  {
+    // button states
+  json_t *button_statesJ = json_object_get(rootJ, "buttons");
+  if (button_statesJ)
+    {
+        for(int k = 0; k < maxSteps; k++) {
+
+      for (int i = 0; i < 10; i++) {
+            for (int j = 0; j < 10; j++) {
+          json_t *button_stateJ = json_array_get(button_statesJ, k*100+i*10 + j);
+          if (button_stateJ)
+            fatherSon->switch_states[k][i][j] = !!json_integer_value(button_stateJ);
+        }
+      }
+    }
+  }
+  json_t *onlyRandomizeActiveJ = json_object_get(rootJ, "onlyRandomizeActive");
+  if (onlyRandomizeActiveJ){ fatherSon->onlyRandomizeActive = json_is_true(onlyRandomizeActiveJ); }  
+
+  json_t *randomizationStepEnumJ = json_object_get(rootJ, "randomizationStepEnum");
+  if (randomizationStepEnumJ){ fatherSon->setRandomizationStepEnum(json_integer_value(randomizationStepEnumJ)); }  
+  
+json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOutputBoundsEnum");
+  if (randomizationOutputBoundsEnumJ){ fatherSon->setRandomizationOutputBoundsEnum(json_integer_value(randomizationOutputBoundsEnumJ)); }  
+  
+  } 
+
+  ComputerscarePatchSequencer *fatherSon;
+  //Menu *createContextMenu() override;
 };
 struct OnlyRandomizeActiveMenuItem : MenuItem {
 	ComputerscarePatchSequencer *patchSequencer;
@@ -519,4 +544,5 @@ Menu *ComputerscarePatchSequencerWidget::createContextMenu() {
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
 // (found in `include/tags.hpp`) separated by commas.
-Model *modelComputerscarePatchSequencer = Model::create<ComputerscarePatchSequencer, ComputerscarePatchSequencerWidget>("computerscare", "computerscare-patch-sequencer", "Father & Son Patch Sequencer", UTILITY_TAG,SEQUENCER_TAG);
+Model *modelComputerscarePatchSequencer = createModel<ComputerscarePatchSequencer, ComputerscarePatchSequencerWidget>("computerscare-fatherandson");
+

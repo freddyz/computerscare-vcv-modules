@@ -12,7 +12,7 @@
 	"modules": [
 		{"slug":"computerscare-knolypobs",
 			"name":"Knoly Pobs",
-			"description":"16 knobs",
+			"description":"16 knobs with polyphonic output",
 			"tags":["Poly","Utility"]
 		},
 		{"slug":"computerscare-debug",
@@ -24,6 +24,11 @@
 			"name":"Oh Peas!",
 			"description":"Quad Quantenuverter.  Attenuverter, Offsetter, Microtonal Quantizer",
 			"tags":["Poly","Quantizer","Utility"]
+		},
+		{"slug":"computerscare-fatherandson",
+			"name":"Father and Son Patch Sequencer",
+			"description":"Patch Sequencer - 10 in, 10 out patch matrix with 16 scenes",
+			"tags":["Poly","Utility"]
 		}
 	]
 }
