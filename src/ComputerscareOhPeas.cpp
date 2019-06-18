@@ -54,7 +54,7 @@ struct PeasTextField : LedDisplayTextField
     }
     void draw(const DrawArgs &args) override
     {
-        if(module)
+        if (module)
         {
             nvgScissor(args.vg, 0, 0, box.size.x, box.size.y);
 
@@ -63,7 +63,7 @@ struct PeasTextField : LedDisplayTextField
             nvgBeginPath(args.vg);
             nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 10.0);
 
-            if(inError)
+            if (inError)
             {
                 nvgFillColor(args.vg, COLOR_COMPUTERSCARE_PINK);
             }
@@ -150,7 +150,7 @@ struct ComputerscareOhPeas : Module
         config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
         configParam(GLOBAL_TRANSPOSE, -1.f, 1.f, 0.0f, "Global Transpose");
         configParam(NUM_DIVISIONS, 1.f, 24.f, 12.0f, "Number of Divisions");
-        for(int i = 0; i < numChannels; i++)
+        for (int i = 0; i < numChannels; i++)
         {
             std::string chi = "Ch. " + std::to_string(i + 1);
             configParam( SCALE_TRIM + i, -1.f, 1.f, 0.0f, chi + " Scale CV Amount");
@@ -178,33 +178,6 @@ struct ComputerscareOhPeas : Module
 
     }
     void process(const ProcessArgs &args) override;
-    /*  json_t *toJson() override
-    {
-      json_t *rootJ = json_object();
-
-    json_t *sequencesJ = json_array();
-    for (int i = 0; i < 1; i++) {
-      json_t *sequenceJ = json_string(textField->text.c_str());
-      json_array_append_new(sequencesJ, sequenceJ);
-    }
-    json_object_set_new(rootJ, "sequences", sequencesJ);
-
-    return rootJ;
-    }
-
-    void fromJson(json_t *rootJ) override
-    {
-    json_t *sequencesJ = json_object_get(rootJ, "sequences");
-    if (sequencesJ) {
-      for (int i = 0; i < 1; i++) {
-        json_t *sequenceJ = json_array_get(sequencesJ, i);
-        if (sequenceJ)
-          textField->text = json_string_value(sequenceJ);
-      }
-    }
-    setQuant();
-    }*/
-
 
 
     void setQuant()
@@ -230,26 +203,26 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
 
     //int globalTransposeKnobValue = (int) clamp(roundf(params[GLOBAL_TRANSPOSE].getValue()), -fNumDiv, fNumDiv);
 
-    if(numDivisionsKnobValue != numDivisions)
+    if (numDivisionsKnobValue != numDivisions)
     {
         //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
 
         //what a hack!!!
-        if(numDivisionsKnobValue != 0)
+        if (numDivisionsKnobValue != 0)
         {
             numDivisions = numDivisionsKnobValue;
             setQuant();
         }
 
     }
-    if(iTranspose != globalTranspose)
+    if (iTranspose != globalTranspose)
     {
         //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
 
         globalTranspose = iTranspose;
         setQuant();
     }
-    for(int i = 0; i < numChannels; i++)
+    for (int i = 0; i < numChannels; i++)
     {
 
         a = params[SCALE_VAL + i].getValue();
@@ -270,50 +243,6 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
         outputs[QUANTIZED_OUTPUT + i].setVoltage(Q);
     }
 }
-
-////////////////////////////////////
-struct StringDisplayWidget3 : TransparentWidget
-{
-
-    std::string *value;
-    std::shared_ptr<Font> font;
-
-    StringDisplayWidget3()
-    {
-        font = APP->window->loadFont(asset::plugin(pluginInstance, "res/Oswald-Regular.ttf"));
-    };
-
-    void draw(const DrawArgs &args) override
-    {
-        // Background
-        NVGcolor backgroundColor = nvgRGB(0x10, 0x00, 0x10);
-        NVGcolor StrokeColor = nvgRGB(0xC0, 0xC7, 0xDE);
-        nvgBeginPath(args.vg);
-        nvgRoundedRect(args.vg, -1.0, -1.0, box.size.x + 2, box.size.y + 2, 4.0);
-        nvgFillColor(args.vg, StrokeColor);
-        nvgFill(args.vg);
-        nvgBeginPath(args.vg);
-        nvgRoundedRect(args.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
-        nvgFillColor(args.vg, backgroundColor);
-        nvgFill(args.vg);
-
-        // text
-        nvgFontSize(args.vg, 15);
-        nvgFontFaceId(args.vg, font->handle);
-        nvgTextLetterSpacing(args.vg, 2.5);
-
-        std::stringstream to_display;
-        to_display << std::setw(8) << *value;
-
-        Vec textPos = Vec(6.0f, 12.0f);
-        NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-        nvgFillColor(args.vg, textColor);
-        nvgTextBox(args.vg, textPos.x, textPos.y, 80, to_display.str().c_str(), NULL);
-
-    }
-};
-
-
 
 struct SetQuantizationModeMenuItem : MenuItem
 {
@@ -347,9 +276,9 @@ struct PeasTF2 : ComputerscareTextField
     };
     void draw(const DrawArgs &args) override
     {
-        if(module)
+        if (module)
         {
-            if(text.c_str() != module->currentFormula)
+            if (text.c_str() != module->currentFormula)
             {
                 module->currentFormula = text.c_str();
                 module->setQuant();
@@ -373,9 +302,9 @@ struct PeasSmallDisplay : SmallLetterDisplay
     void draw(const DrawArgs &args)
     {
         //this->setNumDivisionsString();
-        if(module)
+        if (module)
         {
-            if(type == 0)
+            if (type == 0)
             {
 
                 std::string transposeString =  (module->globalTranspose > 0 ? "+" : "" ) + std::to_string(module->globalTranspose);
@@ -460,7 +389,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget
         transposeDisplay->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
         addChild(transposeDisplay);
 
-        for(int i = 0; i < numChannels; i++)
+        for (int i = 0; i < numChannels; i++)
         {
 
             xx = x + dx * i + randAmt * (2 * random::uniform() - .5);
@@ -560,9 +489,9 @@ void ComputerscareOhPeasWidget::appendContextMenu(Menu *menu)
     scaleItemAdd(peas, menu, "32113", "Blues");
     scaleItemAdd(peas, menu, "11111111111", "Chromatic");
     scaleItemAdd(peas, menu, "212213", "Harmonic Minor");
-    scaleItemAdd(peas,menu,"22222","Whole-Tone");
-    scaleItemAdd(peas,menu,"2121212","Whole-Half Diminished");
-    
+    scaleItemAdd(peas, menu, "22222", "Whole-Tone");
+    scaleItemAdd(peas, menu, "2121212", "Whole-Half Diminished");
+
     scaleItemAdd(peas, menu, "43", "Major Triad");
     scaleItemAdd(peas, menu, "34", "Minor Triad");
     scaleItemAdd(peas, menu, "33", "Diminished Triad");
