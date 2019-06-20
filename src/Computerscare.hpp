@@ -123,19 +123,20 @@ struct ComputerscareInvisibleButton : SvgSwitch {
 	}
 };
 
-struct ComputerscareGreenLight : GrayModuleLightWidget {
+struct ComputerscareGreenLight : app::ModuleLightWidget {
 	ComputerscareGreenLight() {
 		addBaseColor(COLOR_COMPUTERSCARE_GREEN);
 	}
 };
-/*
-struct ComputerscareRedLight : ModuleLightWidget {
+
+struct ComputerscareRedLight : app::ModuleLightWidget {
 	ComputerscareRedLight() {
 		bgColor = nvgRGBA(0x5a, 0x5a, 0x5a, 0x00);
 		borderColor = nvgRGBA(0, 0, 0, 0x00);
 		addBaseColor(COLOR_COMPUTERSCARE_RED);
 	}
 };
+/*
 struct ComputerscareYellowLight : ModuleLightWidget {
 	ComputerscareYellowLight() {
 		bgColor = nvgRGBA(0x5a, 0x5a, 0x5a, 0x00);
@@ -155,20 +156,29 @@ struct ComputerscareBlueLight : ModuleLightWidget {
 
 
 */
-struct ComputerscareHugeLight : ParamWidget  {
+template <typename BASE>
+struct MuteLight : BASE {
+	MuteLight() {
+		this->box.size = mm2px(Vec(6.f, 6.f));
+	}
+};
+
+template <typename BASE>
+struct ComputerscareHugeLight : BASE  {
 	ComputerscareHugeLight() {
 		this->box.size = mm2px(Vec(8.179, 8.179));
 	}
 };
 
-
-struct ComputerscareMediumLight : ParamWidget {
+template <typename BASE>
+struct ComputerscareMediumLight : BASE {
 	ComputerscareMediumLight() {
 		this->box.size = mm2px(Vec(6, 6));
 	}
 };
 
-struct ComputerscareSmallLight :  ParamWidget {
+template <typename BASE>
+struct ComputerscareSmallLight :  BASE {
 	ComputerscareSmallLight() {
 		this->box.size = mm2px(Vec(3, 3));
 	}

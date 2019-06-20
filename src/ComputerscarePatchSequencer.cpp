@@ -58,8 +58,8 @@ struct ComputerscarePatchSequencer : Module {
 
   bool onlyRandomizeActive = true;
 
-  float input_values[numInputs] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-  float sums[numOutputs] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+  float input_values[numInputs * 16] = {0.0};
+  float sums[numOutputs * 16] = {0.0};
 
   int randomizationStepEnum = 0; //0: edit step, 1: active step, 2: all steps
   int randomizationOutputBoundsEnum = 1; //0: randomize exactly one per output, 1: randomize exactly one per output, 2: randomize 1 or more, 3: randomize 0 or more
@@ -67,8 +67,17 @@ struct ComputerscarePatchSequencer : Module {
   ComputerscarePatchSequencer() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-    // configParam(GLOBAL_TRANSPOSE, -1.f, 1.f, 0.0f, "Global Transpose");
+    //configParam(GLOBAL_TRANSPOSE, -1.f, 1.f, 0.0f, "Global Transpose");
+    configParam(STEPS_PARAM, 1.f, 16.f, 2.0f, "Number of Steps");
+    for (int i = 0; i < 100; i++)
+    {
+      //std::string chi = "Ch. " + std::to_string(i + 1);
+      /* configParam( SCALE_TRIM + i, , 0.f, 1.f, 0.f);
+       configParam( SCALE_VAL + i, -5.f, 5.f, 0.0f, chi + " Scale Value");
+       configParam( OFFSET_TRIM + i, -1.f, 1.f, 0.0f, chi + " Offset CV Amount");
+       configParam( OFFSET_VAL + i, -5.f, 5.f, 0.0f, chi + " Offset Value");*/
 
+    }
   }
   void process(const ProcessArgs &args) override;
 
@@ -125,6 +134,7 @@ struct ComputerscarePatchSequencer : Module {
         numConnectedInputs++;
         connectedInputIndices.push_back(i);
       }
+
       connectedInputs[i] = inputs[INPUT_JACKS + i].isConnected();
       connectedOutputs[i] = outputs[OUTPUTS + i].isConnected();
     }
@@ -196,11 +206,16 @@ struct ComputerscarePatchSequencer : Module {
 void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
 
   int numStepsKnobPosition = (int) clamp(roundf(params[STEPS_PARAM].getValue()), 1.0f, 16.0f);
-
+  int channels[10] = {0};
 
   for ( int i = 0 ; i < 10 ; i++)
   {
-    sums[i] = 0.0;
+    channels[i] = inputs[INPUT_JACKS + i].getChannels();
+    for (int j = 0; j < channels[i]; j++) {
+      sums[i * 16 + j] = 0.0;
+    }
+
+
   }
 
   for (int i = 0 ; i < 10 ; i++)
@@ -253,7 +268,11 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
 
   for (int i = 0 ; i < 10 ; i++)
   {
-    input_values[i] = inputs[INPUT_JACKS + i].getVoltage();
+    for (int j = 0; j < channels[i]; i++) {
+
+
+      input_values[i * 16 + j] = inputs[INPUT_JACKS + i].getVoltage(j);
+    }
   }
 
   for (int i = 0 ; i < 10 ; i++)
@@ -263,14 +282,20 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
       // todo: toggle for each output of how to combine multiple active signals in a column
       // sum, average, and, or etc
       if (switch_states[address][j][i]) {
-        sums[i] += input_values[j];
+        for (int k = 0; k < 16; k++) {
+          sums[i * 16 + k] += input_values[i * 16 + j];
+        }
+
       }
     }
   }
   /// outputs
   for (int i = 0 ; i < 10 ; i++)
   {
-    outputs[OUTPUTS + i].setVoltage(sums[i]);
+    outputs[OUTPUTS + i].setChannels(16);
+    for (int j = 0; j < 16; j++) {
+      outputs[OUTPUTS + i].setVoltage(sums[i * 16 + j], j);
+    }
   }
 }
 
@@ -335,13 +360,13 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
       {
         // the part you click
         //addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
-        //addParam(createParam<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10));
+        addParam(createParam<LEDButton>(Vec(35 + column_spacing * j + 2, top_row + row_spacing * i + 4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10));
 
 
 
         // green light indicates the state of the matrix that is being edited
         //ModuleLightWidget *bigOne = ModuleLightWidget::create<ComputerscareHugeLight<ComputerscareGreenLight>>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10);
-        //addParam(createParam<ComputerscareHugeLight>(Vec(35 + column_spacing * j +0.4, top_row + row_spacing * i +2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10));
+        addChild(createLight<ComputerscareHugeLight<ComputerscareGreenLight>>(Vec(35 + column_spacing * j + 0.4, top_row + row_spacing * i + 2.4 ), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10));
 
 
 
@@ -356,10 +381,9 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
         // red light indicates the state of the matrix that is the active step
         //computerscarered
         //addParam(createParam<ComputerscareSmallLight>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
-        //addParam(createParam<ComputerscareSmallLight>(Vec(xpos + rdx, ypos + rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
+        addChild(createLight<ComputerscareSmallLight<ComputerscareRedLight>>(Vec(xpos + rdx, ypos + rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
 
       }
-      //            addInput(createInput<InPort>(mm2px(Vec(xx, y - 0.8)), module, ComputerscareOhPeas::CHANNEL_INPUT + i));
 
       addInput(createInput<InPort>(Vec(3, i * row_spacing + top_row), module, ComputerscarePatchSequencer::INPUT_JACKS + i));
 
@@ -381,14 +405,14 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
     addParam(createParam<LEDButton>(Vec(7 , 37), module, ComputerscarePatchSequencer::MANUAL_CLOCK_PARAM));
 
     //reset button
-    //addParam(createParam<LEDButton>(Vec(7 , 3), module, ComputerscarePatchSequencer::RESET_PARAM));
+    addParam(createParam<LEDButton>(Vec(7 , 3), module, ComputerscarePatchSequencer::RESET_PARAM));
 
     //randomize input
     addInput(createInput<InPort>(Vec(270, 0), module, ComputerscarePatchSequencer::RANDOMIZE_INPUT));
 
     //active step display
-    /*NumberDisplayWidget3 *display = new NumberDisplayWidget3();
-    display->box.pos = Vec(56,40);
+    NumberDisplayWidget3 *display = new NumberDisplayWidget3();
+    display->box.pos = Vec(56, 40);
     display->box.size = Vec(50, 20);
     display->value = &module->addressPlusOne;
     display->module = module;
@@ -396,14 +420,14 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
     // number of steps display
     NumberDisplayWidget3 *stepsDisplay = new NumberDisplayWidget3();
-    stepsDisplay->box.pos = Vec(150,40);
+    stepsDisplay->box.pos = Vec(150, 40);
     stepsDisplay->box.size = Vec(50, 20);
     stepsDisplay->module = module;
     stepsDisplay->value = &module->numAddresses;
     addChild(stepsDisplay);
 
     //number-of-steps dial.   Discrete, 16 positions
-    ParamWidget* stepsKnob =  createParam<LrgKnob>(Vec(108,30), module, ComputerscarePatchSequencer::STEPS_PARAM);
+    ParamWidget* stepsKnob =  createParam<LrgKnob>(Vec(108, 30), module, ComputerscarePatchSequencer::STEPS_PARAM);
     addParam(stepsKnob);
 
     //editAddressNext button
@@ -414,11 +438,11 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
     // currently editing step #:
     NumberDisplayWidget3 *displayEdit = new NumberDisplayWidget3();
-    displayEdit->box.pos = Vec(246,40);
+    displayEdit->box.pos = Vec(246, 40);
     displayEdit->box.size = Vec(50, 20);
     displayEdit->module = module;
     displayEdit->value = &module->editAddressPlusOne;
-    addChild(displayEdit);*/
+    addChild(displayEdit);
     printf("ujje\n");
     fatherSon = module;
   }
