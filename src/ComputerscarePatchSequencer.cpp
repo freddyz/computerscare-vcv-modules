@@ -208,11 +208,11 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
   int numStepsKnobPosition = (int) clamp(roundf(params[STEPS_PARAM].getValue()), 1.0f, 16.0f);
   int channels[10] = {0};
 
-  for ( int i = 0 ; i < 10 ; i++)
+  for ( int j = 0 ; j < 10 ; j++)
   {
-    channels[i] = inputs[INPUT_JACKS + i].getChannels();
-    for (int j = 0; j < channels[i]; j++) {
-      sums[i * 16 + j] = 0.0;
+    //channels[i] = inputs[INPUT_JACKS + i].getChannels();
+    for (int c = 0; c < 16; c++) {
+      sums[j * 16 + c] = 0.0;
     }
 
 
@@ -268,10 +268,10 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
 
   for (int i = 0 ; i < 10 ; i++)
   {
-    for (int j = 0; j < channels[i]; i++) {
+    for (int c = 0; c < 16; c++) {
 
 
-      input_values[i * 16 + j] = inputs[INPUT_JACKS + i].getVoltage(j);
+      input_values[i * 16 + c] = inputs[INPUT_JACKS + i].getVoltage(c);
     }
   }
 
@@ -281,20 +281,20 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
     {
       // todo: toggle for each output of how to combine multiple active signals in a column
       // sum, average, and, or etc
-      if (switch_states[address][j][i]) {
-        for (int k = 0; k < 16; k++) {
-          sums[i * 16 + k] += input_values[i * 16 + j];
+      if (switch_states[address][i][j]) {
+        for (int c = 0; c < 16; c++) {
+          sums[j * 16 + c] += input_values[i * 16 + c];
         }
 
       }
     }
   }
   /// outputs
-  for (int i = 0 ; i < 10 ; i++)
+  for (int j = 0 ; j < 10 ; j++)
   {
-    outputs[OUTPUTS + i].setChannels(16);
-    for (int j = 0; j < 16; j++) {
-      outputs[OUTPUTS + i].setVoltage(sums[i * 16 + j], j);
+    outputs[OUTPUTS + j].setChannels(16);
+    for (int c = 0; c < 16; c++) {
+      outputs[OUTPUTS + j].setVoltage(sums[j * 16 + c], c);
     }
   }
 }
@@ -443,7 +443,6 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
     displayEdit->module = module;
     displayEdit->value = &module->editAddressPlusOne;
     addChild(displayEdit);
-    printf("ujje\n");
     fatherSon = module;
   }
   json_t *toJson() override
