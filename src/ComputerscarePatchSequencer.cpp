@@ -52,6 +52,7 @@ struct ComputerscarePatchSequencer : Module {
   int editAddress = 0;
   int addressPlusOne = 1;
   int editAddressPlusOne = 1;
+  int counter = 0;
 
   int numAddresses = 2;
   bool switch_states[maxSteps][10][10] = {};
@@ -227,11 +228,24 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
         // handle button clicks in the patch matrix
         switch_states[editAddress][i][j] = !switch_states[editAddress][i][j];
       }
-      // update the green lights (step you are editing) and the red lights (current active step)
-      lights[SWITCH_LIGHTS + i + j * 10].value  = (switch_states[editAddress][i][j]) ? 1.0 : 0.0;
-      lights[SWITCH_LIGHTS + i + j * 10 + 100].value  = (switch_states[address][i][j]) ? 1.0 : 0.0;
+
+
     }
   }
+  if (counter > 512) {
+    for (int i = 0 ; i < 10 ; i++)
+    {
+      for (int j = 0 ; j < 10 ; j++)
+      {
+        // update the green lights (step you are editing) and the red lights (current active step)
+        lights[SWITCH_LIGHTS + i + j * 10].value  = (switch_states[editAddress][i][j]) ? 1.0 : 0.0;
+        lights[SWITCH_LIGHTS + i + j * 10 + 100].value  = (switch_states[address][i][j]) ? 1.0 : 0.0;
+      }
+    }
+    counter = 0;
+  }
+  counter++;
+
 
   if (numStepsKnobPosition != numAddresses) {
     numAddresses = numStepsKnobPosition;
@@ -359,7 +373,6 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
       for (int j = 0 ; j < 10 ; j++ )
       {
         // the part you click
-        //addParam(ParamWidget::create<LEDButton>(Vec(35 + column_spacing * j+2, top_row + row_spacing * i+4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10, 0.0, 1.0, 0.0));
         addParam(createParam<LEDButton>(Vec(35 + column_spacing * j + 2, top_row + row_spacing * i + 4), module, ComputerscarePatchSequencer::SWITCHES + i + j * 10));
 
 
@@ -381,6 +394,8 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
         // red light indicates the state of the matrix that is the active step
         //computerscarered
         //addParam(createParam<ComputerscareSmallLight>(Vec(xpos, ypos), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
+        addChild(createLight<ComputerscareSmallLight<ComputerscareRedLight>>(Vec(xpos - rdy, ypos + rdx), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
+
         addChild(createLight<ComputerscareSmallLight<ComputerscareRedLight>>(Vec(xpos + rdx, ypos + rdy), module, ComputerscarePatchSequencer::SWITCH_LIGHTS  + i + j * 10 + 100));
 
       }
@@ -495,27 +510,31 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
     if (randomizationOutputBoundsEnumJ) { fatherSon->setRandomizationOutputBoundsEnum(json_integer_value(randomizationOutputBoundsEnumJ)); }
 
   }
+  void appendContextMenu(Menu *menu) override;
 
   ComputerscarePatchSequencer *fatherSon;
   //Menu *createContextMenu() override;
 };
-/*struct OnlyRandomizeActiveMenuItem : MenuItem {
+struct OnlyRandomizeActiveMenuItem : MenuItem {
   ComputerscarePatchSequencer *patchSequencer;
+  OnlyRandomizeActiveMenuItem() {
+
+  }
   void onAction(const event::Action &e) override {
     patchSequencer->onlyRandomizeActive = !patchSequencer->onlyRandomizeActive;
   }
-  void process(const ProcessArgs &args) override {
+  void step() override {
     rightText = patchSequencer->onlyRandomizeActive ? "✔" : "";
+    MenuItem::step();
   }
 };
-
 struct WhichStepToRandomizeItem : MenuItem {
   ComputerscarePatchSequencer *patchSequencer;
   int stepEnum;
   void onAction(const event::Action &e) override {
     patchSequencer->setRandomizationStepEnum(stepEnum);
   }
-  void process(const ProcessArgs &args) override {
+  void step() override {
     rightText = CHECKMARK(patchSequencer->getRandomizationStepEnum() == stepEnum);
     MenuItem::step();
   }
@@ -527,29 +546,28 @@ struct WhichRandomizationOutputBoundsItem : MenuItem {
   void onAction(const event::Action &e) override {
     patchSequencer->setRandomizationOutputBoundsEnum(boundsEnum);
   }
-  void process(const ProcessArgs &args) override {
+  void step() override {
     rightText = CHECKMARK(patchSequencer->getRandomizationOutputBoundsEnum() == boundsEnum);
     MenuItem::step();
   }
 };
-
-Menu *ComputerscarePatchSequencerWidget::createContextMenu() {
-  Menu *menu = ModuleWidget::createContextMenu();
-  ComputerscarePatchSequencer *patchSequencer = dynamic_cast<ComputerscarePatchSequencer*>(module);
-  assert(patchSequencer);
+void ComputerscarePatchSequencerWidget::appendContextMenu(Menu *menu)
+{
+  ComputerscarePatchSequencer *patchSequencer = dynamic_cast<ComputerscarePatchSequencer *>(this->module);
 
   MenuLabel *spacerLabel = new MenuLabel();
   menu->addChild(spacerLabel);
+
 
   MenuLabel *modeLabel = new MenuLabel();
   modeLabel->text = "Randomization Options";
   menu->addChild(modeLabel);
 
+
   OnlyRandomizeActiveMenuItem *onlyRandomizeActiveMenuItem = new OnlyRandomizeActiveMenuItem();
   onlyRandomizeActiveMenuItem->text = "Only Randomize Active Connections";
   onlyRandomizeActiveMenuItem->patchSequencer = patchSequencer;
   menu->addChild(onlyRandomizeActiveMenuItem);
-
 
   menu->addChild(construct<MenuLabel>());
   menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Which Step to Randomize"));
@@ -557,20 +575,16 @@ Menu *ComputerscarePatchSequencerWidget::createContextMenu() {
   menu->addChild(construct<WhichStepToRandomizeItem>(&MenuItem::text, "Active step", &WhichStepToRandomizeItem::patchSequencer, patchSequencer, &WhichStepToRandomizeItem::stepEnum, 1));
   menu->addChild(construct<WhichStepToRandomizeItem>(&MenuItem::text, "All steps", &WhichStepToRandomizeItem::patchSequencer, patchSequencer, &WhichStepToRandomizeItem::stepEnum, 2));
 
- // randomization output bounds
+
+  // randomization output bounds
   menu->addChild(construct<MenuLabel>());
   menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Output Row Randomization Method"));
   menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or none", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 0));
   menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Exactly one", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 1));
   menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "Zero or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 2));
- menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 3));
+  menu->addChild(construct<WhichRandomizationOutputBoundsItem>(&MenuItem::text, "One or more", &WhichRandomizationOutputBoundsItem::patchSequencer, patchSequencer, &WhichRandomizationOutputBoundsItem::boundsEnum, 3));
 
+}
 
-  return menu;
-}*/
-// Specify the Module and ModuleWidget subclass, human-readable
-// author name for categorization per plugin, module slug (should never
-// change), human-readable module name, and any number of tags
-// (found in `include/tags.hpp`) separated by commas.
 Model *modelComputerscarePatchSequencer = createModel<ComputerscarePatchSequencer, ComputerscarePatchSequencerWidget>("computerscare-fatherandson");
 

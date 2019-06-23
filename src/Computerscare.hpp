@@ -216,7 +216,7 @@ struct LrgKnob : RoundBlackSnapKnob {
 	LrgKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-big-knob-effed.svg")));
 	}
-	//void randomize() override { return; }
+	void randomize() override { return; }
 };
 
 
