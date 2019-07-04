@@ -96,12 +96,13 @@ struct ComputerscareLaundrySoup : Module {
   bool activeStep[numFields] = {false};
 
   bool shouldChange[numFields] = {false};
+  bool changeImminent[numFields] = {false};
 
   ComputerscareLaundrySoup() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     for (int i = 0; i < numFields; i++) {
       currentFormula[i] = "";
-     setNextAbsoluteSequence(i);
+      setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
 
@@ -112,44 +113,43 @@ struct ComputerscareLaundrySoup : Module {
 
 
   void onRandomize() override {
-    //randomizeAllFields();
+    randomizeAllFields();
   }
 
-  /*  void randomizeAllFields() {
-      std::string mainlookup = "111111111111111111122223333333344444444444444445556667778888888888888999";
-      std::string string = "";
-      std::string randchar = "";
-      int length = 0;
+  void randomizeAllFields() {
+    std::string mainlookup = "111111111111111111122223333333344444444444444445556667778888888888888999";
+    std::string string = "";
+    std::string randchar = "";
+    int length = 0;
 
-      for (int i = 0; i < numFields; i++) {
-        length = rand() % 12 + 1;
-        string = "";
-        for (int j = 0; j < length; j++) {
-          randchar = mainlookup[rand() % mainlookup.size()];
-          string = string + randchar;
-        }
-        textFields[i]->text = string;
-        setNextAbsoluteSequence(i);
+    for (int i = 0; i < numFields; i++) {
+      length = rand() % 12 + 1;
+      string = "";
+      for (int j = 0; j < length; j++) {
+        randchar = mainlookup[rand() % mainlookup.size()];
+        string = string + randchar;
       }
+      currentFormula[i] = string;
+      setNextAbsoluteSequence(i);
+    }
 
-    }*/
+  }
 
   void setNextAbsoluteSequence(int index) {
     shouldChange[index] = true;
   }
   void setAbsoluteSequenceFromQueue(int index) {
-     LaundrySoupSequence lss = LaundrySoupSequence(currentFormula[index]);
-     laundrySequences[index] = lss;
-     if (!lss.inError) {
-       laundrySequences[index] = lss;
-       laundrySequences[index].print();
-       //textFields[index]->inError = false;
-     }
-     else {
-       printf("ERROR\n");
-       lss.print();
-       //textFields[index]->inError = true;
-     }
+    LaundrySoupSequence lss = LaundrySoupSequence(currentFormula[index]);
+    laundrySequences[index] = lss;
+    if (!lss.inError) {
+      laundrySequences[index] = lss;
+      laundrySequences[index].print();
+    }
+    else {
+      printf("ERROR\n");
+      lss.print();
+      //textFields[index]->inError = true;
+    }
   }
   void checkIfShouldChange(int index) {
     if (shouldChange[index]) {
@@ -159,12 +159,12 @@ struct ComputerscareLaundrySoup : Module {
     }
   }
   void updateDisplayBlink(int index) {
-   // smallLetterDisplays[index]->blink = shouldChange[index];
+    // smallLetterDisplays[index]->blink = shouldChange[index];
   }
   void onCreate ()
   {
     printf("onCreate\n");
-    
+
   }
 
   void onReset () override
@@ -183,12 +183,10 @@ struct ComputerscareLaundrySoup : Module {
 
   */
   void incrementInternalStep(int i) {
-    laundrySequences[i].print();
     laundrySequences[i].incrementAndCheck();
     if (laundrySequences[i].readHead == 0) {
       this->setChangeImminent(i, false);
     }
-    //this->smallLetterDisplays[i]->value = this->getDisplayString(i);
   }
   std::string getDisplayString(int index) {
     std::string lhs = std::to_string(this->laundrySequences[index].readHead + 1);
@@ -202,7 +200,7 @@ struct ComputerscareLaundrySoup : Module {
     return val;
   }
   void setChangeImminent(int i, bool value) {
-   // this->smallLetterDisplays[i]->doubleblink = value;
+    changeImminent[i] = value;
   }
   void resetOneOfThem(int i) {
     this->laundrySequences[i].readHead = -1;
@@ -292,7 +290,7 @@ struct LaundryTF2 : ComputerscareTextField
 
   LaundryTF2(int i)
   {
-    rowIndex=i;
+    rowIndex = i;
     ComputerscareTextField();
   };
   void draw(const DrawArgs &args) override
@@ -302,17 +300,17 @@ struct LaundryTF2 : ComputerscareTextField
       std::string value = text.c_str();
       if (value != module->currentFormula[rowIndex])
       {
-        printf("diff %i, %s\n",rowIndex,text.c_str());
-          LaundrySoupSequence lss = LaundrySoupSequence(value);
-          
+        printf("diff %i, %s\n", rowIndex, text.c_str());
+        LaundrySoupSequence lss = LaundrySoupSequence(value);
+
         if (!lss.inError && matchParens(value)) {
-          inError=false;
+          inError = false;
           module->currentFormula[rowIndex] = value;
           module->setNextAbsoluteSequence(this->rowIndex);
           //module->updateDisplayBlink(rowIndex);
         }
         else {
-          printf("in error %i\n",index);
+          printf("in error %i\n", index);
           inError = true;
         }
         //module->setQuant();
@@ -324,71 +322,28 @@ struct LaundryTF2 : ComputerscareTextField
   //void draw(const DrawArgs &args) override;
   //int getTextPosition(math::Vec mousePos) override;
 };
-/*struct LaundryTextField : LedDisplayTextField
-{
-  ComputerscareLaundrySoup *module;
-  std::shared_ptr<Font> font;
-  math::Vec textOffset;
-  NVGcolor color;
-  int fontSize = 16;
-  int rowIndex = 0;
-  bool inError = false;
-  void onEnter(const event::Enter &e) override;
-  LaundryTextField(int index)
-  {
-    rowIndex = index;
-    LedDisplayTextField();
-  };
-  void draw(const DrawArgs &args) override
-  {
-    if (module)
-    {
-      std::string value = text.c_str();
-      if (text.c_str() != module->textFields[this->rowIndex]->text)
-      {
-        LaundrySoupSequence lss = LaundrySoupSequence(value);
-        // module->currentFormula = text.c_str();
-        // module->setQuant();
-        if (!lss.inError && matchParens(value)) {
-          //module->textFields[this->rowIndex]->inError = false;
-          //module->setNextAbsoluteSequence(this->rowIndex);
-          //module->updateDisplayBlink(this->rowIndex);
-        }
-        else {
-          //module->textFields[this->rowIndex]->inError = true;
-        }
-      }
-      LedDisplayTextField::draw(args);
-    }
-    
-  }
 
-  //void draw(const DrawArgs &args) override;
-  //int getTextPosition(math::Vec mousePos) override;
-};
-void LaundryTextField::onEnter(const event::Enter &e) {
-  module->setNextAbsoluteSequence(rowIndex);
-  //module->setQuant();
-}*/
 struct LaundrySmallDisplay : SmallLetterDisplay
 {
-    ComputerscareLaundrySoup *module;
-    int type;
-    int index;
-    LaundrySmallDisplay(int i)
+  ComputerscareLaundrySoup *module;
+  int type;
+  int index;
+  LaundrySmallDisplay(int i)
+  {
+    index = i;
+    SmallLetterDisplay();
+  };
+  void draw(const DrawArgs &args)
+  {
+    //this->setNumDivisionsString();
+    if (module)
     {
-      index=i;
-        SmallLetterDisplay();
-    };
-    void draw(const DrawArgs &args)
-    {
-        //this->setNumDivisionsString();
-        if (module)
-        {
-          value = module->getDisplayString(index);
-          SmallLetterDisplay::draw(args);
-        }
+      value = module->getDisplayString(index);
+      blink = module->shouldChange[index];
+      doubleblink = module->changeImminent[index];
+      SmallLetterDisplay::draw(args);
     }
+  }
 
 };
 
@@ -439,7 +394,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       textFieldTemp = new LaundryTF2(i);
       textFieldTemp->box.pos = mm2px(Vec(1, verticalStart + verticalSpacing * i));
       textFieldTemp->module = module;
-      textFieldTemp->box.size = mm2px(Vec(44, 7));
+      textFieldTemp->box.size = mm2px(Vec(64, 7));
       textFieldTemp->multiline = false;
       textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
       textFieldTemp->text = "";
@@ -454,8 +409,9 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       smallLetterDisplay->box.size = Vec(60, 30);
       smallLetterDisplay->value = std::to_string(3);
       smallLetterDisplay->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
-      smallLetterDisplay->module=module;
+      smallLetterDisplay->module = module;
       addChild(smallLetterDisplay);
+      laundrySmallDisplays[i] = smallLetterDisplay;
       //module->smallLetterDisplays[i] = smallLetterDisplay;
 
       addParam(createParam<ComputerscareInvisibleButton>(mm2px(Vec(20, verticalStart - 9.2 + verticalSpacing * i)), module, ComputerscareLaundrySoup::INDIVIDUAL_RESET_PARAM + i));
@@ -495,10 +451,12 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
   }
 
   ComputerscareLaundrySoup *laundry;
-  
+
   LaundryTF2 *textFieldTemp;
   LaundryTF2 *laundryTextFields[numFields];
   LaundrySmallDisplay* smallLetterDisplay;
+  LaundrySmallDisplay* laundrySmallDisplays[numFields];
+
 };
 
 Model *modelComputerscareLaundrySoup = createModel<ComputerscareLaundrySoup, ComputerscareLaundrySoupWidget>("computerscare-laundry-soup");

@@ -118,6 +118,7 @@ struct ComputerscareClockButton : app::SvgSwitch {
 };
 struct ComputerscareInvisibleButton : app::SvgSwitch {
 	ComputerscareInvisibleButton() {
+		momentary = true;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-invisible-button.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-invisible-button-frame2.svg")));
 	}
@@ -267,7 +268,7 @@ struct ComputerscareTextField : ui::TextField {
 
 		font = APP->window->loadFont(asset::system("res/fonts/ShareTechMono-Regular.ttf"));
 		color = nvgRGB(0xff, 0xd7, 0x14);
-		textOffset = math::Vec(5, 5);
+		textOffset = math::Vec(1, 2);
 	}
 
 
