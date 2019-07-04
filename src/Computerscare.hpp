@@ -27,7 +27,7 @@ extern Model *modelComputerscareDebug;
 
 
 extern Model *modelComputerscarePatchSequencer;
-//extern Model *modelComputerscareLaundrySoup;
+extern Model *modelComputerscareLaundrySoup;
 //extern Model *modelComputerscareILoveCookies;
 extern Model *modelComputerscareOhPeas;
 //extern Model *modelComputerscareIso;
@@ -100,7 +100,7 @@ struct ComputerscareDebugFour : app::SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/debug-clock-selector-4way-template.svg")));
 	}
 };
-struct ComputerscareResetButton : SvgSwitch {
+struct ComputerscareResetButton : app::SvgSwitch {
 	ComputerscareResetButton() {
 		momentary = true;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-rst-text.svg")));
@@ -109,14 +109,14 @@ struct ComputerscareResetButton : SvgSwitch {
 	}
 };
 
-struct ComputerscareClockButton : SvgSwitch {
+struct ComputerscareClockButton : app::SvgSwitch {
 	ComputerscareClockButton() {
 		momentary = true;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-clk-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-clk-text-red.svg")));
 	}
 };
-struct ComputerscareInvisibleButton : SvgSwitch {
+struct ComputerscareInvisibleButton : app::SvgSwitch {
 	ComputerscareInvisibleButton() {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-invisible-button.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-invisible-button-frame2.svg")));

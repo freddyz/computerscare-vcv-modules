@@ -18,6 +18,7 @@ SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
 SOURCES += $(wildcard src/ComputerscareIso.cpp)
 SOURCES += $(wildcard src/ComputerscareKnolyPobs.cpp)
 SOURCES += $(wildcard src/ComputerscarePatchSequencer.cpp)
+SOURCES += $(wildcard src/ComputerscareLaundrySoup.cpp)
 
 SOURCES += $(wildcard src/ComputerscareDebug.cpp)
 SOURCES += $(wildcard src/ComputerscareOhPeas.cpp)

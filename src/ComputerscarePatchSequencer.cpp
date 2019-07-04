@@ -207,7 +207,7 @@ struct ComputerscarePatchSequencer : Module {
 void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
 
   int numStepsKnobPosition = (int) clamp(roundf(params[STEPS_PARAM].getValue()), 1.0f, 16.0f);
-  int channels[10] = {0};
+  //int channels[10] = {0};
 
   for ( int j = 0 ; j < 10 ; j++)
   {

@@ -29,6 +29,12 @@
 			"name":"Father and Son Patch Sequencer",
 			"description":"Patch Sequencer - 10 in, 10 out patch matrix with 16 scenes",
 			"tags":["Poly","Utility"]
+		},
+
+		{"slug":"computerscare-laundry-soup",
+			"name":"Laundry Soup",
+			"description":"Rhythm sequencer, pulse generator, text-based",
+			"tags":["Sequencer"]
 		}
 	]
 }
