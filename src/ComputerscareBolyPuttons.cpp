@@ -7,7 +7,10 @@ const int numToggles = 16;
 struct ComputerscareBolyPuttons : Module {
 	int counter = 0;
 	int outputRangeEnum = 0;
+	bool momentary = false;
 	float outputRanges[4][2];
+	rack::dsp::SchmittTrigger momentaryTriggers[16];
+	rack::dsp::PulseGenerator pulseGen[16];
 
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
@@ -67,19 +70,41 @@ struct ComputerscareBolyPuttons : Module {
 		outputs[POLY_OUTPUT].setChannels(16);
 
 		//if (outputs[SCALED_OUTPUT + i].isConnected() || outputs[QUANTIZED_OUTPUT + i].isConnected()) {
-           // numInputChannels = inputs[CHANNEL_INPUT + i].getChannels();
-		
-		for (int i = 0; i < numToggles; i++) {
-			if(inputs[A_INPUT].isConnected()) {
-			min = inputs[A_INPUT].getVoltage(i % numAChannels);
+		// numInputChannels = inputs[CHANNEL_INPUT + i].getChannels();
+		if (momentary) {
+			for (int i = 0; i < numToggles; i++) {
+				if (momentaryTriggers[i].process(params[TOGGLE + i].getValue())) {
+					pulseGen[i].trigger();
+					if (inputs[A_INPUT].isConnected()) {
+						min = inputs[A_INPUT].getVoltage(i % numAChannels);
+					}
+
+					if (inputs[B_INPUT].isConnected()) {
+						max = inputs[B_INPUT].getVoltage(i % numBChannels);
+					}
+
+					float spread = max - min;
+					outputs[POLY_OUTPUT].setVoltage(pulseGen[i].process(APP->engine->getSampleTime())*spread + min, i);
+				}
+
+			}
+
 		}
-		
-		if(inputs[B_INPUT].isConnected()) {
-			max = inputs[B_INPUT].getVoltage(i % numBChannels);
-		}
-		
-		float spread = max - min;
-			outputs[POLY_OUTPUT].setVoltage(params[TOGGLE + i].getValue()*spread + min, i);
+		else {
+
+
+			for (int i = 0; i < numToggles; i++) {
+				if (inputs[A_INPUT].isConnected()) {
+					min = inputs[A_INPUT].getVoltage(i % numAChannels);
+				}
+
+				if (inputs[B_INPUT].isConnected()) {
+					max = inputs[B_INPUT].getVoltage(i % numBChannels);
+				}
+
+				float spread = max - min;
+				outputs[POLY_OUTPUT].setVoltage(params[TOGGLE + i].getValue()*spread + min, i);
+			}
 		}
 	}
 
@@ -112,7 +137,7 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 
 		addInput(createInput<InPort>(Vec(9, 58), module, ComputerscareBolyPuttons::A_INPUT));
 		addInput(createInput<PointingUpPentagonPort>(Vec(33, 55), module, ComputerscareBolyPuttons::B_INPUT));
-	
+
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(1, 24), module, ComputerscareBolyPuttons::POLY_OUTPUT));
 		bolyPuttons = module;
 	}
@@ -123,10 +148,16 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 		smallLetterDisplay->fontSize = 16;
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
+		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 
+		//SmallIsoButton sib = new SmallIsoButton(momentary);
+		//sib->box.pos=Vec(x, y);
+		//sib->module = module;
+
+		//addParam(sib);
 		addParam(createParam<SmallIsoButton>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
 
-		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
+		
 
 
 		addChild(smallLetterDisplay);
