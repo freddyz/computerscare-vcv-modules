@@ -159,20 +159,6 @@ struct ComputerscareOhPeas : Module
             configParam( OFFSET_VAL + i, -5.f, 5.f, 0.0f, chi + " Offset Value");
 
         }
-        /*
-
-              SCALE_TRIM +i,  -1.f, 1.f, 0.0f));
-
-
-             SCALE_VAL +i,  -1.f, 1.f, 0.0f));
-
-             OFFSET_TRIM +i,  -1.f, 1.f, 0.0f));
-
-
-              OFFSET_VAL +i,  -5.f, 5.f, 0.0f));
-        */
-        //,  1.f, 24.f, 12.0f NUM_DIVISIONS
-        //ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  -1.f, 1.f, 0.0f
 
         quant = Quantizer(currentFormula, 12, 0);
 
@@ -200,6 +186,9 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
 
     int numDivisionsKnobValue = floor(params[NUM_DIVISIONS].getValue());
     int iTranspose = floor(numDivisionsKnobValue * params[GLOBAL_TRANSPOSE].getValue());
+    int numInputChannels;
+    int numScaleCVChannels;
+    int numOffsetCVChannels;
 
     //int globalTransposeKnobValue = (int) clamp(roundf(params[GLOBAL_TRANSPOSE].getValue()), -fNumDiv, fNumDiv);
 
@@ -224,23 +213,34 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
     }
     for (int i = 0; i < numChannels; i++)
     {
+        if (outputs[SCALED_OUTPUT + i].isConnected() || outputs[QUANTIZED_OUTPUT + i].isConnected()) {
+            numInputChannels = inputs[CHANNEL_INPUT + i].getChannels();
+            numScaleCVChannels = inputs[SCALE_CV + i].getChannels();
+            numOffsetCVChannels = inputs[OFFSET_CV + i].getChannels();
+            outputs[SCALED_OUTPUT + i].setChannels(numInputChannels);
+            outputs[QUANTIZED_OUTPUT + i].setChannels(numInputChannels);
+            for (int ch = 0; ch < numInputChannels; ch++) {
 
-        a = params[SCALE_VAL + i].getValue();
 
-        b = params[SCALE_TRIM + i].getValue();
-        B = inputs[SCALE_CV + i].getVoltage();
-        A = inputs[CHANNEL_INPUT + i].getVoltage();
+                a = params[SCALE_VAL + i].getValue();
 
-        c = params[OFFSET_TRIM + i].getValue();
-        C = inputs[OFFSET_CV + i].getVoltage();
-        d = params[OFFSET_VAL + i].getValue();
+                b = params[SCALE_TRIM + i].getValue();
+                B = inputs[SCALE_CV + i].getVoltage(ch % numInputChannels);
+                A = inputs[CHANNEL_INPUT + i].getVoltage(ch);
 
-        D = (b * B + a) * A + (c * C + d);
+                c = params[OFFSET_TRIM + i].getValue();
+                C = inputs[OFFSET_CV + i].getVoltage(ch % numInputChannels);
+                d = params[OFFSET_VAL + i].getValue();
 
-        Q = quant.quantizeEven(D, iTranspose);
+                D = (b * B + a) * A + (c * C + d);
 
-        outputs[SCALED_OUTPUT + i].setVoltage(D);
-        outputs[QUANTIZED_OUTPUT + i].setVoltage(Q);
+                Q = quant.quantizeEven(D, iTranspose);
+
+
+                outputs[SCALED_OUTPUT + i].setVoltage(D, ch);
+                outputs[QUANTIZED_OUTPUT + i].setVoltage(Q, ch);
+            }
+        }
     }
 }
 
