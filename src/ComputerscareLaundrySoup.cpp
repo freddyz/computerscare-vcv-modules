@@ -12,7 +12,7 @@ struct ComputerscareLaundrySoup;
 struct LaundryTextField;
 struct LaundryTF2;
 struct LaundrySmallDisplay;
-
+struct ComputerscareLaundrySoupWidget;
 
 const int numFields = 6;
 
@@ -88,6 +88,7 @@ struct ComputerscareLaundrySoup : Module {
   LaundrySmallDisplay* smallLetterDisplays[numFields];
 
   std::string currentFormula[numFields];
+  std::string lastValue[numFields];
 
   rack::dsp::SchmittTrigger manualResetTriggers[numFields];
 
@@ -97,11 +98,13 @@ struct ComputerscareLaundrySoup : Module {
 
   bool shouldChange[numFields] = {false};
   bool changeImminent[numFields] = {false};
+  bool manualSet[numFields] = {false};
 
   ComputerscareLaundrySoup() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     for (int i = 0; i < numFields; i++) {
       currentFormula[i] = "";
+      lastValue[i] = "";
       setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
@@ -123,13 +126,15 @@ struct ComputerscareLaundrySoup : Module {
     int length = 0;
 
     for (int i = 0; i < numFields; i++) {
-      length = rand() % 12 + 1;
+      length = floor(random::uniform() * 12) + 1;
       string = "";
       for (int j = 0; j < length; j++) {
-        randchar = mainlookup[rand() % mainlookup.size()];
+        randchar = mainlookup[floor(random::uniform() * mainlookup.size())];
         string = string + randchar;
       }
+      printf("new sequence:%s\n", string.c_str());
       currentFormula[i] = string;
+      manualSet[i] = true;
       setNextAbsoluteSequence(i);
     }
 
@@ -143,6 +148,7 @@ struct ComputerscareLaundrySoup : Module {
     laundrySequences[index] = lss;
     if (!lss.inError) {
       laundrySequences[index] = lss;
+      printf("not in error channel %i\n", index);
       laundrySequences[index].print();
     }
     else {
@@ -155,22 +161,7 @@ struct ComputerscareLaundrySoup : Module {
     if (shouldChange[index]) {
       setAbsoluteSequenceFromQueue(index);
       shouldChange[index] = false;
-      updateDisplayBlink(index);
     }
-  }
-  void updateDisplayBlink(int index) {
-    // smallLetterDisplays[index]->blink = shouldChange[index];
-  }
-  void onCreate ()
-  {
-    printf("onCreate\n");
-
-  }
-
-  void onReset () override
-  {
-    printf("onReset\n");
-    onCreate();
   }
 
   /*
@@ -284,9 +275,8 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
 struct LaundryTF2 : ComputerscareTextField
 {
   ComputerscareLaundrySoup *module;
-  int fontSize = 16;
+  //int fontSize = 16;
   int rowIndex = 0;
-  bool inError = false;
 
   LaundryTF2(int i)
   {
@@ -297,23 +287,23 @@ struct LaundryTF2 : ComputerscareTextField
   {
     if (module)
     {
+      if (module->manualSet[rowIndex]) {
+        text = module->currentFormula[rowIndex];
+        module->manualSet[rowIndex] = false;
+      }
       std::string value = text.c_str();
-      if (value != module->currentFormula[rowIndex])
+      if (value != module->lastValue[rowIndex])
       {
-        printf("diff %i, %s\n", rowIndex, text.c_str());
         LaundrySoupSequence lss = LaundrySoupSequence(value);
-
+        module->lastValue[rowIndex] = value;
         if (!lss.inError && matchParens(value)) {
           inError = false;
           module->currentFormula[rowIndex] = value;
           module->setNextAbsoluteSequence(this->rowIndex);
-          //module->updateDisplayBlink(rowIndex);
         }
         else {
-          printf("in error %i\n", index);
           inError = true;
         }
-        //module->setQuant();
       }
     }
     ComputerscareTextField::draw(args);
@@ -361,9 +351,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
     //global reset input
     addInput(createInput<InPort>(mm2px(Vec(12 , 0)),  module, ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
 
-
-    // addParam(createParam<ComputerscareClockButton>(Vec(2, 321), module, ComputerscareDebug::MANUAL_TRIGGER));
-
+    //momentary clock and reset buttons
     addParam(createParam<ComputerscareClockButton>(mm2px(Vec(2 , 8)), module, ComputerscareLaundrySoup::MANUAL_CLOCK_PARAM));
     addParam(createParam<ComputerscareResetButton>(mm2px(Vec(12 , 8)), module, ComputerscareLaundrySoup::MANUAL_RESET_PARAM));
 
@@ -380,17 +368,6 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       //individual reset input
       addInput(createInput<InPort>(mm2px(Vec(12, verticalStart + verticalSpacing * i - 10)),  module, ComputerscareLaundrySoup::RESET_INPUT + i));
 
-
-      /* textFieldTemp = createWidget<LaundryTF2>(mm2px(Vec(1, verticalStart + verticalSpacing * i)));
-       textFieldTemp->module = module;
-       textFieldTemp->box.size = mm2px(Vec(44, 7));
-       textFieldTemp->multiline = false;
-       textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
-       textFieldTemp->text = "";
-       textFieldTemp->rowIndex = i;
-       module->textFields[i] = textFieldTemp;
-       textFieldTemp->module = module;
-       addChild(textFieldTemp);*/
       textFieldTemp = new LaundryTF2(i);
       textFieldTemp->box.pos = mm2px(Vec(1, verticalStart + verticalSpacing * i));
       textFieldTemp->module = module;
@@ -412,14 +389,11 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       smallLetterDisplay->module = module;
       addChild(smallLetterDisplay);
       laundrySmallDisplays[i] = smallLetterDisplay;
-      //module->smallLetterDisplays[i] = smallLetterDisplay;
 
       addParam(createParam<ComputerscareInvisibleButton>(mm2px(Vec(20, verticalStart - 9.2 + verticalSpacing * i)), module, ComputerscareLaundrySoup::INDIVIDUAL_RESET_PARAM + i));
 
     }
-
     laundry = module;
-    module->onCreate();
   }
   json_t *toJson() override
   {
@@ -437,7 +411,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
   void fromJson(json_t *rootJ) override
   {
-
+    std::string val;
     ModuleWidget::fromJson(rootJ);
     json_t *sequencesJ = json_object_get(rootJ, "sequences");
     if (sequencesJ) {
@@ -445,7 +419,9 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
         json_t *sequenceJ = json_array_get(sequencesJ, i);
         if (sequenceJ)
-          laundryTextFields[i]->text = json_string_value(sequenceJ);
+          val = json_string_value(sequenceJ);
+        laundryTextFields[i]->text = val;
+        laundry->currentFormula[i] = val;
       }
     }
   }

@@ -59,7 +59,6 @@ struct ComputerscareDebug : Module {
 		INTERNAL_MODE,
 		POLY_MODE
 	};
-	//StringDisplayWidget3* textDisplay;
 
 	ComputerscareDebug() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -115,10 +114,6 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 					logLines[i] = random::uniform();
 				}
 			}
-			//thisVal = std::to_string(logLines[0]).substr(0,10);
-			//outputs[POLY_OUTPUT].setVoltage(logLines[0],0);
-
-
 		}
 	}
 	else if (clockMode == INTERNAL_MODE) {
@@ -192,7 +187,6 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 	HidableSmallSnapKnob() {
 
 		SmallSnapKnob();
-
 	}
 	void draw(const DrawArgs &args) {
 		if (module ? (hackIndex == 0 ? module->clockMode == 0 : module->inputMode == 0) : true) {

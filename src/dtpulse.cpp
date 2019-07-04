@@ -423,8 +423,8 @@ LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
 void LaundrySoupSequence::print() {
   printf("  Laundry tokenStack:\n");
   printTokenVector(tokenStack);
-  printf("  Laundry pulseSequence:\n");
-  printVector(pulseSequence);
+  //printf("  Laundry pulseSequence:\n");
+  //printVector(pulseSequence);
 }
 std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> tokens) {
 	std::vector<int> output = {};

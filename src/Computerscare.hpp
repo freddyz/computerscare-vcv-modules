@@ -119,8 +119,29 @@ struct ComputerscareClockButton : app::SvgSwitch {
 struct ComputerscareInvisibleButton : app::SvgSwitch {
 	ComputerscareInvisibleButton() {
 		momentary = true;
+
+
+		fb = new widget::FramebufferWidget;
+		addChild(fb);
+
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-invisible-button.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-invisible-button-frame2.svg")));
+
+
+
+		sw = new widget::SvgWidget;
+		fb->addChild(sw);
+
+
+	}
+	void addFrame(std::shared_ptr<Svg> svg) {
+		frames.push_back(svg);
+		// If this is our first frame, automatically set SVG and size
+		if (!sw->svg) {
+			sw->setSvg(svg);
+			box.size = sw->box.size;
+			fb->box.size = sw->box.size;
+		}
 	}
 };
 
@@ -264,6 +285,8 @@ struct ComputerscareTextField : ui::TextField {
 	std::shared_ptr<Font> font;
 	math::Vec textOffset;
 	NVGcolor color = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+	int fontSize = 16;
+	bool inError = false;
 	ComputerscareTextField() {
 
 		font = APP->window->loadFont(asset::system("res/fonts/ShareTechMono-Regular.ttf"));
@@ -272,13 +295,18 @@ struct ComputerscareTextField : ui::TextField {
 	}
 
 
-	void draw(const DrawArgs &args) {
+	void draw(const DrawArgs &args) override {
 		nvgScissor(args.vg, RECT_ARGS(args.clipBox));
 
 		// Background
 		nvgBeginPath(args.vg);
 		nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 5.0);
-		nvgFillColor(args.vg, nvgRGB(0x00, 0x00, 0x00));
+		if (inError) {
+			nvgFillColor(args.vg, COLOR_COMPUTERSCARE_PINK);
+		}
+		else {
+			nvgFillColor(args.vg, nvgRGB(0x00, 0x00, 0x00));
+		}
 		nvgFill(args.vg);
 
 		// Text
@@ -291,14 +319,21 @@ struct ComputerscareTextField : ui::TextField {
 			int end = (this == APP->event->selectedWidget) ? std::max(cursor, selection) : -1;
 			bndIconLabelCaret(args.vg, textOffset.x, textOffset.y,
 			                  box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
-			                  -1, color, 18, text.c_str(), highlightColor, begin, end);
+			                  -1, color, fontSize, text.c_str(), highlightColor, begin, end);
 
 			bndSetFont(APP->window->uiFont->handle);
 		}
 
 		nvgResetScissor(args.vg);
 	}
-	//int getTextPosition(math::Vec mousePos) override;
+	int getTextPosition(Vec mousePos) override {
+		bndSetFont(font->handle);
+		int textPos = bndIconLabelTextPosition(APP->window->vg, textOffset.x, textOffset.y,
+		                                       box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
+		                                       -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
+		bndSetFont(APP->window->uiFont->handle);
+		return textPos;
+	}
 };
 ////////////////////////////////////
 struct SmallLetterDisplay : Widget {
