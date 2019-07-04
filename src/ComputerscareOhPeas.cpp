@@ -154,7 +154,7 @@ struct ComputerscareOhPeas : Module
         {
             std::string chi = "Ch. " + std::to_string(i + 1);
             configParam( SCALE_TRIM + i, -1.f, 1.f, 0.0f, chi + " Scale CV Amount");
-            configParam( SCALE_VAL + i, -5.f, 5.f, 0.0f, chi + " Scale Value");
+            configParam( SCALE_VAL + i, -2.f, 2.f, 1.0f, chi + " Scale Value");
             configParam( OFFSET_TRIM + i, -1.f, 1.f, 0.0f, chi + " Offset CV Amount");
             configParam( OFFSET_VAL + i, -5.f, 5.f, 0.0f, chi + " Offset Value");
 

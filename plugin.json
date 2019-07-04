@@ -15,6 +15,11 @@
 			"description":"16 knobs with polyphonic output",
 			"tags":["Poly","Utility"]
 		},
+		{"slug":"computerscare-bolyputtons",
+			"name":"Boly Puttons",
+			"description":"16 momentary or latch buttons with polyphonic output and optional input",
+			"tags":["Poly","Utility"]
+		},
 		{"slug":"computerscare-debug",
 			"name":"Debug",
 			"description":"Debugger, poly sample & hold, poly volt meter",

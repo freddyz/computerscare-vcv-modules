@@ -14,4 +14,5 @@ void init(Plugin *p) {
 	p->addModel(modelComputerscareOhPeas);
 	//p->addModel(modelComputerscareIso);
 	p->addModel(modelComputerscareKnolyPobs);
+	p->addModel(modelComputerscareBolyPuttons);
 }

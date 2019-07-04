@@ -32,6 +32,7 @@ extern Model *modelComputerscareLaundrySoup;
 extern Model *modelComputerscareOhPeas;
 //extern Model *modelComputerscareIso;
 extern Model *modelComputerscareKnolyPobs;
+extern Model *modelComputerscareBolyPuttons;
 
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
@@ -75,6 +76,13 @@ struct IsoButton : SvgSwitch {
 	IsoButton() {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-down.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-up.svg")));
+	}
+};
+struct SmallIsoButton : SvgSwitch {
+	SmallIsoButton() {
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-up.svg")));
+
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-down.svg")));
 	}
 };
 struct ComputerscareIsoThree : app::SvgSwitch {
