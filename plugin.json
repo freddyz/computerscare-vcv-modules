@@ -13,33 +13,39 @@
 		{"slug":"computerscare-knolypobs",
 			"name":"Knoly Pobs",
 			"description":"16 knobs with polyphonic output",
-			"tags":["Poly","Utility"]
+			"tags":["Polyphonic","Utility"]
 		},
 		{"slug":"computerscare-bolyputtons",
 			"name":"Boly Puttons",
 			"description":"16 momentary or latch buttons with polyphonic output and optional input",
-			"tags":["Poly","Utility"]
+			"tags":["Polyphonic","Utility"]
 		},
 		{"slug":"computerscare-debug",
 			"name":"Debug",
 			"description":"Debugger, poly sample & hold, poly volt meter",
-			"tags":["Poly","Utility"]
+			"tags":["Polyphonic","Utility","Random","Sample and hold"]
 		},
 		{"slug":"computerscare-ohpeas",
 			"name":"Oh Peas!",
 			"description":"Quad Quantenuverter.  Attenuverter, Offsetter, Microtonal Quantizer",
-			"tags":["Poly","Quantizer","Utility"]
+			"tags":["Polyphonic","Quantizer","Utility","Quad"]
 		},
 		{"slug":"computerscare-fatherandson",
 			"name":"Father and Son Patch Sequencer",
 			"description":"Patch Sequencer - 10 in, 10 out patch matrix with 16 scenes",
-			"tags":["Poly","Utility"]
+			"tags":["Polyphonic","Utility","Sequencer"]
 		},
 
 		{"slug":"computerscare-laundry-soup",
 			"name":"Laundry Soup",
 			"description":"Rhythm sequencer, pulse generator, text-based",
-			"tags":["Sequencer"]
+			"tags":["Sequencer","Clock modulator","Random"]
+		},
+
+		{"slug":"computerscare-i-love-cookies",
+			"name":"I Love Cookies",
+			"description":"Text-based CV and signal sequencer",
+			"tags":["Sequencer","Utility","Random"]
 		}
 	]
 }

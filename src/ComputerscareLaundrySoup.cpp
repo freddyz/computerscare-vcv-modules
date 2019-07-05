@@ -132,7 +132,6 @@ struct ComputerscareLaundrySoup : Module {
         randchar = mainlookup[floor(random::uniform() * mainlookup.size())];
         string = string + randchar;
       }
-      printf("new sequence:%s\n", string.c_str());
       currentFormula[i] = string;
       manualSet[i] = true;
       setNextAbsoluteSequence(i);

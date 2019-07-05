@@ -28,7 +28,7 @@ extern Model *modelComputerscareDebug;
 
 extern Model *modelComputerscarePatchSequencer;
 extern Model *modelComputerscareLaundrySoup;
-//extern Model *modelComputerscareILoveCookies;
+extern Model *modelComputerscareILoveCookies;
 extern Model *modelComputerscareOhPeas;
 //extern Model *modelComputerscareIso;
 extern Model *modelComputerscareKnolyPobs;
@@ -359,9 +359,11 @@ struct SmallLetterDisplay : Widget {
 	bool doubleblink = false;
 
 	SmallLetterDisplay() {
+		value = "";
 		font = APP->window->loadFont(asset::plugin(pluginInstance, defaultFontPath));
 	};
 	SmallLetterDisplay(std::string fontPath) {
+		value = "";
 		font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
 	};
 
