@@ -47,5 +47,12 @@
 			"description":"Text-based CV and signal sequencer",
 			"tags":["Sequencer","Utility","Random"]
 		}
+		,
+
+		{"slug":"computerscare-roly-pouter",
+			"name":"Roly Pouter",
+			"description":"Polyphonic router",
+			"tags":["Polyphonic","Utility"]
+		}
 	]
 }
