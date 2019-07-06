@@ -128,10 +128,15 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 		}
 		float xx;
 		float yy;
+		// for (int i = 0; i < numToggles; i++) {
+		// 	xx = 7.4f + 27.3 * (i % 2);
+		// 	yy = 94 + 16.5 * (i - i % 2) + 11.3 * (i % 2);
+		// 	addLabeledButton(std::to_string(i + 1), xx, yy, module, i, (i % 2) * (3 + 10 * (i < 9)) - 2, 0);
+		// }
 		for (int i = 0; i < numToggles; i++) {
-			xx = 7.4f + 27.3 * (i % 2);
-			yy = 94 + 16.5 * (i - i % 2) + 11.3 * (i % 2);
-			addLabeledButton(std::to_string(i + 1), xx, yy, module, i, (i % 2) * (3 + 10 * (i < 9)) - 2, 0);
+			xx = 7.2f + 24.3 * (i - i % 8) / 8;
+			yy = 92 + 33.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
+			addLabeledButton(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 2, 2);
 		}
 
 
@@ -149,19 +154,9 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
 		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
-
-		//SmallIsoButton sib = new SmallIsoButton(momentary);
-		//sib->box.pos=Vec(x, y);
-		//sib->module = module;
-
-		//addParam(sib);
-		addParam(createParam<SmallIsoButton>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
-
-		
-
-
 		addChild(smallLetterDisplay);
 
+		addParam(createParam<SmallIsoButton>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
 	}
 	json_t *toJson() override
 	{
@@ -200,12 +195,6 @@ void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
 	MenuLabel *spacerLabel = new MenuLabel();
 	menu->addChild(spacerLabel);
 
-
-	MenuLabel *modeLabel = new MenuLabel();
-	modeLabel->text = "Output Range";
-	menu->addChild(modeLabel);
-
-	// randomization output bounds
 	menu->addChild(construct<MenuLabel>());
 	menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Output Range"));
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, "  0v ... +10v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 0));
@@ -213,7 +202,6 @@ void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, "  0v ...  +5v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 2));
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, "  0v ...  +1v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 3));
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, " -1v ...  +1v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 4));
-
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, "-10v ... +10v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 5));
 
 }

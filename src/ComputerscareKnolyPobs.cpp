@@ -74,9 +74,9 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 		float xx;
 		float yy;
 		for (int i = 0; i < numKnobs; i++) {
-			xx = 1.4f + 24.3 * (i % 2);
-			yy = 64 + 18.5 * (i - i % 2) + 11.3 * (i % 2);
-			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i % 2) * (11 + 5 * (i < 9)) - 4, 0);
+			xx = 1.4f + 24.3 * (i-i % 8)/8;
+			yy = 64 + 37.5 * (i % 8) + 14.3 * (i - i % 8)/8;
+			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i-i%8)*1.2-2, 0);
 		}
 
 
