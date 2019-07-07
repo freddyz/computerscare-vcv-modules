@@ -256,6 +256,11 @@ struct MediumSnapKnob : RoundBlackSnapKnob {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
 	}
 };
+struct MediumDotSnapKnob : RoundBlackSnapKnob {
+	MediumDotSnapKnob() {
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator.svg")));
+	}
+};
 
 struct SmoothKnob : RoundKnob {
 	SmoothKnob() {
@@ -352,12 +357,14 @@ struct SmallLetterDisplay : Widget {
 	int fontSize = 19;
 	std::string defaultFontPath = "res/Oswald-Regular.ttf";
 	NVGcolor baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+	NVGcolor textColor = nvgRGB(0x10, 0x10, 0x00);
 
 	float letterSpacing = 2.5;
 	int textAlign = 1;
 	bool active = false;
 	bool blink = false;
 	bool doubleblink = false;
+	float breakRowWidth = 80.f;
 
 	SmallLetterDisplay() {
 		value = "";
@@ -397,9 +404,9 @@ struct SmallLetterDisplay : Widget {
 		nvgTextAlign(ctx.vg, textAlign);
 
 		Vec textPos = Vec(6.0f, 12.0f);
-		NVGcolor textColor = (!blink || doubleblink) ? nvgRGB(0x10, 0x10, 0x00) : COLOR_COMPUTERSCARE_YELLOW;
-		nvgFillColor(ctx.vg, textColor);
-		nvgTextBox(ctx.vg, textPos.x, textPos.y, 80, value.c_str(), NULL);
+		NVGcolor color = (!blink || doubleblink) ? textColor : COLOR_COMPUTERSCARE_YELLOW;
+		nvgFillColor(ctx.vg, color);
+		nvgTextBox(ctx.vg, textPos.x, textPos.y, breakRowWidth, value.c_str(), NULL);
 
 	}
 };

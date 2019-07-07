@@ -74,7 +74,7 @@ struct PouterSmallDisplay : SmallLetterDisplay
 		{
 
 
-			std::string str = std::to_string(module->routing[ch]) + "->"+ std::to_string(ch+1);
+			std::string str = std::to_string(module->routing[ch]);
 			value = str;
 
 
@@ -84,6 +84,7 @@ struct PouterSmallDisplay : SmallLetterDisplay
 	}
 
 };
+
 struct ComputerscareRolyPouterWidget : ModuleWidget {
 	ComputerscareRolyPouterWidget(ComputerscareRolyPouter *module) {
 
@@ -105,7 +106,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 		for (int i = 0; i < numKnobs; i++) {
 			xx = 1.4f + 24.3 * (i - i % 8) / 8;
 			yy = 66 + 36.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
-			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 0.2 - 3, 0);
+			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.3 - 5, i<8 ? 4 : 0);
 		}
 
 
@@ -116,19 +117,32 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareRolyPouter *module, int index, float labelDx, float labelDy) {
 
 		pouterSmallDisplay = new PouterSmallDisplay(index);
-		pouterSmallDisplay->box.size = Vec(5, 10);
-		pouterSmallDisplay->fontSize = 12;
-		pouterSmallDisplay->textAlign = 1;
+		pouterSmallDisplay->box.size = Vec(20, 20);
+		pouterSmallDisplay->box.pos = Vec(x-2.5 ,y+1.f);
+		pouterSmallDisplay->fontSize = 26;
+		pouterSmallDisplay->textAlign = 18;
+		pouterSmallDisplay->textColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+		pouterSmallDisplay->breakRowWidth=20;
 		pouterSmallDisplay->module = module;
 
-		addParam(createParam<MediumSnapKnob>(Vec(x, y), module, ComputerscareRolyPouter::KNOB + index));
-		pouterSmallDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 
+		outputChannelLabel = new SmallLetterDisplay();
+		outputChannelLabel->box.size = Vec(5, 5);
+		outputChannelLabel->box.pos = Vec(x + labelDx, y - 12 + labelDy);
+		outputChannelLabel->fontSize = 14;
+		outputChannelLabel->textAlign = index < 8 ? 1 : 4;
+		outputChannelLabel->breakRowWidth=15;
 
+		outputChannelLabel->value = std::to_string(index + 1);
+
+		addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, ComputerscareRolyPouter::KNOB + index));
 		addChild(pouterSmallDisplay);
+		addChild(outputChannelLabel);
 
 	}
 	PouterSmallDisplay* pouterSmallDisplay;
+	SmallLetterDisplay* outputChannelLabel;
 };
+
 
 Model *modelComputerscareRolyPouter = createModel<ComputerscareRolyPouter, ComputerscareRolyPouterWidget>("computerscare-roly-pouter");
