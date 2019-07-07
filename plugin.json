@@ -53,6 +53,18 @@
 			"name":"Roly Pouter",
 			"description":"Polyphonic router",
 			"tags":["Polyphonic","Utility"]
+		},
+
+		{"slug":"computerscare-toly-pools",
+			"name":"Toly Pools",
+			"description":"Polyphonic toolset including rotator, number-of-channels selector",
+			"tags":["Polyphonic","Utility","Atten"]
+		},
+
+		{"slug":"computerscare-soly-pequencer",
+			"name":"Soly Pequencer",
+			"description":"Generates sequential rotation of a polyphonic signal",
+			"tags":["Polyphonic","Sequencer"]
 		}
 	]
 }

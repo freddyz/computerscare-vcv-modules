@@ -134,7 +134,7 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 		// 	addLabeledButton(std::to_string(i + 1), xx, yy, module, i, (i % 2) * (3 + 10 * (i < 9)) - 2, 0);
 		// }
 		for (int i = 0; i < numToggles; i++) {
-			xx = 7.2f + 24.3 * (i - i % 8) / 8;
+			xx = 5.2f + 27.3 * (i - i % 8) / 8;
 			yy = 92 + 33.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
 			addLabeledButton(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 2, 2);
 		}

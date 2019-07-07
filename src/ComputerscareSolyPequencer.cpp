@@ -1,13 +1,13 @@
 #include "Computerscare.hpp"
 
-struct ComputerscareRolyPouter;
+struct ComputerscareSolyPequencer;
 
 const int numKnobs = 16;
 
 const int numToggles = 16;
 const int numOutputs = 16;
 
-struct ComputerscareRolyPouter : Module {
+struct ComputerscareSolyPequencer : Module {
 	int counter = 0;
 	int routing[numKnobs];
 	ComputerscareSVGPanel* panelRef;
@@ -30,7 +30,7 @@ struct ComputerscareRolyPouter : Module {
 	};
 
 
-	ComputerscareRolyPouter()  {
+	ComputerscareSolyPequencer()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
@@ -59,7 +59,7 @@ struct ComputerscareRolyPouter : Module {
 };
 struct PouterSmallDisplay : SmallLetterDisplay
 {
-	ComputerscareRolyPouter *module;
+	ComputerscareSolyPequencer *module;
 	int ch;
 	PouterSmallDisplay(int outputChannelNumber)
 	{
@@ -85,16 +85,16 @@ struct PouterSmallDisplay : SmallLetterDisplay
 
 };
 
-struct ComputerscareRolyPouterWidget : ModuleWidget {
-	ComputerscareRolyPouterWidget(ComputerscareRolyPouter *module) {
+struct ComputerscareSolyPequencerWidget : ModuleWidget {
+	ComputerscareSolyPequencerWidget(ComputerscareSolyPequencer *module) {
 
 		setModule(module);
-		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareRolyPouterPanel.svg")));
+		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareSolyPequencerPanel.svg")));
 		box.size = Vec(4 * 15, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
-			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareRolyPouterPanel.svg")));
+			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareSolyPequencerPanel.svg")));
 
 			//module->panelRef = panel;
 
@@ -110,11 +110,11 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 		}
 
 
-		addInput(createInput<InPort>(Vec(1, 34), module, ComputerscareRolyPouter::POLY_INPUT));
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(32, 24), module, ComputerscareRolyPouter::POLY_OUTPUT));
+		addInput(createInput<InPort>(Vec(4, 24), module, ComputerscareSolyPequencer::POLY_INPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 24), module, ComputerscareSolyPequencer::POLY_OUTPUT));
 
 	}
-	void addLabeledKnob(std::string label, int x, int y, ComputerscareRolyPouter *module, int index, float labelDx, float labelDy) {
+	void addLabeledKnob(std::string label, int x, int y, ComputerscareSolyPequencer *module, int index, float labelDx, float labelDy) {
 
 		pouterSmallDisplay = new PouterSmallDisplay(index);
 		pouterSmallDisplay->box.size = Vec(20, 20);
@@ -135,7 +135,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 
 		outputChannelLabel->value = std::to_string(index + 1);
 
-		addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, ComputerscareRolyPouter::KNOB + index));
+		addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, ComputerscareSolyPequencer::KNOB + index));
 		addChild(pouterSmallDisplay);
 		addChild(outputChannelLabel);
 
@@ -145,4 +145,4 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 };
 
 
-Model *modelComputerscareRolyPouter = createModel<ComputerscareRolyPouter, ComputerscareRolyPouterWidget>("computerscare-roly-pouter");
+Model *modelComputerscareSolyPequencer = createModel<ComputerscareSolyPequencer, ComputerscareSolyPequencerWidget>("computerscare-soly-pequencer");

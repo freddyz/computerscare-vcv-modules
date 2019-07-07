@@ -15,16 +15,18 @@ LDFLAGS +=
 SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
 SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
 
-SOURCES += $(wildcard src/ComputerscareIso.cpp)
-SOURCES += $(wildcard src/ComputerscareKnolyPobs.cpp)
-SOURCES += $(wildcard src/ComputerscareBolyPuttons.cpp)
-SOURCES += $(wildcard src/ComputerscareRolyPouter.cpp)
+
 SOURCES += $(wildcard src/ComputerscarePatchSequencer.cpp)
 SOURCES += $(wildcard src/ComputerscareLaundrySoup.cpp)
 SOURCES += $(wildcard src/ComputerscareILoveCookies.cpp)
-
 SOURCES += $(wildcard src/ComputerscareDebug.cpp)
 SOURCES += $(wildcard src/ComputerscareOhPeas.cpp)
+
+SOURCES += $(wildcard src/ComputerscareKnolyPobs.cpp)
+SOURCES += $(wildcard src/ComputerscareBolyPuttons.cpp)
+SOURCES += $(wildcard src/ComputerscareRolyPouter.cpp)
+SOURCES += $(wildcard src/ComputerscareTolyPools.cpp)
+SOURCES += $(wildcard src/ComputerscareSolyPequencer.cpp)
 
 SOURCES += $(wildcard src/Computerscare.cpp)
 SOURCES += $(wildcard src/dtpulse.cpp)
