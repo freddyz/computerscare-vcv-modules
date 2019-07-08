@@ -2,28 +2,37 @@
 
 struct ComputerscareSolyPequencer;
 
-const int numKnobs = 16;
-
-const int numToggles = 16;
-const int numOutputs = 16;
-
 struct ComputerscareSolyPequencer : Module {
-	int counter = 0;
-	int routing[numKnobs];
+	int currentStep[16] = {-1};
+	int numSteps[16] = {16};
+	bool autoNumSteps = true;
+  rack::dsp::SchmittTrigger clockTriggers[16];
+  rack::dsp::SchmittTrigger resetTriggers[16];
+
+  rack::dsp::SchmittTrigger globalManualClockTrigger;
+  rack::dsp::SchmittTrigger globalManualResetTrigger;
+
+
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
-		KNOB,
-		TOGGLES = KNOB + numKnobs,
-		NUM_PARAMS = TOGGLES + numToggles
-
+		MANUAL_RUN_BUTTON,
+		MANUAL_CLOCK_BUTTON,
+		MANUAL_RESET_BUTTON,
+		NUM_STEPS_AUTO_BUTTON,
+		NUM_STEPS_KNOB,
+		NUM_PARAMS
 	};
 	enum InputIds {
 		POLY_INPUT,
+		CLOCK_INPUT,
+		RESET_INPUT,
+		RUN_INPUT,
+		NUM_STEPS_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
 		POLY_OUTPUT,
-		NUM_OUTPUTS = POLY_OUTPUT + numOutputs
+		NUM_OUTPUTS
 	};
 	enum LightIds {
 		NUM_LIGHTS
@@ -33,11 +42,8 @@ struct ComputerscareSolyPequencer : Module {
 	ComputerscareSolyPequencer()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-
-		for (int i = 0; i < numKnobs; i++) {
-			configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch:" + std::to_string(i + 1) + " = input ch");
-			routing[i] = i;
-		}
+		
+		//	configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch:" + std::to_string(i + 1) + " = input ch");
 
 	}
 	void process(const ProcessArgs &args) override {
@@ -50,6 +56,9 @@ struct ComputerscareSolyPequencer : Module {
 			}
 
 		}
+		int numInput = inputs[POLY_INPUT].getChannels();
+		int numClock = inputs[CLOCK_INPUT].getChannels();
+		int numReset = inputs[RESET_INPUT].getChannels();
 		outputs[POLY_OUTPUT].setChannels(16);
 		for (int i = 0; i < numKnobs; i++) {
 			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(params[KNOB + i].getValue() - 1), i);
