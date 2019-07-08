@@ -2,28 +2,48 @@
 
 struct ComputerscareTolyPools;
 
-const int numKnobs = 16;
+/*
+Input:
 
-const int numToggles = 16;
-const int numOutputs = 16;
+first rotate
+knob, CV
+
+numChannels select (auto)
+knob,cv
+
+
+input:
+0123456789abcdef
+
+want:
+3456
+
+rotate 4,clip 4
+
+*/
+
 
 struct ComputerscareTolyPools : Module {
 	int counter = 0;
-	int routing[numKnobs];
+	int numChannels = 16;
+	int rotation = 0;
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
-		KNOB,
-		TOGGLES = KNOB + numKnobs,
-		NUM_PARAMS = TOGGLES + numToggles
+		ROTATE_KNOB,
+		NUM_CHANNELS_KNOB,
+		AUTO_CHANNELS_SWITCH,
+		NUM_PARAMS
 
 	};
 	enum InputIds {
 		POLY_INPUT,
+		ROTATE_CV,
+		NUM_CHANNELS_CV,
 		NUM_INPUTS
 	};
 	enum OutputIds {
 		POLY_OUTPUT,
-		NUM_OUTPUTS = POLY_OUTPUT + numOutputs
+		NUM_OUTPUTS
 	};
 	enum LightIds {
 		NUM_LIGHTS
@@ -34,37 +54,38 @@ struct ComputerscareTolyPools : Module {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		for (int i = 0; i < numKnobs; i++) {
-			configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch:" + std::to_string(i + 1) + " = input ch");
-			routing[i] = i;
-		}
+		configParam(ROTATE_KNOB, 0.f, 15.f, 0.f, "Rotate input", "channels");
+		configParam(NUM_CHANNELS_KNOB, 0.f, 16.f, 16.f, "Number of Output Channels", "channels");
+
 
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
-		if (counter > 5012) {
-			//printf("%f \n",random::uniform());
+		if (counter > 1025) {
 			counter = 0;
-			for (int i = 0; i < numKnobs; i++) {
-				routing[i] = (int)params[KNOB + i].getValue();
-			}
+			numChannels = params[NUM_CHANNELS_KNOB].getValue();
+			rotation = params[ROTATE_KNOB].getValue();
 
 		}
-		outputs[POLY_OUTPUT].setChannels(16);
-		for (int i = 0; i < numKnobs; i++) {
-			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(params[KNOB + i].getValue() - 1), i);
+
+		outputs[POLY_OUTPUT].setChannels(numChannels);
+
+
+		for (int i = 0; i < numChannels; i++) {
+			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage((i + rotation + 16) % 16), i);
+			                                //outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(params[KNOB + i].getValue() - 1), i);
 		}
 	}
 
 };
-struct PouterSmallDisplay : SmallLetterDisplay
+struct PoolsSmallDisplay : SmallLetterDisplay
 {
 	ComputerscareTolyPools *module;
 	int ch;
-	PouterSmallDisplay(int outputChannelNumber)
+	int type = 0;
+	PoolsSmallDisplay(int someType)
 	{
-
-		ch = outputChannelNumber;
+		type = someType;
 		SmallLetterDisplay();
 	};
 	void draw(const DrawArgs &args)
@@ -73,11 +94,12 @@ struct PouterSmallDisplay : SmallLetterDisplay
 		if (module)
 		{
 
-
-			std::string str = std::to_string(module->routing[ch]);
-			value = str;
-
-
+			if (type == 0) {
+				value = std::to_string(module->numChannels);
+			}
+			else {
+				value = std::to_string(module->rotation);
+			}
 
 		}
 		SmallLetterDisplay::draw(args);
@@ -101,46 +123,50 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
 			addChild(panel);
 
 		}
-		float xx;
+		/*float xx;
 		float yy;
 		for (int i = 0; i < numKnobs; i++) {
 			xx = 1.4f + 24.3 * (i - i % 8) / 8;
 			yy = 66 + 36.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
 			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.3 - 5, i<8 ? 4 : 0);
-		}
+		}*/
 
+		//addParam
+
+		addLabeledKnob("Num Output Channels", 2, 86, module, ComputerscareTolyPools::NUM_CHANNELS_KNOB, -5, -30, 0);
+		addLabeledKnob("Rotation", 2, 156, module, ComputerscareTolyPools::ROTATE_KNOB, -5, -10, 1);
 
 		addInput(createInput<InPort>(Vec(4, 24), module, ComputerscareTolyPools::POLY_INPUT));
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 24), module, ComputerscareTolyPools::POLY_OUTPUT));
 
 	}
-	void addLabeledKnob(std::string label, int x, int y, ComputerscareTolyPools *module, int index, float labelDx, float labelDy) {
+	void addLabeledKnob(std::string label, int x, int y, ComputerscareTolyPools *module, int index, float labelDx, float labelDy, int type) {
 
-		pouterSmallDisplay = new PouterSmallDisplay(index);
-		pouterSmallDisplay->box.size = Vec(20, 20);
-		pouterSmallDisplay->box.pos = Vec(x-2.5 ,y+1.f);
-		pouterSmallDisplay->fontSize = 26;
-		pouterSmallDisplay->textAlign = 18;
-		pouterSmallDisplay->textColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
-		pouterSmallDisplay->breakRowWidth=20;
-		pouterSmallDisplay->module = module;
+		poolsSmallDisplay = new PoolsSmallDisplay(type);
+		poolsSmallDisplay->box.size = Vec(20, 20);
+		poolsSmallDisplay->box.pos = Vec(x - 2.5 , y + 1.f);
+		poolsSmallDisplay->fontSize = 26;
+		poolsSmallDisplay->textAlign = 18;
+		poolsSmallDisplay->textColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+		poolsSmallDisplay->breakRowWidth = 20;
+		poolsSmallDisplay->module = module;
 
 
 		outputChannelLabel = new SmallLetterDisplay();
 		outputChannelLabel->box.size = Vec(5, 5);
 		outputChannelLabel->box.pos = Vec(x + labelDx, y - 12 + labelDy);
-		outputChannelLabel->fontSize = 14;
-		outputChannelLabel->textAlign = index < 8 ? 1 : 4;
-		outputChannelLabel->breakRowWidth=15;
+		outputChannelLabel->fontSize = 15;
+		outputChannelLabel->textAlign = 1;
+		outputChannelLabel->breakRowWidth = 50;
 
-		outputChannelLabel->value = std::to_string(index + 1);
+		outputChannelLabel->value = label;
 
-		addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, ComputerscareTolyPools::KNOB + index));
-		addChild(pouterSmallDisplay);
+		addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, index));
+		addChild(poolsSmallDisplay);
 		addChild(outputChannelLabel);
 
 	}
-	PouterSmallDisplay* pouterSmallDisplay;
+	PoolsSmallDisplay* poolsSmallDisplay;
 	SmallLetterDisplay* outputChannelLabel;
 };
 

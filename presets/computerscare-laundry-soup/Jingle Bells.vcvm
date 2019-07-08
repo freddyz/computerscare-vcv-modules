@@ -1,0 +1,50 @@
+{
+  "id": 20,
+  "plugin": "computerscare",
+  "version": "1.0.0",
+  "model": "computerscare-laundry-soup",
+  "params": [
+    {
+      "id": 0,
+      "value": 0.0
+    },
+    {
+      "id": 1,
+      "value": 0.0
+    },
+    {
+      "id": 2,
+      "value": 0.0
+    },
+    {
+      "id": 3,
+      "value": 0.0
+    },
+    {
+      "id": 4,
+      "value": 0.0
+    },
+    {
+      "id": 5,
+      "value": 0.0
+    },
+    {
+      "id": 6,
+      "value": 0.0
+    },
+    {
+      "id": 7,
+      "value": 0.0
+    }
+  ],
+  "leftModuleId": 28,
+  "rightModuleId": 30,
+  "sequences": [
+    "2@8,611,2@8,8",
+    "2@8,8,2@8,8",
+    "2@8,8,2@8,62",
+    "2@24,4,0@4",
+    "22422422318",
+    "223122211,2@8,44"
+  ]
+}
