@@ -3,14 +3,14 @@
 struct ComputerscareSolyPequencer;
 
 struct ComputerscareSolyPequencer : Module {
-	int currentStep[16] = {-1};
+	int currentStep[16] = { -1};
 	int numSteps[16] = {16};
 	bool autoNumSteps = true;
-  rack::dsp::SchmittTrigger clockTriggers[16];
-  rack::dsp::SchmittTrigger resetTriggers[16];
+	rack::dsp::SchmittTrigger clockTriggers[16];
+	rack::dsp::SchmittTrigger resetTriggers[16];
 
-  rack::dsp::SchmittTrigger globalManualClockTrigger;
-  rack::dsp::SchmittTrigger globalManualResetTrigger;
+	rack::dsp::SchmittTrigger globalManualClockTrigger;
+	rack::dsp::SchmittTrigger globalManualResetTrigger;
 
 
 	ComputerscareSVGPanel* panelRef;
@@ -42,27 +42,81 @@ struct ComputerscareSolyPequencer : Module {
 	ComputerscareSolyPequencer()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		
+
 		//	configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch:" + std::to_string(i + 1) + " = input ch");
 
 	}
 	void process(const ProcessArgs &args) override {
-		counter++;
-		if (counter > 5012) {
-			//printf("%f \n",random::uniform());
-			counter = 0;
-			for (int i = 0; i < numKnobs; i++) {
-				routing[i] = (int)params[KNOB + i].getValue();
-			}
-
-		}
 		int numInput = inputs[POLY_INPUT].getChannels();
-		int numClock = inputs[CLOCK_INPUT].getChannels();
 		int numReset = inputs[RESET_INPUT].getChannels();
-		outputs[POLY_OUTPUT].setChannels(16);
-		for (int i = 0; i < numKnobs; i++) {
-			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(params[KNOB + i].getValue() - 1), i);
+		if (inputs[CLOCK_INPUT].isConnected()) {
+
+			//if (clockTriggers[0]) {
+
+				int numClock = inputs[CLOCK_INPUT].getChannels();
+				for (int j = 0; j < numClock; j++) {
+					if(clockTriggers[j].process(inputs[CLOCK_INPUT].getVoltage(j))) {
+						
+
+						currentStep[j]++;
+						currentStep[j] = currentStep[j] % numSteps[j];
+						printf("channel %d\n",j);
+					}
+				}
+			}
+		//}
+		// Run
+		/*
+		if (runningTrigger.process(params[RUN_PARAM].getValue())) {
+			running = !running;
 		}
+
+		bool gateIn = false;
+		if (running) {
+			if (inputs[EXT_CLOCK_INPUT].isConnected()) {
+				// External clock
+				if (clockTrigger.process(inputs[EXT_CLOCK_INPUT].getVoltage())) {
+					setIndex(index + 1);
+				}
+				gateIn = clockTrigger.isHigh();
+			}
+			else {
+				// Internal clock
+				float clockTime = std::pow(2.f, params[CLOCK_PARAM].getValue() + inputs[CLOCK_INPUT].getVoltage());
+				phase += clockTime * args.sampleTime;
+				if (phase >= 1.f) {
+					setIndex(index + 1);
+				}
+				gateIn = (phase < 0.5f);
+			}
+		}
+
+		// Reset
+		if (resetTrigger.process(params[RESET_PARAM].getValue() + inputs[RESET_INPUT].getVoltage())) {
+			setIndex(0);
+		}
+
+		// Gate buttons
+		for (int i = 0; i < 8; i++) {
+			if (gateTriggers[i].process(params[GATE_PARAM + i].getValue())) {
+				gates[i] = !gates[i];
+			}
+			outputs[GATE_OUTPUT + i].setVoltage((running && gateIn && i == index && gates[i]) ? 10.f : 0.f);
+			lights[GATE_LIGHTS + i].setSmoothBrightness((gateIn && i == index) ? (gates[i] ? 1.f : 0.33) : (gates[i] ? 0.66 : 0.0), args.sampleTime);
+		}
+
+		// Outputs
+		outputs[ROW1_OUTPUT].setVoltage(params[ROW1_PARAM + index].getValue());
+		outputs[ROW2_OUTPUT].setVoltage(params[ROW2_PARAM + index].getValue());
+		outputs[ROW3_OUTPUT].setVoltage(params[ROW3_PARAM + index].getValue());
+		outputs[GATES_OUTPUT].setVoltage((gateIn && gates[index]) ? 10.f : 0.f);
+		lights[RUNNING_LIGHT].value = (running);
+		lights[RESET_LIGHT].setSmoothBrightness(resetTrigger.isHigh(), args.sampleTime);
+		lights[GATES_LIGHT].setSmoothBrightness(gateIn, args.sampleTime);
+		lights[ROW_LIGHTS].value = outputs[ROW1_OUTPUT].value / 10.f;
+		lights[ROW_LIGHTS + 1].value = outputs[ROW2_OUTPUT].value / 10.f;
+		lights[ROW_LIGHTS + 2].value = outputs[ROW3_OUTPUT].value / 10.f;
+		}*/
 	}
 
 };
@@ -83,8 +137,8 @@ struct PouterSmallDisplay : SmallLetterDisplay
 		{
 
 
-			std::string str = std::to_string(module->routing[ch]);
-			value = str;
+			//std::string str = std::to_string(module->routing[ch]);
+			value = "pig";
 
 
 
@@ -110,16 +164,17 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 			addChild(panel);
 
 		}
-		float xx;
-		float yy;
-		for (int i = 0; i < numKnobs; i++) {
-			xx = 1.4f + 24.3 * (i - i % 8) / 8;
-			yy = 66 + 36.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
-			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.3 - 5, i<8 ? 4 : 0);
-		}
+		
+		addLabeledKnob("Steps", 10, 50, module, 0, 0, 0);
+		
 
 
 		addInput(createInput<InPort>(Vec(4, 24), module, ComputerscareSolyPequencer::POLY_INPUT));
+				addInput(createInput<InPort>(Vec(4, 44), module, ComputerscareSolyPequencer::CLOCK_INPUT));
+						addInput(createInput<InPort>(Vec(4, 64), module, ComputerscareSolyPequencer::RESET_INPUT));
+
+
+
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 24), module, ComputerscareSolyPequencer::POLY_OUTPUT));
 
 	}
@@ -127,11 +182,11 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 
 		pouterSmallDisplay = new PouterSmallDisplay(index);
 		pouterSmallDisplay->box.size = Vec(20, 20);
-		pouterSmallDisplay->box.pos = Vec(x-2.5 ,y+1.f);
+		pouterSmallDisplay->box.pos = Vec(x - 2.5 , y + 1.f);
 		pouterSmallDisplay->fontSize = 26;
 		pouterSmallDisplay->textAlign = 18;
 		pouterSmallDisplay->textColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
-		pouterSmallDisplay->breakRowWidth=20;
+		pouterSmallDisplay->breakRowWidth = 20;
 		pouterSmallDisplay->module = module;
 
 
@@ -140,11 +195,11 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 		outputChannelLabel->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 		outputChannelLabel->fontSize = 14;
 		outputChannelLabel->textAlign = index < 8 ? 1 : 4;
-		outputChannelLabel->breakRowWidth=15;
+		outputChannelLabel->breakRowWidth = 15;
 
-		outputChannelLabel->value = std::to_string(index + 1);
+		outputChannelLabel->value = "hogman";
 
-		addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, ComputerscareSolyPequencer::KNOB + index));
+		//addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, ComputerscareSolyPequencer::KNOB + index));
 		addChild(pouterSmallDisplay);
 		addChild(outputChannelLabel);
 
