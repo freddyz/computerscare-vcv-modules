@@ -49,11 +49,11 @@ struct ComputerscareSolyPequencer : Module {
 	void process(const ProcessArgs &args) override {
 		int numInput = inputs[POLY_INPUT].getChannels();
 		int numReset = inputs[RESET_INPUT].getChannels();
-		if (inputs[CLOCK_INPUT].isConnected()) {
-
-			//if (clockTriggers[0]) {
-
-				int numClock = inputs[CLOCK_INPUT].getChannels();
+		int numClock = inputs[CLOCK_INPUT].getChannels();
+		int numNumSteps = inputs[NUM_STEPS_INPUT].getChannels();
+		int numOutputChannels = numClock > 0 ? numClock : 1;
+		if (numClock > 0) {
+				outputs[POLY_OUTPUT].setChannels(numClock);
 				for (int j = 0; j < numClock; j++) {
 					if(clockTriggers[j].process(inputs[CLOCK_INPUT].getVoltage(j))) {
 						
@@ -63,6 +63,9 @@ struct ComputerscareSolyPequencer : Module {
 						printf("channel %d\n",j);
 					}
 				}
+			}
+			for(int c = 0; c < numOutputChannels; c++) {
+				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(currentStep[c]),c);
 			}
 		//}
 		// Run
