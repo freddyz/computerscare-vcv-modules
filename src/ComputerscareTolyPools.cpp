@@ -21,12 +21,15 @@ want:
 rotate 4,clip 4
 
 */
-
+float mapChannelCountToVoltage(int ch) {
+	return ( (float) ch ) / 1.6f;
+}
 
 struct ComputerscareTolyPools : Module {
-	int counter = 0;
+	int counter = 83910;
 	int numChannels = 16;
 	int rotation = 0;
+	int numInputChannels=1;
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		ROTATE_KNOB,
@@ -43,6 +46,7 @@ struct ComputerscareTolyPools : Module {
 	};
 	enum OutputIds {
 		POLY_OUTPUT,
+		NUM_CHANNELS_OUTPUT,
 		NUM_OUTPUTS
 	};
 	enum LightIds {
@@ -55,25 +59,24 @@ struct ComputerscareTolyPools : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
 		configParam(ROTATE_KNOB, 0.f, 15.f, 0.f, "Rotate input", "channels");
-		configParam(NUM_CHANNELS_KNOB, 0.f, 16.f, 16.f, "Number of Output Channels", "channels");
+		configParam(NUM_CHANNELS_KNOB, 1.f, 16.f, 16.f, "Number of Output Channels", "channels");
 
 
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
-		if (counter > 1025) {
+		if (counter > 982) {
 			counter = 0;
 			numChannels = params[NUM_CHANNELS_KNOB].getValue();
 			rotation = params[ROTATE_KNOB].getValue();
-
+			numInputChannels = inputs[POLY_INPUT].getChannels();
 		}
 
 		outputs[POLY_OUTPUT].setChannels(numChannels);
-
+		outputs[NUM_CHANNELS_OUTPUT].setVoltage(mapChannelCountToVoltage(numInputChannels));
 
 		for (int i = 0; i < numChannels; i++) {
 			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage((i + rotation + 16) % 16), i);
-			                                //outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(params[KNOB + i].getValue() - 1), i);
 		}
 	}
 
@@ -133,11 +136,16 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
 
 		//addParam
 
+		addInput(createInput<InPort>(Vec(4, 24), module, ComputerscareTolyPools::POLY_INPUT));
+
+		addInput(createInput<InPort>(Vec(4, 84), module, ComputerscareTolyPools::NUM_CHANNELS_CV));
 		addLabeledKnob("Num Output Channels", 2, 86, module, ComputerscareTolyPools::NUM_CHANNELS_KNOB, -5, -30, 0);
+
+		addInput(createInput<InPort>(Vec(4, 144), module, ComputerscareTolyPools::ROTATION_CV));
 		addLabeledKnob("Rotation", 2, 156, module, ComputerscareTolyPools::ROTATE_KNOB, -5, -10, 1);
 
-		addInput(createInput<InPort>(Vec(4, 24), module, ComputerscareTolyPools::POLY_INPUT));
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 24), module, ComputerscareTolyPools::POLY_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 24), module, ComputerscareTolyPools::NUM_CHANNELS_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 124), module, ComputerscareTolyPools::POLY_OUTPUT));
 
 	}
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareTolyPools *module, int index, float labelDx, float labelDy, int type) {
