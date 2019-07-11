@@ -3,8 +3,8 @@
 struct ComputerscareSolyPequencer;
 
 struct ComputerscareSolyPequencer : Module {
-	int currentStep[16] = { -1};
-	int numSteps[16] = {16};
+	int currentStep[16] = {0};
+	int numSteps[16] = {16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16};
 	bool autoNumSteps = true;
 	rack::dsp::SchmittTrigger clockTriggers[16];
 	rack::dsp::SchmittTrigger resetTriggers[16];
@@ -42,31 +42,43 @@ struct ComputerscareSolyPequencer : Module {
 	ComputerscareSolyPequencer()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-
+		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
+		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
 		//	configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch:" + std::to_string(i + 1) + " = input ch");
 
 	}
+	void resetAll() {
+		for (int i = 0; i < 16; i++) {
+			currentStep[i] = 0;
+		}
+	}
 	void process(const ProcessArgs &args) override {
-		int numInput = inputs[POLY_INPUT].getChannels();
+		int numInputChannels = inputs[POLY_INPUT].getChannels();
 		int numReset = inputs[RESET_INPUT].getChannels();
 		int numClock = inputs[CLOCK_INPUT].getChannels();
 		int numNumSteps = inputs[NUM_STEPS_INPUT].getChannels();
 		int numOutputChannels = numClock > 0 ? numClock : 1;
-		if (numClock > 0) {
-				outputs[POLY_OUTPUT].setChannels(numClock);
-				for (int j = 0; j < numClock; j++) {
-					if(clockTriggers[j].process(inputs[CLOCK_INPUT].getVoltage(j))) {
-						
-
-						currentStep[j]++;
-						currentStep[j] = currentStep[j] % numSteps[j];
-						printf("channel %d\n",j);
-					}
+		bool globalClocked = globalManualClockTrigger.process(params[MANUAL_CLOCK_BUTTON].getValue());
+		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
+		for (int j = 0; j < numOutputChannels; j++) {
+			if (globalClocked || clockTriggers[j].process(inputs[CLOCK_INPUT].getVoltage(j))) {
+				currentStep[j]++;
+				if (autoNumSteps) {
+					currentStep[j] = currentStep[j] % numInputChannels;
 				}
+				else {
+					currentStep[j] = currentStep[j] % numSteps[j];
+				}
+
+
 			}
-			for(int c = 0; c < numOutputChannels; c++) {
-				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(currentStep[c]),c);
-			}
+		}
+		for (int c = 0; c < numOutputChannels; c++) {
+			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(currentStep[c]), c);
+		}
+		if (globalManualResetTrigger.process(params[MANUAL_RESET_BUTTON].getValue())) {
+			resetAll();
+		}
 		//}
 		// Run
 		/*
@@ -167,18 +179,24 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 			addChild(panel);
 
 		}
-		
-		addLabeledKnob("Steps", 10, 50, module, 0, 0, 0);
-		
 
-
-		addInput(createInput<InPort>(Vec(4, 24), module, ComputerscareSolyPequencer::POLY_INPUT));
-				addInput(createInput<InPort>(Vec(4, 44), module, ComputerscareSolyPequencer::CLOCK_INPUT));
-						addInput(createInput<InPort>(Vec(4, 64), module, ComputerscareSolyPequencer::RESET_INPUT));
+		addLabeledKnob("Steps", 10, 124, module, 0, 0, 0);
 
 
 
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 24), module, ComputerscareSolyPequencer::POLY_OUTPUT));
+		addInput(createInput<InPort>(Vec(14, 84), module, ComputerscareSolyPequencer::POLY_INPUT));
+
+
+		addParam(createParam<ComputerscareClockButton>(Vec(14, 150), module, ComputerscareSolyPequencer::MANUAL_CLOCK_BUTTON));
+		addInput(createInput<InPort>(Vec(14, 164), module, ComputerscareSolyPequencer::CLOCK_INPUT));
+
+		addParam(createParam<ComputerscareResetButton>(Vec(14, 210), module, ComputerscareSolyPequencer::MANUAL_RESET_BUTTON));
+		addInput(createInput<InPort>(Vec(14, 224), module, ComputerscareSolyPequencer::RESET_INPUT));
+
+
+
+
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(21, 304), module, ComputerscareSolyPequencer::POLY_OUTPUT));
 
 	}
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareSolyPequencer *module, int index, float labelDx, float labelDy) {
