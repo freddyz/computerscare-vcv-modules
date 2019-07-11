@@ -97,6 +97,10 @@ struct ComputerscareIsoThree : app::SvgSwitch {
 };
 struct ThreeVerticalXSwitch : app::SvgSwitch {
 	ThreeVerticalXSwitch() {
+		fb = new widget::FramebufferWidget;
+		addChild(fb);
+		sw = new widget::SvgWidget;
+		fb->addChild(sw);
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-1.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-2.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-3.svg")));
