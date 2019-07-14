@@ -144,18 +144,18 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
 
 		//addParam
 
-		addInput(createInput<InPort>(Vec(4, 24), module, ComputerscareTolyPools::POLY_INPUT));
+		addInput(createInput<InPort>(Vec(1	, 50), module, ComputerscareTolyPools::POLY_INPUT));
 
-		addLabeledKnob("Num Output Channels", 2, 106, module, ComputerscareTolyPools::NUM_CHANNELS_KNOB, -5, -30, 0);
-		addInput(createInput<InPort>(Vec(4, 136), module, ComputerscareTolyPools::NUM_CHANNELS_CV));
+		addLabeledKnob("Num Output Channels", 1, 136, module, ComputerscareTolyPools::NUM_CHANNELS_KNOB, -5, -30, 0);
+		addInput(createInput<InPort>(Vec(4, 166), module, ComputerscareTolyPools::NUM_CHANNELS_CV));
 		
-		addLabeledKnob("Rotation", 2, 206, module, ComputerscareTolyPools::ROTATE_KNOB, -5, -10, 1);
-		addInput(createInput<InPort>(Vec(4,236), module, ComputerscareTolyPools::ROTATE_CV));
+		addLabeledKnob("Rotation", 2, 216, module, ComputerscareTolyPools::ROTATE_KNOB, -5, -5, 1);
+		addInput(createInput<InPort>(Vec(4,246), module, ComputerscareTolyPools::ROTATE_CV));
 		
 
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 24), module, ComputerscareTolyPools::NUM_CHANNELS_OUTPUT));
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(20, 324), module, ComputerscareTolyPools::POLY_OUTPUT));
+		addOutput(createOutput<OutPort>(Vec(28, 30), module, ComputerscareTolyPools::POLY_OUTPUT));
 
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(31, 66), module, ComputerscareTolyPools::NUM_CHANNELS_OUTPUT));
 	}
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareTolyPools *module, int index, float labelDx, float labelDy, int type) {
 
@@ -174,7 +174,7 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
 		outputChannelLabel->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 		outputChannelLabel->fontSize = 15;
 		outputChannelLabel->textAlign = 1;
-		outputChannelLabel->breakRowWidth = 50;
+		outputChannelLabel->breakRowWidth = 55;
 
 		outputChannelLabel->value = label;
 

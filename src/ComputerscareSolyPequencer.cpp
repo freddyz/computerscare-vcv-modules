@@ -60,6 +60,7 @@ struct ComputerscareSolyPequencer : Module {
 		int numOutputChannels = numClock > 0 ? numClock : 1;
 		bool globalClocked = globalManualClockTrigger.process(params[MANUAL_CLOCK_BUTTON].getValue());
 		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
+		if (inputs[POLY_INPUT].isConnected()) {
 		for (int j = 0; j < numOutputChannels; j++) {
 			if (globalClocked || clockTriggers[j].process(inputs[CLOCK_INPUT].getVoltage(j))) {
 				currentStep[j]++;
@@ -73,8 +74,10 @@ struct ComputerscareSolyPequencer : Module {
 
 			}
 		}
-		for (int c = 0; c < numOutputChannels; c++) {
-			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(currentStep[c]), c);
+		
+			for (int c = 0; c < numOutputChannels; c++) {
+				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(currentStep[c]), c);
+			}
 		}
 		if (globalManualResetTrigger.process(params[MANUAL_RESET_BUTTON].getValue())) {
 			resetAll();

@@ -81,11 +81,11 @@ struct IsoButton : SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-up.svg")));
 	}
 };
-struct SmallIsoButton : SvgSwitch {
+struct SmallIsoButton : app::SvgSwitch {
 	SmallIsoButton() {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-up.svg")));
-
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-down.svg")));
+		shadow->opacity = 0.f;
 	}
 };
 struct ComputerscareIsoThree : app::SvgSwitch {
@@ -97,13 +97,10 @@ struct ComputerscareIsoThree : app::SvgSwitch {
 };
 struct ThreeVerticalXSwitch : app::SvgSwitch {
 	ThreeVerticalXSwitch() {
-		fb = new widget::FramebufferWidget;
-		addChild(fb);
-		sw = new widget::SvgWidget;
-		fb->addChild(sw);
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-1.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-2.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-3.svg")));
+		shadow->opacity = 0.f;
 	}
 };
 struct ComputerscareDebugFour : app::SvgSwitch {
