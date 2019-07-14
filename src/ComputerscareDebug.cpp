@@ -8,6 +8,7 @@
 
 #define NUM_LINES 16
 struct ComputerscareDebug;
+std::string noModuleStringValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
 
 
 struct ComputerscareDebug : Module {
@@ -224,7 +225,7 @@ struct StringDisplayWidget3 : Widget {
 		nvgFontFaceId(ctx.vg, font->handle);
 		nvgTextLetterSpacing(ctx.vg, 2.5);
 
-		std::string textToDraw = module ? module->strValue : "";
+		std::string textToDraw = module ? module->strValue : noModuleStringValue;
 		Vec textPos = Vec(6.0f, 12.0f);
 		NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
 		nvgFillColor(ctx.vg, textColor);

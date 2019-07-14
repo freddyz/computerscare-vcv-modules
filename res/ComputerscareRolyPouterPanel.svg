@@ -26,11 +26,11 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="2.8284273"
-     inkscape:cx="49.495967"
-     inkscape:cy="298.10344"
+     inkscape:zoom="32.000002"
+     inkscape:cx="29.9249"
+     inkscape:cy="318.45878"
      inkscape:document-units="mm"
-     inkscape:current-layer="text881"
+     inkscape:current-layer="g1669"
      showgrid="false"
      units="px"
      inkscape:snap-bbox="true"
@@ -276,7 +276,7 @@
        sodipodi:nodetypes="cccccc" />
     <path
        style="fill:#626262;fill-opacity:1;stroke:none;stroke-width:0.42375344;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       d="m 8.8485033,211.06154 0.4694463,-0.89346 6.5597684,1.73952 -2.265989,1.80938 -5.6843273,-1.65343 z"
+       d="m 8.8485033,211.06154 0.4694463,-0.89346 6.5597684,1.73952 -2.265989,1.80938 -5.2166057,-2.09777 z"
        id="path892"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="cccccc" />
@@ -284,13 +284,13 @@
        sodipodi:nodetypes="cccccc"
        inkscape:connector-curvature="0"
        id="path873"
-       d="m 1.0929047,204.36427 1.0068811,-0.0501 4.8564349,0.42743 -1.3820584,1.19971 -5.58532414,-0.89921 z"
+       d="m 1.0929047,204.36427 1.0068811,-0.0501 4.8564349,0.42743 -0.9143368,0.73199 -6.05304574,-0.43149 z"
        style="fill:#626262;fill-opacity:1;stroke:none;stroke-width:0.42375344;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
     <path
        sodipodi:nodetypes="cccccc"
        inkscape:connector-curvature="0"
        id="path875"
-       d="m 6.9572483,204.71528 -1.370453,1.21751 2.3387502,6.13181 0.9075091,-0.91638 0.578878,-0.85915 z"
+       d="m 6.9572483,204.71528 -0.9027314,0.74979 2.3401689,6.15662 0.4383688,-0.47347 0.578878,-0.85915 z"
        style="fill:#232224;fill-opacity:1;stroke:none;stroke-width:0.36093959;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
     <path
        style="fill:#fefefe;fill-opacity:1;stroke:none;stroke-width:0.37162125;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"

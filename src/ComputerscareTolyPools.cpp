@@ -146,11 +146,11 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
 
 		addInput(createInput<InPort>(Vec(1	, 50), module, ComputerscareTolyPools::POLY_INPUT));
 
-		addLabeledKnob("Num Output Channels", 1, 136, module, ComputerscareTolyPools::NUM_CHANNELS_KNOB, -5, -30, 0);
-		addInput(createInput<InPort>(Vec(4, 166), module, ComputerscareTolyPools::NUM_CHANNELS_CV));
+		addLabeledKnob("Num Output Channels", 10, 156, module, ComputerscareTolyPools::NUM_CHANNELS_KNOB, -14, -24, 0);
+		addInput(createInput<InPort>(Vec(10, 186), module, ComputerscareTolyPools::NUM_CHANNELS_CV));
 		
-		addLabeledKnob("Rotation", 2, 216, module, ComputerscareTolyPools::ROTATE_KNOB, -5, -5, 1);
-		addInput(createInput<InPort>(Vec(4,246), module, ComputerscareTolyPools::ROTATE_CV));
+		addLabeledKnob("Rotation", 10, 256, module, ComputerscareTolyPools::ROTATE_KNOB, -13, -5, 1);
+		addInput(createInput<InPort>(Vec(10,286), module, ComputerscareTolyPools::ROTATE_CV));
 		
 
 		addOutput(createOutput<OutPort>(Vec(28, 30), module, ComputerscareTolyPools::POLY_OUTPUT));

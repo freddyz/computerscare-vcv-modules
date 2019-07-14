@@ -327,7 +327,7 @@ struct NumberDisplayWidget3 : TransparentWidget {
   void draw(const DrawArgs &args) override
   {
     // Background
-    if (module) {
+    //if (module) {
       NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
 
       nvgBeginPath(args.vg);
@@ -341,13 +341,18 @@ struct NumberDisplayWidget3 : TransparentWidget {
       nvgTextLetterSpacing(args.vg, 2.5);
 
       std::stringstream to_display;
-      to_display << std::setw(3) << *value;
+      if(module) {
+        to_display << std::setw(3) << *value;
+      }
+      else {
+        to_display << std::setw(3) << "16";
+      }
 
       Vec textPos = Vec(6.0f, 17.0f);
       NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
       nvgFillColor(args.vg, textColor);
       nvgText(args.vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
-    }
+  //  }
   }
 };
 

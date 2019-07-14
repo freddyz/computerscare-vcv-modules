@@ -409,6 +409,9 @@ struct CookiesTF2 : ComputerscareTextField
 
       }
     }
+    else {
+      text = "we,love{}@9,cook(ies)";
+    }
     ComputerscareTextField::draw(args);
   }
   /*void MyTextFieldCookie::onTextChange() {
@@ -446,6 +449,10 @@ struct CookiesSmallDisplay : SmallLetterDisplay
       value = module->getDisplayString(index);
       blink = module->shouldChange[index];
       doubleblink = module->changeImminent[index];
+      SmallLetterDisplay::draw(args);
+    }
+    else {
+      value = "4\n20";
       SmallLetterDisplay::draw(args);
     }
   }
