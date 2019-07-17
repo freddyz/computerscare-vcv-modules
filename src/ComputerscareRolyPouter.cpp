@@ -4,18 +4,14 @@ struct ComputerscareRolyPouter;
 
 const int numKnobs = 16;
 
-const int numToggles = 16;
-const int numOutputs = 16;
-
 struct ComputerscareRolyPouter : Module {
 	int counter = 0;
 	int routing[numKnobs];
+	int numOutputChannels = 16;
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		KNOB,
-		TOGGLES = KNOB + numKnobs,
-		NUM_PARAMS = TOGGLES + numToggles
-
+		NUM_PARAMS = KNOB + numKnobs
 	};
 	enum InputIds {
 		POLY_INPUT,
@@ -23,7 +19,7 @@ struct ComputerscareRolyPouter : Module {
 	};
 	enum OutputIds {
 		POLY_OUTPUT,
-		NUM_OUTPUTS = POLY_OUTPUT + numOutputs
+		NUM_OUTPUTS
 	};
 	enum LightIds {
 		NUM_LIGHTS
@@ -42,6 +38,8 @@ struct ComputerscareRolyPouter : Module {
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
+		int inputChannels = inputs[POLY_INPUT].getChannels();
+		int knobSetting;
 		if (counter > 5012) {
 			//printf("%f \n",random::uniform());
 			counter = 0;
@@ -50,9 +48,15 @@ struct ComputerscareRolyPouter : Module {
 			}
 
 		}
-		outputs[POLY_OUTPUT].setChannels(16);
-		for (int i = 0; i < numKnobs; i++) {
-			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(params[KNOB + i].getValue() - 1), i);
+		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
+		for (int i = 0; i < numOutputChannels; i++) {
+			knobSetting = params[KNOB+i].getValue();
+			if(knobSetting > inputChannels) {
+							outputs[POLY_OUTPUT].setVoltage(0,i);
+			}
+			else {
+			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(knobSetting - 1), i);
+			}
 		}
 	}
 
