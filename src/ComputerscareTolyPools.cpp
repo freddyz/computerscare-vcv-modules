@@ -108,8 +108,11 @@ struct PoolsSmallDisplay : SmallLetterDisplay
 			if (type == 0) {
 				value = std::to_string(module->numChannels);
 			}
-			else {
+			else if(type == 1) {
 				value = std::to_string(module->rotation);
+			}
+			else if(type==2) {
+				value = std::to_string(module->numInputChannels);
 			}
 
 		}
@@ -145,6 +148,15 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
 		//addParam
 
 		addInput(createInput<InPort>(Vec(1	, 50), module, ComputerscareTolyPools::POLY_INPUT));
+		poolsSmallDisplay = new PoolsSmallDisplay(2);
+		poolsSmallDisplay->box.size = Vec(14, 20);
+		poolsSmallDisplay->box.pos = Vec(-3 , 80);
+		poolsSmallDisplay->fontSize = 22;
+		poolsSmallDisplay->textAlign = 18;
+		poolsSmallDisplay->breakRowWidth = 20;
+		poolsSmallDisplay->module = module;
+		addChild(poolsSmallDisplay);
+
 
 		addLabeledKnob("Num Output Channels", 10, 156, module, ComputerscareTolyPools::NUM_CHANNELS_KNOB, -14, -24, 0);
 		addInput(createInput<InPort>(Vec(10, 186), module, ComputerscareTolyPools::NUM_CHANNELS_CV));
@@ -155,7 +167,7 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
 
 		addOutput(createOutput<OutPort>(Vec(28, 30), module, ComputerscareTolyPools::POLY_OUTPUT));
 
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(31, 66), module, ComputerscareTolyPools::NUM_CHANNELS_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(31, 76), module, ComputerscareTolyPools::NUM_CHANNELS_OUTPUT));
 	}
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareTolyPools *module, int index, float labelDx, float labelDy, int type) {
 
@@ -180,7 +192,7 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
 
 		addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, index));
 		addChild(poolsSmallDisplay);
-		addChild(outputChannelLabel);
+		//addChild(outputChannelLabel);
 
 	}
 	PoolsSmallDisplay* poolsSmallDisplay;
