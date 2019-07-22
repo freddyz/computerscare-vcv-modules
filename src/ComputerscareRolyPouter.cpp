@@ -31,7 +31,7 @@ struct ComputerscareRolyPouter : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
 		for (int i = 0; i < numKnobs; i++) {
-			configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch:" + std::to_string(i + 1) + " = input ch");
+			configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch" + std::to_string(i + 1) + " = input ch");
 			routing[i] = i;
 		}
 

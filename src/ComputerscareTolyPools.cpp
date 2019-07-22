@@ -61,8 +61,8 @@ struct ComputerscareTolyPools : Module {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configParam(ROTATE_KNOB, 0.f, 15.f, 0.f, "Rotate input", "channels");
-		configParam(NUM_CHANNELS_KNOB, 1.f, 16.f, 16.f, "Number of Output Channels", "channels");
+		configParam(ROTATE_KNOB, 0.f, 15.f, 0.f, "Rotate input", " channels");
+		configParam(NUM_CHANNELS_KNOB, 1.f, 16.f, 16.f, "Number of Output Channels");
 
 
 	}

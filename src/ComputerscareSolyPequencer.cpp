@@ -61,20 +61,25 @@ struct ComputerscareSolyPequencer : Module {
 		bool globalClocked = globalManualClockTrigger.process(params[MANUAL_CLOCK_BUTTON].getValue());
 		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
 		if (inputs[POLY_INPUT].isConnected()) {
-		for (int j = 0; j < numOutputChannels; j++) {
-			if (globalClocked || clockTriggers[j].process(inputs[CLOCK_INPUT].getVoltage(j))) {
-				currentStep[j]++;
-				if (autoNumSteps) {
-					currentStep[j] = currentStep[j] % numInputChannels;
-				}
-				else {
-					currentStep[j] = currentStep[j] % numSteps[j];
-				}
+			for (int j = 0; j < numOutputChannels; j++) {
+				if (globalClocked || clockTriggers[j].process(inputs[CLOCK_INPUT].getVoltage(j))) {
+					currentStep[j]++;
+					if (autoNumSteps) {
+						currentStep[j] = currentStep[j] % numInputChannels;
+					}
+					else {
+						currentStep[j] = currentStep[j] % numSteps[j];
+					}
 
 
+				}
+				if(j <= numReset) {
+					if(resetTriggers[j].process(inputs[RESET_INPUT].getVoltage(j))) {
+						currentStep[j] = 0;
+					}
+				}
 			}
-		}
-		
+
 			for (int c = 0; c < numOutputChannels; c++) {
 				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(currentStep[c]), c);
 			}
@@ -82,67 +87,15 @@ struct ComputerscareSolyPequencer : Module {
 		if (globalManualResetTrigger.process(params[MANUAL_RESET_BUTTON].getValue())) {
 			resetAll();
 		}
-		//}
-		// Run
-		/*
-		if (runningTrigger.process(params[RUN_PARAM].getValue())) {
-			running = !running;
-		}
-
-		bool gateIn = false;
-		if (running) {
-			if (inputs[EXT_CLOCK_INPUT].isConnected()) {
-				// External clock
-				if (clockTrigger.process(inputs[EXT_CLOCK_INPUT].getVoltage())) {
-					setIndex(index + 1);
-				}
-				gateIn = clockTrigger.isHigh();
-			}
-			else {
-				// Internal clock
-				float clockTime = std::pow(2.f, params[CLOCK_PARAM].getValue() + inputs[CLOCK_INPUT].getVoltage());
-				phase += clockTime * args.sampleTime;
-				if (phase >= 1.f) {
-					setIndex(index + 1);
-				}
-				gateIn = (phase < 0.5f);
-			}
-		}
-
-		// Reset
-		if (resetTrigger.process(params[RESET_PARAM].getValue() + inputs[RESET_INPUT].getVoltage())) {
-			setIndex(0);
-		}
-
-		// Gate buttons
-		for (int i = 0; i < 8; i++) {
-			if (gateTriggers[i].process(params[GATE_PARAM + i].getValue())) {
-				gates[i] = !gates[i];
-			}
-			outputs[GATE_OUTPUT + i].setVoltage((running && gateIn && i == index && gates[i]) ? 10.f : 0.f);
-			lights[GATE_LIGHTS + i].setSmoothBrightness((gateIn && i == index) ? (gates[i] ? 1.f : 0.33) : (gates[i] ? 0.66 : 0.0), args.sampleTime);
-		}
-
-		// Outputs
-		outputs[ROW1_OUTPUT].setVoltage(params[ROW1_PARAM + index].getValue());
-		outputs[ROW2_OUTPUT].setVoltage(params[ROW2_PARAM + index].getValue());
-		outputs[ROW3_OUTPUT].setVoltage(params[ROW3_PARAM + index].getValue());
-		outputs[GATES_OUTPUT].setVoltage((gateIn && gates[index]) ? 10.f : 0.f);
-		lights[RUNNING_LIGHT].value = (running);
-		lights[RESET_LIGHT].setSmoothBrightness(resetTrigger.isHigh(), args.sampleTime);
-		lights[GATES_LIGHT].setSmoothBrightness(gateIn, args.sampleTime);
-		lights[ROW_LIGHTS].value = outputs[ROW1_OUTPUT].value / 10.f;
-		lights[ROW_LIGHTS + 1].value = outputs[ROW2_OUTPUT].value / 10.f;
-		lights[ROW_LIGHTS + 2].value = outputs[ROW3_OUTPUT].value / 10.f;
-		}*/
+	
 	}
 
 };
-struct PouterSmallDisplay : SmallLetterDisplay
+struct PequencerSmallDisplay : SmallLetterDisplay
 {
 	ComputerscareSolyPequencer *module;
 	int ch;
-	PouterSmallDisplay(int outputChannelNumber)
+	PequencerSmallDisplay(int outputChannelNumber)
 	{
 
 		ch = outputChannelNumber;
@@ -156,7 +109,7 @@ struct PouterSmallDisplay : SmallLetterDisplay
 
 
 			//std::string str = std::to_string(module->routing[ch]);
-			value = "pig";
+			value = std::to_string(module->currentStep[ch]);
 
 
 
@@ -184,10 +137,10 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 		}
 
 		addLabeledKnob("Steps", 10, 124, module, 0, 0, 0);
+		stepNumberGrid(-1,70,13,15,module);
 
 
-
-		addInput(createInput<InPort>(Vec(14, 84), module, ComputerscareSolyPequencer::POLY_INPUT));
+		addInput(createInput<InPort>(Vec(14, 44), module, ComputerscareSolyPequencer::POLY_INPUT));
 
 
 		addParam(createParam<ComputerscareClockButton>(Vec(14, 150), module, ComputerscareSolyPequencer::MANUAL_CLOCK_BUTTON));
@@ -202,16 +155,31 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(21, 304), module, ComputerscareSolyPequencer::POLY_OUTPUT));
 
 	}
+	void stepNumberGrid(int x, int y, int xspacing, int yspacing, ComputerscareSolyPequencer *module) {
+		for(int i = 0; i < 4; i++) {
+			for(int j = 0; j < 4; j++) {
+				psd = new PequencerSmallDisplay(i+j*4);
+		psd->box.size = Vec(10, 10);
+		psd->box.pos = Vec(x +i*xspacing , y + j*yspacing);
+		psd->fontSize = 16;
+		psd->textAlign = 18;
+		psd->textColor =nvgRGB(0x24, 0x44, 0x31);
+		psd->breakRowWidth = 20;
+		psd->module = module;
+		addChild(psd);
+			}
+		}
+	}
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareSolyPequencer *module, int index, float labelDx, float labelDy) {
 
-		pouterSmallDisplay = new PouterSmallDisplay(index);
-		pouterSmallDisplay->box.size = Vec(20, 20);
-		pouterSmallDisplay->box.pos = Vec(x - 2.5 , y + 1.f);
-		pouterSmallDisplay->fontSize = 26;
-		pouterSmallDisplay->textAlign = 18;
-		pouterSmallDisplay->textColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
-		pouterSmallDisplay->breakRowWidth = 20;
-		pouterSmallDisplay->module = module;
+		/*psd = new PequencerSmallDisplay(index);
+		psd->box.size = Vec(20, 20);
+		psd->box.pos = Vec(x - 2.5 , y + 1.f);
+		psd->fontSize = 26;
+		psd->textAlign = 18;
+		psd->textColor =nvgRGB(0x24, 0x44, 0x31);
+		psd->breakRowWidth = 20;
+		psd->module = module;*/
 
 
 		outputChannelLabel = new SmallLetterDisplay();
@@ -221,14 +189,14 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 		outputChannelLabel->textAlign = index < 8 ? 1 : 4;
 		outputChannelLabel->breakRowWidth = 15;
 
-		outputChannelLabel->value = "hogman";
+		//outputChannelLabel->value = "hogman";
 
 		//addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, ComputerscareSolyPequencer::KNOB + index));
-		addChild(pouterSmallDisplay);
+		//addChild(psd);
 		addChild(outputChannelLabel);
 
 	}
-	PouterSmallDisplay* pouterSmallDisplay;
+	PequencerSmallDisplay* psd;
 	SmallLetterDisplay* outputChannelLabel;
 };
 
