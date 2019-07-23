@@ -365,6 +365,9 @@ bool matchParens(std::string value) {
     theyMatch = (parensCount==0) && (squareCount ==0) && (curlyCount==0) && (angleCount==0);
     return theyMatch;
   }
+  void printVector(std::vector <int> intVector) {
+    printf("vector\n");
+  }
 void whoKnows(std::string input) {
 	//AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
 	/*abs.print();
@@ -420,8 +423,8 @@ LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
 void LaundrySoupSequence::print() {
   printf("  Laundry tokenStack:\n");
   printTokenVector(tokenStack);
-  printf("  Laundry pulseSequence:\n");
-  printVector(pulseSequence);
+  //printf("  Laundry pulseSequence:\n");
+  //printVector(pulseSequence);
 }
 std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> tokens) {
 	std::vector<int> output = {};

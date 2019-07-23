@@ -1,14 +1,6 @@
 # If RACK_DIR is not defined when calling the Makefile, default to two directories above
 RACK_DIR ?= ../..
 
-# Must follow the format in the Naming section of
-# https://vcvrack.com/manual/PluginDevelopmentTutorial.html
-SLUG = computerscare
-
-# Must follow the format in the Versioning section of
-# https://vcvrack.com/manual/PluginDevelopmentTutorial.html
-VERSION = 0.6.6
-
 # FLAGS will be passed to both the C and C++ compiler
 FLAGS +=
 CFLAGS +=
@@ -19,7 +11,25 @@ CXXFLAGS +=
 LDFLAGS +=
 
 # Add .cpp and .c files to the build
-SOURCES += $(wildcard src/*.cpp)
+#SOURCES += $(wildcard src/*.cpp)
+SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
+SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
+
+
+SOURCES += $(wildcard src/ComputerscarePatchSequencer.cpp)
+SOURCES += $(wildcard src/ComputerscareLaundrySoup.cpp)
+SOURCES += $(wildcard src/ComputerscareILoveCookies.cpp)
+SOURCES += $(wildcard src/ComputerscareDebug.cpp)
+SOURCES += $(wildcard src/ComputerscareOhPeas.cpp)
+
+SOURCES += $(wildcard src/ComputerscareKnolyPobs.cpp)
+SOURCES += $(wildcard src/ComputerscareBolyPuttons.cpp)
+SOURCES += $(wildcard src/ComputerscareRolyPouter.cpp)
+SOURCES += $(wildcard src/ComputerscareTolyPools.cpp)
+SOURCES += $(wildcard src/ComputerscareSolyPequencer.cpp)
+
+SOURCES += $(wildcard src/Computerscare.cpp)
+SOURCES += $(wildcard src/dtpulse.cpp)
 
 # Add files to the ZIP package when running `make dist`
 # The compiled plugin is automatically added.

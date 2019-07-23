@@ -1,16 +1,21 @@
 #include "Computerscare.hpp"
 
-Plugin *plugin;
+Plugin *pluginInstance;
 
 
 void init(Plugin *p) {
-	plugin = p;
-	p->slug = TOSTRING(SLUG);
-	p->version = TOSTRING(VERSION);
+	pluginInstance = p;
 
 	p->addModel(modelComputerscareDebug);
 	p->addModel(modelComputerscarePatchSequencer);
 	p->addModel(modelComputerscareLaundrySoup);
 	p->addModel(modelComputerscareILoveCookies);
 	p->addModel(modelComputerscareOhPeas);
+	
+	p->addModel(modelComputerscareKnolyPobs);
+	p->addModel(modelComputerscareBolyPuttons);
+	p->addModel(modelComputerscareRolyPouter);
+	p->addModel(modelComputerscareTolyPools);
+	p->addModel(modelComputerscareSolyPequencer);
+	
 }

@@ -97,6 +97,34 @@ Input           Equivalent Input          Comment
 ~~~~
 
 
+=======
+
+~~~~
+Input           Equivalent Input
+
+a@3             aaa
+ab@5            ababa
+<1><0>@8        <1><0><1><0><1><0><1><0>
+abcde@8         abcdeabc
+abcdef@3        abc
+~~~~
+
+## Randomization
+
+Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curl braces {} will randomly select one of the values with equal probability.  For example, ~{ab}~ will choose either "a" or "b" at each clock step.  ~{g<2.55>}~ will output either the value of knob "g" or 2.55 volts with equal probability.
+
+## Square Bracket Expansion
+
+Enclosing comma-separated sequences with square brackets allows for even more complex patterns to be generated.
+
+~~~~
+Input           Equivalent Input          Comment
+
+[ab,c]@4        ababcccc                  4 steps of "ab", then 4 steps of "c"
+[A,cde]@5       AAAAAcdecd                5 steps from input "A", then 5 steps of "cde"
+~~~~
+
+
 All of the following are valid I Love Cookies programs:
 ~~~~
 <4.20>

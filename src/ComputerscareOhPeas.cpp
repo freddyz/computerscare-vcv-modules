@@ -1,8 +1,8 @@
+#include "plugin.hpp"
 #include "Computerscare.hpp"
+
 #include "dtpulse.hpp"
-#include "dsp/digital.hpp"
-#include "window.hpp"
-#include "dsp/filter.hpp"
+
 
 #include <string>
 #include <sstream>
@@ -10,428 +10,503 @@
 
 struct ComputerscareOhPeas;
 
-const int numChannels= 4;
+const int numChannels = 4;
 
-class PeasTextField : public LedDisplayTextField {
+struct PeasTextField;
+struct ComputerscareOhPeas;
 
-public:
-  int fontSize = 16;
-  int rowIndex=0;
-  bool inError = false;
-  PeasTextField() : LedDisplayTextField() {}
-  void setModule(ComputerscareOhPeas* _module) {
-    module = _module;
-  }
-  virtual void onTextChange() override;
-  int getTextPosition(Vec mousePos) override {
-    bndSetFont(font->handle);
-    int textPos = bndIconLabelTextPosition(gVg, textOffset.x, textOffset.y,
-      box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
-      -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
-    bndSetFont(gGuiFont->handle);
-    return textPos;
-  }
-  void draw(NVGcontext *vg) override {
-    nvgScissor(vg, 0, 0, box.size.x, box.size.y);
+struct PeasTextField : LedDisplayTextField
+{
+    std::shared_ptr<Font> font;
+    math::Vec textOffset;
+    NVGcolor color;
+    int fontSize = 16;
+    int rowIndex = 0;
+    bool inError = false;
+    ComputerscareOhPeas *module;
+    PeasTextField();
+    //void draw(const DrawArgs &args) override;
+    //int getTextPosition(math::Vec mousePos) ;
 
-    // Background
-    nvgFontSize(vg, fontSize);
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 10.0);
-    
-    if(inError) {
-      nvgFillColor(vg, COLOR_COMPUTERSCARE_PINK);
+
+    void setModule(ComputerscareOhPeas *_module)
+    {
+        module = _module;
     }
-    else {
-      nvgFillColor(vg, nvgRGB(0x00, 0x00, 0x00));
-    }
-     nvgFill(vg);
+    void onEnter(const event::Enter &e) override;
 
-    // Text
-    if (font->handle >= 0) {
+    /*int getTextPosition(Vec mousePos) override {
       bndSetFont(font->handle);
-
-      NVGcolor highlightColor = color;
-      highlightColor.a = 0.5;
-      int begin = min(cursor, selection);
-      int end = (this == gFocusedWidget) ? max(cursor, selection) : -1;
-      //bndTextField(vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
-      bndIconLabelCaret(vg, textOffset.x, textOffset.y - 3,
+      int textPos = bndIconLabelTextPosition(gVg, textOffset.x, textOffset.y,
         box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
-        -1, color, fontSize, text.c_str(), highlightColor, begin, end);
-
+        -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
       bndSetFont(gGuiFont->handle);
+      return textPos;
+    }*/
+    int getTextPosition(math::Vec mousePos) override
+    {
+        bndSetFont(font->handle);
+        int textPos = bndIconLabelTextPosition(APP->window->vg, textOffset.x, textOffset.y,
+                                               box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
+                                               -1, 12, text.c_str(), mousePos.x, mousePos.y);
+        bndSetFont(APP->window->uiFont->handle);
+        return textPos;
     }
+    void draw(const DrawArgs &args) override
+    {
+        if (module)
+        {
+            nvgScissor(args.vg, 0, 0, box.size.x, box.size.y);
 
-    nvgResetScissor(vg);
-  };
+            // Background
+            nvgFontSize(args.vg, fontSize);
+            nvgBeginPath(args.vg);
+            nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 10.0);
 
-private:
-  ComputerscareOhPeas* module;
-};
+            if (inError)
+            {
+                nvgFillColor(args.vg, COLOR_COMPUTERSCARE_PINK);
+            }
+            else
+            {
+                nvgFillColor(args.vg, nvgRGB(0x00, 0x00, 0x00));
+            }
+            nvgFill(args.vg);
 
-struct ComputerscareOhPeas : Module {
-	enum ParamIds {
-		GLOBAL_TRANSPOSE,
-		NUM_DIVISIONS,
-		SCALE_TRIM,
-		SCALE_VAL = SCALE_TRIM+numChannels,
-		OFFSET_TRIM = SCALE_VAL+numChannels,
-		OFFSET_VAL = OFFSET_TRIM+numChannels,
-		NUM_PARAMS=OFFSET_VAL+numChannels
-		
-	};
-	enum InputIds {
-		CHANNEL_INPUT,
-		SCALE_CV=CHANNEL_INPUT+numChannels,
-		OFFSET_CV=SCALE_CV+numChannels,
-		NUM_INPUTS=OFFSET_CV+numChannels
-	};
-	enum OutputIds {
-		SCALED_OUTPUT,
-		QUANTIZED_OUTPUT=SCALED_OUTPUT+numChannels,
-		NUM_OUTPUTS=QUANTIZED_OUTPUT+numChannels
-	};
-	enum LightIds {
-		BLINK_LIGHT,
-		NUM_LIGHTS
-	};
+            // Text
+            if (font->handle >= 0)
+            {
+                bndSetFont(font->handle);
 
-	PeasTextField* textField;
+                NVGcolor highlightColor = color;
+                highlightColor.a = 0.5;
+                int begin = fmin(cursor, selection);
+                // int end = (this == gFocusedWidget) ? fmax(cursor, selection) : -1;
 
-	int numDivisions = 12;
-  int globalTranspose = 0;
-  bool evenQuantizeMode = true;
-  std::string numDivisionsString = "";
-  SmallLetterDisplay* numDivisionsDisplay;
-  SmallLetterDisplay* globalTransposeDisplay;
+                int end = fmax(cursor, selection);
+                //bndTextField(args.vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
+                bndIconLabelCaret(args.vg, textOffset.x, textOffset.y - 3,
+                                  box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
+                                  -1, color, fontSize, text.c_str(), highlightColor, begin, end);
 
-  Quantizer quant;
+                bndSetFont(font->handle);
+            }
 
-	ComputerscareOhPeas() : Module(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS) {
-		quant = Quantizer("221222",12,0);
+            nvgResetScissor(args.vg);
+        };
 
-	}
-	void step() override;
-		json_t *toJson() override
-  {
-		json_t *rootJ = json_object();
-    
-    json_t *sequencesJ = json_array();
-    for (int i = 0; i < 1; i++) {
-      json_t *sequenceJ = json_string(textField->text.c_str());
-      json_array_append_new(sequencesJ, sequenceJ);
     }
-    json_object_set_new(rootJ, "sequences", sequencesJ);
-
-    return rootJ;
-  } 
-  
-  void fromJson(json_t *rootJ) override
-  {
-    json_t *sequencesJ = json_object_get(rootJ, "sequences");
-    if (sequencesJ) {
-      for (int i = 0; i < 1; i++) {
-        json_t *sequenceJ = json_array_get(sequencesJ, i);
-        if (sequenceJ)
-          textField->text = json_string_value(sequenceJ);
-      }
-    }
-    setQuant();
-  }
-
-
-	void setQuant() {
-		std::string value = this->textField->text;
-		this->quant = Quantizer(value,this->numDivisions,this->globalTranspose);
-    this->setNumDivisionsString();
-	}
-  void setNumDivisionsString() {
-    std::string transposeString =  (this->globalTranspose > 0 ? "+" : "" ) + std::to_string(this->globalTranspose);
-    this->numDivisionsDisplay->value = std::to_string(this->numDivisions);
-    this->globalTransposeDisplay->value = transposeString;
-    
-  }
-	// For more advanced Module features, read Rack's engine.hpp header file
-	// - toJson, fromJson: serialization of internal data
-	// - onSampleRateChange: event triggered by a change of sample rate
-	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
 };
 
 
-void ComputerscareOhPeas::step() {
-	float A,B,C,D,Q,a,b,c,d;
+struct ComputerscareOhPeas : Module
+{
+    enum ParamIds
+    {
+        GLOBAL_TRANSPOSE,
+        NUM_DIVISIONS,
+        SCALE_TRIM,
+        SCALE_VAL = SCALE_TRIM + numChannels,
+        OFFSET_TRIM = SCALE_VAL + numChannels,
+        OFFSET_VAL = OFFSET_TRIM + numChannels,
+        NUM_PARAMS = OFFSET_VAL + numChannels
 
-	int numDivisionsKnobValue = floor(params[NUM_DIVISIONS].value);
-  int iTranspose = floor(numDivisionsKnobValue * params[GLOBAL_TRANSPOSE].value);
+    };
+    enum InputIds
+    {
+        CHANNEL_INPUT,
+        SCALE_CV = CHANNEL_INPUT + numChannels,
+        OFFSET_CV = SCALE_CV + numChannels,
+        NUM_INPUTS = OFFSET_CV + numChannels
+    };
+    enum OutputIds
+    {
+        SCALED_OUTPUT,
+        QUANTIZED_OUTPUT = SCALED_OUTPUT + numChannels,
+        NUM_OUTPUTS = QUANTIZED_OUTPUT + numChannels
+    };
+    enum LightIds
+    {
+        BLINK_LIGHT,
+        NUM_LIGHTS
+    };
 
-  //int globalTransposeKnobValue = (int) clamp(roundf(params[GLOBAL_TRANSPOSE].value), -fNumDiv, fNumDiv);
 
-	if(numDivisionsKnobValue != numDivisions) {
-    //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
-		
-    //what a hack!!!
-    if(numDivisionsKnobValue != 0){  
-      numDivisions = numDivisionsKnobValue;
-      setQuant();
+
+    int numDivisions = 12;
+    int globalTranspose = 0;
+    bool evenQuantizeMode = true;
+    std::string currentFormula = "221222";
+    std::string numDivisionsString = "";
+    SmallLetterDisplay *numDivisionsDisplay;
+    SmallLetterDisplay *globalTransposeDisplay;
+
+    PeasTextField *textField;
+    // this one throws an error I think
+    Quantizer quant;
+
+    ComputerscareOhPeas()
+    {
+        config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+        configParam(GLOBAL_TRANSPOSE, -1.f, 1.f, 0.0f, "Global Transpose");
+        configParam(NUM_DIVISIONS, 1.f, 24.f, 12.0f, "Number of Divisions");
+        for (int i = 0; i < numChannels; i++)
+        {
+            std::string chi = "Ch. " + std::to_string(i + 1);
+            configParam( SCALE_TRIM + i, -1.f, 1.f, 0.0f, chi + " Scale CV Amount");
+            configParam( SCALE_VAL + i, -2.f, 2.f, 1.0f, chi + " Scale Value");
+            configParam( OFFSET_TRIM + i, -1.f, 1.f, 0.0f, chi + " Offset CV Amount");
+            configParam( OFFSET_VAL + i, -5.f, 5.f, 0.0f, chi + " Offset Value");
+
+        }
+
+        quant = Quantizer(currentFormula, 12, 0);
+
     }
-		
-	}
-  if(iTranspose != globalTranspose) {
+    void process(const ProcessArgs &args) override;
+
+
+    void setQuant()
+    {
+        this->quant = Quantizer(this->currentFormula.c_str(), this->numDivisions, this->globalTranspose);
+    }
+    // For more advanced Module features, read Rack's engine.hpp header file
+    // - toJson, fromJson: serialization of internal data
+    // - onSampleRateChange: event triggered by a change of sample rate
+    // - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
+};
+void PeasTextField::onEnter(const event::Enter &e)
+{
+    module->setQuant();
+}
+
+void ComputerscareOhPeas::process(const ProcessArgs &args)
+{
+    float A, B, C, D, Q, a, b, c, d;
+
+    int numDivisionsKnobValue = floor(params[NUM_DIVISIONS].getValue());
+    int iTranspose = floor(numDivisionsKnobValue * params[GLOBAL_TRANSPOSE].getValue());
+    int numInputChannels;
+    int numScaleCVChannels;
+    int numOffsetCVChannels;
+
+    //int globalTransposeKnobValue = (int) clamp(roundf(params[GLOBAL_TRANSPOSE].getValue()), -fNumDiv, fNumDiv);
+
+    if (numDivisionsKnobValue != numDivisions)
+    {
         //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
 
-    globalTranspose = iTranspose;
-    setQuant();
-  }
-	for(int i = 0; i < numChannels; i++) {
-		
-		a = params[SCALE_VAL+i].value;
-		
-		b = params[SCALE_TRIM+i].value;
-		B = inputs[SCALE_CV+i].value;
-		A = inputs[CHANNEL_INPUT+i].value;
+        //what a hack!!!
+        if (numDivisionsKnobValue != 0)
+        {
+            numDivisions = numDivisionsKnobValue;
+            setQuant();
+        }
 
-		c = params[OFFSET_TRIM+i].value;
-		C = inputs[OFFSET_CV+i].value;
-		d = params[OFFSET_VAL+i].value;
+    }
+    if (iTranspose != globalTranspose)
+    {
+        //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
 
-		D = (b*B + a)*A + (c*C + d);
+        globalTranspose = iTranspose;
+        setQuant();
+    }
+    for (int i = 0; i < numChannels; i++)
+    {
+        if (outputs[SCALED_OUTPUT + i].isConnected() || outputs[QUANTIZED_OUTPUT + i].isConnected()) {
+            numInputChannels = inputs[CHANNEL_INPUT + i].getChannels();
+            numScaleCVChannels = inputs[SCALE_CV + i].getChannels();
+            numOffsetCVChannels = inputs[OFFSET_CV + i].getChannels();
+            outputs[SCALED_OUTPUT + i].setChannels(numInputChannels);
+            outputs[QUANTIZED_OUTPUT + i].setChannels(numInputChannels);
+            for (int ch = 0; ch < numInputChannels; ch++) {
 
-		Q = quant.quantizeEven(D,iTranspose);
 
-		outputs[SCALED_OUTPUT + i].value = D;
-		outputs[QUANTIZED_OUTPUT + i].value = Q;
-	}
+                a = params[SCALE_VAL + i].getValue();
+
+                b = params[SCALE_TRIM + i].getValue();
+                B = inputs[SCALE_CV + i].getVoltage(ch % numInputChannels);
+                A = inputs[CHANNEL_INPUT + i].getVoltage(ch);
+
+                c = params[OFFSET_TRIM + i].getValue();
+                C = inputs[OFFSET_CV + i].getVoltage(ch % numInputChannels);
+                d = params[OFFSET_VAL + i].getValue();
+
+                D = (b * B + a) * A + (c * C + d);
+
+                Q = quant.quantizeEven(D, iTranspose);
+
+
+                outputs[SCALED_OUTPUT + i].setVoltage(D, ch);
+                outputs[QUANTIZED_OUTPUT + i].setVoltage(Q, ch);
+            }
+        }
+    }
 }
 
-////////////////////////////////////
-struct StringDisplayWidget3 : TransparentWidget {
+struct SetQuantizationModeMenuItem : MenuItem
+{
+    ComputerscareOhPeas *peas;
 
-  std::string *value;
-  std::shared_ptr<Font> font;
+    bool mode = true;
+    SetQuantizationModeMenuItem(bool evenMode)
+    {
+        mode = evenMode;
+    }
+    void doAction()
+    {
+        peas->evenQuantizeMode = mode;
+    }
+    void step() override
+    {
+        rightText = CHECKMARK(peas->evenQuantizeMode == mode);
+        MenuItem::step();
+    }
+};
+struct PeasTF2 : ComputerscareTextField
+{
+    ComputerscareOhPeas *module;
+    int fontSize = 16;
+    int rowIndex = 0;
+    bool inError = false;
 
-  StringDisplayWidget3() {
-    font = Font::load(assetPlugin(plugin, "res/Oswald-Regular.ttf"));
-  };
+    PeasTF2()
+    {
+        ComputerscareTextField();
+    };
+    void draw(const DrawArgs &args) override
+    {
+        if (module)
+        {
+            if (text.c_str() != module->currentFormula)
+            {
+                module->currentFormula = text.c_str();
+                module->setQuant();
+            }
+        }
+        ComputerscareTextField::draw(args);
+    }
 
-  void draw(NVGcontext *vg) override
-  {
-    // Background
-    NVGcolor backgroundColor = nvgRGB(0x10, 0x00, 0x10);
-    NVGcolor StrokeColor = nvgRGB(0xC0, 0xC7, 0xDE);
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, -1.0, -1.0, box.size.x+2, box.size.y+2, 4.0);
-    nvgFillColor(vg, StrokeColor);
-    nvgFill(vg);
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
-    nvgFillColor(vg, backgroundColor);
-    nvgFill(vg);    
-    
-    // text 
-    nvgFontSize(vg, 15);
-    nvgFontFaceId(vg, font->handle);
-    nvgTextLetterSpacing(vg, 2.5);
+    //void draw(const DrawArgs &args) override;
+    //int getTextPosition(math::Vec mousePos) override;
+};
+struct PeasSmallDisplay : SmallLetterDisplay
+{
+    ComputerscareOhPeas *module;
+    int type;
+    PeasSmallDisplay(int t)
+    {
+        type = t;
+        SmallLetterDisplay();
+    };
+    void draw(const DrawArgs &args)
+    {
+        //this->setNumDivisionsString();
+        if (module)
+        {
+            if (type == 0)
+            {
 
-    std::stringstream to_display;   
-    to_display << std::setw(8) << *value;
+                std::string transposeString =  (module->globalTranspose > 0 ? "+" : "" ) + std::to_string(module->globalTranspose);
+                value = transposeString;
+            }
+            else
+            {
+                std::string numDivisionsDisplay = std::to_string(module->numDivisions);
+                value = numDivisionsDisplay;
+            }
 
-    Vec textPos = Vec(6.0f, 12.0f);   
-    NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-    nvgFillColor(vg, textColor);
- 	nvgTextBox(vg, textPos.x, textPos.y,80,to_display.str().c_str(), NULL);
+        }
+        SmallLetterDisplay::draw(args);
+    }
 
-  }
 };
 
-void PeasTextField::onTextChange() {
-  	module->setQuant();
+
+
+void quantizationModeMenuItemAdd(ComputerscareOhPeas *peas, Menu *menu, bool evenMode, std::string label)
+{
+    SetQuantizationModeMenuItem *menuItem = new SetQuantizationModeMenuItem(evenMode);
+    menuItem->text = label;
+    menuItem->peas = peas;
+    menu->addChild(menuItem);
 }
-struct SetScaleMenuItem : MenuItem {
-  ComputerscareOhPeas *peas;
-  std::string scale="221222";
-  SetScaleMenuItem(std::string scaleInput) {
-    scale=scaleInput;
-  }
-  void onAction(EventAction &e) override {
-    peas->textField->text = scale;
-    peas->setQuant();
-  }
-};
-struct SetQuantizationModeMenuItem : MenuItem {
- ComputerscareOhPeas *peas;
- bool mode = true;
-  SetQuantizationModeMenuItem(bool evenMode) {
-    mode=evenMode;
-  }
-  void onAction(EventAction &e) override {
-    peas->evenQuantizeMode = mode;
-  }
-  void step() override {
-    rightText = CHECKMARK(peas->evenQuantizeMode == mode);
-    MenuItem::step();
-  }
-};
+//this->numDivisions,this->globalTranspose
+struct ComputerscareOhPeasWidget : ModuleWidget
+{
+    float randAmt = 0.f;
+    //PeasTextField* textFieldTemp;
 
-struct ComputerscareOhPeasWidget : ModuleWidget {
-  float randAmt = 0.f;
-	ComputerscareOhPeasWidget(ComputerscareOhPeas *module) : ModuleWidget(module) {
-		setPanel(SVG::load(assetPlugin(plugin, "res/ComputerscareOhPeasPanel.svg")));
-/*
-		addInput(Port::create<InPort>(Vec(3, 330), Port::INPUT, module, ComputerscareOhPeas::TRG_INPUT));
-		addInput(Port::create<InPort>(Vec(33, 330), Port::INPUT, module, ComputerscareOhPeas::VAL_INPUT));
-		addInput(Port::create<InPort>(Vec(63, 330), Port::INPUT, module, ComputerscareOhPeas::CLR_INPUT));
-	
-		addParam(ParamWidget::create<LEDButton>(Vec(6, 290), module, ComputerscareOhPeas::MANUAL_TRIGGER, 0.0, 1.0, 0.0));
-		addParam(ParamWidget::create<LEDButton>(Vec(66, 290), module, ComputerscareOhPeas::MANUAL_CLEAR_TRIGGER, 0.0, 1.0, 0.0));
+    //TextField *textFieldTemp;
+    ComputerscareOhPeasWidget(ComputerscareOhPeas *module)
+    {
+        setModule(module);
+        //setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareOhPeasPanel.svg")));
+        box.size = Vec(9 * 15, 380);
+        {
+            ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
+            panel->box.size = box.size;
+            panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareOhPeasPanel.svg")));
 
-		StringDisplayWidget3 *display = new StringDisplayWidget3();
-		  display->box.pos = Vec(1,24);
-		  display->box.size = Vec(88, 250);
-		  display->value = &module->strValue;
-		  addChild(display);
-*/
+            //module->panelRef = panel;
 
-		double x = 1;
-		double y = 7;
-		//double dy = 18.4;
-		double dx = 9.95;
-		double xx;
-		double yy=18;
+            addChild(panel);
 
-  		
-  		ParamWidget* numDivisionKnob =  ParamWidget::create<MediumSnapKnob>(mm2px(Vec(11,yy-2)), module, ComputerscareOhPeas::NUM_DIVISIONS ,  1.f, 24.f, 12.0f);   
-  		addParam(numDivisionKnob);
-  		          
-    ParamWidget* rootKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(21,yy-2)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE ,  -1.f, 1.f, 0.0f);   
-      addParam(rootKnob);
+        }
+        double x = 1;
+        double y = 7;
+        //double dy = 18.4;
+        double dx = 9.95;
+        double xx;
+        double yy = 18;
+        addParam(createParam<MediumSnapKnob>(mm2px(Vec(11, yy - 2)), module, ComputerscareOhPeas::NUM_DIVISIONS ));
 
-  		  textFieldTemp = Widget::create<PeasTextField>(mm2px(Vec(x,y+24)));
-	      textFieldTemp->setModule(module);
-	      textFieldTemp->box.size = mm2px(Vec(44, 7));
-	      textFieldTemp->multiline = false;
-	      textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
+        addParam(createParam<SmoothKnob>(mm2px(Vec(21, yy - 2)), module, ComputerscareOhPeas::GLOBAL_TRANSPOSE));
+
+        textFieldTemp = createWidget<PeasTF2>(mm2px(Vec(x, y + 24)));
+        textFieldTemp->module = module;
+        textFieldTemp->box.size = mm2px(Vec(44, 7));
+        textFieldTemp->multiline = false;
+        textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
         textFieldTemp->text = "221222";
-	      addChild(textFieldTemp);
-	      module->textField = textFieldTemp;
+        addChild(textFieldTemp);
 
-     	  ndd = new SmallLetterDisplay();
-        ndd->box.pos = mm2px(Vec(2,yy));
+        ndd = new PeasSmallDisplay(1);
+        ndd->module = module;
+        ndd->box.pos = mm2px(Vec(2, yy));
         ndd->box.size = mm2px(Vec(9, 7));
         ndd->value = "";
         ndd->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
         addChild(ndd);
-        module->numDivisionsDisplay = ndd;
 
-        transposeDisplay = new SmallLetterDisplay();
-        transposeDisplay->box.pos = mm2px(Vec(30,yy));
+        transposeDisplay = new PeasSmallDisplay(0);
+        transposeDisplay->module = module;
+
+        transposeDisplay->box.pos = mm2px(Vec(30, yy));
         transposeDisplay->box.size = mm2px(Vec(11, 7));
         transposeDisplay->letterSpacing = 2.f;
         transposeDisplay->value = "";
         transposeDisplay->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
         addChild(transposeDisplay);
-        module->globalTransposeDisplay = transposeDisplay;
 
-    		for(int i = 0; i < numChannels; i++) {
+        for (int i = 0; i < numChannels; i++)
+        {
 
-    			xx = x + dx*i+randAmt*(2*randomUniform()-.5);
-          y+=randAmt*(randomUniform()-.5);
-    			addInput(Port::create<InPort>(mm2px(Vec(xx, y-0.8)), Port::INPUT, module, ComputerscareOhPeas::CHANNEL_INPUT+i));
+            xx = x + dx * i + randAmt * (2 * random::uniform() - .5);
+            y += randAmt * (random::uniform() - .5);
+            addInput(createInput<InPort>(mm2px(Vec(xx, y - 0.8)), module, ComputerscareOhPeas::CHANNEL_INPUT + i));
 
-          ParamWidget* scaleTrimKnob =  ParamWidget::create<SmallKnob>(mm2px(Vec(xx+2,y+34)), module, ComputerscareOhPeas::SCALE_TRIM +i,  -1.f, 1.f, 0.0f);   
-          addParam(scaleTrimKnob);
-    			
-    			addInput(Port::create<InPort>(mm2px(Vec(xx, y+40)), Port::INPUT, module, ComputerscareOhPeas::SCALE_CV+i));
+            addParam(createParam<SmallKnob>(mm2px(Vec(xx + 2, y + 34)), module, ComputerscareOhPeas::SCALE_TRIM + i));
 
-    			ParamWidget* scaleKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+50)), module, ComputerscareOhPeas::SCALE_VAL +i,  -1.f, 1.f, 0.0f);   
-    			addParam(scaleKnob);
+            addInput(createInput<InPort>(mm2px(Vec(xx, y + 40)),  module, ComputerscareOhPeas::SCALE_CV + i));
 
-    			ParamWidget* offsetTrimKnob =  ParamWidget::create<ComputerscareDotKnob>(mm2px(Vec(xx+2,y+64)), module, ComputerscareOhPeas::OFFSET_TRIM +i,  -1.f, 1.f, 0.0f);   
-    			addParam(offsetTrimKnob);
-    			
-    			addInput(Port::create<InPort>(mm2px(Vec(xx, y+70)), Port::INPUT, module, ComputerscareOhPeas::OFFSET_CV+i));
+            addParam(createParam<SmoothKnob>(mm2px(Vec(xx, y + 50)), module, ComputerscareOhPeas::SCALE_VAL + i));
+
+            addParam(createParam<ComputerscareDotKnob>(mm2px(Vec(xx + 2, y + 64)), module, ComputerscareOhPeas::OFFSET_TRIM + i));
+
+            addInput(createInput<InPort>(mm2px(Vec(xx, y + 70)),  module, ComputerscareOhPeas::OFFSET_CV + i));
 
 
-    			ParamWidget* offsetKnob =  ParamWidget::create<SmoothKnob>(mm2px(Vec(xx,y+80)), module, ComputerscareOhPeas::OFFSET_VAL +i,  -5.f, 5.f, 0.0f);   
-    			addParam(offsetKnob);
+            addParam(createParam<SmoothKnob>(mm2px(Vec(xx, y + 80)), module, ComputerscareOhPeas::OFFSET_VAL + i));
 
-    			addOutput(Port::create<OutPort>(mm2px(Vec(xx , y+93)), Port::OUTPUT, module, ComputerscareOhPeas::SCALED_OUTPUT + i));
+            addOutput(createOutput<OutPort>(mm2px(Vec(xx, y + 93)), module, ComputerscareOhPeas::SCALED_OUTPUT + i));
 
-       		addOutput(Port::create<InPort>(mm2px(Vec(xx+1 , y+108)), Port::OUTPUT, module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
+            addOutput(createOutput<InPort>(mm2px(Vec(xx + 1, y + 108)),  module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
 
-  	}
-    module->setQuant();
-  }
-   SmallLetterDisplay* trimPlusMinus;
-  SmallLetterDisplay* ndd;
-  SmallLetterDisplay* transposeDisplay;
+        }
+    }
+    json_t *toJson() override
+    {
+        json_t *rootJ = ModuleWidget::toJson();
 
-  PeasTextField* textFieldTemp;
-  Menu *createContextMenu() override;
+        // text
+        json_object_set_new(rootJ, "sequences", json_string(textFieldTemp->text.c_str()));
+
+        return rootJ;
+    }
+
+    void fromJson(json_t *rootJ) override
+    {
+        ModuleWidget::fromJson(rootJ);
+
+        // text
+        json_t *textJ = json_object_get(rootJ, "sequences");
+        if (textJ)
+            textFieldTemp->text = json_string_value(textJ);
+
+        //module->setQuant();
+    }
+
+
+    PeasTF2 *textFieldTemp;
+    SmallLetterDisplay *trimPlusMinus;
+    PeasSmallDisplay *ndd;
+    PeasSmallDisplay *transposeDisplay;
+    void scaleItemAdd(ComputerscareOhPeas *peas, Menu *menu, std::string scale, std::string label);
+    void appendContextMenu(Menu *menu) override;
 
 };
+struct SetScaleMenuItem : MenuItem
+{
+    ComputerscareOhPeas *peas;
+    ComputerscareOhPeasWidget *peasWidget;
+    std::string scale = "221222";
+    SetScaleMenuItem(std::string scaleInput)
+    {
+        scale = scaleInput;
+    }
 
-
-void scaleItemAdd(ComputerscareOhPeas* peas, Menu* menu, std::string scale, std::string label) {
-  SetScaleMenuItem *menuItem = new SetScaleMenuItem(scale);
-  menuItem->text = label;
-  menuItem->peas = peas;
-  menu->addChild(menuItem);
+    void onAction(const event::Action &e) override
+    {
+        peasWidget->textFieldTemp->text = scale;
+        peas->setQuant();
+    }
+};
+void ComputerscareOhPeasWidget::scaleItemAdd(ComputerscareOhPeas *peas, Menu *menu, std::string scale, std::string label)
+{
+    SetScaleMenuItem *menuItem = new SetScaleMenuItem(scale);
+    menuItem->text = label;
+    menuItem->peas = peas;
+    menuItem->peasWidget = this;
+    menu->addChild(menuItem);
 }
+void ComputerscareOhPeasWidget::appendContextMenu(Menu *menu)
+{
+    ComputerscareOhPeas *peas = dynamic_cast<ComputerscareOhPeas *>(this->module);
 
-void quantizationModeMenuItemAdd(ComputerscareOhPeas* peas, Menu* menu, bool evenMode, std::string label) {
-  SetQuantizationModeMenuItem *menuItem = new SetQuantizationModeMenuItem(evenMode);
-  menuItem->text = label;
-  menuItem->peas = peas;
-  menu->addChild(menuItem);
-}
- 
-Menu *ComputerscareOhPeasWidget::createContextMenu() {
-  Menu *menu = ModuleWidget::createContextMenu();
-  ComputerscareOhPeas *peas = dynamic_cast<ComputerscareOhPeas*>(module);
-  assert(peas);
-
-  MenuLabel *spacerLabel = new MenuLabel();
-  menu->addChild(spacerLabel);
-  
-  /*
-  // "closest" quantization mode is quite a bit slower than even
-  MenuLabel *quantModeLabel = new MenuLabel();
-  quantModeLabel->text = "Quantization Mode";
-  menu->addChild(quantModeLabel);
-
-  quantizationModeMenuItemAdd(peas,menu,true,"Even");
-  quantizationModeMenuItemAdd(peas,menu,false,"Closest");
-  
+    MenuLabel *spacerLabel = new MenuLabel();
+    menu->addChild(spacerLabel);
 
 
-  MenuLabel *spacerLabel2 = new MenuLabel();
-  menu->addChild(spacerLabel2);*/
-  
+    MenuLabel *modeLabel = new MenuLabel();
+    modeLabel->text = "Scale Presets";
+    menu->addChild(modeLabel);
 
-  MenuLabel *modeLabel = new MenuLabel();
-  modeLabel->text = "Scale Presets";
-  menu->addChild(modeLabel);
+    scaleItemAdd(peas, menu, "221222", "Major");
+    scaleItemAdd(peas, menu, "212212", "Natural Minor");
+    scaleItemAdd(peas, menu, "2232", "Major Pentatonic");
+    scaleItemAdd(peas, menu, "3223", "Minor Pentatonic");
+    scaleItemAdd(peas, menu, "32113", "Blues");
+    scaleItemAdd(peas, menu, "11111111111", "Chromatic");
+    scaleItemAdd(peas, menu, "212213", "Harmonic Minor");
+    scaleItemAdd(peas, menu, "22222", "Whole-Tone");
+    scaleItemAdd(peas, menu, "2121212", "Whole-Half Diminished");
 
-  scaleItemAdd(peas,menu,"221222","Major");
-  scaleItemAdd(peas,menu,"212212","Natural Minor");
-  scaleItemAdd(peas,menu,"2232","Major Pentatonic");
-  scaleItemAdd(peas,menu,"3223","Minor Pentatonic");
-  scaleItemAdd(peas,menu,"32113","Blues");
-  scaleItemAdd(peas,menu,"11111111111","Chromatic");
-  scaleItemAdd(peas,menu,"212213","Harmonic Minor");
-  scaleItemAdd(peas,menu,"43","Major Triad");
-  scaleItemAdd(peas,menu,"34","Minor Triad");
-  scaleItemAdd(peas,menu,"33","Diminished Triad");
-  scaleItemAdd(peas,menu,"434","Major 7 Tetrachord");
-  scaleItemAdd(peas,menu,"433","Dominant 7 Tetrachord");
-  scaleItemAdd(peas,menu,"343","Minor 7 Tetrachord");
-
-  return menu;
+    scaleItemAdd(peas, menu, "43", "Major Triad");
+    scaleItemAdd(peas, menu, "34", "Minor Triad");
+    scaleItemAdd(peas, menu, "33", "Diminished Triad");
+    scaleItemAdd(peas, menu, "434", "Major 7 Tetrachord");
+    scaleItemAdd(peas, menu, "433", "Dominant 7 Tetrachord");
+    scaleItemAdd(peas, menu, "343", "Minor 7 Tetrachord");
+    scaleItemAdd(peas, menu, "334", "Minor 7 b5 Tetrachord");
 }
 
 // Specify the Module and ModuleWidget subclass, human-readable
 // author name for categorization per plugin, module slug (should never
 // change), human-readable module name, and any number of tags
 // (found in `include/tags.hpp`) separated by commas.
-Model *modelComputerscareOhPeas = Model::create<ComputerscareOhPeas, ComputerscareOhPeasWidget>("computerscare", "computerscare-ohpeas", "Oh Peas! Quad Quantenuverter", QUANTIZER_TAG, ATTENUATOR_TAG, QUAD_TAG, UTILITY_TAG);
+
+
+//Model *modelComputerscareDebug = createModel<ComputerscareDebug, ComputerscareDebugWidget>("computerscare-debug");
+
+Model *modelComputerscareOhPeas = createModel<ComputerscareOhPeas, ComputerscareOhPeasWidget>("computerscare-ohpeas");
