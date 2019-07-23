@@ -49,7 +49,12 @@ struct ComputerscareDebug : Module {
 	int clockMode = 1;
 	int inputMode = 2;
 
-	int stepCounter = 0;
+	int outputRangeEnum = 0;
+
+
+	float outputRanges[6][2];
+
+	int stepCounter;
 	dsp::SchmittTrigger clockTriggers[NUM_LINES];
 	dsp::SchmittTrigger clearTrigger;
 	dsp::SchmittTrigger manualClockTrigger;
@@ -70,6 +75,22 @@ struct ComputerscareDebug : Module {
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 
+
+		outputRanges[0][0] = 0.f;
+		outputRanges[0][1] = 10.f;
+		outputRanges[1][0] = -5.f;
+		outputRanges[1][1] = 5.f;
+		outputRanges[2][0] = 0.f;
+		outputRanges[2][1] = 5.f;
+		outputRanges[3][0] = 0.f;
+		outputRanges[3][1] = 1.f;
+		outputRanges[4][0] = -1.f;
+		outputRanges[4][1] = 1.f;
+		outputRanges[5][0] = -10.f;
+		outputRanges[5][1] = 10.f;
+
+		stepCounter=0;
+
 		//params[MANUAL_TRIGGER].randomizable=false;
 		//params[MANUAL_CLEAR_TRIGGER].randomizable=false;
 
@@ -80,8 +101,6 @@ struct ComputerscareDebug : Module {
 	// - toJson, fromJson: serialization of internal data
 	// - onSampleRateChange: event triggered by a change of sample rate
 	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
-
-
 
 };
 
@@ -94,6 +113,10 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 
 	inputChannel = floor(params[INPUT_CHANNEL_FOCUS].getValue());
 	clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].getValue());
+
+	float min = outputRanges[outputRangeEnum][0];
+	float max = outputRanges[outputRangeEnum][1];
+	float spread = max - min;
 	if (clockMode == SINGLE_MODE) {
 		if (clockTriggers[clockChannel].process(inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 			if (inputMode == POLY_MODE) {
@@ -111,8 +134,9 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 				logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
 			}
 			else if (inputMode == INTERNAL_MODE) {
+				printf("%f, %f\n",min,spread);
 				for (int i = 0; i < 16; i++) {
-					logLines[i] = random::uniform();
+					logLines[i] = min+spread*random::uniform();
 				}
 			}
 		}
@@ -128,7 +152,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 		else if (inputMode == INTERNAL_MODE) {
 			for (int i = 0; i < 16; i++) {
-				logLines[i] = random::uniform();
+				logLines[i] = min+spread*random::uniform();
 			}
 		}
 	}
@@ -150,7 +174,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		else if (inputMode == INTERNAL_MODE) {
 			for (int i = 0; i < 16; i++) {
 				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
-					logLines[i] = random::uniform();
+					logLines[i] = min+spread*random::uniform();
 				}
 			}
 		}
@@ -163,13 +187,15 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 		strValue = defaultStrValue;
 	}
+	outputs[POLY_OUTPUT].setChannels(16);
 	stepCounter++;
+
 	if (stepCounter > 1025) {
 		stepCounter = 0;
 
 		thisVal = "";
 		for ( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
-		{
+		{	
 			thisVal +=  a > 0 ? "\n" : "";
 			thisVal += logLines[a] >= 0 ? "+" : "";
 			thisVal += std::to_string(logLines[a]).substr(0, 10);
@@ -177,7 +203,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 		strValue = thisVal;
 	}
-	outputs[POLY_OUTPUT].setChannels(16);
+	
 
 }
 struct HidableSmallSnapKnob : SmallSnapKnob {
@@ -311,9 +337,53 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		stringDisplay->module = module;
 		addChild(stringDisplay);
 
+		debug = module;
+	}
+	json_t *toJson() override
+	{
+		json_t *rootJ = ModuleWidget::toJson();
+		json_object_set_new(rootJ, "outputRange", json_integer(debug->outputRangeEnum));
+		return rootJ;
+	}
+	void fromJson(json_t *rootJ) override
+	{
+		ModuleWidget::fromJson(rootJ);
+		// button states
+
+		json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
+		if (outputRangeEnumJ) { debug->outputRangeEnum = json_integer_value(outputRangeEnumJ); }
 
 	}
+	void appendContextMenu(Menu *menu) override;
+	ComputerscareDebug *debug;
 };
+struct DebugOutputRangeItem : MenuItem {
+	ComputerscareDebug *debug;
+	int outputRangeEnum;
+	void onAction(const event::Action &e) override {
+		debug->outputRangeEnum = outputRangeEnum;
+		printf("outputRangeEnum %i\n",outputRangeEnum);
+	}
+	void step() override {
+		rightText = CHECKMARK(debug->outputRangeEnum == outputRangeEnum);
+		MenuItem::step();
+	}
+};
+void ComputerscareDebugWidget::appendContextMenu(Menu *menu)
+{
+	ComputerscareDebug *debug = dynamic_cast<ComputerscareDebug *>(this->module);
 
+	MenuLabel *spacerLabel = new MenuLabel();
+	menu->addChild(spacerLabel);
 
+	menu->addChild(construct<MenuLabel>());
+	menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Random Generator Range (Internal In)"));
+	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "  0v ... +10v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 0));
+	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, " -5v ...  +5v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 1));
+	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "  0v ...  +5v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 2));
+	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "  0v ...  +1v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 3));
+	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, " -1v ...  +1v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 4));
+	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "-10v ... +10v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 5));
+
+}
 Model *modelComputerscareDebug = createModel<ComputerscareDebug, ComputerscareDebugWidget>("computerscare-debug");

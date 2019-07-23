@@ -8,7 +8,7 @@ struct ComputerscareBolyPuttons : Module {
 	int counter = 0;
 	int outputRangeEnum = 0;
 	bool momentary = false;
-	float outputRanges[4][2];
+	float outputRanges[6][2];
 	rack::dsp::SchmittTrigger momentaryTriggers[16];
 	rack::dsp::PulseGenerator pulseGen[16];
 
