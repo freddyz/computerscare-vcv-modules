@@ -46,8 +46,8 @@ struct ComputerscareDebug : Module {
 	int clockChannel = 0;
 	int inputChannel = 0;
 
-	int clockMode = 0;
-	int inputMode = 0;
+	int clockMode = 1;
+	int inputMode = 2;
 
 	int stepCounter = 0;
 	dsp::SchmittTrigger clockTriggers[NUM_LINES];
@@ -65,8 +65,8 @@ struct ComputerscareDebug : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		configParam(MANUAL_TRIGGER, 0.0f, 1.0f, 0.0f, "Manual Trigger");
 		configParam(MANUAL_CLEAR_TRIGGER, 0.0f, 1.0f, 0.0f, "Clear");
-		configParam(SWITCH_VIEW, 0.0f, 2.0f, 0.0f, "Input Mode");
-		configParam(WHICH_CLOCK, 0.0f, 2.0f, 0.0f, "Clock Mode");
+		configParam(SWITCH_VIEW, 0.0f, 2.0f, 2.0f, "Input Mode");
+		configParam(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode");
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 

@@ -136,32 +136,34 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 
 		}
 
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(14, 48), module, ComputerscareSolyPequencer::POLY_OUTPUT));
+
+
 		addLabeledKnob("Steps", 10, 124, module, 0, 0, 0);
-		stepNumberGrid(-1,70,13,15,module);
+		stepNumberGrid(1,230,30,15,module);
 
 
-		addInput(createInput<InPort>(Vec(14, 44), module, ComputerscareSolyPequencer::POLY_INPUT));
+		addInput(createInput<InPort>(Vec(19, 102), module, ComputerscareSolyPequencer::POLY_INPUT));
 
 
-		addParam(createParam<ComputerscareClockButton>(Vec(14, 150), module, ComputerscareSolyPequencer::MANUAL_CLOCK_BUTTON));
-		addInput(createInput<InPort>(Vec(14, 164), module, ComputerscareSolyPequencer::CLOCK_INPUT));
+		addParam(createParam<ComputerscareClockButton>(Vec(10, 130), module, ComputerscareSolyPequencer::MANUAL_CLOCK_BUTTON));
+		addInput(createInput<InPort>(Vec(10, 144), module, ComputerscareSolyPequencer::CLOCK_INPUT));
 
-		addParam(createParam<ComputerscareResetButton>(Vec(14, 210), module, ComputerscareSolyPequencer::MANUAL_RESET_BUTTON));
-		addInput(createInput<InPort>(Vec(14, 224), module, ComputerscareSolyPequencer::RESET_INPUT));
-
-
+		addParam(createParam<ComputerscareResetButton>(Vec(30, 168), module, ComputerscareSolyPequencer::MANUAL_RESET_BUTTON));
+		addInput(createInput<InPort>(Vec(30, 182), module, ComputerscareSolyPequencer::RESET_INPUT));
 
 
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(21, 304), module, ComputerscareSolyPequencer::POLY_OUTPUT));
 
+
+		
 	}
 	void stepNumberGrid(int x, int y, int xspacing, int yspacing, ComputerscareSolyPequencer *module) {
-		for(int i = 0; i < 4; i++) {
-			for(int j = 0; j < 4; j++) {
-				psd = new PequencerSmallDisplay(i+j*4);
+		for(int i = 0; i < 2; i++) {
+			for(int j = 0; j < 8; j++) {
+				psd = new PequencerSmallDisplay(i*8+j);
 		psd->box.size = Vec(10, 10);
 		psd->box.pos = Vec(x +i*xspacing , y + j*yspacing);
-		psd->fontSize = 16;
+		psd->fontSize = 18;
 		psd->textAlign = 18;
 		psd->textColor =nvgRGB(0x24, 0x44, 0x31);
 		psd->breakRowWidth = 20;
