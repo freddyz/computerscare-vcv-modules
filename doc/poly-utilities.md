@@ -17,6 +17,11 @@
 Re-route the channels of a polyphonic signal.  If you select an input channel that is higher than the highest available channel of the input signal, the output voltage will be 0.
 
 
+## Soly Pequencer
+
+Sequentially output the individual channel voltages of a polyphonic signal.  Connecting a polyphonic signal to the clock input allows for multiple independent sequences.  Polyphonic reset channels beyond the number of channels of the clock signal are ignored.  I think that the clock/reset buttons will apply to all channels.
+
+
 ## Toly Pools
 
 * Display input channel count
@@ -24,7 +29,3 @@ Re-route the channels of a polyphonic signal.  If you select an input channel th
 * Knob and CV for setting output channel count (0 - 10 volts linearly mapped to 1-16 output channels)
 * Knob and CV for rotating the polyphonic signal (0 - 10 volts sets rotation of 0-15 channels.  For example: rotation of "1" will move input channel 2 -> output channel 1, input channel 3->output channel 2, ...  input channel 16 -> output channel 1)
 
-
-## Soly Pequencer
-
-Sequentially output the individual channel voltages of a polyphonic signal.  Connecting a polyphonic signal to the clock input allows for multiple independent sequences.  Polyphonic reset channels beyond the number of channels of the clock signal are ignored.  I think that the clock/reset buttons will apply to all channels.
