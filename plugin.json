@@ -58,12 +58,12 @@
 		{"slug":"computerscare-toly-pools",
 			"name":"Toly Pools",
 			"description":"Polyphonic toolset including rotator, number-of-channels selector",
-			"tags":["Polyphonic","Utility","Atten"]
+			"tags":["Polyphonic","Utility","Attenuator"]
 		},
 
 		{"slug":"computerscare-soly-pequencer",
 			"name":"Soly Pequencer",
-			"description":"Generates sequential rotation of a polyphonic signal",
+			"description":"Sequentially step through the channels of a polyphonic signal.",
 			"tags":["Polyphonic","Sequencer"]
 		}
 	]
