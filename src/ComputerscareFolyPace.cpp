@@ -257,6 +257,8 @@ struct FolyPaceDisplay : TransparentWidget {
 		float msx=mpx-30*sf+3*sin(G);
 		float msy=mpy+5*sin(L+I+P);
 
+
+		NVGcolor eyecolor = nvgHSLA(0.5,0.9,0.5,0xff);
 		float mex=mpx+30*sf+3*sin(G+K/2);
 		float mey=mpy+5*(1+sf)*sin(G+992.2);
 		
@@ -271,7 +273,10 @@ struct FolyPaceDisplay : TransparentWidget {
 		float epy = oy - 10*(2+sf+sin(I-J/2));
 
 		float es = sf*10+4+2*sin(K-G+H);
-		
+		float erlx = 10 + 2*sin(A)+5*sin(-L);
+		float erly = 10 + 3*sin(O-P)-2*sin(G);
+		float errx = 10+ 3*sin(M)+4*sin(M-2-882.2);
+		float erry = 10 + 2*sin(J)+4*sin(J-erly/20);
 
 
 		//assert(bufferY);
@@ -281,17 +286,40 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgFillColor(args.vg, nvgHSLA(h,s,l,0xff));
 		nvgScissor(args.vg, b.pos.x, b.pos.y, b.size.x, b.size.y);
 		nvgBeginPath(args.vg);
-		
-		nvgRotate(args.vg,fr);
-		nvgEllipse(args.vg, fx,fy,frx,fry);
-		
-		nvgEllipse(args.vg,epx-es,epy,4,4);
-		nvgEllipse(args.vg,epx+es,epy,4,4);
-		
+
 
 		nvgLineCap(args.vg, NVG_ROUND);
 		nvgMiterLimit(args.vg, 2.f);
 		nvgStrokeWidth(args.vg, 4.5f);
+
+
+		nvgRotate(args.vg,fr);
+		nvgEllipse(args.vg, fx,fy,frx,fry);
+		nvgClosePath(args.vg);
+		nvgFill(args.vg);
+		nvgStroke(args.vg);
+
+		nvgFillColor(args.vg,eyecolor);
+		nvgStrokeWidth(args.vg, 1.5f);
+		nvgBeginPath(args.vg);
+
+		nvgEllipse(args.vg,epx-es,epy,erlx,erly);
+		nvgEllipse(args.vg,epx+es,epy,errx,erry);
+		
+		nvgClosePath(args.vg);
+		nvgFill(args.vg);
+		nvgStroke(args.vg);
+
+		nvgFillColor(args.vg,nvgRGB(0,0,0));
+		nvgBeginPath(args.vg);
+
+		nvgEllipse(args.vg,epx-es,epy,2,2);
+		nvgEllipse(args.vg,epx+es,epy,2,2);
+		
+		nvgClosePath(args.vg);
+		nvgFill(args.vg);
+
+		
 
 		nvgFill(args.vg);
 		nvgStroke(args.vg);
@@ -347,21 +375,7 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgResetScissor(args.vg);
 	}
 
-	void drawStats(const DrawArgs &args, Vec pos, const char *title, Stats *stats) {
-		nvgFontSize(args.vg, 13);
-		nvgFontFaceId(args.vg, font->handle);
-		nvgTextLetterSpacing(args.vg, -2);
 
-		nvgFillColor(args.vg, nvgRGBA(0xff, 0xff, 0xff, 0xf0));
-		nvgText(args.vg, pos.x + 6, pos.y + 11, title, NULL);
-
-		nvgFillColor(args.vg, nvgRGBA(0xff, 0xff, 0xff, 0xd0));
-		pos = pos.plus(Vec(22, 11));
-
-		std::string text;
-		text = "reginald hormacknadaunald";
-		nvgText(args.vg, pos.x, pos.y, text.c_str(), NULL);
-	}
 
 	void draw(const DrawArgs &args) override {
 		if (!module)
@@ -372,39 +386,10 @@ struct FolyPaceDisplay : TransparentWidget {
 		float offsetX = module->params[FolyPace::X_POS_PARAM].getValue();
 		float offsetY = module->params[FolyPace::Y_POS_PARAM].getValue();
 
-		// Draw waveforms
-		if (module->lissajous) {
-			// X x Y
-			int lissajousChannels = std::max(module->channelsX, module->channelsY);
-			drawFace(args,module->bufferX[0][0],module->bufferX[1][0],module->bufferX[2][0],module->bufferX[3][0],module->bufferX[4][0],module->bufferX[5][0],module->bufferX[6][0],module->bufferX[7][0],module->bufferX[8][0],module->bufferX[9][0],module->bufferX[10][0],module->bufferX[11][0],module->bufferX[12][0],module->bufferX[13][0],module->bufferX[14][0],module->bufferX[15][0]);
+		int lissajousChannels = std::max(module->channelsX, module->channelsY);
+		drawFace(args,module->bufferX[0][0],module->bufferX[1][0],module->bufferX[2][0],module->bufferX[3][0],module->bufferX[4][0],module->bufferX[5][0],module->bufferX[6][0],module->bufferX[7][0],module->bufferX[8][0],module->bufferX[9][0],module->bufferX[10][0],module->bufferX[11][0],module->bufferX[12][0],module->bufferX[13][0],module->bufferX[14][0],module->bufferX[15][0]);
 
-		}
-		else {
-			// Y
-			for (int c = 0; c < module->channelsY; c++) {
-				nvgStrokeColor(args.vg, nvgRGBA(0x1f, 0x24, 0x16, 0xdf));
-				drawWaveform(args, NULL, 0, 0, module->bufferY[c], offsetY, gainY);
-			}
 
-			// X
-			for (int c = 0; c < module->channelsX; c++) {
-				nvgStrokeColor(args.vg, nvgRGBA(0x9f, 0x24, 0x16, 0xcf));
-				drawWaveform(args, NULL, 0, 0, module->bufferX[c], offsetX, gainX);
-			}
-
-			float trigThreshold = module->params[FolyPace::TRIG_PARAM].getValue();
-			trigThreshold = (trigThreshold + offsetX) * gainX;
-			drawTrig(args, trigThreshold);
-		}
-
-		// Calculate and draw stats
-		if (++statsFrame >= 4) {
-			statsFrame = 0;
-			statsX.calculate(module->bufferX[0], module->channelsX);
-			statsY.calculate(module->bufferY[0], module->channelsY);
-		}
-		drawStats(args, Vec(0, 0), "Josh", &statsX);
-		drawStats(args, Vec(0, box.size.y - 15), "Billy", &statsY);
 	}
 };
 
