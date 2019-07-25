@@ -27,6 +27,7 @@ SOURCES += $(wildcard src/ComputerscareBolyPuttons.cpp)
 SOURCES += $(wildcard src/ComputerscareRolyPouter.cpp)
 SOURCES += $(wildcard src/ComputerscareTolyPools.cpp)
 SOURCES += $(wildcard src/ComputerscareSolyPequencer.cpp)
+SOURCES += $(wildcard src/ComputerscareFolyPace.cpp)
 
 SOURCES += $(wildcard src/Computerscare.cpp)
 SOURCES += $(wildcard src/dtpulse.cpp)

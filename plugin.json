@@ -65,6 +65,11 @@
 			"name":"Soly Pequencer",
 			"description":"Sequentially step through the channels of a polyphonic signal.",
 			"tags":["Polyphonic","Sequencer"]
+		},
+		{"slug":"computerscare-foly-pace",
+			"name":"Foly Pace",
+			"description":"Draw a face",
+			"tags":["Visual","Polyphonic"]
 		}
 	]
 }

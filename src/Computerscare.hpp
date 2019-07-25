@@ -36,6 +36,7 @@ extern Model *modelComputerscareBolyPuttons;
 extern Model *modelComputerscareRolyPouter;
 extern Model *modelComputerscareTolyPools;
 extern Model *modelComputerscareSolyPequencer;
+extern Model *modelComputerscareFolyPace;
 
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);

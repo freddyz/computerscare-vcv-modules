@@ -18,4 +18,6 @@ void init(Plugin *p) {
 	p->addModel(modelComputerscareTolyPools);
 	p->addModel(modelComputerscareSolyPequencer);
 	
+	p->addModel(modelComputerscareFolyPace);
+	
 }
