@@ -240,9 +240,9 @@ struct FolyPaceDisplay : TransparentWidget {
 		float ox=67.5+ sf*20.33*sin(D-C/2);
 		float oy = 180+ sf*30.33*sin(G-F);
 
-		float h = 0.4 + 0.3*sin(A)+0.3*sin(K+G-A);	//face hue
-		float s = 0.5 + 0.32*sin(B-33.21-D);	//face saturation
-		float l = 0.5 + 0.45*sin(C+D/3);	//face lightness
+		float h = 0.4 + 0.3*sin(A/2)+0.3*sin(K/3);	//face hue
+		float s = 0.5 + 0.32*sin(B/3-33.21-D/2);	//face saturation
+		float l = 0.5 + 0.45*sin(C/2);	//face lightness
 		float fx = ox ;	//face y
 		float fy= oy;	//face x
 	
