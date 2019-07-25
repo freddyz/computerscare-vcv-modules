@@ -232,33 +232,49 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgResetScissor(args.vg);
 		nvgRestore(args.vg);
 	}
-	void drawFace(const DrawArgs &args, float *bufferX, float offsetX, float gainX, float *bufferY, float offsetY, float gainY) {
-		float ox=70;
-		float oy = 150;
+	void drawFace(const DrawArgs &args, float A,float B,float C, float D, float E, float F, float G, float H, float I, float J, float K, float L, float M, float N,float O,float P) {
 
-		float h = 0.4;
-		float s = 0.8;
-		float l = 0.5;
-		float fx = ox;
-		float fy= oy;
-		float mpx=0;
-		float mpy=60;
-		float frx=70;
-		float fry=150;
-		float fr = 0.1;
-		float msx=ox+mpx-40;
-		float msy=oy+mpy+30;
+
+
+		float sf = 1 + 0.3*sin(B-C);//scaleFactor
+		float ox=67.5+ sf*20.33*sin(D-C/2);
+		float oy = 180+ sf*30.33*sin(G-F);
+
+		float h = 0.4 + 0.3*sin(A)+0.3*sin(K+G-A);	//face hue
+		float s = 0.5 + 0.32*sin(B-33.21-D);	//face saturation
+		float l = 0.5 + 0.45*sin(C+D/3);	//face lightness
+		float fx = ox ;	//face y
+		float fy= oy;	//face x
+	
+
+		float frx=sf*(70 + 40*sin(A-B/2));	// face x radius
+		float fry=sf*(150 + 80*sin(F/2.2));   //face y radius
+		float fr = 0.04*sin(H-M) + 0.02*sin(H/3+2.2) + 0.02*sin(L+P +8.222);//face rotation
+
+		float mpx=ox-3*sin(G+I+A);
+		float mpy=oy+20+sf*sin(G-I);
+
+		float msx=mpx-30*sf+3*sin(G);
+		float msy=mpy+5*sin(L+I+P);
+
+		float mex=mpx+30*sf+3*sin(G+K/2);
+		float mey=mpy+5*(1+sf)*sin(G+992.2);
 		
-		float m1x=ox+mpx+10;
-		float m1y=oy-mpy+26;
+	
+		float m1x=mpx-15*sf+3*sin(A/3-M);
+		float m1y=mpy-6*sf*sin(M)+14*sf*cos(E-C+A);
 
-		float m2x=ox+mpx+21;
-		float m2y=oy+mpy+34;
+		float m2x=mpx+15*sf-10*sf*sin(-N)+14*sf*sin(E);
+		float m2y=mpy-1*sf*sin(G-A/2);
 
-		float mex=ox+mpx+20;
-		float mey=oy+mpy+30;
+		float epx = ox;
+		float epy = oy - 10*(2+sf+sin(I-J/2));
 
-		assert(bufferY);
+		float es = sf*10+4+2*sin(K-G+H);
+		
+
+
+		//assert(bufferY);
 		nvgSave(args.vg);
 		Rect b = Rect(Vec(0, 0),box.size);
 
@@ -268,7 +284,9 @@ struct FolyPaceDisplay : TransparentWidget {
 		
 		nvgRotate(args.vg,fr);
 		nvgEllipse(args.vg, fx,fy,frx,fry);
-		nvgRotate(args.vg,-fr);
+		
+		nvgEllipse(args.vg,epx-es,epy,4,4);
+		nvgEllipse(args.vg,epx+es,epy,4,4);
 		
 
 		nvgLineCap(args.vg, NVG_ROUND);
@@ -358,9 +376,8 @@ struct FolyPaceDisplay : TransparentWidget {
 		if (module->lissajous) {
 			// X x Y
 			int lissajousChannels = std::max(module->channelsX, module->channelsY);
-			for (int c = 0; c < lissajousChannels; c++) {
-				drawFace(args, module->bufferX[c], offsetX, gainX, module->bufferY[c], offsetY, gainY);
-			}
+			drawFace(args,module->bufferX[0][0],module->bufferX[1][0],module->bufferX[2][0],module->bufferX[3][0],module->bufferX[4][0],module->bufferX[5][0],module->bufferX[6][0],module->bufferX[7][0],module->bufferX[8][0],module->bufferX[9][0],module->bufferX[10][0],module->bufferX[11][0],module->bufferX[12][0],module->bufferX[13][0],module->bufferX[14][0],module->bufferX[15][0]);
+
 		}
 		else {
 			// Y
