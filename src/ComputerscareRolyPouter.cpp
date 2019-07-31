@@ -36,6 +36,11 @@ struct ComputerscareRolyPouter : Module {
 		}
 
 	}
+	void setAll(int setVal) {
+		for(int i = 0; i < 16; i++) {
+    		params[KNOB + i].setValue(setVal);
+    	}
+	}
 	void process(const ProcessArgs &args) override {
 		counter++;
 		int inputChannels = inputs[POLY_INPUT].getChannels();
@@ -146,7 +151,69 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 	}
 	PouterSmallDisplay* pouterSmallDisplay;
 	SmallLetterDisplay* outputChannelLabel;
+
+	void addMenuItems(ComputerscareRolyPouter *pouter, Menu *menu);
+	void appendContextMenu(Menu *menu) override;
 };
+struct ssmi : MenuItem
+{
+    ComputerscareRolyPouter *pouter;
+    ComputerscareRolyPouterWidget *pouterWidget;
+    int mySetVal = 1;
+    ssmi(int setVal)
+    {
+    	mySetVal=setVal;
+        //scale = scaleInput;
+    }
+
+    void onAction(const event::Action &e) override
+    {
+    	pouter->setAll(mySetVal);
+        
+       // peas->setQuant();
+    }
+};
+void ComputerscareRolyPouterWidget::addMenuItems(ComputerscareRolyPouter *pouter, Menu *menu)
+{
+	for(int i = 1; i < 17; i++) {
+		ssmi *menuItem = new ssmi(i);
+    	menuItem->text = "Set all to ch. "+std::to_string(i);
+    	menuItem->pouter = pouter;
+    	menuItem->pouterWidget = this;
+    	menu->addChild(menuItem);
+	}
+    
+}
+void ComputerscareRolyPouterWidget::appendContextMenu(Menu *menu)
+{
+    ComputerscareRolyPouter *pouter = dynamic_cast<ComputerscareRolyPouter *>(this->module);
+
+    MenuLabel *spacerLabel = new MenuLabel();
+    menu->addChild(spacerLabel);
+
+
+    MenuLabel *modeLabel = new MenuLabel();
+    modeLabel->text = "Presets";
+    menu->addChild(modeLabel);
+
+    addMenuItems(pouter, menu);
+    /*scaleItemAdd(peas, menu, "212212", "Natural Minor");
+    scaleItemAdd(peas, menu, "2232", "Major Pentatonic");
+    scaleItemAdd(peas, menu, "3223", "Minor Pentatonic");
+    scaleItemAdd(peas, menu, "32113", "Blues");
+    scaleItemAdd(peas, menu, "11111111111", "Chromatic");
+    scaleItemAdd(peas, menu, "212213", "Harmonic Minor");
+    scaleItemAdd(peas, menu, "22222", "Whole-Tone");
+    scaleItemAdd(peas, menu, "2121212", "Whole-Half Diminished");
+
+    scaleItemAdd(peas, menu, "43", "Major Triad");
+    scaleItemAdd(peas, menu, "34", "Minor Triad");
+    scaleItemAdd(peas, menu, "33", "Diminished Triad");
+    scaleItemAdd(peas, menu, "434", "Major 7 Tetrachord");
+    scaleItemAdd(peas, menu, "433", "Dominant 7 Tetrachord");
+    scaleItemAdd(peas, menu, "343", "Minor 7 Tetrachord");
+    scaleItemAdd(peas, menu, "334", "Minor 7 b5 Tetrachord");*/
+}
 
 
 Model *modelComputerscareRolyPouter = createModel<ComputerscareRolyPouter, ComputerscareRolyPouterWidget>("computerscare-roly-pouter");
