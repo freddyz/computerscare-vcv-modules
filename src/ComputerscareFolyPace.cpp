@@ -325,19 +325,43 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgStroke(args.vg);
 		nvgClosePath(args.vg);
 
-		nvgBeginPath(args.vg);
 
+		float mouthX = ox;
+		float mouthY = oy + 10*(sf+sin(E));
+		float mouthWidth = sf*30.f*(1.2+sin(C));
+		float mouthOpen = 10*(1+sin(B));
+		float mouthSmile = sin(D)*1.3;
+		float mouthSkew = sin(L)-sin(H);
+		float mouthThickness = 3.4f;
+		NVGcolor mouthLipColor=nvgHSLA(0.5f,0.2,0.5,0xff);
+		
+		drawMouth(args,mouthX,mouthY,mouthWidth,mouthOpen,mouthSmile,mouthSkew,mouthThickness,mouthLipColor); 
 
-		nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
-		nvgMoveTo(args.vg, msx, msy);
-		nvgBezierTo(args.vg, m1x, m1y, m2x, m2y, mex, mey);
-		nvgStroke(args.vg);
 
 
 		nvgResetScissor(args.vg);
 		nvgRestore(args.vg);
 	}
+	void drawMouth(const DrawArgs &args, float x, float y,float width, float open, float smile, float skew, float thickness,NVGcolor lipColor) {
+		nvgBeginPath(args.vg);
+		nvgStrokeWidth(args.vg, thickness);
+		//nvgStrokeWidth(args.vg, 4.5f);
+		nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
+		nvgMoveTo(args.vg, x-width/2,y-10.f*smile);
 
+		//top
+		nvgBezierTo(args.vg, x-width/4, y-open*smile, x+width/4, y-open*smile, x+width/2, y-10.f*smile);
+
+		//bottom
+		nvgBezierTo(args.vg, x+width/4,y+smile*open, x-width/4, y+smile*open, x-width/2,y-10.f*smile);
+
+
+		nvgStroke(args.vg);
+		nvgClosePath(args.vg);
+	}
+	void drawEyes(const DrawArgs &args,float x,float y, float spacing, float rx, float ry, float open, float irisRad, float pupilRad, float gazeDir, float gazeStrength, NVGcolor irisColor, NVGcolor pupilColor) {
+
+	}
 	void drawTrig(const DrawArgs &args, float value) {
 		Rect b = Rect(Vec(0, 15), box.size.minus(Vec(0, 15 * 2)));
 		nvgScissor(args.vg, b.pos.x, b.pos.y, b.size.x, b.size.y);
