@@ -360,45 +360,56 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgClosePath(args.vg);
 	}
 	void drawEyes(const DrawArgs &args,float x,float y, float spacing, float rx, float ry, float open, float irisRad, float pupilRad, float gazeDir, float gazeStrength, NVGcolor irisColor, NVGcolor pupilColor) {
+		float leftX = x - spacing/2;
+		float rightX = x + spacing/2;
+		float pupilOffsetX = gazeStrength*cos(gazeDir);
+		float pupilOffsetY = gazeStrength*sin(gazeDir);
+		float leftPupilX = leftX + pupilOffsetX;
+		float leftPupilY = y + pupilOffsetY;
+		float rightPupilX = rightX + pupilOffsetX;
+		float rightPupilY = y + pupilOffsetY;
 
-	}
-	void drawTrig(const DrawArgs &args, float value) {
-		Rect b = Rect(Vec(0, 15), box.size.minus(Vec(0, 15 * 2)));
-		nvgScissor(args.vg, b.pos.x, b.pos.y, b.size.x, b.size.y);
+		nvgBeginPath(args.vg);
+		nvgStrokeWidth(args.vg,1.f);
+		//nvgStrokeWidth(args.vg, 4.5f);
 
-		value = value / 2.f + 0.5f;
-		Vec p = Vec(box.size.x, b.pos.y + b.size.y * (1.f - value));
+		//whites of eyes
+		nvgFillColor(args.vg, nvgRGB(250,250,250));
+		nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
+		
+		nvgEllipse(args.vg, leftX, y, rx, ry);
+		nvgEllipse(args.vg, rightX, y, rx, ry);
 
-		// Draw line
-		nvgStrokeColor(args.vg, nvgRGBA(0x1f, 0x24, 0x16, 0xff));
-		{
-			nvgBeginPath(args.vg);
-			nvgMoveTo(args.vg, p.x - 13, p.y);
-			nvgLineTo(args.vg, 0, p.y);
-			nvgClosePath(args.vg);
-		}
-		nvgStroke(args.vg);
-
-		// Draw indicator
-		nvgFillColor(args.vg, nvgRGBA(0x1f, 0x24, 0x16, 0xff));
-		{
-			nvgBeginPath(args.vg);
-			nvgMoveTo(args.vg, p.x - 2, p.y - 4);
-			nvgLineTo(args.vg, p.x - 9, p.y - 4);
-			nvgLineTo(args.vg, p.x - 13, p.y);
-			nvgLineTo(args.vg, p.x - 9, p.y + 4);
-			nvgLineTo(args.vg, p.x - 2, p.y + 4);
-			nvgClosePath(args.vg);
-		}
 		nvgFill(args.vg);
+		nvgClosePath(args.vg);
 
-		nvgFontSize(args.vg, 9);
-		nvgFontFaceId(args.vg, font->handle);
-		nvgFillColor(args.vg, nvgRGBA(0x1e, 0x28, 0x2b, 0xff));
-		nvgText(args.vg, p.x - 8, p.y + 3, "T", NULL);
-		nvgResetScissor(args.vg);
+		//iris
+		nvgBeginPath(args.vg);
+		nvgFillColor(args.vg, irisColor);
+		nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
+		
+		nvgCircle(args.vg, leftPupilX, y, irisRad);
+		nvgCircle(args.vg, rightPupilX, y, irisRad);
+		nvgFill(args.vg);
+		nvgClosePath(args.vg);
+
+//pupil
+		nvgBeginPath(args.vg);
+		nvgFillColor(args.vg, pupilColor);
+		nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
+		
+		nvgCircle(args.vg, leftPupilX, y, pupilRad);
+		nvgCircle(args.vg, rightPupilX, y, pupilRad);
+		nvgFill(args.vg);
+		nvgClosePath(args.vg);
+
+		nvgGlobalCompositeOperation(args.vg,NVG_SOURCE_OVER);
+//eyebrows
+
 	}
+	void drawNose(const DrawArgs &args,float x, float y, float height, float width, float thickness, NVGcolor color) {
 
+	}
 
 
 	void draw(const DrawArgs &args) override {
