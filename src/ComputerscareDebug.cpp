@@ -89,7 +89,7 @@ struct ComputerscareDebug : Module {
 		outputRanges[5][0] = -10.f;
 		outputRanges[5][1] = 10.f;
 
-		stepCounter=0;
+		stepCounter = 0;
 
 		//params[MANUAL_TRIGGER].randomizable=false;
 		//params[MANUAL_CLEAR_TRIGGER].randomizable=false;
@@ -134,9 +134,9 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 				logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
 			}
 			else if (inputMode == INTERNAL_MODE) {
-				printf("%f, %f\n",min,spread);
+				printf("%f, %f\n", min, spread);
 				for (int i = 0; i < 16; i++) {
-					logLines[i] = min+spread*random::uniform();
+					logLines[i] = min + spread * random::uniform();
 				}
 			}
 		}
@@ -152,7 +152,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 		else if (inputMode == INTERNAL_MODE) {
 			for (int i = 0; i < 16; i++) {
-				logLines[i] = min+spread*random::uniform();
+				logLines[i] = min + spread * random::uniform();
 			}
 		}
 	}
@@ -174,7 +174,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		else if (inputMode == INTERNAL_MODE) {
 			for (int i = 0; i < 16; i++) {
 				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
-					logLines[i] = min+spread*random::uniform();
+					logLines[i] = min + spread * random::uniform();
 				}
 			}
 		}
@@ -195,7 +195,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 
 		thisVal = "";
 		for ( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
-		{	
+		{
 			thisVal +=  a > 0 ? "\n" : "";
 			thisVal += logLines[a] >= 0 ? "+" : "";
 			thisVal += std::to_string(logLines[a]).substr(0, 10);
@@ -203,7 +203,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 		strValue = thisVal;
 	}
-	
+
 
 }
 struct HidableSmallSnapKnob : SmallSnapKnob {
@@ -343,15 +343,36 @@ struct ComputerscareDebugWidget : ModuleWidget {
 	{
 		json_t *rootJ = ModuleWidget::toJson();
 		json_object_set_new(rootJ, "outputRange", json_integer(debug->outputRangeEnum));
+
+		json_t *sequencesJ = json_array();
+
+		for (int i = 0; i < 16; i++) {
+			json_t *sequenceJ = json_real(debug->logLines[i]);
+			json_array_append_new(sequencesJ, sequenceJ);
+		}
+		json_object_set_new(rootJ, "lines", sequencesJ);
 		return rootJ;
 	}
 	void fromJson(json_t *rootJ) override
 	{
+		float val;
 		ModuleWidget::fromJson(rootJ);
 		// button states
 
 		json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
 		if (outputRangeEnumJ) { debug->outputRangeEnum = json_integer_value(outputRangeEnumJ); }
+
+		json_t *sequencesJ = json_object_get(rootJ, "lines");
+
+		if (sequencesJ) {
+			for (int i = 0; i < 16; i++) {
+				json_t *sequenceJ = json_array_get(sequencesJ, i);
+				if (sequenceJ)
+				val = json_real_value(sequenceJ);
+				debug->logLines[i] = val;
+			}
+		}
+
 
 	}
 	void appendContextMenu(Menu *menu) override;
@@ -362,7 +383,7 @@ struct DebugOutputRangeItem : MenuItem {
 	int outputRangeEnum;
 	void onAction(const event::Action &e) override {
 		debug->outputRangeEnum = outputRangeEnum;
-		printf("outputRangeEnum %i\n",outputRangeEnum);
+		printf("outputRangeEnum %i\n", outputRangeEnum);
 	}
 	void step() override {
 		rightText = CHECKMARK(debug->outputRangeEnum == outputRangeEnum);

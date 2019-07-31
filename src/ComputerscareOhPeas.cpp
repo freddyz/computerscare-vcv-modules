@@ -427,14 +427,29 @@ struct ComputerscareOhPeasWidget : ModuleWidget
 
     void fromJson(json_t *rootJ) override
     {
+        std::string val;
         ModuleWidget::fromJson(rootJ);
 
         // text
+
         json_t *textJ = json_object_get(rootJ, "sequences");
         if (textJ)
             textFieldTemp->text = json_string_value(textJ);
+        
+        json_t *textJLegacy = json_object_get(rootJ, "data");
+        if (textJLegacy) {
+            json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
 
-        //module->setQuant();
+            if (seqJLegacy) {
+                json_t *theSequence = json_array_get(seqJLegacy, 0);
+                if (theSequence) {
+                    val = json_string_value(theSequence);
+                    printf("yep there is json from Rack 0.6 %s\n", val.c_str());
+                    textFieldTemp->text = val;
+                    
+                }
+            }
+        }
     }
 
 

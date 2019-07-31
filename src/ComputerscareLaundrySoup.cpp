@@ -423,6 +423,22 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
         laundry->currentFormula[i] = val;
       }
     }
+    else {
+      json_t *textJLegacy = json_object_get(rootJ, "data");
+      if (textJLegacy) {
+        json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
+
+        if (seqJLegacy) {
+          for (int i = 0; i < numFields; i++) {
+            json_t *sequenceJ = json_array_get(seqJLegacy, i);
+            if (sequenceJ)
+            val = json_string_value(sequenceJ);
+            laundryTextFields[i]->text = val;
+            laundry->currentFormula[i] = val;
+          }
+        }
+      }
+    }
   }
 
   ComputerscareLaundrySoup *laundry;
