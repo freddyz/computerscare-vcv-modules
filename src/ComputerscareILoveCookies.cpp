@@ -156,14 +156,14 @@ struct ComputerscareILoveCookies : Module {
 
   }
   void wiggleKnobs() {
-    /*for (int i = 0; i < numKnobs; i++) {
+    for (int i = 0; i < numKnobs; i++) {
       float prev = params[KNOB_PARAM + i].getValue();
       if (random::uniform() < 0.7) {
         float rv = (10 * random::uniform() + 2 * prev) / 3;
-        this->smallLetterKnobs[i]->setValue(rv);
-        params[KNOB_PARAM + i].getValue() = rv;
+        params[KNOB_PARAM+i].setValue(rv);
       }
-    }*/
+    }
+
   }
   void randomizeTextFields() {
     std::string mainlookup = knoblookup;
@@ -475,7 +475,7 @@ struct CookiesCurrentStepDisplay : SmallLetterDisplay
     //this->setNumDivisionsString();
     if (module)
     {
-          //this->currentWorkingStepDisplays[i]->value = this->newABS[i].getWorkingStepDisplay();
+      //this->currentWorkingStepDisplays[i]->value = this->newABS[i].getWorkingStepDisplay();
 
       value = module->newABS[index].getWorkingStepDisplay();
 
@@ -577,17 +577,17 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
       //individual reset input
       addInput(createInput<InPort>(mm2px(Vec(12 + xStart, verticalStart + verticalSpacing * i - 10)), module, ComputerscareILoveCookies::RESET_INPUT + i));
-     
+
       //sequence input field
       textField = new CookiesTF2(i);
       textField->box.pos = mm2px(Vec(1 + xStart, verticalStart + verticalSpacing * i));
-                           textField->box.size = mm2px(Vec(63, 7));
+      textField->box.size = mm2px(Vec(63, 7));
       textField->multiline = false;
       textField->color = nvgRGB(0xC0, 0xE7, 0xDE);
       textField->module = module;
       addChild(textField);
       cookiesTextFields[i] = textField;
-                             //module->textFields[i] = textField;
+      //module->textFields[i] = textField;
 
       //active/total steps display
       cookiesSmallDisplay = new CookiesSmallDisplay(i);
@@ -609,7 +609,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       addChild(currentWorkingStepDisplay);
       currentWorkingStepDisplays[i] = currentWorkingStepDisplay;
 
-     // module->currentWorkingStepDisplays[i] = currentWorkingStepDisplay;
+      // module->currentWorkingStepDisplays[i] = currentWorkingStepDisplay;
 
       addParam(createParam<ComputerscareInvisibleButton>(mm2px(Vec(21 + xStart, verticalStart - 9.9 + verticalSpacing * i)), module, ComputerscareILoveCookies::INDIVIDUAL_RESET_PARAM + i));
     }
@@ -642,6 +642,22 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
         cookies->currentFormula[i] = val;
       }
     }
+    else {
+      json_t *textJLegacy = json_object_get(rootJ, "data");
+      if (textJLegacy) {
+        json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
+
+        if (seqJLegacy) {
+          for (int i = 0; i < numFields; i++) {
+            json_t *sequenceJ = json_array_get(seqJLegacy, i);
+            if (sequenceJ)
+            val = json_string_value(sequenceJ);
+            cookiesTextFields[i]->text = val;
+            cookies->currentFormula[i] = val;
+          }
+        }
+      }
+    }
   }
 
   ComputerscareILoveCookies *cookies;
@@ -655,7 +671,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   CookiesSmallDisplay* cookiesSmallDisplays[numFields];
 
   SmallLetterDisplay* smallLetterDisplay;
-  
+
   CookiesCurrentStepDisplay* currentWorkingStepDisplay;
   CookiesCurrentStepDisplay* currentWorkingStepDisplays[numFields];
 
