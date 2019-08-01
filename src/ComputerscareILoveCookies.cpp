@@ -24,63 +24,6 @@ const int numInputs = numInputRows * numInputColumns;
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED, COLOR_COMPUTERSCARE_YELLOW, COLOR_COMPUTERSCARE_BLUE};
 
 
-/*class MyTextFieldCookie : public LedDisplayTextField {
-
-public:
-  int fontSize = LG_FONT_SIZE;
-  int rowIndex = 0;
-  bool inError = false;
-  MyTextFieldCookie() : LedDisplayTextField() {}
-  void setModule(ComputerscareILoveCookies* _module) {
-    module = _module;
-  }
-  virtual void onTextChange() override;
-  int getTextPosition(Vec mousePos) override {
-    bndSetFont(font->handle);
-    int textPos = bndIconLabelTextPosition(gVg, textOffset.x, textOffset.y,
-                                           box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
-                                           -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
-    bndSetFont(gGuiFont->handle);
-    return textPos;
-  }
-  void draw(const DrawArgs &args) override {
-    nvgScissor(args.vg, 0, 0, box.size.x, box.size.y);
-
-    // Background
-    nvgFontSize(args.vg, fontSize);
-    nvgBeginPath(args.vg);
-    nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 5.0);
-    if (inError) {
-      nvgFillColor(args.vg, COLOR_COMPUTERSCARE_PINK);
-    }
-    else {
-      nvgFillColor(args.vg, nvgRGB(0x00, 0x00, 0x00));
-    }
-    nvgFill(args.vg);
-
-    // Text
-    if (font->handle >= 0) {
-      bndSetFont(font->handle);
-
-      NVGcolor highlightColor = color;
-      highlightColor.a = 0.5;
-      int begin = min(cursor, selection);
-      int end = (this == gFocusedWidget) ? max(cursor, selection) : -1;
-      //bndTextField(args.vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
-      bndIconLabelCaret(args.vg, textOffset.x, textOffset.y - 3,
-                        box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
-                        -1, color, fontSize, text.c_str(), highlightColor, begin, end);
-
-      bndSetFont(gGuiFont->handle);
-    }
-
-    nvgResetScissor(args.vg);
-  };
-
-private:
-  ComputerscareILoveCookies* module;
-};*/
-
 struct ComputerscareILoveCookies : Module {
   enum ParamIds {
     KNOB_PARAM,
@@ -145,9 +88,9 @@ struct ComputerscareILoveCookies : Module {
       checkIfShouldChange(i);
       resetOneOfThem(i);
     }
-		for(int k=0; k < numKnobs; k++) {
-       configParam( KNOB_PARAM+ k, 0.f, 10.f, 0.0f, ""," volts");
-		}
+    for (int k = 0; k < numKnobs; k++) {
+      configParam( KNOB_PARAM + k, 0.f, 10.f, 0.0f, "", " volts");
+    }
   }
   void process(const ProcessArgs &args) override;
 
@@ -163,7 +106,7 @@ struct ComputerscareILoveCookies : Module {
       float prev = params[KNOB_PARAM + i].getValue();
       if (random::uniform() < 0.7) {
         float rv = (10 * random::uniform() + 2 * prev) / 3;
-        params[KNOB_PARAM+i].setValue(rv);
+        params[KNOB_PARAM + i].setValue(rv);
       }
     }
 
@@ -193,11 +136,6 @@ struct ComputerscareILoveCookies : Module {
       setNextAbsoluteSequence(i);
     }
   }
-  /*void checkLength(int index) {
-    std::string value = textFields[index]->text;
-    int length = value.length();
-    textFields[index]->fontSize = length > 17 ? (length > 30 ? SM_FONT_SIZE : MED_FONT_SIZE) : LG_FONT_SIZE;
-  }*/
   void setNextAbsoluteSequence(int index) {
     newABSQueue[index] = AbsoluteSequence(currentFormula[index], knobandinputlookup);
     shouldChange[index] = true;
@@ -417,21 +355,6 @@ struct CookiesTF2 : ComputerscareTextField
     }
     ComputerscareTextField::draw(args);
   }
-  /*void MyTextFieldCookie::onTextChange() {
-    module->checkLength(this->rowIndex);
-    std::string value = module->textFields[this->rowIndex]->text;
-    AbsoluteSequence abs = AbsoluteSequence(value,knobandinputlookup);
-    if((!abs.inError) && matchParens(value)) {
-      module->setNextAbsoluteSequence(this->rowIndex);
-      module->updateDisplayBlink(this->rowIndex);
-      module->textFields[this->rowIndex]->inError=false;
-    }
-    else {
-      module->textFields[this->rowIndex]->inError=true;
-    }
-  }*/
-  //void draw(const DrawArgs &args) override;
-  //int getTextPosition(math::Vec mousePos) override;
 };
 
 struct CookiesSmallDisplay : SmallLetterDisplay
@@ -475,11 +398,8 @@ struct CookiesCurrentStepDisplay : SmallLetterDisplay
   };
   void draw(const DrawArgs &args)
   {
-    //this->setNumDivisionsString();
     if (module)
     {
-      //this->currentWorkingStepDisplays[i]->value = this->newABS[i].getWorkingStepDisplay();
-
       value = module->newABS[index].getWorkingStepDisplay();
 
       SmallLetterDisplay::draw(args);
@@ -590,7 +510,6 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       textField->module = module;
       addChild(textField);
       cookiesTextFields[i] = textField;
-      //module->textFields[i] = textField;
 
       //active/total steps display
       cookiesSmallDisplay = new CookiesSmallDisplay(i);
@@ -611,8 +530,6 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       currentWorkingStepDisplay->module = module;
       addChild(currentWorkingStepDisplay);
       currentWorkingStepDisplays[i] = currentWorkingStepDisplay;
-
-      // module->currentWorkingStepDisplays[i] = currentWorkingStepDisplay;
 
       addParam(createParam<ComputerscareInvisibleButton>(mm2px(Vec(21 + xStart, verticalStart - 9.9 + verticalSpacing * i)), module, ComputerscareILoveCookies::INDIVIDUAL_RESET_PARAM + i));
     }
@@ -654,7 +571,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
           for (int i = 0; i < numFields; i++) {
             json_t *sequenceJ = json_array_get(seqJLegacy, i);
             if (sequenceJ)
-            val = json_string_value(sequenceJ);
+              val = json_string_value(sequenceJ);
             cookiesTextFields[i]->text = val;
             cookies->currentFormula[i] = val;
           }
