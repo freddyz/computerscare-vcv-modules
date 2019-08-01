@@ -1221,4 +1221,12 @@ float Quantizer::quantizeEven(float input,int iTranspose) {
 float Quantizer::quantizeEven(float input) {
   return quantizeEven(input,0);
 }
+std::string getByteString(float f) {
+	unsigned char const * p = reinterpret_cast<unsigned char const *>(&f);
 
+for (std::size_t i = 0; i != sizeof(float); ++i)
+{
+    std::printf("The byte #%zu is 0x%02X\n", i, p[i]);
+}
+	return "horse";
+}

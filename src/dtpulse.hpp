@@ -140,6 +140,7 @@ class Quantizer {
 bool matchesAny(std::string val, std::vector<std::string> whitelist);
 bool is_digits(const std::string &str);
 void padTo(std::string &str, const size_t num, const char paddingChar );
+
 std::vector <int> parseString(std::string expr);
 std::vector <int> parseDt(std::string input, int offset, std::string lookup);
 std::vector <int> parseLookup(std::string input, int offset, std::string lookup);
@@ -166,3 +167,4 @@ void whoKnowsLaundry(std::string input);
 void whoKnowsQuantize(std::string input);
 std::vector<int> getIndicesFromTokenStack(std::vector<Token> tokens);
 std::vector<int> duplicateIntVector(std::vector<int> input);
+std::string getByteString(float f);
