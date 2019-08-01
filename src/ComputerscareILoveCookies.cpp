@@ -89,7 +89,7 @@ struct ComputerscareILoveCookies : Module {
       resetOneOfThem(i);
     }
     for (int k = 0; k < numKnobs; k++) {
-      configParam( KNOB_PARAM + k, 0.f, 10.f, 0.0f, "", " volts");
+      configParam( KNOB_PARAM + k, 0.f, 10.f, 0.0f, string::f("knob %c",knoblookup[k]), " volts");
     }
   }
   void process(const ProcessArgs &args) override;
