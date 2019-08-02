@@ -17,6 +17,8 @@ struct FolyPace : Module {
 		LISSAJOUS_PARAM,
 		TRIG_PARAM,
 		EXTERNAL_PARAM,
+		TRIM,
+		OFFSET,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -55,6 +57,8 @@ struct FolyPace : Module {
 		configParam(X_POS_PARAM, -10.f, 10.f, 0.f, "X position", " V");
 		configParam(Y_SCALE_PARAM, -2.f, 8.f, 0.f, "Y scale", " V/div", 1 / 2.f, 5);
 		configParam(Y_POS_PARAM, -10.f, 10.f, 0.f, "Y position", " V");
+		configParam(TRIM, -2.f, 2.f, 1.f, "Input Trim");
+		configParam(OFFSET, -5.f, 5.f, 0.f, "Input Offset", " Volts");
 		const float timeBase = (float) BUFFER_SIZE / 6;
 		configParam(TIME_PARAM, 6.f, 16.f, 14.f, "Time", " ms/div", 1 / 2.f, 1000 * timeBase);
 		configParam(LISSAJOUS_PARAM, 0.f, 1.f, 0.f);
@@ -244,7 +248,6 @@ struct FolyPaceDisplay : TransparentWidget {
 		NVGcolor irisColor = nvgHSLA(s,l,h, 0xff);
 		NVGcolor pupilColor = nvgHSLA(0.1, 0.1, 0.1, 0xff);
 
-		//assert(bufferY);
 		//nvgSave(args.vg);
 
 		Rect b = Rect(Vec(0, 0), box.size);
@@ -256,7 +259,15 @@ struct FolyPaceDisplay : TransparentWidget {
 
 		drawHead(args,fx,fy,frx,fry,faceColor);
 
+		float leftEyebrowHeight = fry*0.1;
+		float rightEyebrowHeight = fry*0.1;
+		float leftEyebrowAngle = 0.3*sin(C);
+		float rightEyebrowAngle = 0.3*sin(F);
+		NVGcolor eyebrowColor = nvgHSLA(0.1,0.2,0.2,0xff);
+		float eyebrowThickness = 5.f;
+
 		drawEyes(args, epx, epy, eyeSpacing, erlx, erly, 1, irisRad, pupilRad, gazeDir, gazeStrength, irisColor, pupilColor);
+		drawEyebrows(args,epx,epy,eyeSpacing,leftEyebrowHeight,rightEyebrowHeight,leftEyebrowAngle,rightEyebrowAngle,eyebrowColor,eyebrowThickness,eyebrowLength);
 
 
 		float mouthX = ox;
@@ -278,6 +289,28 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgResetScissor(args.vg);
 		//nvgRestore(args.vg);
 	}
+
+		void drawEyebrows(const DrawArgs &args,float x,float y, float eyeSpacing,float leftEyebrowHeight,float rightEyebrowHeight,float leftEyebrowAngle,float rightEyebrowAngle,NVGcolor eyebrowColor,float eyebrowThickness,float eyebrowLength) {
+			nvgBeginPath(args.vg);
+			nvgStrokeColor(args.vg,eyebrowColor);
+		nvgStrokeWidth(args.vg, eyebrowThickness);
+			float cosLeft = cos(leftEyebrowAngle);
+			float sinLeft = sin(leftEyebrowAngle);
+			float cosRight = cos(rightEyebrowAngle);
+			float sinRight = sin(rightEyebrowAngle);
+
+			float r = eyebrowLength / 2;
+
+			nvgMoveTo(args.vg,x - eyeSpacing/2 - r * cosLeft,y - leftEyebrowHeight - r*sinLeft);
+			nvgLineTo(args.vg,x - eyeSpacing/2 + r * cosLeft,y - leftEyebrowHeight + r*sinLeft) 
+			//nvgStroke(args.vg);
+
+			nvgMoveTo(args.vg,x + eyeSpacing/2 - r * cosRight,y - rightEyebrowHeight - r*sinRight);
+			nvgLineTo(args.vg,x + eyeSpacing/2 + r * cosRight,y - rightEyebrowHeight + r*sinRight); 
+			nvgStroke(args.vg);
+
+			nvgClosePath(args.vg);
+		}
 	void drawHead(const DrawArgs &args, float x, float y, float width, float height, NVGcolor color) {
 		nvgBeginPath(args.vg);
 
