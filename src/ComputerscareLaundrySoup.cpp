@@ -93,6 +93,8 @@ struct ComputerscareLaundrySoup : Module {
   rack::dsp::SchmittTrigger manualResetTriggers[numFields];
 
   LaundrySoupSequence laundrySequences[numFields];
+//LaundryPoly laundryPoly;
+
 
   bool activeStep[numFields] = {false};
 
@@ -108,7 +110,6 @@ struct ComputerscareLaundrySoup : Module {
       setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
-
     }
   }
   void process(const ProcessArgs &args) override;
@@ -145,13 +146,14 @@ struct ComputerscareLaundrySoup : Module {
   void setAbsoluteSequenceFromQueue(int index) {
     LaundrySoupSequence lss = LaundrySoupSequence(currentFormula[index]);
     laundrySequences[index] = lss;
+
+    //laundryPoly.update(index,currentFormula[index]);
     if (!lss.inError) {
       laundrySequences[index] = lss;
-      printf("not in error channel %i\n", index);
       laundrySequences[index].print();
     }
     else {
-      printf("ERROR\n");
+      printf("ERROR ch:%i\n",index);
       lss.print();
       //textFields[index]->inError = true;
     }

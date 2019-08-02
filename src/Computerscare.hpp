@@ -45,7 +45,17 @@ static const NVGcolor COLOR_COMPUTERSCARE_YELLOW = nvgRGB(0xE4, 0xC4, 0x21);
 static const NVGcolor COLOR_COMPUTERSCARE_BLUE = nvgRGB(0x24, 0x44, 0xC1);
 static const NVGcolor COLOR_COMPUTERSCARE_PINK = nvgRGB(0xAA, 0x18, 0x31);
 static const NVGcolor COLOR_COMPUTERSCARE_TRANSPARENT = nvgRGBA(0x00, 0x00, 0x00, 0x00);
+float mapChannelCountToVoltage(int ch) {
+	return ( (float) ch ) / 1.6f;
+}
+int mapVoltageToChannelCount(float vv) {
+	float v = vv;
 
+	if(v < 0) { 
+			v = v + 10.f;
+		}
+	return (int) round(v * 1.6f);
+}
 
 namespace rack {
 namespace app {

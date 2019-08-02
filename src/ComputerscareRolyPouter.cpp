@@ -15,6 +15,7 @@ struct ComputerscareRolyPouter : Module {
 	};
 	enum InputIds {
 		POLY_INPUT,
+		ROUTING_CV,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -37,9 +38,9 @@ struct ComputerscareRolyPouter : Module {
 
 	}
 	void setAll(int setVal) {
-		for(int i = 0; i < 16; i++) {
-    		params[KNOB + i].setValue(setVal);
-    	}
+		for (int i = 0; i < 16; i++) {
+			params[KNOB + i].setValue(setVal);
+		}
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
@@ -54,13 +55,35 @@ struct ComputerscareRolyPouter : Module {
 
 		}
 		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
-		for (int i = 0; i < numOutputChannels; i++) {
-			knobSetting = params[KNOB+i].getValue();
-			if(knobSetting > inputChannels) {
-							outputs[POLY_OUTPUT].setVoltage(0,i);
+
+		//if()
+		if (inputs[ROUTING_CV].isConnected())  {
+			float v1 = inputs[ROUTING_CV].getVoltage(0);
+			float v2 = inputs[ROUTING_CV].getVoltage(1);
+			for (int i = 0; i < numOutputChannels; i++) {
+
+				knobSetting = mapVoltageToChannelCount(inputs[ROUTING_CV].getVoltage(i));
+
+				if (knobSetting > inputChannels) {
+					outputs[POLY_OUTPUT].setVoltage(0, i);
+				}
+				else {
+					outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(knobSetting), i);
+				}
 			}
-			else {
-			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(knobSetting - 1), i);
+		} else {
+			for (int i = 0; i < numOutputChannels; i++) {
+
+				knobSetting = params[KNOB + i].getValue();
+
+
+
+				if (knobSetting > inputChannels) {
+					outputs[POLY_OUTPUT].setVoltage(0, i);
+				}
+				else {
+					outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(knobSetting - 1), i);
+				}
 			}
 		}
 	}
@@ -115,11 +138,14 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 		for (int i = 0; i < numKnobs; i++) {
 			xx = 1.4f + 24.3 * (i - i % 8) / 8;
 			yy = 66 + 36.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
-			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.3 - 5, i<8 ? 4 : 0);
+			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.3 - 5, i < 8 ? 4 : 0);
 		}
 
 
 		addInput(createInput<InPort>(Vec(1, 34), module, ComputerscareRolyPouter::POLY_INPUT));
+		addInput(createInput<InPort>(Vec(30, 54), module, ComputerscareRolyPouter::ROUTING_CV));
+
+
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(32, 24), module, ComputerscareRolyPouter::POLY_OUTPUT));
 
 	}
@@ -127,11 +153,11 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 
 		pouterSmallDisplay = new PouterSmallDisplay(index);
 		pouterSmallDisplay->box.size = Vec(20, 20);
-		pouterSmallDisplay->box.pos = Vec(x-2.5 ,y+1.f);
+		pouterSmallDisplay->box.pos = Vec(x - 2.5 , y + 1.f);
 		pouterSmallDisplay->fontSize = 26;
 		pouterSmallDisplay->textAlign = 18;
 		pouterSmallDisplay->textColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
-		pouterSmallDisplay->breakRowWidth=20;
+		pouterSmallDisplay->breakRowWidth = 20;
 		pouterSmallDisplay->module = module;
 
 
@@ -140,7 +166,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 		outputChannelLabel->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 		outputChannelLabel->fontSize = 14;
 		outputChannelLabel->textAlign = index < 8 ? 1 : 4;
-		outputChannelLabel->breakRowWidth=15;
+		outputChannelLabel->breakRowWidth = 15;
 
 		outputChannelLabel->value = std::to_string(index + 1);
 
@@ -157,62 +183,62 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 };
 struct ssmi : MenuItem
 {
-    ComputerscareRolyPouter *pouter;
-    ComputerscareRolyPouterWidget *pouterWidget;
-    int mySetVal = 1;
-    ssmi(int setVal)
-    {
-    	mySetVal=setVal;
-        //scale = scaleInput;
-    }
+	ComputerscareRolyPouter *pouter;
+	ComputerscareRolyPouterWidget *pouterWidget;
+	int mySetVal = 1;
+	ssmi(int setVal)
+	{
+		mySetVal = setVal;
+		//scale = scaleInput;
+	}
 
-    void onAction(const event::Action &e) override
-    {
-    	pouter->setAll(mySetVal);
-        
-       // peas->setQuant();
-    }
+	void onAction(const event::Action &e) override
+	{
+		pouter->setAll(mySetVal);
+
+		// peas->setQuant();
+	}
 };
 void ComputerscareRolyPouterWidget::addMenuItems(ComputerscareRolyPouter *pouter, Menu *menu)
 {
-	for(int i = 1; i < 17; i++) {
+	for (int i = 1; i < 17; i++) {
 		ssmi *menuItem = new ssmi(i);
-    	menuItem->text = "Set all to ch. "+std::to_string(i);
-    	menuItem->pouter = pouter;
-    	menuItem->pouterWidget = this;
-    	menu->addChild(menuItem);
+		menuItem->text = "Set all to ch. " + std::to_string(i);
+		menuItem->pouter = pouter;
+		menuItem->pouterWidget = this;
+		menu->addChild(menuItem);
 	}
-    
+
 }
 void ComputerscareRolyPouterWidget::appendContextMenu(Menu *menu)
 {
-    ComputerscareRolyPouter *pouter = dynamic_cast<ComputerscareRolyPouter *>(this->module);
+	ComputerscareRolyPouter *pouter = dynamic_cast<ComputerscareRolyPouter *>(this->module);
 
-    MenuLabel *spacerLabel = new MenuLabel();
-    menu->addChild(spacerLabel);
+	MenuLabel *spacerLabel = new MenuLabel();
+	menu->addChild(spacerLabel);
 
 
-    MenuLabel *modeLabel = new MenuLabel();
-    modeLabel->text = "Presets";
-    menu->addChild(modeLabel);
+	MenuLabel *modeLabel = new MenuLabel();
+	modeLabel->text = "Presets";
+	menu->addChild(modeLabel);
 
-    addMenuItems(pouter, menu);
-    /*scaleItemAdd(peas, menu, "212212", "Natural Minor");
-    scaleItemAdd(peas, menu, "2232", "Major Pentatonic");
-    scaleItemAdd(peas, menu, "3223", "Minor Pentatonic");
-    scaleItemAdd(peas, menu, "32113", "Blues");
-    scaleItemAdd(peas, menu, "11111111111", "Chromatic");
-    scaleItemAdd(peas, menu, "212213", "Harmonic Minor");
-    scaleItemAdd(peas, menu, "22222", "Whole-Tone");
-    scaleItemAdd(peas, menu, "2121212", "Whole-Half Diminished");
+	addMenuItems(pouter, menu);
+	/*scaleItemAdd(peas, menu, "212212", "Natural Minor");
+	scaleItemAdd(peas, menu, "2232", "Major Pentatonic");
+	scaleItemAdd(peas, menu, "3223", "Minor Pentatonic");
+	scaleItemAdd(peas, menu, "32113", "Blues");
+	scaleItemAdd(peas, menu, "11111111111", "Chromatic");
+	scaleItemAdd(peas, menu, "212213", "Harmonic Minor");
+	scaleItemAdd(peas, menu, "22222", "Whole-Tone");
+	scaleItemAdd(peas, menu, "2121212", "Whole-Half Diminished");
 
-    scaleItemAdd(peas, menu, "43", "Major Triad");
-    scaleItemAdd(peas, menu, "34", "Minor Triad");
-    scaleItemAdd(peas, menu, "33", "Diminished Triad");
-    scaleItemAdd(peas, menu, "434", "Major 7 Tetrachord");
-    scaleItemAdd(peas, menu, "433", "Dominant 7 Tetrachord");
-    scaleItemAdd(peas, menu, "343", "Minor 7 Tetrachord");
-    scaleItemAdd(peas, menu, "334", "Minor 7 b5 Tetrachord");*/
+	scaleItemAdd(peas, menu, "43", "Major Triad");
+	scaleItemAdd(peas, menu, "34", "Minor Triad");
+	scaleItemAdd(peas, menu, "33", "Diminished Triad");
+	scaleItemAdd(peas, menu, "434", "Major 7 Tetrachord");
+	scaleItemAdd(peas, menu, "433", "Dominant 7 Tetrachord");
+	scaleItemAdd(peas, menu, "343", "Minor 7 Tetrachord");
+	scaleItemAdd(peas, menu, "334", "Minor 7 b5 Tetrachord");*/
 }
 
 

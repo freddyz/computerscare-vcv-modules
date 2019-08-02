@@ -21,12 +21,7 @@ want:
 rotate 4,clip 4
 
 */
-float mapChannelCountToVoltage(int ch) {
-	return ( (float) ch ) / 1.6f;
-}
-int mapVoltageToChannelCount(float voltage) {
-	return (int) round(voltage * 1.6f);
-}
+
 
 struct ComputerscareTolyPools : Module {
 	int counter = 83910;
@@ -75,10 +70,10 @@ struct ComputerscareTolyPools : Module {
 			numInputChannels = inputs[POLY_INPUT].getChannels();
 		}
 		if(inputs[NUM_CHANNELS_CV].isConnected()) {
-			numChannels = mapVoltageToChannelCount(inputs[NUM_CHANNELS_CV].getVoltage());
+			numChannels = mapVoltageToChannelCount(inputs[NUM_CHANNELS_CV].getVoltage(0));
 		}
 		if(inputs[ROTATE_CV].isConnected()) {
-			rotation = mapVoltageToChannelCount(inputs[ROTATE_CV].getVoltage());
+			rotation = mapVoltageToChannelCount(inputs[ROTATE_CV].getVoltage(0));
 		}
 		outputs[POLY_OUTPUT].setChannels(numChannels);
 		outputs[NUM_CHANNELS_OUTPUT].setVoltage(mapChannelCountToVoltage(numInputChannels));

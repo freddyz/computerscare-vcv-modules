@@ -46,6 +46,7 @@ class Parser {
 		void skipToken();
 		void setExactValue(Token t);
 		void setForExactIntegers(Token t);
+		void setForVariables(Token t);
 		void setForChanceOfIntegers(Token t);
 		void setForRandoms(Token t);
 		void replaceLettersWithNumbers(Token t);
@@ -64,6 +65,7 @@ class Parser {
 		int currentIndex;
 		void ParseExactValue(Token t);
 		void ParseExactInteger(Token t);
+		void ParseVariable(Token t);
 		void ParseRandomSequence(Token t);
 		void ParseInterleave(Token t,std::vector<std::string> whitelist);
 		void ParseAtExpand(Token t, std::vector<std::string> whitelist, bool laundryMode);
@@ -95,6 +97,7 @@ class AbsoluteSequence {
 		int getCurrentAddressAtReadHead();
 		std::string getWorkingStepDisplay();
 };
+
 class LaundrySoupSequence {
 	public:
 		LaundrySoupSequence(std::string expr);
@@ -136,6 +139,22 @@ class Quantizer {
 		float findClosestValue(float input, std::vector<float> allowedValues);
 
 		std::vector<float> generateMappedValues();
+};
+class LaundryPoly {
+public:
+	int index;
+	LaundrySoupSequence lss[16];
+	LaundryPoly(int n,std::string formula) {
+		index=n;
+		for(int i = 0; i < 16; i++ ) {
+			lss[i] = LaundrySoupSequence(formula);
+		}
+	}
+	void update(int dex,std::string formula) {
+		for(int i = 0; i < 16; i++ ) {
+			lss[i] = LaundrySoupSequence(formula);
+		}
+	}
 };
 bool matchesAny(std::string val, std::vector<std::string> whitelist);
 bool is_digits(const std::string &str);
