@@ -1,6 +1,7 @@
 #include <string.h>
 #include "plugin.hpp"
 #include "Computerscare.hpp"
+#include "dtpulse.hpp"
 
 
 static const int BUFFER_SIZE = 512;
@@ -186,6 +187,9 @@ struct FolyPaceDisplay : TransparentWidget {
 
 	void drawFace(const DrawArgs &args, float A, float B, float C, float D, float E, float F, float G, float H, float I, float J, float K, float L, float M, float N, float O, float P) {
 
+		//printf("ch1:%f\n",A);
+		//std::string byte = getByteString(A);
+
 		//nvgReset(args.vg);
 
 		float sf = 1 + 0.3 * sin(B - C); //scaleFactor
@@ -225,19 +229,19 @@ struct FolyPaceDisplay : TransparentWidget {
 		float epx = ox;
 		float epy = oy - 10 * (2 + sf + sin(I - J / 2));
 
-		float es = sf * 30  + 15 * sin(K - G + H);
-		float erlx = 20 + 10 * sin(A) + 5 * sin(-L);
-		float erly = 30 + 15 * sin(O - P) - 10 * sin(G);
+		float eyeSpacing = frx/2*(1.8+0.5*sin(200-J));
+		float erlx = frx/3*(1+0.4*sin(G));
+		float erly = frx/3*(1+0.4*sin(H-N+100));
 		float errx = 10 + 3 * sin(M) + 4 * sin(M - 2 - 882.2);
 		float erry = 10 + 2 * sin(J) + 4 * sin(J - erly / 20);
 
-		float irisRad = erlx * 0.1 * (1.5 + sin(N));
-		float pupilRad = irisRad * 0.3 * (1 + sin(E));
+		float irisRad = erly*0.4*(1+0.4*sin(K-D+1));
+		float pupilRad = irisRad * 0.4 * (1 + 0.6*sin(E));
 
 		float gazeDir = 3.14159 * (1 + sin(B - K));
 		float gazeStrength = 4 * (1.2 + 0.3 * sin(D - 1) + 0.4 * sin(1 - L / 2));
 
-		NVGcolor irisColor = nvgHSLA(0.4, 0.8, 0.3, 0xff);
+		NVGcolor irisColor = nvgHSLA(s,l,h, 0xff);
 		NVGcolor pupilColor = nvgHSLA(0.1, 0.1, 0.1, 0xff);
 
 		//assert(bufferY);
@@ -252,14 +256,14 @@ struct FolyPaceDisplay : TransparentWidget {
 
 		drawHead(args,fx,fy,frx,fry,faceColor);
 
-		drawEyes(args, epx, epy, es, erlx, erly, 1, irisRad, pupilRad, gazeDir, gazeStrength, irisColor, pupilColor);
+		drawEyes(args, epx, epy, eyeSpacing, erlx, erly, 1, irisRad, pupilRad, gazeDir, gazeStrength, irisColor, pupilColor);
 
 
 		float mouthX = ox;
-		float mouthY = oy + 10 * (sf + sin(E));
-		float mouthWidth = sf * 30.f * (1.2 + sin(C));
-		float mouthOpen = 10 * (1 + sin(B));
-		float mouthSmile = sin(D) * 1.3;
+		float mouthY = oy +0.5*fry*(1+0.4*sin(C/2));
+		float mouthWidth = frx*0.7 * (1.2 + 0.6*sin(C));
+		float mouthOpen = fry*0.2*(1+sin(O));
+		float mouthSmile = sin(D) * 2.3;
 		float mouthSkew = sin(L) - sin(H);
 		float mouthThickness = 3.4f;
 		NVGcolor mouthLipColor = nvgHSLA(0.5f, 0.2, 0.5, 0xff);
@@ -292,7 +296,7 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgStrokeWidth(args.vg, thickness);
 		//nvgStrokeWidth(args.vg, 4.5f);
 
-		nvgMoveTo(args.vg, x - width / 2, y - 10.f * smile);
+		nvgMoveTo(args.vg, x - width / 2, y - 20.f * smile);
 
 		//top
 		nvgBezierTo(args.vg, x - width / 4, y - open * smile, x + width / 4, y - open * smile, x + width / 2, y - 10.f * smile);
@@ -301,7 +305,8 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgBezierTo(args.vg, x + width / 4, y + smile * open, x - width / 4, y + smile * open, x - width / 2, y - 10.f * smile);
 
 		nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
-		nvgStroke(args.vg);
+		nvgFillColor(args.vg,nvgRGBA(0,0,0,0xff));
+		nvgFill(args.vg);
 		nvgClosePath(args.vg);
 	}
 	void drawEyes(const DrawArgs &args, float x, float y, float spacing, float rx, float ry, float open, float irisRad, float pupilRad, float gazeDir, float gazeStrength, NVGcolor irisColor, NVGcolor pupilColor) {
