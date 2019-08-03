@@ -190,12 +190,8 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
     int numScaleCVChannels;
     int numOffsetCVChannels;
 
-    //int globalTransposeKnobValue = (int) clamp(roundf(params[GLOBAL_TRANSPOSE].getValue()), -fNumDiv, fNumDiv);
-
     if (numDivisionsKnobValue != numDivisions)
     {
-        //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
-
         //what a hack!!!
         if (numDivisionsKnobValue != 0)
         {
@@ -206,8 +202,6 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
     }
     if (iTranspose != globalTranspose)
     {
-        //printf("%i, %i, %i, %i\n",numDivisionsKnobValue,numDivisions,iTranspose,globalTranspose);
-
         globalTranspose = iTranspose;
         setQuant();
     }
@@ -219,17 +213,17 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
             numOffsetCVChannels = inputs[OFFSET_CV + i].getChannels();
             outputs[SCALED_OUTPUT + i].setChannels(numInputChannels);
             outputs[QUANTIZED_OUTPUT + i].setChannels(numInputChannels);
-            for (int ch = 0; ch < numInputChannels; ch++) {
+            for (int ch = 0; ch < std::max(numInputChannels,1); ch++) {
 
 
                 a = params[SCALE_VAL + i].getValue();
 
                 b = params[SCALE_TRIM + i].getValue();
-                B = inputs[SCALE_CV + i].getVoltage(ch % numInputChannels);
+                B = inputs[SCALE_CV + i].getVoltage(ch);
                 A = inputs[CHANNEL_INPUT + i].getVoltage(ch);
 
                 c = params[OFFSET_TRIM + i].getValue();
-                C = inputs[OFFSET_CV + i].getVoltage(ch % numInputChannels);
+                C = inputs[OFFSET_CV + i].getVoltage(ch);
                 d = params[OFFSET_VAL + i].getValue();
 
                 D = (b * B + a) * A + (c * C + d);
