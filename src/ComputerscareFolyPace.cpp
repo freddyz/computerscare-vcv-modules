@@ -260,13 +260,13 @@ struct FolyPaceDisplay : TransparentWidget {
 		drawHead(args,fx,fy,frx,fry,faceColor);
 
 
-		float leftEyebrowHeight = erly*(1.3 + 0.3*sin(G));
-		float rightEyebrowHeight = erly*(1.3 + 0.3*sin(G-2.2+N));
-		float leftEyebrowAngle = 0.3*sin(C);
-		float rightEyebrowAngle = 0.3*sin(F);
+		float leftEyebrowHeight = erly*(1.7 + 0.6*sin(G));
+		float rightEyebrowHeight = erly*(1.7 + 0.6*sin(G-2.2+N));
+		float leftEyebrowAngle = 0.5*sin(C);
+		float rightEyebrowAngle = 0.7*sin(F);
 		NVGcolor eyebrowColor = nvgHSLA(0.1,0.2,0.2,0xff);
 		float eyebrowThickness = 5.f;
-		float eyebrowLength = frx*0.3*(1.3+0.3*sin(G));
+		float eyebrowLength = frx*0.3*(2.2+sin(G));
 
 		drawEyes(args, epx, epy, eyeSpacing, erlx, erly, 1, irisRad, pupilRad, gazeDir, gazeStrength, irisColor, pupilColor);
 		drawEyebrows(args,epx,epy,eyeSpacing,leftEyebrowHeight,rightEyebrowHeight,leftEyebrowAngle,rightEyebrowAngle,eyebrowColor,eyebrowThickness,eyebrowLength);
