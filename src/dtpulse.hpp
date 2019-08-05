@@ -43,6 +43,7 @@ class Parser {
 		Token skipAndPeekToken();
 		void setForCookies();
 		void setForLaundry();
+		void setForPolyLaundry();
 		void skipToken();
 		void setExactValue(Token t);
 		void setForExactIntegers(Token t);
@@ -101,6 +102,7 @@ class AbsoluteSequence {
 class LaundrySoupSequence {
 	public:
 		LaundrySoupSequence(std::string expr);
+		LaundrySoupSequence(std::vector<Token> tokens);
 		LaundrySoupSequence();
 		std::vector<Token> tokenStack;
 		std::vector<int> pulseSequence;
@@ -142,19 +144,9 @@ class Quantizer {
 };
 class LaundryPoly {
 public:
-	int index;
 	LaundrySoupSequence lss[16];
-	LaundryPoly(int n,std::string formula) {
-		index=n;
-		for(int i = 0; i < 16; i++ ) {
-			lss[i] = LaundrySoupSequence(formula);
-		}
-	}
-	void update(int dex,std::string formula) {
-		for(int i = 0; i < 16; i++ ) {
-			lss[i] = LaundrySoupSequence(formula);
-		}
-	}
+	LaundryPoly(std::string formula);
+	void print();
 };
 bool matchesAny(std::string val, std::vector<std::string> whitelist);
 bool is_digits(const std::string &str);
@@ -183,7 +175,9 @@ bool matchParens(std::string value);
 std::string evalToken(std::string input, std::string type,std::vector<Token> tStack);
 void whoKnows(std::string input);
 void whoKnowsLaundry(std::string input);
+void whoKnowsLaundryPoly(std::string input);
 void whoKnowsQuantize(std::string input);
 std::vector<int> getIndicesFromTokenStack(std::vector<Token> tokens);
 std::vector<int> duplicateIntVector(std::vector<int> input);
 std::string getByteString(float f);
+void replaceAll(std::string& str, const std::string& from, const std::string& to);

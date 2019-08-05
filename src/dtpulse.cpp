@@ -382,15 +382,34 @@ void whoKnows(std::string input) {
     printVector(abs.workingIndexSequence);
   }*/
 }
-void whoKnowsLaundry(std::string input) {
-  //LaundrySoupSequence laundry = LaundrySoupSequence(input);
+void whoKnowsLaundryPoly(std::string input) {
+	LaundryPoly lp = LaundryPoly(input);
+	lp.print();
+}
+	LaundryPoly::LaundryPoly(std::string formula) {
+		std::string newFormula = "";
+		for(int i = 0; i < 16; i++ ) {
+			newFormula = formula;
+			replaceAll(newFormula,"#","<"+std::to_string(static_cast<long long>(i+1))+">");
+			lss[i] = LaundrySoupSequence(newFormula);
+		}
+	}
+	void LaundryPoly::print() {
+		for(int i = 0; i < 16; i++) {
+			printf("channel %i:",i+1);
+			lss[i].print();
+		}
+	}
 
-  /*laundry.print();
+void whoKnowsLaundry(std::string input) {
+  LaundrySoupSequence laundry = LaundrySoupSequence(input);
+
+  laundry.print();
   printf("  iteration:\n");
   for(int j = 0; j < 13; j++) {
     laundry.incrementAndCheck();
     printVector(laundry.workingPulseSequence);
-  }*/
+  }
 
 }
 LaundrySoupSequence::LaundrySoupSequence() {
@@ -419,6 +438,9 @@ LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
   workingPulseSequence = duplicateIntVector(pulseSequence);
   numSteps = (int) pulseSequence.size();
   readHead = -1;
+}
+LaundrySoupSequence::LaundrySoupSequence(std::vector<Token> tokens) {
+
 }
 void LaundrySoupSequence::print() {
   printf("  Laundry tokenStack:\n");
@@ -594,6 +616,9 @@ Parser::Parser(std::string expr) {
 }
 Parser::Parser() {
   Parser("");
+}
+void Parser::setForPolyLaundry() {
+
 }
 void Parser::setForLaundry() {
   //whitelists
@@ -1250,4 +1275,13 @@ std::string getByteString(float f) {
     std::printf("The byte #%zu is 0x%02X\n", i, p[i]);
   }
   return "horse";
+}
+void replaceAll(std::string& str, const std::string& from, const std::string& to) {
+    if(from.empty())
+        return;
+    size_t start_pos = 0;
+    while((start_pos = str.find(from, start_pos)) != std::string::npos) {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
+    }
 }
