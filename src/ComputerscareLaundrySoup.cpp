@@ -1,12 +1,11 @@
-#include "Computerscare.hpp"
-#include "dsp/digital.hpp"
-#include "dsp/filter.hpp"
-#include "window.hpp"
-#include "dtpulse.hpp"
-
 #include <string>
 #include <sstream>
 #include <iomanip>
+
+#include "plugin.hpp"
+#include "Computerscare.hpp"
+#include "dtpulse.hpp"
+
 
 struct ComputerscareLaundrySoup;
 struct LaundryTextField;

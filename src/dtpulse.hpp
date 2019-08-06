@@ -181,3 +181,5 @@ std::vector<int> getIndicesFromTokenStack(std::vector<Token> tokens);
 std::vector<int> duplicateIntVector(std::vector<int> input);
 std::string getByteString(float f);
 void replaceAll(std::string& str, const std::string& from, const std::string& to);
+float mapChannelCountToVoltage(int ch);
+int mapVoltageToChannelCount(float vv);

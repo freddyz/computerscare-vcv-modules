@@ -1285,3 +1285,14 @@ void replaceAll(std::string& str, const std::string& from, const std::string& to
         start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
     }
 }
+float mapChannelCountToVoltage(int ch) {
+  return ( (float) ch ) / 1.6f;
+}
+int mapVoltageToChannelCount(float vv) {
+  float v = vv;
+
+  if(v < 0) { 
+      v = v + 10.f;
+    }
+  return (int) round(v * 1.6f);
+}

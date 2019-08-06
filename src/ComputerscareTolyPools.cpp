@@ -1,4 +1,5 @@
 #include "Computerscare.hpp"
+#include "dtpulse.hpp"
 
 struct ComputerscareTolyPools;
 
