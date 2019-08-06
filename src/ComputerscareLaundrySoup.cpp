@@ -92,7 +92,7 @@ struct ComputerscareLaundrySoup : Module {
   rack::dsp::SchmittTrigger manualResetTriggers[numFields];
 
   LaundrySoupSequence laundrySequences[numFields];
-//LaundryPoly laundryPoly;
+  LaundryPoly laundryPoly[numFields];
 
 
   bool activeStep[numFields] = {false};
@@ -109,6 +109,9 @@ struct ComputerscareLaundrySoup : Module {
       setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
+      LaundryPoly lp = LaundryPoly("#");
+      laundryPoly[i] = lp;
+      //laundryPoly[i] = LaundryPoly("2");
     }
   }
   void process(const ProcessArgs &args) override;

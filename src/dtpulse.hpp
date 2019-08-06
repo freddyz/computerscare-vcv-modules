@@ -43,7 +43,7 @@ class Parser {
 		Token skipAndPeekToken();
 		void setForCookies();
 		void setForLaundry();
-		void setForPolyLaundry();
+		void setForLaundryPoly();
 		void skipToken();
 		void setExactValue(Token t);
 		void setForExactIntegers(Token t);
@@ -143,10 +143,11 @@ class Quantizer {
 		std::vector<float> generateMappedValues();
 };
 class LaundryPoly {
-public:
-	LaundrySoupSequence lss[16];
-	LaundryPoly(std::string formula);
-	void print();
+	public:
+		LaundrySoupSequence lss[16];
+		LaundryPoly(std::string formula);
+		LaundryPoly();
+		void print();
 };
 bool matchesAny(std::string val, std::vector<std::string> whitelist);
 bool is_digits(const std::string &str);

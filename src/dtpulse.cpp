@@ -394,6 +394,9 @@ void whoKnowsLaundryPoly(std::string input) {
 			lss[i] = LaundrySoupSequence(newFormula);
 		}
 	}
+  LaundryPoly::LaundryPoly() {
+    LaundryPoly("");
+  }
 	void LaundryPoly::print() {
 		for(int i = 0; i < 16; i++) {
 			printf("channel %i:",i+1);
@@ -617,7 +620,7 @@ Parser::Parser(std::string expr) {
 Parser::Parser() {
   Parser("");
 }
-void Parser::setForPolyLaundry() {
+void Parser::setForLaundryPoly() {
 
 }
 void Parser::setForLaundry() {
