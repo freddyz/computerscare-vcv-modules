@@ -388,6 +388,7 @@ void whoKnowsLaundryPoly(std::string input) {
 }
 	LaundryPoly::LaundryPoly(std::string formula) {
 		std::string newFormula = "";
+		inError=false;
 		for(int i = 0; i < 16; i++ ) {
 			newFormula = formula;
 			replaceAll(newFormula,"#","<"+std::to_string(static_cast<long long>(i+1))+">");
@@ -1098,7 +1099,7 @@ int Parser::ParseAtPart(Token t) {
   int atNum = -1;
   if (t.type == "At") {
     t = skipAndPeekToken();
-    while (t.type == "Digit") {
+    while (t.type == "Digit" || t.type=="Integer") {
       atString += t.value;
       t = skipAndPeekToken();
     }
