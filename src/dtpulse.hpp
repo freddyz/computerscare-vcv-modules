@@ -148,6 +148,7 @@ class LaundryPoly {
 		LaundryPoly(std::string formula);
 		LaundryPoly();
 		void print();
+		bool inError=false;
 };
 bool matchesAny(std::string val, std::vector<std::string> whitelist);
 bool is_digits(const std::string &str);

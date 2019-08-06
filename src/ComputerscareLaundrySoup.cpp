@@ -96,6 +96,7 @@ struct ComputerscareLaundrySoup : Module {
 
 
   bool activeStep[numFields] = {false};
+  bool activePolyStep[numFields][16] = {false};
 
   bool shouldChange[numFields] = {false};
   bool changeImminent[numFields] = {false};
@@ -111,7 +112,6 @@ struct ComputerscareLaundrySoup : Module {
       resetOneOfThem(i);
       LaundryPoly lp = LaundryPoly("#");
       laundryPoly[i] = lp;
-      //laundryPoly[i] = LaundryPoly("2");
     }
   }
   void process(const ProcessArgs &args) override;
@@ -149,6 +149,9 @@ struct ComputerscareLaundrySoup : Module {
     LaundrySoupSequence lss = LaundrySoupSequence(currentFormula[index]);
     laundrySequences[index] = lss;
 
+    laundryPoly[index] = LaundryPoly(currentFormula[index]);
+    laundryPoly[index].print();
+
     //laundryPoly.update(index,currentFormula[index]);
     if (!lss.inError) {
       laundrySequences[index] = lss;
@@ -181,6 +184,12 @@ struct ComputerscareLaundrySoup : Module {
     if (laundrySequences[i].readHead == 0) {
       this->setChangeImminent(i, false);
     }
+    for(int ch = 0; ch < 16; ch++) {
+      laundryPoly[i].lss[ch].incrementAndCheck();
+      if (laundryPoly[i].lss[ch].readHead == 0) {
+        //this->setChangeImminent(i, false);
+      }
+    }
   }
   std::string getDisplayString(int index) {
     std::string lhs = std::to_string(this->laundrySequences[index].readHead + 1);
@@ -206,6 +215,7 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
 
   bool globalGateIn = globalClockTrigger.isHigh();
   bool atFirstStep = false;
+  bool atFirstStepPoly[16];
   bool atLastStepAfterIncrement = false;
   bool clocked = globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].getVoltage());
   bool currentTriggerIsHigh = false;
@@ -232,6 +242,9 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
         if (currentTriggerClocked || globalManualClockClicked) {
           incrementInternalStep(i);
           activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
+          for(int ch = 0; ch < 16; ch++) {
+            activePolyStep[i][ch] = (this->laundryPoly[i].lss[ch].peekWorkingStep() == 1);
+          }
           atLastStepAfterIncrement = this->laundrySequences[i].atLastStep();
           if (atLastStepAfterIncrement) checkIfShouldChange(i);
         }
@@ -240,9 +253,17 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
         if ((inputs[GLOBAL_CLOCK_INPUT].isConnected() && clocked) || globalManualClockClicked) {
           incrementInternalStep(i);
           activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
+          for(int ch = 0; ch < 16; ch++) {
+            activePolyStep[i][ch] = (this->laundryPoly[i].lss[ch].peekWorkingStep() == 1);
+          }
           atLastStepAfterIncrement = this->laundrySequences[i].atLastStep();
           if (atLastStepAfterIncrement) checkIfShouldChange(i);
         }
+      }
+
+      for(int ch=0; ch<16; ch++) {
+
+        atFirstStepPoly[ch] =  (this->laundryPoly[i].lss[ch].readHead == 0);
       }
 
       atFirstStep = (this->laundrySequences[i].readHead == 0);
@@ -261,17 +282,25 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
       else {
         if (atFirstStep && !currentResetActive && !inputs[GLOBAL_RESET_INPUT].isConnected()) {
           //checkIfShouldChange(i);
+          //not sure why this was commented out but i think its important :)
         }
       }
     }
-
+    outputs[TRG_OUTPUT+i].setChannels(16);
+    outputs[FIRST_STEP_OUTPUT+i].setChannels(16);
+    
     if (inputs[CLOCK_INPUT + i].isConnected()) {
+      for(int ch = 0; ch < 16; ch++) {
       outputs[TRG_OUTPUT + i].setVoltage((currentTriggerIsHigh && activeStep[i]) ? 10.0f : 0.0f);
       outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f);
     }
+    }
     else {
-      outputs[TRG_OUTPUT + i].setVoltage((globalGateIn && activeStep[i]) ? 10.0f : 0.0f);
-      outputs[FIRST_STEP_OUTPUT + i].setVoltage((globalGateIn && atFirstStep) ? 10.f : 0.0f);
+
+      for(int ch = 0; ch < 16; ch++) {
+      outputs[TRG_OUTPUT + i].setVoltage((globalGateIn && activePolyStep[i][ch]) ? 10.0f : 0.0f,ch);
+      outputs[FIRST_STEP_OUTPUT + i].setVoltage((globalGateIn && atFirstStepPoly[ch]) ? 10.f : 0.0f,ch);
+    }
     }
   }
 }
@@ -298,8 +327,11 @@ struct LaundryTF2 : ComputerscareTextField
       if (value != module->lastValue[rowIndex])
       {
         LaundrySoupSequence lss = LaundrySoupSequence(value);
+        LaundryPoly lp = LaundryPoly(value);
+        lp.print();
+
         module->lastValue[rowIndex] = value;
-        if (!lss.inError && matchParens(value)) {
+        if (!lp.inError && matchParens(value)) {
           inError = false;
           module->currentFormula[rowIndex] = value;
           module->setNextAbsoluteSequence(this->rowIndex);
