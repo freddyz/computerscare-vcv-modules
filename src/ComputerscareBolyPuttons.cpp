@@ -68,8 +68,8 @@ void checkForParamChanges() {
 	int changeIndex = -1;
 	float val;
 	for(int i = 0; i < numToggles; i++) {
-		val=params[TOGGLE + i].getValue()
-		if(previousToggle[i] != val) {
+		val=params[TOGGLE + i].getValue();
+		if(val == 1.f && previousToggle[i] != val) {
 			changeIndex = i;
 		}
 		previousToggle[i] = val;
@@ -78,6 +78,18 @@ void checkForParamChanges() {
 		switchOffAllButtonsButOne(changeIndex);
 	}
 }
+void onRandomize() override {
+    if(radioMode) {
+    	int rIndex = floor(random::uniform() * 16);
+    	switchOffAllButtonsButOne(rIndex);
+    	params[TOGGLE+rIndex].setValue(1.f);
+    }
+    else {
+    	for(int i = 0; i < numToggles; i++) {
+    		params[TOGGLE+i].setValue(random::uniform() < 0.5 ? 0.f : 1.f);
+    	}
+    }
+  }
 	void process(const ProcessArgs &args) override {
 		float min = outputRanges[outputRangeEnum][0];
 		float max = outputRanges[outputRangeEnum][1];
@@ -177,6 +189,8 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 	{
 		json_t *rootJ = ModuleWidget::toJson();
 		json_object_set_new(rootJ, "outputRange", json_integer(bolyPuttons->outputRangeEnum));
+		json_object_set_new(rootJ, "radioMode", json_boolean(bolyPuttons->radioMode));
+		json_object_set_new(rootJ, "momentaryMode", json_boolean(bolyPuttons->momentary));
 		return rootJ;
 	}
 	void fromJson(json_t *rootJ) override
@@ -186,6 +200,10 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 
 		json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
 		if (outputRangeEnumJ) { bolyPuttons->outputRangeEnum = json_integer_value(outputRangeEnumJ); }
+			json_t *radioModeJ = json_object_get(rootJ, "radioMode");
+		if (radioModeJ) { bolyPuttons->radioMode = json_is_true(radioModeJ); }
+			json_t *momentaryModeJ = json_object_get(rootJ, "momentaryMode");
+		if (momentaryModeJ) { bolyPuttons->momentary = json_is_true(momentaryModeJ); }
 
 	}
 	void appendContextMenu(Menu *menu) override;
@@ -209,7 +227,7 @@ struct RadioModeMenuItem: MenuItem {
 
   }
   void onAction(const event::Action &e) override {
-					bolyPuttons->radioMode = !bolyPuttons->radioMode
+	bolyPuttons->radioMode = !bolyPuttons->radioMode;
   }
   void step() override {
     rightText = bolyPuttons->radioMode? "✔" : "";
@@ -221,11 +239,17 @@ void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
 {
 	ComputerscareBolyPuttons *bolyPuttons = dynamic_cast<ComputerscareBolyPuttons *>(this->module);
 
-	MenuLabel *spacerLabel = new MenuLabel();
-	menu->addChild(spacerLabel);
+	menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+	menu->addChild(construct<MenuLabel>(&MenuLabel::text, "How The Buttons Work"));
+  	RadioModeMenuItem *radioMode = new RadioModeMenuItem();
+  	radioMode->text = "Exclusive Mode (behaves like radio buttons)";
+  	radioMode->bolyPuttons= bolyPuttons;
+ 	menu->addChild(radioMode);
 
-	menu->addChild(construct<MenuLabel>());
-	menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Output Range"));
+
+	menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+
+	menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Off / On Values (A ... B)"));
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, "  0v ... +10v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 0));
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, " -5v ...  +5v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 1));
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, "  0v ...  +5v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 2));
@@ -233,10 +257,7 @@ void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, " -1v ...  +1v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 4));
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, "-10v ... +10v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 5));
 
-  RadioModeMenuItem *radioMode = new RadioModeMenuItem();
-  radioMode->text = "Exclusive Mode (behaves like radio buttons)";
-  radioMode->bolyPuttons= bolyPuttons;
-  menu->addChild(radioMode);
+
 
 
 }
