@@ -109,7 +109,6 @@ struct ComputerscareILoveCookies : Module {
         params[KNOB_PARAM + i].setValue(rv);
       }
     }
-
   }
   void randomizeTextFields() {
     std::string mainlookup = knoblookup;

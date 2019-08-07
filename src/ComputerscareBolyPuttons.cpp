@@ -8,7 +8,9 @@ struct ComputerscareBolyPuttons : Module {
 	int counter = 0;
 	int outputRangeEnum = 0;
 	bool momentary = false;
+	bool radioMode=false;
 	float outputRanges[6][2];
+	float previousToggle[16] = {0.f};
 	rack::dsp::SchmittTrigger momentaryTriggers[16];
 	rack::dsp::PulseGenerator pulseGen[16];
 
@@ -39,7 +41,7 @@ struct ComputerscareBolyPuttons : Module {
 
 		for (int i = 0; i < numToggles; i++) {
 			//configParam(KNOB + i, 0.0f, 10.0f, 0.0f);
-			configParam(TOGGLE + i, 0.f, 1.f, 0.f, "Channel " + std::to_string(i + 1) + " Voltage", " Volts");
+			configParam(TOGGLE + i, 0.f, 1.f, 0.f, "Channel " + std::to_string(i + 1));
 		}
 
 		outputRanges[0][0] = 0.f;
@@ -55,6 +57,27 @@ struct ComputerscareBolyPuttons : Module {
 		outputRanges[5][0] = -10.f;
 		outputRanges[5][1] = 10.f;
 	}
+void switchOffAllButtonsButOne(int index) {
+    for (int i = 0; i < numToggles; i++) {
+      if (i != index) {
+        params[TOGGLE + i].setValue(0.f);
+      }
+    }
+  }
+void checkForParamChanges() {
+	int changeIndex = -1;
+	float val;
+	for(int i = 0; i < numToggles; i++) {
+		val=params[TOGGLE + i].getValue()
+		if(previousToggle[i] != val) {
+			changeIndex = i;
+		}
+		previousToggle[i] = val;
+	}
+	if(changeIndex > -1) {
+		switchOffAllButtonsButOne(changeIndex);
+	}
+}
 	void process(const ProcessArgs &args) override {
 		float min = outputRanges[outputRangeEnum][0];
 		float max = outputRanges[outputRangeEnum][1];
@@ -91,8 +114,9 @@ struct ComputerscareBolyPuttons : Module {
 
 		}
 		else {
-
-
+			if(radioMode) {
+				checkForParamChanges();	
+			}
 			for (int i = 0; i < numToggles; i++) {
 				if (inputs[A_INPUT].isConnected()) {
 					min = inputs[A_INPUT].getVoltage(i % numAChannels);
@@ -120,25 +144,16 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareBolyPuttonsPanel.svg")));
-
-			//module->panelRef = panel;
-
 			addChild(panel);
 
 		}
 		float xx;
 		float yy;
-		// for (int i = 0; i < numToggles; i++) {
-		// 	xx = 7.4f + 27.3 * (i % 2);
-		// 	yy = 94 + 16.5 * (i - i % 2) + 11.3 * (i % 2);
-		// 	addLabeledButton(std::to_string(i + 1), xx, yy, module, i, (i % 2) * (3 + 10 * (i < 9)) - 2, 0);
-		// }
 		for (int i = 0; i < numToggles; i++) {
 			xx = 5.2f + 27.3 * (i - i % 8) / 8;
 			yy = 92 + 33.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
 			addLabeledButton(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 2, 2);
 		}
-
 
 		addInput(createInput<InPort>(Vec(9, 58), module, ComputerscareBolyPuttons::A_INPUT));
 		addInput(createInput<PointingUpPentagonPort>(Vec(33, 55), module, ComputerscareBolyPuttons::B_INPUT));
@@ -188,6 +203,20 @@ struct OutputRangeItem : MenuItem {
 		MenuItem::step();
 	}
 };
+struct RadioModeMenuItem: MenuItem {
+  ComputerscareBolyPuttons *bolyPuttons;
+  RadioModeMenuItem() {
+
+  }
+  void onAction(const event::Action &e) override {
+					bolyPuttons->radioMode = !bolyPuttons->radioMode
+  }
+  void step() override {
+    rightText = bolyPuttons->radioMode? "✔" : "";
+    MenuItem::step();
+  }
+};
+
 void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
 {
 	ComputerscareBolyPuttons *bolyPuttons = dynamic_cast<ComputerscareBolyPuttons *>(this->module);
@@ -203,6 +232,12 @@ void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, "  0v ...  +1v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 3));
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, " -1v ...  +1v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 4));
 	menu->addChild(construct<OutputRangeItem>(&MenuItem::text, "-10v ... +10v", &OutputRangeItem::bolyPuttons, bolyPuttons, &OutputRangeItem::outputRangeEnum, 5));
+
+  RadioModeMenuItem *radioMode = new RadioModeMenuItem();
+  radioMode->text = "Exclusive Mode (behaves like radio buttons)";
+  radioMode->bolyPuttons= bolyPuttons;
+  menu->addChild(radioMode);
+
 
 }
 Model *modelComputerscareBolyPuttons = createModel<ComputerscareBolyPuttons, ComputerscareBolyPuttonsWidget>("computerscare-bolyputtons");
