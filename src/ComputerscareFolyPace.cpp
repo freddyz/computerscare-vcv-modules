@@ -436,9 +436,10 @@ struct FolyPaceWidget : ModuleWidget {
 			addChild(display);
 		}
 
-		addInput(createInput<PJ301MPort>(Vec(17, 319), module, FolyPace::X_INPUT));
-		addInput(createInput<PJ301MPort>(Vec(63, 319), module, FolyPace::Y_INPUT));
-		addInput(createInput<PJ301MPort>(Vec(154, 319), module, FolyPace::TRIG_INPUT));
+		addInput(createInput<PointingUpPentagonPort>(Vec(1, 353), module, FolyPace::X_INPUT));
+		addParam(createParam<SmallKnob>(Vec(31, 356), module, FolyPace::TRIM));
+		addParam(createParam<SmoothKnob>(Vec(51, 353), module, FolyPace::OFFSET));
+
 
 	}
 };
