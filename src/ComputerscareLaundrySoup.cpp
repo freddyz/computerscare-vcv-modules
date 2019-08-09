@@ -286,17 +286,17 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
         }
       }
     }
+		//this always assumes 16 channel poly output.  It is a waste if the user doesnt want poly
     outputs[TRG_OUTPUT+i].setChannels(16);
     outputs[FIRST_STEP_OUTPUT+i].setChannels(16);
     
     if (inputs[CLOCK_INPUT + i].isConnected()) {
       for(int ch = 0; ch < 16; ch++) {
-      outputs[TRG_OUTPUT + i].setVoltage((currentTriggerIsHigh && activeStep[i]) ? 10.0f : 0.0f);
-      outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f);
+      outputs[TRG_OUTPUT + i].setVoltage((currentTriggerIsHigh && activePolyStep[i][ch]) ? 10.0f : 0.0f);
+      outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f);
     }
     }
     else {
-
       for(int ch = 0; ch < 16; ch++) {
       outputs[TRG_OUTPUT + i].setVoltage((globalGateIn && activePolyStep[i][ch]) ? 10.0f : 0.0f,ch);
       outputs[FIRST_STEP_OUTPUT + i].setVoltage((globalGateIn && atFirstStepPoly[ch]) ? 10.f : 0.0f,ch);
