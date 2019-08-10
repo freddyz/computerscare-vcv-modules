@@ -421,30 +421,32 @@ LaundrySoupSequence::LaundrySoupSequence() {
 }
 LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
   std::vector<Token> defaultStack;
+	std::vector<Token> calculatedTokens;
   defaultStack.push_back(Token("Error", "error", -1));
   if (expr != "") {
     Parser p = Parser(expr);
     p.setForLaundry();
     if (p.inError || !p.tokenStack.size()) {
-      tokenStack = defaultStack;
+      calculatedTokens = defaultStack;
       inError = true;
     }
     else {
-      tokenStack = p.tokenStack;
+      calculatedTokens = p.tokenStack;
       inError = false;
     }
   }
   else {
-    tokenStack = defaultStack;
+    calculatedTokens = defaultStack;
     inError = false;
   }
+	LaundrySoupSequence(calculatedTokens);
+}
+LaundrySoupSequence::LaundrySoupSequence(std::vector<Token> tokens) {
+	tokenStack = tokens;
   pulseSequence = makePulseSequence(tokenStack);
   workingPulseSequence = duplicateIntVector(pulseSequence);
   numSteps = (int) pulseSequence.size();
   readHead = -1;
-}
-LaundrySoupSequence::LaundrySoupSequence(std::vector<Token> tokens) {
-
 }
 void LaundrySoupSequence::print() {
   printf("  Laundry tokenStack:\n");
