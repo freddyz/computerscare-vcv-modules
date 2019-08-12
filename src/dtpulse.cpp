@@ -366,7 +366,11 @@ bool matchParens(std::string value) {
   return theyMatch;
 }
 void printVector(std::vector <int> intVector) {
-  printf("vector\n");
+  printf("int vector of size %i\n",intVector.size());
+  for(int i= 0; i < intVector.size(); i++) {
+    printf("%i ",intVector[i]);
+  }
+  printf("\n");
 }
 void whoKnows(std::string input) {
   //AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
@@ -383,34 +387,61 @@ void whoKnows(std::string input) {
   }*/
 }
 void whoKnowsLaundryPoly(std::string input) {
-	LaundryPoly lp = LaundryPoly(input);
-	lp.print();
+  LaundryPoly lp = LaundryPoly(input);
+  lp.print();
 }
-	LaundryPoly::LaundryPoly(std::string formula) {
-		std::string newFormula = "";
-		inError=false;
-		for(int i = 0; i < 16; i++ ) {
-			newFormula = formula;
-			replaceAll(newFormula,"#","<"+std::to_string(static_cast<long long>(i+1))+">");
-			lss[i] = LaundrySoupSequence(newFormula);
-		}
-	}
-  LaundryPoly::LaundryPoly() {
-    LaundryPoly("");
+LaundryPoly::LaundryPoly(std::string formula) {
+  std::string newFormula = "";
+  inError = false;
+
+  std::vector<Token> defaultStack;
+  std::vector<Token> calculatedTokens;
+  defaultStack.push_back(Token("Error", "error", -1));
+  if (formula != "") {
+    Parser p = Parser(formula);
+    p.setForLaundryPoly();
+    if (p.inError || !p.tokenStack.size()) {
+      printf("in error\n");
+      calculatedTokens = defaultStack;
+      inError = true;
+    }
+    else {
+      calculatedTokens = p.tokenStack;
+      inError = false;
+      printf("no error\n");
+    }
   }
-	void LaundryPoly::print() {
-		for(int i = 0; i < 16; i++) {
-			printf("channel %i:",i+1);
-			lss[i].print();
-		}
-	}
+  else {
+    calculatedTokens = defaultStack;
+    inError = false;
+    printf("default stack\n");
+  }
+  printf("calculated tokez:\n");
+  printTokenVector(calculatedTokens);
+  for (int i = 0; i < 16; i++ ) {
+    newFormula = formula;
+    replaceAll(newFormula, "#", "<" + std::to_string(static_cast<long long>(i + 1)) + ">");
+    
+    lss[i] = LaundrySoupSequence(calculatedTokens);
+  }
+}
+LaundryPoly::LaundryPoly() {
+  LaundryPoly("");
+}
+void LaundryPoly::print() {
+  printf("   LaundryPoly:\n");
+  for (int i = 0; i < 16; i++) {
+    printf("  channel %i:", i + 1);
+    lss[i].print();
+  }
+}
 
 void whoKnowsLaundry(std::string input) {
   LaundrySoupSequence laundry = LaundrySoupSequence(input);
 
   laundry.print();
   printf("  iteration:\n");
-  for(int j = 0; j < 13; j++) {
+  for (int j = 0; j < 13; j++) {
     laundry.incrementAndCheck();
     printVector(laundry.workingPulseSequence);
   }
@@ -420,8 +451,14 @@ LaundrySoupSequence::LaundrySoupSequence() {
   LaundrySoupSequence("");
 }
 LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
+  Tokenize(expr);
+}
+LaundrySoupSequence::LaundrySoupSequence(const std::vector<Token>& tokens) {
+  Setup(tokens);
+}
+void LaundrySoupSequence::Tokenize(std::string expr) {
   std::vector<Token> defaultStack;
-	std::vector<Token> calculatedTokens;
+  std::vector<Token> calculatedTokens;
   defaultStack.push_back(Token("Error", "error", -1));
   if (expr != "") {
     Parser p = Parser(expr);
@@ -439,20 +476,21 @@ LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
     calculatedTokens = defaultStack;
     inError = false;
   }
-	LaundrySoupSequence(calculatedTokens);
+  Setup(calculatedTokens);
 }
-LaundrySoupSequence::LaundrySoupSequence(std::vector<Token> tokens) {
-	tokenStack = tokens;
+void LaundrySoupSequence::Setup(std::vector<Token> tokens) {
+  tokenStack = tokens;
   pulseSequence = makePulseSequence(tokenStack);
   workingPulseSequence = duplicateIntVector(pulseSequence);
   numSteps = (int) pulseSequence.size();
   readHead = -1;
+  inError=false;
 }
 void LaundrySoupSequence::print() {
-  printf("  Laundry tokenStack:\n");
+  printf("  LaundrySoupSequence inError:%d, tokenStack:\n",inError);
   printTokenVector(tokenStack);
-  //printf("  Laundry pulseSequence:\n");
-  //printVector(pulseSequence);
+  printf("  Laundry pulseSequence:\n");
+  printVector(pulseSequence);
 }
 std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> tokens) {
   std::vector<int> output = {};
@@ -624,59 +662,61 @@ Parser::Parser() {
   Parser("");
 }
 void Parser::setForLaundryPoly() {
-
+  Token t = tokens[0];
+  while (t.type != "NULL") {
+    //tokenStack.push_back(t);
+      tokenStack.push_back(Token(t.type, t.value, t.index,t.duration ));
+    t = skipAndPeekToken();
+  }
+  printf("setForLaundryPoly\n");
+  printTokenVector(tokenStack);
 }
 void Parser::setForLaundry() {
   //whitelists
-  std::vector<std::string> laundryInterleaveAny = {"Letter", "Integer", "ChanceOfInteger", "Digit", "LeftParen", "RightParen","Channel"};
-  std::vector<std::string> laundryAtExpandAny = {"Letter", "Digit", "ChanceOfInteger", "Integer","Channel"};
-  std::vector<std::string> laundrySquareAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Comma","Channel"};
-  std::vector<std::string> laundryFinalAny = {"Letter", "Digit", "ChanceOfInteger", "Integer","Channel"};
+  std::vector<std::string> laundryInterleaveAny = {"Letter", "Integer", "ChanceOfInteger", "Digit", "LeftParen", "RightParen", "Channel"};
+  std::vector<std::string> laundryAtExpandAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Channel"};
+  std::vector<std::string> laundrySquareAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Comma", "Channel"};
+  std::vector<std::string> laundryFinalAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Channel"};
 
   if (tokens.size() > 0) {
     currentIndex = 0;
-    setForVariables(tokens[0]);
+    replaceLettersWithNumbers(tokens[0]);
+    currentIndex = 0;
+    tokens = tokenStack;
+    tokenStack = {};
+
+    setForExactIntegers(tokens[0]);
     if (!inError) {
       currentIndex = 0;
       tokens = tokenStack;
       tokenStack = {};
-      replaceLettersWithNumbers(tokens[0]);
-      currentIndex = 0;
-      tokens = tokenStack;
-      tokenStack = {};
-
-      setForExactIntegers(tokens[0]);
+      setForChanceOfIntegers(peekToken());
       if (!inError) {
         currentIndex = 0;
         tokens = tokenStack;
         tokenStack = {};
-        setForChanceOfIntegers(peekToken());
+        setForInterleave(peekToken(), laundryInterleaveAny);
         if (!inError) {
           currentIndex = 0;
           tokens = tokenStack;
           tokenStack = {};
-          setForInterleave(peekToken(), laundryInterleaveAny);
+          setForAtExpand(peekToken(), laundryAtExpandAny, true);
+
           if (!inError) {
             currentIndex = 0;
             tokens = tokenStack;
             tokenStack = {};
-            setForAtExpand(peekToken(), laundryAtExpandAny, true);
+            setForSquareBrackets(peekToken(), laundrySquareAny, true);
 
             if (!inError) {
               currentIndex = 0;
               tokens = tokenStack;
               tokenStack = {};
-              setForSquareBrackets(peekToken(), laundrySquareAny, true);
-
-              if (!inError) {
-                currentIndex = 0;
-                tokens = tokenStack;
-                tokenStack = {};
-                setFinal(peekToken(), laundryFinalAny);
-              }
+              setFinal(peekToken(), laundryFinalAny);
             }
           }
         }
+
       }
     }
   }
@@ -815,6 +855,7 @@ void Parser::replaceLettersWithNumbers(Token t) {
       tokenStack.push_back(Token("Integer", letterVal, -1, intVal));
     }
     else if (t.type == "Digit") {
+      printf("replaceLettersWithNumbers parsing digit\n");
       tokenStack.push_back(Token("Digit", t.value, -1, t.value == "0" ? 1 : std::stoi(t.value)));
     }
     else {
@@ -850,9 +891,9 @@ void Parser::ParseChanceOfInteger(Token t) {
   }
 }
 void Parser::ParseVariable(Token t) {
-  if(t.type == "Letter" && t.value == "c") {
+  if (t.type == "Hash") {
     t = skipAndPeekToken();
-    tokenStack.push_back(Token("Channel","1",-1,std::stoi("5")));
+    tokenStack.push_back(Token("ChannelVariable", "1", -1, std::stoi("5")));
   }
 }
 void Parser::ParseExactInteger(Token t) {
@@ -1101,7 +1142,7 @@ int Parser::ParseAtPart(Token t) {
   int atNum = -1;
   if (t.type == "At") {
     t = skipAndPeekToken();
-    while (t.type == "Digit" || t.type=="Integer") {
+    while (t.type == "Digit" || t.type == "Integer") {
       atString += t.value;
       t = skipAndPeekToken();
     }
@@ -1283,13 +1324,13 @@ std::string getByteString(float f) {
   return "horse";
 }
 void replaceAll(std::string& str, const std::string& from, const std::string& to) {
-    if(from.empty())
-        return;
-    size_t start_pos = 0;
-    while((start_pos = str.find(from, start_pos)) != std::string::npos) {
-        str.replace(start_pos, from.length(), to);
-        start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
-    }
+  if (from.empty())
+    return;
+  size_t start_pos = 0;
+  while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
+    str.replace(start_pos, from.length(), to);
+    start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
+  }
 }
 float mapChannelCountToVoltage(int ch) {
   return ( (float) ch ) / 1.6f;
@@ -1297,8 +1338,8 @@ float mapChannelCountToVoltage(int ch) {
 int mapVoltageToChannelCount(float vv) {
   float v = vv;
 
-  if(v < 0) { 
-      v = v + 10.f;
-    }
+  if (v < 0) {
+    v = v + 10.f;
+  }
   return (int) round(v * 1.6f);
 }

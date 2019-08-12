@@ -155,11 +155,11 @@ struct ComputerscareLaundrySoup : Module {
     //laundryPoly.update(index,currentFormula[index]);
     if (!lss.inError) {
       laundrySequences[index] = lss;
-      laundrySequences[index].print();
+      //laundrySequences[index].print();
     }
     else {
       printf("ERROR ch:%i\n",index);
-      lss.print();
+      //lss.print();
       //textFields[index]->inError = true;
     }
   }

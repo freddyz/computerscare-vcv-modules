@@ -27,6 +27,7 @@ class Token {
 		Token(std::string t, std::string v);
 		Token(std::string t, std::string v, int dex, int dur);
 		Token(std::string t, std::string v, int dex);
+
 		void print();
 };
 class Parser {
@@ -102,8 +103,10 @@ class AbsoluteSequence {
 class LaundrySoupSequence {
 	public:
 		LaundrySoupSequence(std::string expr);
-		LaundrySoupSequence(std::vector<Token> tokens);
+		LaundrySoupSequence(const std::vector<Token>& tokens);
 		LaundrySoupSequence();
+		void Tokenize(std::string formula);
+		void Setup(std::vector<Token> tokens);
 		std::vector<Token> tokenStack;
 		std::vector<int> pulseSequence;
 		std::vector<int> workingPulseSequence;
@@ -147,6 +150,7 @@ class LaundryPoly {
 		LaundrySoupSequence lss[16];
 		LaundryPoly(std::string formula);
 		LaundryPoly();
+
 		void print();
 		bool inError;
 };
