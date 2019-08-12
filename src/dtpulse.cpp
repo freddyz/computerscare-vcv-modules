@@ -652,7 +652,12 @@ Token::Token(std::string t, std::string v, int dex, int dur) {
   index = dex;
   duration = dur;
 }
-
+Token::Token(const Token& source) {
+	type=source.type;
+	value=source.value;
+	index=source.index;
+	duration=source.duration;
+}
 Parser::Parser(std::string expr) {
   tokens = tokenizeString(expr);
   expression = expr;

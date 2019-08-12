@@ -27,7 +27,7 @@ class Token {
 		Token(std::string t, std::string v);
 		Token(std::string t, std::string v, int dex, int dur);
 		Token(std::string t, std::string v, int dex);
-
+		Token(const Token& source);
 		void print();
 };
 class Parser {
