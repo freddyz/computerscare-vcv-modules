@@ -1,20 +1,6 @@
 # computerscare modules for VCV Rack
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/all-computerscare-modules-v1.png" width="900" alt="Computerscare Modules for VCV Rack" />
 
-![ComputerscarePatchSequencer](./doc/all-computerscare-modules.png)
-
-~~~~
- oo                   o     Q         6       6  Q     6                
-                     o       o                Q                6 6 6    
-           Q      6         QQ          o     Q       6         Qo      
-Q                    Q       66       o         QQ    QQ                
- 6                    6                               6 o       Q       
- Q                Q         6  6    Q         6       Q  Qo             
-   oo                o      6                 o       Q Q      Q 6     
-
-YLX    LY5    2X5    Y2L    2LY    X25    YLX    YLL    
-2LY    X22    25L    52L    YXY    X5Y    55Y    225    
-5YX    XLX    5YX    25X    LY5    L2Y    L5X    55L   
-~~~~
 
 # Oh Peas! Quad Quantenuverter
 4-Channel attenuverter, offsetter, quantizer
@@ -69,7 +55,7 @@ xx ᳹䒜  淧   -- ፌxЧ -᳹   xxx-x䒜x᳹
 # I Love Cookies
 Signal & CV Sequencer.  Uses Text as input.  Because after all, don't we all love cookies?
 
-Knobs are labeled with lowercase letters: a-z.  Inputs are labeled with uppercase letters A-Z.  Programming in the sequence: ~abcd~ will sequentially output the values of knobs a, b, c, and finally d.  It will then loop back to step 0: knob a again.  An exact voltage can be programmed by enclosing the value in square brackets.  For example: `<4.20>`.  Following a sequence of values (lowercase, uppercase, or exact value) with "@8" will loop the sequence after 8 steps.  8 is not a special value, any number works after the "@" symbol.  Here is an example with some I Love Cookies inputs their equivalents:
+Knobs are labeled with lowercase letters: a-z.  Inputs are labeled with uppercase letters A-Z.  Programming in the sequence: ~abcd~ will sequentially output the values of knobs a, b, c, and finally d.  It will then loop back to step 1: knob a again.  An exact voltage can be programmed by enclosing the value in square brackets.  For example: `<4.20>`.  Following a sequence of values (lowercase, uppercase, or exact value) with "@8" will loop the sequence after 8 steps.  8 is not a special value, any number is allowed after the "@" symbol.  Here is an example with some I Love Cookies inputs their equivalents:
 
 ~~~~
 Input           Equivalent Input
@@ -83,7 +69,7 @@ abcdef@3        abc
 
 ## Randomization
 
-Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curl braces {} will randomly select one of the values with equal probability.  For example, ~{ab}~ will choose either "a" or "b" at each clock step.  ~{g<2.55>}~ will output either the value of knob "g" or 2.55 volts with equal probability.
+Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curly braces {} will randomly select one of the values with equal probability.  For example, ~{ab}~ will choose either "a" or "b" at each clock step.  ~{g<2.55>}~ will output either the value of knob "g" or 2.55 volts with equal probability.
 
 ## Square Bracket Expansion
 
@@ -107,21 +93,6 @@ ab@5            ababa
 <1><0>@8        <1><0><1><0><1><0><1><0>
 abcde@8         abcdeabc
 abcdef@3        abc
-~~~~
-
-## Randomization
-
-Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curl braces {} will randomly select one of the values with equal probability.  For example, ~{ab}~ will choose either "a" or "b" at each clock step.  ~{g<2.55>}~ will output either the value of knob "g" or 2.55 volts with equal probability.
-
-## Square Bracket Expansion
-
-Enclosing comma-separated sequences with square brackets allows for even more complex patterns to be generated.
-
-~~~~
-Input           Equivalent Input          Comment
-
-[ab,c]@4        ababcccc                  4 steps of "ab", then 4 steps of "c"
-[A,cde]@5       AAAAAcdecd                5 steps from input "A", then 5 steps of "cde"
 ~~~~
 
 
@@ -190,12 +161,13 @@ In The 3rd row:`2131@8`, the "@8" means: repeat the pattern every 8 clock signal
            
 
 
-The 4th row's input is `8-4`.  This means the pattern "8", offset by 4 triggers.  When triggered by 16th notes, I find this pattern useful for triggering a backbeat snare drum.
+A rest can be programmed by using the number "0".  If Laundry Soup is triggered by 16th notes, the pattern `00004` (or equivalently `0@4,4`) can be used to trigger a snare drum sound on the backbeat.
+ 
 
 ~~~~
-8    ---> x-------
-8-1  ---> -x------
-8-4  ---> ----x---
+8      ---> x-------
+07     ---> -x------
+00004  ---> ----x---
 ~~~~
  
 
@@ -215,94 +187,15 @@ The 6th row shows a way to "skip" beats.  `@4` all by itself means: wait 4 beats
 @4,4    --->   ----x---
 ~~~~
 
-### dtp64 Language:
+### How to program lengths longer than 9 beats:
 To program a rhythm that divides the incoming clock by 16, the proper input is NOT `16`.  Values greater than 9 steps must be enclosed in angle brackets `<16>`
 
 ~~~~
-16      --->   xx-----  (repeats every 7 beats)
+16      --->   xx-----  (Laundry Soup interprets this as a 1 and then a 6.  This pattern repeats every 7 beats)
 
 <16>    --->   x--------------- (repeats every 16 beats)
 ~~~~
 
-
-
-
-To represent lengths 10 thru 64, use a-z, then A-Z, &, $, and 0.  See the chart below for this quasi-base64 mapping which I call "pdt64"
-~~~~
-16      --->   xx-----          (repeats every 7 beats)
-9       --->   x--------        (repeats every 9 beats)
-a       --->   x---------       (repeats every 10 beats)
-g       --->   x--------------- (repeats every 16 beats)
-~~~~
-
-### dtp64 Table:
-~~~~
-dtp64   #-of-clocks
-1       1
-2       2
-3       3
-4       4
-5       5
-6       6
-7       7
-8       8
-9       9
-a       10
-b       11
-c       12
-d       13
-e       14
-f       15
-g       16
-h       17
-i       18
-j       19
-k       20
-l       21
-m       22
-n       23
-o       24
-p       25
-q       26
-r       27
-s       28
-t       29
-u       30
-v       31
-w       32
-x       33
-y       34
-z       35
-A       36
-B       37
-C       38
-D       39
-E       40
-F       41
-G       42
-H       43
-I       44
-J       45
-K       46
-L       47
-M       48
-N       49
-O       50
-P       51
-Q       52
-R       53
-S       54
-T       55
-U       56
-V       57
-W       58
-X       59
-Y       60
-Z       61
-&       62
-$       63
-0       64
-~~~~
 
 
 ### Input Jacks:
@@ -334,12 +227,7 @@ B) The pattern ought to trigger on this absoluteStep
 
 ### Displays:
 
-**absoluteStep Display:** Shows the absoluteStep of the row.  The absoluteStep will increase by 1 every clock signal, until 
-~~~~
-A) The end of the pattern is reached
-           OR
-B) A reset trigger is sent to the Global Reset or Individual Reset input jack
-~~~~
+The display shows a few things:
 
 
 *Inspired by Frank Buss's Formula, Ryan Kirkbride's FoxDot, SuperCollider*
