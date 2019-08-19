@@ -209,7 +209,6 @@ To program a rhythm that divides the incoming clock by 16, the proper input is N
 
 
 ### Input Jacks:
-<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/ohpeas-basic-1.png" width="500" alt="Oh Peas! Quad Quantenuverter" />
 ![ComputerscarePatchSequencer](./doc/laundry-soup-inputs-1.png)
 
 **Global Clock (clk):** Increases each row's absoluteStep by 1.
