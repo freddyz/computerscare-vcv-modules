@@ -3,7 +3,7 @@
 
 
 # Oh Peas! Quad Quantenuverter
-4-Channel attenuverter, offsetter, quantizer
+## 4-Channel attenuverter, offsetter, quantizer
 <img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/ohpeas-basic-1.png" width="500" alt="Oh Peas! Quad Quantenuverter" />
 
 ### Text Input:
@@ -328,7 +328,7 @@ Patch matrix with 16 scenes.  If multiple buttons are active for a single row, t
 ## Debug
 A simple module for debugging.  Displays a list of the last 16 voltages read from IN, with the most recent one at the top.
 
-![ComputerscareDebug](./doc/computerscare-debug-basic.png)
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/computerscare-debug-basic.png" width="500" alt="Comptuerscare Debug" />
 
 ### Inputs:
 **Trigger (trg):** When a trigger signal is detected, the voltage at the Input will be placed at the top of the list of voltages, and the voltage at the bottom will be discarded from the display.
@@ -342,16 +342,16 @@ A simple module for debugging.  Displays a list of the last 16 voltages read fro
 
 **Clear (clr):** Manual Clear
 
-### Polyphonic Enhancements
+### Modes of Operation
 
-In the v1 branch, you can find the new version of Debug.  There are 3 clock modes (single, internal, poly), and 3 input modes (single, internal, poly).
+There are 3 clock modes (single, internal, poly), and 3 input modes (single, internal, poly).  Single uses a single channel.  Poly uses the poly channels.  Internal clock mode operates Debug at audio rate, and Internal input mode uses a uniform random generator with the range selectable via the right-click menu.  The default range for Internal input mode is 0-10v.
 
 
 **Single Clock, Single Input:**
 Selected channel clock signal will place the current value of selected input channel signal at line 1 and will discard the last line in the display.
 
 **Single Clock, Internal Input:**
-Independent randomly generated uniform values (0 to 1) will replace each of the 16 lines of display
+Internal random generator will replace each of the 16 lines of display
 
 **Single Clock, Poly Input:**
 Selected channel clock signal will place current value of each input channel in the corresponding line of the display.  (channel 4 of input gets recorded on line 4 of the display)
@@ -369,7 +369,7 @@ Selected channel clock signal will place current value of each input channel in 
 Each clock signal from poly clock input will update the corresponding display/output line with the current value of the selected input channel
 
 **Poly Clock, Internal Input:**
-Each clock signal from poly clock will update corresponding display line (a.k.a. output channel) with random value between (0 to 1)
+Each clock signal from poly clock will update corresponding display line (a.k.a. output channel) with a random value from the internal generator.
 
 **Poly Clock, Poly Input:**
 16-channel sample-and-hold, clocked by poly clock
