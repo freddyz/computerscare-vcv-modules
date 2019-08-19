@@ -4,7 +4,7 @@
 
 # Oh Peas! Quad Quantenuverter
 4-Channel attenuverter, offsetter, quantizer
-![Oh Peas! Basic](./doc/ohpeas-basic-1.png)
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/ohpeas-basic-1.png" width="500" alt="Oh Peas! Quad Quantenuverter" />
 
 ### Text Input:
 The scale for quantization is programmed via the text field.  
@@ -199,7 +199,7 @@ To program a rhythm that divides the incoming clock by 16, the proper input is N
 
 
 ### Input Jacks:
-
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/ohpeas-basic-1.png" width="500" alt="Oh Peas! Quad Quantenuverter" />
 ![ComputerscarePatchSequencer](./doc/laundry-soup-inputs-1.png)
 
 **Global Clock (clk):** Increases each row's absoluteStep by 1.
@@ -214,6 +214,7 @@ To program a rhythm that divides the incoming clock by 16, the proper input is N
 ### Output Jacks:
 
 ![ComputerscarePatchSequencer](./doc/laundry-soup-outputs-1.png)
+
 
 **Individual Row Output (out):** The output of the row's pattern.  Outputs 10 volts if:
 ~~~~
@@ -251,7 +252,7 @@ The display shows a few things:
 
 Patch matrix with 16 scenes.  If multiple buttons are active for a single row, the 2 active input signals will be summed.
 
-![ComputerscarePatchSequencer](./doc/patch-sequencer-basic-2.png)
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/patch-sequencer-basic-2.png" width="500" alt="Father & Son Patch Sequencer" />
 
 ### Buttons:
 **Patch Matrix:** Grid of 100 buttons.  When the button is lit in green, it means that the input column and output row is connected for the step that is being edited.  When the button is lit in red, it means that the input column and output row is connected for the currently active step.
