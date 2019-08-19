@@ -392,37 +392,11 @@ void whoKnowsLaundryPoly(std::string input) {
 }
 LaundryPoly::LaundryPoly(std::string formula) {
   std::string newFormula = "";
-  inError = false;
-
-  std::vector<Token> defaultStack;
-  std::vector<Token> calculatedTokens;
-  defaultStack.push_back(Token("Error", "error", -1));
-  if (formula != "") {
-    Parser p = Parser(formula);
-    p.setForLaundryPoly();
-    if (p.inError || !p.tokenStack.size()) {
-      printf("in error\n");
-      calculatedTokens = defaultStack;
-      inError = true;
-    }
-    else {
-      calculatedTokens = p.tokenStack;
-      inError = false;
-      printf("no error\n");
-    }
-  }
-  else {
-    calculatedTokens = defaultStack;
-    inError = false;
-    printf("default stack\n");
-  }
-  printf("calculated tokez:\n");
-  printTokenVector(calculatedTokens);
-  for (int i = 0; i < 16; i++ ) {
+   for (int i = 0; i < 16; i++ ) {
     newFormula = formula;
+    replaceAll(newFormula, "2^#", "<" + std::to_string(static_cast<long long>(1 << i)) + ">");
     replaceAll(newFormula, "#", "<" + std::to_string(static_cast<long long>(i + 1)) + ">");
-    
-    lss[i] = LaundrySoupSequence(calculatedTokens);
+    lss[i] = LaundrySoupSequence(newFormula);
   }
 }
 LaundryPoly::LaundryPoly() {
@@ -489,8 +463,8 @@ void LaundrySoupSequence::Setup(std::vector<Token> tokens) {
 void LaundrySoupSequence::print() {
   printf("  LaundrySoupSequence inError:%d, tokenStack:\n",inError);
   printTokenVector(tokenStack);
-  printf("  Laundry pulseSequence:\n");
-  printVector(pulseSequence);
+  //printf("  Laundry pulseSequence:\n");
+  //printVector(pulseSequence);
 }
 std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> tokens) {
   std::vector<int> output = {};
