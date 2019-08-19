@@ -20,7 +20,7 @@ The scale for quantization is programmed via the text field.  Oh Peas! expects n
 ### Knobs:
 **Number of Divisions (divisions):** How many equal divisions the octave is split into.  Default is 12.
 
-**Transpose:** Amount to add or subtract to final output signal.  Values between -NumDivisions and +NumDivisions, which is equivalent to +/- 1 octave.  The default is 0, which means that an input voltage of 0v outputs v/oct C.
+**Transpose:** Amount to add or subtract to final output signal.  Values between -NumDivisions and +NumDivisions, which is equivalent to +/- 1 octave.  The default is 0, which means that an input voltage of 0v outputs the note C.
 
 **Range CV Attenuverter ("range", small knob, _b_):** Attenuverter for the Range CV input.  Scales Range CV between -1 and +1
 
@@ -337,7 +337,7 @@ Patch matrix with 16 scenes.  If multiple buttons are active for a single row, t
 ## Debug
 A simple module for debugging.  Displays a list of the last 16 voltages read from IN, with the most recent one at the top.
 
-<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/computerscare-debug-basic.png" width="500" alt="Comptuerscare Debug" />
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/computerscare-debug-basic.png" width="300" alt="Comptuerscare Debug" />
 
 ### Inputs:
 **Trigger (trg):** When a trigger signal is detected, the voltage at the Input will be placed at the top of the list of voltages, and the voltage at the bottom will be discarded from the display.
