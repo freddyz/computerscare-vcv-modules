@@ -3,7 +3,7 @@
 
 
 # Oh Peas! Quad Quantenuverter
-## 4-Channel attenuverter, offsetter, quantizer
+4-Channel attenuverter, offsetter, quantizer
 <img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/ohpeas-basic-1.png" width="500" alt="Oh Peas! Quad Quantenuverter" />
 
 ### Text Input:
@@ -65,7 +65,7 @@ xx ᳹䒜  淧   -- ፌxЧ -᳹   xxx-x䒜x᳹
 # I Love Cookies
 Signal & CV Sequencer.  Uses Text as input.  Because after all, don't we all love cookies?
 
-Knobs are labeled with lowercase letters: a-z.  Inputs are labeled with uppercase letters A-Z.  Programming in the sequence: ~abcd~ will sequentially output the values of knobs a, b, c, and finally d.  It will then loop back to step 1: knob a again.  An exact voltage can be programmed by enclosing the value in square brackets.  For example: `<4.20>`.  Following a sequence of values (lowercase, uppercase, or exact value) with "@8" will loop the sequence after 8 steps.  8 is not a special value, any number is allowed after the "@" symbol.  Here is an example with some I Love Cookies inputs their equivalents:
+Knobs are labeled with lowercase letters: a-z.  Inputs are labeled with uppercase letters A-Z.  Programming in the sequence: `abcd` will sequentially output the values of knobs a, b, c, and finally d.  It will then loop back to step 1: knob a again.  An exact voltage can be programmed by enclosing the value in square brackets.  For example: `<4.20>`.  Following a sequence of values (lowercase, uppercase, or exact value) with "@8" will loop the sequence after 8 steps.  8 is not a special value, any number is allowed after the "@" symbol.  Here is an example with some I Love Cookies inputs their equivalents:
 
 ~~~~
 Input           Equivalent Input
@@ -132,9 +132,9 @@ def@10
 
 
 # Laundry Soup
-Laundry Soup is a trigger sequencer that takes text as input.  If you connect a clock signal to the "clk" input, and type "1" in the top text box, the top "out" output will send a trigger each clock.  "2" sends a trigger every 2 clock signals.  "31" sends a trigger on the 1st and 4th clock signals, and then repeats this pattern forever or until reset.
+Laundry Soup is a trigger sequencer that takes text as input.  If you connect a clock signal to the "clk" input, and type `1` in the top text box, the top "out" output will send a trigger each clock.  `2` sends a trigger every 2 clock signals.  `31` sends a trigger on the 1st and 4th clock signals, and then repeats this pattern forever or until reset.
 
-![ComputerscarePatchSequencer](./doc/laundry-soup-basic-2.png)
+![Laundry Soup](./doc/laundry-soup-basic-2.png)
 
 
 ### Text Input:
@@ -335,7 +335,7 @@ Patch matrix with 16 scenes.  If multiple buttons are active for a single row, t
 
 
 ## Debug
-A simple module for debugging.  Displays a list of the last 16 voltages read from IN, with the most recent one at the top.
+Polyphonic volt meter, sample sample & hold, and noise source
 
 <img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/computerscare-debug-basic.png" width="300" alt="Comptuerscare Debug" />
 
