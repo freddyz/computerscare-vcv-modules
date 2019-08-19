@@ -4,6 +4,8 @@
 
 # Oh Peas! Quad Quantenuverter
 4-Channel attenuverter, offsetter, quantizer
+
+
 <img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/ohpeas-basic-1.png" width="500" alt="Oh Peas! Quad Quantenuverter" />
 
 ### Text Input:
