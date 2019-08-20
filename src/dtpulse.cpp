@@ -665,6 +665,11 @@ void Parser::setForLaundry() {
     tokenStack = {};
 
     setForExactIntegers(tokens[0]);
+		if(!inError) {
+			currentIndex = 0;
+			tokens=tokenStack;
+			tokenStack={};
+			setFormula(peekToken(),true);
     if (!inError) {
       currentIndex = 0;
       tokens = tokenStack;
@@ -695,7 +700,7 @@ void Parser::setForLaundry() {
             }
           }
         }
-
+				}
       }
     }
   }
@@ -824,6 +829,16 @@ void Parser::setForExactIntegers(Token t) {
     t = skipAndPeekToken();
   }
 }
+void Parser::setFormula(Token t,bool laundryMode) {
+  while (t.type != "NULL") {
+    ParseFormula(t,laundryMode);
+    if (peekToken().type != "NULL") {
+      tokenStack.push_back(peekToken());
+    }
+    t = skipAndPeekToken();
+  }
+}
+
 void Parser::replaceLettersWithNumbers(Token t) {
   std::string letterVal;
   int intVal;
@@ -834,7 +849,6 @@ void Parser::replaceLettersWithNumbers(Token t) {
       tokenStack.push_back(Token("Integer", letterVal, -1, intVal));
     }
     else if (t.type == "Digit") {
-      printf("replaceLettersWithNumbers parsing digit\n");
       tokenStack.push_back(Token("Digit", t.value, -1, t.value == "0" ? 1 : std::stoi(t.value)));
     }
     else {
@@ -874,6 +888,8 @@ void Parser::ParseVariable(Token t) {
     t = skipAndPeekToken();
     tokenStack.push_back(Token("ChannelVariable", "1", -1, std::stoi("5")));
   }
+}
+void Parser::ParseFormula(Token t, bool laundryMode) {
 }
 void Parser::ParseExactInteger(Token t) {
   if (t.type == "LeftAngle") {

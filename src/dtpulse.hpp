@@ -48,6 +48,7 @@ class Parser {
 		void skipToken();
 		void setExactValue(Token t);
 		void setForExactIntegers(Token t);
+		void setFormula(Token t, bool laundryMode);
 		void setForVariables(Token t);
 		void setForChanceOfIntegers(Token t);
 		void setForRandoms(Token t);
@@ -67,6 +68,7 @@ class Parser {
 		int currentIndex;
 		void ParseExactValue(Token t);
 		void ParseExactInteger(Token t);
+		void ParseFormula(Token t, bool laundryMode);
 		void ParseVariable(Token t);
 		void ParseRandomSequence(Token t);
 		void ParseInterleave(Token t,std::vector<std::string> whitelist);
