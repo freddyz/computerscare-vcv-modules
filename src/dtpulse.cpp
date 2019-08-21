@@ -626,6 +626,12 @@ Token::Token(std::string t, std::string v, int dex, int dur) {
   index = dex;
   duration = dur;
 }
+Token::Token(std::string t, int val) {
+	type=t;
+	value = std::to_string(static_cast<long long>(val));
+	index=-1;
+	duration=val;
+}
 Token::Token(const Token& source) {
 	type=source.type;
 	value=source.value;
@@ -643,15 +649,14 @@ Parser::Parser() {
 void Parser::setForLaundryPoly() {
   Token t = tokens[0];
   while (t.type != "NULL") {
-    //tokenStack.push_back(t);
-      tokenStack.push_back(Token(t.type, t.value, t.index,t.duration ));
+    tokenStack.push_back(Token(t.type, t.value, t.index,t.duration ));
     t = skipAndPeekToken();
   }
   printf("setForLaundryPoly\n");
   printTokenVector(tokenStack);
 }
 void Parser::setForLaundry() {
-  //whitelists
+	std::vector<std::string> laundryBinaryOp = {"Plus","Minus","Asterix","Backslash","Caret","Ampersand"};
   std::vector<std::string> laundryInterleaveAny = {"Letter", "Integer", "ChanceOfInteger", "Digit", "LeftParen", "RightParen", "Channel"};
   std::vector<std::string> laundryAtExpandAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Channel"};
   std::vector<std::string> laundrySquareAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Comma", "Channel"};
@@ -669,7 +674,7 @@ void Parser::setForLaundry() {
 			currentIndex = 0;
 			tokens=tokenStack;
 			tokenStack={};
-			setFormula(peekToken(),true);
+			setFormula(peekToken(),laundryBinaryOp,true);
     if (!inError) {
       currentIndex = 0;
       tokens = tokenStack;
@@ -829,9 +834,9 @@ void Parser::setForExactIntegers(Token t) {
     t = skipAndPeekToken();
   }
 }
-void Parser::setFormula(Token t,bool laundryMode) {
+void Parser::setFormula(Token t,std::vector<std::string> operatorWhitelist,bool laundryMode) {
   while (t.type != "NULL") {
-    ParseFormula(t,laundryMode);
+    ParseFormula(t,operatorWhitelist,laundryMode);
     if (peekToken().type != "NULL") {
       tokenStack.push_back(peekToken());
     }
@@ -889,7 +894,52 @@ void Parser::ParseVariable(Token t) {
     tokenStack.push_back(Token("ChannelVariable", "1", -1, std::stoi("5")));
   }
 }
-void Parser::ParseFormula(Token t, bool laundryMode) {
+void Parser::ParseFormula(Token t,std::vector<std::string> operatorWhitelist, bool laundryMode) {
+	std::vector<Token> terminalStack;
+	std::vector<Token> operatorStack;
+	std::vector<std::string> whitelist = operatorWhitelist;
+	whitelist.push_back("Integer");
+	whitelist.push_back("Digit");
+	while(matchesAny(t.type,whitelist)) {
+					if(t.type=="Integer" || t.type=="Digit") {
+						if(operatorStack.size() > 0) {
+							if(terminalStack.size() > 0) {
+								//apply them
+								std::string op = operatorStack.back().type;
+								operatorStack.pop_back();
+								int lhs = terminalStack.back().duration;
+								int rhs = t.duration;
+								int result;
+								terminalStack.pop_back();
+								if(op=="Asterix") {
+									result=lhs*rhs;
+								} else if(op=="Ampersand") {
+									result=lhs%rhs;
+									} else if(op=="Plus") {
+										result=lhs+rhs;
+									}
+									else if(op=="Minus") {
+										result=lhs-rhs;
+									}
+									else if(op=="Backslash") {
+										result = lhs/rhs;
+									}
+								terminalStack.push_back(Token("Integer",result));
+							}
+							else {
+								inError=true;
+							}
+						}	
+						else {
+								terminalStack.push_back(t);
+						}
+					}
+					else { //operator
+						operatorStack.push_back(t);
+					}
+		t = skipAndPeekToken();
+	}
+  tokenStack.insert(tokenStack.end(), terminalStack.begin(), terminalStack.end());
 }
 void Parser::ParseExactInteger(Token t) {
   if (t.type == "LeftAngle") {
@@ -1224,6 +1274,7 @@ std::vector<Token> tokenizeString(std::string input) {
     else if (token == ":") stack.push_back(Token("Colon", token));
     else if (token == ";") stack.push_back(Token("Semicolon", token));
     else if (token == "|") stack.push_back(Token("Pipe", token));
+    else if (token == "%") stack.push_back(Token("Ampersand", token));
     else if (knobandinputlookup.find(token) != std::string::npos) {
       stack.push_back(Token("Letter", token, knobandinputlookup.find(token)));
     }

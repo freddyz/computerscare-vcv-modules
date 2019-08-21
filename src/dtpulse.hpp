@@ -27,6 +27,7 @@ class Token {
 		Token(std::string t, std::string v);
 		Token(std::string t, std::string v, int dex, int dur);
 		Token(std::string t, std::string v, int dex);
+		Token(std::string t, int val);
 		Token(const Token& source);
 		void print();
 };
@@ -48,7 +49,7 @@ class Parser {
 		void skipToken();
 		void setExactValue(Token t);
 		void setForExactIntegers(Token t);
-		void setFormula(Token t, bool laundryMode);
+		void setFormula(Token t,std::vector<std::string> operatorWhitelist, bool laundryMode);
 		void setForVariables(Token t);
 		void setForChanceOfIntegers(Token t);
 		void setForRandoms(Token t);
@@ -68,7 +69,7 @@ class Parser {
 		int currentIndex;
 		void ParseExactValue(Token t);
 		void ParseExactInteger(Token t);
-		void ParseFormula(Token t, bool laundryMode);
+		void ParseFormula(Token t,std::vector<std::string> operatorWhitelist,bool laundryMode);
 		void ParseVariable(Token t);
 		void ParseRandomSequence(Token t);
 		void ParseInterleave(Token t,std::vector<std::string> whitelist);
