@@ -394,7 +394,7 @@ LaundryPoly::LaundryPoly(std::string formula) {
   std::string newFormula = "";
    for (int i = 0; i < 16; i++ ) {
     newFormula = formula;
-    replaceAll(newFormula, "2^#", "<" + std::to_string(static_cast<long long>(1 << i)) + ">");
+    //replaceAll(newFormula, "2^#", "<" + std::to_string(static_cast<long long>(1 << i)) + ">");
     replaceAll(newFormula, "#", "<" + std::to_string(static_cast<long long>(i + 1)) + ">");
     lss[i] = LaundrySoupSequence(newFormula);
   }
@@ -630,7 +630,7 @@ Token::Token(std::string t, int val) {
 	type=t;
 	value = std::to_string(static_cast<long long>(val));
 	index=-1;
-	duration=val;
+	duration=std::max(val,1);
 }
 Token::Token(const Token& source) {
 	type=source.type;
@@ -923,6 +923,9 @@ void Parser::ParseFormula(Token t,std::vector<std::string> operatorWhitelist, bo
 									}
 									else if(op=="Backslash") {
 										result = lhs/rhs;
+									}
+									else if(op=="Caret") {
+										result= myPow(lhs,rhs);
 									}
 								terminalStack.push_back(Token("Integer",result));
 							}
@@ -1388,4 +1391,13 @@ int mapVoltageToChannelCount(float vv) {
     v = v + 10.f;
   }
   return (int) round(v * 1.6f);
+}
+int myPow(int x, int p)
+{
+  if (p == 0) return 1;
+  if (p == 1) return x;
+
+  int tmp = myPow(x, p/2);
+  if (p%2 == 0) return tmp * tmp;
+  else return x * tmp * tmp;
 }
