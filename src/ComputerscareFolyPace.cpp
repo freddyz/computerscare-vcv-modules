@@ -108,11 +108,22 @@ struct FolyPace : Module {
 		if (bufferIndex < BUFFER_SIZE) {
 			if (++frameIndex > frameCount) {
 				frameIndex = 0;
-				for (int c = 0; c < channelsX; c++) {
-					bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(c);
+				float trimVal = params[TRIM].getValue();
+				float offsetVal = params[OFFSET].getValue();
+
+				if (inputs[X_INPUT].isConnected()) {
+					for (int c = 0; c < channelsX; c++) {
+						bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(c) * trimVal + offsetVal + 99 + (1071 * c) % 19;
+					}
 				}
+				else {
+					for (int c = 0; c < 16; c++) {
+						bufferX[c][bufferIndex] = offsetVal + 99 + (1071 * c) % 19;
+					}
+				}
+
 				for (int c = 0; c < channelsY; c++) {
-					bufferY[c][bufferIndex] = inputs[Y_INPUT].getVoltage(c);
+					bufferY[c][bufferIndex] = inputs[Y_INPUT].getVoltage(c) * trimVal + offsetVal;
 				}
 				bufferIndex++;
 			}
@@ -210,10 +221,10 @@ struct FolyPaceDisplay : TransparentWidget {
 		float frx = sf * (70 + 40 * sin(A - B / 2));	// face x radius
 		float fry = sf * (150 + 80 * sin(F / 2.2)); //face y radius
 		float fr = 0.04 * sin(H - M) + 0.02 * sin(H / 3 + 2.2) + 0.02 * sin(L + P + 8.222); //face rotation
-		NVGcolor faceColor=nvgHSLA(h, s, l, 0xff);
+		NVGcolor faceColor = nvgHSLA(h, s, l, 0xff);
 
 		float mpx = ox - 3 * sin(G + I + A);
-		float mpy = oy +20 + sf *(7+0.2* sin(G - I));
+		float mpy = oy + 20 + sf * (7 + 0.2 * sin(G - I));
 
 		float msx = mpx - 30 * sf + 3 * sin(G);
 		float msy = mpy + 5 * sin(L + I + P);
@@ -233,19 +244,19 @@ struct FolyPaceDisplay : TransparentWidget {
 		float epx = ox;
 		float epy = oy - 10 * (2 + sf + sin(I - J / 2));
 
-		float eyeSpacing = frx/2*(1.8+0.5*sin(200-J));
-		float erlx = frx/3*(1+0.4*sin(G));
-		float erly = frx/3*(1+0.4*sin(H-N+100));
+		float eyeSpacing = frx / 2 * (1.8 + 0.5 * sin(200 - J));
+		float erlx = frx / 3 * (1 + 0.4 * sin(G));
+		float erly = frx / 3 * (1 + 0.4 * sin(H - N + 100));
 		float errx = 10 + 3 * sin(M) + 4 * sin(M - 2 - 882.2);
 		float erry = 10 + 2 * sin(J) + 4 * sin(J - erly / 20);
 
-		float irisRad = erly*0.4*(1.3+0.4*sin(K-D+1));
-		float pupilRad = irisRad * 0.4 * (1 + 0.6*sin(E));
+		float irisRad = erly * 0.4 * (1.3 + 0.4 * sin(K - D + 1));
+		float pupilRad = irisRad * 0.4 * (1 + 0.6 * sin(E));
 
 		float gazeDir = 3.14159 * (1 + sin(B - K));
-		float gazeStrength = 4 * (1.3 + 0.3 * sin(D - 1) + 0.4 * sin(1 - L / 2));
+		float gazeStrength = 4 * (1.3 + 0.5 * sin(D - 1) + 0.6 * sin(1 - L / 2));
 
-		NVGcolor irisColor = nvgHSLA(l,s,h, 0xff);
+		NVGcolor irisColor = nvgHSLA(l, s, h, 0xff);
 		NVGcolor pupilColor = nvgHSLA(0.1, 0.1, 0.1, 0xff);
 
 		//nvgSave(args.vg);
@@ -257,29 +268,29 @@ struct FolyPaceDisplay : TransparentWidget {
 
 		nvgRotate(args.vg, fr);
 
-		drawHead(args,fx,fy,frx,fry,faceColor);
+		drawHead(args, fx, fy, frx, fry, faceColor);
 
 
-		float leftEyebrowHeight = erly*(1.9 + 0.6*sin(G)+0.3*sin(K-B/2));
-		float rightEyebrowHeight = erly*(1.9 + 0.6*sin(G-2.2+N)+0.2*sin(L+33));
-		float leftEyebrowAngle = 0.5*sin(C)+0.2*sin(H/2-2);
-		float rightEyebrowAngle = 0.7*sin(F)+0.3*sin(2-I);
-		NVGcolor eyebrowColor = nvgHSLA(0.1,0.2,0.2,0xff);
-		float eyebrowThickness = 5.f * (1.3+sin(M-2));
-		float eyebrowLength = frx*0.3*(2.2+sin(G)+0.4*sin(B-2));
+		float leftEyebrowHeight = erly * (1.9 + 0.6 * sin(G) + 0.3 * sin(K - B / 2));
+		float rightEyebrowHeight = erly * (1.9 + 0.6 * sin(G - 2.2 + N) + 0.2 * sin(L + 33));
+		float leftEyebrowAngle = 0.5 * sin(C) + 0.2 * sin(H / 2 - 2);
+		float rightEyebrowAngle = 0.7 * sin(F) + 0.3 * sin(2 - I);
+		NVGcolor eyebrowColor = nvgHSLA(0.1, 0.2, 0.2, 0xff);
+		float eyebrowThickness = 5.f * (1.3 + sin(M - 2));
+		float eyebrowLength = frx * 0.3 * (2.2 + sin(G) + 0.4 * sin(B - 2));
 
 		drawEyes(args, epx, epy, eyeSpacing, erlx, erly, 1, irisRad, pupilRad, gazeDir, gazeStrength, irisColor, pupilColor);
-		drawEyebrows(args,epx,epy,eyeSpacing,leftEyebrowHeight,rightEyebrowHeight,leftEyebrowAngle,rightEyebrowAngle,eyebrowColor,eyebrowThickness,eyebrowLength);
+		drawEyebrows(args, epx, epy, eyeSpacing, leftEyebrowHeight, rightEyebrowHeight, leftEyebrowAngle, rightEyebrowAngle, eyebrowColor, eyebrowThickness, eyebrowLength);
 
 
 		float mouthX = ox;
-		float mouthY = oy +0.5*fry*(1+0.4*sin(C/2));
-		float mouthWidth = frx*0.7 * (1.2 + 0.6*sin(C));
-		float mouthOpen = fry*0.06*(1+sin(O)-sin(A*2+44));
+		float mouthY = oy + 0.5 * fry * (1 + 0.4 * sin(C / 2));
+		float mouthWidth = frx * 0.7 * (1.2 + 0.6 * sin(C));
+		float mouthOpen = fry * 0.06 * (1 + sin(O) - sin(A * 2 + 44));
 		float mouthSmile = sin(D) * 2.3;
 		float mouthSkew = sin(L) - sin(H);
-		float mouthThickness = 5.4*(sin(H)-sin(M/2));
-		NVGcolor mouthLipColor = nvgHSLA(0.1*sin(N)-0.1, 0.6+0.3*sin(M), 0.5+.4*sin(I), 0xff);
+		float mouthThickness = 5.4 * (sin(H) - sin(M / 2));
+		NVGcolor mouthLipColor = nvgHSLA(0.1 * sin(N) - 0.1, 0.6 + 0.3 * sin(M), 0.5 + .4 * sin(I), 0xff);
 
 		nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
 
@@ -292,27 +303,27 @@ struct FolyPaceDisplay : TransparentWidget {
 		//nvgRestore(args.vg);
 	}
 
-		void drawEyebrows(const DrawArgs &args,float x,float y, float eyeSpacing,float leftEyebrowHeight,float rightEyebrowHeight,float leftEyebrowAngle,float rightEyebrowAngle,NVGcolor eyebrowColor,float eyebrowThickness,float eyebrowLength) {
-			nvgBeginPath(args.vg);
-			nvgStrokeColor(args.vg,eyebrowColor);
+	void drawEyebrows(const DrawArgs &args, float x, float y, float eyeSpacing, float leftEyebrowHeight, float rightEyebrowHeight, float leftEyebrowAngle, float rightEyebrowAngle, NVGcolor eyebrowColor, float eyebrowThickness, float eyebrowLength) {
+		nvgBeginPath(args.vg);
+		nvgStrokeColor(args.vg, eyebrowColor);
 		nvgStrokeWidth(args.vg, eyebrowThickness);
-			float cosLeft = cos(leftEyebrowAngle);
-			float sinLeft = sin(leftEyebrowAngle);
-			float cosRight = cos(rightEyebrowAngle);
-			float sinRight = sin(rightEyebrowAngle);
+		float cosLeft = cos(leftEyebrowAngle);
+		float sinLeft = sin(leftEyebrowAngle);
+		float cosRight = cos(rightEyebrowAngle);
+		float sinRight = sin(rightEyebrowAngle);
 
-			float r = eyebrowLength / 2;
+		float r = eyebrowLength / 2;
 
-			nvgMoveTo(args.vg,x - eyeSpacing/2 - r * cosLeft,y - leftEyebrowHeight - r*sinLeft);
-			nvgLineTo(args.vg,x - eyeSpacing/2 + r * cosLeft,y - leftEyebrowHeight + r*sinLeft);
-			//nvgStroke(args.vg);
+		nvgMoveTo(args.vg, x - eyeSpacing / 2 - r * cosLeft, y - leftEyebrowHeight - r * sinLeft);
+		nvgLineTo(args.vg, x - eyeSpacing / 2 + r * cosLeft, y - leftEyebrowHeight + r * sinLeft);
+		//nvgStroke(args.vg);
 
-			nvgMoveTo(args.vg,x + eyeSpacing/2 - r * cosRight,y - rightEyebrowHeight - r*sinRight);
-			nvgLineTo(args.vg,x + eyeSpacing/2 + r * cosRight,y - rightEyebrowHeight + r*sinRight); 
-			nvgStroke(args.vg);
+		nvgMoveTo(args.vg, x + eyeSpacing / 2 - r * cosRight, y - rightEyebrowHeight - r * sinRight);
+		nvgLineTo(args.vg, x + eyeSpacing / 2 + r * cosRight, y - rightEyebrowHeight + r * sinRight);
+		nvgStroke(args.vg);
 
-			nvgClosePath(args.vg);
-		}
+		nvgClosePath(args.vg);
+	}
 	void drawHead(const DrawArgs &args, float x, float y, float width, float height, NVGcolor color) {
 		nvgBeginPath(args.vg);
 
@@ -329,7 +340,7 @@ struct FolyPaceDisplay : TransparentWidget {
 	void drawMouth(const DrawArgs &args, float x, float y, float width, float open, float smile, float skew, float thickness, NVGcolor lipColor) {
 		nvgBeginPath(args.vg);
 		nvgStrokeWidth(args.vg, thickness);
-		nvgStrokeColor(args.vg,lipColor);
+		nvgStrokeColor(args.vg, lipColor);
 		//nvgStrokeWidth(args.vg, 4.5f);
 
 		nvgMoveTo(args.vg, x - width / 2, y - 20.f * smile);
@@ -341,10 +352,10 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgBezierTo(args.vg, x + width / 4, y + smile * open, x - width / 4, y + smile * open, x - width / 2, y - 10.f * smile);
 		nvgClosePath(args.vg);
 		nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
-		nvgFillColor(args.vg,nvgRGBA(0,0,0,0xff));
+		nvgFillColor(args.vg, nvgRGBA(0, 0, 0, 0xff));
 		nvgStroke(args.vg);
 		nvgFill(args.vg);
-		
+
 	}
 	void drawEyes(const DrawArgs &args, float x, float y, float spacing, float rx, float ry, float open, float irisRad, float pupilRad, float gazeDir, float gazeStrength, NVGcolor irisColor, NVGcolor pupilColor) {
 		float leftX = x - spacing / 2;
@@ -436,9 +447,10 @@ struct FolyPaceWidget : ModuleWidget {
 			addChild(display);
 		}
 
-		addInput(createInput<PJ301MPort>(Vec(17, 319), module, FolyPace::X_INPUT));
-		addInput(createInput<PJ301MPort>(Vec(63, 319), module, FolyPace::Y_INPUT));
-		addInput(createInput<PJ301MPort>(Vec(154, 319), module, FolyPace::TRIG_INPUT));
+		addInput(createInput<PointingUpPentagonPort>(Vec(1, 353), module, FolyPace::X_INPUT));
+		addParam(createParam<SmallKnob>(Vec(31, 356), module, FolyPace::TRIM));
+		addParam(createParam<SmoothKnob>(Vec(51, 353), module, FolyPace::OFFSET));
+
 
 	}
 };
