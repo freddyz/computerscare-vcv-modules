@@ -595,6 +595,24 @@ Parser::Parser(std::string expr) {
 Parser::Parser() {
 	Parser("");
 }
+void Parser::setForQuantizer() {
+printf("horseman\n");
+	if(tokens.size() > 0) {
+printf("pluto mcfeely\n");
+		currentIndex=0;
+		printTokenVector(tokens);
+		printTokenVector(tokenStack);
+		tokenStack={};
+		printTokenVector(tokens);
+		setForExactIntegers(tokens[0]);
+		printf("got there\n");
+		printTokenVector(tokenStack);
+		if(!inError) {
+			currentIndex=0;
+			tokens=tokenStack;
+		}
+	}
+}
 void Parser::setForLaundry() {
 	//whitelists
   std::vector<std::string> laundryInterleaveAny = {"Letter","Integer","ChanceOfInteger","Digit","LeftParen","RightParen"};
@@ -1147,7 +1165,8 @@ std::vector<Token> tokenizeString(std::string input) {
 	return stack;
 }
 void whoKnowsQuantize(std::string input) {
-	//Quantizer q = Quantizer("2212221",12,0);
+	Quantizer q = Quantizer(input,12,0);
+	q.print();
 	//float in = std::stof(input);
 	//printf("closest: %f\n",q.quantize(in));
 	//printf("even   : %f\n",q.quantizeEven(in));
@@ -1171,10 +1190,14 @@ std::vector<float> Quantizer::generateMappedValues() {
 	std::vector<float> output;
 	float sum = 0.f;
 	float currentVal = 0.f;
+printf("tokens size %i\n",scaleParser.tokens.size());
+	scaleParser.setForQuantizer();
 	std::vector<Token> stack = scaleParser.tokens;
+	
+printf("tokens size after %i\n",scaleParser.tokens.size());
 	output.push_back(0.f);
 	for(unsigned int i = 0; i < stack.size(); i++) {
-		if(stack[i].type=="Digit") {
+		if(stack[i].type=="Digit" || stack[i].type=="Integer") {
 			sum += std::stof(stack[i].value);
 			currentVal = sum/fNumDivisions; 
 			output.push_back(currentVal);
@@ -1220,5 +1243,8 @@ float Quantizer::quantizeEven(float input,int iTranspose) {
 }
 float Quantizer::quantizeEven(float input) {
   return quantizeEven(input,0);
+}
+void Quantizer::print() {
+	printFloatVector(mappedValues);	
 }
 

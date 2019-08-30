@@ -44,9 +44,9 @@ int main(int argc, char** argv)
 				}
 				return 0;
 }
-void printVector(std::vector <int> intVector) {
+/*void printVector(std::vector <int> intVector) {
 				for (std::vector<int>::const_iterator i = intVector.begin(); i != intVector.end(); ++i){
 								std::cout << *i << ' ';
 				}
 				std::cout << std::endl;
-}
+}*/

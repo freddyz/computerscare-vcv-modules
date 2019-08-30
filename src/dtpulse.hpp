@@ -43,6 +43,7 @@ class Parser {
 		Token skipAndPeekToken();
 		void setForCookies();
 		void setForLaundry();
+		void setForQuantizer();
 		void skipToken();
 		void setExactValue(Token t);
 		void setForExactIntegers(Token t);
@@ -131,6 +132,7 @@ class Quantizer {
 		bool parseError;
 		int numSteps;
 		float fTranspose;
+		void print();
 	private:
 		Parser scaleParser;
 		float findClosestValue(float input, std::vector<float> allowedValues);
