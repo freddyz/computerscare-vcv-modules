@@ -207,7 +207,7 @@ struct FolyPaceDisplay : TransparentWidget {
 
 		//nvgReset(args.vg);
 
-		float sf = 1 + 0.3 * sin(B - C); //scaleFactor
+		float sf = 1 + 0.2 * sin(B - C); //scaleFactor
 		float ox = 67.5 + sf * 20.33 * sin(D - C / 2);
 		float oy = 180 + sf * 30.33 * sin(G - F);
 
