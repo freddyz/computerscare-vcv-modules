@@ -655,6 +655,24 @@ void Parser::setForLaundryPoly() {
   printf("setForLaundryPoly\n");
   printTokenVector(tokenStack);
 }
+void Parser::setForQuantizer() {
+printf("horseman\n");
+	if(tokens.size() > 0) {
+printf("pluto mcfeely\n");
+		currentIndex=0;
+		printTokenVector(tokens);
+		printTokenVector(tokenStack);
+		tokenStack={};
+		printTokenVector(tokens);
+		setForExactIntegers(tokens[0]);
+		printf("got there\n");
+		printTokenVector(tokenStack);
+		if(!inError) {
+			currentIndex=0;
+			tokens=tokenStack;
+		}
+	}
+}
 void Parser::setForLaundry() {
 	std::vector<std::string> laundryBinaryOp = {"Plus","Minus","Asterix","Backslash","Caret","Ampersand"};
   std::vector<std::string> laundryInterleaveAny = {"Letter", "Integer", "ChanceOfInteger", "Digit", "LeftParen", "RightParen", "Channel"};
@@ -1293,6 +1311,11 @@ void whoKnowsQuantize(std::string input) {
   //float in = std::stof(input);
   //printf("closest: %f\n",q.quantize(in));
   //printf("even   : %f\n",q.quantizeEven(in));
+	Quantizer q = Quantizer(input,12,0);
+	q.print();
+	//float in = std::stof(input);
+	//printf("closest: %f\n",q.quantize(in));
+	//printf("even   : %f\n",q.quantizeEven(in));
 }
 Quantizer::Quantizer() {
   Quantizer("2212221", 12, 0);
@@ -1310,19 +1333,23 @@ Quantizer::Quantizer(std::string intervals, int divisions, int trans) {
   //printFloatVector(mappedValues);
 }
 std::vector<float> Quantizer::generateMappedValues() {
-  std::vector<float> output;
-  float sum = 0.f;
-  float currentVal = 0.f;
-  std::vector<Token> stack = scaleParser.tokens;
-  output.push_back(0.f);
-  for (unsigned int i = 0; i < stack.size(); i++) {
-    if (stack[i].type == "Digit") {
-      sum += std::stof(stack[i].value);
-      currentVal = sum / fNumDivisions;
-      output.push_back(currentVal);
-    }
-  }
-  return output;
+	std::vector<float> output;
+	float sum = 0.f;
+	float currentVal = 0.f;
+  printf("tokens size %i\n",scaleParser.tokens.size());
+	scaleParser.setForQuantizer();
+	std::vector<Token> stack = scaleParser.tokens;
+	
+printf("tokens size after %i\n",scaleParser.tokens.size());
+	output.push_back(0.f);
+	for(unsigned int i = 0; i < stack.size(); i++) {
+		if(stack[i].type=="Digit" || stack[i].type=="Integer") {
+			sum += std::stof(stack[i].value);
+			currentVal = sum/fNumDivisions; 
+			output.push_back(currentVal);
+		}
+	}
+	return output;
 }
 float Quantizer::findEvenSpacingValue(float input, std::vector<float> allowedValues) {
   return allowedValues[floor(input * allowedValues.size())];
@@ -1362,6 +1389,10 @@ float Quantizer::quantizeEven(float input, int iTranspose) {
 }
 float Quantizer::quantizeEven(float input) {
   return quantizeEven(input, 0);
+}
+
+void Quantizer::print() {
+	printFloatVector(mappedValues);	
 }
 std::string getByteString(float f) {
   unsigned char const * p = reinterpret_cast<unsigned char const *>(&f);

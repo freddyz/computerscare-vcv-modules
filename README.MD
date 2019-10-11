@@ -13,7 +13,7 @@ The scale for quantization is programmed via the text field.  Oh Peas! expects n
 
 ### Input Jacks:
 
-**Main Input (input, _A_):**
+**Main Input (input, _A_)**
 
 **Range CV (range, _B_):** Multiplies the input value, attenuverted by the small Range CV knob
 
@@ -81,7 +81,7 @@ abcdef@3        abc
 
 ## Randomization
 
-Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curly braces {} will randomly select one of the values with equal probability.  For example, ~{ab}~ will choose either "a" or "b" at each clock step.  ~{g<2.55>}~ will output either the value of knob "g" or 2.55 volts with equal probability.
+Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curly braces {} will randomly select one of the values with equal probability.  For example, `{ab}` will choose either `a` or `b` at each clock step.  `{g<2.55>}` will output either the value of knob `g` or `2.55` volts with equal probability.
 
 ## Square Bracket Expansion
 
