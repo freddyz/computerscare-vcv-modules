@@ -1,57 +1,55 @@
 # computerscare modules for VCV Rack
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/all-computerscare-modules-v1.png" width="900" alt="Computerscare Modules for VCV Rack" />
 
-![ComputerscarePatchSequencer](./doc/all-computerscare-modules.png)
-
-~~~~
- oo                   o     Q         6       6  Q     6                
-                     o       o                Q                6 6 6    
-           Q      6         QQ          o     Q       6         Qo      
-Q                    Q       66       o         QQ    QQ                
- 6                    6                               6 o       Q       
- Q                Q         6  6    Q         6       Q  Qo             
-   oo                o      6                 o       Q Q      Q 6     
-
-YLX    LY5    2X5    Y2L    2LY    X25    YLX    YLL    
-2LY    X22    25L    52L    YXY    X5Y    55Y    225    
-5YX    XLX    5YX    25X    LY5    L2Y    L5X    55L   
-~~~~
 
 # Oh Peas! Quad Quantenuverter
 4-Channel attenuverter, offsetter, quantizer
-![Oh Peas! Basic](./doc/ohpeas-basic-1.png)
+
+
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/ohpeas-basic-1.png" width="500" alt="Oh Peas! Quad Quantenuverter" />
 
 ### Text Input:
-The scale for quantization is programmed via the text field.  
+The scale for quantization is programmed via the text field.  Oh Peas! expects numbers that mean “how many steps to the next note”. For example, the major triad “scale” (C, E, G) is programmed by entering `43` (meaning: 4 half steps, and then 3 half steps).  The minor triad (C, E flat, G) = `34` (3 half steps, then 4 half steps). The major scale would be `221222` (whole, whole half whole whole whole). The final half step back to the root note is always “implied” so you can safely skip it. Right click to see and select some pre-programmed common scales.
 
 ### Input Jacks:
 
-**Main Input (input):** Increases each row's absoluteStep by 1.
+**Main Input (input, _A_)**
 
-**Range CV (range):** Resets each row's absoluteStep to 0.
+**Range CV (range, _B_):** Multiplies the input value, attenuverted by the small Range CV knob
 
-**Offset CV (offset):** Increases the row's absoluteStep by 1.  If a cable is plugged in, the row ignores the Global Clock.
+**Offset CV (offset, _C_):** Offset for the input value, attenuverted by the small Offset CV knob
 
 ### Knobs:
 **Number of Divisions (divisions):** How many equal divisions the octave is split into.  Default is 12.
 
-**Transpose:** Amount to add or subtract to final output signal.  Values between -NumDivisions and +NumDivisions, which is equivalent to +/- 1 octave.
+**Transpose:** Amount to add or subtract to final output signal.  Values between -NumDivisions and +NumDivisions, which is equivalent to +/- 1 octave.  The default is 0, which means that an input voltage of 0v outputs the note C.
 
-**Range CV Attenuverter ("range", small knob):** Attenuverter for the Range CV input.  Scales Range CV between -1 and +1
+**Range CV Attenuverter ("range", small knob, _b_):** Attenuverter for the Range CV input.  Scales Range CV between -1 and +1
 
-**Range Knob ("range", large knob):** Attenuverter for Main Input signal.  Scales Main Input between -1 and +1
+**Range Knob ("range", large knob, _a_):** Attenuverter for Main Input signal.  Scales Main Input between -2 and +2
 
-**Offset CV Attenuverter ("offset", small knob):** Attenuverter for the Range CV input.  Scales Range CV between -1 and +1
+**Offset CV Attenuverter ("offset", small knob, _c_):** Attenuverter for the Range CV input.  Scales Range CV between -1 and +1
 
-**Offset Knob ("offset", large knob):** Constant offset to add after "range" section is applied.  +/- 5 volts.
+**Offset Knob ("offset", large knob, _d_):** Constant offset to add after "range" section is applied.  +/- 5 volts.
 
 
 
 
 ### Output Jacks:
 
-**Attenuverted, Offset Output (out):** The attenuverted and offset main input signal.  A*(a + B*b) + C*c + d
+**Attenuverted, Offset Output (out):** The attenuverted and offset main input signal.  The formula is: 
 
-**Quantized Output (quantized):** The attenuverted and offset main input signal, quantized to the desired scale.
+~~~~
+<INPUT> * (<range knob> + <RANGE CV> * <range attenuverter>) +<offset knob> + <OFFSET CV> * <offset attenuverter>
+~~~~
+
+or... a bit easier to read using the italic letters above in the input/knob descriptions
+
+~~~~
+A*(a + B*b) + C*c + d
+~~~~
+
+**Quantized Output (quantized):** The attenuverted and offset main input signal, quantized to the desired scale.  The quantization works a bit differently than other quantizers.  Oh Peas first figures out how many steps are in the defined scale, and then equally distributes the input signal between the allowed scale notes.  This is easiest to understand by feeding a sawtooth LFO wave into the input, and noticing that the quantized output produces the scale values each with an equal amount of time.  Most quantizers seem to map the input voltage to the closest allowed scale note which makes a sawtooth wave spend more time on the notes that are farther away from their neighbors.  One implication of this is that plugging the V/Oct of a midi keyboard into Oh Peas will mean some notes on the keyboard will not be quantized to the same output note of Oh Peas!  In fact, that's why it's called "Oh Peas!"
 
 
 ~~~~
@@ -69,7 +67,7 @@ xx ᳹䒜  淧   -- ፌxЧ -᳹   xxx-x䒜x᳹
 # I Love Cookies
 Signal & CV Sequencer.  Uses Text as input.  Because after all, don't we all love cookies?
 
-Knobs are labeled with lowercase letters: a-z.  Inputs are labeled with uppercase letters A-Z.  Programming in the sequence: ~abcd~ will sequentially output the values of knobs a, b, c, and finally d.  It will then loop back to step 0: knob a again.  An exact voltage can be programmed by enclosing the value in square brackets.  For example: `<4.20>`.  Following a sequence of values (lowercase, uppercase, or exact value) with "@8" will loop the sequence after 8 steps.  8 is not a special value, any number works after the "@" symbol.  Here is an example with some I Love Cookies inputs their equivalents:
+Knobs are labeled with lowercase letters: a-z.  Inputs are labeled with uppercase letters A-Z.  Programming in the sequence: `abcd` will sequentially output the values of knobs a, b, c, and finally d.  It will then loop back to step 1: knob a again.  An exact voltage can be programmed by enclosing the value in square brackets.  For example: `<4.20>`.  Following a sequence of values (lowercase, uppercase, or exact value) with "@8" will loop the sequence after 8 steps.  8 is not a special value, any number is allowed after the "@" symbol.  Here is an example with some I Love Cookies inputs their equivalents:
 
 ~~~~
 Input           Equivalent Input
@@ -83,7 +81,7 @@ abcdef@3        abc
 
 ## Randomization
 
-Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curl braces {} will randomly select one of the values with equal probability.  For example, ~{ab}~ will choose either "a" or "b" at each clock step.  ~{g<2.55>}~ will output either the value of knob "g" or 2.55 volts with equal probability.
+Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curly braces {} will randomly select one of the values with equal probability.  For example, `{ab}` will choose either `a` or `b` at each clock step.  `{g<2.55>}` will output either the value of knob `g` or `2.55` volts with equal probability.
 
 ## Square Bracket Expansion
 
@@ -107,21 +105,6 @@ ab@5            ababa
 <1><0>@8        <1><0><1><0><1><0><1><0>
 abcde@8         abcdeabc
 abcdef@3        abc
-~~~~
-
-## Randomization
-
-Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curl braces {} will randomly select one of the values with equal probability.  For example, ~{ab}~ will choose either "a" or "b" at each clock step.  ~{g<2.55>}~ will output either the value of knob "g" or 2.55 volts with equal probability.
-
-## Square Bracket Expansion
-
-Enclosing comma-separated sequences with square brackets allows for even more complex patterns to be generated.
-
-~~~~
-Input           Equivalent Input          Comment
-
-[ab,c]@4        ababcccc                  4 steps of "ab", then 4 steps of "c"
-[A,cde]@5       AAAAAcdecd                5 steps from input "A", then 5 steps of "cde"
 ~~~~
 
 
@@ -151,9 +134,9 @@ def@10
 
 
 # Laundry Soup
-Laundry Soup is a trigger sequencer that takes text as input.  If you connect a clock signal to the "clk" input, and type "1" in the top text box, the top "out" output will send a trigger each clock.  "2" sends a trigger every 2 clock signals.  "31" sends a trigger on the 1st and 4th clock signals, and then repeats this pattern forever or until reset.
+Laundry Soup is a trigger sequencer that takes text as input.  If you connect a clock signal to the "clk" input, and type `1` in the top text box, the top "out" output will send a trigger each clock.  `2` sends a trigger every 2 clock signals.  `31` sends a trigger on the 1st and 4th clock signals, and then repeats this pattern forever or until reset.
 
-![ComputerscarePatchSequencer](./doc/laundry-soup-basic-2.png)
+![Laundry Soup](./doc/laundry-soup-basic-2.png)
 
 
 ### Text Input:
@@ -190,12 +173,13 @@ In The 3rd row:`2131@8`, the "@8" means: repeat the pattern every 8 clock signal
            
 
 
-The 4th row's input is `8-4`.  This means the pattern "8", offset by 4 triggers.  When triggered by 16th notes, I find this pattern useful for triggering a backbeat snare drum.
+A rest can be programmed by using the number "0".  If Laundry Soup is triggered by 16th notes, the pattern `00004` (or equivalently `0@4,4`) can be used to trigger a snare drum sound on the backbeat.
+ 
 
 ~~~~
-8    ---> x-------
-8-1  ---> -x------
-8-4  ---> ----x---
+8      ---> x-------
+07     ---> -x------
+00004  ---> ----x---
 ~~~~
  
 
@@ -215,98 +199,18 @@ The 6th row shows a way to "skip" beats.  `@4` all by itself means: wait 4 beats
 @4,4    --->   ----x---
 ~~~~
 
-### dtp64 Language:
+### How to program lengths longer than 9 beats:
 To program a rhythm that divides the incoming clock by 16, the proper input is NOT `16`.  Values greater than 9 steps must be enclosed in angle brackets `<16>`
 
 ~~~~
-16      --->   xx-----  (repeats every 7 beats)
+16      --->   xx-----  (Laundry Soup interprets this as a 1 and then a 6.  This pattern repeats every 7 beats)
 
 <16>    --->   x--------------- (repeats every 16 beats)
 ~~~~
 
 
 
-
-To represent lengths 10 thru 64, use a-z, then A-Z, &, $, and 0.  See the chart below for this quasi-base64 mapping which I call "pdt64"
-~~~~
-16      --->   xx-----          (repeats every 7 beats)
-9       --->   x--------        (repeats every 9 beats)
-a       --->   x---------       (repeats every 10 beats)
-g       --->   x--------------- (repeats every 16 beats)
-~~~~
-
-### dtp64 Table:
-~~~~
-dtp64   #-of-clocks
-1       1
-2       2
-3       3
-4       4
-5       5
-6       6
-7       7
-8       8
-9       9
-a       10
-b       11
-c       12
-d       13
-e       14
-f       15
-g       16
-h       17
-i       18
-j       19
-k       20
-l       21
-m       22
-n       23
-o       24
-p       25
-q       26
-r       27
-s       28
-t       29
-u       30
-v       31
-w       32
-x       33
-y       34
-z       35
-A       36
-B       37
-C       38
-D       39
-E       40
-F       41
-G       42
-H       43
-I       44
-J       45
-K       46
-L       47
-M       48
-N       49
-O       50
-P       51
-Q       52
-R       53
-S       54
-T       55
-U       56
-V       57
-W       58
-X       59
-Y       60
-Z       61
-&       62
-$       63
-0       64
-~~~~
-
-
 ### Input Jacks:
-
 ![ComputerscarePatchSequencer](./doc/laundry-soup-inputs-1.png)
 
 **Global Clock (clk):** Increases each row's absoluteStep by 1.
@@ -322,6 +226,7 @@ $       63
 
 ![ComputerscarePatchSequencer](./doc/laundry-soup-outputs-1.png)
 
+
 **Individual Row Output (out):** The output of the row's pattern.  Outputs 10 volts if:
 ~~~~
 A) The clock signal is sent to the Global Clock or Individual Clock input jack
@@ -334,12 +239,7 @@ B) The pattern ought to trigger on this absoluteStep
 
 ### Displays:
 
-**absoluteStep Display:** Shows the absoluteStep of the row.  The absoluteStep will increase by 1 every clock signal, until 
-~~~~
-A) The end of the pattern is reached
-           OR
-B) A reset trigger is sent to the Global Reset or Individual Reset input jack
-~~~~
+The display shows a few things:
 
 
 *Inspired by Frank Buss's Formula, Ryan Kirkbride's FoxDot, SuperCollider*
@@ -363,7 +263,7 @@ B) A reset trigger is sent to the Global Reset or Individual Reset input jack
 
 Patch matrix with 16 scenes.  If multiple buttons are active for a single row, the 2 active input signals will be summed.
 
-![ComputerscarePatchSequencer](./doc/patch-sequencer-basic-2.png)
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/patch-sequencer-basic-2.png" width="500" alt="Father & Son Patch Sequencer" />
 
 ### Buttons:
 **Patch Matrix:** Grid of 100 buttons.  When the button is lit in green, it means that the input column and output row is connected for the step that is being edited.  When the button is lit in red, it means that the input column and output row is connected for the currently active step.
@@ -437,9 +337,9 @@ Patch matrix with 16 scenes.  If multiple buttons are active for a single row, t
 
 
 ## Debug
-A simple module for debugging.  Displays a list of the last 16 voltages read from IN, with the most recent one at the top.
+Polyphonic volt meter, sample sample & hold, and noise source
 
-![ComputerscareDebug](./doc/computerscare-debug-basic.png)
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/computerscare-debug-basic.png" width="300" alt="Comptuerscare Debug" />
 
 ### Inputs:
 **Trigger (trg):** When a trigger signal is detected, the voltage at the Input will be placed at the top of the list of voltages, and the voltage at the bottom will be discarded from the display.
@@ -453,16 +353,16 @@ A simple module for debugging.  Displays a list of the last 16 voltages read fro
 
 **Clear (clr):** Manual Clear
 
-### Polyphonic Enhancements
+### Modes of Operation
 
-In the v1 branch, you can find the new version of Debug.  There are 3 clock modes (single, internal, poly), and 3 input modes (single, internal, poly).
+There are 3 clock modes (single, internal, poly), and 3 input modes (single, internal, poly).  Single uses a single channel.  Poly uses the poly channels.  Internal clock mode operates Debug at audio rate, and Internal input mode uses a uniform random generator with the range selectable via the right-click menu.  The default range for Internal input mode is 0-10v.
 
 
 **Single Clock, Single Input:**
 Selected channel clock signal will place the current value of selected input channel signal at line 1 and will discard the last line in the display.
 
 **Single Clock, Internal Input:**
-Independent randomly generated uniform values (0 to 1) will replace each of the 16 lines of display
+Internal random generator will replace each of the 16 lines of display
 
 **Single Clock, Poly Input:**
 Selected channel clock signal will place current value of each input channel in the corresponding line of the display.  (channel 4 of input gets recorded on line 4 of the display)
@@ -480,7 +380,7 @@ Selected channel clock signal will place current value of each input channel in 
 Each clock signal from poly clock input will update the corresponding display/output line with the current value of the selected input channel
 
 **Poly Clock, Internal Input:**
-Each clock signal from poly clock will update corresponding display line (a.k.a. output channel) with random value between (0 to 1)
+Each clock signal from poly clock will update corresponding display line (a.k.a. output channel) with a random value from the internal generator.
 
 **Poly Clock, Poly Input:**
 16-channel sample-and-hold, clocked by poly clock
@@ -502,3 +402,35 @@ Each clock signal from poly clock will update corresponding display line (a.k.a.
     ʬ    ʬ  蠍⼛     蠍ೊ蠍ʬ蠍⼛ 
  蠍 ⼛ೊ⼛   蠍蠍ೊʬ     蠍  ⼛⼛
 ~~~~
+
+# Polyphonic Utility Modules
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/computerscare-poly-utilities.png" width="600" alt="Computerscare Polyphonic Utilities" />
+
+
+## Knoly Pobs
+
+16 knobs, polyphonic output, range: 0 - 10 volts.
+
+
+## Boly Puttons
+
+16 latch buttons.  On/off voltages selectable via right-click menu.  Plugging in a polyphonic signal to the A/B inputs will override the selected on/off values and use the CV signals instead.  If a monophonic signal is plugged into the "A" input, its voltage will be used for ALL "off/up" buttons.  If an n-channel signal is plugged into the "A" input, the "off/up" button voltages will match the "A" channels up to n, and then re-start at "A" channel 1.  Behavior is the same for the "B" input.  Note that this behavior is different than the recommended method of handling polyphonic signals.
+
+
+## Roly Pouter
+
+Re-route the channels of a polyphonic signal.  If you select an input channel that is higher than the highest available channel of the input signal, the output voltage will be 0.
+
+
+## Soly Pequencer
+
+Sequentially output the individual channel voltages of a polyphonic signal.  Connecting a polyphonic signal to the clock input allows for multiple independent sequences.  Polyphonic reset channels beyond the number of channels of the clock signal are ignored.  I think that the clock/reset buttons will apply to all channels.
+
+
+## Toly Pools
+
+* Display input channel count
+* CV output of the input channel count (1 - 16 channels is linearly mapped to 0 - 10 volts)
+* Knob and CV for setting output channel count (0 - 10 volts linearly mapped to 1-16 output channels)
+* Knob and CV for rotating the polyphonic signal (0 - 10 volts sets rotation of 0-15 channels.  For example: rotation of "1" will move input channel 2 -> output channel 1, input channel 3->output channel 2, ...  input channel 16 -> output channel 1)
+
