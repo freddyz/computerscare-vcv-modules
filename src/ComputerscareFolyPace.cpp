@@ -245,8 +245,8 @@ struct FolyPaceDisplay : TransparentWidget {
 		float epy = oy - 10 * (2 + sf + sin(I - J / 2));
 
 		float eyeSpacing = frx / 2 * (1.8 + 0.5 * sin(200 - J));
-		float erlx = frx / 3 * (1 + 0.4 * sin(G));
-		float erly = frx / 3 * (1 + 0.4 * sin(H - N + 100));
+		float erlx = frx / 4 * (1 + 0.4 * sin(G));
+		float erly = frx / 4 * (1 + 0.4 * sin(H - N + 100));
 		float errx = 10 + 3 * sin(M) + 4 * sin(M - 2 - 882.2);
 		float erry = 10 + 2 * sin(J) + 4 * sin(J - erly / 20);
 
@@ -284,10 +284,10 @@ struct FolyPaceDisplay : TransparentWidget {
 
 
 		float mouthX = ox;
-		float mouthY = oy + 0.5 * fry * (1 + 0.4 * sin(C / 2));
-		float mouthWidth = frx * 0.7 * (1.2 + 0.6 * sin(C));
+		float mouthY = oy + 0.4 * fry * (1 + 0.4 * sin(C / 2));
+		float mouthWidth = frx * 0.6 * (1.2 + 0.6 * sin(C));
 		float mouthOpen = fry * 0.06 * (1 + sin(O) - sin(A * 2 + 44));
-		float mouthSmile = sin(D) * 2.3;
+		float mouthSmile = sin(D) * 2.0;
 		float mouthSkew = sin(L) - sin(H);
 		float mouthThickness = 5.4 * (sin(H) - sin(M / 2));
 		NVGcolor mouthLipColor = nvgHSLA(0.1 * sin(N) - 0.1, 0.6 + 0.3 * sin(M), 0.5 + .4 * sin(I), 0xff);
@@ -349,7 +349,7 @@ struct FolyPaceDisplay : TransparentWidget {
 		nvgBezierTo(args.vg, x - width / 4, y - open * smile, x + width / 4, y - open * smile, x + width / 2, y - 10.f * smile);
 
 		//bottom
-		nvgBezierTo(args.vg, x + width / 4, y + smile * open, x - width / 4, y + smile * open, x - width / 2, y - 10.f * smile);
+		nvgBezierTo(args.vg, x + width / 4, y + smile * open, x - width / 4, y + smile * open, x - width / 2, y - 20.f * smile);
 		nvgClosePath(args.vg);
 		nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
 		nvgFillColor(args.vg, nvgRGBA(0, 0, 0, 0xff));
