@@ -1,4 +1,5 @@
 #include "Computerscare.hpp"
+#include "ComputerscareResizableHandle.hpp"
 #include <osdialog.h>
 #include <iostream>
 #include <fstream>
@@ -19,18 +20,15 @@ struct ComputerscareBlank : Module {
 	float height= 380;
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
-		KNOB,
-		TOGGLES = KNOB + numKnobs,
-		NUM_PARAMS = TOGGLES + numToggles
+
+		NUM_PARAMS
 
 	};
 	enum InputIds {
-		CHANNEL_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
-		POLY_OUTPUT,
-		NUM_OUTPUTS = POLY_OUTPUT + numOutputs
+		NUM_OUTPUTS 
 	};
 	enum LightIds {
 		NUM_LIGHTS
@@ -41,24 +39,10 @@ struct ComputerscareBlank : Module {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		for (int i = 0; i < numKnobs; i++) {
-			configParam(KNOB + i, 0.0f, 10.0f, 0.0f);
-			configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1) + " Voltage", " Volts");
-		}
 
 	}
 	void process(const ProcessArgs &args) override {
-		counter++;
-		if (counter > 5012) {
-			//printf("%f \n",random::uniform());
-			counter = 0;
-			//rect4032
-			//south facing high wall
-		}
-		outputs[POLY_OUTPUT].setChannels(16);
-		for (int i = 0; i < numKnobs; i++) {
-			outputs[POLY_OUTPUT].setVoltage(params[KNOB + i].getValue(), i);
-		}
+
 	}
 	void loadScriptDialog() {
 		std::string dir = asset::plugin(pluginInstance, "examples");
@@ -83,6 +67,8 @@ struct ComputerscareBlank : Module {
 	json_t *dataToJson() override {
 		json_t *rootJ = json_object();
 		json_object_set_new(rootJ, "path", json_string(path.c_str()));
+		json_object_set_new(rootJ, "width", json_real(width));
+		json_object_set_new(rootJ, "height", json_real(height));
 		return rootJ;
 	}
 
@@ -92,6 +78,13 @@ struct ComputerscareBlank : Module {
 			path = json_string_value(pathJ);
 			setPath(path);
 		}
+		json_t *widthJ = json_object_get(rootJ, "width");
+	if (widthJ)
+		width = json_number_value(widthJ);
+		
+	json_t *heightJ = json_object_get(rootJ, "height");
+	if (heightJ)
+		height = json_number_value(heightJ);
 	}
 
 };
@@ -124,7 +117,7 @@ struct PNGDisplay : TransparentWidget {
 
 			nvgBeginPath(args.vg);
 			//if (module->width>0 && module->height>0)
-				nvgScale(args.vg, width/module->width, height/module->height);
+				//nvgScale(args.vg, width/module->width, height/module->height);
 		 	NVGpaint imgPaint = nvgImagePattern(args.vg, 0, 0, module->width,module->height, 0, img, 1.0f);
 		 	nvgRect(args.vg, 0, 0, module->width, module->height);
 		 	nvgFillPaint(args.vg, imgPaint);
@@ -137,6 +130,8 @@ struct ComputerscareBlankWidget : ModuleWidget {
 	ComputerscareBlankWidget(ComputerscareBlank *module) {
 
 		setModule(module);
+		this->blankModule=module;
+		box.size = Vec(module->width, module->height);
 		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareKnolyPobsPanel.svg")));
 		box.size = Vec(module->width,module->height);
 		{
@@ -144,6 +139,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareKnolyPobsPanel.svg")));
 
+			this->panel=panel;
 			//module->panelRef = panel;
 
 			addChild(panel);
@@ -152,29 +148,21 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
 
 		{
-			PNGDisplay *display = new PNGDisplay();
-			display->module = module;
-			display->box.pos = Vec(0, 0);
-			display->box.size = Vec(module->width, module->height);
-			addChild(display);
+			PNGDisplay *pngDisplay = new PNGDisplay();
+			pngDisplay->module = module;
+			pngDisplay->box.pos = Vec(0, 0);
+			pngDisplay->box.size = Vec(module->width, module->height);
+			this->pngDisplay=pngDisplay;
+			addChild(pngDisplay);
 		}
 
-	}
-	void addLabeledKnob(std::string label, int x, int y, ComputerscareBlank *module, int index, float labelDx, float labelDy) {
-
-		smallLetterDisplay = new SmallLetterDisplay();
-		smallLetterDisplay->box.size = Vec(5, 10);
-		smallLetterDisplay->fontSize = 16;
-		smallLetterDisplay->value = label;
-		smallLetterDisplay->textAlign = 1;
-
-		addParam(createParam<SmoothKnob>(Vec(x, y), module, ComputerscareBlank::KNOB + index));
-		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
-
-
-		addChild(smallLetterDisplay);
+	ComputerscareResizeHandle *rightHandle = new ComputerscareResizeHandle();
+	rightHandle->right = true;
+	this->rightHandle = rightHandle;
+	addChild(rightHandle);
 
 	}
+
 	void appendContextMenu(Menu* menu) override {
 		ComputerscareBlank* module = dynamic_cast<ComputerscareBlank*>(this->module);
 
@@ -186,7 +174,22 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
 
 	}
+	void step() override;
+	ComputerscareBlank *blankModule;
+	PNGDisplay *pngDisplay;
+	ComputerscareSVGPanel *panel;
+	TransparentWidget *display;
+	ComputerscareResizeHandle *rightHandle;
 	SmallLetterDisplay* smallLetterDisplay;
 };
+void ComputerscareBlankWidget::step() {
+	blankModule->width=box.size.x;
+
+	panel->box.size = box.size;
+	//display->box.size = Vec(box.size.x, box.size.y);
+	pngDisplay->box.size.x = box.size.x;
+	rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
+	ModuleWidget::step();
+}
 
 Model *modelComputerscareBlank = createModel<ComputerscareBlank, ComputerscareBlankWidget>("computerscare-blank");
