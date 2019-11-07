@@ -18,6 +18,7 @@ struct ComputerscareBlank : Module {
 	std::string path;
 	float width = 120;
 	float height = 380;
+	int imageFitEnum = 0;
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		NUM_PARAMS
@@ -42,7 +43,7 @@ struct ComputerscareBlank : Module {
 	void process(const ProcessArgs &args) override {
 
 	}
-	void loadScriptDialog() {
+	void loadImageDialog() {
 		std::string dir = asset::plugin(pluginInstance, "examples");
 		char* pathC = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
 		if (!pathC) {
@@ -62,7 +63,6 @@ struct ComputerscareBlank : Module {
 	}
 	void setWidth(float w) {
 		this->width = w;
-		printf("setWidth width:%f\n", this->width);
 	}
 
 
@@ -85,19 +85,33 @@ struct ComputerscareBlank : Module {
 	}
 
 };
-struct LoadScriptItem : MenuItem {
+struct LoadImageItem : MenuItem {
 	ComputerscareBlank* module;
 	void onAction(const event::Action& e) override {
-		module->loadScriptDialog();
+		module->loadImageDialog();
 	}
 };
-
+struct ImageFitModeItem : MenuItem {
+	ComputerscareBlank *blank;
+	int imageFitEnum;
+	void onAction(const event::Action &e) override {
+		blank->imageFitEnum = imageFitEnum;
+	}
+	void step() override {
+		rightText = CHECKMARK(blank->imageFitEnum == imageFitEnum);
+		MenuItem::step();
+	}
+};
 
 
 struct PNGDisplay : TransparentWidget {
 	ComputerscareBlank *module;
 	const float width = 125.0f;
 	const float height = 130.0f;
+
+	int imgWidth,imgHeight;
+	float imgRatio;
+
 	std::string path = "";
 	bool first = true;
 	int img = 0;
@@ -109,13 +123,27 @@ struct PNGDisplay : TransparentWidget {
 		if (module/* && !module->loading*/) {
 			if (path != module->path) {
 				img = nvgCreateImage(args.vg, module->path.c_str(), 0);
+				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
+				imgRatio = ((float)imgWidth / (float)imgHeight);
 				path = module->path;
+
 			}
 
 			nvgBeginPath(args.vg);
+			NVGpaint imgPaint;
 			//if (module->width>0 && module->height>0)
 			//nvgScale(args.vg, width/module->width, height/module->height);
-			NVGpaint imgPaint = nvgImagePattern(args.vg, 0, 0, module->width, module->height, 0, img, 1.0f);
+			if (module->imageFitEnum == 0) {
+				imgPaint = nvgImagePattern(args.vg, 0, 0, module->width, module->height, 0, img, 1.0f);
+
+			}
+			else if (module->imageFitEnum == 1) { // fit width
+				//nvgScale(args.vg, width/module->width, height/module->height);
+				imgPaint = nvgImagePattern(args.vg, 0, 0, module->width, module->width/imgRatio, 0, img, 1.0f);
+			}
+			else if (module->imageFitEnum == 2) {
+				imgPaint = nvgImagePattern(args.vg, 0, 0, module->height * imgRatio, module->height, 0, img, 1.0f);
+			}
 			nvgRect(args.vg, 0, 0, module->width, module->height);
 			nvgFillPaint(args.vg, imgPaint);
 			nvgFill(args.vg);
@@ -165,13 +193,21 @@ struct ComputerscareBlankWidget : ModuleWidget {
 	}
 
 	void appendContextMenu(Menu* menu) override {
-		ComputerscareBlank* module = dynamic_cast<ComputerscareBlank*>(this->module);
+		ComputerscareBlank* blank = dynamic_cast<ComputerscareBlank*>(this->module);
 
 		menu->addChild(new MenuEntry);
 
-		LoadScriptItem* loadScriptItem = createMenuItem<LoadScriptItem>("Load image");
-		loadScriptItem->module = module;
-		menu->addChild(loadScriptItem);
+		LoadImageItem* loadImageItem = createMenuItem<LoadImageItem>("Load image");
+		loadImageItem->module = blank;
+		menu->addChild(loadImageItem);
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Image Scaling"));
+		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Fit Both (stretch both directions)", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 0));
+		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Fit Width", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 1));
+		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Fit Height", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 2));
+
 
 
 	}
