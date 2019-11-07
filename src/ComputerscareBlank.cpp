@@ -18,6 +18,10 @@ struct ComputerscareBlank : Module {
 	std::string path;
 	float width = 120;
 	float height = 380;
+	bool invertY = false;
+	float zoom = 1.f;
+	float xOffset = 0.f;
+	float yOffset = 0.f;
 	int imageFitEnum = 0;
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
@@ -69,7 +73,11 @@ struct ComputerscareBlank : Module {
 	json_t *dataToJson() override {
 		json_t *rootJ = json_object();
 		json_object_set_new(rootJ, "path", json_string(path.c_str()));
-		//json_object_set_new(rootJ, "width", json_real(width));
+		json_object_set_new(rootJ, "imageFitEnum", json_integer(imageFitEnum));
+		json_object_set_new(rootJ, "invertY", json_boolean(invertY));
+		json_object_set_new(rootJ, "zoom", json_real(zoom));
+		json_object_set_new(rootJ, "xOffset", json_real(xOffset));
+		json_object_set_new(rootJ, "yOffset", json_real(yOffset));
 		return rootJ;
 	}
 
@@ -79,9 +87,22 @@ struct ComputerscareBlank : Module {
 			path = json_string_value(pathJ);
 			setPath(path);
 		}
-		/*json_t *widthJ = json_object_get(rootJ, "width");
-		if (widthJ)
-			this->setWidth(json_number_value(widthJ));*/
+		json_t *imageFitEnumJ = json_object_get(rootJ, "imageFitEnum");
+		if (imageFitEnumJ) { imageFitEnum = json_integer_value(imageFitEnumJ); }
+		json_t *invertYJ = json_object_get(rootJ, "invertY");
+		if (invertYJ) { invertY = json_is_true(invertYJ); }
+		json_t *zoomJ = json_object_get(rootJ, "zoom");
+		if (zoomJ) {
+			zoom=json_number_value(zoomJ);
+		}
+		json_t *xOffsetJ = json_object_get(rootJ, "xOffset");
+		if (xOffsetJ) {
+			xOffset=json_number_value(xOffsetJ);
+		}
+		json_t *yOffsetJ = json_object_get(rootJ, "yOffset");
+		if (yOffsetJ) {
+			yOffset=json_number_value(yOffsetJ);
+		}
 	}
 
 };
@@ -102,14 +123,26 @@ struct ImageFitModeItem : MenuItem {
 		MenuItem::step();
 	}
 };
+struct InvertYMenuItem: MenuItem {
+	ComputerscareBlank *blank;
+	InvertYMenuItem() {
 
+	}
+	void onAction(const event::Action &e) override {
+		blank->invertY = !blank->invertY;
+	}
+	void step() override {
+		rightText = blank->invertY ? "✔" : "";
+		MenuItem::step();
+	}
+};
 
 struct PNGDisplay : TransparentWidget {
 	ComputerscareBlank *module;
 	const float width = 125.0f;
 	const float height = 130.0f;
 
-	int imgWidth,imgHeight;
+	int imgWidth, imgHeight;
 	float imgRatio;
 
 	std::string path = "";
@@ -132,17 +165,17 @@ struct PNGDisplay : TransparentWidget {
 			nvgBeginPath(args.vg);
 			NVGpaint imgPaint;
 			//if (module->width>0 && module->height>0)
-			//nvgScale(args.vg, width/module->width, height/module->height);
+			nvgScale(args.vg, module->zoom, module->zoom);
 			if (module->imageFitEnum == 0) {
-				imgPaint = nvgImagePattern(args.vg, 0, 0, module->width, module->height, 0, img, 1.0f);
+				imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->height, 0, img, 1.0f);
 
 			}
 			else if (module->imageFitEnum == 1) { // fit width
 				//nvgScale(args.vg, width/module->width, height/module->height);
-				imgPaint = nvgImagePattern(args.vg, 0, 0, module->width, module->width/imgRatio, 0, img, 1.0f);
+				imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->width / imgRatio, 0, img, 1.0f);
 			}
 			else if (module->imageFitEnum == 2) {
-				imgPaint = nvgImagePattern(args.vg, 0, 0, module->height * imgRatio, module->height, 0, img, 1.0f);
+				imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->height * imgRatio, module->height, 0, img, 1.0f);
 			}
 			nvgRect(args.vg, 0, 0, module->width, module->height);
 			nvgFillPaint(args.vg, imgPaint);
@@ -150,7 +183,64 @@ struct PNGDisplay : TransparentWidget {
 			nvgClosePath(args.vg);
 		}
 	}
+	void onHoverKey(const event::HoverKey& e) override;
 };
+void PNGDisplay::onHoverKey(const event::HoverKey& e) {
+	float dZoom = 0.05;
+	float dPosition = 10.f;
+	if (e.isConsumed())
+		return;
+
+	// Scroll with arrow keys
+	/*float arrowSpeed = 30.0;
+	if ((e.mods & RACK_MOD_MASK) == (RACK_MOD_CTRL | GLFW_MOD_SHIFT))
+		arrowSpeed /= 16.0;
+	else if ((e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL)
+		arrowSpeed *= 4.0;
+	else if ((e.mods & RACK_MOD_MASK) == GLFW_MOD_SHIFT)
+		arrowSpeed /= 4.0;*/
+	if (e.action == RACK_HELD) {
+
+		switch (e.key) {
+		case GLFW_KEY_A: {
+			//offset.x -= arrowSpeed;
+			DEBUG("A pressed");
+			module->xOffset -= dPosition;
+			e.consume(this);
+		} break;
+		case GLFW_KEY_S: {
+			//offset.x -= arrowSpeed;
+			DEBUG("S pressed");
+			module->yOffset -= module->invertY ? dPosition : -dPosition;
+			e.consume(this);
+		} break;
+		case GLFW_KEY_D: {
+			//offset.x -= arrowSpeed;
+			DEBUG("D pressed");
+			module->xOffset += dPosition;
+			e.consume(this);
+		} break;
+		case GLFW_KEY_W: {
+			//offset.x -= arrowSpeed;
+			DEBUG("W pressed");
+			module->yOffset += module->invertY ? dPosition : -dPosition;
+			e.consume(this);
+		} break;
+		case GLFW_KEY_Z: {
+			//offset.x -= arrowSpeed;
+			DEBUG("Z pressed");
+			module->zoom += dZoom;
+			e.consume(this);
+		} break;
+		case GLFW_KEY_X: {
+			//offset.x -= arrowSpeed;
+			DEBUG("X pressed");
+			module->zoom -= dZoom;
+			e.consume(this);
+		} break;
+		}
+	}
+}
 struct ComputerscareBlankWidget : ModuleWidget {
 	ComputerscareBlankWidget(ComputerscareBlank *module) {
 
@@ -207,6 +297,13 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Fit Both (stretch both directions)", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 0));
 		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Fit Width", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 1));
 		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Fit Height", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 2));
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+
+		InvertYMenuItem *invertYMenuItem = new InvertYMenuItem();
+		invertYMenuItem->text = "Invert Y-Axis";
+		invertYMenuItem->blank = blank;
+		menu->addChild(invertYMenuItem);
 
 
 
