@@ -70,6 +70,11 @@
 			"name":"Foly Pace",
 			"description":"Draw a face",
 			"tags":["Visual","Polyphonic"]
+		},
+		{"slug":"computerscare-blank",
+			"name":"Blank",
+			"description":"Customizable blank panel",
+			"tags":["Blank","Visual"]
 		}
 	]
 }

@@ -19,5 +19,6 @@ void init(Plugin *p) {
 	p->addModel(modelComputerscareSolyPequencer);
 	
 	p->addModel(modelComputerscareFolyPace);
+	p->addModel(modelComputerscareBlank);
 	
 }
