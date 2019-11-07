@@ -47,7 +47,7 @@ struct ComputerscareRolyPouter : Module {
 		counter++;
 		int inputChannels = inputs[POLY_INPUT].getChannels();
 		int knobSetting;
-		if (counter > 5012) {
+		if (counter > 1000) {
 			//printf("%f \n",random::uniform());
 			counter = 0;
 			for (int i = 0; i < numKnobs; i++) {
@@ -59,8 +59,6 @@ struct ComputerscareRolyPouter : Module {
 
 		//if()
 		if (inputs[ROUTING_CV].isConnected())  {
-			float v1 = inputs[ROUTING_CV].getVoltage(0);
-			float v2 = inputs[ROUTING_CV].getVoltage(1);
 			for (int i = 0; i < numOutputChannels; i++) {
 
 				knobSetting = mapVoltageToChannelCount(inputs[ROUTING_CV].getVoltage(i));

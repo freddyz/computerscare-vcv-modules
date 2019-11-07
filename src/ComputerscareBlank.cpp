@@ -144,7 +144,7 @@ struct PNGDisplay : TransparentWidget {
 
 	int imgWidth, imgHeight;
 	float imgRatio;
-
+	int lastEnum = -1;
 	std::string path = "";
 	bool first = true;
 	int img = 0;
@@ -160,6 +160,13 @@ struct PNGDisplay : TransparentWidget {
 				imgRatio = ((float)imgWidth / (float)imgHeight);
 				path = module->path;
 
+			}
+
+			if(module->imageFitEnum != lastEnum) {
+				lastEnum = module->imageFitEnum;
+				module->xOffset=0;
+				module->yOffset=0;
+				module->zoom=1;
 			}
 
 			nvgBeginPath(args.vg);
@@ -211,7 +218,7 @@ void PNGDisplay::onHoverKey(const event::HoverKey& e) {
 		case GLFW_KEY_S: {
 			//offset.x -= arrowSpeed;
 			DEBUG("S pressed");
-			module->yOffset -= module->invertY ? dPosition : -dPosition;
+			module->yOffset += module->invertY ? dPosition : -dPosition;
 			e.consume(this);
 		} break;
 		case GLFW_KEY_D: {
@@ -223,7 +230,7 @@ void PNGDisplay::onHoverKey(const event::HoverKey& e) {
 		case GLFW_KEY_W: {
 			//offset.x -= arrowSpeed;
 			DEBUG("W pressed");
-			module->yOffset += module->invertY ? dPosition : -dPosition;
+			module->yOffset -= module->invertY ? dPosition : -dPosition;
 			e.consume(this);
 		} break;
 		case GLFW_KEY_Z: {
