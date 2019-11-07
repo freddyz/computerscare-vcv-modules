@@ -5,6 +5,7 @@ std::string integerlookup = "0123456789";
 std::string knoblookup = "abcdefghijklmnopqrstuvwxyz";
 std::string inputlookup = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 std::string knobandinputlookup = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+int MAX_LENGTH = 1048576;
 bool matchesAny(std::string val, std::vector<std::string> whitelist) {
   bool result = false;
   std::vector<std::string>::iterator it;
@@ -462,21 +463,30 @@ void LaundrySoupSequence::Setup(std::vector<Token> tokens) {
 }
 void LaundrySoupSequence::print() {
   printf("  LaundrySoupSequence inError:%d, tokenStack:\n",inError);
-  printTokenVector(tokenStack);
+  //printTokenVector(tokenStack);
   //printf("  Laundry pulseSequence:\n");
   //printVector(pulseSequence);
 }
 std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> tokens) {
   std::vector<int> output = {};
+  int length = 0;
+  int zeroCounter=1;
   int thisVal;
   int thisGate;
   for (unsigned int i = 0; i < tokens.size(); i++) {
     thisVal = tokens[i].duration;
+    
+    //horrible hacky way to not crash Rack via entering a ridiculously long sequence
+    //mostly to protect the higher channels of 4^#.  Laundry soup can still break Rack
+    //with something like this 1@999999999999
+    thisVal = std::min(std::max(1,MAX_LENGTH-length),thisVal);
     thisGate = (tokens[i].type == "ChanceOfInteger" ? 2 : (tokens[i].value == "0" ? 0 : 1));
     output.push_back(thisGate);
+    length+=thisVal;
     for (int j = 1; j < thisVal; j++) {
       output.push_back(0);
     }
+
   }
   return output;
 }
@@ -1078,6 +1088,7 @@ void Parser::ParseAtExpand(Token t, std::vector<std::string> whitelist, bool lau
       t = skipAndPeekToken();
     }
     atNum = ParseAtPart(t);
+    atNum = std::min(atNum,MAX_LENGTH);
     if (laundryMode) {
       proposedTokens = atExpandTokens(tokenVec, atNum);
     }
