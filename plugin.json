@@ -72,8 +72,8 @@
 			"tags":["Visual","Polyphonic"]
 		},
 		{"slug":"computerscare-blank",
-			"name":"Blank",
-			"description":"Customizable blank panel",
+			"name":"Custom Blank",
+			"description":"Customizable, resizable, lovable blank panel.  Load your own PNG, JPEG, BMP, or GIF.  Translate image with A,S,D,W keys.  Zoom in/out with Z,X keys.",
 			"tags":["Blank","Visual"]
 		}
 	]

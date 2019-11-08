@@ -210,38 +210,26 @@ void PNGDisplay::onHoverKey(const event::HoverKey& e) {
 
 		switch (e.key) {
 		case GLFW_KEY_A: {
-			//offset.x -= arrowSpeed;
-			DEBUG("A pressed");
-			module->xOffset -= dPosition;
-			e.consume(this);
-		} break;
-		case GLFW_KEY_S: {
-			//offset.x -= arrowSpeed;
-			DEBUG("S pressed");
-			module->yOffset += module->invertY ? dPosition : -dPosition;
-			e.consume(this);
-		} break;
-		case GLFW_KEY_D: {
-			//offset.x -= arrowSpeed;
-			DEBUG("D pressed");
 			module->xOffset += dPosition;
 			e.consume(this);
 		} break;
-		case GLFW_KEY_W: {
-			//offset.x -= arrowSpeed;
-			DEBUG("W pressed");
+		case GLFW_KEY_S: {
 			module->yOffset -= module->invertY ? dPosition : -dPosition;
 			e.consume(this);
 		} break;
+		case GLFW_KEY_D: {
+			module->xOffset -= dPosition;
+			e.consume(this);
+		} break;
+		case GLFW_KEY_W: {
+			module->yOffset += module->invertY ? dPosition : -dPosition;
+			e.consume(this);
+		} break;
 		case GLFW_KEY_Z: {
-			//offset.x -= arrowSpeed;
-			DEBUG("Z pressed");
 			module->zoom += dZoom;
 			e.consume(this);
 		} break;
 		case GLFW_KEY_X: {
-			//offset.x -= arrowSpeed;
-			DEBUG("X pressed");
 			module->zoom -= dZoom;
 			e.consume(this);
 		} break;
