@@ -47,22 +47,16 @@ struct ComputerscareRolyPouter : Module {
 		counter++;
 		int inputChannels = inputs[POLY_INPUT].getChannels();
 		int knobSetting;
-		if (counter > 1000) {
-			//printf("%f \n",random::uniform());
-			counter = 0;
-			for (int i = 0; i < numKnobs; i++) {
-				routing[i] = (int)params[KNOB + i].getValue();
-			}
-
-		}
+		
 		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
 
 		//if()
 		if (inputs[ROUTING_CV].isConnected())  {
 			for (int i = 0; i < numOutputChannels; i++) {
 
-				knobSetting = mapVoltageToChannelCount(inputs[ROUTING_CV].getVoltage(i));
+				knobSetting = std::round(inputs[ROUTING_CV].getVoltage(i)*1.5)+1;
 
+				routing[i]=knobSetting;
 				if (knobSetting > inputChannels) {
 					outputs[POLY_OUTPUT].setVoltage(0, i);
 				}
@@ -71,6 +65,14 @@ struct ComputerscareRolyPouter : Module {
 				}
 			}
 		} else {
+			if (counter > 1000) {
+			//printf("%f \n",random::uniform());
+			counter = 0;
+			for (int i = 0; i < numKnobs; i++) {
+				routing[i] = (int)params[KNOB + i].getValue();
+			}
+
+		}
 			for (int i = 0; i < numOutputChannels; i++) {
 
 				knobSetting = params[KNOB + i].getValue();
@@ -132,6 +134,8 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 			addChild(panel);
 
 		}
+		addInput(createInput<PointingUpPentagonPort>(Vec(22, 53), module, ComputerscareRolyPouter::ROUTING_CV));
+
 		float xx;
 		float yy;
 		for (int i = 0; i < numKnobs; i++) {
@@ -142,8 +146,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 
 
 		addInput(createInput<InPort>(Vec(1, 34), module, ComputerscareRolyPouter::POLY_INPUT));
-		addInput(createInput<InPort>(Vec(30, 54), module, ComputerscareRolyPouter::ROUTING_CV));
-
+		
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(32, 24), module, ComputerscareRolyPouter::POLY_OUTPUT));
 
