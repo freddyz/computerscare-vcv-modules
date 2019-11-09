@@ -28,7 +28,7 @@
 		},
 		{"slug":"computerscare-ohpeas",
 			"name":"Oh Peas!",
-			"description":"Quad Quantenuverter.  Attenuverter, Offsetter, Microtonal Quantizer",
+			"description":"Quad Quantenuverter. \nAttenuverter, Offsetter, Microtonal Quantizer",
 			"tags":["Polyphonic","Quantizer","Utility","Quad"]
 		},
 		{"slug":"computerscare-fatherandson",
@@ -73,7 +73,7 @@
 		},
 		{"slug":"computerscare-blank",
 			"name":"Custom Blank",
-			"description":"Customizable, resizable, lovable blank panel.  Load your own PNG, JPEG, BMP, or GIF.  Translate image with A,S,D,W keys.  Zoom in/out with Z,X keys.",
+			"description":"Customizable, resizable, lovable blank panel. \nLoad your own PNG, JPEG, BMP, or GIF. \nTranslate image with A,S,D,W keys. \nZoom in/out with Z,X keys.",
 			"tags":["Blank","Visual"]
 		}
 	]

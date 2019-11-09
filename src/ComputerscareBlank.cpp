@@ -21,7 +21,7 @@ struct ComputerscareBlank : Module {
 	std::string lastPath;
 	float width = 120;
 	float height = 380;
-	bool invertY = false;
+	bool invertY = true;
 	float zoom = 1.f;
 	float xOffset = 0.f;
 	float yOffset = 0.f;
@@ -253,11 +253,16 @@ struct ComputerscareBlankWidget : ModuleWidget {
 			box.size = Vec(8 * 15, 380);
 		}
 		{
+			BGPanel *bgPanel = new BGPanel(nvgRGB(0xE0, 0xE0, 0xD9));
+			bgPanel->box.size = box.size;
+			this->bgPanel = bgPanel;
+			addChild(bgPanel);
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareCustomBlankPanel.svg")));
 			this->panel = panel;
 			addChild(panel);
+			
 		}
 
 		if (module) {
@@ -312,6 +317,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
 	ComputerscareBlank *blankModule;
 	PNGDisplay *pngDisplay;
 	ComputerscareSVGPanel *panel;
+	BGPanel *bgPanel;
 	TransparentWidget *display;
 	ComputerscareResizeHandle *leftHandle;
 	ComputerscareResizeHandle *rightHandle;
@@ -322,6 +328,7 @@ void ComputerscareBlankWidget::step() {
 		if (!blankModule->loadedJSON) {
 			box.size.x = blankModule->width;
 			panel->box.size.x = blankModule->width;
+			bgPanel->box.size.x=blankModule->width;
 			panel->box.pos.x = blankModule->width / 2 - 60.f;
 			pngDisplay->box.size.x = blankModule->width;
 			rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
@@ -332,6 +339,7 @@ void ComputerscareBlankWidget::step() {
 				blankModule->width = box.size.x;
 				panel->box.pos.x = box.size.x / 2 - panel->box.size.x / 2;
 				pngDisplay->box.size.x = box.size.x;
+				bgPanel->box.size.x=box.size.x;
 				rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
 			}
 		}

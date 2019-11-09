@@ -56,6 +56,7 @@ namespace app {
 struct ComputerscareSVGPanel;
 
 struct ComputerscareSVGPanel : widget::FramebufferWidget {
+	NVGcolor backgroundColor;
 	void step() override;
 	void setBackground(std::shared_ptr<Svg> svg);
 };
@@ -75,7 +76,25 @@ struct ComputerscareSvgPort : PortWidget {
 
 } // namespace app
 } // namespace rack
+struct BGPanel : Widget {
+	NVGcolor color;
 
+	BGPanel(NVGcolor _color) {
+		color = _color;
+	}
+
+	void step() override {
+		Widget::step();
+	}
+
+	void draw(const DrawArgs &args) override {
+		nvgBeginPath(args.vg);
+		nvgRect(args.vg, 0.0, 0.0, box.size.x, box.size.y);
+		nvgFillColor(args.vg, color);
+		nvgFill(args.vg);
+		Widget::draw(args);
+	}
+};
 
 struct IsoButton : SvgSwitch {
 	IsoButton() {
