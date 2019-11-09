@@ -226,20 +226,7 @@ struct FolyPaceDisplay : TransparentWidget {
 		float mpx = ox - 3 * sin(G + I + A);
 		float mpy = oy + 20 + sf * (7 + 0.2 * sin(G - I));
 
-		float msx = mpx - 30 * sf + 3 * sin(G);
-		float msy = mpy + 5 * sin(L + I + P);
-
-
 		NVGcolor eyecolor = nvgHSLA(0.5, 0.9, 0.5, 0xff);
-		float mex = mpx + 30 * sf + 3 * sin(G + K / 2);
-		float mey = mpy + 5 * (1 + sf) * sin(G + 992.2);
-
-
-		float m1x = mpx - 15 * sf + 3 * sin(A / 3 - M);
-		float m1y = mpy - 6 * sf * sin(M) + 14 * sf * cos(E - C + A);
-
-		float m2x = mpx + 15 * sf - 10 * sf * sin(-N) + 14 * sf * sin(E);
-		float m2y = mpy - 1 * sf * sin(G - A / 2);
 
 		float epx = ox;
 		float epy = oy - 10 * (2 + sf + sin(I - J / 2));
@@ -420,7 +407,6 @@ struct FolyPaceDisplay : TransparentWidget {
 		}
 		else {
 			drawFace(args, module->bufferX[0][0], module->bufferX[1][0], module->bufferX[2][0], module->bufferX[3][0], module->bufferX[4][0], module->bufferX[5][0], module->bufferX[6][0], module->bufferX[7][0], module->bufferX[8][0], module->bufferX[9][0], module->bufferX[10][0], module->bufferX[11][0], module->bufferX[12][0], module->bufferX[13][0], module->bufferX[14][0], module->bufferX[15][0]);
-
 		}
 	}
 };
@@ -448,7 +434,7 @@ struct FolyPaceWidget : ModuleWidget {
 		}
 
 		addInput(createInput<PointingUpPentagonPort>(Vec(1, 353), module, FolyPace::X_INPUT));
-		addParam(createParam<SmallKnob>(Vec(31, 356), module, FolyPace::TRIM));
+		addParam(createParam<SmallKnob>(Vec(31, 357), module, FolyPace::TRIM));
 		addParam(createParam<SmoothKnob>(Vec(51, 353), module, FolyPace::OFFSET));
 
 

@@ -56,7 +56,6 @@ struct ComputerscareSolyPequencer : Module {
 		int numInputChannels = inputs[POLY_INPUT].getChannels();
 		int numReset = inputs[RESET_INPUT].getChannels();
 		int numClock = inputs[CLOCK_INPUT].getChannels();
-		int numNumSteps = inputs[NUM_STEPS_INPUT].getChannels();
 		int numOutputChannels = numClock > 0 ? numClock : 1;
 		bool globalClocked = globalManualClockTrigger.process(params[MANUAL_CLOCK_BUTTON].getValue());
 		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
