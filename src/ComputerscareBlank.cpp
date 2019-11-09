@@ -37,14 +37,9 @@ struct ComputerscareBlank : Module {
 
 
 	ComputerscareBlank()  {
-
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-
-
 	}
-	void process(const ProcessArgs &args) override {
-
-	}
+	void process(const ProcessArgs &args) override {}
 	void onReset() override {
 		zoom = 1;
 		xOffset = 0;
@@ -67,10 +62,6 @@ struct ComputerscareBlank : Module {
 			return;
 		this->path = path;
 	}
-	void setWidth(float w) {
-		this->width = w;
-	}
-
 
 	json_t *dataToJson() override {
 		json_t *rootJ = json_object();
@@ -342,11 +333,12 @@ struct ComputerscareBlankWidget : ModuleWidget {
 			else {
 				if (box.size.x != blankModule->width) {
 					blankModule->width = box.size.x;
-					panel->box.pos.x = box.size.x / 2 - panel->box.size.x / 2;
+					panel->box.pos.x = box.size.x / 2 - 60.f;
 					pngDisplay->box.size.x = box.size.x;
 					bgPanel->box.size.x = box.size.x;
 					rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
 				}
+				panel->visible = blankModule->path.empty();
 			}
 			ModuleWidget::step();
 		}

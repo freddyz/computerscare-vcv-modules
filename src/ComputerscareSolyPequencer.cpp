@@ -32,6 +32,7 @@ struct ComputerscareSolyPequencer : Module {
 	};
 	enum OutputIds {
 		POLY_OUTPUT,
+		EOC_OUTPUT,
 		NUM_OUTPUTS
 	};
 	enum LightIds {
@@ -44,8 +45,6 @@ struct ComputerscareSolyPequencer : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
 		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
-		//	configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch:" + std::to_string(i + 1) + " = input ch");
-
 	}
 	void resetAll() {
 		for (int i = 0; i < 16; i++) {
