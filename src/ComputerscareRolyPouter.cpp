@@ -134,7 +134,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 			addChild(panel);
 
 		}
-		addInput(createInput<PointingUpPentagonPort>(Vec(22, 53), module, ComputerscareRolyPouter::ROUTING_CV));
+		addInput(createInput<PointingUpPentagonPort>(Vec(22, 52), module, ComputerscareRolyPouter::ROUTING_CV));
 
 		float xx;
 		float yy;
@@ -145,10 +145,10 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 		}
 
 
-		addInput(createInput<InPort>(Vec(1, 34), module, ComputerscareRolyPouter::POLY_INPUT));
+		addInput(createInput<InPort>(Vec(1, 36), module, ComputerscareRolyPouter::POLY_INPUT));
 		
 
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(32, 24), module, ComputerscareRolyPouter::POLY_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(32, 18), module, ComputerscareRolyPouter::POLY_OUTPUT));
 
 	}
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareRolyPouter *module, int index, float labelDx, float labelDy) {
@@ -191,14 +191,11 @@ struct ssmi : MenuItem
 	ssmi(int setVal)
 	{
 		mySetVal = setVal;
-		//scale = scaleInput;
 	}
 
 	void onAction(const event::Action &e) override
 	{
 		pouter->setAll(mySetVal);
-
-		// peas->setQuant();
 	}
 };
 void ComputerscareRolyPouterWidget::addMenuItems(ComputerscareRolyPouter *pouter, Menu *menu)
@@ -225,22 +222,7 @@ void ComputerscareRolyPouterWidget::appendContextMenu(Menu *menu)
 	menu->addChild(modeLabel);
 
 	addMenuItems(pouter, menu);
-	/*scaleItemAdd(peas, menu, "212212", "Natural Minor");
-	scaleItemAdd(peas, menu, "2232", "Major Pentatonic");
-	scaleItemAdd(peas, menu, "3223", "Minor Pentatonic");
-	scaleItemAdd(peas, menu, "32113", "Blues");
-	scaleItemAdd(peas, menu, "11111111111", "Chromatic");
-	scaleItemAdd(peas, menu, "212213", "Harmonic Minor");
-	scaleItemAdd(peas, menu, "22222", "Whole-Tone");
-	scaleItemAdd(peas, menu, "2121212", "Whole-Half Diminished");
 
-	scaleItemAdd(peas, menu, "43", "Major Triad");
-	scaleItemAdd(peas, menu, "34", "Minor Triad");
-	scaleItemAdd(peas, menu, "33", "Diminished Triad");
-	scaleItemAdd(peas, menu, "434", "Major 7 Tetrachord");
-	scaleItemAdd(peas, menu, "433", "Dominant 7 Tetrachord");
-	scaleItemAdd(peas, menu, "343", "Minor 7 Tetrachord");
-	scaleItemAdd(peas, menu, "334", "Minor 7 b5 Tetrachord");*/
 }
 
 
