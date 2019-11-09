@@ -15,7 +15,10 @@ const int numOutputs = 16;
 
 struct ComputerscareBlank : Module {
 	int counter = 0;
+	bool loading = true;
+	bool loadedJSON = false;
 	std::string path;
+	std::string lastPath;
 	float width = 120;
 	float height = 380;
 	bool invertY = false;
@@ -48,7 +51,7 @@ struct ComputerscareBlank : Module {
 
 	}
 	void loadImageDialog() {
-		std::string dir = asset::plugin(pluginInstance, "examples");
+		std::string dir = this->path.empty() ?  asset::user("") : rack::string::directory(this->path);
 		char* pathC = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
 		if (!pathC) {
 			return;
@@ -62,7 +65,6 @@ struct ComputerscareBlank : Module {
 	void setPath(std::string path) {
 		if (path == "")
 			return;
-
 		this->path = path;
 	}
 	void setWidth(float w) {
@@ -73,6 +75,7 @@ struct ComputerscareBlank : Module {
 	json_t *dataToJson() override {
 		json_t *rootJ = json_object();
 		json_object_set_new(rootJ, "path", json_string(path.c_str()));
+		json_object_set_new(rootJ, "width", json_real(width));
 		json_object_set_new(rootJ, "imageFitEnum", json_integer(imageFitEnum));
 		json_object_set_new(rootJ, "invertY", json_boolean(invertY));
 		json_object_set_new(rootJ, "zoom", json_real(zoom));
@@ -87,22 +90,26 @@ struct ComputerscareBlank : Module {
 			path = json_string_value(pathJ);
 			setPath(path);
 		}
+		json_t *widthJ = json_object_get(rootJ, "width");
+		if (widthJ)
+			width = json_number_value(widthJ);
 		json_t *imageFitEnumJ = json_object_get(rootJ, "imageFitEnum");
 		if (imageFitEnumJ) { imageFitEnum = json_integer_value(imageFitEnumJ); }
 		json_t *invertYJ = json_object_get(rootJ, "invertY");
 		if (invertYJ) { invertY = json_is_true(invertYJ); }
 		json_t *zoomJ = json_object_get(rootJ, "zoom");
 		if (zoomJ) {
-			zoom=json_number_value(zoomJ);
+			zoom = json_number_value(zoomJ);
 		}
 		json_t *xOffsetJ = json_object_get(rootJ, "xOffset");
 		if (xOffsetJ) {
-			xOffset=json_number_value(xOffsetJ);
+			xOffset = json_number_value(xOffsetJ);
 		}
 		json_t *yOffsetJ = json_object_get(rootJ, "yOffset");
 		if (yOffsetJ) {
-			yOffset=json_number_value(yOffsetJ);
+			yOffset = json_number_value(yOffsetJ);
 		}
+		this->loading = false;
 	}
 
 };
@@ -153,41 +160,41 @@ struct PNGDisplay : TransparentWidget {
 	}
 
 	void draw(const DrawArgs &args) override {
-		if (module/* && !module->loading*/) {
-			if (path != module->path) {
-				img = nvgCreateImage(args.vg, module->path.c_str(), 0);
-				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
-				imgRatio = ((float)imgWidth / (float)imgHeight);
-				path = module->path;
+		if (module && module->loadedJSON) {
+				if (path != module->path) {
+					img = nvgCreateImage(args.vg, module->path.c_str(), 0);
+					nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
+					imgRatio = ((float)imgWidth / (float)imgHeight);
+					path = module->path;
+				}
 
-			}
+				/*if (module->imageFitEnum != lastEnum) {
+					lastEnum = module->imageFitEnum;
+					module->xOffset = 0;
+					module->yOffset = 0;
+					module->zoom = 1;
+				}*/
+				if (!path.empty()) {
+					nvgBeginPath(args.vg);
+					NVGpaint imgPaint;
+					//if (module->width>0 && module->height>0)
+					nvgScale(args.vg, module->zoom, module->zoom);
+					if (module->imageFitEnum == 0) {
+						imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->height, 0, img, 1.0f);
 
-			if(module->imageFitEnum != lastEnum) {
-				lastEnum = module->imageFitEnum;
-				module->xOffset=0;
-				module->yOffset=0;
-				module->zoom=1;
-			}
-
-			nvgBeginPath(args.vg);
-			NVGpaint imgPaint;
-			//if (module->width>0 && module->height>0)
-			nvgScale(args.vg, module->zoom, module->zoom);
-			if (module->imageFitEnum == 0) {
-				imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->height, 0, img, 1.0f);
-
-			}
-			else if (module->imageFitEnum == 1) { // fit width
-				//nvgScale(args.vg, width/module->width, height/module->height);
-				imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->width / imgRatio, 0, img, 1.0f);
-			}
-			else if (module->imageFitEnum == 2) {
-				imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->height * imgRatio, module->height, 0, img, 1.0f);
-			}
-			nvgRect(args.vg, 0, 0, module->width, module->height);
-			nvgFillPaint(args.vg, imgPaint);
-			nvgFill(args.vg);
-			nvgClosePath(args.vg);
+					}
+					else if (module->imageFitEnum == 1) { // fit width
+						//nvgScale(args.vg, width/module->width, height/module->height);
+						imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->width / imgRatio, 0, img, 1.0f);
+					}
+					else if (module->imageFitEnum == 2) {
+						imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->height * imgRatio, module->height, 0, img, 1.0f);
+					}
+					nvgRect(args.vg, 0, 0, module->width, module->height);
+					nvgFillPaint(args.vg, imgPaint);
+					nvgFill(args.vg);
+					nvgClosePath(args.vg);
+				}
 		}
 	}
 	void onHoverKey(const event::HoverKey& e) override;
@@ -207,7 +214,6 @@ void PNGDisplay::onHoverKey(const event::HoverKey& e) {
 	else if ((e.mods & RACK_MOD_MASK) == GLFW_MOD_SHIFT)
 		arrowSpeed /= 4.0;*/
 	if (e.action == RACK_HELD) {
-
 		switch (e.key) {
 		case GLFW_KEY_A: {
 			module->xOffset += dPosition;
@@ -242,7 +248,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		setModule(module);
 		if (module) {
 			this->blankModule = module;
-			printf("width:%f\n", module->width);
+			DEBUG("width:%f", module->width);
 			box.size = Vec(module->width, module->height);
 		} else {
 			box.size = Vec(8 * 15, 380);
@@ -311,34 +317,30 @@ struct ComputerscareBlankWidget : ModuleWidget {
 	ComputerscareResizeHandle *leftHandle;
 	ComputerscareResizeHandle *rightHandle;
 	SmallLetterDisplay* smallLetterDisplay;
-	json_t *toJson() override;
-	void fromJson(json_t *rootJ) override;
 };
 void ComputerscareBlankWidget::step() {
-	if (module) {
-		if (box.size.x != blankModule->width) {
-			blankModule->setWidth(box.size.x);
+	if (blankModule) {
+		//if (!blankModule->loading) {
+			if (!blankModule->loadedJSON) {
+				DEBUG("we aint loaded the json man:%f", blankModule->width);
+				box.size.x = blankModule->width;
+				panel->box.size.x = blankModule->width;
+				pngDisplay->box.size.x = blankModule->width;
+				rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
+				blankModule->loadedJSON = true;
+			}
+			else if (box.size.x != blankModule->width) {
+				DEBUG("widget step width:%f", blankModule->width);
+				blankModule->width = box.size.x;
 
-			panel->box.size = box.size;
-			//display->box.size = Vec(box.size.x, box.size.y);
-			pngDisplay->box.size.x = box.size.x;
-			rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
+				panel->box.size = box.size;
+				pngDisplay->box.size.x = box.size.x;
+				rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
+			}
+			ModuleWidget::step();
 		}
-		ModuleWidget::step();
-	}
-}
-json_t *ComputerscareBlankWidget::toJson() {
-	json_t *rootJ = ModuleWidget::toJson();
-	json_object_set_new(rootJ, "width", json_real(box.size.x));
-	return rootJ;
+	//}
 }
 
-void ComputerscareBlankWidget::fromJson(json_t *rootJ) {
-	ModuleWidget::fromJson(rootJ);
-	json_t *widthJ = json_object_get(rootJ, "width");
-	if (widthJ)
-		box.size.x = json_number_value(widthJ);
-
-}
 
 Model *modelComputerscareBlank = createModel<ComputerscareBlank, ComputerscareBlankWidget>("computerscare-blank");
