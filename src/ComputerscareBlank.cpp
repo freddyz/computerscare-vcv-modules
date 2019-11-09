@@ -161,40 +161,40 @@ struct PNGDisplay : TransparentWidget {
 
 	void draw(const DrawArgs &args) override {
 		if (module && module->loadedJSON) {
-				if (path != module->path) {
-					img = nvgCreateImage(args.vg, module->path.c_str(), 0);
-					nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
-					imgRatio = ((float)imgWidth / (float)imgHeight);
-					path = module->path;
-				}
+			if (path != module->path) {
+				img = nvgCreateImage(args.vg, module->path.c_str(), 0);
+				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
+				imgRatio = ((float)imgWidth / (float)imgHeight);
+				path = module->path;
+			}
 
-				/*if (module->imageFitEnum != lastEnum) {
-					lastEnum = module->imageFitEnum;
-					module->xOffset = 0;
-					module->yOffset = 0;
-					module->zoom = 1;
-				}*/
-				if (!path.empty()) {
-					nvgBeginPath(args.vg);
-					NVGpaint imgPaint;
-					//if (module->width>0 && module->height>0)
-					nvgScale(args.vg, module->zoom, module->zoom);
-					if (module->imageFitEnum == 0) {
-						imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->height, 0, img, 1.0f);
+			/*if (module->imageFitEnum != lastEnum) {
+				lastEnum = module->imageFitEnum;
+				module->xOffset = 0;
+				module->yOffset = 0;
+				module->zoom = 1;
+			}*/
+			if (!path.empty()) {
+				nvgBeginPath(args.vg);
+				NVGpaint imgPaint;
+				//if (module->width>0 && module->height>0)
+				nvgScale(args.vg, module->zoom, module->zoom);
+				if (module->imageFitEnum == 0) {
+					imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->height, 0, img, 1.0f);
 
-					}
-					else if (module->imageFitEnum == 1) { // fit width
-						//nvgScale(args.vg, width/module->width, height/module->height);
-						imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->width / imgRatio, 0, img, 1.0f);
-					}
-					else if (module->imageFitEnum == 2) {
-						imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->height * imgRatio, module->height, 0, img, 1.0f);
-					}
-					nvgRect(args.vg, 0, 0, module->width, module->height);
-					nvgFillPaint(args.vg, imgPaint);
-					nvgFill(args.vg);
-					nvgClosePath(args.vg);
 				}
+				else if (module->imageFitEnum == 1) { // fit width
+					//nvgScale(args.vg, width/module->width, height/module->height);
+					imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->width, module->width / imgRatio, 0, img, 1.0f);
+				}
+				else if (module->imageFitEnum == 2) {
+					imgPaint = nvgImagePattern(args.vg, module->xOffset, module->yOffset, module->height * imgRatio, module->height, 0, img, 1.0f);
+				}
+				nvgRect(args.vg, 0, 0, module->width, module->height);
+				nvgFillPaint(args.vg, imgPaint);
+				nvgFill(args.vg);
+				nvgClosePath(args.vg);
+			}
 		}
 	}
 	void onHoverKey(const event::HoverKey& e) override;
@@ -248,7 +248,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		setModule(module);
 		if (module) {
 			this->blankModule = module;
-			DEBUG("width:%f", module->width);
 			box.size = Vec(module->width, module->height);
 		} else {
 			box.size = Vec(8 * 15, 380);
@@ -256,7 +255,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
-			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareKnolyPobsPanel.svg")));
+			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareCustomBlankPanel.svg")));
 			this->panel = panel;
 			addChild(panel);
 		}
@@ -320,26 +319,24 @@ struct ComputerscareBlankWidget : ModuleWidget {
 };
 void ComputerscareBlankWidget::step() {
 	if (blankModule) {
-		//if (!blankModule->loading) {
-			if (!blankModule->loadedJSON) {
-				DEBUG("we aint loaded the json man:%f", blankModule->width);
-				box.size.x = blankModule->width;
-				panel->box.size.x = blankModule->width;
-				pngDisplay->box.size.x = blankModule->width;
-				rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
-				blankModule->loadedJSON = true;
-			}
-			else if (box.size.x != blankModule->width) {
-				DEBUG("widget step width:%f", blankModule->width);
+		if (!blankModule->loadedJSON) {
+			box.size.x = blankModule->width;
+			panel->box.size.x = blankModule->width;
+			panel->box.pos.x = blankModule->width / 2 - 60.f;
+			pngDisplay->box.size.x = blankModule->width;
+			rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
+			blankModule->loadedJSON = true;
+		}
+		else {
+			if (box.size.x != blankModule->width) {
 				blankModule->width = box.size.x;
-
-				panel->box.size = box.size;
+				panel->box.pos.x = box.size.x / 2 - panel->box.size.x / 2;
 				pngDisplay->box.size.x = box.size.x;
 				rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
 			}
-			ModuleWidget::step();
 		}
-	//}
+		ModuleWidget::step();
+	}
 }
 
 
