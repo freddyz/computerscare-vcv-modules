@@ -148,14 +148,11 @@ struct InvertYMenuItem: MenuItem {
 
 struct PNGDisplay : TransparentWidget {
 	ComputerscareBlank *blankModule;
-	const float width = 125.0f;
-	const float height = 130.0f;
 
 	int imgWidth, imgHeight;
 	float imgRatio, widgetRatio;
 	int lastEnum = -1;
 	std::string path = "";
-	bool first = true;
 	int img = 0;
 
 	PNGDisplay() {
@@ -265,7 +262,13 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
 		menu->addChild(new MenuEntry);
 
-		LoadImageItem* loadImageItem = createMenuItem<LoadImageItem>("Load image");
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Keyboard Controls:"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "A,S,D,F: Translate image position"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Z,X: Zoom in/out"));
+
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+		LoadImageItem* loadImageItem = createMenuItem<LoadImageItem>("Load image (PNG, JPEG, BMP, GIF)");
 		loadImageItem->blankModule = blank;
 		menu->addChild(loadImageItem);
 

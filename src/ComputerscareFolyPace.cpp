@@ -9,86 +9,48 @@ static const int BUFFER_SIZE = 512;
 
 struct FolyPace : Module {
 	enum ParamIds {
-		X_SCALE_PARAM,
-		X_POS_PARAM,
-		Y_SCALE_PARAM,
-		Y_POS_PARAM,
 		TIME_PARAM,
-		LISSAJOUS_PARAM,
-		TRIG_PARAM,
-		EXTERNAL_PARAM,
 		TRIM,
 		OFFSET,
 		NUM_PARAMS
 	};
 	enum InputIds {
 		X_INPUT,
-		Y_INPUT,
-		TRIG_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
 		NUM_OUTPUTS
 	};
 	enum LightIds {
-		PLOT_LIGHT,
-		LISSAJOUS_LIGHT,
-		INTERNAL_LIGHT,
-		EXTERNAL_LIGHT,
 		NUM_LIGHTS
 	};
 
 	float bufferX[16][BUFFER_SIZE] = {};
-	float bufferY[16][BUFFER_SIZE] = {};
 	int channelsX = 0;
-	int channelsY = 0;
 	int bufferIndex = 0;
 	int frameIndex = 0;
 
-	dsp::BooleanTrigger sumTrigger;
-	dsp::BooleanTrigger extTrigger;
-	bool lissajous = false;
-	bool external = false;
-	dsp::SchmittTrigger triggers[16];
-
 	FolyPace() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(X_SCALE_PARAM, -2.f, 8.f, 0.f, "X scale", " V/div", 1 / 2.f, 5);
-		configParam(X_POS_PARAM, -10.f, 10.f, 0.f, "X position", " V");
-		configParam(Y_SCALE_PARAM, -2.f, 8.f, 0.f, "Y scale", " V/div", 1 / 2.f, 5);
-		configParam(Y_POS_PARAM, -10.f, 10.f, 0.f, "Y position", " V");
+			const float timeBase = (float) BUFFER_SIZE / 6;
+
+		configParam(TIME_PARAM, 6.f, 16.f, 14.f, "Time", " ms/div", 1 / 2.f, 1000 * timeBase);
+
 		configParam(TRIM, -2.f, 2.f, 1.f, "Input Trim");
 		configParam(OFFSET, -5.f, 5.f, 0.f, "Input Offset", " Volts");
-		const float timeBase = (float) BUFFER_SIZE / 6;
-		configParam(TIME_PARAM, 6.f, 16.f, 14.f, "Time", " ms/div", 1 / 2.f, 1000 * timeBase);
-		configParam(LISSAJOUS_PARAM, 0.f, 1.f, 0.f);
-		configParam(TRIG_PARAM, -10.f, 10.f, 0.f, "Trigger position", " V");
-		configParam(EXTERNAL_PARAM, 0.f, 1.f, 0.f);
+
+	
 	}
 
 	void onReset() override {
-		lissajous = false;
-		external = false;
-		std::memset(bufferX, 0, sizeof(bufferX));
-		std::memset(bufferY, 0, sizeof(bufferY));
+		//std::memset(bufferX, 0, sizeof(bufferX));
 	}
 
 	void process(const ProcessArgs &args) override {
 		// Modes
-		if (sumTrigger.process(params[LISSAJOUS_PARAM].getValue() > 0.f)) {
-			lissajous = !lissajous;
-		}
-		lights[PLOT_LIGHT].setBrightness(!lissajous);
-		lights[LISSAJOUS_LIGHT].setBrightness(lissajous);
-
-		if (extTrigger.process(params[EXTERNAL_PARAM].getValue() > 0.f)) {
-			external = !external;
-		}
-		lights[INTERNAL_LIGHT].setBrightness(!external);
-		lights[EXTERNAL_LIGHT].setBrightness(external);
-
 		// Compute time
 		float deltaTime = std::pow(2.f, -params[TIME_PARAM].getValue());
+
 		int frameCount = (int) std::ceil(deltaTime * args.sampleRate);
 
 		// Set channels
@@ -96,12 +58,6 @@ struct FolyPace : Module {
 		if (channelsX != this->channelsX) {
 			std::memset(bufferX, 0, sizeof(bufferX));
 			this->channelsX = channelsX;
-		}
-
-		int channelsY = inputs[Y_INPUT].getChannels();
-		if (channelsY != this->channelsY) {
-			std::memset(bufferY, 0, sizeof(bufferY));
-			this->channelsY = channelsY;
 		}
 
 		// Add frame to buffer
@@ -112,8 +68,8 @@ struct FolyPace : Module {
 				float offsetVal = params[OFFSET].getValue();
 
 				if (inputs[X_INPUT].isConnected()) {
-					for (int c = 0; c < channelsX; c++) {
-						bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(c) * trimVal + offsetVal + 99 + (1071 * c) % 19;
+					for (int c = 0; c < 16; c++) {
+						bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(std::min(c, this->channelsX)) * trimVal + offsetVal + 99 + (1071 * c) % 19;
 					}
 				}
 				else {
@@ -122,9 +78,6 @@ struct FolyPace : Module {
 					}
 				}
 
-				for (int c = 0; c < channelsY; c++) {
-					bufferY[c][bufferIndex] = inputs[Y_INPUT].getVoltage(c) * trimVal + offsetVal;
-				}
 				bufferIndex++;
 			}
 		}
@@ -142,70 +95,25 @@ struct FolyPace : Module {
 
 		frameIndex++;
 
-		// Reset if triggered
-		float trigThreshold = params[TRIG_PARAM].getValue();
-		Input &trigInput = external ? inputs[TRIG_INPUT] : inputs[X_INPUT];
 
-		// This may be 0
-		int trigChannels = trigInput.getChannels();
-		for (int c = 0; c < trigChannels; c++) {
-			float trigVoltage = trigInput.getVoltage(c);
-			if (triggers[c].process(rescale(trigVoltage, trigThreshold, trigThreshold + 0.001f, 0.f, 1.f))) {
-				trigger();
-				return;
-			}
-		}
-
-		// Reset if we've been waiting for `holdTime`
-		const float holdTime = 0.2f;
-		if (frameIndex * args.sampleTime >= holdTime) {
-			trigger();
-			return;
-		}
 	}
 
 	void trigger() {
-		for (int c = 0; c < 16; c++) {
-			triggers[c].reset();
-		}
 		bufferIndex = 0;
 		frameIndex = 0;
-	}
-
-	json_t *dataToJson() override {
-		json_t *rootJ = json_object();
-		json_object_set_new(rootJ, "lissajous", json_integer((int) lissajous));
-		json_object_set_new(rootJ, "external", json_integer((int) external));
-		return rootJ;
-	}
-
-	void dataFromJson(json_t *rootJ) override {
-		json_t *sumJ = json_object_get(rootJ, "lissajous");
-		if (sumJ)
-			lissajous = json_integer_value(sumJ);
-
-		json_t *extJ = json_object_get(rootJ, "external");
-		if (extJ)
-			external = json_integer_value(extJ);
 	}
 };
 
 
 struct FolyPaceDisplay : TransparentWidget {
 	FolyPace *module;
-	std::shared_ptr<Font> font;
-
 
 	FolyPaceDisplay() {
-		font = APP->window->loadFont(asset::plugin(pluginInstance, "res/Oswald-Regular.ttf"));
 	}
 
 	void drawFace(const DrawArgs &args, float A, float B, float C, float D, float E, float F, float G, float H, float I, float J, float K, float L, float M, float N, float O, float P) {
 
-		//printf("ch1:%f\n",A);
-		//std::string byte = getByteString(A);
 
-		//nvgReset(args.vg);
 
 		float sf = 1 + 0.2 * sin(B - C); //scaleFactor
 		float ox = 67.5 + sf * 20.33 * sin(D - C / 2);
@@ -213,7 +121,7 @@ struct FolyPaceDisplay : TransparentWidget {
 
 		float h = 0.4 + 0.3 * sin(A / 2) + 0.3 * sin(K / 3);	//face hue
 		float s = 0.5 + 0.32 * sin(B / 3 - 33.21 - D / 2);	//face saturation
-		float l = 0.5 + 0.45 * sin(C / 2);	//face lightness
+		float l = 0.5 + 0.35 * sin(C / 2);	//face lightness
 		float fx = ox ;	//face y
 		float fy = oy;	//face x
 
@@ -223,19 +131,12 @@ struct FolyPaceDisplay : TransparentWidget {
 		float fr = 0.04 * sin(H - M) + 0.02 * sin(H / 3 + 2.2) + 0.02 * sin(L + P + 8.222); //face rotation
 		NVGcolor faceColor = nvgHSLA(h, s, l, 0xff);
 
-		float mpx = ox - 3 * sin(G + I + A);
-		float mpy = oy + 20 + sf * (7 + 0.2 * sin(G - I));
-
-		NVGcolor eyecolor = nvgHSLA(0.5, 0.9, 0.5, 0xff);
-
 		float epx = ox;
 		float epy = oy - 10 * (2 + sf + sin(I - J / 2));
 
 		float eyeSpacing = frx / 2 * (1.8 + 0.5 * sin(200 - J));
 		float erlx = frx / 4 * (1 + 0.4 * sin(G));
 		float erly = frx / 4 * (1 + 0.4 * sin(H - N + 100));
-		float errx = 10 + 3 * sin(M) + 4 * sin(M - 2 - 882.2);
-		float erry = 10 + 2 * sin(J) + 4 * sin(J - erly / 20);
 
 		float irisRad = erly * 0.4 * (1.3 + 0.4 * sin(K - D + 1));
 		float pupilRad = irisRad * 0.4 * (1 + 0.6 * sin(E));
