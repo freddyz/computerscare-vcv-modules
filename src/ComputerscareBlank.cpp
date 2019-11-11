@@ -152,7 +152,7 @@ struct PNGDisplay : TransparentWidget {
 	int imgWidth, imgHeight;
 	float imgRatio, widgetRatio;
 	int lastEnum = -1;
-	std::string path = "";
+	std::string path = "empty";
 	int img = 0;
 
 	PNGDisplay() {
@@ -190,8 +190,11 @@ struct PNGDisplay : TransparentWidget {
 				img = nvgCreateImage(args.vg, blankModule->path.c_str(), 0);
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
+				
+				if(path != "empty") {
+					setZooms();
+				}
 				path = blankModule->path;
-				setZooms();
 			}
 
 			if (blankModule->imageFitEnum != lastEnum && lastEnum != -1) {
@@ -199,7 +202,7 @@ struct PNGDisplay : TransparentWidget {
 				setZooms();
 			}
 			lastEnum = blankModule->imageFitEnum;
-			if (!path.empty()) {
+			if (!path.empty() && path!="empty") {
 				nvgBeginPath(args.vg);
 				NVGpaint imgPaint;
 				nvgScale(args.vg, blankModule->zoomX, blankModule->zoomY);
