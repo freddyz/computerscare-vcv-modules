@@ -191,6 +191,7 @@ struct PNGDisplay : TransparentWidget {
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
 				path = blankModule->path;
+				setZooms();
 			}
 
 			if (blankModule->imageFitEnum != lastEnum && lastEnum != -1) {
