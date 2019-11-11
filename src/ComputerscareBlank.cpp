@@ -17,7 +17,8 @@ struct ComputerscareBlank : Module {
 	float height = 380;
 	int rotation = 0;
 	bool invertY = true;
-	float zoom = 1.f;
+	float zoomX = 1.f;
+	float zoomY = 1.f;
 	float xOffset = 0.f;
 	float yOffset = 0.f;
 	int imageFitEnum = 0;
@@ -41,7 +42,8 @@ struct ComputerscareBlank : Module {
 	}
 	void process(const ProcessArgs &args) override {}
 	void onReset() override {
-		zoom = 1;
+		zoomX = 1;
+		zoomY = 1;
 		xOffset = 0;
 		yOffset = 0;
 	}
@@ -69,7 +71,8 @@ struct ComputerscareBlank : Module {
 		json_object_set_new(rootJ, "width", json_real(width));
 		json_object_set_new(rootJ, "imageFitEnum", json_integer(imageFitEnum));
 		json_object_set_new(rootJ, "invertY", json_boolean(invertY));
-		json_object_set_new(rootJ, "zoom", json_real(zoom));
+		json_object_set_new(rootJ, "zoomX", json_real(zoomX));
+		json_object_set_new(rootJ, "zoomY", json_real(zoomY));
 		json_object_set_new(rootJ, "xOffset", json_real(xOffset));
 		json_object_set_new(rootJ, "yOffset", json_real(yOffset));
 		json_object_set_new(rootJ, "rotation", json_integer(rotation));
@@ -90,9 +93,13 @@ struct ComputerscareBlank : Module {
 
 		json_t *invertYJ = json_object_get(rootJ, "invertY");
 		if (invertYJ) { invertY = json_is_true(invertYJ); }
-		json_t *zoomJ = json_object_get(rootJ, "zoom");
-		if (zoomJ) {
-			zoom = json_number_value(zoomJ);
+		json_t *zoomXJ = json_object_get(rootJ, "zoomX");
+		if (zoomXJ) {
+			zoomX = json_number_value(zoomXJ);
+		}
+		json_t *zoomYJ = json_object_get(rootJ, "zoomY");
+		if (zoomYJ) {
+			zoomY = json_number_value(zoomYJ);
 		}
 		json_t *xOffsetJ = json_object_get(rootJ, "xOffset");
 		if (xOffsetJ) {
@@ -145,7 +152,7 @@ struct PNGDisplay : TransparentWidget {
 	const float height = 130.0f;
 
 	int imgWidth, imgHeight;
-	float imgRatio;
+	float imgRatio, widgetRatio;
 	int lastEnum = -1;
 	std::string path = "";
 	bool first = true;
@@ -154,6 +161,32 @@ struct PNGDisplay : TransparentWidget {
 	PNGDisplay() {
 	}
 
+
+	void setZooms() {
+		if (blankModule->imageFitEnum == 0) {
+			blankModule->zoomX = blankModule->width / imgWidth;
+			blankModule->zoomY = blankModule->height / imgHeight;
+			blankModule->xOffset = 0;
+			blankModule->yOffset = 0;
+
+		} else if (blankModule->imageFitEnum == 1) { // fit width
+			blankModule->zoomX = blankModule->width / imgWidth;
+			blankModule->zoomY = blankModule->zoomX;
+			blankModule->xOffset = 0;
+			blankModule->yOffset = 0;
+
+		} else if (blankModule->imageFitEnum == 2) { //fit height
+			blankModule->zoomY = blankModule->height / imgHeight;
+			blankModule->zoomX = blankModule->zoomY;
+			blankModule->xOffset=0;
+			blankModule->yOffset=0;
+		}
+		else if(blankModule->imageFitEnum ==3) {
+
+		}
+
+		
+	}
 	void draw(const DrawArgs &args) override {
 		if (blankModule && blankModule->loadedJSON) {
 			if (path != blankModule->path) {
@@ -165,89 +198,23 @@ struct PNGDisplay : TransparentWidget {
 
 			if (blankModule->imageFitEnum != lastEnum && lastEnum != -1) {
 				lastEnum = blankModule->imageFitEnum;
-				blankModule->xOffset = 0;
-				blankModule->yOffset = 0;
-				blankModule->zoom = 1;
+				setZooms();
 			}
 			lastEnum = blankModule->imageFitEnum;
 			if (!path.empty()) {
 				nvgBeginPath(args.vg);
 				NVGpaint imgPaint;
-				nvgScale(args.vg, blankModule->zoom, blankModule->zoom);
-				if (blankModule->imageFitEnum == 0) { //stretch both dimensions
-					imgPaint = nvgImagePattern(args.vg, blankModule->xOffset, blankModule->yOffset, blankModule->width, blankModule->height, 0, img, 1.0f);
-
-				}
-				else if (blankModule->imageFitEnum == 1) { // fit width
-					imgPaint = nvgImagePattern(args.vg, blankModule->xOffset, blankModule->yOffset, blankModule->width, blankModule->width / imgRatio, 0, img, 1.0f);
-				}
-				else if (blankModule->imageFitEnum == 2) { // fit height
-					imgPaint = nvgImagePattern(args.vg, blankModule->xOffset, blankModule->yOffset, blankModule->height * imgRatio, blankModule->height, 0, img, 1.0f);
-				}
-				nvgRect(args.vg, 0, 0, blankModule->width, blankModule->height);
+				nvgScale(args.vg, blankModule->zoomX, blankModule->zoomY);
+				imgPaint = nvgImagePattern(args.vg, blankModule->xOffset, blankModule->yOffset, imgWidth, imgHeight, 0, img, 1.0f);
+				nvgRect(args.vg, blankModule->xOffset, blankModule->yOffset, imgWidth, imgHeight);
 				nvgFillPaint(args.vg, imgPaint);
 				nvgFill(args.vg);
 				nvgClosePath(args.vg);
 			}
 		}
 	}
-	void onHoverKey(const event::HoverKey& e) override;
 };
-void PNGDisplay::onHoverKey(const event::HoverKey& e) {
-	float dZoom = 0.05;
-	float dPosition = 10.f;
-	if (e.isConsumed())
-		return;
 
-	// Scroll with arrow keys
-	/*float arrowSpeed = 30.0;
-	if ((e.mods & RACK_MOD_MASK) == (RACK_MOD_CTRL | GLFW_MOD_SHIFT))
-		arrowSpeed /= 16.0;
-	else if ((e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL)
-		arrowSpeed *= 4.0;
-	else if ((e.mods & RACK_MOD_MASK) == GLFW_MOD_SHIFT)
-		arrowSpeed /= 4.0;*/
-	//duplicate is ctrl-d, ignore keys if mods are pressed so duplication doesnt translate the image
-	if (e.action == RACK_HELD && !e.mods ) {
-		switch (e.key) {
-		case GLFW_KEY_A: {
-			blankModule->xOffset += dPosition;
-			e.consume(this);
-		} break;
-		case GLFW_KEY_S: {
-			blankModule->yOffset -= blankModule->invertY ? dPosition : -dPosition;
-			e.consume(this);
-		} break;
-		case GLFW_KEY_D: {
-			blankModule->xOffset -= dPosition;
-			e.consume(this);
-		} break;
-		case GLFW_KEY_W: {
-			blankModule->yOffset += blankModule->invertY ? dPosition : -dPosition;
-			e.consume(this);
-		} break;
-		case GLFW_KEY_Z: {
-			blankModule->zoom += dZoom;
-			e.consume(this);
-		} break;
-		case GLFW_KEY_X: {
-			blankModule->zoom -= dZoom;
-			e.consume(this);
-		} break;
-		case GLFW_KEY_Q: {
-			blankModule->rotation += 1;
-			blankModule->rotation %= 4;
-			e.consume(this);
-		} break;
-		case GLFW_KEY_E: {
-			blankModule->rotation -= 1;
-			blankModule->rotation += 4;
-			blankModule->rotation %= 4;
-			e.consume(this);
-		} break;
-		}
-	}
-}
 struct ComputerscareBlankWidget : ModuleWidget {
 	ComputerscareBlankWidget(ComputerscareBlank *blankModule) {
 
@@ -302,12 +269,16 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		loadImageItem->blankModule = blank;
 		menu->addChild(loadImageItem);
 
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Current Image Path:"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, blank->path));
+
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Image Scaling"));
 		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Fit Both (stretch both directions)", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 0));
 		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Fit Width", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 1));
 		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Fit Height", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 2));
+		menu->addChild(construct<ImageFitModeItem>(&MenuItem::text, "Free", &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 3));
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
@@ -327,6 +298,8 @@ struct ComputerscareBlankWidget : ModuleWidget {
 				bgPanel->box.size.x = blankModule->width;
 				panel->box.pos.x = blankModule->width / 2 - 60.f;
 				pngDisplay->box.size.x = blankModule->width;
+				//pngDisplay->box.pos.x = blankModule->xOffset;
+				//pngDisplay->box.pos.y = blankModule->yOffset;
 				rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
 				blankModule->loadedJSON = true;
 			}
@@ -335,14 +308,74 @@ struct ComputerscareBlankWidget : ModuleWidget {
 					blankModule->width = box.size.x;
 					panel->box.pos.x = box.size.x / 2 - 60.f;
 					pngDisplay->box.size.x = box.size.x;
+
 					bgPanel->box.size.x = box.size.x;
 					rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
+					pngDisplay->setZooms();
 				}
 				panel->visible = blankModule->path.empty();
 			}
 			ModuleWidget::step();
 		}
 	};
+	void onHoverKey(const event::HoverKey& e) override {
+		float dZoom = 0.05;
+		float dPosition = 10.f;
+		if (e.isConsumed())
+			return;
+
+		// Scroll with arrow keys
+		/*float arrowSpeed = 30.0;
+		if ((e.mods & RACK_MOD_MASK) == (RACK_MOD_CTRL | GLFW_MOD_SHIFT))
+			arrowSpeed /= 16.0;
+		else if ((e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL)
+			arrowSpeed *= 4.0;
+		else if ((e.mods & RACK_MOD_MASK) == GLFW_MOD_SHIFT)
+			arrowSpeed /= 4.0;*/
+		//duplicate is ctrl-d, ignore keys if mods are pressed so duplication doesnt translate the image
+		if (e.action == RACK_HELD && !e.mods ) {
+			switch (e.key) {
+			case GLFW_KEY_A: {
+				blankModule->xOffset += dPosition / blankModule->zoomX;
+				e.consume(this);
+			} break;
+			case GLFW_KEY_S: {
+				blankModule->yOffset -= (blankModule->invertY ? dPosition : -dPosition) / blankModule->zoomY;
+				e.consume(this);
+			} break;
+			case GLFW_KEY_D: {
+				blankModule->xOffset -= dPosition / blankModule->zoomX;
+				e.consume(this);
+			} break;
+			case GLFW_KEY_W: {
+				blankModule->yOffset += (blankModule->invertY ? dPosition : -dPosition) / blankModule->zoomY;
+				e.consume(this);
+			} break;
+			case GLFW_KEY_Z: {
+				blankModule->zoomX *= (1 + dZoom);
+				blankModule->zoomY *= (1 + dZoom);
+				e.consume(this);
+			} break;
+			case GLFW_KEY_X: {
+				blankModule->zoomX *= (1 - dZoom);
+				blankModule->zoomY *= (1 - dZoom);
+				e.consume(this);
+			} break;
+			case GLFW_KEY_Q: {
+				blankModule->rotation += 1;
+				blankModule->rotation %= 4;
+				e.consume(this);
+			} break;
+			case GLFW_KEY_E: {
+				blankModule->rotation -= 1;
+				blankModule->rotation += 4;
+				blankModule->rotation %= 4;
+				e.consume(this);
+			} break;
+			}
+		}
+		ModuleWidget::onHoverKey(e);
+	}
 	ComputerscareBlank *blankModule;
 	PNGDisplay *pngDisplay;
 	ComputerscareSVGPanel *panel;
@@ -352,29 +385,5 @@ struct ComputerscareBlankWidget : ModuleWidget {
 	ComputerscareResizeHandle *rightHandle;
 	SmallLetterDisplay* smallLetterDisplay;
 };
-// void ComputerscareBlankWidget::step() {
-// 	if (blankModule) {
-// 		if (blankModule && !blankModule->loadedJSON) {
-// 			box.size.x = blankModule->width;
-// 			panel->box.size.x = blankModule->width;
-// 			bgPanel->box.size.x=blankModule->width;
-// 			panel->box.pos.x = blankModule->width / 2 - 60.f;
-// 			pngDisplay->box.size.x = blankModule->width;
-// 			rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
-// 			blankModule->loadedJSON = true;
-// 		}
-// 		else {
-// 			if (box.size.x != blankModule->width) {
-// 				blankModule->width = box.size.x;
-// 				panel->box.pos.x = box.size.x / 2 - panel->box.size.x / 2;
-// 				pngDisplay->box.size.x = box.size.x;
-// 				bgPanel->box.size.x=box.size.x;
-// 				rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
-// 			}
-// 		}
-// 		ModuleWidget::step();
-// 	}
-// }
-
 
 Model *modelComputerscareBlank = createModel<ComputerscareBlank, ComputerscareBlankWidget>("computerscare-blank");
