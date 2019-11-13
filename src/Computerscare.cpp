@@ -20,5 +20,6 @@ void init(Plugin *p) {
 	
 	p->addModel(modelComputerscareFolyPace);
 	p->addModel(modelComputerscareBlank);
+	p->addModel(modelComputerscareStolyFickPigure);
 	
 }

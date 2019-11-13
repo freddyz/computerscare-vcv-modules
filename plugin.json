@@ -75,6 +75,10 @@
 			"name":"Custom Blank",
 			"description":"Customizable, resizable, lovable blank panel. \nLoad your own PNG, JPEG, BMP, or GIF.",
 			"tags":["Blank","Visual"]
+		},{"slug":"computerscare-stoly-fick-pigure",
+			"name":"Stoly Fick Pigure",
+			"description":"Draw a stick figure",
+			"tags":["Visual","Polyphonic"]
 		}
 	]
 }
