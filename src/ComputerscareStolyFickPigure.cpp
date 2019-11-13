@@ -226,6 +226,15 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgLineTo(args.vg,rightHandX,rightHandY);
 		nvgStroke(args.vg);
 		
+		float headHeight = torsoLength*(0.5+sin(H-E-A-D)/6-sin(F+A-C+E)/7);
+		float headWidth = headHeight*(0.5+sin(I+D-M/2)/7+sin(G/2+J-10)/6);
+		float headAngle = M_PI/2 + (sin(C+K)/6+sin(D+G)/9);
+		
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg,neckX,neckY);
+		nvgEllipse(args.vg, 0,0,headWidth,headHeight);
+		nvgFill(args.vg);
+		nvgStroke(args.vg);
 		
 		//nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
 
