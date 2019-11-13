@@ -114,6 +114,7 @@ struct StolyFickPigureDisplay : TransparentWidget {
 	void drawFace(const DrawArgs &args, float A, float B, float C, float D, float E, float F, float G, float H, float I, float J, float K, float L, float M, float N, float O, float P) {
 
 		nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_GREEN);
+		nvgFillColor(args.vg, COLOR_COMPUTERSCARE_GREEN);
 		nvgStrokeWidth(args.vg, 3.2);
 
 		float size = 1+(sin(C+B-D/2)-sin(B+M*2))/6;
@@ -189,8 +190,43 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgMoveTo(args.vg,cx,cy);
 		nvgLineTo(args.vg,neckX,neckY);
 		nvgStroke(args.vg);
+		
+		float armLength=torsoLength*(2+(sin(N+14)-sin(P-L-3))/2)/3;
+		float forearmLength=armLength*(1+(sin(F+B)-sin(E))/8);
+		float armDirection=2.2;
+		float armSpread=0.6;
 
+		float leftElbowArg=2;
+		float rightElbowArg=1.1;
+		
+		float leftHandArg=1;
+		float rightHandArg=-0.9;
+		
+		float leftElbowX = neckX+armLength*cos(leftElbowArg);
+		float leftElbowY = neckY-armLength*sin(leftElbowArg);
 
+		float leftHandX=leftElbowX+forearmLength*cos(leftHandArg);
+		float leftHandY=leftElbowY-forearmLength*sin(leftHandArg);
+		
+		float rightElbowX = neckX+armLength*cos(rightElbowArg);
+		float rightElbowY = neckY-armLength*sin(rightElbowArg);
+
+		float rightHandX=rightElbowX+forearmLength*cos(rightHandArg);
+		float rightHandY=rightElbowY-forearmLength*sin(rightHandArg);
+
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg,neckX,neckY);
+		nvgLineTo(args.vg,leftElbowX,leftElbowY);
+		nvgLineTo(args.vg,leftHandX,leftHandY);
+		nvgStroke(args.vg);
+		
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg,neckX,neckY);
+		nvgLineTo(args.vg,rightElbowX,rightElbowY);
+		nvgLineTo(args.vg,rightHandX,rightHandY);
+		nvgStroke(args.vg);
+		
+		
 		//nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
 
 
