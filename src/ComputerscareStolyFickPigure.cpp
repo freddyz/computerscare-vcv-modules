@@ -238,6 +238,22 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgFill(args.vg);
 		nvgStroke(args.vg);
 
+		
+		float mouthWidth=headWidth/2;
+		float mouthOpen = 100*(1+sin(K))/headHeight;
+		float mouthSmile=10*(sin(C)+sin(L))/headHeight;
+		float mouthSkew=0;
+		float mouthThickness=1;
+
+		float mouthX = 0;
+		float mouthY = -headHeight/2+mouthSmile*7;
+
+
+		NVGcolor mouthLipColor=nvgRGB(0x24, 0x24, 0x31);
+
+		drawMouth(args, mouthX, mouthY, mouthWidth, mouthOpen, mouthSmile, mouthSkew, mouthThickness, mouthLipColor);
+
+
 		nvgTranslate(args.vg,-neckX,-neckY);
 		
 		//nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
