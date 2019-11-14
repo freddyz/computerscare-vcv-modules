@@ -111,22 +111,22 @@ struct StolyFickPigureDisplay : TransparentWidget {
 	StolyFickPigureDisplay() {
 	}
 
-	void drawFace(const DrawArgs &args, float A, float B, float C, float D, float E, float F, float G, float H, float I, float J, float K, float L, float M, float N, float O, float P) {
+	void drawStickFigure(const DrawArgs &args, float A, float B, float C, float D, float E, float F, float G, float H, float I, float J, float K, float L, float M, float N, float O, float P) {
 
 		nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_GREEN);
-		nvgFillColor(args.vg, COLOR_COMPUTERSCARE_GREEN);
+		nvgFillColor(args.vg, COLOR_COMPUTERSCARE_YELLOW);
 		nvgStrokeWidth(args.vg, 3.2);
 
-		float size = 1+(sin(C+B-D/2)-sin(B+M*2))/6;
+		float size = 1+sin(O-29)/6;
 
 		//crotch
-		float cx = 62*(1+(sin(E+F)-sin(P+O/2))/4);
-		float cy = 210*(1+(sin(A+G)-sin(P+H/2))/11);
+		float cx = 62*(1+(sin(E+F)-sin(P+O/2))/40000);
+		float cy = 210*(1+(sin(A+G)-sin(P+H/2))/11000);
 
 		//thigh spread, length, direction
 		float thighSpread = (2+sin(J+I+K)-sin(A-N/2))/4;
-		float thighLength = (50+(sin(C-100+F+K*2)+sin(C+L-10))*19);
-		float thighDirection = (3+sin(J+O-211)-sin(P*2+I)-sin(B+K))/2;
+		float thighLength = 50*(1+(sin(C-100+F+K*2)+sin(C+L-10))/6);
+		float thighDirection = (sin(J+O-211)-sin(P*2+I)-sin(B+K))/2;
 
 
 		//ankle spread,length,direction
@@ -176,12 +176,9 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		//nvgClosePath(args.vg);
 		nvgStroke(args.vg);
 
-
-		
-
 		//torso length,direction
-		float torsoLength=thighLength*(2+(sin(A))/4);
-		float torsoDirection=M_PI/2 + (1+sin(B))/2;
+		float torsoLength=thighLength*(1.4+(sin(A))/4);
+		float torsoDirection=M_PI/2+sin(D)/2;
 
 		float neckX = cx+torsoLength*cos(torsoDirection);
 		float neckY = cy-torsoLength*sin(torsoDirection);
@@ -191,16 +188,16 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgLineTo(args.vg,neckX,neckY);
 		nvgStroke(args.vg);
 		
-		float armLength=torsoLength*(2+(sin(N+14)-sin(P-L-3))/2)/3;
-		float forearmLength=armLength*(1+(sin(F+B)-sin(E))/8);
-		float armDirection=2.2;
-		float armSpread=0.6;
+		float armLength=torsoLength*(2+(sin(N+14)-sin(P-L-3))/2)/4;
+		float forearmLength=armLength*(1+(sin(F+B)-sin(E))/5);
+		float armDirection=3*M_PI/2+0.2*(sin(C-M));
+		float armSpread=sin(B);
 
-		float leftElbowArg=2;
-		float rightElbowArg=1.1;
+		float leftElbowArg=armDirection+sin(C+N-P)/14;
+		float rightElbowArg=armDirection+sin(D+C-I-J)/14;
 		
-		float leftHandArg=1;
-		float rightHandArg=-0.9;
+		float leftHandArg=sin(E+22+A);
+		float rightHandArg=sin(F+22-B);
 		
 		float leftElbowX = neckX+armLength*cos(leftElbowArg);
 		float leftElbowY = neckY-armLength*sin(leftElbowArg);
@@ -226,15 +223,22 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgLineTo(args.vg,rightHandX,rightHandY);
 		nvgStroke(args.vg);
 		
-		float headHeight = torsoLength*(0.5+sin(H-E-A-D)/6-sin(F+A-C+E)/7);
+		float headHeight = torsoLength*(0.4+sin(H-E-A-D)/9-sin(F+A-C+E)/7);
 		float headWidth = headHeight*(0.5+sin(I+D-M/2)/7+sin(G/2+J-10)/6);
 		float headAngle = M_PI/2 + (sin(C+K)/6+sin(D+G)/9);
+
+		float headRotation=sin(C+O)/2+sin(M/2)/3;
 		
 		nvgBeginPath(args.vg);
-		nvgMoveTo(args.vg,neckX,neckY);
-		nvgEllipse(args.vg, 0,0,headWidth,headHeight);
+
+		nvgTranslate(args.vg, neckX, neckY);
+		nvgRotate(args.vg,headRotation);
+		nvgEllipse(args.vg, 0,-headHeight,headWidth,headHeight);
+
 		nvgFill(args.vg);
 		nvgStroke(args.vg);
+
+		nvgTranslate(args.vg,-neckX,-neckY);
 		
 		//nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
 
@@ -357,10 +361,10 @@ struct StolyFickPigureDisplay : TransparentWidget {
 
 	void draw(const DrawArgs &args) override {
 		if (!module) {
-			drawFace(args, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10);
+			drawStickFigure(args, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10);
 		}
 		else {
-			drawFace(args, module->bufferX[0][0], module->bufferX[1][0], module->bufferX[2][0], module->bufferX[3][0], module->bufferX[4][0], module->bufferX[5][0], module->bufferX[6][0], module->bufferX[7][0], module->bufferX[8][0], module->bufferX[9][0], module->bufferX[10][0], module->bufferX[11][0], module->bufferX[12][0], module->bufferX[13][0], module->bufferX[14][0], module->bufferX[15][0]);
+			drawStickFigure(args, module->bufferX[0][0], module->bufferX[1][0], module->bufferX[2][0], module->bufferX[3][0], module->bufferX[4][0], module->bufferX[5][0], module->bufferX[6][0], module->bufferX[7][0], module->bufferX[8][0], module->bufferX[9][0], module->bufferX[10][0], module->bufferX[11][0], module->bufferX[12][0], module->bufferX[13][0], module->bufferX[14][0], module->bufferX[15][0]);
 		}
 	}
 };
