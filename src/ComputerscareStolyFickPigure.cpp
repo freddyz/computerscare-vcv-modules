@@ -200,8 +200,8 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		float armDirection=3*M_PI/2+0.2*(sin(C-M));
 		float armSpread=sin(B);
 
-		float leftElbowArg=armDirection+sin(C+N-P)/14;
-		float rightElbowArg=armDirection+sin(D+C-I-J)/14;
+		float leftElbowArg=armDirection+sin(C+N-P+armSpread)/14;
+		float rightElbowArg=armDirection+sin(D+C-I-J-armSpread)/14;
 		
 		float leftHandArg=sin(E+22+A);
 		float rightHandArg=sin(F+22-B);
