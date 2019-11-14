@@ -114,7 +114,14 @@ struct StolyFickPigureDisplay : TransparentWidget {
 	void drawStickFigure(const DrawArgs &args, float A, float B, float C, float D, float E, float F, float G, float H, float I, float J, float K, float L, float M, float N, float O, float P) {
 
 		nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_GREEN);
-		nvgFillColor(args.vg, COLOR_COMPUTERSCARE_YELLOW);
+
+		float h = 0.4 + 0.3 * sin(A / 2) + 0.3 * sin(K / 3);	//face hue
+		float s = 0.5 + 0.32 * sin(B / 3 - 33.21 - D / 2);	//face saturation
+		float l = 0.5 + 0.35 * sin(C / 2);	//face lightness
+
+		NVGcolor faceColor = nvgHSLA(h, s, l, 0xff);
+
+		nvgFillColor(args.vg, faceColor);
 		nvgStrokeWidth(args.vg, 3.2);
 
 		float size = 1+sin(O-29)/6;
@@ -251,7 +258,7 @@ struct StolyFickPigureDisplay : TransparentWidget {
 
 		NVGcolor mouthLipColor=nvgRGB(0x24, 0x24, 0x31);
 
-		drawMouth(args, mouthX, mouthY, mouthWidth, mouthOpen, mouthSmile, mouthSkew, mouthThickness, mouthLipColor);
+		//drawMouth(args, mouthX, mouthY, mouthWidth, mouthOpen, mouthSmile, mouthSkew, mouthThickness, mouthLipColor);
 
 
 		nvgTranslate(args.vg,-neckX,-neckY);
