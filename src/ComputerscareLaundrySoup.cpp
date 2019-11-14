@@ -96,7 +96,7 @@ struct ComputerscareLaundrySoup : Module {
 
 
   bool activeStep[numFields] = {false};
-  bool activePolyStep[numFields][16] = {false};
+  bool activePolyStep[numFields][16] = {{false}};
 
   bool shouldChange[numFields] = {false};
   bool changeImminent[numFields] = {false};
