@@ -150,7 +150,7 @@ struct ComputerscareLaundrySoup : Module {
     laundrySequences[index] = lss;
 
     laundryPoly[index] = LaundryPoly(currentFormula[index]);
-    laundryPoly[index].print();
+    //laundryPoly[index].print();
 
     //laundryPoly.update(index,currentFormula[index]);
     if (!lss.inError) {
@@ -158,7 +158,7 @@ struct ComputerscareLaundrySoup : Module {
       //laundrySequences[index].print();
     }
     else {
-      printf("ERROR ch:%i\n",index);
+      DEBUG("ERROR ch:%i",index);
       //lss.print();
       //textFields[index]->inError = true;
     }
@@ -192,8 +192,8 @@ struct ComputerscareLaundrySoup : Module {
     }
   }
   std::string getDisplayString(int index) {
-    std::string lhs = std::to_string(this->laundrySequences[index].readHead + 1);
-    std::string rhs =  std::to_string(this->laundrySequences[index].numSteps);
+    std::string lhs = std::to_string(this->laundryPoly[index].lss[0].readHead + 1);
+    std::string rhs =  std::to_string(this->laundryPoly[index].lss[0].numSteps);
 
     padTo(lhs, 3, ' ');
     padTo(rhs, 3, ' ');
@@ -328,7 +328,6 @@ struct LaundryTF2 : ComputerscareTextField
       {
         LaundrySoupSequence lss = LaundrySoupSequence(value);
         LaundryPoly lp = LaundryPoly(value);
-        lp.print();
 
         module->lastValue[rowIndex] = value;
         if (!lp.inError && matchParens(value)) {
@@ -337,6 +336,8 @@ struct LaundryTF2 : ComputerscareTextField
           module->setNextAbsoluteSequence(this->rowIndex);
         }
         else {
+          DEBUG("Channel %i in error",rowIndex);
+          lp.print();
           inError = true;
         }
       }
