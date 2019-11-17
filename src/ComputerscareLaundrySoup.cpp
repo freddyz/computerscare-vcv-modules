@@ -15,41 +15,6 @@ struct ComputerscareLaundrySoupWidget;
 
 const int numFields = 6;
 
-/*class MyTextField : public LedDisplayTextField {
-
-public:
-  int fontSize = 16;
-  int rowIndex = 0;
-  bool inError = false;
-  MyTextField() : LedDisplayTextField() {}
-  void setModule(ComputerscareLaundrySoup* _module) {
-    module = _module;
-  }
-  //virtual void onTextChange() override;
-  int getTextPosition(Vec mousePos) override {
-    bndSetFont(font->handle);
-    int textPos = bndIconLabelTextPosition(gVg, textOffset.x, textOffset.y,
-                                           box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
-                                           -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
-    bndSetFont(gGuiFont->handle);
-    return textPos;
-  }
-*/
-
-/*void MyTextField::onTextChange() {
-  std::string value = module->textFields[this->rowIndex]->text;
-  LaundrySoupSequence lss = LaundrySoupSequence(value);
-
-  if(!lss.inError && matchParens(value)) {
-    module->textFields[this->rowIndex]->inError=false;
-      module->setNextAbsoluteSequence(this->rowIndex);
-      module->updateDisplayBlink(this->rowIndex);
-  }
-  else {
-    module->textFields[this->rowIndex]->inError=true;
-  }
-
-}*/
 struct ComputerscareLaundrySoup : Module {
   enum ParamIds {
     MANUAL_CLOCK_PARAM,
@@ -91,7 +56,6 @@ struct ComputerscareLaundrySoup : Module {
 
   rack::dsp::SchmittTrigger manualResetTriggers[numFields];
 
-  LaundrySoupSequence laundrySequences[numFields];
   LaundryPoly laundryPoly[numFields];
 
   bool activePolyStep[numFields][16] = {{false}};
@@ -108,7 +72,7 @@ struct ComputerscareLaundrySoup : Module {
       setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
-      LaundryPoly lp = LaundryPoly("#");
+      LaundryPoly lp = LaundryPoly("");
       laundryPoly[i] = lp;
     }
   }
@@ -133,6 +97,10 @@ struct ComputerscareLaundrySoup : Module {
         randchar = mainlookup[floor(random::uniform() * mainlookup.size())];
         string = string + randchar;
       }
+      if(random::uniform() < 0.5) {
+        string += "@"+std::to_string((int)(random::uniform()*129));
+      }
+
       currentFormula[i] = string;
       manualSet[i] = true;
       setNextAbsoluteSequence(i);
@@ -144,21 +112,9 @@ struct ComputerscareLaundrySoup : Module {
     shouldChange[index] = true;
   }
   void setAbsoluteSequenceFromQueue(int index) {
-    LaundrySoupSequence lss = LaundrySoupSequence(currentFormula[index]);
-    laundrySequences[index] = lss;
-
     laundryPoly[index] = LaundryPoly(currentFormula[index]);
-    //laundryPoly[index].print();
-
-    //laundryPoly.update(index,currentFormula[index]);
-    if (!lss.inError) {
-      laundrySequences[index] = lss;
-      //laundrySequences[index].print();
-    }
-    else {
+    if(laundryPoly[index].inError) {
       DEBUG("ERROR ch:%i", index);
-      //lss.print();
-      //textFields[index]->inError = true;
     }
   }
   void checkIfShouldChange(int index) {
@@ -178,14 +134,10 @@ struct ComputerscareLaundrySoup : Module {
 
   */
   void incrementInternalStep(int i) {
-    laundrySequences[i].incrementAndCheck();
-    if (laundrySequences[i].readHead == 0) {
-      this->setChangeImminent(i, false);
-    }
     for (int ch = 0; ch < 16; ch++) {
       laundryPoly[i].lss[ch].incrementAndCheck();
-      if (laundryPoly[i].lss[ch].readHead == 0) {
-        //this->setChangeImminent(i, false);
+      if (laundryPoly[i].lss[laundryPoly[i].maxIndex].readHead == 0) {
+        this->setChangeImminent(i, false);
       }
     }
   }
@@ -206,11 +158,8 @@ struct ComputerscareLaundrySoup : Module {
     changeImminent[i] = value;
   }
   void resetOneOfThem(int i) {
-    this->laundrySequences[i].readHead = -1;
     for (int ch = 0; ch < 16; ch++) {
       laundryPoly[i].lss[ch].readHead = -1;
-      //this->setChangeImminent(i, false);
-
     }
   }
 };
@@ -242,14 +191,13 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
 
     currentManualResetClicked = manualResetTriggers[i].process(params[INDIVIDUAL_RESET_PARAM + i].getValue());
 
-    if (this->laundrySequences[i].numSteps > 0) {
+    if (this->laundryPoly[i].maxSteps > 0) {
       if (inputs[CLOCK_INPUT + i].isConnected()) {
         if (currentTriggerClocked || globalManualClockClicked) {
           incrementInternalStep(i);
           for (int ch = 0; ch < 16; ch++) {
             activePolyStep[i][ch] = (this->laundryPoly[i].lss[ch].peekWorkingStep() == 1);
           }
-          //atLastStepAfterIncrement = this->laundrySequences[i].atLastStep();
           atLastStepAfterIncrement = this->laundryPoly[i].maxChannelAtLastStep();
           if (atLastStepAfterIncrement) checkIfShouldChange(i);
         }
@@ -270,7 +218,7 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
         atFirstStepPoly[ch] =  (this->laundryPoly[i].lss[ch].readHead == 0);
       }
 
-      atFirstStep = (this->laundrySequences[i].readHead == 0);
+      atFirstStep = (this->laundryPoly[i].lss[this->laundryPoly[i].maxIndex].readHead == 0);
       if (globalManualResetClicked || currentManualResetClicked) {
         setChangeImminent(i, true);
         checkIfShouldChange(i);
