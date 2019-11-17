@@ -96,9 +96,12 @@ struct ComputerscareLaundrySoup : Module {
       for (int j = 0; j < length; j++) {
         randchar = mainlookup[floor(random::uniform() * mainlookup.size())];
         string = string + randchar;
+        if (random::uniform() < 0.2) {
+        string += "?";
       }
-      if(random::uniform() < 0.5) {
-        string += "@"+std::to_string((int)(random::uniform()*129));
+      }
+      if (random::uniform() < 0.5) {
+        string += "@" + std::to_string((int)(random::uniform() * 129));
       }
 
       currentFormula[i] = string;
@@ -113,7 +116,7 @@ struct ComputerscareLaundrySoup : Module {
   }
   void setAbsoluteSequenceFromQueue(int index) {
     laundryPoly[index] = LaundryPoly(currentFormula[index]);
-    if(laundryPoly[index].inError) {
+    if (laundryPoly[index].inError) {
       DEBUG("ERROR ch:%i", index);
     }
   }
@@ -244,8 +247,8 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
 
     if (inputs[CLOCK_INPUT + i].isConnected()) {
       for (int ch = 0; ch < 16; ch++) {
-        outputs[TRG_OUTPUT + i].setVoltage((currentTriggerIsHigh && activePolyStep[i][ch]) ? 10.0f : 0.0f,ch);
-        outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f,ch);
+        outputs[TRG_OUTPUT + i].setVoltage((currentTriggerIsHigh && activePolyStep[i][ch]) ? 10.0f : 0.0f, ch);
+        outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
       }
     }
     else {
@@ -276,7 +279,7 @@ struct LaundryTF2 : ComputerscareTextField
         module->manualSet[rowIndex] = false;
       }
       std::string value = text.c_str();
-      
+
       if (value != module->lastValue[rowIndex])
       {
         LaundrySoupSequence lss = LaundrySoupSequence(value);
