@@ -367,8 +367,8 @@ bool matchParens(std::string value) {
   return theyMatch;
 }
 void printVector(std::vector <int> intVector) {
-  printf("int vector of size %i\n",intVector.size());
-  for(int i= 0; i < intVector.size(); i++) {
+  //printf("int vector of size %i\n",intVector.size());
+  for(unsigned int i= 0; i < intVector.size(); i++) {
     printf("%i ",intVector[i]);
   }
   printf("\n");
@@ -393,12 +393,21 @@ void whoKnowsLaundryPoly(std::string input) {
 }
 LaundryPoly::LaundryPoly(std::string formula) {
   std::string newFormula = "";
+    bool myInError=false;
+    maxSteps=-1;
+    int ns;
    for (int i = 0; i < 16; i++ ) {
     newFormula = formula;
-    //replaceAll(newFormula, "2^#", "<" + std::to_string(static_cast<long long>(1 << i)) + ">");
     replaceAll(newFormula, "#", "<" + std::to_string(static_cast<long long>(i + 1)) + ">");
     lss[i] = LaundrySoupSequence(newFormula);
+    ns = lss[i].numSteps;
+    if(ns > maxSteps) {
+      maxSteps = ns;
+      maxIndex = i;
+    }
+    myInError = myInError || lss[i].inError;
   }
+  inError=myInError;
 }
 LaundryPoly::LaundryPoly() {
   LaundryPoly("");
@@ -410,7 +419,9 @@ void LaundryPoly::print() {
     lss[i].print();
   }
 }
-
+bool LaundryPoly::maxChannelAtLastStep() {
+  return lss[maxIndex].atLastStep();
+}
 void whoKnowsLaundry(std::string input) {
   LaundrySoupSequence laundry = LaundrySoupSequence(input);
 
@@ -470,7 +481,6 @@ void LaundrySoupSequence::print() {
 std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> tokens) {
   std::vector<int> output = {};
   int length = 0;
-  int zeroCounter=1;
   int thisVal;
   int thisGate;
   for (unsigned int i = 0; i < tokens.size(); i++) {
@@ -919,7 +929,7 @@ void Parser::ParseFormula(Token t,std::vector<std::string> operatorWhitelist, bo
 								operatorStack.pop_back();
 								int lhs = terminalStack.back().duration;
 								int rhs = t.duration;
-								int result;
+								int result =lhs;
 								terminalStack.pop_back();
 								if(op=="Asterix") {
 									result=lhs*rhs;
