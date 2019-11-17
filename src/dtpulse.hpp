@@ -153,8 +153,11 @@ class Quantizer {
 class LaundryPoly {
 	public:
 		LaundrySoupSequence lss[16];
+		int maxIndex;
+		int maxSteps;
 		LaundryPoly(std::string formula);
 		LaundryPoly();
+		bool maxChannelAtLastStep();
 
 		void print();
 		bool inError;

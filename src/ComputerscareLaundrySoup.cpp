@@ -94,8 +94,6 @@ struct ComputerscareLaundrySoup : Module {
   LaundrySoupSequence laundrySequences[numFields];
   LaundryPoly laundryPoly[numFields];
 
-
-  bool activeStep[numFields] = {false};
   bool activePolyStep[numFields][16] = {{false}};
 
   bool shouldChange[numFields] = {false};
@@ -158,7 +156,7 @@ struct ComputerscareLaundrySoup : Module {
       //laundrySequences[index].print();
     }
     else {
-      DEBUG("ERROR ch:%i",index);
+      DEBUG("ERROR ch:%i", index);
       //lss.print();
       //textFields[index]->inError = true;
     }
@@ -184,7 +182,7 @@ struct ComputerscareLaundrySoup : Module {
     if (laundrySequences[i].readHead == 0) {
       this->setChangeImminent(i, false);
     }
-    for(int ch = 0; ch < 16; ch++) {
+    for (int ch = 0; ch < 16; ch++) {
       laundryPoly[i].lss[ch].incrementAndCheck();
       if (laundryPoly[i].lss[ch].readHead == 0) {
         //this->setChangeImminent(i, false);
@@ -192,8 +190,10 @@ struct ComputerscareLaundrySoup : Module {
     }
   }
   std::string getDisplayString(int index) {
-    std::string lhs = std::to_string(this->laundryPoly[index].lss[0].readHead + 1);
-    std::string rhs =  std::to_string(this->laundryPoly[index].lss[0].numSteps);
+    LaundryPoly loopy = this->laundryPoly[index];
+
+    std::string lhs = std::to_string(loopy.lss[loopy.maxIndex].readHead + 1);
+    std::string rhs =  std::to_string(loopy.lss[loopy.maxIndex].numSteps);
 
     padTo(lhs, 3, ' ');
     padTo(rhs, 3, ' ');
@@ -207,6 +207,11 @@ struct ComputerscareLaundrySoup : Module {
   }
   void resetOneOfThem(int i) {
     this->laundrySequences[i].readHead = -1;
+    for (int ch = 0; ch < 16; ch++) {
+      laundryPoly[i].lss[ch].readHead = -1;
+      //this->setChangeImminent(i, false);
+
+    }
   }
 };
 
@@ -241,27 +246,26 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
       if (inputs[CLOCK_INPUT + i].isConnected()) {
         if (currentTriggerClocked || globalManualClockClicked) {
           incrementInternalStep(i);
-          activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
-          for(int ch = 0; ch < 16; ch++) {
+          for (int ch = 0; ch < 16; ch++) {
             activePolyStep[i][ch] = (this->laundryPoly[i].lss[ch].peekWorkingStep() == 1);
           }
-          atLastStepAfterIncrement = this->laundrySequences[i].atLastStep();
+          //atLastStepAfterIncrement = this->laundrySequences[i].atLastStep();
+          atLastStepAfterIncrement = this->laundryPoly[i].maxChannelAtLastStep();
           if (atLastStepAfterIncrement) checkIfShouldChange(i);
         }
       }
       else {
         if ((inputs[GLOBAL_CLOCK_INPUT].isConnected() && clocked) || globalManualClockClicked) {
           incrementInternalStep(i);
-          activeStep[i] = (this->laundrySequences[i].peekWorkingStep() == 1);
-          for(int ch = 0; ch < 16; ch++) {
+          for (int ch = 0; ch < 16; ch++) {
             activePolyStep[i][ch] = (this->laundryPoly[i].lss[ch].peekWorkingStep() == 1);
           }
-          atLastStepAfterIncrement = this->laundrySequences[i].atLastStep();
+          atLastStepAfterIncrement = this->laundryPoly[i].maxChannelAtLastStep();
           if (atLastStepAfterIncrement) checkIfShouldChange(i);
         }
       }
 
-      for(int ch=0; ch<16; ch++) {
+      for (int ch = 0; ch < 16; ch++) {
 
         atFirstStepPoly[ch] =  (this->laundryPoly[i].lss[ch].readHead == 0);
       }
@@ -286,21 +290,21 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
         }
       }
     }
-		//this always assumes 16 channel poly output.  It is a waste if the user doesnt want poly
-    outputs[TRG_OUTPUT+i].setChannels(16);
-    outputs[FIRST_STEP_OUTPUT+i].setChannels(16);
-    
+    //this always assumes 16 channel poly output.  It is a waste if the user doesnt want poly
+    outputs[TRG_OUTPUT + i].setChannels(16);
+    outputs[FIRST_STEP_OUTPUT + i].setChannels(16);
+
     if (inputs[CLOCK_INPUT + i].isConnected()) {
-      for(int ch = 0; ch < 16; ch++) {
-      outputs[TRG_OUTPUT + i].setVoltage((currentTriggerIsHigh && activePolyStep[i][ch]) ? 10.0f : 0.0f);
-      outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f);
-    }
+      for (int ch = 0; ch < 16; ch++) {
+        outputs[TRG_OUTPUT + i].setVoltage((currentTriggerIsHigh && activePolyStep[i][ch]) ? 10.0f : 0.0f,ch);
+        outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f,ch);
+      }
     }
     else {
-      for(int ch = 0; ch < 16; ch++) {
-      outputs[TRG_OUTPUT + i].setVoltage((globalGateIn && activePolyStep[i][ch]) ? 10.0f : 0.0f,ch);
-      outputs[FIRST_STEP_OUTPUT + i].setVoltage((globalGateIn && atFirstStepPoly[ch]) ? 10.f : 0.0f,ch);
-    }
+      for (int ch = 0; ch < 16; ch++) {
+        outputs[TRG_OUTPUT + i].setVoltage((globalGateIn && activePolyStep[i][ch]) ? 10.0f : 0.0f, ch);
+        outputs[FIRST_STEP_OUTPUT + i].setVoltage((globalGateIn && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
+      }
     }
   }
 }
@@ -324,6 +328,7 @@ struct LaundryTF2 : ComputerscareTextField
         module->manualSet[rowIndex] = false;
       }
       std::string value = text.c_str();
+      
       if (value != module->lastValue[rowIndex])
       {
         LaundrySoupSequence lss = LaundrySoupSequence(value);
@@ -336,7 +341,7 @@ struct LaundryTF2 : ComputerscareTextField
           module->setNextAbsoluteSequence(this->rowIndex);
         }
         else {
-          DEBUG("Channel %i in error",rowIndex);
+          DEBUG("Channel %i in error", rowIndex);
           lp.print();
           inError = true;
         }
@@ -469,7 +474,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
           for (int i = 0; i < numFields; i++) {
             json_t *sequenceJ = json_array_get(seqJLegacy, i);
             if (sequenceJ)
-            val = json_string_value(sequenceJ);
+              val = json_string_value(sequenceJ);
             laundryTextFields[i]->text = val;
             laundry->currentFormula[i] = val;
           }

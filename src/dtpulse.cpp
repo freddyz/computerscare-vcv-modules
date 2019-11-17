@@ -394,10 +394,17 @@ void whoKnowsLaundryPoly(std::string input) {
 LaundryPoly::LaundryPoly(std::string formula) {
   std::string newFormula = "";
     bool myInError=false;
+    maxSteps=-1;
+    int ns;
    for (int i = 0; i < 16; i++ ) {
     newFormula = formula;
     replaceAll(newFormula, "#", "<" + std::to_string(static_cast<long long>(i + 1)) + ">");
     lss[i] = LaundrySoupSequence(newFormula);
+    ns = lss[i].numSteps;
+    if(ns > maxSteps) {
+      maxSteps = ns;
+      maxIndex = i;
+    }
     myInError = myInError || lss[i].inError;
   }
   inError=myInError;
@@ -412,7 +419,9 @@ void LaundryPoly::print() {
     lss[i].print();
   }
 }
-
+bool LaundryPoly::maxChannelAtLastStep() {
+  return lss[maxIndex].atLastStep();
+}
 void whoKnowsLaundry(std::string input) {
   LaundrySoupSequence laundry = LaundrySoupSequence(input);
 
