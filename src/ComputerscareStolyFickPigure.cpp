@@ -115,6 +115,8 @@ struct StolyFickPigureDisplay : TransparentWidget {
 
 		nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_GREEN);
 
+		nvgLineJoin(args.vg, NVG_ROUND);
+
 		float h = 0.4 + 0.3 * sin(A / 2) + 0.3 * sin(K / 3);	//face hue
 		float s = 0.5 + 0.32 * sin(B / 3 - 33.21 - D / 2);	//face saturation
 		float l = 0.5 + 0.35 * sin(C / 2);	//face lightness
@@ -165,23 +167,15 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgBeginPath(args.vg);
 		
 		
-		nvgMoveTo(args.vg, cx,cy);
+		nvgMoveTo(args.vg, leftAnkleX,leftAnkleY);
 		nvgLineTo(args.vg, leftKneeX,leftKneeY);
-		nvgLineTo(args.vg, leftAnkleX,leftAnkleY);
-
-		//nvgClosePath(args.vg);
-		nvgStroke(args.vg);
-
-		nvgBeginPath(args.vg);
-		
-
-
-		nvgMoveTo(args.vg, cx,cy);
+		nvgLineTo(args.vg, cx,cy);
 		nvgLineTo(args.vg, rightKneeX,rightKneeY);
 		nvgLineTo(args.vg, rightAnkleX,rightAnkleY);
 
 		//nvgClosePath(args.vg);
 		nvgStroke(args.vg);
+
 
 		//torso length,direction
 		float torsoLength=thighLength*(1.4+(sin(A))/4);
@@ -198,10 +192,10 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		float armLength=torsoLength*(2+(sin(N+14)-sin(P-L-3))/2)/4;
 		float forearmLength=armLength*(1+(sin(F+B)-sin(E))/5);
 		float armDirection=3*M_PI/2+0.2*(sin(C-M));
-		float armSpread=sin(B);
+		float armSpread=sin(B+P)+sin(N-J);
 
-		float leftElbowArg=armDirection+sin(C+N-P+armSpread)/14;
-		float rightElbowArg=armDirection+sin(D+C-I-J-armSpread)/14;
+		float leftElbowArg=armDirection+armSpread;
+		float rightElbowArg=armDirection-armSpread;
 		
 		float leftHandArg=sin(E+22+A);
 		float rightHandArg=sin(F+22-B);
