@@ -329,6 +329,35 @@ struct LaundrySmallDisplay : SmallLetterDisplay
 
 };
 
+struct LaundryChannelItem : MenuItem {
+	ComputerscareLaundrySoup *module;
+	int channels;
+	void onAction(const event::Action &e) override {
+		//module->channels = channels;
+	}
+};
+
+
+struct LaundryChannelsItem : MenuItem {
+	ComputerscareLaundrySoup *module;
+	Menu *createChildMenu() override {
+		Menu *menu = new Menu;
+		for (int channels = -1; channels <= 16; channels++) {
+			MergeChannelItem *item = new MergeChannelItem;
+			if (channels < 0)
+				item->text = "Automatic";
+			else
+				item->text = string::f("%d", channels);
+			item->rightText = CHECKMARK(false/*module->channels == channels*/);
+			item->module = module;
+			item->channels = channels;
+			menu->addChild(item);
+		}
+		return menu;
+	}
+};
+
+
 struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
   double verticalSpacing = 18.4;
@@ -433,7 +462,17 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       }
     }
   }
+  void appendContextMenu(Menu *menu) override {
+		ComputerscareLaundrySoup *module = dynamic_cast<ComputerscareLaundrySoup*>(this->laundry);
 
+		menu->addChild(new MenuEntry);
+
+		LaundryChannelsItem *channelsItem = new LaundryChannelsItem;
+		channelsItem->text = "Channels";
+		channelsItem->rightText = RIGHT_ARROW;
+		channelsItem->module = module;
+		menu->addChild(channelsItem);
+	}
   ComputerscareLaundrySoup *laundry;
 
   LaundryTF2 *textFieldTemp;
