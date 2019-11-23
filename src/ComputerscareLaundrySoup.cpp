@@ -58,7 +58,10 @@ struct ComputerscareLaundrySoup : Module {
 
   LaundryPoly laundryPoly[numFields];
 
+  int channelCountEnum[numFields];
+
   bool activePolyStep[numFields][16] = {{false}};
+
 
   bool shouldChange[numFields] = {false};
   bool changeImminent[numFields] = {false};
@@ -74,6 +77,73 @@ struct ComputerscareLaundrySoup : Module {
       resetOneOfThem(i);
       LaundryPoly lp = LaundryPoly("");
       laundryPoly[i] = lp;
+      channelCountEnum[i] = -1;
+      DEBUG("%i", channelCountEnum[i]);
+    }
+  }
+  json_t *dataToJson() override {
+    json_t *rootJ = json_object();
+
+    json_t *sequencesJ = json_array();
+    json_t *channelCountJ = json_array();
+    for (int i = 0; i < numFields; i++) {
+      json_t *sequenceJ = json_string(currentFormula[i].c_str());
+      json_array_append_new(sequencesJ, sequenceJ);
+
+      DEBUG("channel %i: enum:%i", i, channelCountEnum[i]);
+      json_t *channelJ = json_integer(channelCountEnum[i]);
+      json_array_append_new(channelCountJ, channelJ);
+    }
+    json_object_set_new(rootJ, "sequences", sequencesJ);
+    json_object_set_new(rootJ, "channelCount", channelCountJ);
+
+    return rootJ;
+  }
+
+  void dataFromJson(json_t *rootJ) override {
+    std::string val;
+    int count;
+    json_t *sequencesJ = json_object_get(rootJ, "sequences");
+    if (sequencesJ) {
+      for (int i = 0; i < numFields; i++) {
+
+        json_t *sequenceJ = json_array_get(sequencesJ, i);
+        if (sequenceJ)
+          val = json_string_value(sequenceJ);
+        //laundryTextFields[i]->text = val;
+        currentFormula[i] = val;
+        lastValue[i] = val;
+        manualSet[i] = true;
+      }
+    }
+    else {
+      json_t *textJLegacy = json_object_get(rootJ, "data");
+      if (textJLegacy) {
+        json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
+
+        if (seqJLegacy) {
+          for (int i = 0; i < numFields; i++) {
+            json_t *sequenceJ = json_array_get(seqJLegacy, i);
+            if (sequenceJ)
+              val = json_string_value(sequenceJ);
+            //laundryTextFields[i]->text = val;
+            currentFormula[i] = val;
+            lastValue[i] = val;
+            manualSet[i] = true;
+
+          }
+        }
+      }
+    }
+    json_t *channelCountEnumJ = json_object_get(rootJ, "channelCount");
+    if (channelCountEnumJ) {
+      for (int i = 0; i < numFields; i++) {
+        json_t *countJ = json_array_get(channelCountEnumJ, i);
+        if (countJ) {
+          count = json_integer_value(countJ);
+          channelCountEnum[i] = count;
+        }
+      }
     }
   }
   void process(const ProcessArgs &args) override;
@@ -97,8 +167,8 @@ struct ComputerscareLaundrySoup : Module {
         randchar = mainlookup[floor(random::uniform() * mainlookup.size())];
         string = string + randchar;
         if (random::uniform() < 0.2) {
-        string += "?";
-      }
+          string += "?";
+        }
       }
       if (random::uniform() < 0.5) {
         string += "@" + std::to_string((int)(random::uniform() * 129));
@@ -330,31 +400,34 @@ struct LaundrySmallDisplay : SmallLetterDisplay
 };
 
 struct LaundryChannelItem : MenuItem {
-	ComputerscareLaundrySoup *module;
-	int channels;
-	void onAction(const event::Action &e) override {
-		//module->channels = channels;
-	}
+  ComputerscareLaundrySoup *module;
+  int channels;
+  int row;
+  void onAction(const event::Action &e) override {
+    module->channelCountEnum[row] = channels;
+  }
 };
 
 
 struct LaundryChannelsItem : MenuItem {
-	ComputerscareLaundrySoup *module;
-	Menu *createChildMenu() override {
-		Menu *menu = new Menu;
-		for (int channels = -1; channels <= 16; channels++) {
-			MergeChannelItem *item = new MergeChannelItem;
-			if (channels < 0)
-				item->text = "Automatic";
-			else
-				item->text = string::f("%d", channels);
-			item->rightText = CHECKMARK(false/*module->channels == channels*/);
-			item->module = module;
-			item->channels = channels;
-			menu->addChild(item);
-		}
-		return menu;
-	}
+  ComputerscareLaundrySoup *module;
+  int row;
+  Menu *createChildMenu() override {
+    Menu *menu = new Menu;
+    for (int channels = -1; channels <= 16; channels++) {
+      LaundryChannelItem *item = new LaundryChannelItem;
+      item->row = row;
+      if (channels < 0)
+        item->text = "Automatic";
+      else
+        item->text = string::f("%d", channels);
+      item->rightText = CHECKMARK(module->channelCountEnum[row] == channels);
+      item->module = module;
+      item->channels = channels;
+      menu->addChild(item);
+    }
+    return menu;
+  }
 };
 
 
@@ -416,63 +489,21 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
     }
     laundry = module;
   }
-  json_t *toJson() override
-  {
-    json_t *rootJ = ModuleWidget::toJson();
 
-    json_t *sequencesJ = json_array();
-    for (int i = 0; i < numFields; i++) {
-      json_t *sequenceJ = json_string(laundryTextFields[i]->text.c_str());
-      json_array_append_new(sequencesJ, sequenceJ);
-    }
-    json_object_set_new(rootJ, "sequences", sequencesJ);
-
-    return rootJ;
-  }
-
-  void fromJson(json_t *rootJ) override
-  {
-    std::string val;
-    ModuleWidget::fromJson(rootJ);
-    json_t *sequencesJ = json_object_get(rootJ, "sequences");
-    if (sequencesJ) {
-      for (int i = 0; i < numFields; i++) {
-
-        json_t *sequenceJ = json_array_get(sequencesJ, i);
-        if (sequenceJ)
-          val = json_string_value(sequenceJ);
-        laundryTextFields[i]->text = val;
-        laundry->currentFormula[i] = val;
-      }
-    }
-    else {
-      json_t *textJLegacy = json_object_get(rootJ, "data");
-      if (textJLegacy) {
-        json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
-
-        if (seqJLegacy) {
-          for (int i = 0; i < numFields; i++) {
-            json_t *sequenceJ = json_array_get(seqJLegacy, i);
-            if (sequenceJ)
-              val = json_string_value(sequenceJ);
-            laundryTextFields[i]->text = val;
-            laundry->currentFormula[i] = val;
-          }
-        }
-      }
-    }
-  }
   void appendContextMenu(Menu *menu) override {
-		ComputerscareLaundrySoup *module = dynamic_cast<ComputerscareLaundrySoup*>(this->laundry);
+    ComputerscareLaundrySoup *module = dynamic_cast<ComputerscareLaundrySoup*>(this->laundry);
 
-		menu->addChild(new MenuEntry);
+    menu->addChild(new MenuEntry);
 
-		LaundryChannelsItem *channelsItem = new LaundryChannelsItem;
-		channelsItem->text = "Channels";
-		channelsItem->rightText = RIGHT_ARROW;
-		channelsItem->module = module;
-		menu->addChild(channelsItem);
-	}
+    for (int i = 0; i < numFields; i++) {
+      LaundryChannelsItem *channelsItem = new LaundryChannelsItem;
+      channelsItem->text = string::f("Channel %d Polyphony", i+1);;
+      channelsItem->rightText = RIGHT_ARROW;
+      channelsItem->module = module;
+      channelsItem->row=i;
+      menu->addChild(channelsItem);
+    }
+  }
   ComputerscareLaundrySoup *laundry;
 
   LaundryTF2 *textFieldTemp;
