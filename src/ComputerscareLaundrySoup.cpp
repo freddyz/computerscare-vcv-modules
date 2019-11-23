@@ -58,7 +58,11 @@ struct ComputerscareLaundrySoup : Module {
 
   LaundryPoly laundryPoly[numFields];
 
+  int checkCounter = 0;
+  int checkCounterLimit = 10000;
+
   int channelCountEnum[numFields];
+  int channelCount[numFields];
 
   bool activePolyStep[numFields][16] = {{false}};
 
@@ -78,7 +82,7 @@ struct ComputerscareLaundrySoup : Module {
       LaundryPoly lp = LaundryPoly("");
       laundryPoly[i] = lp;
       channelCountEnum[i] = -1;
-      DEBUG("%i", channelCountEnum[i]);
+      channelCount[i] = 1;
     }
   }
   json_t *dataToJson() override {
@@ -89,8 +93,6 @@ struct ComputerscareLaundrySoup : Module {
     for (int i = 0; i < numFields; i++) {
       json_t *sequenceJ = json_string(currentFormula[i].c_str());
       json_array_append_new(sequencesJ, sequenceJ);
-
-      DEBUG("channel %i: enum:%i", i, channelCountEnum[i]);
       json_t *channelJ = json_integer(channelCountEnum[i]);
       json_array_append_new(channelCountJ, channelJ);
     }
@@ -110,7 +112,6 @@ struct ComputerscareLaundrySoup : Module {
         json_t *sequenceJ = json_array_get(sequencesJ, i);
         if (sequenceJ)
           val = json_string_value(sequenceJ);
-        //laundryTextFields[i]->text = val;
         currentFormula[i] = val;
         lastValue[i] = val;
         manualSet[i] = true;
@@ -126,7 +127,6 @@ struct ComputerscareLaundrySoup : Module {
             json_t *sequenceJ = json_array_get(seqJLegacy, i);
             if (sequenceJ)
               val = json_string_value(sequenceJ);
-            //laundryTextFields[i]->text = val;
             currentFormula[i] = val;
             lastValue[i] = val;
             manualSet[i] = true;
@@ -184,8 +184,20 @@ struct ComputerscareLaundrySoup : Module {
   void setNextAbsoluteSequence(int index) {
     shouldChange[index] = true;
   }
+  void checkChannelCount(int index) {
+    if (channelCountEnum[index] == -1) {
+      if (currentFormula[index].find("#") != std::string::npos) {
+        channelCount[index] = 16;
+      } else {
+        channelCount[index] = 1;
+      }
+    } else {
+      channelCount[index] = channelCountEnum[index];
+    }
+  }
   void setAbsoluteSequenceFromQueue(int index) {
     laundryPoly[index] = LaundryPoly(currentFormula[index]);
+    checkChannelCount(index);
     if (laundryPoly[index].inError) {
       DEBUG("ERROR ch:%i", index);
     }
@@ -256,7 +268,18 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
   bool currentResetTriggered = false;
   bool currentManualResetClicked;
 
+  int numOutputChannels;
+
+  if (checkCounter > checkCounterLimit) {
+    for (int i = 0; i < numFields; i++) {
+      checkChannelCount(i);
+    }
+    checkCounter = 0;
+  }
+  checkCounter++;
+
   for (int i = 0; i < numFields; i++) {
+    numOutputChannels = channelCount[i];
     currentResetActive = inputs[RESET_INPUT + i].isConnected();
     currentResetTriggered = resetTriggers[i].process(inputs[RESET_INPUT + i].getVoltage() / 2.f);
     currentTriggerIsHigh = clockTriggers[i].isHigh();
@@ -268,7 +291,7 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
       if (inputs[CLOCK_INPUT + i].isConnected()) {
         if (currentTriggerClocked || globalManualClockClicked) {
           incrementInternalStep(i);
-          for (int ch = 0; ch < 16; ch++) {
+          for (int ch = 0; ch < numOutputChannels; ch++) {
             activePolyStep[i][ch] = (this->laundryPoly[i].lss[ch].peekWorkingStep() == 1);
           }
           atLastStepAfterIncrement = this->laundryPoly[i].maxChannelAtLastStep();
@@ -278,7 +301,7 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
       else {
         if ((inputs[GLOBAL_CLOCK_INPUT].isConnected() && clocked) || globalManualClockClicked) {
           incrementInternalStep(i);
-          for (int ch = 0; ch < 16; ch++) {
+          for (int ch = 0; ch < numOutputChannels; ch++) {
             activePolyStep[i][ch] = (this->laundryPoly[i].lss[ch].peekWorkingStep() == 1);
           }
           atLastStepAfterIncrement = this->laundryPoly[i].maxChannelAtLastStep();
@@ -286,7 +309,7 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
         }
       }
 
-      for (int ch = 0; ch < 16; ch++) {
+      for (int ch = 0; ch < numOutputChannels; ch++) {
 
         atFirstStepPoly[ch] =  (this->laundryPoly[i].lss[ch].readHead == 0);
       }
@@ -312,17 +335,17 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
       }
     }
     //this always assumes 16 channel poly output.  It is a waste if the user doesnt want poly
-    outputs[TRG_OUTPUT + i].setChannels(16);
-    outputs[FIRST_STEP_OUTPUT + i].setChannels(16);
+    outputs[TRG_OUTPUT + i].setChannels(numOutputChannels);
+    outputs[FIRST_STEP_OUTPUT + i].setChannels(numOutputChannels);
 
     if (inputs[CLOCK_INPUT + i].isConnected()) {
-      for (int ch = 0; ch < 16; ch++) {
+      for (int ch = 0; ch < numOutputChannels; ch++) {
         outputs[TRG_OUTPUT + i].setVoltage((currentTriggerIsHigh && activePolyStep[i][ch]) ? 10.0f : 0.0f, ch);
         outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
       }
     }
     else {
-      for (int ch = 0; ch < 16; ch++) {
+      for (int ch = 0; ch < numOutputChannels; ch++) {
         outputs[TRG_OUTPUT + i].setVoltage((globalGateIn && activePolyStep[i][ch]) ? 10.0f : 0.0f, ch);
         outputs[FIRST_STEP_OUTPUT + i].setVoltage((globalGateIn && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
       }
@@ -352,7 +375,7 @@ struct LaundryTF2 : ComputerscareTextField
 
       if (value != module->lastValue[rowIndex])
       {
-        LaundrySoupSequence lss = LaundrySoupSequence(value);
+        //LaundrySoupSequence lss = LaundrySoupSequence(value);
         LaundryPoly lp = LaundryPoly(value);
 
         module->lastValue[rowIndex] = value;
@@ -404,7 +427,13 @@ struct LaundryChannelItem : MenuItem {
   int channels;
   int row;
   void onAction(const event::Action &e) override {
-    module->channelCountEnum[row] = channels;
+    if (row > -1) {
+      module->channelCountEnum[row] = channels;
+    } else {
+      for (int i = 0; i < numFields; i++) {
+        module->channelCountEnum[i] = channels;
+      }
+    }
   }
 };
 
@@ -421,7 +450,9 @@ struct LaundryChannelsItem : MenuItem {
         item->text = "Automatic";
       else
         item->text = string::f("%d", channels);
-      item->rightText = CHECKMARK(module->channelCountEnum[row] == channels);
+      if (row > -1) {
+        item->rightText = CHECKMARK(module->channelCountEnum[row] == channels);
+      }
       item->module = module;
       item->channels = channels;
       menu->addChild(item);
@@ -495,13 +526,20 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
     menu->addChild(new MenuEntry);
 
-    for (int i = 0; i < numFields; i++) {
+
+
+    for (int i = -1; i < numFields; i++) {
       LaundryChannelsItem *channelsItem = new LaundryChannelsItem;
-      channelsItem->text = string::f("Channel %d Polyphony", i+1);;
+      channelsItem->text = i == -1 ? "Set All Channels Polyphony" : string::f("Channel %d Polyphony", i + 1);;
       channelsItem->rightText = RIGHT_ARROW;
       channelsItem->module = module;
-      channelsItem->row=i;
+      channelsItem->row = i;
       menu->addChild(channelsItem);
+
+      if (i == -1) {
+        MenuLabel *spacerLabel = new MenuLabel();
+        menu->addChild(spacerLabel);
+      }
     }
   }
   ComputerscareLaundrySoup *laundry;
