@@ -81,7 +81,7 @@ abcdef@3        abc
 
 ## Randomization
 
-Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curly braces {} will randomly select one of the values with equal probability.  For example, `{ab}` will choose either `a` or `b` at each clock step.  `{g<2.55>}` will output either the value of knob `g` or `2.55` volts with equal probability.
+Enclosing values (lowercase letter, uppercase letter, or exact voltage) in curly braces {} will randomly select one of the values with equal probability.  For example, `{ab}` will choose either `a` or `b` at each clock step.  `{g<2.55>}` will output either the value of knob `g` or `2.55` volts with equal probability.  `{}` will choose one of the 26 knobs `a` thru `z`.
 
 ## Square Bracket Expansion
 
@@ -115,6 +115,7 @@ All of the following are valid I Love Cookies programs:
 ab(cd)
 def@10
 [abc,de]@6
+{}@8,arphald
 ~~~~
 
 
