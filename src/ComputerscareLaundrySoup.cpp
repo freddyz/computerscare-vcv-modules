@@ -15,6 +15,31 @@ struct ComputerscareLaundrySoupWidget;
 
 const int numFields = 6;
 
+std::string randomFormula() {
+     std::string mainlookup = "111111111111111111111111112222333333344444444444444445556667778888888888888999";
+    std::string string = "";
+    std::string randchar = "";
+    std::vector<std::string> atLookup={"4","8","12","16","24","32","36","48","60","64","120","128"};
+    int length = 0;
+
+      length = floor(random::uniform() * 12) + 1;
+      string = "";
+      for (int j = 0; j < length; j++) {
+        randchar = mainlookup[floor(random::uniform() * mainlookup.size())];
+        string = string + randchar;
+        if (random::uniform() < 0.2) {
+          string += "?";
+        }
+      }
+      if (random::uniform() < 0.5) {
+        if(random::uniform() < 0.8) {
+          string = "["+string.insert(floor(random::uniform()*(string.size()-1)+1),",")+"]";
+        }
+        string += "@" + atLookup[floor(random::uniform()*atLookup.size())];
+      }
+      return string;
+  }
+
 struct ComputerscareLaundrySoup : Module {
   enum ParamIds {
     MANUAL_CLOCK_PARAM,
@@ -53,6 +78,7 @@ struct ComputerscareLaundrySoup : Module {
 
   std::string currentFormula[numFields];
   std::string lastValue[numFields];
+  std::string currentTextFieldValue[numFields];
 
   rack::dsp::SchmittTrigger manualResetTriggers[numFields];
 
@@ -71,18 +97,35 @@ struct ComputerscareLaundrySoup : Module {
   bool changeImminent[numFields] = {false};
   bool manualSet[numFields] = {false};
 
+  bool jsonLoaded = false;
+  bool laundryInitialized = false;
+  int sampleCounter = 0;
+
+
+  
   ComputerscareLaundrySoup() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     for (int i = 0; i < numFields; i++) {
-      currentFormula[i] = "";
-      lastValue[i] = "";
+      currentFormula[i] = std::to_string(i+1);
+      lastValue[i] = currentFormula[i];
+      currentTextFieldValue[i] = currentFormula[i];
+      manualSet[i]=true;
+
+      if(i==numFields-1) {
+        randomizeAField(i);
+      }
+
       setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
-      LaundryPoly lp = LaundryPoly("");
+
+
+
+      LaundryPoly lp = LaundryPoly(currentFormula[i]);
       laundryPoly[i] = lp;
       channelCountEnum[i] = -1;
       channelCount[i] = 1;
+
     }
   }
   json_t *dataToJson() override {
@@ -112,8 +155,9 @@ struct ComputerscareLaundrySoup : Module {
         json_t *sequenceJ = json_array_get(sequencesJ, i);
         if (sequenceJ)
           val = json_string_value(sequenceJ);
-        currentFormula[i] = val;
-        lastValue[i] = val;
+        // currentFormula[i] = val;
+        // lastValue[i] = val;
+        currentTextFieldValue[i] = val;
         manualSet[i] = true;
       }
     }
@@ -127,8 +171,9 @@ struct ComputerscareLaundrySoup : Module {
             json_t *sequenceJ = json_array_get(seqJLegacy, i);
             if (sequenceJ)
               val = json_string_value(sequenceJ);
-            currentFormula[i] = val;
-            lastValue[i] = val;
+            // currentFormula[i] = val;
+            //lastValue[i] = val;
+            currentTextFieldValue[i] = val;
             manualSet[i] = true;
 
           }
@@ -145,39 +190,50 @@ struct ComputerscareLaundrySoup : Module {
         }
       }
     }
+    //DEBUG("JSON loaded at %i samples", sampleCounter);
+    jsonLoaded = true;
   }
   void process(const ProcessArgs &args) override;
 
+  void onAdd() override {
+    DEBUG("Added me at %i samples", sampleCounter);
 
+  }
+
+  void checkTextField(int channel) {
+    std::string value = currentTextFieldValue[channel];
+    if (value != currentFormula[channel]) {
+      LaundryPoly lp = LaundryPoly(value);
+      if (!lp.inError && matchParens(value)) {
+        //inError = false;
+        lastValue[channel] = currentFormula[channel];
+        currentFormula[channel] = value;
+        //upcomingFormula[channel]=value;
+        setNextAbsoluteSequence(channel);
+      }
+      else {
+        DEBUG("Channel %i in error", channel);
+        //lp.print();
+        //inError = true;
+      }
+    }
+
+  }
 
   void onRandomize() override {
     randomizeAllFields();
   }
-
   void randomizeAllFields() {
-    std::string mainlookup = "111111111111111111122223333333344444444444444445556667778888888888888999";
-    std::string string = "";
-    std::string randchar = "";
-    int length = 0;
-
-    for (int i = 0; i < numFields; i++) {
-      length = floor(random::uniform() * 12) + 1;
-      string = "";
-      for (int j = 0; j < length; j++) {
-        randchar = mainlookup[floor(random::uniform() * mainlookup.size())];
-        string = string + randchar;
-        if (random::uniform() < 0.2) {
-          string += "?";
-        }
-      }
-      if (random::uniform() < 0.5) {
-        string += "@" + std::to_string((int)(random::uniform() * 129));
-      }
-
-      currentFormula[i] = string;
+    for(int i = 0; i < numFields; i++) {
+      randomizeAField(i);
+    }
+  }
+  
+  void randomizeAField(int i) {
+      currentFormula[i] = randomFormula();
       manualSet[i] = true;
       setNextAbsoluteSequence(i);
-    }
+    
 
   }
 
@@ -270,8 +326,11 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
 
   int numOutputChannels;
 
+
+
   if (checkCounter > checkCounterLimit) {
     for (int i = 0; i < numFields; i++) {
+      checkTextField(i);
       checkChannelCount(i);
     }
     checkCounter = 0;
@@ -352,6 +411,7 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
     }
   }
 }
+
 struct LaundryTF2 : ComputerscareTextField
 {
   ComputerscareLaundrySoup *module;
@@ -363,6 +423,8 @@ struct LaundryTF2 : ComputerscareTextField
     rowIndex = i;
     ComputerscareTextField();
   };
+
+
   void draw(const DrawArgs &args) override
   {
     if (module)
@@ -373,26 +435,22 @@ struct LaundryTF2 : ComputerscareTextField
       }
       std::string value = text.c_str();
 
-      if (value != module->lastValue[rowIndex])
+      if (value != module->currentFormula[rowIndex])
       {
-        //LaundrySoupSequence lss = LaundrySoupSequence(value);
-        LaundryPoly lp = LaundryPoly(value);
-
-        module->lastValue[rowIndex] = value;
-        if (!lp.inError && matchParens(value)) {
-          inError = false;
-          module->currentFormula[rowIndex] = value;
-          module->setNextAbsoluteSequence(this->rowIndex);
-        }
-        else {
-          DEBUG("Channel %i in error", rowIndex);
-          lp.print();
-          inError = true;
-        }
+        module->currentTextFieldValue[rowIndex] = value;
+        inError = true;
+      }
+      else {
+        inError = false;
       }
     }
+    else {
+      text=randomFormula();
+    }
+
     ComputerscareTextField::draw(args);
   }
+
 
   //void draw(const DrawArgs &args) override;
   //int getTextPosition(math::Vec mousePos) override;
