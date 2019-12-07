@@ -136,7 +136,7 @@ struct ComputerscareLaundrySoup : Module {
     json_t *sequencesJ = json_array();
     json_t *channelCountJ = json_array();
     for (int i = 0; i < numFields; i++) {
-      json_t *sequenceJ = json_string(currentFormula[i].c_str());
+      json_t *sequenceJ = json_string(currentTextFieldValue[i].c_str());
       json_array_append_new(sequencesJ, sequenceJ);
       json_t *channelJ = json_integer(channelCountEnum[i]);
       json_array_append_new(channelCountJ, channelJ);
