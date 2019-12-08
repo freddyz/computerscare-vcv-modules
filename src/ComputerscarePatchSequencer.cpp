@@ -52,7 +52,7 @@ struct ComputerscarePatchSequencer : Module {
   int editAddress = 0;
   int addressPlusOne = 1;
   int editAddressPlusOne = 1;
-  int counter = 0;
+  int counter = 513;
 
   int numAddresses = 2;
   bool switch_states[maxSteps][10][10] = {};
@@ -65,25 +65,31 @@ struct ComputerscarePatchSequencer : Module {
   int randomizationStepEnum = 0; //0: edit step, 1: active step, 2: all steps
   int randomizationOutputBoundsEnum = 1; //0: randomize exactly one per output, 1: randomize exactly one per output, 2: randomize 1 or more, 3: randomize 0 or more
 
+  int channelCount[numInputs];
+
   ComputerscarePatchSequencer() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-
-    //configParam(GLOBAL_TRANSPOSE, -1.f, 1.f, 0.0f, "Global Transpose");
     configParam(STEPS_PARAM, 1.f, 16.f, 2.0f, "Number of Steps");
-    for (int i = 0; i < 100; i++)
-    {
-      //std::string chi = "Ch. " + std::to_string(i + 1);
-      /* configParam( SCALE_TRIM + i, , 0.f, 1.f, 0.f);
-       configParam( SCALE_VAL + i, -5.f, 5.f, 0.0f, chi + " Scale Value");
-       configParam( OFFSET_TRIM + i, -1.f, 1.f, 0.0f, chi + " Offset CV Amount");
-       configParam( OFFSET_VAL + i, -5.f, 5.f, 0.0f, chi + " Offset Value");*/
-
+    for(int i = 0; i < numOutputs; i++) {
+      channelCount[i]=0;
     }
   }
   void process(const ProcessArgs &args) override;
 
 
-
+  void updateChannelCount() {
+    int currentMax;
+    for(int j = 0; j < numOutputs; j++) {
+      currentMax=0;
+      for(int i = 0; i < numInputs; i++) {
+        if (switch_states[address][i][j] && inputs[INPUT_JACKS+i].isConnected()) {
+          currentMax = std::max(currentMax,inputs[INPUT_JACKS+i].getChannels());
+        }
+      }
+      channelCount[j]=currentMax;
+      outputs[OUTPUTS+j].setChannels(currentMax);
+    }
+  }
 
   int getRandomizationStepEnum() {
     return randomizationStepEnum;
@@ -233,10 +239,12 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
     }
   }
   if (counter > 512) {
+     updateChannelCount();
     for (int i = 0 ; i < 10 ; i++)
     {
       for (int j = 0 ; j < 10 ; j++)
       {
+
         // update the green lights (step you are editing) and the red lights (current active step)
         lights[SWITCH_LIGHTS + i + j * 10].value  = (switch_states[editAddress][i][j]) ? 1.0 : 0.0;
         lights[SWITCH_LIGHTS + i + j * 10 + 100].value  = (switch_states[address][i][j]) ? 1.0 : 0.0;
@@ -283,8 +291,6 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
   for (int i = 0 ; i < 10 ; i++)
   {
     for (int c = 0; c < 16; c++) {
-
-
       input_values[i * 16 + c] = inputs[INPUT_JACKS + i].getVoltage(c);
     }
   }
@@ -296,7 +302,7 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
       // todo: toggle for each output of how to combine multiple active signals in a column
       // sum, average, and, or etc
       if (switch_states[address][i][j]) {
-        for (int c = 0; c < 16; c++) {
+        for (int c = 0; c < channelCount[j]; c++) {
           sums[j * 16 + c] += input_values[i * 16 + c];
         }
 
@@ -306,8 +312,8 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
   /// outputs
   for (int j = 0 ; j < 10 ; j++)
   {
-    outputs[OUTPUTS + j].setChannels(16);
-    for (int c = 0; c < 16; c++) {
+    //outputs[OUTPUTS + j].setChannels(16);
+    for (int c = 0; c < channelCount[j]; c++) {
       outputs[OUTPUTS + j].setVoltage(sums[j * 16 + c], c);
     }
   }

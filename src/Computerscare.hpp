@@ -326,6 +326,7 @@ struct ComputerscareTextField : ui::TextField {
 	NVGcolor color = COLOR_COMPUTERSCARE_LIGHT_GREEN;
 	int fontSize = 16;
 	bool inError = false;
+	int textColorState=0;
 	ComputerscareTextField() {
 
 		font = APP->window->loadFont(asset::system("res/fonts/ShareTechMono-Regular.ttf"));

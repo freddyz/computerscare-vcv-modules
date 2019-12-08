@@ -134,7 +134,6 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 				logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
 			}
 			else if (inputMode == INTERNAL_MODE) {
-				printf("%f, %f\n", min, spread);
 				for (int i = 0; i < 16; i++) {
 					logLines[i] = min + spread * random::uniform();
 				}
