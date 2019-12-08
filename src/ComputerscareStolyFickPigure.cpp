@@ -117,20 +117,20 @@ struct StolyFickPigureDisplay : TransparentWidget {
 
 		nvgLineJoin(args.vg, NVG_ROUND);
 
-		float h = 0.4 + 0.3 * sin(A / 2) + 0.3 * sin(K / 3);	//face hue
+		float h = 0.5 + 0.25 * sin(C / 2) + 0.25 * sin(K / 3);	//face hue
 		float s = 0.5 + 0.32 * sin(B / 3 - 33.21 - D / 2);	//face saturation
-		float l = 0.5 + 0.35 * sin(C / 2);	//face lightness
+		float l = 0.5 + 0.35 * sin(E / 2);	//face lightness
 
 		NVGcolor faceColor = nvgHSLA(h, s, l, 0xff);
 
 		nvgFillColor(args.vg, faceColor);
 		nvgStrokeWidth(args.vg, 3.2);
 
-		float size = 1+sin(O-29)/6;
+		float size = 1+sin(O-29)/4;
 
 		//crotch
-		float cx = 62*(1+(sin(E+F)-sin(P+O/2))/40000);
-		float cy = 210*(1+(sin(A+G)-sin(P+H/2))/11000);
+		float cx = 62*(1+(sin(E+F)-sin(P+O/2+50))/40000);
+		float cy = 210*(1+(sin(A+G-12)-sin(P+H/2))/11000);
 
 		//thigh spread, length, direction
 		float thighSpread = (2+sin(J+I+K)-sin(A-N/2))/4;
@@ -140,8 +140,8 @@ struct StolyFickPigureDisplay : TransparentWidget {
 
 		//ankle spread,length,direction
 		float ankleSpread = (2+sin(O-B)/2+sin(F+2)/2+sin(P-E-D+19.2))/13;
-		float ankleLength = thighLength*(1+(sin(F+A+J-K/2))/9);
-		float ankleDirection =  3*M_PI/2+(3+sin(J+M-L)-sin(P-B+22)-sin(H))/8;
+		float ankleLength = thighLength*(1+(sin(F+A+J-K/2+9))/9);
+		float ankleDirection =  3*M_PI/2+(3+sin(J+M-L-101)-sin(P-B+22)-sin(H))/8;
 
 		float leftKneeArg = 3*M_PI/2 +thighDirection + thighSpread;
 		float rightKneeArg = 3*M_PI/2 +thighDirection - thighSpread;
@@ -178,7 +178,7 @@ struct StolyFickPigureDisplay : TransparentWidget {
 
 
 		//torso length,direction
-		float torsoLength=thighLength*(1.4+(sin(A))/4);
+		float torsoLength=thighLength*(1.4+(sin(A-12))/4);
 		float torsoDirection=M_PI/2+sin(D)/2;
 
 		float neckX = cx+torsoLength*cos(torsoDirection);
@@ -190,14 +190,14 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgStroke(args.vg);
 		
 		float armLength=torsoLength*(2+(sin(N+14)-sin(P-L-3))/2)/4;
-		float forearmLength=armLength*(1+(sin(F+B)-sin(E))/5);
+		float forearmLength=armLength*(1+(sin(F+B+2)-sin(E))/5);
 		float armDirection=3*M_PI/2+0.2*(sin(C-M));
-		float armSpread=sin(B+P)+sin(N-J);
+		float armSpread=sin(B+P-A)+sin(N-J);
 
 		float leftElbowArg=armDirection+armSpread;
 		float rightElbowArg=armDirection-armSpread;
 		
-		float leftHandArg=sin(E+22+A);
+		float leftHandArg=sin(E+22+A-4);
 		float rightHandArg=sin(F+22-B);
 		
 		float leftElbowX = neckX+armLength*cos(leftElbowArg);
@@ -224,11 +224,11 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgLineTo(args.vg,rightHandX,rightHandY);
 		nvgStroke(args.vg);
 		
-		float headHeight = torsoLength*(0.4+sin(H-E-A-D)/9-sin(F+A-C+E)/7);
-		float headWidth = headHeight*(0.5+sin(I+D-M/2)/7+sin(G/2+J-10)/6);
-		float headAngle = M_PI/2 + (sin(C+K)/6+sin(D+G)/9);
+		float headHeight = torsoLength*(0.5+sin(H-E-I-D)/9-sin(F+B-C+E)/7);
+		float headWidth = headHeight*(0.6+sin(I+D-M/2)/7+sin(G/2+J-10)/6);
+		float headAngle = M_PI/2 + (sin(C+A)/6+sin(D+G)/9);
 
-		float headRotation=sin(C+O)/2+sin(M/2)/3;
+		float headRotation=sin(C+A)/2+sin(M/2)/3;
 		
 		nvgBeginPath(args.vg);
 
