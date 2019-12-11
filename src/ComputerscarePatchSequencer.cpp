@@ -65,7 +65,8 @@ struct ComputerscarePatchSequencer : Module {
   int randomizationStepEnum = 0; //0: edit step, 1: active step, 2: all steps
   int randomizationOutputBoundsEnum = 1; //0: randomize exactly one per output, 1: randomize exactly one per output, 2: randomize 1 or more, 3: randomize 0 or more
 
-  int channelCount[numInputs];
+  int channelCount[numOutputs];
+  int channelCountEnum = -1;
 
   ComputerscarePatchSequencer() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -562,6 +563,37 @@ struct WhichRandomizationOutputBoundsItem : MenuItem {
     MenuItem::step();
   }
 };
+
+struct FatherSonChannelItem : MenuItem {
+  ComputerscarePatchSequencer *module;
+  int channels;
+  void onAction(const event::Action &e) override {
+      module->channelCountEnum = channels;
+  }
+};
+
+
+struct FatherSonChannelsItem : MenuItem {
+  ComputerscarePatchSequencer *module;
+  Menu *createChildMenu() override {
+    Menu *menu = new Menu;
+    for (int channels = -1; channels <= 16; channels++) {
+      FatherSonChannelItem *item = new FatherSonChannelItem;
+      if (channels < 0) {
+        item->text = "Automatic";
+      }
+      else {
+        item->text = string::f("%d", channels);
+        item->rightText = CHECKMARK(module->channelCountEnum == channels);
+      }
+      item->module = module;
+      item->channels = channels;
+      menu->addChild(item);
+    }
+    return menu;
+  }
+};
+
 void ComputerscarePatchSequencerWidget::appendContextMenu(Menu *menu)
 {
   ComputerscarePatchSequencer *patchSequencer = dynamic_cast<ComputerscarePatchSequencer *>(this->module);
