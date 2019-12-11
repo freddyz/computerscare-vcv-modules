@@ -80,12 +80,17 @@ struct ComputerscarePatchSequencer : Module {
 
   void updateChannelCount() {
     int currentMax;
-    for(int j = 0; j < numOutputs; j++) {
-      currentMax=0;
-      for(int i = 0; i < numInputs; i++) {
-        if (switch_states[address][i][j] && inputs[INPUT_JACKS+i].isConnected()) {
-          currentMax = std::max(currentMax,inputs[INPUT_JACKS+i].getChannels());
+    if(channelCountEnum == -1) {
+      for(int j = 0; j < numOutputs; j++) {
+        currentMax=0;
+        for(int i = 0; i < numInputs; i++) {
+          if (switch_states[address][i][j] && inputs[INPUT_JACKS+i].isConnected()) {
+            currentMax = std::max(currentMax,inputs[INPUT_JACKS+i].getChannels());
+          }
         }
+      }
+      else {
+        currentMax=channelCountEnum;
       }
       channelCount[j]=currentMax;
       outputs[OUTPUTS+j].setChannels(currentMax);
