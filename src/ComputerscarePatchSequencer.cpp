@@ -489,6 +489,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
     }
     json_object_set_new(rootJ, "buttons", button_statesJ);
     json_object_set_new(rootJ, "onlyRandomizeActive", json_boolean(fatherSon->onlyRandomizeActive));
+    json_object_set_new(rootJ, "channelCountEnum", json_integer(fatherSon->channelCountEnum));
     json_object_set_new(rootJ, "randomizationStepEnum", json_integer(fatherSon->getRandomizationStepEnum()));
     json_object_set_new(rootJ, "randomizationOutputBoundsEnum", json_integer(fatherSon->getRandomizationOutputBoundsEnum()));
     return rootJ;
@@ -517,6 +518,9 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
     json_t *randomizationStepEnumJ = json_object_get(rootJ, "randomizationStepEnum");
     if (randomizationStepEnumJ) { fatherSon->setRandomizationStepEnum(json_integer_value(randomizationStepEnumJ)); }
+    
+    json_t *channelCountEnumJ = json_object_get(rootJ, "channelCountEnum");
+    if (channelCountEnumJ) { fatherSon->channelCountEnum = json_integer_value(channelCountEnumJ); }
 
     json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOutputBoundsEnum");
     if (randomizationOutputBoundsEnumJ) { fatherSon->setRandomizationOutputBoundsEnum(json_integer_value(randomizationOutputBoundsEnumJ)); }
