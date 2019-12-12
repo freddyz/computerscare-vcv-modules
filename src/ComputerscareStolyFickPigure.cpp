@@ -414,6 +414,18 @@ struct StolyFickPigureWidget : ModuleWidget {
 
 
 	}
+	void drawShadow(const DrawArgs& args)  {
+		DEBUG("my draw shadow has been called");
+		nvgBeginPath(args.vg);
+		float r = 20; // Blur radius
+		float c = 20; // Corner radius
+		math::Vec b = math::Vec(-10, 30); // Offset from each corner
+		nvgRect(args.vg, b.x - r, b.y - r, box.size.x - 2 * b.x + 2 * r, box.size.y - 2 * b.y + 2 * r);
+		NVGcolor shadowColor = nvgRGBAf(120, 0, 0, 0.7);
+		NVGcolor transparentColor = nvgRGBAf(120, 0, 0, 0);
+		nvgFillPaint(args.vg, nvgBoxGradient(args.vg, b.x, b.y, box.size.x - 2 * b.x, box.size.y - 2 * b.y, c, r, shadowColor, transparentColor));
+		nvgFill(args.vg);
+	}
 };
 
 
