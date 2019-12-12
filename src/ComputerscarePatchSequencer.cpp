@@ -71,8 +71,8 @@ struct ComputerscarePatchSequencer : Module {
   ComputerscarePatchSequencer() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configParam(STEPS_PARAM, 1.f, 16.f, 2.0f, "Number of Steps");
-    for(int i = 0; i < numOutputs; i++) {
-      channelCount[i]=0;
+    for (int i = 0; i < numOutputs; i++) {
+      channelCount[i] = 0;
     }
   }
   void process(const ProcessArgs &args) override;
@@ -80,20 +80,21 @@ struct ComputerscarePatchSequencer : Module {
 
   void updateChannelCount() {
     int currentMax;
-    if(channelCountEnum == -1) {
-      for(int j = 0; j < numOutputs; j++) {
-        currentMax=0;
-        for(int i = 0; i < numInputs; i++) {
-          if (switch_states[address][i][j] && inputs[INPUT_JACKS+i].isConnected()) {
-            currentMax = std::max(currentMax,inputs[INPUT_JACKS+i].getChannels());
+
+    for (int j = 0; j < numOutputs; j++) {
+      if (channelCountEnum == -1) {
+        currentMax = 0;
+        for (int i = 0; i < numInputs; i++) {
+          if (switch_states[address][i][j] && inputs[INPUT_JACKS + i].isConnected()) {
+            currentMax = std::max(currentMax, inputs[INPUT_JACKS + i].getChannels());
           }
         }
       }
       else {
-        currentMax=channelCountEnum;
+        currentMax = channelCountEnum;
       }
-      channelCount[j]=currentMax;
-      outputs[OUTPUTS+j].setChannels(currentMax);
+      channelCount[j] = currentMax;
+      outputs[OUTPUTS + j].setChannels(currentMax);
     }
   }
 
@@ -245,7 +246,7 @@ void ComputerscarePatchSequencer::process(const ProcessArgs &args) {
     }
   }
   if (counter > 512) {
-     updateChannelCount();
+    updateChannelCount();
     for (int i = 0 ; i < 10 ; i++)
     {
       for (int j = 0 ; j < 10 ; j++)
@@ -340,31 +341,31 @@ struct NumberDisplayWidget3 : TransparentWidget {
   {
     // Background
     //if (module) {
-      NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
+    NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
 
-      nvgBeginPath(args.vg);
-      nvgRoundedRect(args.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
-      nvgFillColor(args.vg, backgroundColor);
-      nvgFill(args.vg);
+    nvgBeginPath(args.vg);
+    nvgRoundedRect(args.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
+    nvgFillColor(args.vg, backgroundColor);
+    nvgFill(args.vg);
 
-      // text
-      nvgFontSize(args.vg, 13);
-      nvgFontFaceId(args.vg, font->handle);
-      nvgTextLetterSpacing(args.vg, 2.5);
+    // text
+    nvgFontSize(args.vg, 13);
+    nvgFontFaceId(args.vg, font->handle);
+    nvgTextLetterSpacing(args.vg, 2.5);
 
-      std::stringstream to_display;
-      if(module) {
-        to_display << std::setw(3) << *value;
-      }
-      else {
-        to_display << std::setw(3) << "16";
-      }
+    std::stringstream to_display;
+    if (module) {
+      to_display << std::setw(3) << *value;
+    }
+    else {
+      to_display << std::setw(3) << "16";
+    }
 
-      Vec textPos = Vec(6.0f, 17.0f);
-      NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-      nvgFillColor(args.vg, textColor);
-      nvgText(args.vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
-  //  }
+    Vec textPos = Vec(6.0f, 17.0f);
+    NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
+    nvgFillColor(args.vg, textColor);
+    nvgText(args.vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
+    //  }
   }
 };
 
@@ -523,7 +524,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
 
     json_t *randomizationStepEnumJ = json_object_get(rootJ, "randomizationStepEnum");
     if (randomizationStepEnumJ) { fatherSon->setRandomizationStepEnum(json_integer_value(randomizationStepEnumJ)); }
-    
+
     json_t *channelCountEnumJ = json_object_get(rootJ, "channelCountEnum");
     if (channelCountEnumJ) { fatherSon->channelCountEnum = json_integer_value(channelCountEnumJ); }
 
@@ -577,7 +578,7 @@ struct FatherSonChannelItem : MenuItem {
   ComputerscarePatchSequencer *module;
   int channels;
   void onAction(const event::Action &e) override {
-      module->channelCountEnum = channels;
+    module->channelCountEnum = channels;
   }
 };
 
@@ -593,8 +594,8 @@ struct FatherSonChannelsItem : MenuItem {
       }
       else {
         item->text = string::f("%d", channels);
-        item->rightText = CHECKMARK(module->channelCountEnum == channels);
       }
+      item->rightText = CHECKMARK(module->channelCountEnum == channels);
       item->module = module;
       item->channels = channels;
       menu->addChild(item);
@@ -609,6 +610,14 @@ void ComputerscarePatchSequencerWidget::appendContextMenu(Menu *menu)
 
   MenuLabel *spacerLabel = new MenuLabel();
   menu->addChild(spacerLabel);
+
+  FatherSonChannelsItem *channelsItem = new FatherSonChannelsItem;
+  channelsItem->text = "Output Polyphony";
+  channelsItem->rightText = RIGHT_ARROW;
+  channelsItem->module = patchSequencer;
+  menu->addChild(channelsItem);
+
+  menu->addChild(new MenuEntry);
 
 
   MenuLabel *modeLabel = new MenuLabel();
