@@ -107,21 +107,12 @@ struct ComputerscareLaundrySoup : Module {
   ComputerscareLaundrySoup() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     for (int i = 0; i < numFields; i++) {
-      /*if (i < numFields - 1) {
-        currentTextFieldValue[i] = std::to_string(i + 1);
-      }
-      else {
-        currentTextFieldValue[i] = randomFormula();
-      }*/
-
       manualSet[i] = false;
       inError[i] = false;
 
       setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
-
-
 
       LaundryPoly lp = LaundryPoly(currentFormula[i]);
       laundryPoly[i] = lp;
@@ -340,12 +331,18 @@ void ComputerscareLaundrySoup::process(const ProcessArgs &args) {
         currentTextFieldValue[i] = i < numFields - 1 ? std::to_string(i + 1) : randomFormula();
         manualSet[i] = true;
       }
+      for (int i = 0; i < numFields; i++) {
+        checkTextField(i);
+        checkChannelCount(i);
+        checkIfShouldChange(i);
+      }
       jsonLoaded = true;
     }
-    for (int i = 0; i < numFields; i++) {
-
-      checkTextField(i);
-      checkChannelCount(i);
+    else {
+      for (int i = 0; i < numFields; i++) {
+        checkTextField(i);
+        checkChannelCount(i);
+      }
     }
     checkCounter = 0;
   }
