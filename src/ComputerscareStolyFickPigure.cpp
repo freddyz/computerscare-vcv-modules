@@ -447,7 +447,7 @@ struct StolyFickPigureWidget : ModuleWidget {
 		addParam(createParam<SmallKnob>(Vec(31, 357), module, StolyFickPigure::TRIM));
 		addParam(createParam<SmoothKnob>(Vec(51, 353), module, StolyFickPigure::OFFSET));
 
-		addParam(createParam<SmallKnob>(Vec(81, 357), module, StolyFickPigure::SCRAMBLE));
+		addParam(createParam<ScrambleKnob>(Vec(81, 357), module, StolyFickPigure::SCRAMBLE));
 
 
 	}

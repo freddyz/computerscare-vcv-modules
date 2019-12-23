@@ -297,6 +297,11 @@ struct SmallKnob : RoundKnob {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
 	}
 };
+struct ScrambleKnob : RoundKnob {
+	ScrambleKnob() {
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+	}
+};
 struct SmallSnapKnob : RoundBlackSnapKnob {
 	//bool visible = true;
 
