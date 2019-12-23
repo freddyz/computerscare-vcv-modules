@@ -36,7 +36,7 @@ struct FolyPace : Module {
 
 		configParam(TIME_PARAM, 6.f, 16.f, 14.f, "Time", " ms/div", 1 / 2.f, 1000 * timeBase);
 
-		configParam(TRIM, -2.f, 2.f, 1.f, "Input Trim");
+		configParam(TRIM, -2.f, 2.f, 0.2f, "Input Trim");
 		configParam(OFFSET, -5.f, 5.f, 0.f, "Input Offset", " Volts");
 
 	
