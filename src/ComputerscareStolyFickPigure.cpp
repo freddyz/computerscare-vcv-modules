@@ -63,7 +63,6 @@ struct StolyFickPigure : Module {
 		//std::memset(bufferX, 0, sizeof(bufferX));
 	}
 	void updateScramble(float v) {
-		DEBUG("updating scramble %f",v);
 		for(int i = 0; i < 16; i++) {
 			cmap[i] = (i*A+B+(int)std::floor(v*1010.1))%16;
 		}
@@ -105,6 +104,7 @@ struct StolyFickPigure : Module {
 				if (inputs[X_INPUT].isConnected()) {
 					for (int c = 0; c < 16; c++) {
 						bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(std::min(cmap[c], this->channelsX)) * trimVal + offsetVal + 99 + (1071 * cmap[c]) % 19;
+						//bufferX[c][bufferIndex]=inputs[X_INPUT].getVoltage(cmap[c])
 					}
 				}
 				else {
@@ -225,7 +225,7 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgStroke(args.vg);
 		
 		float armLength=torsoLength*(2+(sin(N+14)-sin(P-L-3))/2)/4;
-		float forearmLength=armLength*(1+(sin(F+B+2)-sin(E))/5);
+		float forearmLength=armLength*(1+(2+(sin(F+B+2)-sin(E)))/300);
 		float armDirection=3*M_PI/2+0.2*(sin(C-M));
 		float armSpread=sin(B+P-A)+sin(N-J);
 
@@ -274,142 +274,10 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgFill(args.vg);
 		nvgStroke(args.vg);
 
-		
-		float mouthWidth=headWidth/2;
-		float mouthOpen = 100*(1+sin(K))/headHeight;
-		float mouthSmile=10*(sin(C)+sin(L))/headHeight;
-		float mouthSkew=0;
-		float mouthThickness=1;
-
-		float mouthX = 0;
-		float mouthY = -headHeight/2+mouthSmile*7;
-
-
-		NVGcolor mouthLipColor=nvgRGB(0x24, 0x24, 0x31);
-
-		//drawMouth(args, mouthX, mouthY, mouthWidth, mouthOpen, mouthSmile, mouthSkew, mouthThickness, mouthLipColor);
-
-
-		nvgTranslate(args.vg,-neckX,-neckY);
-		
-		//nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
-
-
-
+	
 		nvgResetScissor(args.vg);
 		//nvgRestore(args.vg);
 	}
-
-	void drawEyebrows(const DrawArgs &args, float x, float y, float eyeSpacing, float leftEyebrowHeight, float rightEyebrowHeight, float leftEyebrowAngle, float rightEyebrowAngle, NVGcolor eyebrowColor, float eyebrowThickness, float eyebrowLength) {
-		nvgBeginPath(args.vg);
-		nvgStrokeColor(args.vg, eyebrowColor);
-		nvgStrokeWidth(args.vg, eyebrowThickness);
-		float cosLeft = cos(leftEyebrowAngle);
-		float sinLeft = sin(leftEyebrowAngle);
-		float cosRight = cos(rightEyebrowAngle);
-		float sinRight = sin(rightEyebrowAngle);
-
-		float r = eyebrowLength / 2;
-
-		nvgMoveTo(args.vg, x - eyeSpacing / 2 - r * cosLeft, y - leftEyebrowHeight - r * sinLeft);
-		nvgLineTo(args.vg, x - eyeSpacing / 2 + r * cosLeft, y - leftEyebrowHeight + r * sinLeft);
-		//nvgStroke(args.vg);
-
-		nvgMoveTo(args.vg, x + eyeSpacing / 2 - r * cosRight, y - rightEyebrowHeight - r * sinRight);
-		nvgLineTo(args.vg, x + eyeSpacing / 2 + r * cosRight, y - rightEyebrowHeight + r * sinRight);
-		nvgStroke(args.vg);
-
-		nvgClosePath(args.vg);
-	}
-	void drawHead(const DrawArgs &args, float x, float y, float width, float height, NVGcolor color) {
-		nvgBeginPath(args.vg);
-
-
-		nvgLineCap(args.vg, NVG_ROUND);
-		nvgMiterLimit(args.vg, 2.f);
-		nvgStrokeWidth(args.vg, 4.5f);
-
-		nvgEllipse(args.vg, x, y, width, height);
-		nvgClosePath(args.vg);
-		nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
-		nvgFill(args.vg);
-	}
-	void drawMouth(const DrawArgs &args, float x, float y, float width, float open, float smile, float skew, float thickness, NVGcolor lipColor) {
-		nvgBeginPath(args.vg);
-		nvgStrokeWidth(args.vg, thickness);
-		nvgStrokeColor(args.vg, lipColor);
-		//nvgStrokeWidth(args.vg, 4.5f);
-
-		nvgMoveTo(args.vg, x - width / 2, y - 20.f * smile);
-
-		//top
-		nvgBezierTo(args.vg, x - width / 4, y - open * smile, x + width / 4, y - open * smile, x + width / 2, y - 10.f * smile);
-
-		//bottom
-		nvgBezierTo(args.vg, x + width / 4, y + smile * open, x - width / 4, y + smile * open, x - width / 2, y - 20.f * smile);
-		nvgClosePath(args.vg);
-		nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
-		nvgFillColor(args.vg, nvgRGBA(0, 0, 0, 0xff));
-		nvgStroke(args.vg);
-		nvgFill(args.vg);
-
-	}
-	void drawEyes(const DrawArgs &args, float x, float y, float spacing, float rx, float ry, float open, float irisRad, float pupilRad, float gazeDir, float gazeStrength, NVGcolor irisColor, NVGcolor pupilColor) {
-		float leftX = x - spacing / 2;
-		float rightX = x + spacing / 2;
-		float pupilOffsetX = gazeStrength * cos(gazeDir);
-		float pupilOffsetY = gazeStrength * sin(gazeDir);
-		float leftPupilX = leftX + pupilOffsetX;
-		float leftPupilY = y + pupilOffsetY;
-		float rightPupilX = rightX + pupilOffsetX;
-		float rightPupilY = y + pupilOffsetY;
-
-		nvgBeginPath(args.vg);
-		nvgStrokeWidth(args.vg, 1.f);
-		//nvgStrokeWidth(args.vg, 4.5f);
-
-		//whites of eyes
-		nvgFillColor(args.vg, nvgRGB(250, 250, 250));
-
-
-		nvgEllipse(args.vg, leftX, y, rx, ry);
-		nvgEllipse(args.vg, rightX, y, rx, ry);
-
-		nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
-		nvgFill(args.vg);
-		nvgClosePath(args.vg);
-
-		//iris
-
-		nvgBeginPath(args.vg);
-		nvgFillColor(args.vg, irisColor);
-
-
-		nvgCircle(args.vg, leftPupilX, leftPupilY, irisRad);
-		nvgCircle(args.vg, rightPupilX, rightPupilY, irisRad);
-		nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
-		nvgFill(args.vg);
-		nvgClosePath(args.vg);
-
-		//pupil
-		nvgBeginPath(args.vg);
-		nvgFillColor(args.vg, pupilColor);
-
-
-		nvgCircle(args.vg, leftPupilX, leftPupilY, pupilRad);
-		nvgCircle(args.vg, rightPupilX, rightPupilY, pupilRad);
-		nvgGlobalCompositeOperation(args.vg, NVG_ATOP);
-		nvgFill(args.vg);
-		nvgClosePath(args.vg);
-
-		nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
-//eyebrows
-
-	}
-	void drawNose(const DrawArgs &args, float x, float y, float height, float width, float thickness, NVGcolor color) {
-
-	}
-
 
 	void draw(const DrawArgs &args) override {
 		if (!module) {
