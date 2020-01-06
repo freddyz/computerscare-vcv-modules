@@ -22,6 +22,6 @@ class Goly {
 		float currentValues[16];
 	
 		Goly();
-		void invoke(int algorithm,std::vector<float> pararms);
+		void invoke(int algorithm,std::vector<float> gp);
 		
 };

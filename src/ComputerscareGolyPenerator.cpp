@@ -50,27 +50,23 @@ struct ComputerscareGolyPenerator : Module {
 		configParam(KNOB +1,0.f,10.f,1.f,"Algorithm");
 		
 
-		for (int i = 2; i < numKnobs; i++) {
-			configParam(KNOB + i, 0.0f, 10.0f, 0.0f);
-			configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1) + " Voltage", " Volts");
+		for (int i = 2; i < 8; i++) {
+			configParam(KNOB + i, -10.f, 10.f, 0.f, "Parameter " + std::to_string(i - 1));
 		}
 
 		goly = Goly();
 
 	}
 	void updateCurrents() {
-		std::vector<float> golyParams = {params[KNOB+2].getValue(),params[KNOB+3].getValue()};
-		goly.invoke((int)params[KNOB+1].getValue(),golyParams);
+		std::vector<float> golyParams = {params[KNOB+2].getValue(),params[KNOB+3].getValue(),params[KNOB+4].getValue(),params[KNOB+5].getValue(),params[KNOB+6].getValue(),params[KNOB+7].getValue()};
+		goly.invoke((int) std::floor(params[KNOB+1].getValue()),golyParams);
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
 		if (counter > 5012) {
-			//printf("%f \n",random::uniform());
 			counter = 0;
-			//rect4032
-			//south facing high wall
 			updateCurrents();
-			numChannels=(params[KNOB].getValue());
+			numChannels=(int) (std::floor(params[KNOB].getValue()));
 		}
 
 
@@ -100,7 +96,7 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		}
 		float xx;
 		float yy;
-		for (int i = 0; i < numKnobs; i++) {
+		for (int i = 0; i < 8; i++) {
 			xx = 1.4f + 24.3 * (i-i % 8)/8;
 			yy = 64 + 37.5 * (i % 8) + 14.3 * (i - i % 8)/8;
 			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i-i%8)*1.2-2, 0);
