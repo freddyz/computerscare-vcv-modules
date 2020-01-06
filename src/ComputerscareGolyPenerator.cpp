@@ -21,6 +21,7 @@ struct ComputerscareGolyPenerator : Module {
 	int counter = 0;
 	int numChannels=16;
 	ComputerscareSVGPanel* panelRef;
+	Goly goly;
 	float currentValues[16]={0.f};
 	enum ParamIds {
 		KNOB,
@@ -54,11 +55,12 @@ struct ComputerscareGolyPenerator : Module {
 			configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1) + " Voltage", " Volts");
 		}
 
+		goly = Goly();
+
 	}
 	void updateCurrents() {
-		for(int i = 0; i < numChannels; i++) {
-			currentValues[i]=(float)i;
-		}
+		std::vector<float> golyParams = {params[KNOB+2].getValue(),params[KNOB+3].getValue()};
+		goly.invoke((int)params[KNOB+1].getValue(),golyParams);
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
@@ -74,7 +76,7 @@ struct ComputerscareGolyPenerator : Module {
 
 		outputs[POLY_OUTPUT].setChannels(numChannels);
 		for (int i = 0; i < 16; i++) {
-			outputs[POLY_OUTPUT].setVoltage(currentValues[i], i);
+			outputs[POLY_OUTPUT].setVoltage(goly.currentValues[i], i);
 		}
 	}
 

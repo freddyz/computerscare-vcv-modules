@@ -19,12 +19,9 @@ extern std::string knobandinputlookup;
 
 class Goly {
 	public:
-		std::string type;
-		std::string value;
-		int index;
-		int duration;
-		Goly(std::string t, std::string v);
+		float currentValues[16];
+	
+		Goly();
+		void invoke(int algorithm,std::vector<float> pararms);
 		
 };
-
-int myHorse(int x, int p);

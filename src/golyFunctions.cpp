@@ -1,11 +1,33 @@
 #include "golyFunctions.hpp"
 
 
-void Goly(std::string t, std::string v) {
-	printf("gee golly horse\n");
+Goly::Goly() {
+	for (int i = 0; i < 16; i++) {
+		currentValues[i] = 0.f;
+	}
 
 }
+void Goly::invoke(int algorithm, std::vector<float> params) {
+	switch (algorithm)
+	{
+	case 0: // code to be executed if n = 1;
+		for (int i = 0; i < 16; i++) {
+			currentValues[i] = params[0];
+		}
+		break;
 
-int myHorse(int x, int p) {
-	return 33;
+	case 1:
+
+		for (int i = 0; i < 16; i++) {
+			currentValues[i] = (float) i * (params[0]);
+		}
+		break;
+
+	default:
+		for (int i = 0; i < 16; i++) {
+			currentValues[i] = (float) i ;
+		}
+
+	}
 }
+
