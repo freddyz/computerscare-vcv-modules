@@ -30,10 +30,12 @@ SOURCES += $(wildcard src/ComputerscareSolyPequencer.cpp)
 SOURCES += $(wildcard src/ComputerscareFolyPace.cpp)
 SOURCES += $(wildcard src/ComputerscareBlank.cpp)
 SOURCES += $(wildcard src/ComputerscareStolyFickPigure.cpp)
-
+SOURCES += $(wildcard src/ComputerscareGolyPenerator.cpp)
 
 SOURCES += $(wildcard src/Computerscare.cpp)
 SOURCES += $(wildcard src/dtpulse.cpp)
+SOURCES += $(wildcard src/golyFunctions.cpp)
+
 
 # Add files to the ZIP package when running `make dist`
 # The compiled plugin is automatically added.

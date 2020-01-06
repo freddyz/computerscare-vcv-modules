@@ -79,6 +79,11 @@
 			"name":"Stoly Fick Pigure",
 			"description":"Draw a stick figure",
 			"tags":["Visual","Polyphonic"]
+		},
+		{"slug":"computerscare-goly-penerator",
+			"name":"Goly Penerator",
+			"description":"Polyphonic constant CV signal generation",
+			"tags":["Polyphonic","Utility"]
 		}
 	]
 }
