@@ -613,6 +613,33 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       }
     }
   }
+
+  void fromJson(json_t *rootJ) override
+  {
+    /*This is a deprecated method, but since I used ModuleWidget::toJson to save the custom sequences,
+    old patches have "sequences" at the root of the JSON serialization.  Module::dataFromJSON does not provide
+    the root object, just the "data" key, so this is the only way to get the sequences from patches prior to v1.2
+
+    */
+    std::string val;
+    ModuleWidget::fromJson(rootJ);
+
+    json_t *seqJLegacy = json_object_get(rootJ, "sequences");
+    if (seqJLegacy) {
+      for (int i = 0; i < numFields; i++) {
+        json_t *sequenceJ = json_array_get(seqJLegacy, i);
+        if (sequenceJ) {
+          val = json_string_value(sequenceJ);
+          laundry->currentTextFieldValue[i] = val;
+          laundry->manualSet[i] = true;
+        }
+
+      }
+      laundry->jsonLoaded = true;
+    }
+
+
+  }
   ComputerscareLaundrySoup *laundry;
 
   LaundryTF2 *textFieldTemp;
