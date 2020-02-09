@@ -23,5 +23,6 @@ void init(Plugin *p) {
 	p->addModel(modelComputerscareStolyFickPigure);
 
 	p->addModel(modelComputerscareGolyPenerator);
+	p->addModel(modelComputerscareMolyPatrix);
 	
 }

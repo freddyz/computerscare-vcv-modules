@@ -85,6 +85,11 @@
 			"name":"Goly Penerator",
 			"description":"Polyphonic constant CV signal generation",
 			"tags":["Polyphonic","Utility"]
+		},
+		{"slug":"computerscare-moly-patrix",
+			"name":"Moly Patrix",
+			"description":"Polyphonic mix matrix",
+			"tags":["Polyphonic","Utility","Mixer"]
 		}
 	]
 }

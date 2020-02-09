@@ -11,30 +11,30 @@ CXXFLAGS +=
 LDFLAGS +=
 
 # Add .cpp and .c files to the build
-#SOURCES += $(wildcard src/*.cpp)
-SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
-SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
+SOURCES += $(wildcard src/*.cpp)
+# SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
+# SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
 
 
-SOURCES += $(wildcard src/ComputerscarePatchSequencer.cpp)
-SOURCES += $(wildcard src/ComputerscareLaundrySoup.cpp)
-SOURCES += $(wildcard src/ComputerscareILoveCookies.cpp)
-SOURCES += $(wildcard src/ComputerscareDebug.cpp)
-SOURCES += $(wildcard src/ComputerscareOhPeas.cpp)
+# SOURCES += $(wildcard src/ComputerscarePatchSequencer.cpp)
+# SOURCES += $(wildcard src/ComputerscareLaundrySoup.cpp)
+# SOURCES += $(wildcard src/ComputerscareILoveCookies.cpp)
+# SOURCES += $(wildcard src/ComputerscareDebug.cpp)
+# SOURCES += $(wildcard src/ComputerscareOhPeas.cpp)
 
-SOURCES += $(wildcard src/ComputerscareKnolyPobs.cpp)
-SOURCES += $(wildcard src/ComputerscareBolyPuttons.cpp)
-SOURCES += $(wildcard src/ComputerscareRolyPouter.cpp)
-SOURCES += $(wildcard src/ComputerscareTolyPools.cpp)
-SOURCES += $(wildcard src/ComputerscareSolyPequencer.cpp)
-SOURCES += $(wildcard src/ComputerscareFolyPace.cpp)
-SOURCES += $(wildcard src/ComputerscareBlank.cpp)
-SOURCES += $(wildcard src/ComputerscareStolyFickPigure.cpp)
-SOURCES += $(wildcard src/ComputerscareGolyPenerator.cpp)
+# SOURCES += $(wildcard src/ComputerscareKnolyPobs.cpp)
+# SOURCES += $(wildcard src/ComputerscareBolyPuttons.cpp)
+# SOURCES += $(wildcard src/ComputerscareRolyPouter.cpp)
+# SOURCES += $(wildcard src/ComputerscareTolyPools.cpp)
+# SOURCES += $(wildcard src/ComputerscareSolyPequencer.cpp)
+# SOURCES += $(wildcard src/ComputerscareFolyPace.cpp)
+# SOURCES += $(wildcard src/ComputerscareBlank.cpp)
+# SOURCES += $(wildcard src/ComputerscareStolyFickPigure.cpp)
+# SOURCES += $(wildcard src/ComputerscareGolyPenerator.cpp)
 
-SOURCES += $(wildcard src/Computerscare.cpp)
-SOURCES += $(wildcard src/dtpulse.cpp)
-SOURCES += $(wildcard src/golyFunctions.cpp)
+# SOURCES += $(wildcard src/Computerscare.cpp)
+# SOURCES += $(wildcard src/dtpulse.cpp)
+# SOURCES += $(wildcard src/golyFunctions.cpp)
 
 
 # Add files to the ZIP package when running `make dist`
