@@ -12,6 +12,7 @@ struct FolyPace : Module {
 		TIME_PARAM,
 		TRIM,
 		OFFSET,
+		SCRAMBLE,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -29,21 +30,45 @@ struct FolyPace : Module {
 	int channelsX = 0;
 	int bufferIndex = 0;
 	int frameIndex = 0;
+	float lastScramble = 0;
+	int cnt=0;
+	int cmap[16];
+
+	int A = 31;
+	int B = 32; 
+	int C = 29;
+	int D = 2;
 
 	FolyPace() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 			const float timeBase = (float) BUFFER_SIZE / 6;
-
+			for(int i = 0; i < 16; i++) {
+				cmap[i]=i;
+			}
 		configParam(TIME_PARAM, 6.f, 16.f, 14.f, "Time", " ms/div", 1 / 2.f, 1000 * timeBase);
 
 		configParam(TRIM, -2.f, 2.f, 0.2f, "Input Trim");
 		configParam(OFFSET, -5.f, 5.f, 0.f, "Input Offset", " Volts");
+		configParam(SCRAMBLE, -10.f, 10.f, 0.f, "Scrambling");
+
 
 	
 	}
 
 	void onReset() override {
 		//std::memset(bufferX, 0, sizeof(bufferX));
+	}
+	void updateScramble(float v) {
+		for(int i = 0; i < 16; i++) {
+			cmap[i] = (i*A+B+(int)std::floor(v*1010.1))%16;
+		}
+	}
+	void checkScramble() {
+		float xx = params[SCRAMBLE].getValue();
+		if(lastScramble != xx) {
+			lastScramble= xx;
+			updateScramble(xx);
+		}
 	}
 
 	void process(const ProcessArgs &args) override {
@@ -59,22 +84,40 @@ struct FolyPace : Module {
 			std::memset(bufferX, 0, sizeof(bufferX));
 			this->channelsX = channelsX;
 		}
+		if(cnt > 4101) {
 
+			checkScramble();
+			cnt = 0;
+		}
+		cnt++;
 		// Add frame to buffer
 		if (bufferIndex < BUFFER_SIZE) {
 			if (++frameIndex > frameCount) {
 				frameIndex = 0;
 				float trimVal = params[TRIM].getValue();
 				float offsetVal = params[OFFSET].getValue();
+/*
 
-				if (inputs[X_INPUT].isConnected()) {
+if (inputs[X_INPUT].isConnected()) {
 					for (int c = 0; c < 16; c++) {
-						bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(std::min(c, this->channelsX)) * trimVal + offsetVal + 99 + (1071 * c) % 19;
+						bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(std::min(cmap[c], this->channelsX)) * trimVal + offsetVal + 99 + (1071 * cmap[c]) % 19;
+						//bufferX[c][bufferIndex]=inputs[X_INPUT].getVoltage(cmap[c])
 					}
 				}
 				else {
 					for (int c = 0; c < 16; c++) {
-						bufferX[c][bufferIndex] = offsetVal + 99 + (1071 * c) % 19;
+						bufferX[c][bufferIndex] = offsetVal + 99 + (1071 * cmap[c]) % 19;
+					}
+				}
+*/
+				if (inputs[X_INPUT].isConnected()) {
+					for (int c = 0; c < 16; c++) {
+						bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(std::min(cmap[c], this->channelsX)) * trimVal + offsetVal + 99 + (1071 * cmap[c]) % 19;
+					}
+				}
+				else {
+					for (int c = 0; c < 16; c++) {
+						bufferX[c][bufferIndex] = offsetVal + 99 + (1071 * cmap[c]) % 19;
 					}
 				}
 
@@ -337,6 +380,7 @@ struct FolyPaceWidget : ModuleWidget {
 		addInput(createInput<PointingUpPentagonPort>(Vec(1, 353), module, FolyPace::X_INPUT));
 		addParam(createParam<SmallKnob>(Vec(31, 357), module, FolyPace::TRIM));
 		addParam(createParam<SmoothKnob>(Vec(51, 353), module, FolyPace::OFFSET));
+		addParam(createParam<ScrambleKnob>(Vec(81, 357), module, FolyPace::SCRAMBLE));
 
 
 	}
