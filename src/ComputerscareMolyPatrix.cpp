@@ -73,7 +73,7 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     {
       ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
-      panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareKnolyPobsPanel.svg")));
+      panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareMolyPatrixPanel.svg")));
 
       //module->panelRef = panel;
 
@@ -83,7 +83,7 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     float xx;
     float yy;
     float x0 = 6;
-    float dx = 22;
+    float dx = 21.4;
     float y0 = 40;
     float dy = 21;
     for (int i = 0; i < numRows; i++) {
@@ -95,9 +95,9 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     }
 
 
-    addInput(createInput<PointingUpPentagonPort>(Vec(18, 4), module, ComputerscareMolyPatrix::POLY_INPUT));
+    addInput(createInput<PointingUpPentagonPort>(Vec(8, 10), module, ComputerscareMolyPatrix::POLY_INPUT));
 
-    addOutput(createOutput<PointingUpPentagonPort>(Vec(298, 4), module, ComputerscareMolyPatrix::POLY_OUTPUT));
+    addOutput(createOutput<InPort>(Vec(318, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
 
   }
   void addLabeledKnob(std::string label, int x, int y, ComputerscareMolyPatrix *module, int index, float labelDx, float labelDy) {
