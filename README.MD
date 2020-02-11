@@ -13,7 +13,7 @@
 - [Boly Puttons](./doc/poly-utilities.md): 16 latch buttons.  Optional A/B inputs.  Polyphonic output
 - [Roly Pouter](./doc/poly-utilities.md): Re-routes the channels of a polyphonic signal
 - [Soly Pequencer](./doc/poly-utilities.md): Sequentially outputs the individual channel voltages of a polyphonic signal
-- [Toly Pools](./doc/poly-utilities.md): Polyphonic utilities: rotate, set/get/display polyphonic channel count
+- [Toly Pools](./doc/poly-utilities.md): Rotate a polyphonic signal, set/get/display polyphonic channel count
 - [Moly Patrix](./doc/poly-utilities.md): Polyphonic matrix mixer
 
 ## Visualization
