@@ -47,3 +47,16 @@ A*(a + B*b) + C*c + d
 ~~~~
 
 **Quantized Output (quantized):** The attenuverted and offset main input signal, quantized to the desired scale.  The quantization works a bit differently than other quantizers.  Oh Peas first figures out how many steps are in the defined scale, and then equally distributes the input signal between the allowed scale notes.  This is easiest to understand by feeding a sawtooth LFO wave into the input, and noticing that the quantized output produces the scale values each with an equal amount of time.  Most quantizers seem to map the input voltage to the closest allowed scale note which makes a sawtooth wave spend more time on the notes that are farther away from their neighbors.  One implication of this is that plugging the V/Oct of a midi keyboard into Oh Peas will mean some notes on the keyboard will not be quantized to the same output note of Oh Peas!  In fact, that's why it's called "Oh Peas!"
+
+
+~~~~
+ЧxЧ-ፌፌ--   Ч  x䒜-᳹淧ፌ-   -  -淧xx-
+ ፌ᳹ 䒜ፌ   x-䒜ፌፌ  ᳹-      ᳹xx   淧 
+xx ᳹䒜  淧   -- ፌxЧ -᳹   xxx-x䒜x᳹ 
+   淧x- --ፌ᳹xx䒜䒜 䒜 䒜x Ч  -- ᳹x - 
+_==-=-=-__==-=-=-__==-=-=-__==-=-=-__==-=-=-_
+ЧxЧ-ፌፌ--   Ч  x䒜-᳹淧ፌ-   -  -淧xx-
+ ፌ᳹ 䒜ፌ   x-䒜ፌፌ  ᳹-      ᳹xx   淧 
+xx ᳹䒜  淧   -- ፌxЧ -᳹   xxx-x䒜x᳹ 
+   淧x- --ፌ᳹xx䒜䒜 䒜 䒜x Ч  -- ᳹x - 
+~~~~
