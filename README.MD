@@ -19,4 +19,4 @@
 ## Visualization
 - [Foly Pace](./doc/foly-pace.md): Draws a goofy face.  Use polyphonic input for maximum weirdness
 - [Stoly Fick Pigure](./doc/stoly-fick-pigure.md): Dancing stick figure.  Use polyphonic input for the sickest moves
-- [Custom Blank](./doc/custom-blank.mb): Resizable blank module.  Load your own image file (.png, .jpeg, .bmp)
+- [Custom Blank](./doc/custom-blank.md): Resizable blank module.  Load your own image file (.png, .jpeg, .bmp)
