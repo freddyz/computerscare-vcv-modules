@@ -86,6 +86,8 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     float dx = 21.4;
     float y0 = 40;
     float dy = 21;
+
+    addInput(createInput<PointingUpPentagonPort>(Vec(11, 14), module, ComputerscareMolyPatrix::POLY_INPUT));
     for (int i = 0; i < numRows; i++) {
       for (int j = 0; j < numColumns; j++) {
         xx = x0 + j * dx;
@@ -95,7 +97,7 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     }
 
 
-    addInput(createInput<PointingUpPentagonPort>(Vec(8, 10), module, ComputerscareMolyPatrix::POLY_INPUT));
+    
 
     addOutput(createOutput<InPort>(Vec(318, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
 
