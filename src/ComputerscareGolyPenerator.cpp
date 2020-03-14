@@ -96,6 +96,7 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		}
 		float xx;
 		float yy;
+//		    ParamWidget* stepsKnob =  createParam<LrgKnob>(Vec(108, 30), module, ComputerscarePatchSequencer::STEPS_PARAM);
 
 		addLabeledKnob("ch out",5,90,module,0,-2,0);
 		addLabeledKnob("Algo",5,140,module,1,0,0);
@@ -103,6 +104,8 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		addLabeledKnob("B",20,300,module,3,0,0);
 		addLabeledKnob("C",30,260,module,4,0,0);
 		addLabeledKnob("D",30,310,module,5,0,0);
+
+
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(18, 184), module, ComputerscareGolyPenerator::POLY_OUTPUT));
 
