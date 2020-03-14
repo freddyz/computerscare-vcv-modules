@@ -96,22 +96,22 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		}
 		float xx;
 		float yy;
-		for (int i = 0; i < 8; i++) {
-			xx = 1.4f + 24.3 * (i-i % 8)/8;
-			yy = 64 + 37.5 * (i % 8) + 14.3 * (i - i % 8)/8;
-			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i-i%8)*1.2-2, 0);
-		}
 
+		addLabeledKnob("ch out",5,90,module,0,-2,0);
+		addLabeledKnob("Algo",5,140,module,1,0,0);
+		addLabeledKnob("A",10,250,module,2,0,0);
+		addLabeledKnob("B",20,300,module,3,0,0);
+		addLabeledKnob("C",30,260,module,4,0,0);
+		addLabeledKnob("D",30,310,module,5,0,0);
 
-
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(28, 24), module, ComputerscareGolyPenerator::POLY_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(18, 184), module, ComputerscareGolyPenerator::POLY_OUTPUT));
 
 	}
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareGolyPenerator *module, int index, float labelDx, float labelDy) {
 
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
-		smallLetterDisplay->fontSize = 16;
+		smallLetterDisplay->fontSize = 21;
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
 

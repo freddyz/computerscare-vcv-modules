@@ -7,12 +7,16 @@ Goly::Goly() {
 	}
 
 }
+//[A,B,C,D]
 void Goly::invoke(int algorithm, std::vector<float> gp) {
 	switch (algorithm)
 	{
 	case 0: // code to be executed if n = 1;
+		//linear
+		//defaults:[A,B,C,D]=[1,0,1,0]
+		// A*((x-D)*C)+B
 		for (int i = 0; i < 16; i++) {
-			currentValues[i] = gp[0]+gp[1]*i/16.f+gp[2]*i*i/8.f;
+			currentValues[i] = gp[0]*((i-gp[3])*gp[2])+gp[1];
 		}
 		break;
 	case 1:
