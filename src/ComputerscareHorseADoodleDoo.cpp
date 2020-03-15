@@ -24,17 +24,22 @@ struct HorseSequencer {
 	void makeAbsolute() {
 		std::vector<int> newSeq;
 		std::vector<int> thisOct;
-		newSeq.push_back(1);
 		newSeq.resize(0);
-		DEBUG("valuu:%f", pattern);
-		for (int i = 0; i < 16; i++) {
+		/*for (int i = 0; i < 16; i++) {
 			int dex = ((int)std::floor(pattern * primes[i]) + otherPrimes[i]) % 16;
-			//DEBUG("i:dex:%i",dex);
 
 			thisOct = octets[dex];
 			//vector1.insert( vector1.end(), vector2.begin(), vector2.end() );
 			newSeq.insert(newSeq.end(), thisOct.begin(), thisOct.end());
 			//absoluteSequence.push_back(dex < 8 ? 0 : 1);
+		}*/
+		for(int i = 0; i < numSteps; i++) {
+			float val = 0.f;
+			for(int k = 0; k < 4; k++) {
+				val+=std::sin(primes[((i+1)*(k+1))%16]*pattern + otherPrimes[(otherPrimes[0]+i)%16]);
+			}
+			newSeq.push_back(val < (density-0.5)*4*2 ? 1: 0);
+			
 		}
 		printVector(newSeq);
 		absoluteSequence = newSeq;
@@ -178,7 +183,6 @@ struct ComputerscareHorseADoodleDoo : Module {
 
 		if (clocked) {
 			seqVal = seq.tickAndGet();
-			DEBUG("step after tick:%i",seq.currentStep);
 			for (int ch = 0; ch < numChannels; ch++) {
 				atFirstStepPoly[ch] =  (seq.currentStep == 0);
 			}
@@ -253,7 +257,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY), module, ComputerscareHorseADoodleDoo::TRIGGER_OUTPUT));
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY + dy), module, ComputerscareHorseADoodleDoo::EOC_OUTPUT));
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY + dy * 2), module, ComputerscareHorseADoodleDoo::REST_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY + dy * 2), module, ComputerscareHorseADoodleDoo::CV_OUTPUT));
 
 	}
 
