@@ -15,6 +15,9 @@ struct HorseSequencer {
 	std::vector<std::vector<int>> octets = {{0, 0, 0, 0}, {0, 0, 0, 1}, {0, 0, 1, 0}, {0, 0, 1, 1}, {0, 1, 0, 0}, {0, 1, 0, 1}, {0, 1, 1, 0}, {0, 1, 1, 1}, {1, 0, 0, 0}, {1, 0, 0, 1}, {1, 0, 1, 0}, {1, 0, 1, 1}, {1, 1, 0, 0}, {1, 1, 0, 1}, {1, 1, 1, 0}, {1, 1, 1, 1}};
 	std::vector<int> somethin = {1, 0, 0, 1};
 	std::vector<int> absoluteSequence;
+	std::vector<float> cvSequence;
+
+	Quantizer quant;
 	HorseSequencer(float patt, int steps, float dens) {
 		numSteps = steps;
 		density = dens;
@@ -23,8 +26,10 @@ struct HorseSequencer {
 	}
 	void makeAbsolute() {
 		std::vector<int> newSeq;
-		std::vector<int> thisOct;
+		std::vector<float> newCV;
+		
 		newSeq.resize(0);
+		newCV.resize(0);
 		/*for (int i = 0; i < 16; i++) {
 			int dex = ((int)std::floor(pattern * primes[i]) + otherPrimes[i]) % 16;
 
@@ -33,25 +38,33 @@ struct HorseSequencer {
 			newSeq.insert(newSeq.end(), thisOct.begin(), thisOct.end());
 			//absoluteSequence.push_back(dex < 8 ? 0 : 1);
 		}*/
-		for(int i = 0; i < numSteps; i++) {
+		quant = Quantizer("3223",12,0);
+
+		float cvRange = std::sin(primes[9]*pattern-otherPrimes[3]);
+		int cvRoot = std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
+
+		for (int i = 0; i < numSteps; i++) {
 			float val = 0.f;
-			for(int k = 0; k < 4; k++) {
-				val+=std::sin(primes[((i+1)*(k+1))%16]*pattern + otherPrimes[(otherPrimes[0]+i)%16]);
+			float cvVal = 0.f;
+			for (int k = 0; k < 4; k++) {
+				val += std::sin(primes[((i + 1) * (k + 1)) % 16] * pattern + otherPrimes[(otherPrimes[0] + i) % 16]);
+				cvVal+=std::sin(primes[((i + 11) * (k + 1)+201) % 16] * pattern + otherPrimes[(otherPrimes[3] + i-7) % 16]);
+				//cvVal+=i/12;
 			}
-			newSeq.push_back(val < (density-0.5)*4*2 ? 1: 0);
-			
+			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
+			newCV.push_back(quant.quantizeEven((3+cvVal)/5,0));
 		}
 		printVector(newSeq);
 		absoluteSequence = newSeq;
+		cvSequence = newCV;
 	}
-	void change(float patt,int steps,float dens) {
+	void change(float patt, int steps, float dens) {
 		numSteps = steps;
 		density = dens;
 		pattern = patt;
-		currentStep=0;
+		currentStep = 0;
+		DEBUG("changed to %f,%i,%f", pattern, numSteps, density);
 		makeAbsolute();
-		DEBUG("changed to %f,%i,%f",pattern,numSteps,density);
-		printVector(absoluteSequence);
 	}
 	void tick() {
 		currentStep++;
@@ -62,6 +75,9 @@ struct HorseSequencer {
 	}
 	int get() {
 		return absoluteSequence[currentStep];
+	}
+	float getCV() {
+		return cvSequence[currentStep];
 	}
 	int tickAndGet() {
 		tick();
@@ -98,7 +114,6 @@ struct ComputerscareHorseADoodleDoo : Module {
 	enum OutputIds {
 		TRIGGER_OUTPUT,
 		EOC_OUTPUT,
-		REST_OUTPUT,
 		CV_OUTPUT,
 		NUM_OUTPUTS
 	};
@@ -117,13 +132,16 @@ struct ComputerscareHorseADoodleDoo : Module {
 	int lastStepsKnob = 2;
 	float lastDensityKnob = 0.f;
 
-	float pendingPattern=0.f;
-	int pendingNumSteps=8;
-	float pendingDensity=0.f;
+	float pendingPattern = 0.f;
+	int pendingNumSteps = 8;
+	float pendingDensity = 0.f;
+
+
 
 	int seqVal = 0.f;
+	float cvVal = 0.f;
 
-	bool changePending=true;
+	bool changePending = true;
 
 	HorseSequencer seq = HorseSequencer(0.f, 8, 0.f);
 
@@ -133,7 +151,7 @@ struct ComputerscareHorseADoodleDoo : Module {
 
 		configParam(PATTERN_KNOB, 0.f, 10.f, 0.f, "Pattern");
 		configParam(STEPS_KNOB, 2.f, 64.f, 8.f, "Number of Steps");
-		configParam(DENSITY_KNOB, 0.f, 1.f, 0.5f, "Density","%", 0, 100);
+		configParam(DENSITY_KNOB, 0.f, 1.f, 0.5f, "Density", "%", 0, 100);
 
 		configParam(PATTERN_TRIM, -1.f, 1.f, 0.f, "Pattern CV Trim");
 		configParam(STEPS_TRIM, -1.f, 1.f, 0.f, "Steps CV Trim");
@@ -146,22 +164,22 @@ struct ComputerscareHorseADoodleDoo : Module {
 	void patternKnobChanged(float newPattern, int newNumSteps, float newDensity) {
 		//seq = HorseSequencer(pattern, numSteps, density);
 		//DEBUG("TeeHee pattern:%f,steps:%i,density:%f",newPattern,newNumSteps,newDensity);
-		pendingPattern=newPattern;
-		pendingNumSteps=newNumSteps;
-		pendingDensity=newDensity;
-		changePending=true;
+		pendingPattern = newPattern;
+		pendingNumSteps = newNumSteps;
+		pendingDensity = newDensity;
+		changePending = true;
 	}
 	void applyChange() {
 		//DEBUG("Change time");
-		seq.change(pendingPattern,fmax(2,pendingNumSteps),pendingDensity);
-		changePending=false;
+		seq.change(pendingPattern, fmax(2, pendingNumSteps), pendingDensity);
+		changePending = false;
 	}
 
 
 	void checkKnobChanges() {
-		float patternVal = params[PATTERN_KNOB].getValue() + params[PATTERN_TRIM].getValue()*inputs[PATTERN_CV].getVoltage();
-		int stepsVal = std::floor(params[STEPS_KNOB].getValue() + params[STEPS_TRIM].getValue()*inputs[STEPS_CV].getVoltage());
-		float densityVal = params[DENSITY_KNOB].getValue()+params[DENSITY_TRIM].getValue()*inputs[DENSITY_CV].getVoltage();
+		float patternVal = params[PATTERN_KNOB].getValue() + params[PATTERN_TRIM].getValue() * inputs[PATTERN_CV].getVoltage();
+		int stepsVal = std::floor(params[STEPS_KNOB].getValue() + params[STEPS_TRIM].getValue() * inputs[STEPS_CV].getVoltage());
+		float densityVal = params[DENSITY_KNOB].getValue() + params[DENSITY_TRIM].getValue() * inputs[DENSITY_CV].getVoltage() / 10;
 
 
 		if (patternVal != lastPatternKnob || stepsVal != lastStepsKnob || densityVal != lastDensityKnob) {
@@ -181,19 +199,31 @@ struct ComputerscareHorseADoodleDoo : Module {
 		bool clockInputHigh = clockInputTrigger.isHigh();
 		bool clocked = clockInputTrigger.process(inputs[CLOCK_INPUT].getVoltage());
 
+		bool reset = resetInputTrigger.process(inputs[RESET_INPUT].getVoltage());
+
 		if (clocked) {
 			seqVal = seq.tickAndGet();
+			if (seqVal) {
+				cvVal = seq.getCV();
+			}
+
 			for (int ch = 0; ch < numChannels; ch++) {
 				atFirstStepPoly[ch] =  (seq.currentStep == 0);
 			}
-			if(atFirstStepPoly[0] && changePending) {
+			if (atFirstStepPoly[0] && changePending) {
 				applyChange();
-				seqVal=seq.get();
+				seqVal = seq.get();
+				if (seqVal) {
+					cvVal = seq.getCV();
+				}
 			}
+
 		}
 		if (inputs[CLOCK_INPUT].isConnected()) {
 			for (int ch = 0; ch < numChannels; ch++) {
 				outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && seqVal == 1) ? 10.0f : 0.0f, ch);
+				//DEBUG("before output:%f",cvVal);
+				outputs[CV_OUTPUT].setVoltage(cvVal, ch);
 				//outputs[EOC_OUTPUT].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
 			}
 		}
@@ -222,7 +252,23 @@ struct ComputerscareHorseADoodleDoo : Module {
 	}
 
 };
-
+struct NumStepsOverKnobDisplay : SmallLetterDisplay
+{
+	ComputerscareHorseADoodleDoo *module;
+	NumStepsOverKnobDisplay()
+	{
+		SmallLetterDisplay();
+	};
+	void draw(const DrawArgs &args)
+	{
+		if (module)
+		{
+			std::string str = std::to_string(module->lastStepsKnob);
+			value = str;
+		}
+		SmallLetterDisplay::draw(args);
+	}
+};
 struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 	ComputerscareHorseADoodleDooWidget(ComputerscareHorseADoodleDoo *module) {
 
@@ -242,7 +288,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		addInputBlock("Pattern", 0, 100, module, 0,  ComputerscareHorseADoodleDoo::PATTERN_CV, 0);
 		addInputBlock("Length", 0, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1);
-		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV,0);
+		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0);
 
 
 
@@ -279,12 +325,22 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 			addParam(createParam<SmoothKnob>(Vec(x, y), module, knobIndex));
 		}
 		else if (knobType == 1) {
+
+			numStepsKnob = new NumStepsOverKnobDisplay();
+			numStepsKnob->box.size = Vec(20, 20);
+			numStepsKnob->box.pos = Vec(x - 2.5 , y + 1.f);
+			numStepsKnob->fontSize = 26;
+			numStepsKnob->textAlign = 18;
+			numStepsKnob->textColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+			numStepsKnob->breakRowWidth = 20;
+			numStepsKnob->module = module;
 			addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, knobIndex));
+			addChild(numStepsKnob);
 		}
 
 		//trim knob
-		addParam(createParam<SmallKnob>(Vec(x+30, y), module, knobIndex+1));
-		addInput(createInput<TinyJack>(Vec(x+40,y),module,inputIndex));
+		addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex + 1));
+		addInput(createInput<TinyJack>(Vec(x + 40, y), module, inputIndex));
 
 		smallLetterDisplay->box.pos = Vec(x, y - 12);
 
@@ -292,6 +348,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addChild(smallLetterDisplay);
 
 	}
+	NumStepsOverKnobDisplay* numStepsKnob;
 	InputBlockBackground* background;
 	SmallLetterDisplay* smallLetterDisplay;
 };
