@@ -101,6 +101,23 @@ struct BGPanel : Widget {
 	}
 };
 
+
+struct InputBlockBackground : TransparentWidget {
+	InputBlockBackground() {
+
+	}
+	void draw(const DrawArgs &args) override {
+		nvgBeginPath(args.vg);
+		nvgRect(args.vg, box.pos.x, box.pos.y, box.size.x, box.size.y);
+		nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_BLUE);
+		nvgStrokeWidth(args.vg,2.5);
+		nvgFillColor(args.vg, COLOR_COMPUTERSCARE_LIGHT_GREEN);
+		nvgFill(args.vg);
+		Widget::draw(args);
+	}
+};
+
+
 struct IsoButton : SvgSwitch {
 	IsoButton() {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-down.svg")));
@@ -251,6 +268,13 @@ struct OutPort : ComputerscareSvgPort {
 	}
 };
 
+struct TinyJack : ComputerscareSvgPort {
+	TinyJack() {
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/tiny-jack.svg")));
+		//background->wrap();
+	}
+};
+
 struct PointingUpPentagonPort : ComputerscareSvgPort {
 	PointingUpPentagonPort() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-pointing-up.svg")));
@@ -335,7 +359,7 @@ struct ComputerscareTextField : ui::TextField {
 	NVGcolor color = COLOR_COMPUTERSCARE_LIGHT_GREEN;
 	int fontSize = 16;
 	bool inError = false;
-	int textColorState=0;
+	int textColorState = 0;
 	ComputerscareTextField() {
 
 		font = APP->window->loadFont(asset::system("res/fonts/ShareTechMono-Regular.ttf"));
