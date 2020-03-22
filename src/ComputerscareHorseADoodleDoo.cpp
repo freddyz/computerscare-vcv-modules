@@ -41,7 +41,7 @@ struct HorseSequencer {
 		quant = Quantizer("3223",12,0);
 
 		float cvRange = std::sin(primes[9]*pattern-otherPrimes[3]);
-		int cvRoot = std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
+		int cvRoot = 0;//std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
 
 		for (int i = 0; i < numSteps; i++) {
 			float val = 0.f;
@@ -52,7 +52,7 @@ struct HorseSequencer {
 				//cvVal+=i/12;
 			}
 			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
-			newCV.push_back(quant.quantizeEven((3+cvVal)/5,0));
+			newCV.push_back(cvRoot+(cvVal+4)/.8);
 		}
 		printVector(newSeq);
 		absoluteSequence = newSeq;
@@ -269,6 +269,39 @@ struct NumStepsOverKnobDisplay : SmallLetterDisplay
 		SmallLetterDisplay::draw(args);
 	}
 };
+
+struct HorseDisplay : TransparentWidget {
+	ComputerscareHorseADoodleDoo *module;
+
+	HorseDisplay() {
+	}
+
+	void drawHorse(const DrawArgs &args, float x=0.f) {
+
+		float dy=380/(float)(module->seq.numSteps);
+		for(int i = 0; i<module->seq.numSteps; i++) {
+			nvgBeginPath(args.vg);
+			nvgRect(args.vg, 0.0,i*dy, 10.f, dy);
+			nvgFillColor(args.vg, module->seq.absoluteSequence[i] ==1 ? COLOR_COMPUTERSCARE_RED : COLOR_COMPUTERSCARE_TRANSPARENT);
+			nvgFill(args.vg);
+			if(i==module->seq.currentStep) {
+				nvgStrokeWidth(args.vg,3.f);
+				nvgStrokeColor(args.vg,COLOR_COMPUTERSCARE_BLUE );
+				nvgStroke(args.vg);
+			}
+			
+		}
+	}
+
+	void draw(const DrawArgs &args) override {
+		if (!module) {
+			//drawHorse(args, 3);
+		}
+		else {
+			drawHorse(args, 3);
+		}
+	}
+};
 struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 	ComputerscareHorseADoodleDooWidget(ComputerscareHorseADoodleDoo *module) {
 
@@ -290,7 +323,10 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addInputBlock("Length", 0, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1);
 		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0);
 
+		horseDisplay = new HorseDisplay();
+		horseDisplay->module=module;
 
+		addChild(horseDisplay);
 
 		int outputY = 254;
 		int dy = 30;
@@ -348,6 +384,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addChild(smallLetterDisplay);
 
 	}
+	HorseDisplay* horseDisplay;
 	NumStepsOverKnobDisplay* numStepsKnob;
 	InputBlockBackground* background;
 	SmallLetterDisplay* smallLetterDisplay;
