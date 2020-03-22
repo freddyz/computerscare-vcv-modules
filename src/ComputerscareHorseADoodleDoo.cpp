@@ -201,7 +201,22 @@ struct ComputerscareHorseADoodleDoo : Module {
 
 		bool reset = resetInputTrigger.process(inputs[RESET_INPUT].getVoltage());
 
-		if (clocked) {
+		if(reset) {
+			if(changePending) {
+				applyChange();
+			}
+			seq.reset();
+			seqVal=seq.get();
+			if(seqVal) {
+				cvVal=seq.getCV();
+			}
+			for (int ch = 0; ch < numChannels; ch++) {
+				atFirstStepPoly[ch] =  true;
+			}
+
+		}
+
+		if (clocked && !reset) {
 			seqVal = seq.tickAndGet();
 			if (seqVal) {
 				cvVal = seq.getCV();
@@ -257,6 +272,7 @@ struct NumStepsOverKnobDisplay : SmallLetterDisplay
 	ComputerscareHorseADoodleDoo *module;
 	NumStepsOverKnobDisplay()
 	{
+		letterSpacing=1.f;
 		SmallLetterDisplay();
 	};
 	void draw(const DrawArgs &args)
@@ -281,7 +297,7 @@ struct HorseDisplay : TransparentWidget {
 		float dy=380/(float)(module->seq.numSteps);
 		for(int i = 0; i<module->seq.numSteps; i++) {
 			nvgBeginPath(args.vg);
-			nvgRect(args.vg, 0.0,i*dy, 10.f, dy);
+			nvgRect(args.vg, 60,i*dy, 15.f, dy);
 			nvgFillColor(args.vg, module->seq.absoluteSequence[i] ==1 ? COLOR_COMPUTERSCARE_RED : COLOR_COMPUTERSCARE_TRANSPARENT);
 			nvgFill(args.vg);
 			if(i==module->seq.currentStep) {
@@ -307,7 +323,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		setModule(module);
 		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareHorseADoodleDooPanel.svg")));
-		box.size = Vec(4 * 15, 380);
+		box.size = Vec(5 * 15, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
