@@ -68,20 +68,34 @@ struct ComputerscareILoveCookies : Module {
   AbsoluteSequence newABSQueue[numFields];
 
   std::string currentFormula[numFields];
+  std::string currentTextFieldValue[numFields];
+
+  std::string upcomingFormula[numFields];
   std::string lastValue[numFields];
 
 
-  bool manualSet[numFields] = {false};
+  bool manualSet[numFields];
+  bool inError[numFields];
   bool shouldChange[numFields] = {false};
   bool changeImminent[numFields] = {false};
 
   int activeKnobIndex[numFields] = {0};
+
+  int knobRangeEnum = 0;
+
+  int checkCounter = 0;
+  int checkCounterLimit = 10000;
+
+  bool jsonLoaded = false;
 
   std::vector<ParamWidget*> smallLetterKnobs;
 
   ComputerscareILoveCookies() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     for (int i = 0; i < numFields; i++) {
+      manualSet[i] = false;
+      inError[i] = false;
+
       currentFormula[i] = "";
       lastValue[i] = "";
       setNextAbsoluteSequence(i);
@@ -89,8 +103,73 @@ struct ComputerscareILoveCookies : Module {
       resetOneOfThem(i);
     }
     for (int k = 0; k < numKnobs; k++) {
-      configParam( KNOB_PARAM + k, 0.f, 10.f, 0.0f, string::f("knob %c",knoblookup[k]), " volts");
+      configParam( KNOB_PARAM + k, 0.f, 10.f, 0.0f, string::f("knob %c", knoblookup[k]));
     }
+  }
+  json_t *dataToJson() override {
+    json_t *rootJ = json_object();
+
+    json_t *sequencesJ = json_array();
+    json_t *knobRangeJ = json_integer(knobRangeEnum);
+
+    for (int i = 0; i < numFields; i++) {
+      json_t *sequenceJ = json_string(currentTextFieldValue[i].c_str());
+      json_array_append_new(sequencesJ, sequenceJ);
+
+
+    }
+    json_object_set_new(rootJ, "sequences", sequencesJ);
+    json_object_set_new(rootJ, "knobRange", knobRangeJ);
+
+    return rootJ;
+  }
+
+  void dataFromJson(json_t *rootJ) override {
+    std::string val;
+    int count;
+    json_t *sequencesJ = json_object_get(rootJ, "sequences");
+    if (sequencesJ) {
+      for (int i = 0; i < numFields; i++) {
+
+        json_t *sequenceJ = json_array_get(sequencesJ, i);
+        if (sequenceJ) {
+          val = json_string_value(sequenceJ);
+
+          // currentFormula[i] = val;
+          //currentTextFieldValue[i] = val;
+          currentTextFieldValue[i] = val;
+
+          manualSet[i] = true;
+        }
+      }
+      jsonLoaded = true;
+    }
+    else {
+      json_t *textJLegacy = json_object_get(rootJ, "data");
+      if (textJLegacy) {
+        json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
+
+        if (seqJLegacy) {
+          for (int i = 0; i < numFields; i++) {
+            json_t *sequenceJ = json_array_get(seqJLegacy, i);
+            if (sequenceJ)
+              val = json_string_value(sequenceJ);
+            // currentFormula[i] = val;
+            //lastValue[i] = val;
+            currentTextFieldValue[i] = val;
+            //upcomingFormula[i]=val;
+            manualSet[i] = true;
+
+          }
+        }
+      }
+    }
+    json_t *knobRangeJ = json_object_get(rootJ, "knobRange");
+    if (knobRangeJ) {
+      knobRangeEnum = json_integer_value(knobRangeJ);
+    }
+
+
   }
   void process(const ProcessArgs &args) override;
 
@@ -110,37 +189,46 @@ struct ComputerscareILoveCookies : Module {
       }
     }
   }
-  void randomizeTextFields() {
+  std::string randomCookieFormula() {
     std::string mainlookup = knoblookup;
     std::string str = "";
     std::string randchar = "";
 
     float ru;
     int length = 0;
-    for (int i = 0; i < numFields; i++) {
-
-      length = floor(random::uniform() * 12) + 2;
-      str = "";
-      for (int j = 0; j < length; j++) {
-        randchar = mainlookup[floor(random::uniform() * mainlookup.size())];
-        str = str + randchar;
-        ru = random::uniform();
-        if (ru < 0.1) {
-          str = "(" + str + ")";
-        }
+    length = floor(random::uniform() * 12) + 2;
+    str = "";
+    for (int j = 0; j < length; j++) {
+      randchar = mainlookup[floor(random::uniform() * mainlookup.size())];
+      str = str + randchar;
+      ru = random::uniform();
+      if (ru < 0.1) {
+        str = "(" + str + ")";
       }
-      currentFormula[i] = str;
-      manualSet[i] = true;
+    }
+    return str;
+  }
 
-      setNextAbsoluteSequence(i);
+  void randomizeAllFields() {
+    for (int i = 0; i < numFields; i++) {
+      randomizeAField(i);
     }
   }
+
+  void randomizeAField(int i) {
+    currentTextFieldValue[i] = randomCookieFormula();
+    manualSet[i] = true;
+    setNextAbsoluteSequence(i);
+
+
+  }
   void setNextAbsoluteSequence(int index) {
-    newABSQueue[index] = AbsoluteSequence(currentFormula[index], knobandinputlookup);
+    newABSQueue[index] = AbsoluteSequence(upcomingFormula[index], knobandinputlookup);
     shouldChange[index] = true;
   }
   void setAbsoluteSequenceFromQueue(int index) {
     newABS[index] = newABSQueue[index];
+    currentFormula[index] = upcomingFormula[index];
     newABS[index].incrementAndCheck();
   }
   void checkIfShouldChange(int index) {
@@ -177,34 +265,45 @@ struct ComputerscareILoveCookies : Module {
   }
   float mapKnobValue(float rawValue, int rowIndex) {
     // raw value is between 0 and +10
-    /*
-    0:  -10,10
-    1:  -5,5
-    2:  0,10
-    3:  0,5
-    4:  0,1
-    5: -1,1
-    6: 0,2
-    7: 0,3
-    8: -2,2
-    */
+
     float mappedValue = 0.f;
-    int mapEnum = 2;
+    int mapEnum = knobRangeEnum;
     switch (mapEnum) {
-    case 0: mappedValue = mapValue(rawValue, -5.f, 2.f); break;
-    case 1: mappedValue = mapValue(rawValue, -5.f, 1.f); break;
-    case 2: mappedValue = rawValue; break;
-    case 3: mappedValue = mapValue(rawValue, 0.f, 0.5); break;
-    case 4: mappedValue = mapValue(rawValue, 0.f, 0.1); break;
-    case 5: mappedValue = mapValue(rawValue, -5, 0.2); break;
-    case 6: mappedValue = mapValue(rawValue, 0.f, 0.2); break;
-    case 7: mappedValue = mapValue(rawValue, 0.f, 1 / 3); break;
-    case 8: mappedValue = mapValue(rawValue, -5.f, 0.4); break;
+    case 0: mappedValue = rawValue; break;//0..10
+    case 1: mappedValue = mapValue(rawValue, 0.f, 0.5); break;//0..5
+    case 2: mappedValue = mapValue(rawValue, 0.f, 0.2); break;//0..2
+    case 3: mappedValue = mapValue(rawValue, 0.f, 0.1); break;//0..1
+
+
+    case 4: mappedValue = mapValue(rawValue, -5, 2.f); break;//-10..10
+    case 5: mappedValue = mapValue(rawValue, -5, 1.f); break;//-5..5
+
+    case 6: mappedValue = mapValue(rawValue, -5, 0.4); break;//-2..2
+
+    case 7: mappedValue = mapValue(rawValue, -5, 0.2); break;//-1..1
     }
     return mappedValue;
   }
   float mapValue(float input, float offset, float multiplier) {
     return (input + offset) * multiplier;
+  }
+  void checkTextField(int channel) {
+    std::string textFieldValue = currentTextFieldValue[channel];
+
+    if (textFieldValue != currentFormula[channel] && textFieldValue != upcomingFormula[channel]) {
+
+      AbsoluteSequence pendingSequence = AbsoluteSequence(textFieldValue, knobandinputlookup);
+      if (!pendingSequence.inError && matchParens(textFieldValue)) {
+        upcomingFormula[channel] = textFieldValue;
+        setNextAbsoluteSequence(channel);
+        inError[channel] = false;
+      }
+      else {
+        DEBUG("Channel %i in error", channel);
+        inError[channel] = true;
+      }
+    }
+
   }
 
 };
@@ -226,6 +325,28 @@ void ComputerscareILoveCookies::process(const ProcessArgs &args) {
   bool currentResetTriggered;
   bool currentManualResetClicked;
   float knobRawValue = 0.f;
+
+  if (checkCounter > checkCounterLimit) {
+    if (!jsonLoaded) {
+      for (int i = 0; i < numFields; i++) {
+        //currentTextFieldValue[i] = i < numFields - 1 ? std::to_string(i + 1) : "abcd";
+        manualSet[i] = true;
+      }
+      for (int i = 0; i < numFields; i++) {
+        checkTextField(i);
+        checkIfShouldChange(i);
+      }
+      jsonLoaded = true;
+    }
+    else {
+      for (int i = 0; i < numFields; i++) {
+        checkTextField(i);
+      }
+    }
+    checkCounter = 0;
+  }
+  checkCounter++;
+
   for (int i = 0; i < numFields; i++) {
     activeStep = false;
     currentResetActive = inputs[RESET_INPUT + i].isConnected();
@@ -308,8 +429,19 @@ struct RandomizeTextFieldsMenuItem : MenuItem {
   ComputerscareILoveCookies *cookies;
   void onAction(const event::Action &e) override {
     srand(time(0));
-    cookies->randomizeTextFields();
+    cookies->randomizeAllFields();
 
+  }
+};
+struct CookiesKnobRangeItem : MenuItem {
+  ComputerscareILoveCookies *cookies;
+  int knobRangeEnum;
+  void onAction(const event::Action &e) override {
+    cookies->knobRangeEnum = knobRangeEnum;
+  }
+  void step() override {
+    rightText = CHECKMARK(cookies->knobRangeEnum == knobRangeEnum);
+    MenuItem::step();
   }
 };
 struct CookiesTF2 : ComputerscareTextField
@@ -328,26 +460,12 @@ struct CookiesTF2 : ComputerscareTextField
     if (module)
     {
       if (module->manualSet[rowIndex]) {
-        text = module->currentFormula[rowIndex];
+        text = module->currentTextFieldValue[rowIndex];
         module->manualSet[rowIndex] = false;
       }
       std::string value = text.c_str();
-      if (value != module->lastValue[rowIndex])
-      {
-        //LaundrySoupSequence lss = LaundrySoupSequence(value);
-
-        module->lastValue[rowIndex] = value;
-        AbsoluteSequence abs = AbsoluteSequence(value, knobandinputlookup);
-        if ((!abs.inError) && matchParens(value)) {
-          module->currentFormula[rowIndex] = value;
-          inError = false;
-          module->setNextAbsoluteSequence(this->rowIndex);
-        }
-        else {
-          inError = true;
-        }
-
-      }
+      module->currentTextFieldValue[rowIndex] = value;
+      inError = module->inError[rowIndex];
     }
     else {
       text = "we,love{}@9,cook(ies)";
@@ -534,34 +652,24 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
     }
     cookies = module;
   }
-  json_t *toJson() override
-  {
-    json_t *rootJ = ModuleWidget::toJson();
 
-    json_t *sequencesJ = json_array();
-    for (int i = 0; i < numFields; i++) {
-      json_t *sequenceJ = json_string(cookiesTextFields[i]->text.c_str());
-      json_array_append_new(sequencesJ, sequenceJ);
-    }
-    json_object_set_new(rootJ, "sequences", sequencesJ);
-
-    return rootJ;
-  }
 
   void fromJson(json_t *rootJ) override
   { std::string val;
     ModuleWidget::fromJson(rootJ);
-    json_t *sequencesJ = json_object_get(rootJ, "sequences");
+    json_t *sequencesJ = json_object_get(rootJ, "sequences");//legacy
     if (sequencesJ) {
       for (int i = 0; i < numFields; i++) {
         json_t *sequenceJ = json_array_get(sequencesJ, i);
-        if (sequenceJ)
+        if (sequenceJ) {
           val = json_string_value(sequenceJ);
-        cookiesTextFields[i]->text = val;
-        cookies->currentFormula[i] = val;
+          cookies->currentTextFieldValue[i] = val;
+          cookies->manualSet[i] = true;
+        }
       }
+      cookies->jsonLoaded = true;
     }
-    else {
+    /*else {
       json_t *textJLegacy = json_object_get(rootJ, "data");
       if (textJLegacy) {
         json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
@@ -576,8 +684,9 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
           }
         }
       }
-    }
+    }*/
   }
+
 
   ComputerscareILoveCookies *cookies;
 
@@ -618,5 +727,23 @@ void ComputerscareILoveCookiesWidget::appendContextMenu(Menu *menu) {
   randomizeTextFieldsMenuItem->cookies = cookiesModule;
   menu->addChild(randomizeTextFieldsMenuItem);
 
+
+  menu->addChild(construct<MenuLabel>());
+  menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Knob Range"));
+  menu->addChild(construct<CookiesKnobRangeItem>(&MenuItem::text, "  0v ... +10v", &CookiesKnobRangeItem::cookies, cookiesModule, &CookiesKnobRangeItem::knobRangeEnum, 0));
+  menu->addChild(construct<CookiesKnobRangeItem>(&MenuItem::text, "  0v ...  +5v", &CookiesKnobRangeItem::cookies, cookiesModule, &CookiesKnobRangeItem::knobRangeEnum, 1));
+  menu->addChild(construct<CookiesKnobRangeItem>(&MenuItem::text, "  0v ...  +2v", &CookiesKnobRangeItem::cookies, cookiesModule, &CookiesKnobRangeItem::knobRangeEnum, 2));
+  menu->addChild(construct<CookiesKnobRangeItem>(&MenuItem::text, "  0v ...  +1v", &CookiesKnobRangeItem::cookies, cookiesModule, &CookiesKnobRangeItem::knobRangeEnum, 3));
+  menu->addChild(construct<CookiesKnobRangeItem>(&MenuItem::text, "-10v ... +10v", &CookiesKnobRangeItem::cookies, cookiesModule, &CookiesKnobRangeItem::knobRangeEnum, 4));
+  menu->addChild(construct<CookiesKnobRangeItem>(&MenuItem::text, " -5v ...  +5v", &CookiesKnobRangeItem::cookies, cookiesModule, &CookiesKnobRangeItem::knobRangeEnum, 5));
+  menu->addChild(construct<CookiesKnobRangeItem>(&MenuItem::text, " -2v ...  +2v", &CookiesKnobRangeItem::cookies, cookiesModule, &CookiesKnobRangeItem::knobRangeEnum, 6));
+  menu->addChild(construct<CookiesKnobRangeItem>(&MenuItem::text, " -1v ...  +1v", &CookiesKnobRangeItem::cookies, cookiesModule, &CookiesKnobRangeItem::knobRangeEnum, 7));
+
 };
+
+
+
+
+
+
 Model *modelComputerscareILoveCookies = createModel<ComputerscareILoveCookies, ComputerscareILoveCookiesWidget>("computerscare-i-love-cookies");
