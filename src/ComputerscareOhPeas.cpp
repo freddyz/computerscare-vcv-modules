@@ -12,91 +12,9 @@ struct ComputerscareOhPeas;
 
 const int numChannels = 4;
 
-struct PeasTextField;
 struct ComputerscareOhPeas;
 
-struct PeasTextField : LedDisplayTextField
-{
-    std::shared_ptr<Font> font;
-    math::Vec textOffset;
-    NVGcolor color;
-    int fontSize = 16;
-    int rowIndex = 0;
-    bool inError = false;
-    ComputerscareOhPeas *module;
-    PeasTextField();
-    //void draw(const DrawArgs &args) override;
-    //int getTextPosition(math::Vec mousePos) ;
 
-
-    void setModule(ComputerscareOhPeas *_module)
-    {
-        module = _module;
-    }
-    void onEnter(const event::Enter &e) override;
-
-    /*int getTextPosition(Vec mousePos) override {
-      bndSetFont(font->handle);
-      int textPos = bndIconLabelTextPosition(gVg, textOffset.x, textOffset.y,
-        box.size.x - 2*textOffset.x, box.size.y - 2*textOffset.y,
-        -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
-      bndSetFont(gGuiFont->handle);
-      return textPos;
-    }*/
-    int getTextPosition(math::Vec mousePos) override
-    {
-        bndSetFont(font->handle);
-        int textPos = bndIconLabelTextPosition(APP->window->vg, textOffset.x, textOffset.y,
-                                               box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
-                                               -1, 12, text.c_str(), mousePos.x, mousePos.y);
-        bndSetFont(APP->window->uiFont->handle);
-        return textPos;
-    }
-    void draw(const DrawArgs &args) override
-    {
-        if (module)
-        {
-            nvgScissor(args.vg, 0, 0, box.size.x, box.size.y);
-
-            // Background
-            nvgFontSize(args.vg, fontSize);
-            nvgBeginPath(args.vg);
-            nvgRoundedRect(args.vg, 0, 0, box.size.x, box.size.y, 10.0);
-
-            if (inError)
-            {
-                nvgFillColor(args.vg, COLOR_COMPUTERSCARE_PINK);
-            }
-            else
-            {
-                nvgFillColor(args.vg, nvgRGB(0x00, 0x00, 0x00));
-            }
-            nvgFill(args.vg);
-
-            // Text
-            if (font->handle >= 0)
-            {
-                bndSetFont(font->handle);
-
-                NVGcolor highlightColor = color;
-                highlightColor.a = 0.5;
-                int begin = fmin(cursor, selection);
-                // int end = (this == gFocusedWidget) ? fmax(cursor, selection) : -1;
-
-                int end = fmax(cursor, selection);
-                //bndTextField(args.vg,textOffset.x,textOffset.y+2, box.size.x, box.size.y, -1, 0, 0, const char *text, int cbegin, int cend);
-                bndIconLabelCaret(args.vg, textOffset.x, textOffset.y - 3,
-                                  box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
-                                  -1, color, fontSize, text.c_str(), highlightColor, begin, end);
-
-                bndSetFont(font->handle);
-            }
-
-            nvgResetScissor(args.vg);
-        };
-
-    }
-};
 
 
 struct ComputerscareOhPeas : Module
@@ -136,13 +54,18 @@ struct ComputerscareOhPeas : Module
     int numDivisions = 12;
     int globalTranspose = 0;
     bool evenQuantizeMode = true;
+    bool manualSet=false;
+
+    int checkCounter=9999;
+    int checkPeriod=1000;
     std::string currentFormula = "221222";
+    std::string lastFormula="52";
+
+
     std::string numDivisionsString = "";
     SmallLetterDisplay *numDivisionsDisplay;
     SmallLetterDisplay *globalTransposeDisplay;
 
-    PeasTextField *textField;
-    // this one throws an error I think
     Quantizer quant;
 
     ComputerscareOhPeas()
@@ -160,28 +83,56 @@ struct ComputerscareOhPeas : Module
 
         }
 
-        quant = Quantizer(currentFormula, 12, 0);
+        //quant = Quantizer(currentFormula, 12, 0);
 
     }
     void process(const ProcessArgs &args) override;
 
+    json_t *dataToJson() override {
+        json_t *rootJ = json_object();
+
+        json_t *sequenceJ = json_string(currentFormula.c_str());
+
+        json_object_set_new(rootJ, "sequences", sequenceJ);
+
+        return rootJ;
+    }
+
+    void dataFromJson(json_t *rootJ) override {
+        std::string val;
+        json_t *textJ = json_object_get(rootJ, "sequences");
+        if (textJ) {
+            currentFormula = json_string_value(textJ);
+            manualSet=true;
+        }
+
+    }
 
     void setQuant()
     {
         this->quant = Quantizer(this->currentFormula.c_str(), this->numDivisions, this->globalTranspose);
+    }
+    void checkForChange() {
+        if(lastFormula != currentFormula) {
+            setQuant();
+        }
+        lastFormula=currentFormula;
     }
     // For more advanced Module features, read Rack's engine.hpp header file
     // - toJson, fromJson: serialization of internal data
     // - onSampleRateChange: event triggered by a change of sample rate
     // - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
 };
-void PeasTextField::onEnter(const event::Enter &e)
-{
-    module->setQuant();
-}
+
 
 void ComputerscareOhPeas::process(const ProcessArgs &args)
 {
+    if(checkCounter > checkPeriod) {
+        checkForChange();
+        checkCounter=0;
+    }
+    checkCounter++;
+
     float A, B, C, D, Q, a, b, c, d;
 
     int numDivisionsKnobValue = floor(params[NUM_DIVISIONS].getValue());
@@ -213,7 +164,7 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
             numOffsetCVChannels = inputs[OFFSET_CV + i].getChannels();
             outputs[SCALED_OUTPUT + i].setChannels(numInputChannels);
             outputs[QUANTIZED_OUTPUT + i].setChannels(numInputChannels);
-            for (int ch = 0; ch < std::max(numInputChannels,1); ch++) {
+            for (int ch = 0; ch < std::max(numInputChannels, 1); ch++) {
 
 
                 a = params[SCALE_VAL + i].getValue();
@@ -272,10 +223,14 @@ struct PeasTF2 : ComputerscareTextField
     {
         if (module)
         {
+            if(module->manualSet) {
+                text=module->currentFormula;
+                printf("manualSet to %s\n",text.c_str());
+                module->manualSet=false;
+            }
             if (text.c_str() != module->currentFormula)
             {
                 module->currentFormula = text.c_str();
-                module->setQuant();
             }
         }
         ComputerscareTextField::draw(args);
@@ -329,9 +284,7 @@ void quantizationModeMenuItemAdd(ComputerscareOhPeas *peas, Menu *menu, bool eve
 struct ComputerscareOhPeasWidget : ModuleWidget
 {
     float randAmt = 0.f;
-    //PeasTextField* textFieldTemp;
 
-    //TextField *textFieldTemp;
     ComputerscareOhPeasWidget(ComputerscareOhPeas *module)
     {
         setModule(module);
@@ -362,7 +315,6 @@ struct ComputerscareOhPeasWidget : ModuleWidget
         textFieldTemp->box.size = mm2px(Vec(44, 7));
         textFieldTemp->multiline = false;
         textFieldTemp->color = nvgRGB(0xC0, 0xE7, 0xDE);
-        textFieldTemp->text = "221222";
         addChild(textFieldTemp);
 
         ndd = new PeasSmallDisplay(1);
@@ -408,15 +360,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget
             addOutput(createOutput<InPort>(mm2px(Vec(xx + 1, y + 108)),  module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
 
         }
-    }
-    json_t *toJson() override
-    {
-        json_t *rootJ = ModuleWidget::toJson();
-
-        // text
-        json_object_set_new(rootJ, "sequences", json_string(textFieldTemp->text.c_str()));
-
-        return rootJ;
+        peas=module;
     }
 
     void fromJson(json_t *rootJ) override
@@ -424,29 +368,18 @@ struct ComputerscareOhPeasWidget : ModuleWidget
         std::string val;
         ModuleWidget::fromJson(rootJ);
 
-        // text
+        // legacy
 
         json_t *textJ = json_object_get(rootJ, "sequences");
-        if (textJ)
-            textFieldTemp->text = json_string_value(textJ);
-        
-        json_t *textJLegacy = json_object_get(rootJ, "data");
-        if (textJLegacy) {
-            json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
-
-            if (seqJLegacy) {
-                json_t *theSequence = json_array_get(seqJLegacy, 0);
-                if (theSequence) {
-                    val = json_string_value(theSequence);
-                    printf("yep there is json from Rack 0.6 %s\n", val.c_str());
-                    textFieldTemp->text = val;
-                    
-                }
-            }
+        if (textJ) {
+            DEBUG("we got legacy");
+            //textFieldTemp->text = json_string_value(textJ);
+            peas->currentFormula=json_string_value(textJ);
+            peas->manualSet=true;
         }
     }
 
-
+    ComputerscareOhPeas *peas;
     PeasTF2 *textFieldTemp;
     SmallLetterDisplay *trimPlusMinus;
     PeasSmallDisplay *ndd;
