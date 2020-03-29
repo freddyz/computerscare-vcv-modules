@@ -209,7 +209,6 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 	void fromJson(json_t *rootJ) override
 	{
 		ModuleWidget::fromJson(rootJ);
-		// button states
 		bolyPuttons->legacyJSON(rootJ);
 
 	}

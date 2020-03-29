@@ -324,7 +324,9 @@ void ComputerscareILoveCookies::process(const ProcessArgs &args) {
   bool currentResetActive;
   bool currentResetTriggered;
   bool currentManualResetClicked;
+  bool outputConnected;
   float knobRawValue = 0.f;
+  float inV[16] = {10.f};
 
   if (checkCounter > checkCounterLimit) {
     if (!jsonLoaded) {
@@ -350,6 +352,8 @@ void ComputerscareILoveCookies::process(const ProcessArgs &args) {
   for (int i = 0; i < numFields; i++) {
     activeStep = false;
     currentResetActive = inputs[RESET_INPUT + i].isConnected();
+    outputConnected=outputs[TRG_OUTPUT+i].isConnected();
+
     currentResetTriggered = resetTriggers[i].process(inputs[RESET_INPUT + i].getVoltage() / 2.f);
     currentManualResetClicked = manualResetTriggers[i].process(params[INDIVIDUAL_RESET_PARAM + i].getValue());
 
@@ -389,25 +393,33 @@ void ComputerscareILoveCookies::process(const ProcessArgs &args) {
         }
       }
     }
-    if (activeKnobIndex[i] < 0) {
-      outputs[TRG_OUTPUT + i].setVoltage(0.f);
-    }
-    else if (activeKnobIndex[i] < 26) {
-      knobRawValue = params[activeKnobIndex[i]].getValue();
-      outputs[TRG_OUTPUT + i].setVoltage(mapKnobValue(knobRawValue, i));
-    }
-    else if (activeKnobIndex[i] < 52) {
-      knobRawValue = inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].getVoltage();
-      outputs[TRG_OUTPUT + i].setVoltage(knobRawValue);
-    }
-    else if (activeKnobIndex[i] < 78) {
-      outputs[TRG_OUTPUT + i].setVoltage(newABS[i].exactFloats[activeKnobIndex[i] - 52]);
-    }
-    else if (activeKnobIndex[i] < 104) {
-      outputs[TRG_OUTPUT + i].setVoltage(2.22);
-    }
-    else {
-      outputs[TRG_OUTPUT + i].setVoltage(0.f);
+    if(outputConnected) {
+      if (activeKnobIndex[i] < 0) {
+        outputs[TRG_OUTPUT+i].setChannels(1);
+        outputs[TRG_OUTPUT + i].setVoltage(0.f);
+      }
+      else if (activeKnobIndex[i] < 26) {
+        outputs[TRG_OUTPUT+i].setChannels(1);
+        knobRawValue = params[activeKnobIndex[i]].getValue();
+        outputs[TRG_OUTPUT + i].setVoltage(mapKnobValue(knobRawValue, i));
+      }
+      else if (activeKnobIndex[i] < 52) {
+        outputs[TRG_OUTPUT+i].setChannels(inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].getChannels());
+        inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].readVoltages(inV);
+        outputs[TRG_OUTPUT + i].writeVoltages(inV);
+      }
+      else if (activeKnobIndex[i] < 78) {
+        outputs[TRG_OUTPUT+i].setChannels(1);
+        outputs[TRG_OUTPUT + i].setVoltage(newABS[i].exactFloats[activeKnobIndex[i] - 52]);
+      }
+      else if (activeKnobIndex[i] < 104) {
+        outputs[TRG_OUTPUT+i].setChannels(1);
+        outputs[TRG_OUTPUT + i].setVoltage(2.22);
+      }
+      else {
+        outputs[TRG_OUTPUT+i].setChannels(1);
+        outputs[TRG_OUTPUT + i].setVoltage(0.f);
+      }
     }
     if (inputs[CLOCK_INPUT + i].isConnected()) {
       outputs[FIRST_STEP_OUTPUT + i].setVoltage((currentTriggerIsHigh && atFirstStep) ? 10.f : 0.0f);
