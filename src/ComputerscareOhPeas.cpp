@@ -83,8 +83,6 @@ struct ComputerscareOhPeas : Module
 
         }
 
-        //quant = Quantizer(currentFormula, 12, 0);
-
     }
     void process(const ProcessArgs &args) override;
 
@@ -232,6 +230,9 @@ struct PeasTF2 : ComputerscareTextField
             {
                 module->currentFormula = text.c_str();
             }
+        }
+        else {
+            text="2212221";
         }
         ComputerscareTextField::draw(args);
     }
