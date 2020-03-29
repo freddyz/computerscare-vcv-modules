@@ -17,7 +17,6 @@ struct HorseSequencer {
 	std::vector<int> absoluteSequence;
 	std::vector<float> cvSequence;
 
-	Quantizer quant;
 	HorseSequencer(float patt, int steps, float dens) {
 		numSteps = steps;
 		density = dens;
@@ -27,7 +26,7 @@ struct HorseSequencer {
 	void makeAbsolute() {
 		std::vector<int> newSeq;
 		std::vector<float> newCV;
-		
+
 		newSeq.resize(0);
 		newCV.resize(0);
 		/*for (int i = 0; i < 16; i++) {
@@ -38,9 +37,9 @@ struct HorseSequencer {
 			newSeq.insert(newSeq.end(), thisOct.begin(), thisOct.end());
 			//absoluteSequence.push_back(dex < 8 ? 0 : 1);
 		}*/
-		quant = Quantizer("3223",12,0);
 
-		float cvRange = std::sin(primes[9]*pattern-otherPrimes[3]);
+
+		float cvRange = std::sin(primes[9] * pattern - otherPrimes[3]);
 		int cvRoot = 0;//std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
 
 		for (int i = 0; i < numSteps; i++) {
@@ -48,11 +47,11 @@ struct HorseSequencer {
 			float cvVal = 0.f;
 			for (int k = 0; k < 4; k++) {
 				val += std::sin(primes[((i + 1) * (k + 1)) % 16] * pattern + otherPrimes[(otherPrimes[0] + i) % 16]);
-				cvVal+=std::sin(primes[((i + 11) * (k + 1)+201) % 16] * pattern + otherPrimes[(otherPrimes[3] + i-7) % 16]);
+				cvVal += std::sin(primes[((i + 11) * (k + 1) + 201) % 16] * pattern + otherPrimes[(otherPrimes[3] + i - 7) % 16]);
 				//cvVal+=i/12;
 			}
 			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
-			newCV.push_back(cvRoot+(cvVal+4)/.8);
+			newCV.push_back(cvRoot + (cvVal + 4) / .8);
 		}
 		printVector(newSeq);
 		absoluteSequence = newSeq;
@@ -100,6 +99,7 @@ struct ComputerscareHorseADoodleDoo : Module {
 		DENSITY_TRIM,
 		WEIRDNESS_KNOB,
 		WEIRDNESS_TRIM,
+		POLY_KNOB,
 		NUM_PARAMS
 
 	};
@@ -122,8 +122,8 @@ struct ComputerscareHorseADoodleDoo : Module {
 	};
 
 
-	rack::dsp::SchmittTrigger clockInputTrigger;
-	rack::dsp::SchmittTrigger resetInputTrigger;
+	rack::dsp::SchmittTrigger clockInputTrigger[16];
+	rack::dsp::SchmittTrigger resetInputTrigger[16];
 
 	rack::dsp::SchmittTrigger clockManualTrigger;
 	rack::dsp::SchmittTrigger resetManualTrigger;
@@ -131,6 +131,7 @@ struct ComputerscareHorseADoodleDoo : Module {
 	float lastPatternKnob = 0.f;
 	int lastStepsKnob = 2;
 	float lastDensityKnob = 0.f;
+	int lastPolyKnob=0;
 
 	float pendingPattern = 0.f;
 	int pendingNumSteps = 8;
@@ -157,6 +158,9 @@ struct ComputerscareHorseADoodleDoo : Module {
 		configParam(STEPS_TRIM, -1.f, 1.f, 0.f, "Steps CV Trim");
 		configParam(DENSITY_TRIM, -1.f, 1.f, 0.f, "Density CV Trim");
 
+		configParam(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
+
+
 		seq = HorseSequencer(0.f, 8, 0.f);
 
 
@@ -181,38 +185,31 @@ struct ComputerscareHorseADoodleDoo : Module {
 		int stepsVal = std::floor(params[STEPS_KNOB].getValue() + params[STEPS_TRIM].getValue() * inputs[STEPS_CV].getVoltage());
 		float densityVal = params[DENSITY_KNOB].getValue() + params[DENSITY_TRIM].getValue() * inputs[DENSITY_CV].getVoltage() / 10;
 
-
 		if (patternVal != lastPatternKnob || stepsVal != lastStepsKnob || densityVal != lastDensityKnob) {
 			patternKnobChanged(patternVal, stepsVal, densityVal);
 		}
 		lastPatternKnob = patternVal;
 		lastStepsKnob = stepsVal;
 		lastDensityKnob = densityVal;
+		lastPolyKnob=std::floor(params[POLY_KNOB].getValue());
 	}
-	void process(const ProcessArgs &args) override {
-		counter++;
-		if (counter > 601) {
-			checkKnobChanges();
-			counter = 0;
-		}
+	void processChannel(int ch) {
+		bool clockInputHigh = clockInputTrigger[ch].isHigh();
+		bool clocked = clockInputTrigger[ch].process(inputs[CLOCK_INPUT].getVoltage());
 
-		bool clockInputHigh = clockInputTrigger.isHigh();
-		bool clocked = clockInputTrigger.process(inputs[CLOCK_INPUT].getVoltage());
+		bool reset = resetInputTrigger[ch].process(inputs[RESET_INPUT].getVoltage());
 
-		bool reset = resetInputTrigger.process(inputs[RESET_INPUT].getVoltage());
-
-		if(reset) {
-			if(changePending) {
+		if (reset) {
+			if (changePending) {
 				applyChange();
 			}
 			seq.reset();
-			seqVal=seq.get();
-			if(seqVal) {
-				cvVal=seq.getCV();
+			seqVal = seq.get();
+			if (seqVal) {
+				cvVal = seq.getCV();
 			}
-			for (int ch = 0; ch < numChannels; ch++) {
-				atFirstStepPoly[ch] =  true;
-			}
+			atFirstStepPoly[ch] =  true;
+
 
 		}
 
@@ -221,11 +218,9 @@ struct ComputerscareHorseADoodleDoo : Module {
 			if (seqVal) {
 				cvVal = seq.getCV();
 			}
+			atFirstStepPoly[ch] =  (seq.currentStep == 0);
 
-			for (int ch = 0; ch < numChannels; ch++) {
-				atFirstStepPoly[ch] =  (seq.currentStep == 0);
-			}
-			if (atFirstStepPoly[0] && changePending) {
+			if (atFirstStepPoly[ch] && changePending) {
 				applyChange();
 				seqVal = seq.get();
 				if (seqVal) {
@@ -235,51 +230,51 @@ struct ComputerscareHorseADoodleDoo : Module {
 
 		}
 		if (inputs[CLOCK_INPUT].isConnected()) {
-			for (int ch = 0; ch < numChannels; ch++) {
-				outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && seqVal == 1) ? 10.0f : 0.0f, ch);
-				//DEBUG("before output:%f",cvVal);
-				outputs[CV_OUTPUT].setVoltage(cvVal, ch);
-				//outputs[EOC_OUTPUT].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
-			}
+			outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && seqVal == 1) ? 10.0f : 0.0f, ch);
+			//DEBUG("before output:%f",cvVal);
+			outputs[CV_OUTPUT].setVoltage(cvVal, ch);
+			//outputs[EOC_OUTPUT].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
 		}
 		else {
-			/* for (int ch = 0; ch < numChannels; ch++) {
-			   outputs[TRG_OUTPUT + i].setVoltage((globalGateIn && activePolyStep[i][ch]) ? 10.0f : 0.0f, ch);
-			   outputs[FIRST_STEP_OUTPUT + i].setVoltage((globalGateIn && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
-			 }*/
+
 		}
 
-
-		//if (outputs[EOC_OUTPUT].isConnected()) {
-		for (int ch = 0; ch < numChannels; ch++) {
-
-			if (atFirstStepPoly[ch]) {
-
-				outputs[EOC_OUTPUT].setVoltage((clockInputHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
-
-			}
+		if (atFirstStepPoly[ch]) {
+			outputs[EOC_OUTPUT].setVoltage((clockInputHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
 		}
-		//outputs[EOC_OUTPUT].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
-		//}
-
-
+	}
+	void process(const ProcessArgs &args) override {
+		counter++;
+		if (counter > 601) {
+			checkKnobChanges();
+			counter = 0;
+		}
+		processChannel(0);
 
 	}
-
 };
+
 struct NumStepsOverKnobDisplay : SmallLetterDisplay
 {
 	ComputerscareHorseADoodleDoo *module;
-	NumStepsOverKnobDisplay()
+	int knobConnection=1;
+	NumStepsOverKnobDisplay(int type)
 	{
-		letterSpacing=1.f;
+		letterSpacing = 1.f;
+		knobConnection=type;
 		SmallLetterDisplay();
 	};
 	void draw(const DrawArgs &args)
 	{
 		if (module)
 		{
-			std::string str = std::to_string(module->lastStepsKnob);
+			std::string str="";
+			if(knobConnection==1) {
+				str = std::to_string(module->lastStepsKnob);
+			}
+			else if(knobConnection==2){
+				str = module->lastPolyKnob == 0 ? "A" :std::to_string(module->lastPolyKnob);
+			}
 			value = str;
 		}
 		SmallLetterDisplay::draw(args);
@@ -292,20 +287,95 @@ struct HorseDisplay : TransparentWidget {
 	HorseDisplay() {
 	}
 
-	void drawHorse(const DrawArgs &args, float x=0.f) {
+	void drawHorse(const DrawArgs &args, float x = 0.f) {
 
-		float dy=380/(float)(module->seq.numSteps);
-		for(int i = 0; i<module->seq.numSteps; i++) {
+		float dy = 380 / (float)(module->seq.numSteps);
+		float mid=module->seq.numSteps/2;
+
+		float dh = 0.2;//multiplicitive on original height
+		float zDistance = 20;
+
+
+
+
+		for (int i = 0; i < module->seq.numSteps; i++) {
 			nvgBeginPath(args.vg);
-			nvgRect(args.vg, 60,i*dy, 15.f, dy);
-			nvgFillColor(args.vg, module->seq.absoluteSequence[i] ==1 ? COLOR_COMPUTERSCARE_RED : COLOR_COMPUTERSCARE_TRANSPARENT);
-			nvgFill(args.vg);
-			if(i==module->seq.currentStep) {
-				nvgStrokeWidth(args.vg,3.f);
-				nvgStrokeColor(args.vg,COLOR_COMPUTERSCARE_BLUE );
+			float xx = 65;
+			float yy = i * dy;
+
+			float ip = i/module->seq.numSteps;
+			float width = 15.f;
+			float height = dy;
+
+			if (module->seq.absoluteSequence[i] == 1) {
+
+				float xCloseTop = xx;
+				float yCloseTop = yy;
+				float xFarTop = xx - zDistance;
+				float yFarTop = 100;
+				float xFarBottom = xFarTop;
+				float yFarBottom = yFarTop;
+				float xCloseBottom = xCloseTop;
+				float yCloseBottom = yCloseTop + height;
+
+
+				// left side wall
+				if (i == module->seq.currentStep) {
+					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_BLUE );
+				}
+				else {
+					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_RED);
+				 }
+
+				nvgStrokeColor(args.vg, BLACK);
+				nvgStrokeWidth(args.vg, .2);
+
+
+				nvgBeginPath(args.vg);
+				nvgMoveTo(args.vg, xCloseTop, yCloseTop);
+				nvgLineTo(args.vg, xFarTop, yFarTop);
+				nvgLineTo(args.vg, xFarBottom, yFarBottom);
+				nvgLineTo(args.vg, xCloseBottom, yCloseBottom);
+				nvgLineTo(args.vg, xCloseTop, yCloseTop);
+				nvgClosePath(args.vg);
+				//nvgRect(args.vg, xx,yy,width,height);
+				nvgFill(args.vg);
 				nvgStroke(args.vg);
+
+
+
+				//top
+				nvgStrokeWidth(args.vg,1.f);
+				if (i == module->seq.currentStep) {
+					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_YELLOW);
+				}
+				else {
+					nvgFillColor(args.vg,nvgRGB(0xE2,0x22,0x12));				 
+				}
+				nvgBeginPath(args.vg);
+				nvgRect(args.vg,xx,yy,10.f,dy);
+				nvgClosePath(args.vg);
+				//nvgRect(args.vg, xx,yy,width,height);
+				nvgFill(args.vg);
+				nvgStroke(args.vg);
+
+
+
+
+				//nvgRestore(args.vg);
+
+				//nvgReset(args.vg);
+
+
+
 			}
+			else {
+				//nvgFillColor(args.vg,COLOR_COMPUTERSCARE_TRANSPARENT);
+			}
+			//nvgFillColor(args.vg, module->seq.absoluteSequence[i] == 1 ? COLOR_COMPUTERSCARE_RED : COLOR_COMPUTERSCARE_TRANSPARENT);
+
 			
+
 		}
 	}
 
@@ -339,12 +409,14 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addInputBlock("Length", 0, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1);
 		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0);
 
+		addInputBlock("Polyphony", 0, 240, module, ComputerscareHorseADoodleDoo::POLY_KNOB,  -1, 2);
+
 		horseDisplay = new HorseDisplay();
-		horseDisplay->module=module;
+		horseDisplay->module = module;
 
 		addChild(horseDisplay);
 
-		int outputY = 254;
+		int outputY = 269;
 		int dy = 30;
 
 		int outputX = 32;
@@ -373,12 +445,16 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		smallLetterDisplay->fontSize = 21;
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
-		if (knobType == 0) {
-			addParam(createParam<SmoothKnob>(Vec(x, y), module, knobIndex));
-		}
-		else if (knobType == 1) {
 
-			numStepsKnob = new NumStepsOverKnobDisplay();
+
+		if (knobType == 0) {//smooth
+			addParam(createParam<SmoothKnob>(Vec(x, y), module, knobIndex));
+			//trim knob
+			addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex + 1));
+			addInput(createInput<TinyJack>(Vec(x + 40, y), module, inputIndex));
+		}
+		else if (knobType == 1 || knobType == 2) {
+			numStepsKnob = new NumStepsOverKnobDisplay(knobType);
 			numStepsKnob->box.size = Vec(20, 20);
 			numStepsKnob->box.pos = Vec(x - 2.5 , y + 1.f);
 			numStepsKnob->fontSize = 26;
@@ -388,22 +464,25 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 			numStepsKnob->module = module;
 			addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, knobIndex));
 			addChild(numStepsKnob);
+			if (knobType == 1) {
+				//trim knob
+				addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex + 1));
+				addInput(createInput<TinyJack>(Vec(x + 40, y), module, inputIndex));
+			}
 		}
-
-		//trim knob
-		addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex + 1));
-		addInput(createInput<TinyJack>(Vec(x + 40, y), module, inputIndex));
-
-		smallLetterDisplay->box.pos = Vec(x, y - 12);
+	
 
 
-		addChild(smallLetterDisplay);
+	smallLetterDisplay->box.pos = Vec(x, y - 12);
 
-	}
-	HorseDisplay* horseDisplay;
-	NumStepsOverKnobDisplay* numStepsKnob;
-	InputBlockBackground* background;
-	SmallLetterDisplay* smallLetterDisplay;
+
+	addChild(smallLetterDisplay);
+
+}
+HorseDisplay* horseDisplay;
+NumStepsOverKnobDisplay* numStepsKnob;
+InputBlockBackground* background;
+SmallLetterDisplay* smallLetterDisplay;
 };
 
 Model *modelComputerscareHorseADoodleDoo = createModel<ComputerscareHorseADoodleDoo, ComputerscareHorseADoodleDooWidget>("computerscare-horse-a-doodle-doo");
