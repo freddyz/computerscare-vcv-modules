@@ -97,6 +97,40 @@ struct ComputerscareDebug : Module {
 	}
 	void process(const ProcessArgs &args) override;
 
+
+	json_t *dataToJson() override {
+		json_t *rootJ = json_object();
+
+      json_object_set_new(rootJ, "outputRange", json_integer(outputRangeEnum));
+
+		json_t *sequencesJ = json_array();
+
+		for (int i = 0; i < 16; i++) {
+			json_t *sequenceJ = json_real(logLines[i]);
+			json_array_append_new(sequencesJ, sequenceJ);
+		}
+		json_object_set_new(rootJ, "lines", sequencesJ);
+		return rootJ;
+    }
+
+    void dataFromJson(json_t *rootJ) override {
+        float val;
+
+		json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
+		if (outputRangeEnumJ) { outputRangeEnum = json_integer_value(outputRangeEnumJ); }
+
+		json_t *sequencesJ = json_object_get(rootJ, "lines");
+
+		if (sequencesJ) {
+			for (int i = 0; i < 16; i++) {
+				json_t *sequenceJ = json_array_get(sequencesJ, i);
+				if (sequenceJ)
+				val = json_real_value(sequenceJ);
+				logLines[i] = val;
+			}
+		}
+
+    }
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
 	// - onSampleRateChange: event triggered by a change of sample rate
@@ -187,6 +221,9 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		strValue = defaultStrValue;
 	}
 	outputs[POLY_OUTPUT].setChannels(16);
+	/*for(unsigned int i=0; i < NUM_LINES;i++) {
+		outputs[POLY_OUTPUT].setVoltage(logLines[i], i);
+	}*/
 	stepCounter++;
 
 	if (stepCounter > 1025) {
@@ -338,7 +375,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		debug = module;
 	}
-	json_t *toJson() override
+	/*json_t *toJson() override
 	{
 		json_t *rootJ = ModuleWidget::toJson();
 		json_object_set_new(rootJ, "outputRange", json_integer(debug->outputRangeEnum));
@@ -351,7 +388,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		}
 		json_object_set_new(rootJ, "lines", sequencesJ);
 		return rootJ;
-	}
+	}*/
 	void fromJson(json_t *rootJ) override
 	{
 		float val;
