@@ -8,7 +8,7 @@ struct ComputerscareBolyPuttons : Module {
 	int counter = 0;
 	int outputRangeEnum = 0;
 	bool momentary = false;
-	bool radioMode=false;
+	bool radioMode = false;
 	float outputRanges[6][2];
 	float previousToggle[16] = {0.f};
 	rack::dsp::SchmittTrigger momentaryTriggers[16];
@@ -57,39 +57,59 @@ struct ComputerscareBolyPuttons : Module {
 		outputRanges[5][0] = -10.f;
 		outputRanges[5][1] = 10.f;
 	}
-void switchOffAllButtonsButOne(int index) {
-    for (int i = 0; i < numToggles; i++) {
-      if (i != index) {
-        params[TOGGLE + i].setValue(0.f);
-      }
-    }
-  }
-void checkForParamChanges() {
-	int changeIndex = -1;
-	float val;
-	for(int i = 0; i < numToggles; i++) {
-		val=params[TOGGLE + i].getValue();
-		if(val == 1.f && previousToggle[i] != val) {
-			changeIndex = i;
+	void switchOffAllButtonsButOne(int index) {
+		for (int i = 0; i < numToggles; i++) {
+			if (i != index) {
+				params[TOGGLE + i].setValue(0.f);
+			}
 		}
-		previousToggle[i] = val;
 	}
-	if(changeIndex > -1) {
-		switchOffAllButtonsButOne(changeIndex);
+	void checkForParamChanges() {
+		int changeIndex = -1;
+		float val;
+		for (int i = 0; i < numToggles; i++) {
+			val = params[TOGGLE + i].getValue();
+			if (val == 1.f && previousToggle[i] != val) {
+				changeIndex = i;
+			}
+			previousToggle[i] = val;
+		}
+		if (changeIndex > -1) {
+			switchOffAllButtonsButOne(changeIndex);
+		}
 	}
-}
-void onRandomize() override {
-    if(radioMode) {
-    	int rIndex = floor(random::uniform() * 16);
-    	switchOffAllButtonsButOne(rIndex);
-    	params[TOGGLE+rIndex].setValue(1.f);
-    }
-    else {
-    	for(int i = 0; i < numToggles; i++) {
-    		params[TOGGLE+i].setValue(random::uniform() < 0.5 ? 0.f : 1.f);
-    	}
-    }
-  }
+	void legacyJSON(json_t *rootJ) {
+		json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
+		if (outputRangeEnumJ) { outputRangeEnum = json_integer_value(outputRangeEnumJ); }
+		json_t *radioModeJ = json_object_get(rootJ, "radioMode");
+		if (radioModeJ) { radioMode = json_is_true(radioModeJ); }
+		json_t *momentaryModeJ = json_object_get(rootJ, "momentaryMode");
+		if (momentaryModeJ) { momentary = json_is_true(momentaryModeJ); }
+	}
+	void dataFromJson(json_t *rootJ) override {
+		legacyJSON(rootJ);
+	}
+	json_t *dataToJson() override
+	{
+        json_t *rootJ = json_object();
+		json_object_set_new(rootJ, "outputRange", json_integer(outputRangeEnum));
+		json_object_set_new(rootJ, "radioMode", json_boolean(radioMode));
+		json_object_set_new(rootJ, "momentaryMode", json_boolean(momentary));
+		return rootJ;
+	}
+
+	void onRandomize() override {
+		if (radioMode) {
+			int rIndex = floor(random::uniform() * 16);
+			switchOffAllButtonsButOne(rIndex);
+			params[TOGGLE + rIndex].setValue(1.f);
+		}
+		else {
+			for (int i = 0; i < numToggles; i++) {
+				params[TOGGLE + i].setValue(random::uniform() < 0.5 ? 0.f : 1.f);
+			}
+		}
+	}
 	void process(const ProcessArgs &args) override {
 		float min = outputRanges[outputRangeEnum][0];
 		float max = outputRanges[outputRangeEnum][1];
@@ -126,8 +146,8 @@ void onRandomize() override {
 
 		}
 		else {
-			if(radioMode) {
-				checkForParamChanges();	
+			if (radioMode) {
+				checkForParamChanges();
 			}
 			for (int i = 0; i < numToggles; i++) {
 				if (inputs[A_INPUT].isConnected()) {
@@ -185,25 +205,11 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 
 		addParam(createParam<SmallIsoButton>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
 	}
-	json_t *toJson() override
-	{
-		json_t *rootJ = ModuleWidget::toJson();
-		json_object_set_new(rootJ, "outputRange", json_integer(bolyPuttons->outputRangeEnum));
-		json_object_set_new(rootJ, "radioMode", json_boolean(bolyPuttons->radioMode));
-		json_object_set_new(rootJ, "momentaryMode", json_boolean(bolyPuttons->momentary));
-		return rootJ;
-	}
+	
 	void fromJson(json_t *rootJ) override
 	{
 		ModuleWidget::fromJson(rootJ);
-		// button states
-
-		json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
-		if (outputRangeEnumJ) { bolyPuttons->outputRangeEnum = json_integer_value(outputRangeEnumJ); }
-			json_t *radioModeJ = json_object_get(rootJ, "radioMode");
-		if (radioModeJ) { bolyPuttons->radioMode = json_is_true(radioModeJ); }
-			json_t *momentaryModeJ = json_object_get(rootJ, "momentaryMode");
-		if (momentaryModeJ) { bolyPuttons->momentary = json_is_true(momentaryModeJ); }
+		bolyPuttons->legacyJSON(rootJ);
 
 	}
 	void appendContextMenu(Menu *menu) override;
@@ -222,17 +228,17 @@ struct OutputRangeItem : MenuItem {
 	}
 };
 struct RadioModeMenuItem: MenuItem {
-  ComputerscareBolyPuttons *bolyPuttons;
-  RadioModeMenuItem() {
+	ComputerscareBolyPuttons *bolyPuttons;
+	RadioModeMenuItem() {
 
-  }
-  void onAction(const event::Action &e) override {
-	bolyPuttons->radioMode = !bolyPuttons->radioMode;
-  }
-  void step() override {
-    rightText = bolyPuttons->radioMode? "✔" : "";
-    MenuItem::step();
-  }
+	}
+	void onAction(const event::Action &e) override {
+		bolyPuttons->radioMode = !bolyPuttons->radioMode;
+	}
+	void step() override {
+		rightText = bolyPuttons->radioMode ? "✔" : "";
+		MenuItem::step();
+	}
 };
 
 void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
@@ -241,10 +247,10 @@ void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
 
 	menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 	menu->addChild(construct<MenuLabel>(&MenuLabel::text, "How The Buttons Work"));
-  	RadioModeMenuItem *radioMode = new RadioModeMenuItem();
-  	radioMode->text = "Exclusive Mode (behaves like radio buttons)";
-  	radioMode->bolyPuttons= bolyPuttons;
- 	menu->addChild(radioMode);
+	RadioModeMenuItem *radioMode = new RadioModeMenuItem();
+	radioMode->text = "Exclusive Mode (behaves like radio buttons)";
+	radioMode->bolyPuttons = bolyPuttons;
+	menu->addChild(radioMode);
 
 
 	menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));

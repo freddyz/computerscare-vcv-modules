@@ -88,6 +88,10 @@ struct ComputerscareDebug : Module {
 		outputRanges[4][1] = 1.f;
 		outputRanges[5][0] = -10.f;
 		outputRanges[5][1] = 10.f;
+		outputRanges[6][0] = -2.f;
+		outputRanges[6][1] = 2.f;
+		outputRanges[7][0] = 0.f;
+		outputRanges[7][1] = 2.f;
 
 		stepCounter = 0;
 
@@ -97,11 +101,23 @@ struct ComputerscareDebug : Module {
 	}
 	void process(const ProcessArgs &args) override;
 
+	void onRandomize() override {
+		randomizeStorage();
+	}
+
+	void randomizeStorage() {
+		float min = outputRanges[outputRangeEnum][0];
+		float max = outputRanges[outputRangeEnum][1];
+		float spread = max - min;
+		for (int i = 0; i < 16; i++) {
+			logLines[i] = min + spread * random::uniform();
+		}
+	}
 
 	json_t *dataToJson() override {
 		json_t *rootJ = json_object();
 
-      json_object_set_new(rootJ, "outputRange", json_integer(outputRangeEnum));
+		json_object_set_new(rootJ, "outputRange", json_integer(outputRangeEnum));
 
 		json_t *sequencesJ = json_array();
 
@@ -111,10 +127,10 @@ struct ComputerscareDebug : Module {
 		}
 		json_object_set_new(rootJ, "lines", sequencesJ);
 		return rootJ;
-    }
+	}
 
-    void dataFromJson(json_t *rootJ) override {
-        float val;
+	void dataFromJson(json_t *rootJ) override {
+		float val;
 
 		json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
 		if (outputRangeEnumJ) { outputRangeEnum = json_integer_value(outputRangeEnumJ); }
@@ -125,12 +141,12 @@ struct ComputerscareDebug : Module {
 			for (int i = 0; i < 16; i++) {
 				json_t *sequenceJ = json_array_get(sequencesJ, i);
 				if (sequenceJ)
-				val = json_real_value(sequenceJ);
+					val = json_real_value(sequenceJ);
 				logLines[i] = val;
 			}
 		}
 
-    }
+	}
 	// For more advanced Module features, read Rack's engine.hpp header file
 	// - toJson, fromJson: serialization of internal data
 	// - onSampleRateChange: event triggered by a change of sample rate
@@ -248,7 +264,6 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 	ComputerscareDebug *module;
 
 	HidableSmallSnapKnob() {
-
 		SmallSnapKnob();
 	}
 	void draw(const DrawArgs &args) {
@@ -256,6 +271,7 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 			Widget::draw(args);
 		}
 	};
+	void randomize() override { return; }
 };
 ////////////////////////////////////
 struct StringDisplayWidget3 : Widget {
@@ -404,7 +420,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 			for (int i = 0; i < 16; i++) {
 				json_t *sequenceJ = json_array_get(sequencesJ, i);
 				if (sequenceJ)
-				val = json_real_value(sequenceJ);
+					val = json_real_value(sequenceJ);
 				debug->logLines[i] = val;
 			}
 		}
@@ -441,6 +457,8 @@ void ComputerscareDebugWidget::appendContextMenu(Menu *menu)
 	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "  0v ...  +1v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 3));
 	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, " -1v ...  +1v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 4));
 	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "-10v ... +10v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 5));
+	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, " -2v ...  +2v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 6));
+	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "  0v ...  +2v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 7));
 
 }
 Model *modelComputerscareDebug = createModel<ComputerscareDebug, ComputerscareDebugWidget>("computerscare-debug");

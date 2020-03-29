@@ -214,6 +214,61 @@ struct ComputerscarePatchSequencer : Module {
     }
   }; // end randomize()
 
+
+  void dataFromJson(json_t *rootJ) override {
+    // button states
+    DEBUG("dataFromJson called.  It wants its JSON back");
+    json_t *button_statesJ = json_object_get(rootJ, "buttons");
+    if (button_statesJ)
+    {
+      DEBUG("there R buttonz");
+      for (int k = 0; k < maxSteps; k++) {
+
+        for (int i = 0; i < 10; i++) {
+          for (int j = 0; j < 10; j++) {
+            json_t *button_stateJ = json_array_get(button_statesJ, k * 100 + i * 10 + j);
+            if (button_stateJ)
+              switch_states[k][i][j] = !!json_integer_value(button_stateJ);
+          }
+        }
+      }
+    }
+    json_t *onlyRandomizeActiveJ = json_object_get(rootJ, "onlyRandomizeActive");
+    if (onlyRandomizeActiveJ) { onlyRandomizeActive = json_is_true(onlyRandomizeActiveJ); }
+
+    json_t *randomizationStepEnumJ = json_object_get(rootJ, "randomizationStepEnum");
+    if (randomizationStepEnumJ) { setRandomizationStepEnum(json_integer_value(randomizationStepEnumJ)); }
+
+    json_t *channelCountEnumJ = json_object_get(rootJ, "channelCountEnum");
+    if (channelCountEnumJ) { channelCountEnum = json_integer_value(channelCountEnumJ); }
+
+    json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOutputBoundsEnum");
+    if (randomizationOutputBoundsEnumJ) { setRandomizationOutputBoundsEnum(json_integer_value(randomizationOutputBoundsEnumJ)); }
+
+  }
+  json_t *dataToJson() override
+  {
+
+    json_t *rootJ = json_object();
+    // button states
+    json_t *button_statesJ = json_array();
+    for (int k = 0; k < maxSteps; k++) {
+      for (int i = 0; i < 10; i++)
+      {
+        for (int j = 0; j < 10; j++)
+        {
+          json_t *button_stateJ = json_integer((int) switch_states[k][i][j]);
+          json_array_append_new(button_statesJ, button_stateJ);
+        }
+      }
+    }
+    json_object_set_new(rootJ, "buttons", button_statesJ);
+    json_object_set_new(rootJ, "onlyRandomizeActive", json_boolean(onlyRandomizeActive));
+    json_object_set_new(rootJ, "channelCountEnum", json_integer(channelCountEnum));
+    json_object_set_new(rootJ, "randomizationStepEnum", json_integer(getRandomizationStepEnum()));
+    json_object_set_new(rootJ, "randomizationOutputBoundsEnum", json_integer(getRandomizationOutputBoundsEnum()));
+    return rootJ;
+  }
 };
 
 
@@ -478,64 +533,20 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
     addChild(displayEdit);
     fatherSon = module;
   }
-  json_t *toJson() override
-  {
-    json_t *rootJ = ModuleWidget::toJson();
-    // button states
-    json_t *button_statesJ = json_array();
-    for (int k = 0; k < maxSteps; k++) {
-      for (int i = 0; i < 10; i++)
-      {
-        for (int j = 0; j < 10; j++)
-        {
-          json_t *button_stateJ = json_integer((int) fatherSon->switch_states[k][i][j]);
-          json_array_append_new(button_statesJ, button_stateJ);
-        }
-      }
-    }
-    json_object_set_new(rootJ, "buttons", button_statesJ);
-    json_object_set_new(rootJ, "onlyRandomizeActive", json_boolean(fatherSon->onlyRandomizeActive));
-    json_object_set_new(rootJ, "channelCountEnum", json_integer(fatherSon->channelCountEnum));
-    json_object_set_new(rootJ, "randomizationStepEnum", json_integer(fatherSon->getRandomizationStepEnum()));
-    json_object_set_new(rootJ, "randomizationOutputBoundsEnum", json_integer(fatherSon->getRandomizationOutputBoundsEnum()));
-    return rootJ;
-  }
+
 
   void fromJson(json_t *rootJ) override
   {
     ModuleWidget::fromJson(rootJ);
-    // button states
-    json_t *button_statesJ = json_object_get(rootJ, "buttons");
-    if (button_statesJ)
-    {
-      for (int k = 0; k < maxSteps; k++) {
-
-        for (int i = 0; i < 10; i++) {
-          for (int j = 0; j < 10; j++) {
-            json_t *button_stateJ = json_array_get(button_statesJ, k * 100 + i * 10 + j);
-            if (button_stateJ)
-              fatherSon->switch_states[k][i][j] = !!json_integer_value(button_stateJ);
-          }
-        }
-      }
+     json_t *button_statesJ = json_object_get(rootJ, "buttons");
+      if (button_statesJ) {
+        //there be legacy JSON
+      fatherSon->dataFromJson(rootJ);
     }
-    json_t *onlyRandomizeActiveJ = json_object_get(rootJ, "onlyRandomizeActive");
-    if (onlyRandomizeActiveJ) { fatherSon->onlyRandomizeActive = json_is_true(onlyRandomizeActiveJ); }
-
-    json_t *randomizationStepEnumJ = json_object_get(rootJ, "randomizationStepEnum");
-    if (randomizationStepEnumJ) { fatherSon->setRandomizationStepEnum(json_integer_value(randomizationStepEnumJ)); }
-
-    json_t *channelCountEnumJ = json_object_get(rootJ, "channelCountEnum");
-    if (channelCountEnumJ) { fatherSon->channelCountEnum = json_integer_value(channelCountEnumJ); }
-
-    json_t *randomizationOutputBoundsEnumJ = json_object_get(rootJ, "randomizationOutputBoundsEnum");
-    if (randomizationOutputBoundsEnumJ) { fatherSon->setRandomizationOutputBoundsEnum(json_integer_value(randomizationOutputBoundsEnumJ)); }
-
   }
   void appendContextMenu(Menu *menu) override;
 
   ComputerscarePatchSequencer *fatherSon;
-  //Menu *createContextMenu() override;
 };
 struct OnlyRandomizeActiveMenuItem : MenuItem {
   ComputerscarePatchSequencer *patchSequencer;

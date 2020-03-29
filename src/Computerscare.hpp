@@ -145,6 +145,9 @@ struct ThreeVerticalXSwitch : app::SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-3.svg")));
 		shadow->opacity = 0.f;
 	}
+	void randomize() override {
+		return;
+	}
 };
 struct ComputerscareDebugFour : app::SvgSwitch {
 	ComputerscareDebugFour() {
