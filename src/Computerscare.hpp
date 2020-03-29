@@ -124,6 +124,9 @@ struct ThreeVerticalXSwitch : app::SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-3.svg")));
 		shadow->opacity = 0.f;
 	}
+	void randomize() override {
+		return;
+	}
 };
 struct ComputerscareDebugFour : app::SvgSwitch {
 	ComputerscareDebugFour() {
@@ -331,7 +334,7 @@ struct ComputerscareTextField : ui::TextField {
 	NVGcolor color = COLOR_COMPUTERSCARE_LIGHT_GREEN;
 	int fontSize = 16;
 	bool inError = false;
-	int textColorState=0;
+	int textColorState = 0;
 	ComputerscareTextField() {
 
 		font = APP->window->loadFont(asset::system("res/fonts/ShareTechMono-Regular.ttf"));
