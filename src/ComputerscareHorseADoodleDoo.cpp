@@ -8,19 +8,33 @@ struct HorseSequencer {
 	float pattern = 0.f;
 	int numSteps = 8;
 	int currentStep = -1;
-	float density = 0.f;
+	float density = 0.5f;
+
+	float pendingPattern = 0.f;
+	int pendingNumSteps = 8;
+	float pendingDensity = 0.5f;
+	bool pendingChange=0;
+	bool forceChange=0;
+
+
+
 	int primes[16] = {30011, 36877, 26627, 32833, 66797, 95153, 66553, 84857, 32377, 79589, 25609, 20113, 70991, 86533, 21499, 32491};
 	int otherPrimes[16] = {80651, 85237, 11813, 22343, 19543, 28027, 9203, 39521, 42853, 58411, 33811, 76771, 10939, 22721, 17851, 10163};
+	int channel=0;
 
 	std::vector<std::vector<int>> octets = {{0, 0, 0, 0}, {0, 0, 0, 1}, {0, 0, 1, 0}, {0, 0, 1, 1}, {0, 1, 0, 0}, {0, 1, 0, 1}, {0, 1, 1, 0}, {0, 1, 1, 1}, {1, 0, 0, 0}, {1, 0, 0, 1}, {1, 0, 1, 0}, {1, 0, 1, 1}, {1, 1, 0, 0}, {1, 1, 0, 1}, {1, 1, 1, 0}, {1, 1, 1, 1}};
 	std::vector<int> somethin = {1, 0, 0, 1};
 	std::vector<int> absoluteSequence;
 	std::vector<float> cvSequence;
 
-	HorseSequencer(float patt, int steps, float dens) {
+	HorseSequencer() {
+
+	}
+	HorseSequencer(float patt, int steps, float dens,int ch) {
 		numSteps = steps;
 		density = dens;
 		pattern = patt;
+		channel = ch;
 		makeAbsolute();
 	}
 	void makeAbsolute() {
@@ -57,17 +71,39 @@ struct HorseSequencer {
 		absoluteSequence = newSeq;
 		cvSequence = newCV;
 	}
+	void checkAndArm(float patt,int steps,float dens) {
+		if(pattern!=patt || numSteps != steps || density !=dens) {
+			pendingPattern=patt;
+			pendingNumSteps=steps;
+			pendingDensity=dens;
+			pendingChange=true;
+		}
+	}
+	void armChange() {
+		forceChange=true;
+	}
+	void disarm() {
+		pendingChange=false;
+		pendingPattern=pattern;
+		pendingNumSteps=numSteps;
+		pendingDensity=density;
+	}
 	void change(float patt, int steps, float dens) {
 		numSteps = steps;
 		density = dens;
 		pattern = patt;
 		currentStep = 0;
-		DEBUG("changed to %f,%i,%f", pattern, numSteps, density);
 		makeAbsolute();
 	}
 	void tick() {
 		currentStep++;
 		currentStep %= numSteps;
+		if((currentStep==0 && pendingChange)||forceChange) {
+			change(pendingPattern,pendingNumSteps,pendingDensity);
+			pendingChange=false;
+			forceChange=false;
+			currentStep=0;
+		}
 	}
 	void reset() {
 		currentStep = 0;
@@ -133,18 +169,14 @@ struct ComputerscareHorseADoodleDoo : Module {
 	float lastDensityKnob = 0.f;
 	int lastPolyKnob=0;
 
-	float pendingPattern = 0.f;
-	int pendingNumSteps = 8;
-	float pendingDensity = 0.f;
 
 
+	int seqVal[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
+	float cvVal[16] = {0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f,0.f};
 
-	int seqVal = 0.f;
-	float cvVal = 0.f;
+	bool changePending[16] = {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1};
 
-	bool changePending = true;
-
-	HorseSequencer seq = HorseSequencer(0.f, 8, 0.f);
+	HorseSequencer seq[16];
 
 	ComputerscareHorseADoodleDoo()  {
 
@@ -161,37 +193,32 @@ struct ComputerscareHorseADoodleDoo : Module {
 		configParam(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
 
 
-		seq = HorseSequencer(0.f, 8, 0.f);
+		for(int i = 0; i < 16; i++) {
+			seq[i] = HorseSequencer(0.f, 8, 0.f,i);
+		}
 
 
-	}
-	void patternKnobChanged(float newPattern, int newNumSteps, float newDensity) {
-		//seq = HorseSequencer(pattern, numSteps, density);
-		//DEBUG("TeeHee pattern:%f,steps:%i,density:%f",newPattern,newNumSteps,newDensity);
-		pendingPattern = newPattern;
-		pendingNumSteps = newNumSteps;
-		pendingDensity = newDensity;
-		changePending = true;
-	}
-	void applyChange() {
-		//DEBUG("Change time");
-		seq.change(pendingPattern, fmax(2, pendingNumSteps), pendingDensity);
-		changePending = false;
 	}
 
 
 	void checkKnobChanges() {
-		float patternVal = params[PATTERN_KNOB].getValue() + params[PATTERN_TRIM].getValue() * inputs[PATTERN_CV].getVoltage();
-		int stepsVal = std::floor(params[STEPS_KNOB].getValue() + params[STEPS_TRIM].getValue() * inputs[STEPS_CV].getVoltage());
-		float densityVal = params[DENSITY_KNOB].getValue() + params[DENSITY_TRIM].getValue() * inputs[DENSITY_CV].getVoltage() / 10;
 
-		if (patternVal != lastPatternKnob || stepsVal != lastStepsKnob || densityVal != lastDensityKnob) {
-			patternKnobChanged(patternVal, stepsVal, densityVal);
-		}
-		lastPatternKnob = patternVal;
-		lastStepsKnob = stepsVal;
-		lastDensityKnob = densityVal;
+		int pattNum=inputs[PATTERN_CV].getChannels();
+		int stepsNum=inputs[STEPS_CV].getChannels();
+		int densityNum=inputs[DENSITY_CV].getChannels();
+
+
+		lastStepsKnob=std::floor(params[STEPS_KNOB].getValue());
 		lastPolyKnob=std::floor(params[POLY_KNOB].getValue());
+		outputs[TRIGGER_OUTPUT].setChannels(lastPolyKnob);
+		outputs[CV_OUTPUT].setChannels(lastPolyKnob);
+
+		for(int i = 0; i < lastPolyKnob; i++) {
+			float patternVal = params[PATTERN_KNOB].getValue() + params[PATTERN_TRIM].getValue() * inputs[PATTERN_CV].getVoltage(fmin(i,pattNum));
+			int stepsVal = std::floor(params[STEPS_KNOB].getValue() + params[STEPS_TRIM].getValue() * inputs[STEPS_CV].getVoltage(fmin(i,stepsNum)));
+			float densityVal = params[DENSITY_KNOB].getValue() + params[DENSITY_TRIM].getValue() * inputs[DENSITY_CV].getVoltage(fmin(i,densityNum)) / 10;
+			seq[i].checkAndArm(patternVal, stepsVal, densityVal);
+		}
 	}
 	void processChannel(int ch) {
 		bool clockInputHigh = clockInputTrigger[ch].isHigh();
@@ -200,39 +227,36 @@ struct ComputerscareHorseADoodleDoo : Module {
 		bool reset = resetInputTrigger[ch].process(inputs[RESET_INPUT].getVoltage());
 
 		if (reset) {
-			if (changePending) {
-				applyChange();
-			}
-			seq.reset();
-			seqVal = seq.get();
-			if (seqVal) {
-				cvVal = seq.getCV();
+			seq[ch].armChange();
+			seqVal[ch] = seq[ch].get();
+			if (seqVal[ch]) {
+				cvVal[ch] = seq[ch].getCV();
 			}
 			atFirstStepPoly[ch] =  true;
-
-
 		}
 
 		if (clocked && !reset) {
-			seqVal = seq.tickAndGet();
-			if (seqVal) {
-				cvVal = seq.getCV();
+			seqVal[ch] = seq[ch].tickAndGet();
+			if (seqVal[ch]) {
+				cvVal[ch] = seq[ch].getCV();
 			}
-			atFirstStepPoly[ch] =  (seq.currentStep == 0);
-
-			if (atFirstStepPoly[ch] && changePending) {
-				applyChange();
-				seqVal = seq.get();
-				if (seqVal) {
-					cvVal = seq.getCV();
+			atFirstStepPoly[ch] =  (seq[ch].currentStep == 0);
+			if(seqVal[ch]) {
+				cvVal[ch]=seq[ch].getCV();
+			}
+			/*if (atFirstStepPoly[ch] && changePending[ch]) {
+				applyChange(ch);
+				seqVal[ch] = seq[ch].get();
+				if (seqVal[ch]) {
+					cvVal[ch] = seq[ch].getCV();
 				}
-			}
+			}*/
 
 		}
 		if (inputs[CLOCK_INPUT].isConnected()) {
-			outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && seqVal == 1) ? 10.0f : 0.0f, ch);
+			outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && seqVal[ch] == 1) ? 10.0f : 0.0f, ch);
 			//DEBUG("before output:%f",cvVal);
-			outputs[CV_OUTPUT].setVoltage(cvVal, ch);
+			outputs[CV_OUTPUT].setVoltage(cvVal[ch], ch);
 			//outputs[EOC_OUTPUT].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
 		}
 		else {
@@ -249,8 +273,11 @@ struct ComputerscareHorseADoodleDoo : Module {
 			checkKnobChanges();
 			counter = 0;
 		}
-		processChannel(0);
-
+		for(int i = 0; i < 16; i++) {
+			processChannel(i);
+	
+		}
+		
 	}
 };
 
@@ -283,14 +310,15 @@ struct NumStepsOverKnobDisplay : SmallLetterDisplay
 
 struct HorseDisplay : TransparentWidget {
 	ComputerscareHorseADoodleDoo *module;
+	int ch=0;
 
 	HorseDisplay() {
 	}
 
 	void drawHorse(const DrawArgs &args, float x = 0.f) {
 
-		float dy = 380 / (float)(module->seq.numSteps);
-		float mid=module->seq.numSteps/2;
+		float dy = 380 / (float)(module->seq[0].numSteps);
+		float mid=module->seq[ch].numSteps/2;
 
 		float dh = 0.2;//multiplicitive on original height
 		float zDistance = 20;
@@ -298,16 +326,16 @@ struct HorseDisplay : TransparentWidget {
 
 
 
-		for (int i = 0; i < module->seq.numSteps; i++) {
+		for (int i = 0; i < module->seq[ch].numSteps; i++) {
 			nvgBeginPath(args.vg);
 			float xx = 65;
 			float yy = i * dy;
 
-			float ip = i/module->seq.numSteps;
+			float ip = i/module->seq[ch].numSteps;
 			float width = 15.f;
 			float height = dy;
 
-			if (module->seq.absoluteSequence[i] == 1) {
+			if (module->seq[ch].absoluteSequence[i] == 1 || i==module->seq[ch].currentStep) {
 
 				float xCloseTop = xx;
 				float yCloseTop = yy;
@@ -320,7 +348,7 @@ struct HorseDisplay : TransparentWidget {
 
 
 				// left side wall
-				if (i == module->seq.currentStep) {
+				if (i == module->seq[ch].currentStep) {
 					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_BLUE );
 				}
 				else {
@@ -346,7 +374,7 @@ struct HorseDisplay : TransparentWidget {
 
 				//top
 				nvgStrokeWidth(args.vg,1.f);
-				if (i == module->seq.currentStep) {
+				if (i == module->seq[ch].currentStep) {
 					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_YELLOW);
 				}
 				else {
@@ -442,9 +470,11 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
+		smallLetterDisplay->letterSpacing=0.5;
 		smallLetterDisplay->fontSize = 21;
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
+		smallLetterDisplay->box.pos = Vec(x-4, y - 15);
 
 
 		if (knobType == 0) {//smooth
@@ -472,8 +502,6 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		}
 	
 
-
-	smallLetterDisplay->box.pos = Vec(x, y - 12);
 
 
 	addChild(smallLetterDisplay);
