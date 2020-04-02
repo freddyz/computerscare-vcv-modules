@@ -4,16 +4,16 @@ struct ComputerscareKnolyPobs;
 
 const int numKnobs = 16;
 
-const int numToggles = 16;
-const int numOutputs = 16;
-
 struct ComputerscareKnolyPobs : Module {
-	int counter = 0;
+	int counterPeriod = 64;
+	int counter = counterPeriod + 1;
+	int polyChannels = 16;
+
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		KNOB,
-		TOGGLES = KNOB + numKnobs,
-		NUM_PARAMS = TOGGLES + numToggles
+		POLY_CHANNELS = KNOB + numKnobs,
+		NUM_PARAMS
 
 	};
 	enum InputIds {
@@ -22,7 +22,7 @@ struct ComputerscareKnolyPobs : Module {
 	};
 	enum OutputIds {
 		POLY_OUTPUT,
-		NUM_OUTPUTS = POLY_OUTPUT + numOutputs
+		NUM_OUTPUTS
 	};
 	enum LightIds {
 		NUM_LIGHTS
@@ -34,25 +34,63 @@ struct ComputerscareKnolyPobs : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
 		for (int i = 0; i < numKnobs; i++) {
-			configParam(KNOB + i, 0.0f, 10.0f, 0.0f);
-			configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1) + " Voltage", " Volts");
+			configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
 		}
-
+		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
-		if (counter > 5012) {
+		if (counter > 64) {
+			checkPoly();
 			//printf("%f \n",random::uniform());
 			counter = 0;
 			//rect4032
 			//south facing high wall
 		}
-		outputs[POLY_OUTPUT].setChannels(16);
-		for (int i = 0; i < numKnobs; i++) {
+
+		for (int i = 0; i < polyChannels; i++) {
 			outputs[POLY_OUTPUT].setVoltage(params[KNOB + i].getValue(), i);
 		}
 	}
+	void checkPoly() {
+		float candidate= params[POLY_CHANNELS].getValue();
+		if(polyChannels != candidate) {
+			polyChannels = candidate;
+			outputs[POLY_OUTPUT].setChannels(polyChannels);
+			redraw();
+		}
+		
+		
+	}
+	void redraw() {
+		for (int i = 0; i < polyChannels; i++) {
+			//params[KNOB+i].setValue(random::uniform());
+		}
+	}
 
+};
+
+struct DisableableSmoothKnob : RoundKnob {
+	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg"));
+	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-disabled.svg"));
+
+	int channel = 0;
+	ComputerscareKnolyPobs *module;
+
+	DisableableSmoothKnob() {
+		//setSvg(enabledSvg);
+	}
+
+	void draw(const DrawArgs& args) override {
+		if (module) {
+			bool disabled = (channel > module->polyChannels - 1);
+			setSvg(disabled ? disabledSvg : enabledSvg);
+			dirtyValue=-10.f;
+		}
+		else {
+		}
+			RoundKnob::draw(args);
+	}
 };
 
 struct ComputerscareKnolyPobsWidget : ModuleWidget {
@@ -67,20 +105,18 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareKnolyPobsPanel.svg")));
 
 			//module->panelRef = panel;
-
 			addChild(panel);
-
 		}
+
+		addParam(createParam<TinyChannelsSnapKnob>(Vec(6, 20), module, ComputerscareKnolyPobs::POLY_CHANNELS));
+
 		float xx;
 		float yy;
 		for (int i = 0; i < numKnobs; i++) {
-			xx = 1.4f + 24.3 * (i-i % 8)/8;
-			yy = 64 + 37.5 * (i % 8) + 14.3 * (i - i % 8)/8;
-			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i-i%8)*1.2-2, 0);
+			xx = 1.4f + 24.3 * (i - i % 8) / 8;
+			yy = 64 + 37.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
+			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 2, 0);
 		}
-
-
-
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(28, 24), module, ComputerscareKnolyPobs::POLY_OUTPUT));
 
 	}
@@ -92,13 +128,23 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
 
-		addParam(createParam<SmoothKnob>(Vec(x, y), module, ComputerscareKnolyPobs::KNOB + index));
+		ParamWidget* pob =  createParam<DisableableSmoothKnob>(Vec(x, y), module, ComputerscareKnolyPobs::KNOB + index);
+
+		DisableableSmoothKnob* fader = dynamic_cast<DisableableSmoothKnob*>(pob);
+
+		fader->module = module;
+		fader->channel = index;
+
+		addParam(fader);
+
+
 		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 
 
 		addChild(smallLetterDisplay);
 
 	}
+	DisableableSmoothKnob* fader;
 	SmallLetterDisplay* smallLetterDisplay;
 };
 
