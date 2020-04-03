@@ -291,7 +291,7 @@ struct MediumDotSnapKnob : RoundBlackSnapKnob {
 };
 struct TinyChannelsSnapKnob: RoundBlackSnapKnob {
 	TinyChannelsSnapKnob() {
-		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-channels-empty-knob.svg")));
 	}
 	void randomize() override {return;}
 };

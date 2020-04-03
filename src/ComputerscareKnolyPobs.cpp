@@ -40,12 +40,9 @@ struct ComputerscareKnolyPobs : Module {
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
-		if (counter > 64) {
+		if (counter > counterPeriod) {
 			checkPoly();
-			//printf("%f \n",random::uniform());
 			counter = 0;
-			//rect4032
-			//south facing high wall
 		}
 
 		for (int i = 0; i < polyChannels; i++) {
@@ -53,21 +50,12 @@ struct ComputerscareKnolyPobs : Module {
 		}
 	}
 	void checkPoly() {
-		float candidate= params[POLY_CHANNELS].getValue();
-		if(polyChannels != candidate) {
+		float candidate = params[POLY_CHANNELS].getValue();
+		if (polyChannels != candidate) {
 			polyChannels = candidate;
 			outputs[POLY_OUTPUT].setChannels(polyChannels);
-			redraw();
-		}
-		
-		
-	}
-	void redraw() {
-		for (int i = 0; i < polyChannels; i++) {
-			//params[KNOB+i].setValue(random::uniform());
 		}
 	}
-
 };
 
 struct DisableableSmoothKnob : RoundKnob {
@@ -75,21 +63,25 @@ struct DisableableSmoothKnob : RoundKnob {
 	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-disabled.svg"));
 
 	int channel = 0;
+	bool disabled = false;
 	ComputerscareKnolyPobs *module;
 
 	DisableableSmoothKnob() {
-		//setSvg(enabledSvg);
+		setSvg(enabledSvg);
 	}
 
 	void draw(const DrawArgs& args) override {
 		if (module) {
-			bool disabled = (channel > module->polyChannels - 1);
-			setSvg(disabled ? disabledSvg : enabledSvg);
-			dirtyValue=-10.f;
+			bool candidate = channel > module->polyChannels - 1;
+			if (disabled != candidate) {
+				setSvg(candidate ? disabledSvg : enabledSvg);
+				dirtyValue = -20.f;
+				disabled = candidate;
+			}
 		}
 		else {
 		}
-			RoundKnob::draw(args);
+		RoundKnob::draw(args);
 	}
 };
 
@@ -108,7 +100,7 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 			addChild(panel);
 		}
 
-		addParam(createParam<TinyChannelsSnapKnob>(Vec(6, 20), module, ComputerscareKnolyPobs::POLY_CHANNELS));
+		addParam(createParam<TinyChannelsSnapKnob>(Vec(8, 26), module, ComputerscareKnolyPobs::POLY_CHANNELS));
 
 		float xx;
 		float yy;
