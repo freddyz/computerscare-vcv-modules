@@ -318,12 +318,20 @@ struct MediumDotSnapKnob : RoundBlackSnapKnob {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator.svg")));
 	}
 };
+struct TinyChannelsSnapKnob: RoundBlackSnapKnob {
+	TinyChannelsSnapKnob() {
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-channels-empty-knob.svg")));
+	}
+	void randomize() override {return;}
+};
 
 struct SmoothKnob : RoundKnob {
 	SmoothKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
 	}
+
 };
+
 struct SmallKnob : RoundKnob {
 	SmallKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
