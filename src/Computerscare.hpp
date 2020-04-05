@@ -318,12 +318,7 @@ struct MediumDotSnapKnob : RoundBlackSnapKnob {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator.svg")));
 	}
 };
-struct TinyChannelsSnapKnob: RoundBlackSnapKnob {
-	TinyChannelsSnapKnob() {
-		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-channels-empty-knob.svg")));
-	}
-	void randomize() override {return;}
-};
+
 
 struct SmoothKnob : RoundKnob {
 	SmoothKnob() {
@@ -481,3 +476,5 @@ struct SmallLetterDisplay : Widget {
 
 	}
 };
+
+#include "ComputerscarePolyModule.hpp"

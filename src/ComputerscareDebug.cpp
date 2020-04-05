@@ -266,7 +266,7 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 	HidableSmallSnapKnob() {
 		SmallSnapKnob();
 	}
-	void draw(const DrawArgs &args) {
+	void draw(const DrawArgs &args) override {
 		if (module ? (hackIndex == 0 ? module->clockMode == 0 : module->inputMode == 0) : true) {
 			Widget::draw(args);
 		}

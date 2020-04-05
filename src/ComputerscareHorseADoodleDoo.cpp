@@ -22,6 +22,7 @@ struct HorseSequencer {
 	int otherPrimes[16] = {80651, 85237, 11813, 22343, 19543, 28027, 9203, 39521, 42853, 58411, 33811, 76771, 10939, 22721, 17851, 10163};
 	int channel = 0;
 
+
 	std::vector<std::vector<int>> octets = {{0, 0, 0, 0}, {0, 0, 0, 1}, {0, 0, 1, 0}, {0, 0, 1, 1}, {0, 1, 0, 0}, {0, 1, 0, 1}, {0, 1, 1, 0}, {0, 1, 1, 1}, {1, 0, 0, 0}, {1, 0, 0, 1}, {1, 0, 1, 0}, {1, 0, 1, 1}, {1, 1, 0, 0}, {1, 1, 0, 1}, {1, 1, 1, 0}, {1, 1, 1, 1}};
 	std::vector<int> somethin = {1, 0, 0, 1};
 	std::vector<int> absoluteSequence;
@@ -60,7 +61,7 @@ struct HorseSequencer {
 		for (int i = 0; i < numSteps; i++) {
 			float val = 0.f;
 			float cvVal = 0.f;
-			float arg = pattern + ((float) i)*trigConst;
+			float arg = pattern + ((float) i) * trigConst;
 			for (int k = 0; k < 4; k++) {
 				val += std::sin(primes[((i + 1) * (k + 1)) % 16] * arg + otherPrimes[(otherPrimes[0] + i) % 16]);
 				cvVal += std::sin(primes[((i + 11) * (k + 1) + 201) % 16] * arg + otherPrimes[(otherPrimes[3] + i - 7) % 16]);
@@ -122,9 +123,8 @@ struct HorseSequencer {
 	}
 };
 
-struct ComputerscareHorseADoodleDoo : Module {
+struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	int counter = 0;
-	int numChannels = 1;
 	ComputerscareSVGPanel* panelRef;
 	float currentValues[16] = {0.f};
 	bool atFirstStepPoly[16] = {false};
@@ -176,6 +176,9 @@ struct ComputerscareHorseADoodleDoo : Module {
 	int seqVal[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	float cvVal[16] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
 
+	int clockChannels[16] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+	int resetChannels[16] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
 	bool changePending[16] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 
 	HorseSequencer seq[16];
@@ -209,24 +212,31 @@ struct ComputerscareHorseADoodleDoo : Module {
 		int stepsNum = inputs[STEPS_CV].getChannels();
 		int densityNum = inputs[DENSITY_CV].getChannels();
 
+		int clockNum = inputs[CLOCK_INPUT].getChannels();
+		int resetNum = inputs[RESET_INPUT].getChannels();
+
 
 		lastStepsKnob = std::floor(params[STEPS_KNOB].getValue());
 		lastPolyKnob = std::floor(params[POLY_KNOB].getValue());
-		outputs[TRIGGER_OUTPUT].setChannels(lastPolyKnob);
-		outputs[CV_OUTPUT].setChannels(lastPolyKnob);
 
-		for (int i = 0; i < lastPolyKnob; i++) {
+		polyChannels = lastPolyKnob == 0 ? std::max(clockNum, std::max(pattNum, std::max(stepsNum, densityNum))) : lastPolyKnob;
+
+		for (int i = 0; i < 16; i++) {
+			clockChannels[i] = std::max(1, std::min(i, clockNum));
+			resetChannels[i] = std::max(1, std::min(i, resetNum));
+		}
+
+		outputs[TRIGGER_OUTPUT].setChannels(polyChannels);
+		outputs[CV_OUTPUT].setChannels(polyChannels);
+
+		for (int i = 0; i < polyChannels; i++) {
 			float patternVal = params[PATTERN_KNOB].getValue() + params[PATTERN_TRIM].getValue() * inputs[PATTERN_CV].getVoltage(fmin(i, pattNum));
 			int stepsVal = std::floor(params[STEPS_KNOB].getValue() + params[STEPS_TRIM].getValue() * inputs[STEPS_CV].getVoltage(fmin(i, stepsNum)));
 			float densityVal = params[DENSITY_KNOB].getValue() + params[DENSITY_TRIM].getValue() * inputs[DENSITY_CV].getVoltage(fmin(i, densityNum)) / 10;
 			seq[i].checkAndArm(patternVal, stepsVal, densityVal);
 		}
 	}
-	void processChannel(int ch) {
-		bool clockInputHigh = clockInputTrigger[ch].isHigh();
-		bool clocked = clockInputTrigger[ch].process(inputs[CLOCK_INPUT].getVoltage());
-
-		bool reset = resetInputTrigger[ch].process(inputs[RESET_INPUT].getVoltage());
+	void processChannel(int ch, bool clocked, bool reset, bool clockInputHigh) {
 
 		if (reset) {
 			seq[ch].armChange();
@@ -275,9 +285,20 @@ struct ComputerscareHorseADoodleDoo : Module {
 			checkKnobChanges();
 			counter = 0;
 		}
-		for (int i = 0; i < 16; i++) {
-			processChannel(i);
 
+
+		bool currentClock[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+		bool currentReset[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+		bool isHigh[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+		for (int i = 0; i < 16; i++) {
+			currentClock[i] = clockInputTrigger[i].process(inputs[CLOCK_INPUT].getVoltage(i));
+			currentReset[i] = resetInputTrigger[i].process(inputs[RESET_INPUT].getVoltage(i));
+			isHigh[i] = clockInputTrigger[i].isHigh();
+
+		}
+		for (int i = 0; i < 16; i++) {
+			processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
 		}
 
 	}

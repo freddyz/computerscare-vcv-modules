@@ -1,14 +1,12 @@
 #include "Computerscare.hpp"
+#include "ComputerscarePolyModule.hpp"
 
 struct ComputerscareKnolyPobs;
 
 const int numKnobs = 16;
 
-struct ComputerscareKnolyPobs : Module {
-	int counterPeriod = 64;
-	int counter = counterPeriod + 1;
-	int polyChannels = 16;
 
+struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		KNOB,
@@ -39,24 +37,19 @@ struct ComputerscareKnolyPobs : Module {
 		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
 	}
 	void process(const ProcessArgs &args) override {
-		counter++;
-		if (counter > counterPeriod) {
-			checkPoly();
-			counter = 0;
-		}
+		ComputerscarePolyModule::checkCounter();
 
 		for (int i = 0; i < polyChannels; i++) {
 			outputs[POLY_OUTPUT].setVoltage(params[KNOB + i].getValue(), i);
 		}
 	}
-	void checkPoly() {
-		float candidate = params[POLY_CHANNELS].getValue();
-		if (polyChannels != candidate) {
-			polyChannels = candidate;
+	void checkPoly() override {
+			polyChannels = params[POLY_CHANNELS].getValue();
 			outputs[POLY_OUTPUT].setChannels(polyChannels);
-		}
 	}
 };
+
+
 
 struct DisableableSmoothKnob : RoundKnob {
 	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg"));
@@ -100,7 +93,16 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 			addChild(panel);
 		}
 
-		addParam(createParam<TinyChannelsSnapKnob>(Vec(8, 26), module, ComputerscareKnolyPobs::POLY_CHANNELS));
+
+
+		//addParam(createParam<TinyChannelsSnapKnob>(Vec(8, 26), module, ComputerscareKnolyPobs::POLY_CHANNELS));
+
+		channelWidget = new PolyOutputChannelsWidget(Vec(1,23),module,ComputerscareKnolyPobs::POLY_CHANNELS);
+
+
+		addChild(channelWidget);
+
+
 
 		float xx;
 		float yy;
@@ -136,6 +138,8 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 		addChild(smallLetterDisplay);
 
 	}
+	PolyOutputChannelsWidget* channelWidget;
+	PolyChannelsDisplay* channelDisplay;
 	DisableableSmoothKnob* fader;
 	SmallLetterDisplay* smallLetterDisplay;
 };

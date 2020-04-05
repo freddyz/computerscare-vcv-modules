@@ -96,7 +96,6 @@ struct PouterSmallDisplay : SmallLetterDisplay
 	int ch;
 	PouterSmallDisplay(int outputChannelNumber)
 	{
-
 		ch = outputChannelNumber;
 		SmallLetterDisplay();
 	};
@@ -105,17 +104,11 @@ struct PouterSmallDisplay : SmallLetterDisplay
 		//this->setNumDivisionsString();
 		if (module)
 		{
-
-
 			std::string str = std::to_string(module->routing[ch]);
 			value = str;
-
-
-
 		}
 		SmallLetterDisplay::draw(args);
 	}
-
 };
 
 struct ComputerscareRolyPouterWidget : ModuleWidget {
