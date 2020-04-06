@@ -4,8 +4,7 @@ struct ComputerscareBolyPuttons;
 
 const int numToggles = 16;
 
-struct ComputerscareBolyPuttons : Module {
-	int counter = 0;
+struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 	int outputRangeEnum = 0;
 	bool momentary = false;
 	bool radioMode = false;
@@ -17,7 +16,8 @@ struct ComputerscareBolyPuttons : Module {
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		TOGGLE,
-		NUM_PARAMS = TOGGLE + numToggles
+		POLY_CHANNELS=TOGGLE+numToggles,
+		NUM_PARAMS
 
 	};
 	enum InputIds {
@@ -43,6 +43,7 @@ struct ComputerscareBolyPuttons : Module {
 			//configParam(KNOB + i, 0.0f, 10.0f, 0.0f);
 			configParam(TOGGLE + i, 0.f, 1.f, 0.f, "Channel " + std::to_string(i + 1));
 		}
+		configParam(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 
 		outputRanges[0][0] = 0.f;
 		outputRanges[0][1] = 10.f;
@@ -110,19 +111,26 @@ struct ComputerscareBolyPuttons : Module {
 			}
 		}
 	}
+	void checkPoly() override {
+		int aChannels=inputs[A_INPUT].getChannels();
+		int bChannels=inputs[B_INPUT].getChannels();
+		int knobSetting = params[POLY_CHANNELS].getValue();
+		if(knobSetting ==0) {
+			polyChannels = (aChannels==0 && bChannels ==0) ? 16 : std::max(aChannels,bChannels);
+		}
+		else {
+			polyChannels = knobSetting;
+		}
+		outputs[POLY_OUTPUT].setChannels(polyChannels);
+	}
 	void process(const ProcessArgs &args) override {
+		ComputerscarePolyModule::checkCounter();
+
 		float min = outputRanges[outputRangeEnum][0];
 		float max = outputRanges[outputRangeEnum][1];
 		int numAChannels = inputs[A_INPUT].getChannels();
 		int numBChannels = inputs[B_INPUT].getChannels();
-		counter++;
-		if (counter > 5012) {
-			//printf("%f \n",random::uniform());
-			counter = 0;
-			//rect4032
-			//south facing high wall
-		}
-		outputs[POLY_OUTPUT].setChannels(16);
+		
 
 		//if (outputs[SCALED_OUTPUT + i].isConnected() || outputs[QUANTIZED_OUTPUT + i].isConnected()) {
 		// numInputChannels = inputs[CHANNEL_INPUT + i].getChannels();
@@ -145,6 +153,7 @@ struct ComputerscareBolyPuttons : Module {
 			}
 
 		}
+		//toggle mode
 		else {
 			if (radioMode) {
 				checkForParamChanges();
@@ -166,6 +175,7 @@ struct ComputerscareBolyPuttons : Module {
 
 };
 
+
 struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 	ComputerscareBolyPuttonsWidget(ComputerscareBolyPuttons *module) {
 
@@ -179,6 +189,10 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 			addChild(panel);
 
 		}
+
+		channelWidget = new PolyOutputChannelsWidget(Vec(22,23),module,ComputerscareBolyPuttons::POLY_CHANNELS);
+		addChild(channelWidget);
+
 		float xx;
 		float yy;
 		for (int i = 0; i < numToggles; i++) {
@@ -213,6 +227,8 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 
 	}
 	void appendContextMenu(Menu *menu) override;
+
+	PolyOutputChannelsWidget* channelWidget;
 	ComputerscareBolyPuttons *bolyPuttons;
 	SmallLetterDisplay* smallLetterDisplay;
 };

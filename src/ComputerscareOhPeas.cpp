@@ -1,3 +1,4 @@
+
 #include "plugin.hpp"
 #include "Computerscare.hpp"
 
@@ -54,7 +55,7 @@ struct ComputerscareOhPeas : Module
     int numDivisions = 12;
     int globalTranspose = 0;
     bool evenQuantizeMode = true;
-    bool manualSet=false;
+    bool manualSet=true;
 
     int checkCounter=9999;
     int checkPeriod=1000;
@@ -230,6 +231,7 @@ struct PeasTF2 : ComputerscareTextField
             {
                 module->currentFormula = text.c_str();
             }
+
         }
         else {
             text="2212221";
@@ -370,11 +372,8 @@ struct ComputerscareOhPeasWidget : ModuleWidget
         ModuleWidget::fromJson(rootJ);
 
         // legacy
-
         json_t *textJ = json_object_get(rootJ, "sequences");
         if (textJ) {
-            DEBUG("we got legacy");
-            //textFieldTemp->text = json_string_value(textJ);
             peas->currentFormula=json_string_value(textJ);
             peas->manualSet=true;
         }

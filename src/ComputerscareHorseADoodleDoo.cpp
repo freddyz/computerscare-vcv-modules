@@ -280,11 +280,13 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		}
 	}
 	void process(const ProcessArgs &args) override {
-		counter++;
+		ComputerscarePolyModule::checkCounter();
+
+		/*counter++;
 		if (counter > 601) {
 			checkKnobChanges();
 			counter = 0;
-		}
+		}*/
 
 
 		bool currentClock[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -301,6 +303,11 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
 		}
 
+	}
+	void checkPoly() override {
+			checkKnobChanges();
+			//polyChannels = params[POLY_CHANNELS].getValue();
+			//outputs[POLY_OUTPUT].setChannels(polyChannels);
 	}
 };
 
@@ -460,7 +467,9 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addInputBlock("Length", 0, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1);
 		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0);
 
-		addInputBlock("Polyphony", 0, 240, module, ComputerscareHorseADoodleDoo::POLY_KNOB,  -1, 2);
+		channelWidget = new PolyOutputChannelsWidget(Vec(1,250),module,ComputerscareHorseADoodleDoo::POLY_KNOB);
+
+		addChild(channelWidget);
 
 		horseDisplay = new HorseDisplay();
 		horseDisplay->module = module;
@@ -530,6 +539,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addChild(smallLetterDisplay);
 
 	}
+	PolyOutputChannelsWidget* channelWidget;
 	HorseDisplay* horseDisplay;
 	NumStepsOverKnobDisplay* numStepsKnob;
 	InputBlockBackground* background;
