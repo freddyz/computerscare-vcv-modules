@@ -195,10 +195,14 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 
 		float xx;
 		float yy;
+		float dx;
+		float dy;
 		for (int i = 0; i < numToggles; i++) {
 			xx = 5.2f + 27.3 * (i - i % 8) / 8;
 			yy = 92 + 33.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
-			addLabeledButton(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 2, 2);
+			dx = 4 - (i-i%8)*0.9;
+			dy  = 19;
+			addLabeledButton(std::to_string(i + 1), xx, yy, module, i, dx, dy);
 		}
 
 		addInput(createInput<InPort>(Vec(9, 58), module, ComputerscareBolyPuttons::A_INPUT));
@@ -209,6 +213,8 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 	}
 	void addLabeledButton(std::string label, int x, int y, ComputerscareBolyPuttons *module, int index, float labelDx, float labelDy) {
 
+		addParam(createParam<SmallIsoButton>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
+
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
 		smallLetterDisplay->fontSize = 16;
@@ -217,7 +223,6 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 		addChild(smallLetterDisplay);
 
-		addParam(createParam<SmallIsoButton>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
 	}
 	
 	void fromJson(json_t *rootJ) override

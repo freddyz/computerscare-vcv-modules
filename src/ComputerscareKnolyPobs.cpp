@@ -57,7 +57,7 @@ struct DisableableSmoothKnob : RoundKnob {
 
 	int channel = 0;
 	bool disabled = false;
-	ComputerscareKnolyPobs *module;
+	ComputerscarePolyModule *module;
 
 	DisableableSmoothKnob() {
 		setSvg(enabledSvg);
