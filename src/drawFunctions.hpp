@@ -9,15 +9,17 @@ struct DrawHelper {
     args = someArgs;
   }
   void drawShape(std::vector<Vec> points, NVGColor fillColor) {
-    
+               drawShape(points,fillColor,COLOR_COMPUTERSCARE_TRANSPARENT,0.f);
+
   }
   void drawShape(std::vector<Vec> points,NVGColor fillColor,NVGColor strokeColor) {
-    
+           drawShape(points,fillColor,strokeColor,1.f);
+
   }
     
   
    void drawShape(std::vector<Vec> points,NVGColor strokeColor,float thickness) {
-     
+     drawShape(points,COLOR_COMPUTERSCARE_TRANSPARENT,strokeColor,thickness);
    }
   void drawShape(std::vector<Vec> points,NVGColor fillColor,NVGColor strokeColor,float thickness) {
     unsigned int n = points.size();
