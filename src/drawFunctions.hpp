@@ -8,12 +8,24 @@ struct DrawHelper {
   DrawHelper(DrawArgs &someArgs) {
     args = someArgs;
   }
-  void drawOutline(std::vector<Vec> points,NVGColor color,float thickness) {
+  void drawShape(std::vector<Vec> points, NVGColor fillColor) {
+    
+  }
+  void drawShape(std::vector<Vec> points,NVGColor fillColor,NVGColor strokeColor) {
+    
+  }
+    
+  
+   void drawShape(std::vector<Vec> points,NVGColor strokeColor,float thickness) {
+     
+   }
+  void drawShape(std::vector<Vec> points,NVGColor fillColor,NVGColor strokeColor,float thickness) {
     unsigned int n = points.size();
     nvgSave(args.vg);
     nvgBeginPath(args.vg);
-    nvgStrokeStyle(args.vg,color);
+    nvgStrokeStyle(args.vg,strokeColor);
     nvgStrokeWidth(args.vg,thickness);
+    nvgFillStyle(fillColor);
     nvgMoveTo(args.vg,points[0].x,points[0].y);
 
     for(int i = 1; i < n; i++) {
@@ -21,7 +33,10 @@ struct DrawHelper {
     }
 
     nvgClosePath(args.vg);
-    nvgStroke(args.vg);
+    nvgFill(args.vg);
+    if(thickness > 0) {
+      nvgStroke(args.vg);
+    }
     nvgRestore(args.vg);
   }
 };
