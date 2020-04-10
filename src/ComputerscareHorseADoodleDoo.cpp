@@ -138,6 +138,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		WEIRDNESS_KNOB,
 		WEIRDNESS_TRIM,
 		POLY_KNOB,
+		MODE_KNOB,
 		NUM_PARAMS
 
 	};
@@ -197,6 +198,8 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 		configParam(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
 
+		configParam(MODE_KNOB,1.f,16.f,1.f,"Mode");
+
 
 		for (int i = 0; i < 16; i++) {
 			seq[i] = HorseSequencer(0.f, 8, 0.f, i);
@@ -240,14 +243,14 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 		if (reset) {
 			seq[ch].armChange();
-			seqVal[ch] = seq[ch].get();
+			/*seqVal[ch] = seq[ch].get();
 			if (seqVal[ch]) {
 				cvVal[ch] = seq[ch].getCV();
 			}
-			atFirstStepPoly[ch] =  true;
+			atFirstStepPoly[ch] =  true;*/
 		}
 
-		if (clocked && !reset) {
+		if (clocked /*&& !reset*/) {
 			seqVal[ch] = seq[ch].tickAndGet();
 			if (seqVal[ch]) {
 				cvVal[ch] = seq[ch].getCV();
@@ -265,6 +268,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			}*/
 
 		}
+
 		if (inputs[CLOCK_INPUT].isConnected()) {
 			outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && seqVal[ch] == 1) ? 10.0f : 0.0f, ch);
 			//DEBUG("before output:%f",cvVal);
@@ -310,6 +314,9 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			//outputs[POLY_OUTPUT].setChannels(polyChannels);
 	}
 };
+
+
+
 
 struct NumStepsOverKnobDisplay : SmallLetterDisplay
 {
@@ -466,6 +473,14 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addInputBlock("Pattern", 0, 100, module, 0,  ComputerscareHorseADoodleDoo::PATTERN_CV, 0);
 		addInputBlock("Length", 0, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1);
 		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0);
+					addParam(createParam<MediumDotSnapKnob>(Vec(30,240), module, ComputerscareHorseADoodleDoo::MODE_KNOB));
+
+
+		//addInputBlock("Mode", 0, 250, module, ComputerscareHorseADoodleDoo::MODE_KNOB,  0, 1);
+
+
+
+
 
 		channelWidget = new PolyOutputChannelsWidget(Vec(1,250),module,ComputerscareHorseADoodleDoo::POLY_KNOB);
 

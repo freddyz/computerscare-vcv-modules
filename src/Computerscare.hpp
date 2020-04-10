@@ -477,4 +477,5 @@ struct SmallLetterDisplay : Widget {
 	}
 };
 
+#include "drawFunctions.hpp"
 #include "ComputerscarePolyModule.hpp"
