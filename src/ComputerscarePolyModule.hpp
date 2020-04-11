@@ -82,15 +82,11 @@ struct PolyOutputChannelsWidget : Widget {
 	PolyChannelsDisplay *channelCountDisplay;
 	TinyChannelsSnapKnob *channelsKnob;
 	PolyOutputChannelsWidget(math::Vec pos,ComputerscarePolyModule *mod,int paramId) {
-		//Vec(8, 26) +7,+3
-		//		//addParam(createParam<TinyChannelsSnapKnob>(Vec(8, 26), module, ComputerscareKnolyPobs::POLY_CHANNELS));
 		module = mod;
-
 
 		channelsKnob = createParam<TinyChannelsSnapKnob>(pos.plus(Vec(7,3)),module,paramId);
 		channelsKnob->module=module;
 		channelsKnob->paramId=paramId;
-
 
 		channelCountDisplay = new PolyChannelsDisplay(pos);
 		

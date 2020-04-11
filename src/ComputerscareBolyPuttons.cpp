@@ -175,15 +175,18 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 
 };
 
-struct DisableableParamWidget : ParamWidget {
+struct DisableableParamWidget : SmallIsoButton {
 	ComputerscarePolyModule *module;
-	bool disabled;
 	int channel;
+
+	DisableableParamWidget() {
+		SmallIsoButton();
+	}
 	void step() override {
 		if (module) {
 			disabled = channel > module->polyChannels - 1;
 		}
-		ParamWidget::step();
+		SmallIsoButton::step();
 	}
 };
 
@@ -224,7 +227,14 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 	}
 	void addLabeledButton(std::string label, int x, int y, ComputerscareBolyPuttons *module, int index, float labelDx, float labelDy) {
 
-		addParam(createParam<SmallIsoButton>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
+		DisableableParamWidget* button =  createParam<DisableableParamWidget>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index);
+
+		button->module=module;
+		button->channel=index;
+		addParam(button);
+
+
+		//addParam(createParam<DisableableParamWidget>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
 
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
@@ -244,6 +254,7 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 	}
 	void appendContextMenu(Menu *menu) override;
 
+	DisableableParamWidget* button;
 	PolyOutputChannelsWidget* channelWidget;
 	ComputerscareBolyPuttons *bolyPuttons;
 	SmallLetterDisplay* smallLetterDisplay;

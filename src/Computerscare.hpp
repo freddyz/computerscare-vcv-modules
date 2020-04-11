@@ -140,23 +140,28 @@ struct SmallIsoButton : app::SvgSwitch {
 		disabledFrames.push_back(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-down-grey.svg")));
 
 
-		//addFrame(enabledFrames[0]);
-		//addFrame(enabledFrames[1]);
+		addFrame(enabledFrames[0]);
+		addFrame(enabledFrames[1]);
 		shadow->opacity = 0.f;
 	}
 
-	void draw(const DrawArgs& args) override {
+	void step() override {
 		if (disabled != lastDisabled) {
-			DEBUG("AH HA!!!");
-			frames.empty();
-			addFrame(disabled ? disabledFrames[0] : enabledFrames[0]);
-			addFrame(disabled ? disabledFrames[1] : enabledFrames[1]);
-
-			//setSvg(candidate ? disabledSvg : enabledSvg);
+			if(disabled) {
+				frames[0]=disabledFrames[0];
+				frames[1]=disabledFrames[1];
+			}
+			else {
+				frames[0]=enabledFrames[0];
+				frames[1]=enabledFrames[1];
+			}
+			onChange(*(new event::Change()));
+			fb->dirty=true;
 			dirtyValue = -20.f;
 			lastDisabled = disabled;
+
 		}
-		SvgSwitch::draw(args);
+		SvgSwitch::step();
 	}
 };
 struct ComputerscareIsoThree : app::SvgSwitch {
