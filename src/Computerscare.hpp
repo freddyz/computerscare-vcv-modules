@@ -43,6 +43,7 @@ extern Model *modelComputerscareGolyPenerator;
 extern Model *modelComputerscareMolyPatrix;
 
 extern Model *modelComputerscareHorseADoodleDoo;
+extern Model *modelComputerscareDrolyPaw;
 
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
@@ -126,10 +127,36 @@ struct IsoButton : SvgSwitch {
 	}
 };
 struct SmallIsoButton : app::SvgSwitch {
+	bool disabled=true;
+	bool lastDisabled=false;
+	std::vector<std::shared_ptr<Svg>> enabledFrames;
+	std::vector<std::shared_ptr<Svg>> disabledFrames;
+
 	SmallIsoButton() {
-		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-up.svg")));
-		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-down.svg")));
+		enabledFrames.push_back(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-up.svg")));
+		enabledFrames.push_back(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-down.svg")));
+		
+		disabledFrames.push_back(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-up-grey.svg")));
+		disabledFrames.push_back(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-down-grey.svg")));
+
+
+		//addFrame(enabledFrames[0]);
+		//addFrame(enabledFrames[1]);
 		shadow->opacity = 0.f;
+	}
+
+	void draw(const DrawArgs& args) override {
+		if (disabled != lastDisabled) {
+			DEBUG("AH HA!!!");
+			frames.empty();
+			addFrame(disabled ? disabledFrames[0] : enabledFrames[0]);
+			addFrame(disabled ? disabledFrames[1] : enabledFrames[1]);
+
+			//setSvg(candidate ? disabledSvg : enabledSvg);
+			dirtyValue = -20.f;
+			lastDisabled = disabled;
+		}
+		SvgSwitch::draw(args);
 	}
 };
 struct ComputerscareIsoThree : app::SvgSwitch {
@@ -477,5 +504,6 @@ struct SmallLetterDisplay : Widget {
 	}
 };
 
+#include "pointFunctions.hpp"
 #include "drawFunctions.hpp"
 #include "ComputerscarePolyModule.hpp"

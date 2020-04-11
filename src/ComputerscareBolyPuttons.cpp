@@ -97,7 +97,7 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 		json_object_set_new(rootJ, "radioMode", json_boolean(radioMode));
 		json_object_set_new(rootJ, "momentaryMode", json_boolean(momentary));
 		return rootJ;
-	}
+	}  
 
 	void onRandomize() override {
 		if (radioMode) {
@@ -175,6 +175,17 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 
 };
 
+struct DisableableParamWidget : ParamWidget {
+	ComputerscarePolyModule *module;
+	bool disabled;
+	int channel;
+	void step() override {
+		if (module) {
+			disabled = channel > module->polyChannels - 1;
+		}
+		ParamWidget::step();
+	}
+};
 
 struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 	ComputerscareBolyPuttonsWidget(ComputerscareBolyPuttons *module) {

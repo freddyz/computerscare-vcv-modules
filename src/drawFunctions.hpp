@@ -8,16 +8,12 @@ struct DrawHelper {
   DrawHelper(NVGcontext* ctx) {
     vg = ctx;
   }
-  void drawShape(std::vector<Vec> points, NVGcolor fillColor) {
+  void drawShape(std::vector<Vec> points, NVGcolor fillColor=COLOR_COMPUTERSCARE_PINK) {
     drawShape(points, fillColor, COLOR_COMPUTERSCARE_TRANSPARENT, 0.f);
-
   }
   void drawShape(std::vector<Vec> points, NVGcolor fillColor, NVGcolor strokeColor) {
     drawShape(points, fillColor, strokeColor, 1.f);
-
   }
-
-
   void drawShape(std::vector<Vec> points, NVGcolor strokeColor, float thickness) {
     drawShape(points, COLOR_COMPUTERSCARE_TRANSPARENT, strokeColor, thickness);
   }

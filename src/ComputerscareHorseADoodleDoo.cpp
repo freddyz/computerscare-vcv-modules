@@ -70,7 +70,7 @@ struct HorseSequencer {
 			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
 			newCV.push_back(cvRoot + (cvVal + 4) / .8);
 		}
-		printVector(newSeq);
+		//printVector(newSeq);
 		absoluteSequence = newSeq;
 		cvSequence = newCV;
 	}
