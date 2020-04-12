@@ -88,21 +88,12 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareKnolyPobsPanel.svg")));
-
-			//module->panelRef = panel;
 			addChild(panel);
 		}
-
-
-
-		//addParam(createParam<TinyChannelsSnapKnob>(Vec(8, 26), module, ComputerscareKnolyPobs::POLY_CHANNELS));
-
 		channelWidget = new PolyOutputChannelsWidget(Vec(1,23),module,ComputerscareKnolyPobs::POLY_CHANNELS);
 
 
 		addChild(channelWidget);
-
-
 
 		float xx;
 		float yy;

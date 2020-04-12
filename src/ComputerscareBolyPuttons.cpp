@@ -16,7 +16,8 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		TOGGLE,
-		POLY_CHANNELS=TOGGLE+numToggles,
+		POLY_CHANNELS = TOGGLE + numToggles,
+		MOMENTARY_MODE,
 		NUM_PARAMS
 
 	};
@@ -92,31 +93,34 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 	}
 	json_t *dataToJson() override
 	{
-        json_t *rootJ = json_object();
+		json_t *rootJ = json_object();
 		json_object_set_new(rootJ, "outputRange", json_integer(outputRangeEnum));
 		json_object_set_new(rootJ, "radioMode", json_boolean(radioMode));
 		json_object_set_new(rootJ, "momentaryMode", json_boolean(momentary));
 		return rootJ;
-	}  
+	}
 
 	void onRandomize() override {
-		if (radioMode) {
-			int rIndex = floor(random::uniform() * 16);
-			switchOffAllButtonsButOne(rIndex);
-			params[TOGGLE + rIndex].setValue(1.f);
-		}
-		else {
-			for (int i = 0; i < numToggles; i++) {
-				params[TOGGLE + i].setValue(random::uniform() < 0.5 ? 0.f : 1.f);
+		if (momentary) {
+		} else {
+			if (radioMode) {
+				int rIndex = floor(random::uniform() * 16);
+				switchOffAllButtonsButOne(rIndex);
+				params[TOGGLE + rIndex].setValue(1.f);
+			}
+			else {
+				for (int i = 0; i < numToggles; i++) {
+					params[TOGGLE + i].setValue(random::uniform() < 0.5 ? 0.f : 1.f);
+				}
 			}
 		}
 	}
 	void checkPoly() override {
-		int aChannels=inputs[A_INPUT].getChannels();
-		int bChannels=inputs[B_INPUT].getChannels();
+		int aChannels = inputs[A_INPUT].getChannels();
+		int bChannels = inputs[B_INPUT].getChannels();
 		int knobSetting = params[POLY_CHANNELS].getValue();
-		if(knobSetting ==0) {
-			polyChannels = (aChannels==0 && bChannels ==0) ? 16 : std::max(aChannels,bChannels);
+		if (knobSetting == 0) {
+			polyChannels = (aChannels == 0 && bChannels == 0) ? 16 : std::max(aChannels, bChannels);
 		}
 		else {
 			polyChannels = knobSetting;
@@ -126,58 +130,33 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
 
-		float min = outputRanges[outputRangeEnum][0];
-		float max = outputRanges[outputRangeEnum][1];
+		float rangeMin = outputRanges[outputRangeEnum][0];
+		float rangeMax = outputRanges[outputRangeEnum][1];
 		int numAChannels = inputs[A_INPUT].getChannels();
 		int numBChannels = inputs[B_INPUT].getChannels();
-		
 
-		//if (outputs[SCALED_OUTPUT + i].isConnected() || outputs[QUANTIZED_OUTPUT + i].isConnected()) {
-		// numInputChannels = inputs[CHANNEL_INPUT + i].getChannels();
-		if (momentary) {
-			for (int i = 0; i < numToggles; i++) {
-				if (momentaryTriggers[i].process(params[TOGGLE + i].getValue())) {
-					pulseGen[i].trigger();
-					if (inputs[A_INPUT].isConnected()) {
-						min = inputs[A_INPUT].getVoltage(i % numAChannels);
-					}
+		float min;
+		float max;
+		float spread;
 
-					if (inputs[B_INPUT].isConnected()) {
-						max = inputs[B_INPUT].getVoltage(i % numBChannels);
-					}
 
-					float spread = max - min;
-					outputs[POLY_OUTPUT].setVoltage(pulseGen[i].process(APP->engine->getSampleTime())*spread + min, i);
-				}
-
-			}
-
+		if (radioMode && !momentary) {
+			checkForParamChanges();
 		}
-		//toggle mode
-		else {
-			if (radioMode) {
-				checkForParamChanges();
-			}
-			for (int i = 0; i < numToggles; i++) {
-				if (inputs[A_INPUT].isConnected()) {
-					min = inputs[A_INPUT].getVoltage(i % numAChannels);
-				}
-
-				if (inputs[B_INPUT].isConnected()) {
-					max = inputs[B_INPUT].getVoltage(i % numBChannels);
-				}
-
-				float spread = max - min;
-				outputs[POLY_OUTPUT].setVoltage(params[TOGGLE + i].getValue()*spread + min, i);
-			}
+		for(int i = 0; i < polyChannels; i++) {
+			min = i< numAChannels ? inputs[A_INPUT].getVoltage(i) : rangeMin;
+			max = i< numBChannels ? inputs[B_INPUT].getVoltage(i) : rangeMax;
+			spread = max-min;
+			outputs[POLY_OUTPUT].setVoltage(params[TOGGLE + i].getValue()*spread + min, i);
 		}
 	}
 
 };
 
 struct DisableableParamWidget : SmallIsoButton {
-	ComputerscarePolyModule *module;
+	ComputerscareBolyPuttons *module;
 	int channel;
+
 
 	DisableableParamWidget() {
 		SmallIsoButton();
@@ -185,6 +164,7 @@ struct DisableableParamWidget : SmallIsoButton {
 	void step() override {
 		if (module) {
 			disabled = channel > module->polyChannels - 1;
+			momentary = module->momentary;
 		}
 		SmallIsoButton::step();
 	}
@@ -204,7 +184,7 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 
 		}
 
-		channelWidget = new PolyOutputChannelsWidget(Vec(22,23),module,ComputerscareBolyPuttons::POLY_CHANNELS);
+		channelWidget = new PolyOutputChannelsWidget(Vec(22, 23), module, ComputerscareBolyPuttons::POLY_CHANNELS);
 		addChild(channelWidget);
 
 		float xx;
@@ -214,7 +194,7 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 		for (int i = 0; i < numToggles; i++) {
 			xx = 5.2f + 27.3 * (i - i % 8) / 8;
 			yy = 92 + 33.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
-			dx = 4 - (i-i%8)*0.9;
+			dx = 4 - (i - i % 8) * 0.9;
 			dy  = 19;
 			addLabeledButton(std::to_string(i + 1), xx, yy, module, i, dx, dy);
 		}
@@ -229,8 +209,8 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 
 		DisableableParamWidget* button =  createParam<DisableableParamWidget>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index);
 
-		button->module=module;
-		button->channel=index;
+		button->module = module;
+		button->channel = index;
 		addParam(button);
 
 
@@ -245,12 +225,11 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 		addChild(smallLetterDisplay);
 
 	}
-	
+
 	void fromJson(json_t *rootJ) override
 	{
 		ModuleWidget::fromJson(rootJ);
 		bolyPuttons->legacyJSON(rootJ);
-
 	}
 	void appendContextMenu(Menu *menu) override;
 
@@ -283,6 +262,20 @@ struct RadioModeMenuItem: MenuItem {
 		MenuItem::step();
 	}
 };
+struct MomentaryModeMenuItem: MenuItem {
+	ComputerscareBolyPuttons *bolyPuttons;
+	MomentaryModeMenuItem() {
+
+	}
+	void onAction(const event::Action &e) override {
+		bolyPuttons->momentary = !bolyPuttons->momentary;
+	}
+	void step() override {
+		rightText = bolyPuttons->momentary ? "✔" : "";
+		MenuItem::step();
+	}
+};
+
 
 void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
 {
@@ -291,10 +284,16 @@ void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu *menu)
 	menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 	menu->addChild(construct<MenuLabel>(&MenuLabel::text, "How The Buttons Work"));
 	RadioModeMenuItem *radioMode = new RadioModeMenuItem();
-	radioMode->text = "Exclusive Mode (behaves like radio buttons)";
+	radioMode->text = "Exclusive Mode (like radio buttons: only can be pressed at a time)";
 	radioMode->bolyPuttons = bolyPuttons;
 	menu->addChild(radioMode);
 
+
+	menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+	MomentaryModeMenuItem *momentaryMode = new MomentaryModeMenuItem();
+	momentaryMode->text = "Momentary (gate output while button is held)";
+	momentaryMode->bolyPuttons = bolyPuttons;
+	menu->addChild(momentaryMode);
 
 	menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
