@@ -9,6 +9,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 	int counter = 0;
 	int routing[numKnobs];
 	int numOutputChannels = 16;
+	int numInputChannels = -1;
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		KNOB,
@@ -46,20 +47,26 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 		}
 	}
 	void onRandomize() override {
-		int numInputChannels = inputs[POLY_INPUT].getChannels();
-		for(int i = 0; i < polyChannels; i++) {
-			params[KNOB+i].setValue(1+std::floor(random::uniform()*numInputChannels));
+		float max = numInputChannels > 0 ? numInputChannels : 16;
+		for (int i = 0; i < polyChannels; i++) {
+			params[KNOB + i].setValue(1 + std::floor(random::uniform()*max));
 		}
 	}
 	void checkPoly() override {
-		int inputChannels = inputs[POLY_INPUT].getChannels();
+		numInputChannels = inputs[POLY_INPUT].getChannels();
 		int cvChannels = inputs[ROUTING_CV].getChannels();
 		int knobSetting = params[POLY_CHANNELS].getValue();
-		if (knobSetting == 0) {
-			polyChannels = inputChannels;
-		}
-		else {
-			polyChannels = knobSetting;
+		if (numInputChannels > 0) {
+
+
+			if (knobSetting == 0) {
+				polyChannels = numInputChannels;
+			}
+			else {
+				polyChannels = knobSetting;
+			}
+		} else {
+			polyChannels = 16;
 		}
 		outputs[POLY_OUTPUT].setChannels(polyChannels);
 	}
@@ -112,6 +119,8 @@ struct PouterSmallDisplay : SmallLetterDisplay
 {
 	ComputerscareRolyPouter *module;
 	int ch;
+	NVGcolor okayColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+	NVGcolor outOfBoundsColor = COLOR_COMPUTERSCARE_YELLOW;
 	PouterSmallDisplay(int outputChannelNumber)
 	{
 		ch = outputChannelNumber;
@@ -119,10 +128,15 @@ struct PouterSmallDisplay : SmallLetterDisplay
 	};
 	void draw(const DrawArgs &args)
 	{
-		//this->setNumDivisionsString();
 		if (module)
 		{
 			std::string str = std::to_string(module->routing[ch]);
+			if (module->numInputChannels > 0 && (module->routing[ch] > module->numInputChannels)) {
+				textColor = outOfBoundsColor;
+			}
+			else {
+				textColor = okayColor;
+			}
 			value = str;
 		}
 		SmallLetterDisplay::draw(args);
@@ -187,7 +201,6 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 		pouterSmallDisplay->box.pos = Vec(x - 2.5 , y + 1.f);
 		pouterSmallDisplay->fontSize = 26;
 		pouterSmallDisplay->textAlign = 18;
-		pouterSmallDisplay->textColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
 		pouterSmallDisplay->breakRowWidth = 20;
 		pouterSmallDisplay->module = module;
 
