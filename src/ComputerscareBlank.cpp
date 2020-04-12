@@ -175,14 +175,14 @@ struct PNGDisplay : TransparentWidget {
 		} else if (blankModule->imageFitEnum == 2) { //fit height
 			blankModule->zoomY = blankModule->height / imgHeight;
 			blankModule->zoomX = blankModule->zoomY;
-			blankModule->xOffset=0;
-			blankModule->yOffset=0;
+			blankModule->xOffset = 0;
+			blankModule->yOffset = 0;
 		}
-		else if(blankModule->imageFitEnum ==3) {
+		else if (blankModule->imageFitEnum == 3) {
 
 		}
 
-		
+
 	}
 	void draw(const DrawArgs &args) override {
 		if (blankModule && blankModule->loadedJSON) {
@@ -190,8 +190,8 @@ struct PNGDisplay : TransparentWidget {
 				img = nvgCreateImage(args.vg, blankModule->path.c_str(), 0);
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
-				
-				if(path != "empty") {
+
+				if (path != "empty") {
 					setZooms();
 				}
 				path = blankModule->path;
@@ -202,7 +202,7 @@ struct PNGDisplay : TransparentWidget {
 				setZooms();
 			}
 			lastEnum = blankModule->imageFitEnum;
-			if (!path.empty() && path!="empty") {
+			if (!path.empty() && path != "empty") {
 				nvgBeginPath(args.vg);
 				NVGpaint imgPaint;
 				nvgScale(args.vg, blankModule->zoomX, blankModule->zoomY);
