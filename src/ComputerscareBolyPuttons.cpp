@@ -127,6 +127,18 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 		}
 		outputs[POLY_OUTPUT].setChannels(polyChannels);
 	}
+	void toggleMomentary() {
+		momentary = !momentary;
+		if(momentary) {
+			switchOffAllButtonsButOne(-1);
+		}
+	}
+	void toggleRadio() {
+		radioMode = !radioMode;
+		if(radioMode) {
+			switchOffAllButtonsButOne(-1);
+		}
+	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
 
@@ -255,7 +267,7 @@ struct RadioModeMenuItem: MenuItem {
 
 	}
 	void onAction(const event::Action &e) override {
-		bolyPuttons->radioMode = !bolyPuttons->radioMode;
+		bolyPuttons->toggleRadio();
 	}
 	void step() override {
 		rightText = bolyPuttons->radioMode ? "✔" : "";
@@ -268,7 +280,7 @@ struct MomentaryModeMenuItem: MenuItem {
 
 	}
 	void onAction(const event::Action &e) override {
-		bolyPuttons->momentary = !bolyPuttons->momentary;
+		bolyPuttons->toggleMomentary();
 	}
 	void step() override {
 		rightText = bolyPuttons->momentary ? "✔" : "";
