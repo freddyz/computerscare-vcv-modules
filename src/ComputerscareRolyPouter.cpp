@@ -5,14 +5,15 @@ struct ComputerscareRolyPouter;
 
 const int numKnobs = 16;
 
-struct ComputerscareRolyPouter : Module {
+struct ComputerscareRolyPouter : ComputerscarePolyModule {
 	int counter = 0;
 	int routing[numKnobs];
 	int numOutputChannels = 16;
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		KNOB,
-		NUM_PARAMS = KNOB + numKnobs
+		POLY_CHANNELS = KNOB + numKnobs,
+		NUM_PARAMS
 	};
 	enum InputIds {
 		POLY_INPUT,
@@ -36,6 +37,7 @@ struct ComputerscareRolyPouter : Module {
 			configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch" + std::to_string(i + 1) + " = input ch");
 			routing[i] = i;
 		}
+		configParam(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
 
 	}
 	void setAll(int setVal) {
@@ -43,20 +45,40 @@ struct ComputerscareRolyPouter : Module {
 			params[KNOB + i].setValue(setVal);
 		}
 	}
+	void onRandomize() override {
+		int numInputChannels = inputs[POLY_INPUT].getChannels();
+		for(int i = 0; i < polyChannels; i++) {
+			params[KNOB+i].setValue(1+std::floor(random::uniform()*numInputChannels));
+		}
+	}
+	void checkPoly() override {
+		int inputChannels = inputs[POLY_INPUT].getChannels();
+		int cvChannels = inputs[ROUTING_CV].getChannels();
+		int knobSetting = params[POLY_CHANNELS].getValue();
+		if (knobSetting == 0) {
+			polyChannels = inputChannels;
+		}
+		else {
+			polyChannels = knobSetting;
+		}
+		outputs[POLY_OUTPUT].setChannels(polyChannels);
+	}
 	void process(const ProcessArgs &args) override {
+		ComputerscarePolyModule::checkCounter();
 		counter++;
 		int inputChannels = inputs[POLY_INPUT].getChannels();
+		int cvChannels = inputs[ROUTING_CV].getChannels();
 		int knobSetting;
-		
-		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
+
+		//outputs[POLY_OUTPUT].setChannels(numOutputChannels);
 
 		//if()
-		if (inputs[ROUTING_CV].isConnected())  {
+		if (cvChannels > 0)  {
 			for (int i = 0; i < numOutputChannels; i++) {
 
-				knobSetting = std::round(inputs[ROUTING_CV].getVoltage(i)*1.5)+1;
+				knobSetting = std::round(inputs[ROUTING_CV].getVoltage(cvChannels == 1 ? 0 : i) * 1.5) + 1;
 
-				routing[i]=knobSetting;
+				routing[i] = knobSetting;
 				if (knobSetting > inputChannels) {
 					outputs[POLY_OUTPUT].setVoltage(0, i);
 				}
@@ -66,19 +88,15 @@ struct ComputerscareRolyPouter : Module {
 			}
 		} else {
 			if (counter > 1000) {
-			//printf("%f \n",random::uniform());
-			counter = 0;
-			for (int i = 0; i < numKnobs; i++) {
-				routing[i] = (int)params[KNOB + i].getValue();
+				//printf("%f \n",random::uniform());
+				counter = 0;
+				for (int i = 0; i < numKnobs; i++) {
+					routing[i] = (int)params[KNOB + i].getValue();
+				}
+
 			}
-
-		}
 			for (int i = 0; i < numOutputChannels; i++) {
-
 				knobSetting = params[KNOB + i].getValue();
-
-
-
 				if (knobSetting > inputChannels) {
 					outputs[POLY_OUTPUT].setVoltage(0, i);
 				}
@@ -110,23 +128,45 @@ struct PouterSmallDisplay : SmallLetterDisplay
 		SmallLetterDisplay::draw(args);
 	}
 };
+struct DisableableSnapKnob : RoundBlackSnapKnob {
+	ComputerscarePolyModule *module;
+	int channel;
+	bool disabled = false;
+	int lastDisabled = -1;
+	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator.svg"));
+	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator-disabled.svg"));
 
+	DisableableSnapKnob() {
+		RoundBlackSnapKnob();
+	}
+	void step() override {
+		if (module) {
+			disabled = channel > module->polyChannels - 1;
+		}
+		if (disabled != lastDisabled) {
+			setSvg(disabled ? disabledSvg : enabledSvg);
+			dirtyValue = -20.f;
+			lastDisabled = disabled;
+		}
+		RoundBlackSnapKnob::step();
+	}
+	void randomize() override {return;}
+};
 struct ComputerscareRolyPouterWidget : ModuleWidget {
 	ComputerscareRolyPouterWidget(ComputerscareRolyPouter *module) {
 
 		setModule(module);
-		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareRolyPouterPanel.svg")));
 		box.size = Vec(4 * 15, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareRolyPouterPanel.svg")));
-
-			//module->panelRef = panel;
-
 			addChild(panel);
 
 		}
+		channelWidget = new PolyOutputChannelsWidget(Vec(2, 13), module, ComputerscareRolyPouter::POLY_CHANNELS);
+		addChild(channelWidget);
+
 		addInput(createInput<PointingUpPentagonPort>(Vec(22, 52), module, ComputerscareRolyPouter::ROUTING_CV));
 
 		float xx;
@@ -136,11 +176,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 			yy = 66 + 36.5 * (i % 8) + 14.3 * (i - i % 8) / 8;
 			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.3 - 5, i < 8 ? 4 : 0);
 		}
-
-
 		addInput(createInput<InPort>(Vec(1, 36), module, ComputerscareRolyPouter::POLY_INPUT));
-		
-
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(32, 18), module, ComputerscareRolyPouter::POLY_OUTPUT));
 
 	}
@@ -165,11 +201,17 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 
 		outputChannelLabel->value = std::to_string(index + 1);
 
-		addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, ComputerscareRolyPouter::KNOB + index));
+		DisableableSnapKnob* knob =  createParam<DisableableSnapKnob>(Vec(x, y), module, ComputerscareRolyPouter::KNOB + index);
+		knob->channel = index;
+		knob->module = module;
+		addParam(knob);
+
 		addChild(pouterSmallDisplay);
 		addChild(outputChannelLabel);
 
 	}
+	DisableableSnapKnob* knob;
+	PolyOutputChannelsWidget* channelWidget;
 	PouterSmallDisplay* pouterSmallDisplay;
 	SmallLetterDisplay* outputChannelLabel;
 

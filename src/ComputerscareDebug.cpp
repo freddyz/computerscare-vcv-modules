@@ -237,9 +237,6 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		strValue = defaultStrValue;
 	}
 	outputs[POLY_OUTPUT].setChannels(16);
-	/*for(unsigned int i=0; i < NUM_LINES;i++) {
-		outputs[POLY_OUTPUT].setVoltage(logLines[i], i);
-	}*/
 	stepCounter++;
 
 	if (stepCounter > 1025) {
