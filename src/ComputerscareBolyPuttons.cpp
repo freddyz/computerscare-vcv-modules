@@ -120,7 +120,7 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 		int bChannels = inputs[B_INPUT].getChannels();
 		int knobSetting = params[POLY_CHANNELS].getValue();
 		if (knobSetting == 0) {
-			polyChannels = (aChannels == 0 && bChannels == 0) ? 16 : std::max(aChannels, bChannels);
+			polyChannels = (aChannels <= 1 && bChannels <= 1) ? 16 : std::max(aChannels, bChannels);
 		}
 		else {
 			polyChannels = knobSetting;
@@ -155,9 +155,20 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 		if (radioMode && !momentary) {
 			checkForParamChanges();
 		}
+
+		if(numAChannels == 1) {
+			min = inputs[A_INPUT].getVoltage(0);
+		}
+		if(numBChannels == 1) {
+			max = inputs[B_INPUT].getVoltage(0);
+		}
 		for(int i = 0; i < polyChannels; i++) {
-			min = i< numAChannels ? inputs[A_INPUT].getVoltage(i) : rangeMin;
-			max = i< numBChannels ? inputs[B_INPUT].getVoltage(i) : rangeMax;
+			if(numAChannels != 1) {
+				min = i< numAChannels ? inputs[A_INPUT].getVoltage(i) : rangeMin;
+			}
+			if(numBChannels != 1) {
+				max = i< numBChannels ? inputs[B_INPUT].getVoltage(i) : rangeMax;
+			}
 			spread = max-min;
 			outputs[POLY_OUTPUT].setVoltage(params[TOGGLE + i].getValue()*spread + min, i);
 		}

@@ -246,11 +246,14 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		stepCounter = 0;
 
 		thisVal = "";
+		std::string thisLine="";
 		for ( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
 		{
-			thisVal +=  a > 0 ? "\n" : "";
-			thisVal += logLines[a] >= 0 ? "+" : "";
-			thisVal += std::to_string(logLines[a]).substr(0, 10);
+			thisLine = logLines[a] >= 0 ? "+" : "";
+			thisLine += std::to_string(logLines[a]);
+			thisLine = thisLine.substr(0, 9);
+			thisVal+= (a > 0 ? "\n" : "")+thisLine;
+
 			outputs[POLY_OUTPUT].setVoltage(logLines[a], a);
 		}
 		strValue = thisVal;
