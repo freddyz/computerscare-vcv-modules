@@ -14,11 +14,13 @@ struct DrolyPaw : Module {
 		OFFSET,
 		SCRAMBLE,
 		DRAW_MODE,
+		CLEAR_BUTTON,
 		NUM_PARAMS
 	};
 	enum InputIds {
 		X_INPUT,
 		SCRAMBLE_INPUT,
+		CLEAR_TRIGGER,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -34,7 +36,12 @@ struct DrolyPaw : Module {
 	int bufferIndex = 0;
 	int frameIndex = 0;
 	int cnt = 0;
+	bool clearArmed=false;
 	float lastScramble = 0;
+
+	rack::dsp::SchmittTrigger globalManualClockTrigger;
+	rack::dsp::SchmittTrigger globalManualResetTrigger;
+
 
 	int A = 31;
 	int B = 32;
@@ -57,6 +64,7 @@ struct DrolyPaw : Module {
 
 		configParam(SCRAMBLE, -10.f, 10.f, 0.f, "Scrambling");
 		configParam(DRAW_MODE, 0.f, 64.f, 1.f, "Draw Mode");
+		configParam(CLEAR_BUTTON, 0.f, 1.f, 0.f);
 
 	}
 
@@ -75,12 +83,28 @@ struct DrolyPaw : Module {
 			updateScramble(xx);
 		}
 	}
+	void armClear() {
+		clearArmed=true;
+	}
+	bool checkClear() {
+		if(clearArmed) {
+			clearArmed=false;
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
 	void process(const ProcessArgs &args) override {
 		// Modes
 		// Compute time
 		float deltaTime = std::pow(2.f, -params[TIME_PARAM].getValue());
 
 		int frameCount = (int) std::ceil(deltaTime * args.sampleRate);
+
+		if(globalManualResetTrigger.process(params[CLEAR_BUTTON].getValue())) {
+			armClear();
+		}
 
 		// Set channels
 		int channelsX = inputs[X_INPUT].getChannels();
@@ -214,7 +238,9 @@ struct DrolyPawDisplay : FramebufferWidget {
 		else if (mode == 1) {
 			pts.spray(100);
 			pts.scale(Vec(buffer[2][0]*buffer[0][0], buffer[2][0]*buffer[1][0]));
-			draw.drawDots(pts.get(), draw.sincolor(random::uniform()), 2.f);
+
+			draw.drawField(pts.get(),draw.sincolor(buffer[3][0]+buffer[4][0]*random::uniform()),buffer[5][0]*buffer[6][0]);
+			//draw.drawDots(pts.get(), draw.sincolor(random::uniform()), 2.f);
 		}
 		else {
 			int nx = (mode * 17) % 10;
@@ -252,9 +278,12 @@ struct DrolyPawDisplay : FramebufferWidget {
 		}
 
 		glViewport(0.0, 0.0, fbSize.x * oversample, fbSize.y * oversample);
-		//glClearColor(0.0, 0.0, 0.0, 0.0);
-		// glClearColor(0.0, 1.0, 1.0, 0.5);
-		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		if(module->checkClear()) {
+
+			glClearColor(0.0, 0.0, 0.0, 0.0);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+		}
 		nvgEndFrame(vg);
 
 		// Clean up the NanoVG state so that calls to nvgTextBounds() etc during step() don't use a dirty state.
@@ -329,6 +358,8 @@ struct DrolyPawWidget : ModuleWidget {
 
 		addParam(createParam<ScrambleKnob>(Vec(81, 357), module, DrolyPaw::SCRAMBLE));
 		addParam(createParam<MediumDotSnapKnob>(Vec(101, 354), module, DrolyPaw::DRAW_MODE));
+		addParam(createParam<ComputerscareResetButton>(Vec(1, 334), module,DrolyPaw::CLEAR_BUTTON));
+
 
 
 	}

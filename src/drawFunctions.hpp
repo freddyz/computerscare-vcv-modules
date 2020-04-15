@@ -76,6 +76,24 @@ struct DrawHelper {
     nvgStroke(vg);
     nvgRestore(vg);
   }
+  void drawField(std::vector<Vec> points, NVGcolor strokeColor=BLACK,float length=4,float thickness=1.f) {
+    unsigned int n = points.size();
+    nvgSave(vg);
+   // nvgBeginPath(vg);
+    nvgBeginPath(vg);
+    nvgStrokeColor(vg, strokeColor);
+    nvgStrokeWidth(vg, thickness);
+
+    //nvgMoveTo(vg, 0,0);
+    for (unsigned int i = 0; i < n; i++) {
+      nvgMoveTo(vg,points[i].x,points[i].y);
+      Vec end = points[i].plus(Vec(points[i].y,-points[i].x).normalize().mult(length));
+      nvgLineTo(vg,end.x,end.y);
+      //nvgClosePath(vg);
+    }
+    nvgStroke(vg);
+    nvgRestore(vg);
+  }
   NVGcolor sincolor(float t,std::vector<int> omega={1,2,3}) {
     return nvgRGB(127*(1+sin(t*omega[0])),127*(1+sin(t*omega[1])),127*(1+sin(t*omega[2])));
   }
