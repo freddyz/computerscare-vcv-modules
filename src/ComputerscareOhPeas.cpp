@@ -15,9 +15,6 @@ const int numChannels = 4;
 
 struct ComputerscareOhPeas;
 
-
-
-
 struct ComputerscareOhPeas : Module
 {
     enum ParamIds
@@ -169,17 +166,16 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
                 a = params[SCALE_VAL + i].getValue();
 
                 b = params[SCALE_TRIM + i].getValue();
-                B = inputs[SCALE_CV + i].getVoltage(ch);
+                B = inputs[SCALE_CV + i].getVoltage(numScaleCVChannels == 1 ? 0 : ch);
                 A = inputs[CHANNEL_INPUT + i].getVoltage(ch);
 
                 c = params[OFFSET_TRIM + i].getValue();
-                C = inputs[OFFSET_CV + i].getVoltage(ch);
+                C = inputs[OFFSET_CV + i].getVoltage(numOffsetCVChannels == 1 ? 0 : ch);
                 d = params[OFFSET_VAL + i].getValue();
 
                 D = (b * B + a) * A + (c * C + d);
 
                 Q = quant.quantizeEven(D, iTranspose);
-
 
                 outputs[SCALED_OUTPUT + i].setVoltage(D, ch);
                 outputs[QUANTIZED_OUTPUT + i].setVoltage(Q, ch);
