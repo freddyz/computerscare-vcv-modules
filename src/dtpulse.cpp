@@ -396,8 +396,12 @@ LaundryPoly::LaundryPoly(std::string formula) {
     bool myInError=false;
     maxSteps=-1;
     int ns;
+    std::vector<std::string> semisep = split(formula,';');
+    int semilen = semisep.size();
+    printf("semilen:%i\n",semilen);
    for (int i = 0; i < 16; i++ ) {
-    newFormula = formula;
+    //newFormula = formula;
+    newFormula=semilen==0 ? formula : semisep[i%semilen];//i%semilen];
     replaceAll(newFormula, "#", "<" + std::to_string(static_cast<long long>(i + 1)) + ">");
     lss[i] = LaundrySoupSequence(newFormula);
     ns = lss[i].numSteps;
@@ -1430,4 +1434,15 @@ int myPow(int x, int p)
   int tmp = myPow(x, p/2);
   if (p%2 == 0) return tmp * tmp;
   else return x * tmp * tmp;
+}
+std::vector<std::string> split(std::string strToSplit, char delimeter)
+{
+    std::stringstream ss(strToSplit);
+    std::string item;
+    std::vector<std::string> splittedStrings;
+    while (std::getline(ss, item, delimeter))
+    {
+       splittedStrings.push_back(item);
+    }
+    return splittedStrings;
 }

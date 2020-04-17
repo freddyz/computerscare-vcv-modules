@@ -198,3 +198,4 @@ void replaceAll(std::string& str, const std::string& from, const std::string& to
 float mapChannelCountToVoltage(int ch);
 int mapVoltageToChannelCount(float vv);
 int myPow(int x, int p);
+std::vector<std::string> split(std::string strToSplit, char delimeter);
