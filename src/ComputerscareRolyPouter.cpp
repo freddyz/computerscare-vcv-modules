@@ -57,8 +57,6 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 		int cvChannels = inputs[ROUTING_CV].getChannels();
 		int knobSetting = params[POLY_CHANNELS].getValue();
 		if (numInputChannels > 0) {
-
-
 			if (knobSetting == 0) {
 				polyChannels = numInputChannels;
 			}
@@ -66,7 +64,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 				polyChannels = knobSetting;
 			}
 		} else {
-			polyChannels = 16;
+			polyChannels = knobSetting == 0 ? 16 : knobSetting;
 		}
 		outputs[POLY_OUTPUT].setChannels(polyChannels);
 	}
@@ -94,7 +92,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 				}
 			}
 		} else {
-			if (counter > 1000) {
+			if (counter > 8) {
 				//printf("%f \n",random::uniform());
 				counter = 0;
 				for (int i = 0; i < numKnobs; i++) {
@@ -178,7 +176,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 			addChild(panel);
 
 		}
-		channelWidget = new PolyOutputChannelsWidget(Vec(2, 13), module, ComputerscareRolyPouter::POLY_CHANNELS);
+		channelWidget = new PolyOutputChannelsWidget(Vec(2, 8), module, ComputerscareRolyPouter::POLY_CHANNELS);
 		addChild(channelWidget);
 
 		addInput(createInput<PointingUpPentagonPort>(Vec(22, 52), module, ComputerscareRolyPouter::ROUTING_CV));
