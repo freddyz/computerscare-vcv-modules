@@ -2,9 +2,12 @@
 
 struct ComputerscareSolyPequencer;
 
-struct ComputerscareSolyPequencer : Module {
+struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 	int currentStep[16] = {0};
 	int numSteps[16] = {16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16};
+	int clockChannels[16] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+	int resetChannels[16] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
 	bool autoNumSteps = true;
 	rack::dsp::SchmittTrigger clockTriggers[16];
 	rack::dsp::SchmittTrigger resetTriggers[16];
@@ -20,6 +23,7 @@ struct ComputerscareSolyPequencer : Module {
 		MANUAL_RESET_BUTTON,
 		NUM_STEPS_AUTO_BUTTON,
 		NUM_STEPS_KNOB,
+		POLY_CHANNELS,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -45,22 +49,48 @@ struct ComputerscareSolyPequencer : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
 		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
+		configParam(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 	}
 	void resetAll() {
 		for (int i = 0; i < 16; i++) {
 			currentStep[i] = 0;
 		}
 	}
+	void checkPoly() override {
+		int resetNum = inputs[RESET_INPUT].getChannels();
+		int clockNum = inputs[CLOCK_INPUT].getChannels();
+		int knobSetting = params[POLY_CHANNELS].getValue();
+		if (knobSetting == 0) {
+			polyChannels = inputs[CLOCK_INPUT].isConnected() ? std::max(clockNum,resetNum) : 16;
+		}
+		else {
+			polyChannels = knobSetting;
+		}
+		for (int i = 0; i < 16; i++) {
+			clockChannels[i] = std::max(1, std::min(i+1, clockNum));
+			resetChannels[i] = std::max(1, std::min(i+1, resetNum));
+		}
+		outputs[POLY_OUTPUT].setChannels(polyChannels);
+	}
 	void process(const ProcessArgs &args) override {
+		ComputerscarePolyModule::checkCounter();
 		int numInputChannels = inputs[POLY_INPUT].getChannels();
 		int numReset = inputs[RESET_INPUT].getChannels();
 		int numClock = inputs[CLOCK_INPUT].getChannels();
-		int numOutputChannels = numClock > 0 ? numClock : 1;
+		//int numOutputChannels = numClock > 0 ? numClock : 1;
 		bool globalClocked = globalManualClockTrigger.process(params[MANUAL_CLOCK_BUTTON].getValue());
-		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
+		
 		if (inputs[POLY_INPUT].isConnected()) {
-			for (int j = 0; j < numOutputChannels; j++) {
-				if (globalClocked || clockTriggers[j].process(inputs[CLOCK_INPUT].getVoltage(j))) {
+			bool currentClock[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+			bool currentReset[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+			bool isHigh[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+			for (int i = 0; i < 16; i++) {
+				currentClock[i] = clockTriggers[i].process(inputs[CLOCK_INPUT].getVoltage(i));
+				currentReset[i] = resetTriggers[i].process(inputs[RESET_INPUT].getVoltage(i));
+				isHigh[i] = clockTriggers[i].isHigh();
+			}
+			for (int j = 0; j < polyChannels; j++) {
+				if (globalClocked || currentClock[clockChannels[j]-1]) {
 					currentStep[j]++;
 					if (autoNumSteps) {
 						currentStep[j] = currentStep[j] % numInputChannels;
@@ -78,7 +108,7 @@ struct ComputerscareSolyPequencer : Module {
 				}
 			}
 
-			for (int c = 0; c < numOutputChannels; c++) {
+			for (int c = 0; c < polyChannels; c++) {
 				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(currentStep[c]), c);
 			}
 		}
@@ -127,15 +157,15 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareSolyPequencerPanel.svg")));
-
-			//module->panelRef = panel;
-
 			addChild(panel);
 
 		}
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(14, 48), module, ComputerscareSolyPequencer::POLY_OUTPUT));
 
+
+		channelWidget = new PolyOutputChannelsWidget(Vec(2, 8), module, ComputerscareSolyPequencer::POLY_CHANNELS);
+		addChild(channelWidget);
 
 		addLabeledKnob("Steps", 10, 124, module, 0, 0, 0);
 		stepNumberGrid(1,230,30,15,module);
@@ -196,6 +226,8 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 		addChild(outputChannelLabel);
 
 	}
+
+	PolyOutputChannelsWidget* channelWidget;
 	PequencerSmallDisplay* psd;
 	SmallLetterDisplay* outputChannelLabel;
 };

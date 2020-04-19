@@ -225,8 +225,8 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		polyChannels = lastPolyKnob == 0 ? std::max(clockNum, std::max(pattNum, std::max(stepsNum, densityNum))) : lastPolyKnob;
 
 		for (int i = 0; i < 16; i++) {
-			clockChannels[i] = std::max(1, std::min(i, clockNum));
-			resetChannels[i] = std::max(1, std::min(i, resetNum));
+			clockChannels[i] = std::max(1, std::min(i+1, clockNum));
+			resetChannels[i] = std::max(1, std::min(i+1, resetNum));
 		}
 
 		outputs[TRIGGER_OUTPUT].setChannels(polyChannels);
