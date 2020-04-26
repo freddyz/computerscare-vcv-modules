@@ -37,12 +37,15 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 			configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
 		}
 		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
+		configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale","%",0,100);
+		configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset","Volts");
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
-
+		float trim = params[GLOBAL_SCALE].getValue();
+		float offset = params[GLOBAL_OFFSET].getValue();
 		for (int i = 0; i < polyChannels; i++) {
-			outputs[POLY_OUTPUT].setVoltage(params[KNOB + i].getValue(), i);
+			outputs[POLY_OUTPUT].setVoltage(params[KNOB + i].getValue()*trim+offset, i);
 		}
 	}
 	void checkPoly() override {
@@ -55,7 +58,14 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 	}
 };
 
-
+struct NoRandomSmallKnob : SmallKnob {
+	NoRandomSmallKnob() {
+		SmallKnob();
+	};
+	void randomize() override {
+		return;
+	}
+};
 
 struct DisableableSmoothKnob : RoundKnob {
 	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg"));
@@ -100,6 +110,10 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 
 
 		addChild(channelWidget);
+
+		addParam(createParam<NoRandomSmallKnob>(Vec(1,3), module, ComputerscareKnolyPobs::GLOBAL_SCALE));
+		addParam(createParam<NoRandomSmallKnob>(Vec(15,3), module, ComputerscareKnolyPobs::GLOBAL_OFFSET));
+
 
 		float xx;
 		float yy;

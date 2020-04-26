@@ -1,4 +1,5 @@
 #include <string.h>
+#include <ctime>
 #include "plugin.hpp"
 #include "Computerscare.hpp"
 #include "dtpulse.hpp"
@@ -46,7 +47,8 @@ struct DrolyPaw : Module {
 	int bufferIndex = 0;
 	int frameIndex = 0;
 	int cnt = 0;
-	bool clearArmed=false;
+	int interiorCounter = 9000;
+	bool clearArmed = false;
 	float lastScramble = 0;
 
 	rack::dsp::SchmittTrigger globalManualClockTrigger;
@@ -65,7 +67,7 @@ struct DrolyPaw : Module {
 
 		for (int i = 0; i < 16; i++) {
 			cmap[i] = i;
-			cmapParams[i]=i;
+			cmapParams[i] = i;
 		}
 
 		configParam(TIME_PARAM, 6.f, 16.f, 14.f, "Time", " ms/div", 1 / 2.f, 1000 * timeBase);
@@ -78,8 +80,8 @@ struct DrolyPaw : Module {
 		configParam(SCRAMBLE, -10.f, 10.f, 0.f, "Scrambling");
 		configParam(DRAW_MODE, 0.f, 64.f, 1.f, "Draw Mode");
 		configParam(CLEAR_BUTTON, 0.f, 1.f, 0.f);
-		configParam(CLEAR_EVERY_FRAME, 0.f, 1.f, 1.f,"Clear Every Frame");
-		configParam(DRAW_EVERY_FRAME, 0.f, 1.f, 1.f,"Draw Every Frame");
+		configParam(CLEAR_EVERY_FRAME, 0.f, 1.f, 1.f, "Clear Every Frame");
+		configParam(DRAW_EVERY_FRAME, 0.f, 1.f, 1.f, "Draw Every Frame");
 
 		configParam(DRAWPARAMS_TRIM, -2.f, 2.f, 1.f, "Draw Parameters Attenuverter");
 		configParam(DRAWPARAMS_OFFSET, -5.f, 5.f, 0.f, "Draw Parameters Offset", " Volts");
@@ -102,11 +104,11 @@ struct DrolyPaw : Module {
 		}
 	}
 	void armClear() {
-		clearArmed=true;
+		clearArmed = true;
 	}
 	bool checkClear() {
-		if(clearArmed) {
-			clearArmed=false;
+		if (clearArmed) {
+			clearArmed = false;
 			return true;
 		}
 		else {
@@ -120,7 +122,7 @@ struct DrolyPaw : Module {
 
 		int frameCount = (int) std::ceil(deltaTime * args.sampleRate);
 
-		if(params[CLEAR_EVERY_FRAME].getValue() || globalManualResetTrigger.process(params[CLEAR_BUTTON].getValue())) {
+		if (params[CLEAR_EVERY_FRAME].getValue() || globalManualResetTrigger.process(params[CLEAR_BUTTON].getValue())) {
 			armClear();
 		}
 
@@ -147,6 +149,7 @@ struct DrolyPaw : Module {
 		if (bufferIndex < BUFFER_SIZE) {
 			if (++frameIndex > frameCount) {
 				frameIndex = 0;
+
 				float trimVal = params[INPUT_TRIM].getValue();
 				float offsetVal = params[INPUT_OFFSET].getValue();
 
@@ -156,16 +159,35 @@ struct DrolyPaw : Module {
 				if (inputs[X_INPUT].isConnected()) {
 					for (int c = 0; c < 16; c++) {
 						bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(std::min(cmap[c], this->channelsX)) * trimVal + offsetVal;
-						bufferY[c][bufferIndex]=inputs[Y_INPUT].getVoltage(std::min(cmapParams[c], this->channelsY)) * paramsTrimVal + paramsOffsetVal;
 						//bufferX[c][bufferIndex]=inputs[X_INPUT].getVoltage(c);
 						//bufferX[c][bufferIndex]=inputs[X_INPUT].getVoltage(c)*trimVal+offsetVal;
 					}
 				}
 				else {
 					for (int c = 0; c < 16; c++) {
-						bufferX[c][bufferIndex] = offsetVal + 99 + (1071 * cmap[c]) % 19;
+						bufferX[c][bufferIndex] = sin((float)interiorCounter / 100000 * (c + 1)) + offsetVal; // t is an integer type
+
+
+						//bufferX[c][bufferIndex] = offsetVal + 99 + (1071 * cmap[c]) % 19;
+					}
+					interiorCounter++;
+					if (interiorCounter > 400000) {
+						interiorCounter = 0;
 					}
 				}
+				if (inputs[Y_INPUT].isConnected()) {
+					for (int c = 0; c < 16; c++) {
+						bufferY[c][bufferIndex] = inputs[Y_INPUT].getVoltage(std::min(cmapParams[c], this->channelsY)) * paramsTrimVal + paramsOffsetVal;
+					}
+				}
+				else {
+					for (int c = 0; c < 16; c++) {
+
+
+						bufferY[c][bufferIndex] = paramsTrimVal*sin((float)interiorCounter / 100000 * (c + 1))+paramsOffsetVal;
+					}
+				}
+
 
 				bufferIndex++;
 			}
@@ -187,8 +209,8 @@ struct DrolyPaw : Module {
 
 	}
 
-	float bget(int ch) {
-		return bufferX[ch % 16][0];
+	float bget(int ch, int offset = 0) {
+		return bufferX[ch % 16][offset];
 	}
 	float bgetf(int ch) {
 		return bufferX[(ch * ch + 910) % 16][(ch * ch * ch - ch * ch + 10101) % BUFFER_SIZE];
@@ -243,44 +265,49 @@ struct NoClearWidget : FramebufferWidget {
 struct DrolyPawDisplay : FramebufferWidget {
 	DrolyPaw *module;
 	void step() override {
-	
+
 		dirty = true;
 		FramebufferWidget::step();
 	}
 	/*DrolyPawDisplay() {
 		FramebufferWidget();
 	}*/
-	void drawThingie(const DrawArgs &args, float buffer[16][BUFFER_SIZE],float paramsBuffer[16][BUFFER_SIZE]) {
+	void drawThingie(const DrawArgs &args, float buffer[16][BUFFER_SIZE], float paramsBuffer[16][BUFFER_SIZE]) {
 		DrawHelper draw = DrawHelper(args.vg);
 		Points pts = Points();
 		nvgTranslate(args.vg, 97.5, 190);
 		int mode = module->params[DrolyPaw::DRAW_MODE].getValue();
+
 		if (mode == 0) {
 			for (int i = 0; i < 4; i++) {
 				pts.triangle(Vec(buffer[i * 4][0] * 10, buffer[i * 4 + 1][0] * 10), Vec(buffer[i * 4 + 2][0] * 3, buffer[i * 4 + 3][0] * 3));
 				pts.offset(Vec(buffer[(i * 11 + 3) % 16][0], buffer[(i * 3 + 11) % 16][0]));
-				draw.drawShape(pts.get(), draw.sincolor(buffer[0][0]+i*buffer[1][0]));
+				draw.drawShape(pts.get(), draw.sincolor(buffer[0][0] + i * buffer[1][0]));
 			}
 		}
 		else if (mode == 1) {
 			pts.spray(100);
 			pts.scale(Vec(buffer[2][0]*buffer[0][0], buffer[2][0]*buffer[1][0]));
-			draw.drawField(pts.get(),draw.sincolor(buffer[3][0]+buffer[4][0]*random::uniform()),buffer[5][0]*buffer[6][0]);
+			draw.drawField(pts.get(), draw.sincolor(buffer[3][0] + buffer[4][0]*random::uniform()), buffer[5][0]*buffer[6][0]);
 			//draw.drawDots(pts.get(), draw.sincolor(random::uniform()), 2.f);
 		}
-		else if(mode==2) {
-			pts.linear(16,Vec(0,-box.size.y/2+26),Vec(0,100+242*paramsBuffer[3][0]));
+		else if (mode == 2) {
+			//16 horizontal lines
+
+
+			float spaceexp = 1 / (1 + expf(-paramsBuffer[3][0]));
+			pts.linear(16, Vec(0, -spaceexp * box.size.y / 2), Vec(0, spaceexp * box.size.y + 40));
 			std::vector<Vec> polyVals;
 			std::vector<NVGcolor> colors;
 			std::vector<Vec> thicknesses;
 
-			for(int i= 0; i < 16; i++) {
-				polyVals.push_back(Vec(buffer[i][0]*30,0.f));
-				colors.push_back(draw.sincolor(paramsBuffer[0][0]+2+paramsBuffer[2][0]*i));
+			for (int i = 0; i < 16; i++) {
+				polyVals.push_back(Vec(buffer[i][0] * 30, 0.f));
+				colors.push_back(draw.sincolor(paramsBuffer[0][0] + 2 + paramsBuffer[2][0]*i));
 
-				thicknesses.push_back(Vec(expf(paramsBuffer[1][0]/2),0));
+				thicknesses.push_back(Vec(expf(paramsBuffer[1][0] * 2+2) + 0.5, 0));
 			}
-			draw.drawLines(pts.get(),polyVals,colors,thicknesses);
+			draw.drawLines(pts.get(), polyVals, colors, thicknesses);
 		}
 		else {
 			int nx = (mode * 17) % 10;
@@ -314,15 +341,15 @@ struct DrolyPawDisplay : FramebufferWidget {
 			drawThingie(args);
 		}
 		else {
-			if(module->params[DrolyPaw::DRAW_EVERY_FRAME].getValue()) {
-				drawThingie(args, module->bufferX,module->bufferY);
+			if (module->params[DrolyPaw::DRAW_EVERY_FRAME].getValue()) {
+				drawThingie(args, module->bufferX, module->bufferY);
 			}
-			
+
 		}
 
 		glViewport(0.0, 0.0, fbSize.x * oversample, fbSize.y * oversample);
-		if(module) {
-			if(module->checkClear()) {
+		if (module) {
+			if (module->checkClear()) {
 				glClearColor(0.0, 0.0, 0.0, 0.0);
 				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 			}
@@ -408,9 +435,9 @@ struct DrolyPawWidget : ModuleWidget {
 
 		//addParam(createParam<ScrambleKnob>(Vec(81, 357), module, DrolyPaw::SCRAMBLE));
 		addParam(createParam<MediumDotSnapKnob>(Vec(141, 354), module, DrolyPaw::DRAW_MODE));
-		addParam(createParam<ComputerscareResetButton>(Vec(1, 334), module,DrolyPaw::CLEAR_BUTTON));
-		addParam(createParam<SmallIsoButton>(Vec(24,334),module,DrolyPaw::CLEAR_EVERY_FRAME));
-		addParam(createParam<SmallIsoButton>(Vec(44,334),module,DrolyPaw::DRAW_EVERY_FRAME));
+		addParam(createParam<ComputerscareResetButton>(Vec(1, 334), module, DrolyPaw::CLEAR_BUTTON));
+		addParam(createParam<SmallIsoButton>(Vec(24, 334), module, DrolyPaw::CLEAR_EVERY_FRAME));
+		addParam(createParam<SmallIsoButton>(Vec(44, 334), module, DrolyPaw::DRAW_EVERY_FRAME));
 
 
 
