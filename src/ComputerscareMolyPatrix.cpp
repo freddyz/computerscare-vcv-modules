@@ -8,14 +8,17 @@ const int numColumns = 16;
 
 const int numOutputs = 1;
 
-struct ComputerscareMolyPatrix : Module {
+struct ComputerscareMolyPatrix : ComputerscarePolyModule {
   int counter = 0;
   int numInputChannels = 0;
   ComputerscareSVGPanel* panelRef;
   enum ParamIds {
     KNOB,
-    NUM_PARAMS = KNOB + numKnobs
-
+    INPUT_ROW_TRIM = KNOB + numKnobs,
+    OUTPUT_COLUMN_TRIM=INPUT_ROW_TRIM+numRows,
+    OUTPUT_TRIM=OUTPUT_COLUMN_TRIM+numColumns,
+    POLY_CHANNELS,
+    NUM_PARAMS
   };
   enum InputIds {
     POLY_INPUT,
@@ -37,22 +40,33 @@ struct ComputerscareMolyPatrix : Module {
       configParam(KNOB+n,-1.f,1.f,0.f);
     }*/
     for (int i = 0; i < numRows; i++) {
+      configParam(INPUT_ROW_TRIM+i,-2.f,2.f,1.f,"Input Channel "+std::to_string(i+1)+" Attenuation");
+      configParam(OUTPUT_COLUMN_TRIM+i,-2.f,2.f,1.f,"Output Channel "+std::to_string(i+1)+" Attenuation");
       for (int j = 0; j < numColumns; j++) {
         configParam(KNOB + i * 16 + j, -2.f, 2.f, i == j ? 1.f : 0.f, "i:" + std::to_string(i) + ",j:" + std::to_string(j));
       }
+      configParam(OUTPUT_TRIM,-2.f,2.f,1.f,"Output Attenuation");
+      configParam(POLY_CHANNELS,0.f,16.f,0.f,"Poly Channels");
     }
 
   }
-  void process(const ProcessArgs &args) override {
-    counter++;
-    if (counter > 5012) {
-      //printf("%f \n",random::uniform());
-      counter = 0;
-      //rect4032
-      //south facing high wall
-    }
+  void checkPoly() override {
     numInputChannels = inputs[POLY_INPUT].getChannels();
-    outputs[POLY_OUTPUT].setChannels(16);
+    int knobSetting = params[POLY_CHANNELS].getValue();
+    if (numInputChannels > 0) {
+      if (knobSetting == 0) {
+        polyChannels = numInputChannels;
+      }
+      else {
+        polyChannels = knobSetting;
+      }
+    } else {
+      polyChannels = knobSetting == 0 ? 16 : knobSetting;
+    }
+    outputs[POLY_OUTPUT].setChannels(polyChannels);
+  }
+  void process(const ProcessArgs &args) override {
+        ComputerscarePolyModule::checkCounter();
     for (int j = 0; j < numRows; j++) {
       float out = 0.f;
       for (int i = 0; i < numColumns; i++) {
@@ -98,7 +112,8 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
 
 
     
-
+    channelWidget = new PolyOutputChannelsWidget(Vec(290, 1), module, ComputerscareMolyPatrix::POLY_CHANNELS);
+    addChild(channelWidget);
     addOutput(createOutput<InPort>(Vec(318, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
 
   }
@@ -117,6 +132,7 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
 //    addChild(smallLetterDisplay);
 
   }
+  PolyOutputChannelsWidget* channelWidget;
   SmallLetterDisplay* smallLetterDisplay;
 };
 

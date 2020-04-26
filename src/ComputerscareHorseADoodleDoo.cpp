@@ -139,6 +139,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		WEIRDNESS_TRIM,
 		POLY_KNOB,
 		MODE_KNOB,
+		MANUAL_RESET_BUTTON,
 		NUM_PARAMS
 
 	};
@@ -165,7 +166,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	rack::dsp::SchmittTrigger resetInputTrigger[16];
 
 	rack::dsp::SchmittTrigger clockManualTrigger;
-	rack::dsp::SchmittTrigger resetManualTrigger;
+	rack::dsp::SchmittTrigger globalManualResetTrigger;
 
 	float lastPatternKnob = 0.f;
 	int lastStepsKnob = 2;
@@ -200,6 +201,9 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 		configParam(MODE_KNOB,1.f,16.f,1.f,"Mode");
 
+		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
+
+
 
 		for (int i = 0; i < 16; i++) {
 			seq[i] = HorseSequencer(0.f, 8, 0.f, i);
@@ -230,6 +234,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		}
 
 		outputs[TRIGGER_OUTPUT].setChannels(polyChannels);
+		outputs[EOC_OUTPUT].setChannels(polyChannels);
 		outputs[CV_OUTPUT].setChannels(polyChannels);
 
 		for (int i = 0; i < polyChannels; i++) {
@@ -243,11 +248,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 		if (reset) {
 			seq[ch].armChange();
-			/*seqVal[ch] = seq[ch].get();
-			if (seqVal[ch]) {
-				cvVal[ch] = seq[ch].getCV();
-			}
-			atFirstStepPoly[ch] =  true;*/
 		}
 
 		if (clocked /*&& !reset*/) {
@@ -259,13 +259,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			if (seqVal[ch]) {
 				cvVal[ch] = seq[ch].getCV();
 			}
-			/*if (atFirstStepPoly[ch] && changePending[ch]) {
-				applyChange(ch);
-				seqVal[ch] = seq[ch].get();
-				if (seqVal[ch]) {
-					cvVal[ch] = seq[ch].getCV();
-				}
-			}*/
 
 		}
 
@@ -285,13 +278,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
-
-		/*counter++;
-		if (counter > 601) {
-			checkKnobChanges();
-			counter = 0;
-		}*/
-
+		bool manualReset = globalManualResetTrigger.process(params[MANUAL_RESET_BUTTON].getValue());
 
 		bool currentClock[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -299,7 +286,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		bool isHigh[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 		for (int i = 0; i < 16; i++) {
 			currentClock[i] = clockInputTrigger[i].process(inputs[CLOCK_INPUT].getVoltage(i));
-			currentReset[i] = resetInputTrigger[i].process(inputs[RESET_INPUT].getVoltage(i));
+			currentReset[i] = resetInputTrigger[i].process(inputs[RESET_INPUT].getVoltage(i)) || manualReset;
 			isHigh[i] = clockInputTrigger[i].isHigh();
 
 		}
@@ -310,8 +297,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	}
 	void checkPoly() override {
 			checkKnobChanges();
-			//polyChannels = params[POLY_CHANNELS].getValue();
-			//outputs[POLY_OUTPUT].setChannels(polyChannels);
 	}
 };
 
@@ -349,12 +334,17 @@ struct HorseDisplay : TransparentWidget {
 	ComputerscareHorseADoodleDoo *module;
 	int ch = 0;
 
-	HorseDisplay() {
+	HorseDisplay(int chan=0) {
+		ch=chan;
+
 	}
 
 	void drawHorse(const DrawArgs &args, float x = 0.f) {
 
-		float dy = 380 / (float)(module->seq[0].numSteps);
+		DrawHelper draw =  DrawHelper(args.vg);
+		NVGcolor highlightColor = draw.sincolor(ch+3.f);
+
+		float dy = 380 / (float)(module->seq[ch].numSteps);
 		float mid = module->seq[ch].numSteps / 2;
 
 		float dh = 0.2;//multiplicitive on original height
@@ -365,11 +355,11 @@ struct HorseDisplay : TransparentWidget {
 
 		for (int i = 0; i < module->seq[ch].numSteps; i++) {
 			nvgBeginPath(args.vg);
-			float xx = 65;
+			float xx = 70-ch*7;
 			float yy = i * dy;
 
 			float ip = i / module->seq[ch].numSteps;
-			float width = 15.f;
+			float width = 6.f;
 			float height = dy;
 
 			if (module->seq[ch].absoluteSequence[i] == 1 || i == module->seq[ch].currentStep) {
@@ -386,10 +376,10 @@ struct HorseDisplay : TransparentWidget {
 
 				// left side wall
 				if (i == module->seq[ch].currentStep) {
-					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_BLUE );
+					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_RED );
 				}
 				else {
-					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_RED);
+					nvgFillColor(args.vg, highlightColor);
 				}
 
 				nvgStrokeColor(args.vg, BLACK);
@@ -412,13 +402,13 @@ struct HorseDisplay : TransparentWidget {
 				//top
 				nvgStrokeWidth(args.vg, 1.f);
 				if (i == module->seq[ch].currentStep) {
-					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_YELLOW);
-				}
-				else {
 					nvgFillColor(args.vg, nvgRGB(0xE2, 0x22, 0x12));
 				}
+				else {
+					nvgFillColor(args.vg, highlightColor);
+				}
 				nvgBeginPath(args.vg);
-				nvgRect(args.vg, xx, yy, 10.f, dy);
+				nvgRect(args.vg, xx, yy, width, dy);
 				nvgClosePath(args.vg);
 				//nvgRect(args.vg, xx,yy,width,height);
 				nvgFill(args.vg);
@@ -449,7 +439,9 @@ struct HorseDisplay : TransparentWidget {
 			//drawHorse(args, 3);
 		}
 		else {
-			drawHorse(args, 3);
+			if(ch < module->polyChannels) {
+				drawHorse(args, 3);
+			}
 		}
 	}
 };
@@ -473,7 +465,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addInputBlock("Pattern", 0, 100, module, 0,  ComputerscareHorseADoodleDoo::PATTERN_CV, 0);
 		addInputBlock("Length", 0, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1);
 		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0);
-					addParam(createParam<MediumDotSnapKnob>(Vec(30,240), module, ComputerscareHorseADoodleDoo::MODE_KNOB));
+		addParam(createParam<MediumDotSnapKnob>(Vec(30,240), module, ComputerscareHorseADoodleDoo::MODE_KNOB));
 
 
 		//addInputBlock("Mode", 0, 250, module, ComputerscareHorseADoodleDoo::MODE_KNOB,  0, 1);
@@ -486,17 +478,22 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		addChild(channelWidget);
 
-		horseDisplay = new HorseDisplay();
-		horseDisplay->module = module;
+		for(int i =0; i < 16; i++) {
+			horseDisplay = new HorseDisplay(i);
+			horseDisplay->module = module;
 
-		addChild(horseDisplay);
+			addChild(horseDisplay);
+		}
 
 		int outputY = 269;
 		int dy = 30;
 
 		int outputX = 32;
 		addInput(createInput<InPort>(Vec(2, outputY), module, ComputerscareHorseADoodleDoo::CLOCK_INPUT));
-		addInput(createInput<InPort>(Vec(2, outputY + dy), module, ComputerscareHorseADoodleDoo::RESET_INPUT));
+		
+		addParam(createParam<ComputerscareResetButton>(Vec(2, outputY+dy+12), module, ComputerscareHorseADoodleDoo::MANUAL_RESET_BUTTON));
+
+		addInput(createInput<InPort>(Vec(2, outputY + 2*dy), module, ComputerscareHorseADoodleDoo::RESET_INPUT));
 
 
 

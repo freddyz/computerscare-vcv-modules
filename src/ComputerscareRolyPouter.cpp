@@ -38,7 +38,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 			configParam(KNOB + i, 1.f, 16.f, (i + 1), "output ch" + std::to_string(i + 1) + " = input ch");
 			routing[i] = i;
 		}
-		configParam(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
+		configParam(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 
 	}
 	void setAll(int setVal) {
@@ -82,8 +82,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 			for (int i = 0; i < numOutputChannels; i++) {
 
 				knobSetting = std::round(inputs[ROUTING_CV].getVoltage(cvChannels == 1 ? 0 : i) * 1.5) + 1;
-
-				routing[i] = knobSetting;
+				routing[i] =knobSetting;// knobSetting < 1 ? knobSetting + 16 : knobSetting;
 				if (knobSetting > inputChannels) {
 					outputs[POLY_OUTPUT].setVoltage(0, i);
 				}

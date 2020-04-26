@@ -23,5 +23,6 @@ class Goly {
 	
 		Goly();
 		void invoke(int algorithm,std::vector<float> gp);
+		void invoke(int algorithm,std::vector<float> gp,int num);
 		
 };

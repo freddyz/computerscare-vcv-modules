@@ -11,6 +11,8 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 	enum ParamIds {
 		KNOB,
 		POLY_CHANNELS = KNOB + numKnobs,
+		GLOBAL_SCALE,
+		GLOBAL_OFFSET,
 		NUM_PARAMS
 
 	};
@@ -45,6 +47,10 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 	}
 	void checkPoly() override {
 			polyChannels = params[POLY_CHANNELS].getValue();
+			if(polyChannels == 0) {
+				polyChannels=16;
+				params[POLY_CHANNELS].setValue(16);
+			}
 			outputs[POLY_OUTPUT].setChannels(polyChannels);
 	}
 };

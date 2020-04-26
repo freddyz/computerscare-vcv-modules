@@ -5,11 +5,6 @@
 
 struct ComputerscareGolyPenerator;
 
-const int numKnobs = 16;
-
-const int numToggles = 16;
-const int numOutputs = 16;
-
 
 /*
 	knob1: number of channels output 1-16
@@ -17,17 +12,20 @@ const int numOutputs = 16;
 	knob3: param 1
 */
 
-struct ComputerscareGolyPenerator : Module {
+struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 	int counter = 0;
-	int numChannels=16;
+	int numChannels = 16;
 	ComputerscareSVGPanel* panelRef;
 	Goly goly;
-	float currentValues[16]={0.f};
+	float currentValues[16] = {0.f};
 	enum ParamIds {
-		KNOB,
-		TOGGLES = KNOB + numKnobs,
-		NUM_PARAMS = TOGGLES + numToggles
-
+		ALGORITHM,
+		IN_OFFSET,
+		IN_SCALE,
+		OUT_SCALE,
+		OUT_OFFSET,
+		POLY_CHANNELS,
+		NUM_PARAMS
 	};
 	enum InputIds {
 		CHANNEL_INPUT,
@@ -35,7 +33,7 @@ struct ComputerscareGolyPenerator : Module {
 	};
 	enum OutputIds {
 		POLY_OUTPUT,
-		NUM_OUTPUTS = POLY_OUTPUT + numOutputs
+		NUM_OUTPUTS
 	};
 	enum LightIds {
 		NUM_LIGHTS
@@ -46,32 +44,39 @@ struct ComputerscareGolyPenerator : Module {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configParam(KNOB,1.f,16.f,16.f,"Number of Output Channels");
-		configParam(KNOB +1,0.f,10.f,1.f,"Algorithm");
-		
+		configParam(ALGORITHM , 1.f, 16.f, 1.f, "Algorithm");
+		configParam(IN_OFFSET, -1.f, 1.f, 0.f, "Input Offset");
 
-		for (int i = 2; i < 8; i++) {
-			configParam(KNOB + i, -10.f, 10.f, 0.f, "Parameter " + std::to_string(i - 1));
-		}
+		configParam(IN_SCALE, -2.f, 2.f, 1.f, "Input Scale");
+
+		configParam(OUT_SCALE, -20.f, 20.f, 10.f, "Output Scale");
+		configParam(OUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
+		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
 
 		goly = Goly();
 
 	}
 	void updateCurrents() {
-		std::vector<float> golyParams = {params[KNOB+2].getValue(),params[KNOB+3].getValue(),params[KNOB+4].getValue(),params[KNOB+5].getValue(),params[KNOB+6].getValue(),params[KNOB+7].getValue()};
-		goly.invoke((int) std::floor(params[KNOB+1].getValue()),golyParams);
+		std::vector<float> golyParams = {params[IN_OFFSET].getValue(), params[IN_SCALE].getValue(), params[OUT_SCALE].getValue(), params[OUT_OFFSET].getValue()};
+		goly.invoke((int) std::floor(params[ALGORITHM].getValue()), golyParams, params[POLY_CHANNELS].getValue());
+	}
+	void checkPoly() override {
+		int knobSetting = params[POLY_CHANNELS].getValue();
+		polyChannels = knobSetting == 0 ? 16 : knobSetting;
+		outputs[POLY_OUTPUT].setChannels(polyChannels);
 	}
 	void process(const ProcessArgs &args) override {
+		ComputerscarePolyModule::checkCounter();
 		counter++;
-		if (counter > 5012) {
+		if (counter > 13) {
 			counter = 0;
 			updateCurrents();
-			numChannels=(int) (std::floor(params[KNOB].getValue()));
+			//numChannels=(int) (std::floor(params[POLY_CHANNELS].getValue()));
 		}
 
 
-		outputs[POLY_OUTPUT].setChannels(numChannels);
-		for (int i = 0; i < 16; i++) {
+		//outputs[POLY_OUTPUT].setChannels(numChannels);
+		for (int i = 0; i < polyChannels; i++) {
 			outputs[POLY_OUTPUT].setVoltage(goly.currentValues[i], i);
 		}
 	}
@@ -98,19 +103,21 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		float yy;
 //		    ParamWidget* stepsKnob =  createParam<LrgKnob>(Vec(108, 30), module, ComputerscarePatchSequencer::STEPS_PARAM);
 
-		addLabeledKnob("ch out",5,90,module,0,-2,0);
-		addLabeledKnob("Algo",5,140,module,1,0,0);
-		addLabeledKnob("A",10,250,module,2,0,0);
-		addLabeledKnob("B",20,300,module,3,0,0);
-		addLabeledKnob("C",30,260,module,4,0,0);
-		addLabeledKnob("D",30,310,module,5,0,0);
+		addLabeledKnob("Algo", 5, 140, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
+		addLabeledKnob("A", 10, 250, module, ComputerscareGolyPenerator::IN_OFFSET, 0, 0);
+		addLabeledKnob("B", 20, 300, module, ComputerscareGolyPenerator::IN_SCALE, 0, 0);
+		addLabeledKnob("C", 30, 260, module, ComputerscareGolyPenerator::OUT_SCALE, 0, 0);
+		addLabeledKnob("D", 30, 310, module, ComputerscareGolyPenerator::OUT_OFFSET, 0, 0);
 
+		//addLabeledKnob("ch out",5,90,module,ComputerscareGolyPenerator::POLY_CHANNELS,-2,0);
 
+		channelWidget = new PolyOutputChannelsWidget(Vec(0, 170), module, ComputerscareGolyPenerator::POLY_CHANNELS);
+		addChild(channelWidget);
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(18, 184), module, ComputerscareGolyPenerator::POLY_OUTPUT));
 
 	}
-	void addLabeledKnob(std::string label, int x, int y, ComputerscareGolyPenerator *module, int index, float labelDx, float labelDy) {
+	void addLabeledKnob(std::string label, int x, int y, ComputerscareGolyPenerator *module, int paramIndex, float labelDx, float labelDy, bool snap = false) {
 
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
@@ -118,13 +125,21 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
 
-		addParam(createParam<SmoothKnob>(Vec(x, y), module, ComputerscareGolyPenerator::KNOB + index));
+		if (snap) {
+			addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, paramIndex));
+		}
+		else {
+			addParam(createParam<SmoothKnob>(Vec(x, y), module, paramIndex));
+
+		}
 		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 
 
 		addChild(smallLetterDisplay);
 
 	}
+	PolyOutputChannelsWidget* channelWidget;
+
 	SmallLetterDisplay* smallLetterDisplay;
 };
 

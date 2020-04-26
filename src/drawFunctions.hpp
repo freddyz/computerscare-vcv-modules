@@ -1,7 +1,6 @@
 #pragma once
 
-namespace rack {
-namespace app {
+
 struct DrawHelper {
 
   NVGcontext* vg;
@@ -59,7 +58,36 @@ struct DrawHelper {
     //nvgStroke(vg);
    // nvgRestore(vg);
   }
-  void drawLines(std::vector<Vec> points, std::vector<Vec> rTheta,NVGcolor strokeColor=BLACK,float thickness=1.f) {
+  //void drawLines(std::vector<Vec> points, float length=)
+  void drawLines(std::vector<Vec> points,float length=20,float angle=0.f,float thickness=5.f) {
+    std::vector<Vec> angles;
+    for(unsigned int i = 0; i < points.size(); i++) {
+      angles.push_back(Vec(length,angle));
+    }
+    drawLines(points,angles,COLOR_COMPUTERSCARE_RED,thickness);
+  }
+  void drawLines(std::vector<Vec> points, std::vector<Vec> rTheta,std::vector<NVGcolor> strokeColors,std::vector<Vec> thicknesses) {
+    unsigned int n = points.size();
+  
+   // nvgBeginPath(vg);
+    
+
+    //nvgMoveTo(vg, 0,0);
+    for (unsigned int i = 0; i < n; i++) {
+        nvgSave(vg);
+        nvgBeginPath(vg);
+      nvgStrokeWidth(vg, thicknesses[i].x);
+      nvgStrokeColor(vg, strokeColors[i]);
+      nvgMoveTo(vg,points[i].x,points[i].y);
+      nvgLineTo(vg,points[i].x+rTheta[i].x*cos(rTheta[i].y),points[i].y+rTheta[i].x*sin(rTheta[i].y));
+      nvgStroke(vg);
+      nvgRestore(vg);
+      //nvgClosePath(vg);
+    }
+    
+    
+  }
+  void drawLines(std::vector<Vec> points, std::vector<Vec> rTheta,NVGcolor strokeColor=COLOR_COMPUTERSCARE_RED,float thickness=1.f) {
     unsigned int n = points.size();
     nvgSave(vg);
    // nvgBeginPath(vg);
@@ -98,5 +126,3 @@ struct DrawHelper {
     return nvgRGB(127*(1+sin(t*omega[0])),127*(1+sin(t*omega[1])),127*(1+sin(t*omega[2])));
   }
 };
-}
-}

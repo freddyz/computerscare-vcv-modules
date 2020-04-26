@@ -10,17 +10,24 @@ static const int BUFFER_SIZE = 512;
 struct DrolyPaw : Module {
 	enum ParamIds {
 		TIME_PARAM,
-		TRIM,
-		OFFSET,
+		INPUT_TRIM,
+		INPUT_OFFSET,
 		SCRAMBLE,
 		DRAW_MODE,
 		CLEAR_BUTTON,
+		CLEAR_EVERY_FRAME,
+		DRAWPARAMS_TRIM,
+		DRAWPARAMS_OFFSET,
+		DRAW_EVERY_FRAME,
 		NUM_PARAMS
 	};
 	enum InputIds {
 		X_INPUT,
-		SCRAMBLE_INPUT,
+		Y_INPUT,
 		CLEAR_TRIGGER,
+		DRAW_TRIGGER,
+		DRAW_GATE,
+		CLEAR_GATE,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -31,8 +38,11 @@ struct DrolyPaw : Module {
 	};
 
 	float bufferX[16][BUFFER_SIZE] = {};
+	float bufferY[16][BUFFER_SIZE] = {};
 	int cmap[16];
+	int cmapParams[16];
 	int channelsX = 0;
+	int channelsY = 0;
 	int bufferIndex = 0;
 	int frameIndex = 0;
 	int cnt = 0;
@@ -55,16 +65,24 @@ struct DrolyPaw : Module {
 
 		for (int i = 0; i < 16; i++) {
 			cmap[i] = i;
+			cmapParams[i]=i;
 		}
 
 		configParam(TIME_PARAM, 6.f, 16.f, 14.f, "Time", " ms/div", 1 / 2.f, 1000 * timeBase);
 
-		configParam(TRIM, -2.f, 2.f, 0.2f, "Input Trim");
-		configParam(OFFSET, -5.f, 5.f, 0.f, "Input Offset", " Volts");
+		configParam(INPUT_TRIM, -2.f, 2.f, 0.2f, "Input Attenuverter");
+		configParam(INPUT_OFFSET, -5.f, 5.f, 0.f, "Input Offset", " Volts");
+
+
 
 		configParam(SCRAMBLE, -10.f, 10.f, 0.f, "Scrambling");
 		configParam(DRAW_MODE, 0.f, 64.f, 1.f, "Draw Mode");
 		configParam(CLEAR_BUTTON, 0.f, 1.f, 0.f);
+		configParam(CLEAR_EVERY_FRAME, 0.f, 1.f, 1.f,"Clear Every Frame");
+		configParam(DRAW_EVERY_FRAME, 0.f, 1.f, 1.f,"Draw Every Frame");
+
+		configParam(DRAWPARAMS_TRIM, -2.f, 2.f, 1.f, "Draw Parameters Attenuverter");
+		configParam(DRAWPARAMS_OFFSET, -5.f, 5.f, 0.f, "Draw Parameters Offset", " Volts");
 
 	}
 
@@ -73,7 +91,7 @@ struct DrolyPaw : Module {
 	}
 	void updateScramble(float v) {
 		for (int i = 0; i < 16; i++) {
-			cmap[i] = (i * A + B + (int)std::floor(v * 1010.1)) % 16;
+			cmap[i] = i;//(i * A + B + (int)std::floor(v * 1010.1)) % 16;
 		}
 	}
 	void checkScramble() {
@@ -102,7 +120,7 @@ struct DrolyPaw : Module {
 
 		int frameCount = (int) std::ceil(deltaTime * args.sampleRate);
 
-		if(globalManualResetTrigger.process(params[CLEAR_BUTTON].getValue())) {
+		if(params[CLEAR_EVERY_FRAME].getValue() || globalManualResetTrigger.process(params[CLEAR_BUTTON].getValue())) {
 			armClear();
 		}
 
@@ -111,6 +129,12 @@ struct DrolyPaw : Module {
 		if (channelsX != this->channelsX) {
 			std::memset(bufferX, 0, sizeof(bufferX));
 			this->channelsX = channelsX;
+		}
+
+		int channelsY = inputs[Y_INPUT].getChannels();
+		if (channelsY != this->channelsY) {
+			std::memset(bufferY, 0, sizeof(bufferY));
+			this->channelsY = channelsY;
 		}
 
 		if (cnt > 4101) {
@@ -123,13 +147,16 @@ struct DrolyPaw : Module {
 		if (bufferIndex < BUFFER_SIZE) {
 			if (++frameIndex > frameCount) {
 				frameIndex = 0;
-				float trimVal = params[TRIM].getValue();
-				float offsetVal = params[OFFSET].getValue();
+				float trimVal = params[INPUT_TRIM].getValue();
+				float offsetVal = params[INPUT_OFFSET].getValue();
+
+				float paramsTrimVal = params[DRAWPARAMS_TRIM].getValue();
+				float paramsOffsetVal = params[DRAWPARAMS_OFFSET].getValue();
 
 				if (inputs[X_INPUT].isConnected()) {
 					for (int c = 0; c < 16; c++) {
 						bufferX[c][bufferIndex] = inputs[X_INPUT].getVoltage(std::min(cmap[c], this->channelsX)) * trimVal + offsetVal;
-						//bufferX[c][bufferIndex]=inputs[X_INPUT].getVoltage(cmap[c]);
+						bufferY[c][bufferIndex]=inputs[Y_INPUT].getVoltage(std::min(cmapParams[c], this->channelsY)) * paramsTrimVal + paramsOffsetVal;
 						//bufferX[c][bufferIndex]=inputs[X_INPUT].getVoltage(c);
 						//bufferX[c][bufferIndex]=inputs[X_INPUT].getVoltage(c)*trimVal+offsetVal;
 					}
@@ -216,17 +243,17 @@ struct NoClearWidget : FramebufferWidget {
 struct DrolyPawDisplay : FramebufferWidget {
 	DrolyPaw *module;
 	void step() override {
-		// Render every frame
+	
 		dirty = true;
 		FramebufferWidget::step();
 	}
 	/*DrolyPawDisplay() {
 		FramebufferWidget();
 	}*/
-	void drawThingie(const DrawArgs &args, float buffer[16][BUFFER_SIZE]) {
+	void drawThingie(const DrawArgs &args, float buffer[16][BUFFER_SIZE],float paramsBuffer[16][BUFFER_SIZE]) {
 		DrawHelper draw = DrawHelper(args.vg);
 		Points pts = Points();
-		nvgTranslate(args.vg, 67.5, 190);
+		nvgTranslate(args.vg, 97.5, 190);
 		int mode = module->params[DrolyPaw::DRAW_MODE].getValue();
 		if (mode == 0) {
 			for (int i = 0; i < 4; i++) {
@@ -238,9 +265,22 @@ struct DrolyPawDisplay : FramebufferWidget {
 		else if (mode == 1) {
 			pts.spray(100);
 			pts.scale(Vec(buffer[2][0]*buffer[0][0], buffer[2][0]*buffer[1][0]));
-
 			draw.drawField(pts.get(),draw.sincolor(buffer[3][0]+buffer[4][0]*random::uniform()),buffer[5][0]*buffer[6][0]);
 			//draw.drawDots(pts.get(), draw.sincolor(random::uniform()), 2.f);
+		}
+		else if(mode==2) {
+			pts.linear(16,Vec(0,-box.size.y/2+26),Vec(0,100+242*paramsBuffer[3][0]));
+			std::vector<Vec> polyVals;
+			std::vector<NVGcolor> colors;
+			std::vector<Vec> thicknesses;
+
+			for(int i= 0; i < 16; i++) {
+				polyVals.push_back(Vec(buffer[i][0]*30,0.f));
+				colors.push_back(draw.sincolor(paramsBuffer[0][0]+2+paramsBuffer[2][0]*i));
+
+				thicknesses.push_back(Vec(expf(paramsBuffer[1][0]/2),0));
+			}
+			draw.drawLines(pts.get(),polyVals,colors,thicknesses);
 		}
 		else {
 			int nx = (mode * 17) % 10;
@@ -274,15 +314,18 @@ struct DrolyPawDisplay : FramebufferWidget {
 			drawThingie(args);
 		}
 		else {
-			drawThingie(args, module->bufferX);
+			if(module->params[DrolyPaw::DRAW_EVERY_FRAME].getValue()) {
+				drawThingie(args, module->bufferX,module->bufferY);
+			}
+			
 		}
 
 		glViewport(0.0, 0.0, fbSize.x * oversample, fbSize.y * oversample);
-		if(module->checkClear()) {
-
-			glClearColor(0.0, 0.0, 0.0, 0.0);
-			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
+		if(module) {
+			if(module->checkClear()) {
+				glClearColor(0.0, 0.0, 0.0, 0.0);
+				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+			}
 		}
 		nvgEndFrame(vg);
 
@@ -326,11 +369,11 @@ struct DrolyPawWidget : ModuleWidget {
 	DrolyPawWidget(DrolyPaw *module) {
 		setModule(module);
 
-		box.size = Vec(9 * 15, 380);
+		box.size = Vec(13 * 15, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
-			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareStolyFickPigurePanel.svg")));
+			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDrolyPawPanel.svg")));
 			addChild(panel);
 
 		}
@@ -348,17 +391,27 @@ struct DrolyPawWidget : ModuleWidget {
 			display->module = module;
 			display->box.pos = Vec(0, 0);
 			display->box.size = Vec(box.size.x, box.size.y);
+			//display->sizex
 			addChild(display);
 		}
 
 
 		addInput(createInput<PointingUpPentagonPort>(Vec(1, 353), module, DrolyPaw::X_INPUT));
-		addParam(createParam<SmallKnob>(Vec(31, 357), module, DrolyPaw::TRIM));
-		addParam(createParam<SmoothKnob>(Vec(51, 353), module, DrolyPaw::OFFSET));
 
-		addParam(createParam<ScrambleKnob>(Vec(81, 357), module, DrolyPaw::SCRAMBLE));
-		addParam(createParam<MediumDotSnapKnob>(Vec(101, 354), module, DrolyPaw::DRAW_MODE));
+
+		addParam(createParam<SmallKnob>(Vec(31, 357), module, DrolyPaw::INPUT_TRIM));
+		addParam(createParam<SmoothKnob>(Vec(51, 353), module, DrolyPaw::INPUT_OFFSET));
+
+		addInput(createInput<PointingUpPentagonPort>(Vec(81, 353), module, DrolyPaw::Y_INPUT));
+		addParam(createParam<SmallKnob>(Vec(101, 357), module, DrolyPaw::DRAWPARAMS_TRIM));
+		addParam(createParam<SmoothKnob>(Vec(121, 353), module, DrolyPaw::DRAWPARAMS_OFFSET));
+
+		//addParam(createParam<ScrambleKnob>(Vec(81, 357), module, DrolyPaw::SCRAMBLE));
+		addParam(createParam<MediumDotSnapKnob>(Vec(141, 354), module, DrolyPaw::DRAW_MODE));
 		addParam(createParam<ComputerscareResetButton>(Vec(1, 334), module,DrolyPaw::CLEAR_BUTTON));
+		addParam(createParam<SmallIsoButton>(Vec(24,334),module,DrolyPaw::CLEAR_EVERY_FRAME));
+		addParam(createParam<SmallIsoButton>(Vec(44,334),module,DrolyPaw::DRAW_EVERY_FRAME));
+
 
 
 

@@ -61,16 +61,17 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 		int clockNum = inputs[CLOCK_INPUT].getChannels();
 		int knobSetting = params[POLY_CHANNELS].getValue();
 		if (knobSetting == 0) {
-			polyChannels = inputs[CLOCK_INPUT].isConnected() ? std::max(clockNum,resetNum) : 16;
+			polyChannels = inputs[CLOCK_INPUT].isConnected() ? std::max(clockNum, resetNum) : 16;
 		}
 		else {
 			polyChannels = knobSetting;
 		}
 		for (int i = 0; i < 16; i++) {
-			clockChannels[i] = std::max(1, std::min(i+1, clockNum));
-			resetChannels[i] = std::max(1, std::min(i+1, resetNum));
+			clockChannels[i] = std::max(1, std::min(i + 1, clockNum));
+			resetChannels[i] = std::max(1, std::min(i + 1, resetNum));
 		}
 		outputs[POLY_OUTPUT].setChannels(polyChannels);
+		outputs[EOC_OUTPUT].setChannels(polyChannels);
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
@@ -79,18 +80,23 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 		int numClock = inputs[CLOCK_INPUT].getChannels();
 		//int numOutputChannels = numClock > 0 ? numClock : 1;
 		bool globalClocked = globalManualClockTrigger.process(params[MANUAL_CLOCK_BUTTON].getValue());
-		
+		bool manualReset = globalManualResetTrigger.process(params[MANUAL_RESET_BUTTON].getValue());
+
 		if (inputs[POLY_INPUT].isConnected()) {
 			bool currentClock[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 			bool currentReset[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 			bool isHigh[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+			bool eoc[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 			for (int i = 0; i < 16; i++) {
 				currentClock[i] = clockTriggers[i].process(inputs[CLOCK_INPUT].getVoltage(i));
 				currentReset[i] = resetTriggers[i].process(inputs[RESET_INPUT].getVoltage(i));
 				isHigh[i] = clockTriggers[i].isHigh();
 			}
+			for(int i =0; i < 16; i++) {
+				eoc[i] = (currentClock[clockChannels[i]-1] && isHigh[clockChannels[i]-1]) || (currentReset[resetChannels[i]-1] && resetTriggers[resetChannels[i]-1].isHigh());
+			}
 			for (int j = 0; j < polyChannels; j++) {
-				if (globalClocked || currentClock[clockChannels[j]-1]) {
+				if (globalClocked || currentClock[clockChannels[j] - 1]) {
 					currentStep[j]++;
 					if (autoNumSteps) {
 						currentStep[j] = currentStep[j] % numInputChannels;
@@ -101,21 +107,23 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 
 
 				}
-				if(j <= numReset) {
-					if(resetTriggers[j].process(inputs[RESET_INPUT].getVoltage(j))) {
+				if (j <= numReset) {
+					if (resetTriggers[j].process(inputs[RESET_INPUT].getVoltage(j))) {
 						currentStep[j] = 0;
 					}
 				}
 			}
-
 			for (int c = 0; c < polyChannels; c++) {
 				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(currentStep[c]), c);
+				outputs[EOC_OUTPUT].setVoltage(currentStep[c]==0 && eoc[c] ? 10.f : 0.f,c);
 			}
+			
 		}
-		if (globalManualResetTrigger.process(params[MANUAL_RESET_BUTTON].getValue())) {
+		if (manualReset) {
 			resetAll();
 		}
-	
+
+
 	}
 
 };
@@ -162,13 +170,14 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 		}
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(14, 48), module, ComputerscareSolyPequencer::POLY_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(34, 48), module, ComputerscareSolyPequencer::EOC_OUTPUT));
 
 
 		channelWidget = new PolyOutputChannelsWidget(Vec(2, 8), module, ComputerscareSolyPequencer::POLY_CHANNELS);
 		addChild(channelWidget);
 
 		addLabeledKnob("Steps", 10, 124, module, 0, 0, 0);
-		stepNumberGrid(1,230,30,15,module);
+		stepNumberGrid(1, 230, 30, 15, module);
 
 
 		addInput(createInput<InPort>(Vec(19, 102), module, ComputerscareSolyPequencer::POLY_INPUT));
@@ -183,20 +192,20 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 
 
 
-		
+
 	}
 	void stepNumberGrid(int x, int y, int xspacing, int yspacing, ComputerscareSolyPequencer *module) {
-		for(int i = 0; i < 2; i++) {
-			for(int j = 0; j < 8; j++) {
-				psd = new PequencerSmallDisplay(i*8+j);
-		psd->box.size = Vec(10, 10);
-		psd->box.pos = Vec(x +i*xspacing , y + j*yspacing);
-		psd->fontSize = 18;
-		psd->textAlign = 18;
-		psd->textColor =nvgRGB(0x24, 0x44, 0x31);
-		psd->breakRowWidth = 20;
-		psd->module = module;
-		addChild(psd);
+		for (int i = 0; i < 2; i++) {
+			for (int j = 0; j < 8; j++) {
+				psd = new PequencerSmallDisplay(i * 8 + j);
+				psd->box.size = Vec(10, 10);
+				psd->box.pos = Vec(x + i * xspacing , y + j * yspacing);
+				psd->fontSize = 18;
+				psd->textAlign = 18;
+				psd->textColor = nvgRGB(0x24, 0x44, 0x31);
+				psd->breakRowWidth = 20;
+				psd->module = module;
+				addChild(psd);
 			}
 		}
 	}
