@@ -222,6 +222,8 @@ struct DrolyPaw : Module {
 		frameIndex = 0;
 	}
 };
+namespace rack {
+namespace widget {
 struct NoClearWidget : FramebufferWidget {
 	NoClearWidget() {
 		FramebufferWidget();
@@ -309,6 +311,10 @@ struct DrolyPawDisplay : FramebufferWidget {
 			}
 			draw.drawLines(pts.get(), polyVals, colors, thicknesses);
 		}
+		else if( mode==3) {
+			//number,-dTHickness,dAngle,dColor (passed to sincolor)
+			draw.drawLines(20,3,0.1);
+		}
 		else {
 			int nx = (mode * 17) % 10;
 			int ny = (mode * 11 + 3) % 10;
@@ -360,36 +366,7 @@ struct DrolyPawDisplay : FramebufferWidget {
 		nvgReset(vg);
 	}
 };
-struct DrolyGLDisplay : OpenGlWidget {
-	DrolyPaw *module;
-	DrolyGLDisplay() {
-
-	}
-
-	void drawFramebuffer() override {
-		float a = module->bufferX[0][0];
-		float b = module->bufferX[1][0];
-
-		float c = module->bufferX[2][0];
-
-		glViewport(0.0, 0.0, fbSize.x, fbSize.y);
-		glClearColor(a * 2, b * 2, c * 2, 1.0);
-		//glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
-		glOrtho(a, fbSize.x, 0.0, fbSize.y, -1.0, 1.0);
-
-		glBegin(GL_TRIANGLES);
-		glColor3f(a / 10, b / 10, c / 10);
-		glVertex3f(fbSize.x / 2 + b * 10, fbSize.y / 2 + c * 10, a * 10);
-		glColor3f(0, 1, 0);
-		glVertex3f(fbSize.x / 2 + c * 10, 0, 0);
-		glColor3f(0, 0, 1);
-		glVertex3f(0, fbSize.y / 2 + b * 10, 0);
-		glEnd();
-	}
-};
+}}
 
 
 struct DrolyPawWidget : ModuleWidget {
@@ -403,14 +380,6 @@ struct DrolyPawWidget : ModuleWidget {
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDrolyPawPanel.svg")));
 			addChild(panel);
 
-		}
-
-		{
-			DrolyGLDisplay *gl = new DrolyGLDisplay();
-			gl->module = module;
-			gl->box.pos = Vec(0, 0);
-			gl->box.size = Vec(box.size.x, box.size.y);
-			//addChild(gl);
 		}
 
 		{
