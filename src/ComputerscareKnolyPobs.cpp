@@ -132,13 +132,13 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 
 		float xx;
 		float yy;
-		float yInitial=84;
+		float yInitial=86;
 		float ySpacing =  34;
 		float yRightColumnOffset=14.3/8;
 		for (int i = 0; i < numKnobs; i++) {
 			xx = 1.4f + 24.3 * (i - i % 8) / 8;
 			yy = yInitial + ySpacing* (i % 8) +  yRightColumnOffset* (i - i % 8) ;
-			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 2 +(i==8 ? 5 : 0), 2);
+			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 3 +(i==8 ? 5 : 0), 2);
 		}
 
 	}
@@ -146,7 +146,7 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
 
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
-		smallLetterDisplay->fontSize = 14;
+		smallLetterDisplay->fontSize = 18;
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
 

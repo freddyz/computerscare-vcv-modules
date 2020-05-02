@@ -178,18 +178,39 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 
 struct DisableableParamWidget : SmallIsoButton {
 	ComputerscareBolyPuttons *module;
+	SmallLetterDisplay *smallLetterDisplay;
 	int channel;
+	Vec labelOffset = Vec(0,0);
 
 
 	DisableableParamWidget() {
+		smallLetterDisplay = new SmallLetterDisplay();
+		smallLetterDisplay->box.size = Vec(5, 10);
+		smallLetterDisplay->fontSize = 17;
+		smallLetterDisplay->value = "";
+		smallLetterDisplay->textAlign = 1;
+		smallLetterDisplay->box.pos = box.pos;//Vec(box.pos.x,box.pos.y);
+		//smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
+
+		addChild(smallLetterDisplay);
 		SmallIsoButton();
 	}
 	void step() override {
 		if (module) {
 			disabled = channel > module->polyChannels - 1;
 			momentary = module->momentary;
+			bool pressed = module->params[channel].getValue() == 1.f;
+			labelOffset = Vec(pressed ? 3.f : -4.f, pressed ? 7.f : 2.f);
+			//smallLetterDisplay
+			//smallLetterDisplay->box.pos=box.pos;//.plus(Vec(0,0/*disabled ? 5 : 0,0*/));
 		}
+		smallLetterDisplay->value = std::to_string(channel+1);
 		SmallIsoButton::step();
+	}
+	void draw(const DrawArgs &ctx) override {
+		//addChild(smallLetterDisplay);
+		smallLetterDisplay->textOffset = labelOffset;//.plus(labelOffset);
+		SmallIsoButton::draw(ctx);
 	}
 };
 
@@ -239,13 +260,7 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 
 		//addParam(createParam<DisableableParamWidget>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
 
-		smallLetterDisplay = new SmallLetterDisplay();
-		smallLetterDisplay->box.size = Vec(5, 10);
-		smallLetterDisplay->fontSize = 16;
-		smallLetterDisplay->value = label;
-		smallLetterDisplay->textAlign = 1;
-		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
-		addChild(smallLetterDisplay);
+
 
 	}
 

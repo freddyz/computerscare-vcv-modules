@@ -456,6 +456,7 @@ struct SmallLetterDisplay : Widget {
 	std::string defaultFontPath = "res/Oswald-Regular.ttf";
 	NVGcolor baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
 	NVGcolor textColor = nvgRGB(0x10, 0x10, 0x00);
+	Vec textOffset = Vec(0,0);
 
 	float letterSpacing = 2.5;
 	int textAlign = 1;
@@ -501,7 +502,7 @@ struct SmallLetterDisplay : Widget {
 		nvgTextLineHeight(ctx.vg, 0.7);
 		nvgTextAlign(ctx.vg, textAlign);
 
-		Vec textPos = Vec(6.0f, 12.0f);
+		Vec textPos = Vec(6.0f, 12.0f).plus(textOffset);
 		NVGcolor color = (!blink || doubleblink) ? textColor : COLOR_COMPUTERSCARE_YELLOW;
 		nvgFillColor(ctx.vg, color);
 		nvgTextBox(ctx.vg, textPos.x, textPos.y, breakRowWidth, value.c_str(), NULL);
