@@ -104,30 +104,33 @@ struct DrawHelper {
     nvgStroke(vg);
     nvgRestore(vg);
   }
-  drawLines(int n, float dThickness,float dTheta,float dColor=0.1) {
+  void drawLines(int n, float dThickness,float dTheta,float dColor=0.1) {
     nvgSave(vg);
    // nvgBeginPath(vg);
     
     //nvgMoveTo(vg, 0,0);
-   float initialThick=20.f;
-    float radius=100;
-    for (unsigned int i = 0; i < n; i++) {
-      float thickness=initialThick-dThickness*i/n;
+    float radius=100000;
+    float thickness=10;
+    for (int i = 0; i < n; i++) {
+      
       NVGcolor color = sincolor(dColor*i/n);
       float angle = dTheta*i/n*2*M_PI;
       nvgBeginPath(vg);
       nvgStrokeColor(vg, color);
       nvgStrokeWidth(vg, thickness);
    
-      float x0=100*cosf(angle);
-      float y0 = 100*sinf(angle);
-      float x1 = 100*cosf(angle+M_PI);
-      float y1 = 100*sinf(angle+M_PI);
+      float x0=radius*cosf(angle);
+      float y0 = radius*sinf(angle);
+      float x1 = radius*cosf(angle+M_PI);
+      float y1 = radius*sinf(angle+M_PI);
 
       nvgMoveTo(vg,x0,y0);
       nvgLineTo(vg,x1,y1);
       nvgClosePath(vg);
       nvgStroke(vg);
+
+      thickness*=expf(dThickness);
+
     }
     nvgRestore(vg);
   }

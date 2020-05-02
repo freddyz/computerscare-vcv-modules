@@ -313,7 +313,7 @@ struct DrolyPawDisplay : FramebufferWidget {
 		}
 		else if( mode==3) {
 			//number,-dTHickness,dAngle,dColor (passed to sincolor)
-			draw.drawLines(20,3,0.1);
+			draw.drawLines(fmin(65,std::floor(exp(40*buffer[0][1])+2)),buffer[1][0],buffer[2][0]/4,buffer[3][0]*2);
 		}
 		else {
 			int nx = (mode * 17) % 10;
