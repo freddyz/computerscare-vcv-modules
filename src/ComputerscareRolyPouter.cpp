@@ -113,7 +113,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 					outputs[POLY_OUTPUT].setVoltage(0, i);
 				}
 				else {
-					outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(knobSetting), i);
+					outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(routing[i]), i);
 				}
 			}
 		} else {
