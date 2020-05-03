@@ -2,6 +2,13 @@
 
 using namespace rack;
 
+struct AutoParamQuantity : ParamQuantity {
+	std::string getDisplayValueString() override {
+		std::string disp = Quantity::getDisplayValueString();
+		return disp == "0" ? "Auto" : disp;
+	}
+};
+
 struct ComputerscarePolyModule : Module {
 	int polyChannels = 16;
 	int polyChannelsKnobSetting=0;

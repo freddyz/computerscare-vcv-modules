@@ -51,7 +51,7 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 
 		configParam(OUT_SCALE, -20.f, 20.f, 10.f, "Output Scale");
 		configParam(OUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
-		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
+		configParam<AutoParamQuantity>(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
 
 		goly = Goly();
 

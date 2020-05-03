@@ -197,7 +197,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		configParam(STEPS_TRIM, -1.f, 1.f, 0.f, "Steps CV Trim");
 		configParam(DENSITY_TRIM, -1.f, 1.f, 0.f, "Density CV Trim");
 
-		configParam(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
+		configParam<AutoParamQuantity>(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
 
 		configParam(MODE_KNOB,1.f,16.f,1.f,"Mode");
 

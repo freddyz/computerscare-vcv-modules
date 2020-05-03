@@ -46,7 +46,7 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
         configParam(KNOB + i * 16 + j, -2.f, 2.f, i == j ? 1.f : 0.f, "i:" + std::to_string(i) + ",j:" + std::to_string(j));
       }
       configParam(OUTPUT_TRIM,-2.f,2.f,1.f,"Output Attenuation");
-      configParam(POLY_CHANNELS,0.f,16.f,0.f,"Poly Channels");
+      configParam<AutoParamQuantity>(POLY_CHANNELS,0.f,16.f,0.f,"Poly Channels");
     }
 
   }

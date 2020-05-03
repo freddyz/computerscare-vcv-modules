@@ -49,7 +49,7 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
 		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
-		configParam(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
+		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 	}
 	void resetAll() {
 		for (int i = 0; i < 16; i++) {

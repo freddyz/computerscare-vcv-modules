@@ -44,7 +44,7 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 			//configParam(KNOB + i, 0.0f, 10.0f, 0.0f);
 			configParam(TOGGLE + i, 0.f, 1.f, 0.f, "Channel " + std::to_string(i + 1));
 		}
-		configParam(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
+		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 
 		outputRanges[0][0] = 0.f;
 		outputRanges[0][1] = 10.f;
