@@ -1446,3 +1446,9 @@ std::vector<std::string> split(std::string strToSplit, char delimeter)
     }
     return splittedStrings;
 }
+void swap (int *a, int *b)  
+{  
+    int temp = *a;  
+    *a = *b;  
+    *b = temp;  
+}

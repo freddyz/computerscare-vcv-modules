@@ -199,3 +199,4 @@ float mapChannelCountToVoltage(int ch);
 int mapVoltageToChannelCount(float vv);
 int myPow(int x, int p);
 std::vector<std::string> split(std::string strToSplit, char delimeter);
+void swap (int *a, int *b);

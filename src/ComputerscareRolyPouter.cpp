@@ -14,6 +14,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 	enum ParamIds {
 		KNOB,
 		POLY_CHANNELS = KNOB + numKnobs,
+		RANDOMIZE_ONE_TO_ONE,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -39,6 +40,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 			routing[i] = i;
 		}
 		configParam(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
+		configParam(RANDOMIZE_ONE_TO_ONE, 0.f, 1.f, 0.f);
 
 	}
 	void setAll(int setVal) {
@@ -48,9 +50,33 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 	}
 	void onRandomize() override {
 		float max = numInputChannels > 0 ? numInputChannels : 16;
-		for (int i = 0; i < polyChannels; i++) {
-			params[KNOB + i].setValue(1 + std::floor(random::uniform()*max));
+		if (params[RANDOMIZE_ONE_TO_ONE].getValue() == 1) {
+			int tempRouting[polyChannels];
+			for (int i = 0; i < polyChannels; i++) {
+				tempRouting[i] = i + 1;
+			}
+			for (int i = polyChannels - 1; i > 0; i--)
+			{
+				// Pick a random index from 0 to i
+				int j = ((int) std::floor(random::uniform() * 1000)) % (i + 1);
+
+				// Swap arr[i] with the element
+				// at random index
+				swap(&tempRouting[i], &tempRouting[j]);
+			}
+			for (int i = 0; i < polyChannels; i++) {
+				params[KNOB + i].setValue(tempRouting[i]);
+			}
 		}
+		else {
+			for (int i = 0; i < polyChannels; i++) {
+				params[KNOB + i].setValue(1 + std::floor(random::uniform()*max));
+			}
+		}
+	}
+	void toggleOneToOne() {
+		int prev = params[RANDOMIZE_ONE_TO_ONE].getValue();
+		params[RANDOMIZE_ONE_TO_ONE].setValue(prev == 1 ? 0 : 1);
 	}
 	void checkPoly() override {
 		numInputChannels = inputs[POLY_INPUT].getChannels();
@@ -82,7 +108,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 			for (int i = 0; i < numOutputChannels; i++) {
 
 				knobSetting = std::round(inputs[ROUTING_CV].getVoltage(cvChannels == 1 ? 0 : i) * 1.5) + 1;
-				routing[i] =knobSetting;// knobSetting < 1 ? knobSetting + 16 : knobSetting;
+				routing[i] = (knobSetting + 16 * 4 - 1) % 16 + 1;
 				if (knobSetting > inputChannels) {
 					outputs[POLY_OUTPUT].setVoltage(0, i);
 				}
@@ -231,7 +257,6 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 struct ssmi : MenuItem
 {
 	ComputerscareRolyPouter *pouter;
-	ComputerscareRolyPouterWidget *pouterWidget;
 	int mySetVal = 1;
 	ssmi(int setVal)
 	{
@@ -243,17 +268,58 @@ struct ssmi : MenuItem
 		pouter->setAll(mySetVal);
 	}
 };
-void ComputerscareRolyPouterWidget::addMenuItems(ComputerscareRolyPouter *pouter, Menu *menu)
-{
-	for (int i = 1; i < 17; i++) {
-		ssmi *menuItem = new ssmi(i);
-		menuItem->text = "Set all to ch. " + std::to_string(i);
-		menuItem->pouter = pouter;
-		menuItem->pouterWidget = this;
-		menu->addChild(menuItem);
+struct OneToOneItem: MenuItem {
+	ComputerscareRolyPouter *pouter;
+
+	OneToOneItem() {
+
+	}
+	void onAction(const event::Action &e) override {
+		pouter->toggleOneToOne();
+	}
+	void step() override {
+		rightText = pouter->params[ComputerscareRolyPouter::RANDOMIZE_ONE_TO_ONE].getValue() == 1.f ? "✔" : "";
+		MenuItem::step();
+	}
+};
+/*struct LaundryChannelsItem : MenuItem {
+  ComputerscareLaundrySoup *module;
+  int row;
+  Menu *createChildMenu() override {
+    Menu *menu = new Menu;
+    for (int channels = -1; channels <= 16; channels++) {
+      LaundryChannelItem *item = new LaundryChannelItem;
+      item->row = row;
+      if (channels < 0)
+        item->text = "Automatic";
+      else
+        item->text = string::f("%d", channels);
+      if (row > -1) {
+        item->rightText = CHECKMARK(module->channelCountEnum[row] == channels);
+      }
+      item->module = module;
+      item->channels = channels;
+      menu->addChild(item);
+    }
+    return menu;
+  }
+};*/
+
+struct SetAllItem : MenuItem {
+	ComputerscareRolyPouter *pouter;
+
+	Menu *createChildMenu() override {
+		Menu *menu = new Menu;
+		for (int i = 1; i < 17; i++) {
+			ssmi *menuItem = new ssmi(i);
+			menuItem->text = "Set all to ch. " + std::to_string(i);
+			menuItem->pouter = pouter;
+			menu->addChild(menuItem);
+		}
+		return menu;
 	}
 
-}
+};
 void ComputerscareRolyPouterWidget::appendContextMenu(Menu *menu)
 {
 	ComputerscareRolyPouter *pouter = dynamic_cast<ComputerscareRolyPouter *>(this->module);
@@ -261,12 +327,23 @@ void ComputerscareRolyPouterWidget::appendContextMenu(Menu *menu)
 	MenuLabel *spacerLabel = new MenuLabel();
 	menu->addChild(spacerLabel);
 
+	OneToOneItem *oneToOne = new OneToOneItem();
+	oneToOne->text = "Randomize one-to-one (Don't re-use input channels on randomize)";
+	oneToOne->pouter = pouter;
+	menu->addChild(oneToOne);
+
 
 	MenuLabel *modeLabel = new MenuLabel();
 	modeLabel->text = "Presets";
 	menu->addChild(modeLabel);
 
-	addMenuItems(pouter, menu);
+	SetAllItem *setAllItem = new SetAllItem();
+	setAllItem->text = "Set All To";
+	setAllItem->rightText = RIGHT_ARROW;
+	setAllItem->pouter = pouter;
+	menu->addChild(setAllItem);
+
+	//addMenuItems(pouter, menu);
 
 }
 
