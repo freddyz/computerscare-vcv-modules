@@ -2,6 +2,7 @@
 #include <ctime>
 #include "plugin.hpp"
 #include "Computerscare.hpp"
+#include "ComputerscareResizableHandle.hpp"
 #include "dtpulse.hpp"
 
 
@@ -20,6 +21,7 @@ struct DrolyPaw : Module {
 		DRAWPARAMS_TRIM,
 		DRAWPARAMS_OFFSET,
 		DRAW_EVERY_FRAME,
+		MODULE_WIDTH,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -85,7 +87,7 @@ struct DrolyPaw : Module {
 
 		configParam(DRAWPARAMS_TRIM, -2.f, 2.f, 1.f, "Draw Parameters Attenuverter");
 		configParam(DRAWPARAMS_OFFSET, -5.f, 5.f, 0.f, "Draw Parameters Offset", " Volts");
-
+		configParam(MODULE_WIDTH, 15.f, 450.f, 195.f, "Width");
 	}
 
 	void onReset() override {
@@ -184,7 +186,7 @@ struct DrolyPaw : Module {
 					for (int c = 0; c < 16; c++) {
 
 
-						bufferY[c][bufferIndex] = paramsTrimVal*sin((float)interiorCounter / 100000 * (c + 1))+paramsOffsetVal;
+						bufferY[c][bufferIndex] = paramsTrimVal * sin((float)interiorCounter / 100000 * (c + 1)) + paramsOffsetVal;
 					}
 				}
 
@@ -266,10 +268,13 @@ struct NoClearWidget : FramebufferWidget {
 
 struct DrolyPawDisplay : FramebufferWidget {
 	DrolyPaw *module;
+	float width=195;
 	void step() override {
 
 		dirty = true;
+		box.size.x = width;
 		FramebufferWidget::step();
+		
 	}
 	/*DrolyPawDisplay() {
 		FramebufferWidget();
@@ -277,7 +282,8 @@ struct DrolyPawDisplay : FramebufferWidget {
 	void drawThingie(const DrawArgs &args, float buffer[16][BUFFER_SIZE], float paramsBuffer[16][BUFFER_SIZE]) {
 		DrawHelper draw = DrawHelper(args.vg);
 		Points pts = Points();
-		nvgTranslate(args.vg, 97.5, 190);
+		width = module->params[DrolyPaw::MODULE_WIDTH].getValue();
+		nvgTranslate(args.vg, width/2, 190);
 		int mode = module->params[DrolyPaw::DRAW_MODE].getValue();
 
 		if (mode == 0) {
@@ -304,16 +310,16 @@ struct DrolyPawDisplay : FramebufferWidget {
 			std::vector<Vec> thicknesses;
 
 			for (int i = 0; i < 16; i++) {
-				polyVals.push_back(Vec(buffer[i][0] * 30, 0.f));
+				polyVals.push_back(Vec(buffer[i][0] * width/4, 0.f));
 				colors.push_back(draw.sincolor(paramsBuffer[0][0] + 2 + paramsBuffer[2][0]*i));
 
-				thicknesses.push_back(Vec(expf(paramsBuffer[1][0] * 2+2) + 0.5, 0));
+				thicknesses.push_back(Vec(expf(paramsBuffer[1][0] * 2 + 2) + 0.5, 0));
 			}
 			draw.drawLines(pts.get(), polyVals, colors, thicknesses);
 		}
-		else if( mode==3) {
+		else if ( mode == 3) {
 			//number,-dTHickness,dAngle,dColor (passed to sincolor)
-			draw.drawLines(fmin(65,std::floor(exp(40*buffer[0][1])+2)),buffer[1][0],buffer[2][0]/4,buffer[3][0]*2);
+			draw.drawLines(fmin(65, std::floor(exp(40 * buffer[0][1]) + 2)), buffer[1][0], buffer[2][0] / 4, buffer[3][0] * 2);
 		}
 		else {
 			int nx = (mode * 17) % 10;
@@ -366,15 +372,27 @@ struct DrolyPawDisplay : FramebufferWidget {
 		nvgReset(vg);
 	}
 };
-}}
+}
+}
 
 
 struct DrolyPawWidget : ModuleWidget {
 	DrolyPawWidget(DrolyPaw *module) {
 		setModule(module);
 
-		box.size = Vec(13 * 15, 380);
+		if (module) {
+			DEBUG("is mod");
+			box.size = Vec(module->params[DrolyPaw::MODULE_WIDTH].getValue(), 380);
+		}
+		else {
+			box.size = Vec(13 * 15, 380);//195
+		}
 		{
+			BGPanel *bgPanel = new BGPanel(nvgRGB(0x16, 0x15, 0x19));
+			bgPanel->box.size = box.size;
+			this->bgPanel = bgPanel;
+			addChild(bgPanel);
+
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDrolyPawPanel.svg")));
@@ -409,21 +427,44 @@ struct DrolyPawWidget : ModuleWidget {
 		addParam(createParam<SmallIsoButton>(Vec(44, 334), module, DrolyPaw::DRAW_EVERY_FRAME));
 
 
+		ComputerscareResizeHandle *leftHandle = new ComputerscareResizeHandle();
+
+		ComputerscareResizeHandle *rightHandle = new ComputerscareResizeHandle();
+		rightHandle->right = true;
+		this->rightHandle = rightHandle;
+		addChild(leftHandle);
+		addChild(rightHandle);
+		drolyPawModule = module;
 
 
 	}
-	void drawShadow(const DrawArgs& args)  {
-		DEBUG("my draw shadow has been called");
-		nvgBeginPath(args.vg);
-		float r = 20; // Blur radius
-		float c = 20; // Corner radius
-		math::Vec b = math::Vec(-10, 30); // Offset from each corner
-		nvgRect(args.vg, b.x - r, b.y - r, box.size.x - 2 * b.x + 2 * r, box.size.y - 2 * b.y + 2 * r);
-		NVGcolor shadowColor = nvgRGBAf(120, 0, 0, 0.7);
-		NVGcolor transparentColor = nvgRGBAf(120, 0, 0, 0);
-		nvgFillPaint(args.vg, nvgBoxGradient(args.vg, b.x, b.y, box.size.x - 2 * b.x, box.size.y - 2 * b.y, c, r, shadowColor, transparentColor));
-		nvgFill(args.vg);
-	}
+
+	void step() override {
+		if (module) {
+			float width =  module->params[DrolyPaw::MODULE_WIDTH].getValue();
+			//DEBUG("%f",width);
+			if (box.size.x != width) {
+				/*if(drolyPawModule->manualSetWidth) {
+					DEBUG("Manual set");
+					box.size.x=width;
+					drolyPawModule->manualSetWidth=false;
+				}*/
+				//else {
+					DEBUG("%f",width);
+					bgPanel->box.size.x=box.size.x;
+					module->params[DrolyPaw::MODULE_WIDTH].setValue(box.size.x);
+				//}
+			}
+			rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
+			
+			ModuleWidget::step();
+		}
+
+	};
+	BGPanel *bgPanel;
+	DrolyPaw *drolyPawModule;
+	ComputerscareResizeHandle *leftHandle;
+	ComputerscareResizeHandle *rightHandle;
 };
 
 

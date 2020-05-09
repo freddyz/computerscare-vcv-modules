@@ -398,7 +398,6 @@ LaundryPoly::LaundryPoly(std::string formula) {
     int ns;
     std::vector<std::string> semisep = split(formula,';');
     int semilen = semisep.size();
-    printf("semilen:%i\n",semilen);
    for (int i = 0; i < 16; i++ ) {
     //newFormula = formula;
     newFormula=semilen==0 ? formula : semisep[i%semilen];//i%semilen];
