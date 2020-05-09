@@ -98,8 +98,8 @@
 		},
 		{"slug":"computerscare-droly-paw",
 			"name":"Droly Paw",
-			"description":"Draws weird things",
-			"tags":["Visualization","Polyphonic","Utility"]
+			"description":"Draws normal and weird pictures",
+			"tags":["Visual","Polyphonic","Utility"]
 		}
 	]
 }
