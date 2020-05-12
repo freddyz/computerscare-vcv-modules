@@ -82,7 +82,44 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 	}
 
 };
+struct PeneratorDisplay : TransparentWidget {
+	ComputerscareGolyPenerator *module;
 
+	PeneratorDisplay() {
+
+	}
+	void draw(const DrawArgs &args) override {
+		float valsToDraw[16] = {1.f};
+		int ch = 16;
+		if (module) {
+			ch = module->polyChannels;
+			for (int i = 0; i < ch; i++) {
+				valsToDraw[i] = module->goly.currentValues[i];
+			}
+		}
+		else {
+			for (int i = 0; i < ch; i++) {
+				valsToDraw[i] = random::uniform() * 10;
+			}
+		}
+		DrawHelper draw = DrawHelper(args.vg);
+		Points pts = Points();
+
+		nvgTranslate(args.vg, box.size.x / 2, box.size.y/2);
+		pts.linear(16, Vec(0, 0), Vec(0, 40));
+		std::vector<Vec> polyVals;
+		std::vector<NVGcolor> colors;
+		std::vector<Vec> thicknesses;
+
+		for (int i = 0; i < 16; i++) {
+			polyVals.push_back(Vec(valsToDraw[i] * 2,0.f));
+			colors.push_back(draw.sincolor(valsToDraw[i]));
+
+			thicknesses.push_back(Vec(3.f, 0));
+		}
+		draw.drawLines(pts.get(), polyVals, colors, thicknesses);
+	}
+};
 struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 	ComputerscareGolyPeneratorWidget(ComputerscareGolyPenerator *module) {
 
@@ -99,6 +136,14 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 			addChild(panel);
 
 		}
+
+		PeneratorDisplay *display = new PeneratorDisplay();
+		display->module = module;
+		display->box.pos = Vec(0, 30);
+		display->box.size = Vec(box.size.x, 120);
+		//display->sizex
+		addChild(display);
+
 		float xx;
 		float yy;
 //		    ParamWidget* stepsKnob =  createParam<LrgKnob>(Vec(108, 30), module, ComputerscarePatchSequencer::STEPS_PARAM);

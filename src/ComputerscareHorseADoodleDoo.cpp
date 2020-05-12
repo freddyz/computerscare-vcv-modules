@@ -92,8 +92,8 @@ struct HorseSequencer {
 		pendingDensity = density;
 	}
 	void change(float patt, int steps, float dens) {
-		numSteps = steps;
-		density = dens;
+		numSteps = std::max(1,steps);
+		density = std::fmax(0,dens);
 		pattern = patt;
 		currentStep = 0;
 		makeAbsolute();
@@ -140,6 +140,9 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		POLY_KNOB,
 		MODE_KNOB,
 		MANUAL_RESET_BUTTON,
+		PATTERN_SPREAD,
+		STEPS_SPREAD,
+		DENSITY_SPREAD,
 		NUM_PARAMS
 
 	};
@@ -197,6 +200,11 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		configParam(STEPS_TRIM, -1.f, 1.f, 0.f, "Steps CV Trim");
 		configParam(DENSITY_TRIM, -1.f, 1.f, 0.f, "Density CV Trim");
 
+
+		configParam(PATTERN_SPREAD, 0.f, 1.f, 0.f, "Pattern Spread","%",0,100);
+		configParam(STEPS_SPREAD, -1.f, 1.f, 0.f, "Steps Spread","%",0,100);
+		configParam(DENSITY_SPREAD, -1.f, 1.f, 0.f, "Density Spread","%",0,100);
+
 		configParam<AutoParamQuantity>(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
 
 		configParam(MODE_KNOB,1.f,16.f,1.f,"Mode");
@@ -223,6 +231,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		int resetNum = inputs[RESET_INPUT].getChannels();
 
 
+		int mode = params[MODE_KNOB].getValue();
 		lastStepsKnob = std::floor(params[STEPS_KNOB].getValue());
 		lastPolyKnob = std::floor(params[POLY_KNOB].getValue());
 
@@ -241,6 +250,11 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			float patternVal = params[PATTERN_KNOB].getValue() + params[PATTERN_TRIM].getValue() * inputs[PATTERN_CV].getVoltage(fmin(i, pattNum));
 			int stepsVal = std::floor(params[STEPS_KNOB].getValue() + params[STEPS_TRIM].getValue() * inputs[STEPS_CV].getVoltage(fmin(i, stepsNum)));
 			float densityVal = params[DENSITY_KNOB].getValue() + params[DENSITY_TRIM].getValue() * inputs[DENSITY_CV].getVoltage(fmin(i, densityNum)) / 10;
+			
+			patternVal+=i*params[PATTERN_SPREAD].getValue();
+			stepsVal+=std::floor(params[STEPS_SPREAD].getValue()*i*i);
+			densityVal+=params[DENSITY_SPREAD].getValue()*i/10;		
+
 			seq[i].checkAndArm(patternVal, stepsVal, densityVal);
 		}
 	}
@@ -462,9 +476,9 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		}
 
-		addInputBlock("Pattern", 0, 100, module, 0,  ComputerscareHorseADoodleDoo::PATTERN_CV, 0);
-		addInputBlock("Length", 0, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1);
-		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0);
+		addInputBlock("Pattern", 0, 100, module, 0,  ComputerscareHorseADoodleDoo::PATTERN_CV, 0,ComputerscareHorseADoodleDoo::PATTERN_SPREAD);
+		addInputBlock("Length", 0, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1,ComputerscareHorseADoodleDoo::STEPS_SPREAD);
+		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0,ComputerscareHorseADoodleDoo::DENSITY_SPREAD);
 		addParam(createParam<MediumDotSnapKnob>(Vec(30,240), module, ComputerscareHorseADoodleDoo::MODE_KNOB));
 
 
@@ -504,7 +518,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 	}
 
 
-	void addInputBlock(std::string label, int x, int y, ComputerscareHorseADoodleDoo *module, int knobIndex,  int inputIndex, int knobType) {
+	void addInputBlock(std::string label, int x, int y, ComputerscareHorseADoodleDoo *module, int knobIndex,  int inputIndex, int knobType,int scrambleIndex) {
 
 		background = new InputBlockBackground();
 		background->box.pos = Vec(0, y / 2 - 9);
@@ -526,6 +540,8 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 			//trim knob
 			addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex + 1));
 			addInput(createInput<TinyJack>(Vec(x + 40, y), module, inputIndex));
+			addParam(createParam<ScrambleKnob>(Vec(x+30, y+20), module, scrambleIndex));
+
 		}
 		else if (knobType == 1 || knobType == 2) {
 			numStepsKnob = new NumStepsOverKnobDisplay(knobType);
@@ -542,6 +558,8 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 				//trim knob
 				addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex + 1));
 				addInput(createInput<TinyJack>(Vec(x + 40, y), module, inputIndex));
+				addParam(createParam<ScrambleKnob>(Vec(x+30, y+20), module, scrambleIndex));
+
 			}
 		}
 

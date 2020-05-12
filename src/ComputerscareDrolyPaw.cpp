@@ -51,7 +51,7 @@ struct DrolyPaw : Module {
 	int cnt = 0;
 	int interiorCounter = 9000;
 	bool clearArmed = false;
-	bool drawArmed=false;
+	bool drawArmed = false;
 	float lastScramble = 0;
 
 	rack::dsp::SchmittTrigger globalManualClockTrigger;
@@ -131,9 +131,9 @@ struct DrolyPaw : Module {
 		int frameCount = (int) std::ceil(deltaTime * args.sampleRate);
 
 		bool clearGateHigh = inputs[CLEAR_GATE].isConnected() && inputs[CLEAR_GATE].getVoltage() >= 1.f;
-		bool drawGateHigh = inputs[DRAW_GATE].isConnected() && inputs[DRAW_GATE].getVoltage()>=1.f;
+		bool drawGateHigh = inputs[DRAW_GATE].isConnected() && inputs[DRAW_GATE].getVoltage() >= 1.f;
 
-		if(inputs[CLEAR_GATE].isConnected()) {
+		if (inputs[CLEAR_GATE].isConnected()) {
 			if (inputs[CLEAR_GATE].getVoltage() >= 1.f || globalManualResetTrigger.process(params[CLEAR_BUTTON].getValue()) ) {
 				armClear();
 			}
@@ -143,17 +143,17 @@ struct DrolyPaw : Module {
 				armClear();
 			}
 		}
-		if(inputs[DRAW_GATE].isConnected()) {
-			if(inputs[DRAW_GATE].getVoltage() >= 1.f) {
-				drawArmed=true;
+		if (inputs[DRAW_GATE].isConnected()) {
+			if (inputs[DRAW_GATE].getVoltage() >= 1.f) {
+				drawArmed = true;
 			}
 		}
 		else {
-			if(params[DRAW_EVERY_FRAME].getValue() || drawTrigger.process(inputs[DRAW_TRIGGER].getVoltage())) {
-				drawArmed=true;
+			if (params[DRAW_EVERY_FRAME].getValue() || drawTrigger.process(inputs[DRAW_TRIGGER].getVoltage())) {
+				drawArmed = true;
 			}
 		}
-		
+
 
 
 		// Set channels
@@ -195,7 +195,7 @@ struct DrolyPaw : Module {
 				}
 				else {
 					for (int c = 0; c < 16; c++) {
-						bufferX[c][bufferIndex] = trimVal*5*sin((float)interiorCounter / 100000 * (c + 1)) + offsetVal; // t is an integer type
+						bufferX[c][bufferIndex] = trimVal * 5 * sin((float)interiorCounter / 100000 * (c + 1)) + offsetVal; // t is an integer type
 
 
 						//bufferX[c][bufferIndex] = offsetVal + 99 + (1071 * cmap[c]) % 19;
@@ -294,25 +294,25 @@ struct NoClearWidget : FramebufferWidget {
 
 struct DrolyPawDisplay : FramebufferWidget {
 	DrolyPaw *module;
-	float containerWidth=195;
+	float containerWidth = 195;
 	void step() override {
 
 		dirty = true;
-		
-		if(module) {
+
+		if (module) {
 			containerWidth = module->params[DrolyPaw::MODULE_WIDTH].getValue();
 		}
 		box.size.x = containerWidth;
 		FramebufferWidget::step();
-		
+
 	}
 	/*DrolyPawDisplay() {
 		FramebufferWidget();
 	}*/
-	void drawThingie(const DrawArgs &args, float buffer[16][BUFFER_SIZE], float paramsBuffer[16][BUFFER_SIZE], int mode, float width,float height=380) {
+	void drawThingie(const DrawArgs &args, float buffer[16][BUFFER_SIZE], float paramsBuffer[16][BUFFER_SIZE], int mode, float width, float height = 380) {
 		DrawHelper draw = DrawHelper(args.vg);
 		Points pts = Points();
-		nvgTranslate(args.vg, width/2, 190);
+		nvgTranslate(args.vg, width / 2, 190);
 
 		if (mode == 0) {
 			for (int i = 0; i < 4; i++) {
@@ -322,11 +322,10 @@ struct DrolyPawDisplay : FramebufferWidget {
 			}
 		}
 		else if (mode == 1) {
-			float scale=width/2/(1+expf(-paramsBuffer[0][0]));
+			float scale = width * expf(paramsBuffer[0][0] / 3) / 20;
 			pts.spray(100);
 			pts.scale(Vec(scale, scale));
-			draw.drawField(pts.get(), draw.sincolor(buffer[3][0] + buffer[4][0]*random::uniform()), paramsBuffer[1][0]);
-			//draw.drawDots(pts.get(), draw.sincolor(random::uniform()), 2.f);
+			draw.drawField(pts.get(), draw.sincolor(paramsBuffer[2][0] + paramsBuffer[3][0]*random::uniform(), {paramsBuffer[4][0], paramsBuffer[5][0], paramsBuffer[6][0]}, {paramsBuffer[7][0], paramsBuffer[8][0], paramsBuffer[9][0]}), expf(paramsBuffer[1][0] / 2));
 		}
 		else if (mode == 2) {
 			//16 horizontal lines
@@ -339,7 +338,7 @@ struct DrolyPawDisplay : FramebufferWidget {
 			std::vector<Vec> thicknesses;
 
 			for (int i = 0; i < 16; i++) {
-				polyVals.push_back(Vec(buffer[i][0] * width/4, 0.f));
+				polyVals.push_back(Vec(buffer[i][0] * width / 4, 0.f));
 				colors.push_back(draw.sincolor(paramsBuffer[0][0] + 2 + paramsBuffer[2][0]*i));
 
 				thicknesses.push_back(Vec(expf(paramsBuffer[1][0] * 2 + 2) + 0.5, 0));
@@ -351,7 +350,7 @@ struct DrolyPawDisplay : FramebufferWidget {
 			//number,-dTHickness,dAngle,dColor (passed to sincolor)
 			draw.drawLines(fmin(65, std::floor(exp(40 * buffer[0][1]) + 2)), buffer[1][0], buffer[2][0] / 4, buffer[3][0] * 2);
 		}
-		else if(mode==4) {
+		else if (mode == 4) {
 			int nx = (mode * 17) % 10;
 			int ny = (mode * 11 + 3) % 10;
 			pts.grid(nx, ny, Vec(buffer[2][0] * 10, buffer[1][0] * 10));
@@ -366,15 +365,15 @@ struct DrolyPawDisplay : FramebufferWidget {
 	void drawThingie(const DrawArgs &args) {
 		float bx[16][BUFFER_SIZE];
 		float by[16][BUFFER_SIZE];
-		for(int i = 0; i<BUFFER_SIZE; i++) {
-			for(int j = 0; j < 16; j++) {
-				bx[j][i]=random::uniform()*10;
-				by[j][i]=random::uniform()*10;
+		for (int i = 0; i < BUFFER_SIZE; i++) {
+			for (int j = 0; j < 16; j++) {
+				bx[j][i] = random::normal() * 2;
+				by[j][i] = random::uniform() * 1;
 			}
 		}
 		int mode = 2;
-		int width=195;
-		drawThingie(args,bx,by,mode,width);
+		int width = 195;
+		drawThingie(args, bx, by, mode, width);
 
 	}
 	void drawFramebuffer() override  {
@@ -400,8 +399,8 @@ struct DrolyPawDisplay : FramebufferWidget {
 			if (module->drawArmed) {
 				float myWidth = module->params[DrolyPaw::MODULE_WIDTH].getValue();
 				int mode = module->params[DrolyPaw::DRAW_MODE].getValue();
-				drawThingie(args, module->bufferX, module->bufferY,mode,myWidth);
-				module->drawArmed=false;
+				drawThingie(args, module->bufferX, module->bufferY, mode, myWidth);
+				module->drawArmed = false;
 			}
 
 		}
@@ -486,8 +485,8 @@ struct DrolyPawWidget : ModuleWidget {
 		ComputerscareResizeHandle *rightHandle = new ComputerscareResizeHandle();
 		rightHandle->right = true;
 
-		leftHandle->box.size.y=RACK_GRID_HEIGHT*0.9;
-		
+		leftHandle->box.size.y = RACK_GRID_HEIGHT * 0.9;
+
 		this->rightHandle = rightHandle;
 		addChild(leftHandle);
 		addChild(rightHandle);
@@ -496,13 +495,13 @@ struct DrolyPawWidget : ModuleWidget {
 
 	}
 	void draw(const DrawArgs &args) override {
-		if(!module) {
+		ModuleWidget::draw(args);
+		if (!module) {
 			display->drawThingie(args);
 		}
 		else {
 		}
 
-			ModuleWidget::draw(args);
 	}
 
 	void step() override {
@@ -516,21 +515,21 @@ struct DrolyPawWidget : ModuleWidget {
 					drolyPawModule->manualSetWidth=false;
 				}*/
 				//else {
-					DEBUG("%f",width);
-					bgPanel->box.size.x=box.size.x;
-					module->params[DrolyPaw::MODULE_WIDTH].setValue(box.size.x);
+				DEBUG("%f", width);
+				bgPanel->box.size.x = box.size.x;
+				module->params[DrolyPaw::MODULE_WIDTH].setValue(box.size.x);
 				//}
 			}
 			rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
-			
+
 			ModuleWidget::step();
 		}
 
 	};
 	void resizeEverything() {
 		float width = drolyPawModule->params[DrolyPaw::MODULE_WIDTH].getValue();
-		box.size.x=width;
-		bgPanel->box.size.x=width;
+		box.size.x = width;
+		bgPanel->box.size.x = width;
 
 	}
 	void fromJson(json_t* rootJ) override {

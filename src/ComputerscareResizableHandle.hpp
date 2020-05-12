@@ -45,7 +45,12 @@ struct ComputerscareResizeHandle : OpaqueWidget {
 	ComputerscareResizeHandle() {
 		box.size = Vec(RACK_GRID_WIDTH * 1, RACK_GRID_HEIGHT);
 	}
-
+	void onEnter(const event::Enter& e) override {
+		OpaqueWidget::onEnter(e);
+	}
+	void onLeave(const event::Leave& e) override {
+		OpaqueWidget::onLeave(e);
+	}
 	void onDragStart(const event::DragStart &e) override {
 		if (e.button != GLFW_MOUSE_BUTTON_LEFT)
 			return;

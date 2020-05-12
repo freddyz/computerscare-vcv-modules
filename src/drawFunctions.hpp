@@ -152,7 +152,7 @@ struct DrawHelper {
     nvgStroke(vg);
     nvgRestore(vg);
   }
-  NVGcolor sincolor(float t,std::vector<int> omega={1,2,3},std::vector<float> phi={0.f,5.f,9.f}) {
+  NVGcolor sincolor(float t,std::vector<float> omega={1,2,3},std::vector<float> phi={0.f,5.f,9.f}) {
     return nvgRGB(127*(1+sin(t*omega[0]+phi[0])),127*(1+sin(t*omega[1]+phi[1])),127*(1+sin(t*omega[2]+phi[2])));
   }
 
