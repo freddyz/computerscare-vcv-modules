@@ -106,14 +106,14 @@ struct PeneratorDisplay : TransparentWidget {
 		Points pts = Points();
 
 		nvgTranslate(args.vg, box.size.x / 2, box.size.y/2);
-		pts.linear(16, Vec(0, 0), Vec(0, 40));
+		pts.linear(ch, Vec(0, -box.size.y/2), Vec(0, 2*box.size.y/ch));
 		std::vector<Vec> polyVals;
 		std::vector<NVGcolor> colors;
 		std::vector<Vec> thicknesses;
 
 		for (int i = 0; i < 16; i++) {
 			polyVals.push_back(Vec(valsToDraw[i] * 2,0.f));
-			colors.push_back(draw.sincolor(valsToDraw[i]));
+			colors.push_back(draw.sincolor(valsToDraw[i],{2,2,1}));
 
 			thicknesses.push_back(Vec(3.f, 0));
 		}
@@ -139,8 +139,8 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 
 		PeneratorDisplay *display = new PeneratorDisplay();
 		display->module = module;
-		display->box.pos = Vec(0, 30);
-		display->box.size = Vec(box.size.x, 120);
+		display->box.pos = Vec(0, 70);
+		display->box.size = Vec(box.size.x, 300);
 		//display->sizex
 		addChild(display);
 

@@ -169,28 +169,25 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 
 		}
 
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(14, 48), module, ComputerscareSolyPequencer::POLY_OUTPUT));
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(34, 48), module, ComputerscareSolyPequencer::EOC_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(4, 56), module, ComputerscareSolyPequencer::POLY_OUTPUT));
+		addOutput(createOutput<TinyJack>(Vec(40, 84), module, ComputerscareSolyPequencer::EOC_OUTPUT));
 
 
-		channelWidget = new PolyOutputChannelsWidget(Vec(2, 8), module, ComputerscareSolyPequencer::POLY_CHANNELS);
+		channelWidget = new PolyOutputChannelsWidget(Vec(26, 56), module, ComputerscareSolyPequencer::POLY_CHANNELS);
 		addChild(channelWidget);
 
 		addLabeledKnob("Steps", 10, 124, module, 0, 0, 0);
 		stepNumberGrid(1, 230, 30, 15, module);
 
 
-		addInput(createInput<InPort>(Vec(19, 102), module, ComputerscareSolyPequencer::POLY_INPUT));
+		addInput(createInput<InPort>(Vec(20, 114), module, ComputerscareSolyPequencer::POLY_INPUT));
 
 
-		addParam(createParam<ComputerscareClockButton>(Vec(10, 130), module, ComputerscareSolyPequencer::MANUAL_CLOCK_BUTTON));
-		addInput(createInput<InPort>(Vec(10, 144), module, ComputerscareSolyPequencer::CLOCK_INPUT));
+		addParam(createParam<ComputerscareClockButton>(Vec(10, 150), module, ComputerscareSolyPequencer::MANUAL_CLOCK_BUTTON));
+		addInput(createInput<PointingUpPentagonPort>(Vec(8, 169), module, ComputerscareSolyPequencer::CLOCK_INPUT));
 
 		addParam(createParam<ComputerscareResetButton>(Vec(30, 168), module, ComputerscareSolyPequencer::MANUAL_RESET_BUTTON));
 		addInput(createInput<InPort>(Vec(30, 182), module, ComputerscareSolyPequencer::RESET_INPUT));
-
-
-
 
 
 	}

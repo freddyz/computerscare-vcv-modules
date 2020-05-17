@@ -252,7 +252,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			float densityVal = params[DENSITY_KNOB].getValue() + params[DENSITY_TRIM].getValue() * inputs[DENSITY_CV].getVoltage(fmin(i, densityNum)) / 10;
 			
 			patternVal+=i*params[PATTERN_SPREAD].getValue();
-			stepsVal+=std::floor(params[STEPS_SPREAD].getValue()*i*i);
+			stepsVal+=std::floor(params[STEPS_SPREAD].getValue()*i*stepsVal);
 			densityVal+=params[DENSITY_SPREAD].getValue()*i/10;		
 
 			seq[i].checkAndArm(patternVal, stepsVal, densityVal);
@@ -529,7 +529,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
 		smallLetterDisplay->letterSpacing = 0.5;
-		smallLetterDisplay->fontSize = 21;
+		smallLetterDisplay->fontSize = 16;
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
 		smallLetterDisplay->box.pos = Vec(x - 4, y - 15);
@@ -538,9 +538,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		if (knobType == 0) {//smooth
 			addParam(createParam<SmoothKnob>(Vec(x, y), module, knobIndex));
 			//trim knob
-			addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex + 1));
-			addInput(createInput<TinyJack>(Vec(x + 40, y), module, inputIndex));
-			addParam(createParam<ScrambleKnob>(Vec(x+30, y+20), module, scrambleIndex));
+			
 
 		}
 		else if (knobType == 1 || knobType == 2) {
@@ -556,12 +554,15 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 			addChild(numStepsKnob);
 			if (knobType == 1) {
 				//trim knob
-				addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex + 1));
-				addInput(createInput<TinyJack>(Vec(x + 40, y), module, inputIndex));
-				addParam(createParam<ScrambleKnob>(Vec(x+30, y+20), module, scrambleIndex));
+				//addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex + 1));
+				//addInput(createInput<TinyJack>(Vec(x + 40, y), module, inputIndex));
+				//addParam(createParam<ScrambleKnob>(Vec(x+30, y+20), module, scrambleIndex));
 
 			}
 		}
+		addParam(createParam<SmallKnob>(Vec(x + 30, y-15), module, knobIndex + 1));
+			addInput(createInput<TinyJack>(Vec(x + 40, y-10), module, inputIndex));
+			addParam(createParam<ScrambleKnob>(Vec(x+30, y+5), module, scrambleIndex));
 
 
 
