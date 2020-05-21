@@ -107,10 +107,11 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 
 
 				}
-				if (j <= numReset) {
-					if (currentReset[j]/*resetTriggers[j].process(inputs[RESET_INPUT].getVoltage(j))*/) {
-						currentStep[j] = 0;
-					}
+				if(numReset == 1 && currentReset[0]) {
+					currentStep[j] = 0;
+				}
+				else if (j <= numReset && currentReset[j]) {
+					currentStep[j] = 0;
 				}
 			}
 			for (int c = 0; c < polyChannels; c++) {
@@ -180,13 +181,13 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
 		stepNumberGrid(1, 230, 30, 15, module);
 
 
-		addInput(createInput<InPort>(Vec(20, 114), module, ComputerscareSolyPequencer::POLY_INPUT));
+		addInput(createInput<InPort>(Vec(20, 116), module, ComputerscareSolyPequencer::POLY_INPUT));
 
 
-		addParam(createParam<ComputerscareClockButton>(Vec(10, 150), module, ComputerscareSolyPequencer::MANUAL_CLOCK_BUTTON));
+		addParam(createParam<ComputerscareClockButton>(Vec(8, 152), module, ComputerscareSolyPequencer::MANUAL_CLOCK_BUTTON));
 		addInput(createInput<PointingUpPentagonPort>(Vec(8, 169), module, ComputerscareSolyPequencer::CLOCK_INPUT));
 
-		addParam(createParam<ComputerscareResetButton>(Vec(30, 168), module, ComputerscareSolyPequencer::MANUAL_RESET_BUTTON));
+		addParam(createParam<ComputerscareResetButton>(Vec(32, 169), module, ComputerscareSolyPequencer::MANUAL_RESET_BUTTON));
 		addInput(createInput<InPort>(Vec(30, 182), module, ComputerscareSolyPequencer::RESET_INPUT));
 
 
