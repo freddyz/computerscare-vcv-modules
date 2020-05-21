@@ -7,7 +7,18 @@ Goly::Goly() {
 
 }
 //[A,B,C,D]
+/*
+			std::vector<float> golyParams = 
+			{
+		gp[0]=	params[IN_OFFSET].getValue(),  //-1,1
+		gp[1]=	params[IN_SCALE].getValue(), //-2,2
+		gp[2]=	arams[OUT_SCALE].getValue(),  //-20, 20
+		gp[3]=	params[OUT_OFFSET].getValue()}; // -10,10
+
+
+*/
 void Goly::invoke(int algorithm, std::vector<float> gp, int num = 16) {
+	float trigFactor = 2*M_PI / num;
 	switch (algorithm)
 	{
 	case 1: // code to be executed if n = 1;
@@ -39,21 +50,15 @@ void Goly::invoke(int algorithm, std::vector<float> gp, int num = 16) {
 		}
 		break;
 	case 4:
-		float trigFactor;
+		//sin wave
 		for (int i = 0; i < num; i++) {
-			trigFactor = 5.f + ((float) (i) ) * 2.f * M_PI / (16 * expf(gp[0]));
-			float val = 0.f;
-			for (int j = 1; j < 6; j++) {
-				val += gp[j] * sinf(trigFactor * j);
-			}
-			currentValues[i] = val;
+			float ip = (float)i / num;
+			float d = trigFactor*(ip - gp[0]);
+			currentValues[i] = gp[2] * (1+sinf(d*exp(2*gp[1]+2)))/2 + gp[3];
 		}
 		break;
-
+	
 	default:
-		/*for (int i = 0; i < 16; i++) {
-			currentValues[i] = 0.f;
-		}*/
 		int k = 0;
 
 	}

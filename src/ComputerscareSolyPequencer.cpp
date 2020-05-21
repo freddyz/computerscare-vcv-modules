@@ -108,7 +108,7 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 
 				}
 				if (j <= numReset) {
-					if (resetTriggers[j].process(inputs[RESET_INPUT].getVoltage(j))) {
+					if (currentReset[j]/*resetTriggers[j].process(inputs[RESET_INPUT].getVoltage(j))*/) {
 						currentStep[j] = 0;
 					}
 				}

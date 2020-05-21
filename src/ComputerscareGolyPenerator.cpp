@@ -106,7 +106,7 @@ struct PeneratorDisplay : TransparentWidget {
 		Points pts = Points();
 
 		nvgTranslate(args.vg, box.size.x / 2, box.size.y/2);
-		pts.linear(ch, Vec(0, -box.size.y/2), Vec(0, 2*box.size.y/ch));
+		pts.linear(ch, Vec(0, -box.size.y/2), Vec(0, 3*box.size.y/ch));
 		std::vector<Vec> polyVals;
 		std::vector<NVGcolor> colors;
 		std::vector<Vec> thicknesses;
@@ -148,11 +148,11 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		float yy;
 //		    ParamWidget* stepsKnob =  createParam<LrgKnob>(Vec(108, 30), module, ComputerscarePatchSequencer::STEPS_PARAM);
 
-		addLabeledKnob("Algo", 5, 140, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
-		addLabeledKnob("A", 10, 250, module, ComputerscareGolyPenerator::IN_OFFSET, 0, 0);
-		addLabeledKnob("B", 20, 300, module, ComputerscareGolyPenerator::IN_SCALE, 0, 0);
-		addLabeledKnob("C", 30, 260, module, ComputerscareGolyPenerator::OUT_SCALE, 0, 0);
-		addLabeledKnob("D", 30, 310, module, ComputerscareGolyPenerator::OUT_OFFSET, 0, 0);
+		addLabeledKnob<SmoothKnob>("Algo", 5, 140, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
+		addLabeledKnob<SmoothKnob>("In Offset", 10, 250, module, ComputerscareGolyPenerator::IN_OFFSET, 0, 0);
+		addLabeledKnob<SmallKnob>("In Scale", 20, 300, module, ComputerscareGolyPenerator::IN_SCALE, 0, 0);
+		addLabeledKnob<SmallKnob>("Out Scale", 30, 260, module, ComputerscareGolyPenerator::OUT_SCALE, 0, 0);
+		addLabeledKnob<SmoothKnob>("Out Offset", 30, 310, module, ComputerscareGolyPenerator::OUT_OFFSET, 0, 0);
 
 		//addLabeledKnob("ch out",5,90,module,ComputerscareGolyPenerator::POLY_CHANNELS,-2,0);
 
@@ -162,11 +162,14 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(18, 184), module, ComputerscareGolyPenerator::POLY_OUTPUT));
 
 	}
+
+
+	template <typename BASE>
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareGolyPenerator *module, int paramIndex, float labelDx, float labelDy, bool snap = false) {
 
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
-		smallLetterDisplay->fontSize = 21;
+		smallLetterDisplay->fontSize = 14;
 		smallLetterDisplay->value = label;
 		smallLetterDisplay->textAlign = 1;
 
@@ -174,7 +177,7 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 			addParam(createParam<MediumDotSnapKnob>(Vec(x, y), module, paramIndex));
 		}
 		else {
-			addParam(createParam<SmoothKnob>(Vec(x, y), module, paramIndex));
+			addParam(createParam<BASE>(Vec(x, y), module, paramIndex));
 
 		}
 		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
