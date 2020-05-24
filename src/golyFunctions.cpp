@@ -50,7 +50,7 @@ void Goly::invoke(int algorithm, std::vector<float> gp, int num = 16) {
 		}
 		break;
 	case 4:
-		//sin wave
+		//sine wave
 		for (int i = 0; i < num; i++) {
 			float ip = (float)i / num;
 			float d = trigFactor*(ip - gp[0]);
