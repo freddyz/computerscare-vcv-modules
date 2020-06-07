@@ -469,7 +469,7 @@ struct DrolyPawWidget : ModuleWidget {
 		//addParam(createParam<ScrambleKnob>(Vec(81, 357), module, DrolyPaw::SCRAMBLE));
 		addParam(createParam<MediumDotSnapKnob>(Vec(141, 354), module, DrolyPaw::DRAW_MODE));
 
-		addParam(createParam<ComputerscareResetButton>(Vec(1, 334), module, DrolyPaw::CLEAR_BUTTON));
+		addParam(createParam<ComputerscareClearButton>(Vec(1, 334), module, DrolyPaw::CLEAR_BUTTON));
 		addParam(createParam<SmallIsoButton>(Vec(24, 334), module, DrolyPaw::CLEAR_EVERY_FRAME));
 		addInput(createInput<PointingUpPentagonPort>(Vec(44, 333), module, DrolyPaw::CLEAR_TRIGGER));
 		addInput(createInput<PointingUpPentagonPort>(Vec(64, 333), module, DrolyPaw::CLEAR_GATE));

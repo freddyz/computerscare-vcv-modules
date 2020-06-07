@@ -196,7 +196,13 @@ struct ComputerscareResetButton : app::SvgSwitch {
 		momentary = true;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-rst-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-rst-text-red.svg")));
-		//APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-pentagon-jack-1-outline-flipped.svg"));
+	}
+};
+struct ComputerscareClearButton : app::SvgSwitch {
+	ComputerscareClearButton() {
+		momentary = true;
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-CLEAR-BUTTON-UP.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-CLEAR-BUTTON-DOWN.svg")));
 	}
 };
 
