@@ -477,9 +477,6 @@ struct DrolyPawWidget : ModuleWidget {
 		addInput(createInput<PointingUpPentagonPort>(Vec(114, 333), module, DrolyPaw::DRAW_TRIGGER));
 		addInput(createInput<PointingUpPentagonPort>(Vec(134, 333), module, DrolyPaw::DRAW_GATE));
 
-
-
-
 		ComputerscareResizeHandle *leftHandle = new ComputerscareResizeHandle();
 
 		ComputerscareResizeHandle *rightHandle = new ComputerscareResizeHandle();

@@ -15,9 +15,12 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
   enum ParamIds {
     KNOB,
     INPUT_ROW_TRIM = KNOB + numKnobs,
-    OUTPUT_COLUMN_TRIM=INPUT_ROW_TRIM+numRows,
-    OUTPUT_TRIM=OUTPUT_COLUMN_TRIM+numColumns,
+    OUTPUT_COLUMN_TRIM = INPUT_ROW_TRIM + numRows,
+    OUTPUT_TRIM = OUTPUT_COLUMN_TRIM + numColumns,
     POLY_CHANNELS,
+    INPUT_TRIM,
+    INPUT_OFFSET,
+    OUTPUT_OFFSET,
     NUM_PARAMS
   };
   enum InputIds {
@@ -40,13 +43,17 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
       configParam(KNOB+n,-1.f,1.f,0.f);
     }*/
     for (int i = 0; i < numRows; i++) {
-      configParam(INPUT_ROW_TRIM+i,-2.f,2.f,1.f,"Input Channel "+std::to_string(i+1)+" Attenuation");
-      configParam(OUTPUT_COLUMN_TRIM+i,-2.f,2.f,1.f,"Output Channel "+std::to_string(i+1)+" Attenuation");
+      configParam(INPUT_ROW_TRIM + i, -2.f, 2.f, 1.f, "Input Channel " + std::to_string(i + 1) + " Attenuation");
+      configParam(OUTPUT_COLUMN_TRIM + i, -2.f, 2.f, 1.f, "Output Channel " + std::to_string(i + 1) + " Attenuation");
       for (int j = 0; j < numColumns; j++) {
-        configParam(KNOB + i * 16 + j, -2.f, 2.f, i == j ? 1.f : 0.f, "i:" + std::to_string(i) + ",j:" + std::to_string(j));
+        configParam(KNOB + i * 16 + j, -2.f, 2.f, i == j ? 1.f : 0.f, "Input ch." + std::to_string(i+1) + " → Output ch." + std::to_string(j+1));
       }
-      configParam(OUTPUT_TRIM,-2.f,2.f,1.f,"Output Attenuation");
-      configParam<AutoParamQuantity>(POLY_CHANNELS,0.f,16.f,0.f,"Poly Channels");
+      configParam(OUTPUT_TRIM, -2.f, 2.f, 1.f, "Output Attenuation");
+      configParam(OUTPUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
+      configParam(INPUT_TRIM, -2.f, 2.f, 1.f, "Input Attenuation");
+
+      configParam(INPUT_OFFSET, -10.f, 10.f, 0.f, "Input Offset");
+      configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
     }
 
   }
@@ -66,11 +73,11 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
     outputs[POLY_OUTPUT].setChannels(polyChannels);
   }
   void process(const ProcessArgs &args) override {
-        ComputerscarePolyModule::checkCounter();
+    ComputerscarePolyModule::checkCounter();
     for (int j = 0; j < numRows; j++) {
       float out = 0.f;
       for (int i = 0; i < numColumns; i++) {
-        out += params[KNOB + j * 16 + i].getValue() * inputs[POLY_INPUT].getVoltage(i);
+        out += params[KNOB + i * 16 + j].getValue() * inputs[POLY_INPUT].getVoltage(i)*params[INPUT_ROW_TRIM+i].getValue()*params[INPUT_TRIM].getValue();
       }
       outputs[POLY_OUTPUT].setVoltage(out, j);
     }
@@ -83,7 +90,7 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
 
     setModule(module);
     //setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareMolyPatrixPanel.svg")));
-    box.size = Vec(24 * 15, 380);
+    box.size = Vec(26 * 15, 380);
     {
       ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
@@ -96,22 +103,25 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     }
     float xx;
     float yy;
-    float x0 = 6;
+    float x0 = 30;
     float dx = 21.4;
-    float y0 = 40;
+    float y0 = 41;
     float dy = 21;
 
-    addInput(createInput<PointingUpPentagonPort>(Vec(11, 14), module, ComputerscareMolyPatrix::POLY_INPUT));
+    addInput(createInput<PointingUpPentagonPort>(Vec(9, 12), module, ComputerscareMolyPatrix::POLY_INPUT));
+    addLabeledKnob("",36,16,module,ComputerscareMolyPatrix::INPUT_TRIM,0,0);
+
     for (int i = 0; i < numRows; i++) {
       for (int j = 0; j < numColumns; j++) {
         xx = x0 + j * dx;
         yy = y0 + i * dy;
         addLabeledKnob(std::to_string(i + 1), xx, yy, module, i * 16 + j, 0, 0);
       }
+      addLabeledKnob("",x0-25,y0+i*dy,module,ComputerscareMolyPatrix::INPUT_ROW_TRIM+i,0,0);
     }
 
 
-    
+
     channelWidget = new PolyOutputChannelsWidget(Vec(290, 1), module, ComputerscareMolyPatrix::POLY_CHANNELS);
     addChild(channelWidget);
     addOutput(createOutput<InPort>(Vec(318, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
