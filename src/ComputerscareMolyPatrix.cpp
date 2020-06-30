@@ -25,6 +25,12 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
   };
   enum InputIds {
     POLY_INPUT,
+    ZERO_INPUT,
+    ONE_INPUT,
+    INPUT_ATTENUATION_CV,
+    INPUT_OFFSET_CV,
+    OUTPUT_ATTENUATION_CV,
+    OUTPUT_ATTENUATION_OFFSET,
     NUM_INPUTS
   };
   enum OutputIds {
@@ -74,55 +80,78 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
   }
   void process(const ProcessArgs &args) override {
     ComputerscarePolyModule::checkCounter();
-    for (int j = 0; j < numRows; j++) {
-      float out = 0.f;
+    float outTrim = params[OUTPUT_TRIM].getValue();
+    float outOffset = params[OUTPUT_OFFSET].getValue();
+
+    for (int outIndex = 0; outIndex < numRows; outIndex++) {
+      float outVoltage = 0.f;
       for (int i = 0; i < numColumns; i++) {
-        out += params[KNOB + i * 16 + j].getValue() * inputs[POLY_INPUT].getVoltage(i) * params[INPUT_ROW_TRIM + i].getValue() * params[INPUT_TRIM].getValue();
+        outVoltage += params[KNOB + i * 16 + outIndex].getValue() * inputs[POLY_INPUT].getVoltage(i) * params[INPUT_ROW_TRIM + i].getValue() * params[INPUT_TRIM].getValue() + params[OUTPUT_OFFSET].getValue();
       }
-      outputs[POLY_OUTPUT].setVoltage(out, j);
+      outputs[POLY_OUTPUT].setVoltage(params[OUTPUT_COLUMN_TRIM + outIndex].getValue()*outTrim * outVoltage + outOffset, outIndex);
     }
   }
 
+
 };
+
+
+
 struct DisableableSmallKnob : RoundKnob {
 
-  std::vector<std::shared_ptr<Svg>> enabledThemes = {APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")),APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-dark.svg"))};
+  std::vector<std::shared_ptr<Svg>> enabledThemes = {APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")), APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed-dark.svg"))};
+
 
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg"));
   std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed-disabled.svg"));
 
   int inputChannel = 0;
   int outputChannel = 0;
+  int themeIndex = 0;
   bool disabled = false;
+  bool initialized=false;
+  bool randomizable=true;
   ComputerscareMolyPatrix *module;
 
   DisableableSmallKnob() {
-    setSvg(enabledSvg);
+    setSvg(enabledThemes[themeIndex]);
     shadow->box.size = math::Vec(0, 0);
     shadow->opacity = 0.f;
+    dirtyValue=-21.f;
   }
 
   void draw(const DrawArgs& args) override {
     if (module) {
-      bool candidateDisabled = (module->numInputChannels !=0 && inputChannel > module->numInputChannels-1 || outputChannel > module->polyChannels-1) ;
-      if (disabled != candidateDisabled) {
-        setSvg(candidateDisabled ? disabledSvg : enabledSvg);
+      bool candidateDisabled = (module->numInputChannels != 0 && inputChannel > module->numInputChannels - 1 || outputChannel > module->polyChannels - 1) ;
+      if (disabled != candidateDisabled || !initialized) {
+        setSvg(candidateDisabled ? disabledSvg : enabledThemes[themeIndex]);
         dirtyValue = -20.f;
         disabled = candidateDisabled;
+        initialized=true;
       }
     }
     else {
     }
     RoundKnob::draw(args);
   }
+  void randomize() override { 
+    if(randomizable) {
+      RoundKnob::randomize();
+    }
+    else {
+      return; 
+    }
+  }
 };
 
 struct ComputerscareMolyPatrixWidget : ModuleWidget {
+
   ComputerscareMolyPatrixWidget(ComputerscareMolyPatrix *module) {
 
     setModule(module);
+
     //setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareMolyPatrixPanel.svg")));
-    box.size = Vec(26 * 15, 380);
+    box.size = Vec(28 * 15, 380);
     {
       ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
@@ -137,43 +166,41 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     float yy;
     float x0 = 30;
     float dx = 21.4;
-    float y0 = 41;
+    float y0 = 43;
     float dy = 21;
 
     addInput(createInput<PointingUpPentagonPort>(Vec(9, 12), module, ComputerscareMolyPatrix::POLY_INPUT));
-    addKnob(36, 16, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0);
+    addKnob(36, 16, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0,1,0);
 
     for (int i = 0; i < numRows; i++) {
       for (int j = 0; j < numColumns; j++) {
         xx = x0 + j * dx;
         yy = y0 + i * dy;
-        addKnob( xx, yy, module, i * 16 + j, i,j);
+        addKnob( xx, yy, module, i * 16 + j, i, j);
       }
-      addKnob( x0 - 25, y0 + i * dy, module, ComputerscareMolyPatrix::INPUT_ROW_TRIM + i,i,0);
+      addKnob( x0 - 25, y0 + i * dy, module, ComputerscareMolyPatrix::INPUT_ROW_TRIM + i, i, 0,1,0);
+      addKnob( 420 - 40, y0 + i * dy, module, ComputerscareMolyPatrix::OUTPUT_COLUMN_TRIM + i, 0, i,1,0);
+
     }
 
-    channelWidget = new PolyOutputChannelsWidget(Vec(290, 1), module, ComputerscareMolyPatrix::POLY_CHANNELS);
+    channelWidget = new PolyOutputChannelsWidget(Vec(352, 5), module, ComputerscareMolyPatrix::POLY_CHANNELS);
     addChild(channelWidget);
-    addOutput(createOutput<InPort>(Vec(318, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
+
+    addKnob(372, 1, module, ComputerscareMolyPatrix::OUTPUT_TRIM, 0, 0,1,0);
+    addOutput(createOutput<InPort>(Vec(390, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
+
 
   }
-  void addKnob(int x, int y, ComputerscareMolyPatrix *module, int index, int row,int column) {
-
-    /* smallLetterDisplay = new SmallLetterDisplay();
-     smallLetterDisplay->box.size = Vec(5, 10);
-     smallLetterDisplay->fontSize = 16;
-     smallLetterDisplay->value = label;
-     smallLetterDisplay->textAlign = 1;*/
+  void addKnob(int x, int y, ComputerscareMolyPatrix *module, int index, int row, int column, int theme = 0,bool randomizable=true) {
 
     knob = createParam<DisableableSmallKnob>(Vec(x, y), module, ComputerscareMolyPatrix::KNOB + index);
+
     knob->module = module;
     knob->inputChannel = row;
     knob->outputChannel = column;
+    knob->themeIndex = theme;
+    knob->randomizable=randomizable;
     addParam(knob);
-    //smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
-
-
-//    addChild(smallLetterDisplay);
 
   }
   DisableableSmallKnob* knob;
