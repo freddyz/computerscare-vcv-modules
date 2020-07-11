@@ -83,10 +83,13 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
     float outTrim = params[OUTPUT_TRIM].getValue();
     float outOffset = params[OUTPUT_OFFSET].getValue();
 
+    float inOffset = params[INPUT_OFFSET].getValue();
+
+
     for (int outIndex = 0; outIndex < numRows; outIndex++) {
       float outVoltage = 0.f;
       for (int i = 0; i < numColumns; i++) {
-        outVoltage += params[KNOB + i * 16 + outIndex].getValue() * inputs[POLY_INPUT].getVoltage(i) * params[INPUT_ROW_TRIM + i].getValue() * params[INPUT_TRIM].getValue() + params[OUTPUT_OFFSET].getValue();
+        outVoltage += params[KNOB + i * 16 + outIndex].getValue() * (inputs[POLY_INPUT].getVoltage(i)+inOffset) * params[INPUT_ROW_TRIM + i].getValue() * params[INPUT_TRIM].getValue();
       }
       outputs[POLY_OUTPUT].setVoltage(params[OUTPUT_COLUMN_TRIM + outIndex].getValue()*outTrim * outVoltage + outOffset, outIndex);
     }
@@ -170,7 +173,14 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     float dy = 21;
 
     addInput(createInput<PointingUpPentagonPort>(Vec(9, 12), module, ComputerscareMolyPatrix::POLY_INPUT));
-    addKnob(36, 16, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0,1,0);
+    addKnob(40, 12, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0,1,0);
+    addInput(createInput<TinyJack>(Vec(53,25), module, ComputerscareMolyPatrix::INPUT_ATTENUATION_CV));
+
+    addParam(createParam<SmoothKnobNoRandom>(Vec(96,14), module, ComputerscareMolyPatrix::INPUT_OFFSET));
+
+        
+    //addKnob(60, 16, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0,1,0);
+
 
     for (int i = 0; i < numRows; i++) {
       for (int j = 0; j < numColumns; j++) {
@@ -183,10 +193,16 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
 
     }
 
-    channelWidget = new PolyOutputChannelsWidget(Vec(352, 5), module, ComputerscareMolyPatrix::POLY_CHANNELS);
+   
+
+    
+
+    addKnob(322, 1, module, ComputerscareMolyPatrix::OUTPUT_TRIM, 0, 0,1,0);
+    addInput(createInput<TinyJack>(Vec(332,15), module, ComputerscareMolyPatrix::OUTPUT_ATTENUATION_CV));
+     channelWidget = new PolyOutputChannelsWidget(Vec(337, 1), module, ComputerscareMolyPatrix::POLY_CHANNELS);
     addChild(channelWidget);
 
-    addKnob(372, 1, module, ComputerscareMolyPatrix::OUTPUT_TRIM, 0, 0,1,0);
+    addParam(createParam<SmoothKnobNoRandom>(Vec(362,4), module, ComputerscareMolyPatrix::OUTPUT_OFFSET));
     addOutput(createOutput<InPort>(Vec(390, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
 
 

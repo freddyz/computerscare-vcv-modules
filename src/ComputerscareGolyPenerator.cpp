@@ -44,7 +44,7 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configParam(ALGORITHM , 1.f, 16.f, 1.f, "Algorithm");
+		configParam(ALGORITHM , 1.f, 4.f, 1.f, "Algorithm");
 		configParam(IN_OFFSET, -1.f, 1.f, 0.f, "Input Offset");
 
 		configParam(IN_SCALE, -2.f, 2.f, 1.f, "Input Scale");
@@ -105,8 +105,8 @@ struct PeneratorDisplay : TransparentWidget {
 		DrawHelper draw = DrawHelper(args.vg);
 		Points pts = Points();
 
-		nvgTranslate(args.vg, box.size.x / 2, box.size.y/2);
-		pts.linear(ch, Vec(0, -box.size.y/2), Vec(0, 3*box.size.y/ch));
+		nvgTranslate(args.vg, box.size.x / 2, box.size.y/2+5);
+		pts.linear(ch, Vec(0, -box.size.y/2), Vec(0, 50));
 		std::vector<Vec> polyVals;
 		std::vector<NVGcolor> colors;
 		std::vector<Vec> thicknesses;

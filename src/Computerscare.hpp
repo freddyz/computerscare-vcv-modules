@@ -362,9 +362,13 @@ struct SmoothKnob : RoundKnob {
 	SmoothKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
 	}
-
 };
-
+struct SmoothKnobNoRandom : RoundKnob {
+	SmoothKnobNoRandom() {
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
+	}
+	void randomize() override { return; }
+};
 struct SmallKnob : RoundKnob {
 	SmallKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
