@@ -13,6 +13,8 @@ struct ComputerscareBlank : Module {
 	bool loadedJSON = false;
 	std::string path;
 	std::string lastPath;
+
+	std::vector<std::string> paths;
 	float width = 120;
 	float height = 380;
 	int rotation = 0;
@@ -22,12 +24,20 @@ struct ComputerscareBlank : Module {
 	float xOffset = 0.f;
 	float yOffset = 0.f;
 	int imageFitEnum = 0;
+	int currentFrame = 0;
+	int numFrames = 0;
+	int stepCounter = 0;
+	int speed = 100000;
+
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
+		ANIMATION_SPEED,
 		NUM_PARAMS
 	};
 	enum InputIds {
-		NUM_INPUTS
+		NUM_INPUTS,
+		CLOCK_INPUT,
+		RESET_INPUT
 	};
 	enum OutputIds {
 		NUM_OUTPUTS
@@ -39,16 +49,28 @@ struct ComputerscareBlank : Module {
 
 	ComputerscareBlank()  {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+		configParam(ANIMATION_SPEED, 0.f, 2.f, 1.f, "Animation Speed");
+
+		paths.push_back("");
 	}
-	void process(const ProcessArgs &args) override {}
+	void process(const ProcessArgs &args) override {
+		stepCounter++;
+		if (stepCounter > speed) {
+			stepCounter = 0;
+			if(numFrames > 1) {
+				currentFrame ++;
+				currentFrame %= numFrames;
+			}
+		}
+	}
 	void onReset() override {
 		zoomX = 1;
 		zoomY = 1;
 		xOffset = 0;
 		yOffset = 0;
 	}
-	void loadImageDialog() {
-		std::string dir = this->path.empty() ?  asset::user("../") : rack::string::directory(this->path);
+	void loadImageDialog(int index = 0) {
+		std::string dir = this->paths[index].empty() ?  asset::user("../") : rack::string::directory(this->paths[index]);
 		char* pathC = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
 		if (!pathC) {
 			return;
@@ -59,15 +81,34 @@ struct ComputerscareBlank : Module {
 		setPath(path);
 	}
 
-	void setPath(std::string path) {
-		if (path == "")
-			return;
-		this->path = path;
+	void setPath(std::string path, int index = 0) {
+		//if (paths.size() <= index) {
+		paths.push_back(path);
+		//}
+		//else {
+		//	paths[index] = path;
+		//}
+		printf("setted %s\n", path.c_str());
+		numFrames = paths.size();
+		currentFrame = numFrames - 1;
+	}
+	std::string getPath() {
+		return numFrames > 0 ? paths[currentFrame] : "";
 	}
 
 	json_t *dataToJson() override {
 		json_t *rootJ = json_object();
-		json_object_set_new(rootJ, "path", json_string(path.c_str()));
+		if (paths.size() > 0) {
+			json_object_set_new(rootJ, "path", json_string(paths[0].c_str()));
+		}
+		json_t *pathsJ = json_array();
+		for (int i = 0; i < numFrames; i++) {
+			json_t *pathJ = json_string(paths[i].c_str());
+			json_array_append_new(pathsJ, pathJ);
+		}
+		json_object_set_new(rootJ, "paths", pathsJ);
+
+
 		json_object_set_new(rootJ, "width", json_real(width));
 		json_object_set_new(rootJ, "imageFitEnum", json_integer(imageFitEnum));
 		json_object_set_new(rootJ, "invertY", json_boolean(invertY));
@@ -80,11 +121,33 @@ struct ComputerscareBlank : Module {
 	}
 
 	void dataFromJson(json_t *rootJ) override {
-		json_t *pathJ = json_object_get(rootJ, "path");
-		if (pathJ) {
-			path = json_string_value(pathJ);
-			setPath(path);
+
+
+		json_t *pathsJ = json_object_get(rootJ, "paths");
+		if (pathsJ) {
+			std::string val;
+			for (int i = 0; i < 4; i++) {
+
+				json_t *pathJ = json_array_get(pathsJ, i);
+				if (pathJ) {
+					val = json_string_value(pathJ);
+
+					// currentFormula[i] = val;
+					//currentTextFieldValue[i] = val;
+					//paths.push_back(val);
+					setPath(val, i);
+				}
+			}
 		}
+		else {
+			json_t *pathJ = json_object_get(rootJ, "path");
+			if (pathJ) {
+				//paths.push_back(path)
+				path = json_string_value(pathJ);
+				setPath(path);
+			}
+		}
+
 		json_t *widthJ = json_object_get(rootJ, "width");
 		if (widthJ)
 			width = json_number_value(widthJ);
@@ -186,15 +249,17 @@ struct PNGDisplay : TransparentWidget {
 	}
 	void draw(const DrawArgs &args) override {
 		if (blankModule && blankModule->loadedJSON) {
-			if (path != blankModule->path) {
-				img = nvgCreateImage(args.vg, blankModule->path.c_str(), 0);
+			std::string modulePath = blankModule->getPath();
+			printf("%s\n", modulePath.c_str());
+			if (path != modulePath) {
+				img = nvgCreateImage(args.vg, modulePath.c_str(), 0);
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
 
 				if (path != "empty") {
 					setZooms();
 				}
-				path = blankModule->path;
+				path = modulePath;
 			}
 
 			if (blankModule->imageFitEnum != lastEnum && lastEnum != -1) {
