@@ -84,18 +84,37 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
     float outOffset = params[OUTPUT_OFFSET].getValue();
 
     float inOffset = params[INPUT_OFFSET].getValue();
+    
+    int numInputTrimChannels = inputs[INPUT_ATTENUATION_CV].getChannels();
+    int numOutputTrimChannels = inputs[OUTPUT_ATTENUATION_CV].getChannels();
+
+
+
+    float inputTrims[16] = {};
+    float outputTrims[16] = {};
+    float inputVals[16] = {};
+
+    if (numInputChannels > 0) {
+      inputs[POLY_INPUT].readVoltages(inputVals);
+    }
+    if (numInputTrimChannels > 0) {
+      inputs[INPUT_ATTENUATION_CV].readVoltages(inputTrims);
+    }
+    if (numOutputTrimChannels > 0) {
+      inputs[OUTPUT_ATTENUATION_CV].readVoltages(outputTrims);
+    }
+    
+
 
 
     for (int outIndex = 0; outIndex < numRows; outIndex++) {
       float outVoltage = 0.f;
       for (int i = 0; i < numColumns; i++) {
-        outVoltage += params[KNOB + i * 16 + outIndex].getValue() * (inputs[POLY_INPUT].getVoltage(i)+inOffset) * params[INPUT_ROW_TRIM + i].getValue() * params[INPUT_TRIM].getValue();
+        outVoltage += params[KNOB + i * 16 + outIndex].getValue() * (inputVals[i] + inOffset) * params[INPUT_ROW_TRIM + i].getValue() * (params[INPUT_TRIM].getValue() * (numInputTrimChannels > 0 ? inputTrims[numInputTrimChannels == 1 ? 0 : i] / 10 : 1));
       }
-      outputs[POLY_OUTPUT].setVoltage(params[OUTPUT_COLUMN_TRIM + outIndex].getValue()*outTrim * outVoltage + outOffset, outIndex);
+      outputs[POLY_OUTPUT].setVoltage(params[OUTPUT_COLUMN_TRIM + outIndex].getValue() * (outTrim * (numOutputTrimChannels > 0 ? outputTrims[numOutputTrimChannels == 1 ? 0 : outIndex] / 10 : 1)) * outVoltage + outOffset, outIndex);
     }
   }
-
-
 };
 
 
@@ -112,15 +131,15 @@ struct DisableableSmallKnob : RoundKnob {
   int outputChannel = 0;
   int themeIndex = 0;
   bool disabled = false;
-  bool initialized=false;
-  bool randomizable=true;
+  bool initialized = false;
+  bool randomizable = true;
   ComputerscareMolyPatrix *module;
 
   DisableableSmallKnob() {
     setSvg(enabledThemes[themeIndex]);
     shadow->box.size = math::Vec(0, 0);
     shadow->opacity = 0.f;
-    dirtyValue=-21.f;
+    dirtyValue = -21.f;
   }
 
   void draw(const DrawArgs& args) override {
@@ -130,19 +149,19 @@ struct DisableableSmallKnob : RoundKnob {
         setSvg(candidateDisabled ? disabledSvg : enabledThemes[themeIndex]);
         dirtyValue = -20.f;
         disabled = candidateDisabled;
-        initialized=true;
+        initialized = true;
       }
     }
     else {
     }
     RoundKnob::draw(args);
   }
-  void randomize() override { 
-    if(randomizable) {
+  void randomize() override {
+    if (randomizable) {
       RoundKnob::randomize();
     }
     else {
-      return; 
+      return;
     }
   }
 };
@@ -173,12 +192,12 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     float dy = 21;
 
     addInput(createInput<PointingUpPentagonPort>(Vec(9, 12), module, ComputerscareMolyPatrix::POLY_INPUT));
-    addKnob(40, 12, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0,1,0);
-    addInput(createInput<TinyJack>(Vec(53,25), module, ComputerscareMolyPatrix::INPUT_ATTENUATION_CV));
+    addKnob(40, 12, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0, 1, 0);
+    addInput(createInput<TinyJack>(Vec(53, 25), module, ComputerscareMolyPatrix::INPUT_ATTENUATION_CV));
 
-    addParam(createParam<SmoothKnobNoRandom>(Vec(96,14), module, ComputerscareMolyPatrix::INPUT_OFFSET));
+    addParam(createParam<SmoothKnobNoRandom>(Vec(96, 14), module, ComputerscareMolyPatrix::INPUT_OFFSET));
 
-        
+
     //addKnob(60, 16, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0,1,0);
 
 
@@ -188,26 +207,26 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
         yy = y0 + i * dy;
         addKnob( xx, yy, module, i * 16 + j, i, j);
       }
-      addKnob( x0 - 25, y0 + i * dy, module, ComputerscareMolyPatrix::INPUT_ROW_TRIM + i, i, 0,1,0);
-      addKnob( 420 - 40, y0 + i * dy, module, ComputerscareMolyPatrix::OUTPUT_COLUMN_TRIM + i, 0, i,1,0);
+      addKnob( x0 - 25, y0 + i * dy, module, ComputerscareMolyPatrix::INPUT_ROW_TRIM + i, i, 0, 1, 0);
+      addKnob( 420 - 40, y0 + i * dy, module, ComputerscareMolyPatrix::OUTPUT_COLUMN_TRIM + i, 0, i, 1, 0);
 
     }
 
-   
 
-    
 
-    addKnob(322, 1, module, ComputerscareMolyPatrix::OUTPUT_TRIM, 0, 0,1,0);
-    addInput(createInput<TinyJack>(Vec(332,15), module, ComputerscareMolyPatrix::OUTPUT_ATTENUATION_CV));
-     channelWidget = new PolyOutputChannelsWidget(Vec(337, 1), module, ComputerscareMolyPatrix::POLY_CHANNELS);
+
+
+    addKnob(322, 1, module, ComputerscareMolyPatrix::OUTPUT_TRIM, 0, 0, 1, 0);
+    addInput(createInput<TinyJack>(Vec(332, 15), module, ComputerscareMolyPatrix::OUTPUT_ATTENUATION_CV));
+    channelWidget = new PolyOutputChannelsWidget(Vec(337, 1), module, ComputerscareMolyPatrix::POLY_CHANNELS);
     addChild(channelWidget);
 
-    addParam(createParam<SmoothKnobNoRandom>(Vec(362,4), module, ComputerscareMolyPatrix::OUTPUT_OFFSET));
+    addParam(createParam<SmoothKnobNoRandom>(Vec(362, 4), module, ComputerscareMolyPatrix::OUTPUT_OFFSET));
     addOutput(createOutput<InPort>(Vec(390, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
 
 
   }
-  void addKnob(int x, int y, ComputerscareMolyPatrix *module, int index, int row, int column, int theme = 0,bool randomizable=true) {
+  void addKnob(int x, int y, ComputerscareMolyPatrix *module, int index, int row, int column, int theme = 0, bool randomizable = true) {
 
     knob = createParam<DisableableSmallKnob>(Vec(x, y), module, ComputerscareMolyPatrix::KNOB + index);
 
@@ -215,7 +234,7 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     knob->inputChannel = row;
     knob->outputChannel = column;
     knob->themeIndex = theme;
-    knob->randomizable=randomizable;
+    knob->randomizable = randomizable;
     addParam(knob);
 
   }
