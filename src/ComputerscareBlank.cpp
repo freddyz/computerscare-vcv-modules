@@ -1,5 +1,6 @@
 #include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
+#include "animatedGif.hpp"
 #include <osdialog.h>
 #include <iostream>
 #include <fstream>
@@ -250,9 +251,10 @@ struct PNGDisplay : TransparentWidget {
 	void draw(const DrawArgs &args) override {
 		if (blankModule && blankModule->loadedJSON) {
 			std::string modulePath = blankModule->getPath();
-			printf("%s\n", modulePath.c_str());
+			//printf("%s\n", modulePath.c_str());
 			if (path != modulePath) {
-				img = nvgCreateImage(args.vg, modulePath.c_str(), 0);
+				//img = nvgCreateImage(args.vg, modulePath.c_str(), 0);
+				img = animatedGifCreateImage(args.vg, modulePath.c_str(), 0);
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
 
