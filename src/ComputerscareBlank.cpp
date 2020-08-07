@@ -28,6 +28,7 @@ struct ComputerscareBlank : Module {
 	int currentFrame = 0;
 	int numFrames = 0;
 	int stepCounter = 0;
+	int frameDelay=10000;
 	int speed = 100000;
 
 	ComputerscareSVGPanel* panelRef;
@@ -56,7 +57,7 @@ struct ComputerscareBlank : Module {
 	}
 	void process(const ProcessArgs &args) override {
 		stepCounter++;
-		if (stepCounter > speed) {
+		if (stepCounter > frameDelay) {
 			stepCounter = 0;
 			if(numFrames > 1) {
 				currentFrame ++;
@@ -84,17 +85,24 @@ struct ComputerscareBlank : Module {
 
 	void setPath(std::string path, int index = 0) {
 		//if (paths.size() <= index) {
-		paths.push_back(path);
+		//paths.push_back(path);
 		//}
 		//else {
-		//	paths[index] = path;
+			paths[index] = path;
 		//}
 		printf("setted %s\n", path.c_str());
-		numFrames = paths.size();
-		currentFrame = numFrames - 1;
+		//numFrames = paths.size();
+		currentFrame = 0;
+	}
+	void setFrameCount(int frameCount) {
+		numFrames=frameCount;
+	}
+	void setFrameDelay(int frameDelayCentiseconds) {
+		frameDelay=frameDelayCentiseconds;
 	}
 	std::string getPath() {
-		return numFrames > 0 ? paths[currentFrame] : "";
+		//return numFrames > 0 ? paths[currentFrame] : "";
+		return paths[0];
 	}
 
 	json_t *dataToJson() override {
@@ -136,7 +144,7 @@ struct ComputerscareBlank : Module {
 					// currentFormula[i] = val;
 					//currentTextFieldValue[i] = val;
 					//paths.push_back(val);
-					setPath(val, i);
+					setPath(val, 0);
 				}
 			}
 		}
@@ -218,6 +226,8 @@ struct PNGDisplay : TransparentWidget {
 	int lastEnum = -1;
 	std::string path = "empty";
 	int img = 0;
+	int currentFrame=-1;
+	AnimatedGifBuddy gifBuddy;
 
 	PNGDisplay() {
 	}
@@ -254,7 +264,11 @@ struct PNGDisplay : TransparentWidget {
 			//printf("%s\n", modulePath.c_str());
 			if (path != modulePath) {
 				//img = nvgCreateImage(args.vg, modulePath.c_str(), 0);
-				img = animatedGifCreateImage(args.vg, modulePath.c_str(), 0);
+				gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
+				img = gifBuddy.getHandle();
+				blankModule->setFrameCount(gifBuddy.getFrameCount());
+				blankModule->setFrameDelay(gifBuddy.getFrameDelay());
+				
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
 
@@ -278,6 +292,10 @@ struct PNGDisplay : TransparentWidget {
 				nvgFillPaint(args.vg, imgPaint);
 				nvgFill(args.vg);
 				nvgClosePath(args.vg);
+			}
+			if(blankModule->currentFrame != currentFrame) {
+				currentFrame = blankModule->currentFrame;
+				gifBuddy.displayGifFrame(args.vg,currentFrame);
 			}
 		}
 	}
