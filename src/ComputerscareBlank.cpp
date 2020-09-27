@@ -110,13 +110,6 @@ struct ComputerscareBlank : Module {
 		if (paths.size() > 0) {
 			json_object_set_new(rootJ, "path", json_string(paths[0].c_str()));
 		}
-		json_t *pathsJ = json_array();
-		for (int i = 0; i < numFrames; i++) {
-			json_t *pathJ = json_string(paths[i].c_str());
-			json_array_append_new(pathsJ, pathJ);
-		}
-		json_object_set_new(rootJ, "paths", pathsJ);
-
 
 		json_object_set_new(rootJ, "width", json_real(width));
 		json_object_set_new(rootJ, "imageFitEnum", json_integer(imageFitEnum));
@@ -132,31 +125,14 @@ struct ComputerscareBlank : Module {
 	void dataFromJson(json_t *rootJ) override {
 
 
-		json_t *pathsJ = json_object_get(rootJ, "paths");
-		if (pathsJ) {
-			std::string val;
-			for (int i = 0; i < 4; i++) {
-
-				json_t *pathJ = json_array_get(pathsJ, i);
-				if (pathJ) {
-					val = json_string_value(pathJ);
-
-					// currentFormula[i] = val;
-					//currentTextFieldValue[i] = val;
-					//paths.push_back(val);
-					setPath(val, 0);
-				}
-			}
+		
+		json_t *pathJ = json_object_get(rootJ, "path");
+		if (pathJ) {
+			//paths.push_back(path)
+			path = json_string_value(pathJ);
+			setPath(path);
 		}
-		else {
-			json_t *pathJ = json_object_get(rootJ, "path");
-			if (pathJ) {
-				//paths.push_back(path)
-				path = json_string_value(pathJ);
-				setPath(path);
-			}
-		}
-
+	
 		json_t *widthJ = json_object_get(rootJ, "width");
 		if (widthJ)
 			width = json_number_value(widthJ);
