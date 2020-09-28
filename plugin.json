@@ -100,6 +100,11 @@
 			"name":"Droly Paw",
 			"description":"Draws normal and weird pictures",
 			"tags":["Visual","Polyphonic","Utility"]
+		},
+		{"slug":"computerscare-patch-versioning",
+			"name":"Patch Versioning",
+			"description":"Save and manage multiple versions of a patch",
+			"tags":["Utility"]
 		}
 	]
 }

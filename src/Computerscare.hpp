@@ -45,6 +45,8 @@ extern Model *modelComputerscareMolyPatrix;
 extern Model *modelComputerscareHorseADoodleDoo;
 extern Model *modelComputerscareDrolyPaw;
 
+extern Model *modelComputerscarePatchVersioning;
+
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
 static const NVGcolor COLOR_COMPUTERSCARE_RED = nvgRGB(0xC4, 0x34, 0x21);
@@ -121,6 +123,10 @@ struct InputBlockBackground : TransparentWidget {
 
 
 struct IsoButton : SvgSwitch {
+	IsoButton(bool isMomentary) {
+		momentary=isMomentary;
+		IsoButton();
+	}
 	IsoButton() {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-down.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-up.svg")));

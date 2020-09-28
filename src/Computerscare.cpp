@@ -27,6 +27,6 @@ void init(Plugin *p) {
 	p->addModel(modelComputerscareMolyPatrix);
 	p->addModel(modelComputerscareHorseADoodleDoo);
 
-
+	p->addModel(modelComputerscarePatchVersioning);
 	
 }
