@@ -8,6 +8,13 @@ const int numKnobs = 16;
 const int numToggles = 16;
 const int numOutputs = 16;
 
+std::string generateNewPatchName() {
+	std::string currentPatchName = APP->patch->path;
+	size_t lastindex = currentPatchName.find_last_of("."); 
+	std::string rawname = currentPatchName.substr(0, lastindex);
+	return rawname + "-v.vcv";
+}
+
 struct ComputerscarePatchVersioning : Module {
 	int counter = 0;
 	ComputerscareSVGPanel* panelRef;
@@ -45,9 +52,10 @@ struct ComputerscarePatchVersioning : Module {
 	void process(const ProcessArgs &args) override {
 		 bool saveClicked = saveTrigger.process(params[SAVE_BUTTON].getValue());
 		 if(saveClicked) {
-		 	std::string patchName = APP->patch->path+".poopoo";
-		 	DEBUG("patch name %s",patchName.c_str());
-		 	APP->patch->save(patchName);
+		 	std::string newPatchName = generateNewPatchName();
+		 	APP->patch->save(newPatchName);
+		 	APP->patch->path = newPatchName;
+			APP->history->setSaved();
 		 }
 	}
 
@@ -72,46 +80,14 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 
 		}
 
-		addParam(createParam<IsoButton>(Vec(50, 100), module, ComputerscarePatchVersioning::SAVE_BUTTON));
+		addParam(createParam<MomentaryIsoButton>(Vec(50, 100), module, ComputerscarePatchVersioning::SAVE_BUTTON));
 
 
 
 
 
 	}
-	void addLabeledKnob(std::string label, int x, int y, ComputerscarePatchVersioning *module, int index, int type) {
-		smallLetterDisplay = new SmallLetterDisplay();
-		smallLetterDisplay->box.size = Vec(60, 30);
-		smallLetterDisplay->value = label;
-		if (type == 0)  {
-			addParam(createParam<SmoothKnob>(Vec(x, y), module, ComputerscarePatchVersioning::KNOB + index));
-			smallLetterDisplay->box.pos = Vec(x + 22, y + 2);
-		}
-		else if (type == 1) {
-			addParam(createParam<SmallKnob>(Vec(x, y), module, ComputerscarePatchVersioning::KNOB + index));
-			smallLetterDisplay->box.pos = Vec(x + 12, y - 10);
-		}
-		else if (type == 2) {
-			addParam(createParam<BigSmoothKnob>(Vec(x, y), module, ComputerscarePatchVersioning::KNOB + index));
-			smallLetterDisplay->box.pos = Vec(x + 22, y - 12);
-		}
-		else if (type == 3) {
-			addParam(createParam<LrgKnob>(Vec(x, y), module, ComputerscarePatchVersioning::KNOB + index));
-			smallLetterDisplay->box.pos = Vec(x + 22, y - 12);
-		}
-		else if (type == 4) {
-			addParam(createParam<BigSmoothKnob>(Vec(x, y), module, ComputerscarePatchVersioning::KNOB + index));
-			smallLetterDisplay->box.pos = Vec(x + 22, y - 12);
-		}
 
-		else  {
-			addParam(createParam<MediumSnapKnob>(Vec(x, y), module, ComputerscarePatchVersioning::KNOB + index));
-			smallLetterDisplay->box.pos = Vec(x + 12, y - 10);
-		}
-		addChild(smallLetterDisplay);
-
-	}
-	SmallLetterDisplay* smallLetterDisplay;
 };
 
 
