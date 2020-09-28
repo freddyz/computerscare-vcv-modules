@@ -106,8 +106,8 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 				if (prev != &head) STBI_FREE(prev);
 			}
 		}
-		printf("first frame address p:%i",framePointers[0]);
-		printf("second frame address p:%i",framePointers[1]);
+		printf("first frame address p:%i\n",framePointers[0]);
+		printf("second frame address p:%i\n",framePointers[1]);
 	}
 	else
 	{
