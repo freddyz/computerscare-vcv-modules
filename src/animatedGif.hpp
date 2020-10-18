@@ -157,7 +157,8 @@ struct AnimatedGifBuddy {
 			return 0;
 		}
 		image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
-		stbi_image_free(img);
+		//stbi_image_free(img);
+		
 		initialized = true;
 		return image;
 	}
