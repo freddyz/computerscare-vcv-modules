@@ -24,7 +24,7 @@ typedef struct gif_result_t {
 
 
 
-STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *frames, std::vector<unsigned char*> &framePointers)
+STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *frames, std::vector<unsigned char*> &framePointers,int &frameDelay)
 {
 	FILE *f;
 	stbi__context s;
@@ -59,6 +59,7 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 
 			if (prev) prev->next = gr;
 			gr->delay = g.delay;
+			frameDelay=g.delay;
 			prev = gr;
 			gr = (gif_result*) stbi__malloc(sizeof(gif_result));
 			memset(gr, 0, sizeof(gif_result));
@@ -129,6 +130,7 @@ struct AnimatedGifBuddy {
 	int imageHandle;
 	bool initialized = false;
 	int numFrames = -1;
+	int frameDelay = 0;
 	AnimatedGifBuddy() {
 
 	}
@@ -147,8 +149,9 @@ struct AnimatedGifBuddy {
 		stbi_convert_iphone_png_to_rgb(1);
 		//img = stbi_load(filename, &w, &h, &n, 4);
 		framePointers = {};
-		img = stbi_xload(filename, &w, &h, &frame, framePointers);
+		img = stbi_xload(filename, &w, &h, &frame, framePointers,frameDelay);
 		printf(filename);
+		printf("\nframe delay:%i\n",frameDelay);
 		printf("loaded %i frames\n", framePointers.size());
 		numFrames = (int) framePointers.size();
 		//printVector(framePointers);
@@ -158,7 +161,7 @@ struct AnimatedGifBuddy {
 		}
 		image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
 		//stbi_image_free(img);
-		
+
 		initialized = true;
 		return image;
 	}
@@ -172,7 +175,7 @@ struct AnimatedGifBuddy {
 	int getFrameCount() {
 		return numFrames;
 	}
-	int getFrameDelay() {
-		return 1764;
+	float getSecondsDelay() {
+		return ((float) frameDelay)/100;
 	}
 };

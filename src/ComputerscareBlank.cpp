@@ -28,7 +28,8 @@ struct ComputerscareBlank : Module {
 	int currentFrame = 0;
 	int numFrames = 0;
 	int stepCounter = 0;
-	int frameDelay=10000;
+	float frameDelay=.5;
+	int samplesDelay=10000;
 	int speed = 100000;
 
 	ComputerscareSVGPanel* panelRef;
@@ -57,7 +58,11 @@ struct ComputerscareBlank : Module {
 	}
 	void process(const ProcessArgs &args) override {
 		stepCounter++;
-		if (stepCounter > frameDelay) {
+		samplesDelay = frameDelay * args.sampleRate;
+		
+		if (stepCounter > samplesDelay) {
+			//DEBUG("samplesDelay: %i",samplesDelay);
+			//DEBUG("%f",args.sampleRate);
 			stepCounter = 0;
 			if(numFrames > 1) {
 				currentFrame ++;
@@ -95,10 +100,12 @@ struct ComputerscareBlank : Module {
 		currentFrame = 0;
 	}
 	void setFrameCount(int frameCount) {
+		DEBUG("setting frame count %i",frameCount);
 		numFrames=frameCount;
 	}
-	void setFrameDelay(int frameDelayCentiseconds) {
-		frameDelay=frameDelayCentiseconds;
+	void setFrameDelay(float frameDelaySeconds) {
+		DEBUG("setting frame delay %f",frameDelaySeconds);
+		frameDelay=frameDelaySeconds;
 	}
 	std::string getPath() {
 		//return numFrames > 0 ? paths[currentFrame] : "";
@@ -243,7 +250,7 @@ struct PNGDisplay : TransparentWidget {
 				gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
 				img = gifBuddy.getHandle();
 				blankModule->setFrameCount(gifBuddy.getFrameCount());
-				blankModule->setFrameDelay(gifBuddy.getFrameDelay());
+				blankModule->setFrameDelay(gifBuddy.getSecondsDelay());
 				
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
