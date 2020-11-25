@@ -86,7 +86,7 @@ struct DrolyPaw : Module {
 
 
 		configParam(SCRAMBLE, -10.f, 10.f, 0.f, "Scrambling");
-		configParam(DRAW_MODE, 0.f, 64.f, 1.f, "Draw Mode");
+		configParam(DRAW_MODE, 0.f, 4.f, 1.f, "Draw Mode");
 		configParam(CLEAR_BUTTON, 0.f, 1.f, 0.f);
 		configParam(CLEAR_EVERY_FRAME, 0.f, 1.f, 1.f, "Clear Every Frame");
 		configParam(DRAW_EVERY_FRAME, 0.f, 1.f, 1.f, "Draw Every Frame");
