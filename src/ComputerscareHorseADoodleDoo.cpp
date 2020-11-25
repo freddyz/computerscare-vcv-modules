@@ -208,7 +208,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 		configParam<AutoParamQuantity>(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
 
-		configParam(MODE_KNOB, 1.f, 16.f, 1.f, "Mode");
+		configParam(MODE_KNOB, 1.f, 2.f, 1.f, "Mode");
 
 		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
 		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
@@ -256,6 +256,10 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			patternVal += i * params[PATTERN_SPREAD].getValue();
 			stepsVal += std::floor(params[STEPS_SPREAD].getValue() * i * stepsVal);
 			densityVal += params[DENSITY_SPREAD].getValue() * i / 10;
+
+			if(mode==2 && i > 0) {
+				densityVal=1.0;
+			}
 
 			seq[i].checkAndArm(patternVal, stepsVal, densityVal);
 		}
@@ -466,7 +470,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		setModule(module);
 		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareHorseADoodleDooPanel.svg")));
-		box.size = Vec(5 * 15, 380);
+		box.size = Vec(6 * 15, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
@@ -478,9 +482,9 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		}
 
-		addInputBlock("Pattern", 0, 100, module, 0,  ComputerscareHorseADoodleDoo::PATTERN_CV, 0, ComputerscareHorseADoodleDoo::PATTERN_SPREAD);
-		addInputBlock("Length", 0, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1, ComputerscareHorseADoodleDoo::STEPS_SPREAD);
-		addInputBlock("Density", 0, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0, ComputerscareHorseADoodleDoo::DENSITY_SPREAD);
+		addInputBlock("Pattern", 10, 100, module, 0,  ComputerscareHorseADoodleDoo::PATTERN_CV, 0, ComputerscareHorseADoodleDoo::PATTERN_SPREAD);
+		addInputBlock("Length", 10, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1, ComputerscareHorseADoodleDoo::STEPS_SPREAD);
+		addInputBlock("Density", 10, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0, ComputerscareHorseADoodleDoo::DENSITY_SPREAD);
 		addParam(createParam<MediumDotSnapKnob>(Vec(4, 230), module, ComputerscareHorseADoodleDoo::MODE_KNOB));
 
 
@@ -513,7 +517,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addInput(createInput<InPort>(Vec(2, outputY + 2 * dy), module, ComputerscareHorseADoodleDoo::RESET_INPUT));
 
 
-		channelWidget = new PolyOutputChannelsWidget(Vec(outputX-5, outputY - 25), module, ComputerscareHorseADoodleDoo::POLY_KNOB);
+		channelWidget = new PolyOutputChannelsWidget(Vec(outputX+18, outputY - 25), module, ComputerscareHorseADoodleDoo::POLY_KNOB);
 		addChild(channelWidget);
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY), module, ComputerscareHorseADoodleDoo::TRIGGER_OUTPUT));
@@ -524,12 +528,6 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 
 	void addInputBlock(std::string label, int x, int y, ComputerscareHorseADoodleDoo *module, int knobIndex,  int inputIndex, int knobType, int scrambleIndex) {
-
-		background = new InputBlockBackground();
-		background->box.pos = Vec(0, y / 2 - 9);
-		background->box.size = Vec(72, 45);
-
-		addChild(background);
 
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
@@ -567,12 +565,12 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		}
 		addParam(createParam<SmallKnob>(Vec(x + 32, y + 5), module, knobIndex + 1));
 		addInput(createInput<TinyJack>(Vec(x + 54, y + 6), module, inputIndex));
-		addParam(createParam<ScrambleKnob>(Vec(x + 45, y-15), module, scrambleIndex));
+		addParam(createParam<ScrambleKnob>(Vec(x + 55, y-15), module, scrambleIndex));
 
 
 
 
-		addChild(smallLetterDisplay);
+		//addChild(smallLetterDisplay);
 
 	}
 	PolyOutputChannelsWidget* channelWidget;
