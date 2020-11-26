@@ -257,8 +257,8 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			stepsVal += std::floor(params[STEPS_SPREAD].getValue() * i * stepsVal);
 			densityVal += params[DENSITY_SPREAD].getValue() * i / 10;
 
-			if(mode==2 && i > 0) {
-				densityVal=1.0;
+			if (mode == 2 && i > 0) {
+				densityVal = 1.0;
 			}
 
 			seq[i].checkAndArm(patternVal, stepsVal, densityVal);
@@ -509,15 +509,15 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		int outputX = 42;
 
-		addParam(createParam<ComputerscareClockButton>(Vec(2, outputY-6), module, ComputerscareHorseADoodleDoo::MANUAL_CLOCK_BUTTON));
-		addInput(createInput<InPort>(Vec(2, outputY+10), module, ComputerscareHorseADoodleDoo::CLOCK_INPUT));
+		addParam(createParam<ComputerscareClockButton>(Vec(2, outputY - 6), module, ComputerscareHorseADoodleDoo::MANUAL_CLOCK_BUTTON));
+		addInput(createInput<InPort>(Vec(2, outputY + 10), module, ComputerscareHorseADoodleDoo::CLOCK_INPUT));
 
 		addParam(createParam<ComputerscareResetButton>(Vec(2, outputY + dy + 16), module, ComputerscareHorseADoodleDoo::MANUAL_RESET_BUTTON));
 
 		addInput(createInput<InPort>(Vec(2, outputY + 2 * dy), module, ComputerscareHorseADoodleDoo::RESET_INPUT));
 
 
-		channelWidget = new PolyOutputChannelsWidget(Vec(outputX+18, outputY - 25), module, ComputerscareHorseADoodleDoo::POLY_KNOB);
+		channelWidget = new PolyOutputChannelsWidget(Vec(outputX + 18, outputY - 25), module, ComputerscareHorseADoodleDoo::POLY_KNOB);
 		addChild(channelWidget);
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY), module, ComputerscareHorseADoodleDoo::TRIGGER_OUTPUT));
@@ -565,7 +565,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		}
 		addParam(createParam<SmallKnob>(Vec(x + 32, y + 5), module, knobIndex + 1));
 		addInput(createInput<TinyJack>(Vec(x + 54, y + 6), module, inputIndex));
-		addParam(createParam<ScrambleKnob>(Vec(x + 55, y-15), module, scrambleIndex));
+		addParam(createParam<ScrambleKnob>(Vec(x + 55, y - 15), module, scrambleIndex));
 
 
 
