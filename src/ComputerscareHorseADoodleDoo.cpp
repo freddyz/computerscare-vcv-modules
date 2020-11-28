@@ -177,6 +177,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	float lastDensityKnob = 0.f;
 	int lastPolyKnob = 0;
 
+	int mode = 1;
 
 
 	int seqVal[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -208,7 +209,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 		configParam<AutoParamQuantity>(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
 
-		configParam(MODE_KNOB, 1.f, 2.f, 1.f, "Mode");
+		configParam(MODE_KNOB, 1.f, 3.f, 1.f, "Mode");
 
 		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
 		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
@@ -233,7 +234,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		int resetNum = inputs[RESET_INPUT].getChannels();
 
 
-		int mode = params[MODE_KNOB].getValue();
+		mode = params[MODE_KNOB].getValue();
 		lastStepsKnob = std::floor(params[STEPS_KNOB].getValue());
 		lastPolyKnob = std::floor(params[POLY_KNOB].getValue());
 
@@ -257,28 +258,37 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			stepsVal += std::floor(params[STEPS_SPREAD].getValue() * i * stepsVal);
 			densityVal += params[DENSITY_SPREAD].getValue() * i / 10;
 
-			if (mode == 2 && i > 0) {
-				densityVal = 1.0;
-			}
-
 			seq[i].checkAndArm(patternVal, stepsVal, densityVal);
 		}
 	}
-	void processChannel(int ch, bool clocked, bool reset, bool clockInputHigh) {
+	void processChannel(int ch, bool clocked, bool reset, bool clockInputHigh, int overrideMode = 1, bool overriddenTriggerHigh = false) {
 
 		if (reset) {
 			seq[ch].armChange();
 		}
 
 		if (clocked /*&& !reset*/) {
-			seqVal[ch] = seq[ch].tickAndGet();
-			if (seqVal[ch]) {
-				cvVal[ch] = seq[ch].getCV();
+			if (overrideMode == 2) {
+				seqVal[ch] = seq[ch].tickAndGet();
+				if (overriddenTriggerHigh) {
+					cvVal[ch] = seq[ch].getCV();
+				}
+				seqVal[ch] = overriddenTriggerHigh;
 			}
+			else if (overrideMode == 3) {
+				if (overriddenTriggerHigh) {
+					seqVal[ch] = seq[ch].tickAndGet();
+					cvVal[ch] = seq[ch].getCV();
+				}
+			}
+			else {
+				seqVal[ch] = seq[ch].tickAndGet();
+				if (seqVal[ch]) {
+					cvVal[ch] = seq[ch].getCV();
+				}
+			}
+
 			atFirstStepPoly[ch] =  (seq[ch].currentStep == 0);
-			if (seqVal[ch]) {
-				cvVal[ch] = seq[ch].getCV();
-			}
 
 		}
 
@@ -310,8 +320,35 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			isHigh[i] = manualClock || clockInputTrigger[i].isHigh();
 
 		}
-		for (int i = 0; i < 16; i++) {
-			processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
+		if (mode == 1) {
+			//each poly channel processes independent trigger and cv
+			for (int i = 0; i < 16; i++) {
+
+				processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
+			}
+		}
+		else if (mode == 2) {
+			// all poly channels 2-16 CV only changes along with channel 1 trigger
+			// what to do with the triggers for these channels?
+			for (int i = 0; i < 16; i++) {
+				if (i == 0) {
+					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
+				}
+				else {
+					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1], 2, seqVal[0]);
+				}
+			}
+		}
+		else if (mode == 3) {
+			// eoc cascade: previous channels EOC clocks next channels CV and trigger
+			for (int i = 0; i < 16; i++) {
+				if (i == 0) {
+					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
+				}
+				else {
+					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1], 3, atFirstStepPoly[i - 1]);
+				}
+			}
 		}
 
 	}
