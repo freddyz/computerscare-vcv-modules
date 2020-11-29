@@ -191,11 +191,13 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     float y0 = 43;
     float dy = 21;
 
-    addInput(createInput<PointingUpPentagonPort>(Vec(9, 12), module, ComputerscareMolyPatrix::POLY_INPUT));
-    addKnob(40, 12, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0, 1, 0);
-    addInput(createInput<TinyJack>(Vec(53, 25), module, ComputerscareMolyPatrix::INPUT_ATTENUATION_CV));
+    float inX = 28;
 
-    addParam(createParam<SmoothKnobNoRandom>(Vec(96, 14), module, ComputerscareMolyPatrix::INPUT_OFFSET));
+    addInput(createInput<PointingUpPentagonPort>(Vec(inX+0, 12), module, ComputerscareMolyPatrix::POLY_INPUT));
+    addKnob(inX+28, 12, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0, 1, 0);
+    addInput(createInput<TinyJack>(Vec(inX+41, 25), module, ComputerscareMolyPatrix::INPUT_ATTENUATION_CV));
+
+    addParam(createParam<SmoothKnobNoRandom>(Vec(inX+58, 14), module, ComputerscareMolyPatrix::INPUT_OFFSET));
 
 
     //addKnob(60, 16, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0,1,0);
@@ -213,16 +215,16 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     }
 
 
+    float outX = 302;
 
 
-
-    addKnob(322, 1, module, ComputerscareMolyPatrix::OUTPUT_TRIM, 0, 0, 1, 0);
-    addInput(createInput<TinyJack>(Vec(332, 15), module, ComputerscareMolyPatrix::OUTPUT_ATTENUATION_CV));
-    channelWidget = new PolyOutputChannelsWidget(Vec(337, 1), module, ComputerscareMolyPatrix::POLY_CHANNELS);
+    addKnob(outX+0, 1, module, ComputerscareMolyPatrix::OUTPUT_TRIM, 0, 0, 1, 0);
+    addInput(createInput<TinyJack>(Vec(outX+10, 15), module, ComputerscareMolyPatrix::OUTPUT_ATTENUATION_CV));
+    channelWidget = new PolyOutputChannelsWidget(Vec(outX+15, 1), module, ComputerscareMolyPatrix::POLY_CHANNELS);
     addChild(channelWidget);
 
-    addParam(createParam<SmoothKnobNoRandom>(Vec(362, 4), module, ComputerscareMolyPatrix::OUTPUT_OFFSET));
-    addOutput(createOutput<InPort>(Vec(390, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
+    addParam(createParam<SmoothKnobNoRandom>(Vec(outX+40, 4), module, ComputerscareMolyPatrix::OUTPUT_OFFSET));
+    addOutput(createOutput<InPort>(Vec(outX+73, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
 
 
   }
