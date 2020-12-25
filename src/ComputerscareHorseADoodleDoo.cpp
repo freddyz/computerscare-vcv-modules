@@ -209,7 +209,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 		configParam<AutoParamQuantity>(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
 
-		configParam(MODE_KNOB, 1.f, 3.f, 1.f, "Mode");
+		configParam(MODE_KNOB, 1.f, 4.f, 1.f, "Mode");
 
 		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
 		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
@@ -275,7 +275,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 				}
 				seqVal[ch] = overriddenTriggerHigh;
 			}
-			else if (overrideMode == 3) {
+			else if (overrideMode == 3 || overrideMode == 4) {
 				if (overriddenTriggerHigh) {
 					seqVal[ch] = seq[ch].tickAndGet();
 					cvVal[ch] = seq[ch].getCV();
@@ -323,13 +323,13 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		if (mode == 1) {
 			//each poly channel processes independent trigger and cv
 			for (int i = 0; i < 16; i++) {
-
 				processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
 			}
 		}
 		else if (mode == 2) {
 			// all poly channels 2-16 CV only changes along with channel 1 trigger
 			// what to do with the triggers for these channels?
+			// force to 1 channel gate output?
 			for (int i = 0; i < 16; i++) {
 				if (i == 0) {
 					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
@@ -338,15 +338,25 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1], 2, seqVal[0]);
 				}
 			}
+		} else if (mode == 3) {
+			// trigger cascade
+			for (int i = 0; i < 16; i++) {
+				if (i == 0) {
+					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
+				}
+				else {
+					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1], 3, seqVal[i - 1]);
+				}
+			}
 		}
-		else if (mode == 3) {
+		else if (mode == 4) {
 			// eoc cascade: previous channels EOC clocks next channels CV and trigger
 			for (int i = 0; i < 16; i++) {
 				if (i == 0) {
 					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1]);
 				}
 				else {
-					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1], 3, atFirstStepPoly[i - 1]);
+					processChannel(i, currentClock[clockChannels[i] - 1], currentReset[resetChannels[i] - 1], isHigh[clockChannels[i] - 1], 4, atFirstStepPoly[i - 1]);
 				}
 			}
 		}

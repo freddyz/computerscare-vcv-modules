@@ -45,9 +45,9 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
 		configParam(ALGORITHM , 1.f, 4.f, 1.f, "Algorithm");
-		configParam(IN_OFFSET, -1.f, 1.f, 0.f, "Input Offset");
+		configParam(IN_OFFSET, -1.f, 1.f, 0.f, "Channel Center");
 
-		configParam(IN_SCALE, -2.f, 2.f, 1.f, "Input Scale");
+		configParam(IN_SCALE, -2.f, 2.f, 1.f, "Channel Spread");
 
 		configParam(OUT_SCALE, -20.f, 20.f, 10.f, "Output Scale");
 		configParam(OUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
@@ -106,16 +106,16 @@ struct PeneratorDisplay : TransparentWidget {
 		Points pts = Points();
 
 		nvgTranslate(args.vg, box.size.x / 2, box.size.y/2+5);
-		pts.linear(ch, Vec(0, -box.size.y/2), Vec(0, 50));
+		pts.linear(ch, Vec(0, -box.size.y/2), Vec(0, 150));
 		std::vector<Vec> polyVals;
 		std::vector<NVGcolor> colors;
 		std::vector<Vec> thicknesses;
 
 		for (int i = 0; i < 16; i++) {
 			polyVals.push_back(Vec(valsToDraw[i] * 2,0.f));
-			colors.push_back(draw.sincolor(valsToDraw[i],{2,2,1}));
+			colors.push_back(draw.sincolor(0,{1,1,0}));
 
-			thicknesses.push_back(Vec(3.f, 0));
+			thicknesses.push_back(Vec(160/(1+ch), 0));
 		}
 		draw.drawLines(pts.get(), polyVals, colors, thicknesses);
 	}
@@ -139,8 +139,8 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 
 		PeneratorDisplay *display = new PeneratorDisplay();
 		display->module = module;
-		display->box.pos = Vec(0, 70);
-		display->box.size = Vec(box.size.x, 300);
+		display->box.pos = Vec(0, 120);
+		display->box.size = Vec(box.size.x, 400);
 		//display->sizex
 		addChild(display);
 
@@ -148,18 +148,18 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		float yy;
 //		    ParamWidget* stepsKnob =  createParam<LrgKnob>(Vec(108, 30), module, ComputerscarePatchSequencer::STEPS_PARAM);
 
-		addLabeledKnob<SmoothKnob>("Algo", 5, 140, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
-		addLabeledKnob<SmoothKnob>("In Offset", 10, 250, module, ComputerscareGolyPenerator::IN_OFFSET, 0, 0);
-		addLabeledKnob<SmallKnob>("In Scale", 20, 300, module, ComputerscareGolyPenerator::IN_SCALE, 0, 0);
-		addLabeledKnob<SmallKnob>("Out Scale", 30, 260, module, ComputerscareGolyPenerator::OUT_SCALE, 0, 0);
-		addLabeledKnob<SmoothKnob>("Out Offset", 30, 310, module, ComputerscareGolyPenerator::OUT_OFFSET, 0, 0);
+		addLabeledKnob<SmoothKnob>("Algo", 5, 30, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
+		addLabeledKnob<SmoothKnob>("center", 28, 80, module, ComputerscareGolyPenerator::IN_OFFSET, 0, 0);
+		addLabeledKnob<SmallKnob>("spread", 5, 86, module, ComputerscareGolyPenerator::IN_SCALE, 0, 0);
+		addLabeledKnob<SmallKnob>("scale", 33, 290, module, ComputerscareGolyPenerator::OUT_SCALE, 0, 0);
+		addLabeledKnob<SmoothKnob>("offset", 2, 284, module, ComputerscareGolyPenerator::OUT_OFFSET, 0, 0);
 
 		//addLabeledKnob("ch out",5,90,module,ComputerscareGolyPenerator::POLY_CHANNELS,-2,0);
 
-		channelWidget = new PolyOutputChannelsWidget(Vec(0, 170), module, ComputerscareGolyPenerator::POLY_CHANNELS);
+		channelWidget = new PolyOutputChannelsWidget(Vec(0, 312), module, ComputerscareGolyPenerator::POLY_CHANNELS);
 		addChild(channelWidget);
 
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(18, 184), module, ComputerscareGolyPenerator::POLY_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(28, 318), module, ComputerscareGolyPenerator::POLY_OUTPUT));
 
 	}
 
@@ -183,7 +183,7 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 
 
-		addChild(smallLetterDisplay);
+		//addChild(smallLetterDisplay);
 
 	}
 	PolyOutputChannelsWidget* channelWidget;
