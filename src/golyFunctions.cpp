@@ -38,7 +38,7 @@ void Goly::invoke(int algorithm, std::vector<float> gp, int num = 16) {
 		for (int i = 0; i < num; i++) {
 			float ip = (float)i / num;
 			float d = ip - gp[0] - 0.5;
-			currentValues[i] = gp[2] / (1 + exp(-d * exp(4 * gp[1]))) + gp[3];
+			currentValues[i] = gp[2] / (1 + exp(-d * exp(-4 * gp[1]+6))) + gp[3];
 		}
 		break;
 	case 3:
@@ -46,7 +46,7 @@ void Goly::invoke(int algorithm, std::vector<float> gp, int num = 16) {
 		for (int i = 0; i < num; i++) {
 			float ip = (float)i / num;
 			float d = ip - gp[0] - 0.5;
-			currentValues[i] = gp[2] * exp(-d*d*exp(5*gp[1])) + gp[3];
+			currentValues[i] = gp[2] * exp(-d*d*exp(-5*gp[1]+7)) + gp[3];
 		}
 		break;
 	case 4:
@@ -54,9 +54,16 @@ void Goly::invoke(int algorithm, std::vector<float> gp, int num = 16) {
 		for (int i = 0; i < num; i++) {
 			float ip = (float)i / num;
 			float d = trigFactor*(ip - gp[0]);
-			currentValues[i] = gp[2] * (1+sinf(d*exp(2*gp[1]+2)))/2 + gp[3];
+			currentValues[i] = gp[2] * (1+sinf(d*exp(-2*gp[1]+2)))/2 + gp[3];
 		}
 		break;
+	case 5:
+		//pseudo random
+		for(int i = 0; i < num; i++) {
+			float ip = (float) i / num;
+			float d = trigFactor*(ip-gp[0]);
+			currentValues[i] = gp[2]*(4 + sinf(d*29-3+16*gp[1]) + sinf(-d*24-2+39*gp[1]) + sinf(d*17-1-27*gp[1])+sinf(d*109+12.2-17*gp[1]))/8 + gp[3];
+		}
 	
 	default:
 		int k = 0;

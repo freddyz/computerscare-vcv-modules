@@ -44,7 +44,7 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configParam(ALGORITHM , 1.f, 4.f, 1.f, "Algorithm");
+		configParam(ALGORITHM , 1.f, 5.f, 1.f, "Algorithm");
 		configParam(IN_OFFSET, -1.f, 1.f, 0.f, "Channel Center");
 
 		configParam(IN_SCALE, -2.f, 2.f, 1.f, "Channel Spread");
