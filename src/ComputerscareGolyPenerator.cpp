@@ -130,24 +130,17 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareGolyPeneratorPanel.svg")));
-
-			//module->panelRef = panel;
-
 			addChild(panel);
-
 		}
 
 		PeneratorDisplay *display = new PeneratorDisplay();
 		display->module = module;
 		display->box.pos = Vec(0, 120);
 		display->box.size = Vec(box.size.x, 400);
-		//display->sizex
 		addChild(display);
 
 		float xx;
 		float yy;
-//		    ParamWidget* stepsKnob =  createParam<LrgKnob>(Vec(108, 30), module, ComputerscarePatchSequencer::STEPS_PARAM);
-
 		addLabeledKnob<SmoothKnob>("Algo", 5, 30, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
 		addLabeledKnob<SmoothKnob>("center", 28, 80, module, ComputerscareGolyPenerator::IN_OFFSET, 0, 0);
 		addLabeledKnob<SmallKnob>("spread", 5, 86, module, ComputerscareGolyPenerator::IN_SCALE, 0, 0);
