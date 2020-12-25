@@ -95,11 +95,6 @@
 			"name":"Horse A Doodle Doo",
 			"description":"Rhythm generator",
 			"tags":["Sequencer","Clock Modulator","Polyphonic"]
-		},
-		{"slug":"computerscare-droly-paw",
-			"name":"Droly Paw",
-			"description":"Draws normal and weird pictures",
-			"tags":["Visual","Polyphonic","Utility"]
 		}
 	]
 }
