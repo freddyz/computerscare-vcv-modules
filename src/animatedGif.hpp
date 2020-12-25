@@ -24,7 +24,7 @@ typedef struct gif_result_t {
 
 
 
-STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *frames, std::vector<unsigned char*> &framePointers,int &frameDelay)
+STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *frames, std::vector<unsigned char*> &framePointers, int &frameDelay)
 {
 	FILE *f;
 	stbi__context s;
@@ -44,7 +44,7 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 
 		memset(&g, 0, sizeof(g));
 		memset(&head, 0, sizeof(head));
-		printf("%i\n",g);
+		printf("%i\n", g);
 
 		*frames = 0;
 
@@ -58,8 +58,15 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 			}
 
 			if (prev) prev->next = gr;
-			gr->delay = g.delay;
-			frameDelay=g.delay;
+			if (g.delay) {
+				gr->delay = g.delay;
+				frameDelay = g.delay;
+			}
+			else {
+				gr->delay = 4;
+				frameDelay = 4;
+			}
+
 			prev = gr;
 			gr = (gif_result*) stbi__malloc(sizeof(gif_result));
 			memset(gr, 0, sizeof(gif_result));
@@ -107,8 +114,11 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 				if (prev != &head) STBI_FREE(prev);
 			}
 		}
-		printf("first frame address p:%i\n",framePointers[0]);
-		printf("second frame address p:%i\n",framePointers[1]);
+		printf("framePointers.size() %i\n",framePointers.size());
+		if (framePointers.size()) {
+			printf("first frame address p:%i\n", framePointers[0]);
+			printf("second frame address p:%i\n", framePointers[1]);
+		}
 	}
 	else
 	{
@@ -138,7 +148,7 @@ struct AnimatedGifBuddy {
 		imageHandle = animatedGifCreateImage(ctx, filename, 0);
 	}
 	int getHandle() {
-		printf("imageHandle:%i\n",imageHandle);
+		printf("imageHandle:%i\n", imageHandle);
 		return imageHandle;
 	}
 	int animatedGifCreateImage(NVGcontext* ctx, const char* filename, int imageFlags) {
@@ -149,14 +159,15 @@ struct AnimatedGifBuddy {
 		stbi_convert_iphone_png_to_rgb(1);
 		//img = stbi_load(filename, &w, &h, &n, 4);
 		framePointers = {};
-		img = stbi_xload(filename, &w, &h, &frame, framePointers,frameDelay);
+		printf("framePointers.size BEFORE %i\n",framePointers.size());
+		img = stbi_xload(filename, &w, &h, &frame, framePointers, frameDelay);
 		printf(filename);
-		printf("\nframe delay:%i\n",frameDelay);
+		printf("\nframe delay:%i\n", frameDelay);
 		printf("loaded %i frames\n", framePointers.size());
 		numFrames = (int) framePointers.size();
 		//printVector(framePointers);
-		if (img == NULL) {
-//		printf("Failed to load %s - %s\n", filename, stbi_failure_reason());
+		if (img == NULL || numFrames == 0) {
+			printf("Failed to load %s - %s\n", filename, stbi_failure_reason());
 			return 0;
 		}
 		image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
@@ -176,6 +187,6 @@ struct AnimatedGifBuddy {
 		return numFrames;
 	}
 	float getSecondsDelay() {
-		return ((float) frameDelay)/100;
+		return ((float) frameDelay) / 100;
 	}
 };
