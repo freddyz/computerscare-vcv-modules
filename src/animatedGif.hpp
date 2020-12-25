@@ -157,7 +157,7 @@ struct AnimatedGifBuddy {
 		int frame = 0;
 		stbi_set_unpremultiply_on_load(1);
 		stbi_convert_iphone_png_to_rgb(1);
-		//img = stbi_load(filename, &w, &h, &n, 4);
+
 		framePointers = {};
 		printf("framePointers.size BEFORE %i\n",framePointers.size());
 		img = stbi_xload(filename, &w, &h, &frame, framePointers, frameDelay);
@@ -166,12 +166,11 @@ struct AnimatedGifBuddy {
 		printf("loaded %i frames\n", framePointers.size());
 		numFrames = (int) framePointers.size();
 		//printVector(framePointers);
-		if (img == NULL || numFrames == 0) {
+		if (img == NULL) {
 			printf("Failed to load %s - %s\n", filename, stbi_failure_reason());
 			return 0;
 		}
 		image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
-		//stbi_image_free(img);
 
 		initialized = true;
 		return image;
@@ -179,7 +178,6 @@ struct AnimatedGifBuddy {
 	void displayGifFrame(NVGcontext* ctx, int frameNumber) {
 		if (initialized && frameNumber < numFrames) {
 			const unsigned char* dataAtFrame = framePointers[frameNumber];
-			//printf("displaying frame %i\n",frameNumber);
 			nvgUpdateImage(ctx, imageHandle, dataAtFrame);
 		}
 	}
