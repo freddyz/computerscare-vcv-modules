@@ -104,7 +104,6 @@ struct ComputerscareBlank : Module {
 		numFrames = frameCount;
 	}
 	void setFrameDelay(float frameDelaySeconds) {
-		DEBUG("setting frame delay %f", frameDelaySeconds);
 		frameDelay = frameDelaySeconds;
 	}
 	std::string getPath() {
@@ -251,7 +250,7 @@ struct PNGDisplay : TransparentWidget {
 				img = gifBuddy.getHandle();
 
 				blankModule->setFrameCount(gifBuddy.getFrameCount());
-				blankModule->setFrameDelay(gifBuddy.getSecondsDelay());
+				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
 
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
@@ -280,6 +279,7 @@ struct PNGDisplay : TransparentWidget {
 			}
 			if (blankModule->currentFrame != currentFrame) {
 				currentFrame = blankModule->currentFrame;
+				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(currentFrame));
 				gifBuddy.displayGifFrame(args.vg, currentFrame);
 			}
 		}
