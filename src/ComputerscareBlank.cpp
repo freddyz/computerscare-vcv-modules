@@ -13,7 +13,6 @@ struct ComputerscareBlank : Module {
 	bool loading = true;
 	bool loadedJSON = false;
 	std::string path;
-	std::string lastPath;
 
 	std::vector<std::string> paths;
 	float width = 120;
@@ -31,6 +30,7 @@ struct ComputerscareBlank : Module {
 	float frameDelay = .5;
 	int samplesDelay = 10000;
 	int speed = 100000;
+	int imageStatus=0;
 
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
@@ -103,6 +103,9 @@ struct ComputerscareBlank : Module {
 		DEBUG("setting frame count %i", frameCount);
 		numFrames = frameCount;
 	}
+	void setImageStatus(int status) {
+		imageStatus=status;
+	}
 	void setFrameDelay(float frameDelaySeconds) {
 		frameDelay = frameDelaySeconds;
 	}
@@ -134,9 +137,7 @@ struct ComputerscareBlank : Module {
 
 		json_t *pathJ = json_object_get(rootJ, "path");
 		if (pathJ) {
-			//paths.push_back(path)
-			path = json_string_value(pathJ);
-			setPath(path);
+			setPath(json_string_value(pathJ));
 		}
 
 		json_t *widthJ = json_object_get(rootJ, "width");
@@ -247,10 +248,17 @@ struct PNGDisplay : TransparentWidget {
 				DEBUG("path not module path");
 				DEBUG("path: %s, modulePath:%s",path.c_str(),modulePath.c_str());
 				gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
+				if(gifBuddy.getImageStatus() == 3) {
+					std::string badGifPath = asset::plugin(pluginInstance, "res/bad-gif.gif");
+					gifBuddy = AnimatedGifBuddy(args.vg, badGifPath.c_str());
+				}
 				img = gifBuddy.getHandle();
 
 				blankModule->setFrameCount(gifBuddy.getFrameCount());
 				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
+				blankModule->setImageStatus(gifBuddy.getImageStatus());
+
+
 
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
@@ -347,7 +355,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		menu->addChild(loadImageItem);
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Current Image Path:"));
-		menu->addChild(construct<MenuLabel>(&MenuLabel::text, blank->path));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, blank->getPath()));
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
