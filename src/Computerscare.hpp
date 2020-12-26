@@ -523,3 +523,4 @@ struct SmallLetterDisplay : Widget {
 #include "pointFunctions.hpp"
 #include "drawFunctions.hpp"
 #include "ComputerscarePolyModule.hpp"
+#include "MenuParams.hpp"

@@ -37,6 +37,7 @@ struct ComputerscareBlank : Module {
 		ANIMATION_SPEED,
 		ANIMATION_ENABLED,
 		CONSTANT_FRAME_DELAY,
+		ANIMATION_MODE,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -54,10 +55,10 @@ struct ComputerscareBlank : Module {
 
 	ComputerscareBlank()  {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(ANIMATION_SPEED, 0.f, 2.f, 0.1, "Animation Speed");
+		configParam(ANIMATION_SPEED, -2.f, 2.f, 1.0, "Animation Speed");
 		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
 		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
-
+		configParam(ANIMATION_MODE, 0.f, 3.f, 0.f, "Animation Mode");
 		paths.push_back("empty");
 	}
 	void process(const ProcessArgs &args) override {
@@ -111,11 +112,18 @@ struct ComputerscareBlank : Module {
 		imageStatus = status;
 	}
 	void setFrameDelay(float frameDelaySeconds) {
-		if (params[CONSTANT_FRAME_DELAY].getValue()) {
-			frameDelay = params[ANIMATION_SPEED].getValue();
+		float speedKnob = abs(params[ANIMATION_SPEED].getValue());
+		float base = frameDelaySeconds;
+		if (speedKnob == 0) {
+			frameDelay = 10000000;
 		}
 		else {
-			frameDelay = frameDelaySeconds;
+			if (params[CONSTANT_FRAME_DELAY].getValue()) {
+				frameDelay = base/speedKnob;
+			}
+			else {
+				frameDelay = frameDelaySeconds/speedKnob;
+			}
 		}
 	}
 	std::string getPath() {
@@ -135,7 +143,7 @@ struct ComputerscareBlank : Module {
 		currentFrame = 0;
 	}
 	void goToRandomFrame() {
-		currentFrame = (int) std::floor(random::uniform()*numFrames);
+		currentFrame = (int) std::floor(random::uniform() * numFrames);
 	}
 	void toggleAnimationEnabled() {
 		float current = params[ANIMATION_ENABLED].getValue();
@@ -404,9 +412,9 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		invertYMenuItem->blank = blank;
 		menu->addChild(invertYMenuItem);
 
-		SmoothKnob* speedParam = new SmoothKnob();
+		/*SmoothKnob* speedParam = new SmoothKnob();
 		speedParam->paramQuantity = blankModule->paramQuantities[ComputerscareBlank::ANIMATION_SPEED];
-		
+
 		MenuEntry* LabeledKnob = new MenuEntry();
 		MenuLabel* johnLabel = construct<MenuLabel>(&MenuLabel::text, "Animation Speed");
 		johnLabel->box.pos = Vec(speedParam->box.size.x,0);
@@ -415,10 +423,20 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		LabeledKnob->addChild(speedParam);
 
 		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Animation Speed"));
-		menu->addChild(LabeledKnob);
+		menu->addChild(LabeledKnob);*/
 
-		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
-		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+		MenuParam* animEnabled = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED],0);
+		menu->addChild(animEnabled);
+
+		MenuParam* speedParam = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_SPEED], 2);
+		menu->addChild(speedParam);
+
+		MenuParam* mp = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY], 2);
+		menu->addChild(mp);
+
+		MenuParam* am = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_MODE], 1);
+		menu->addChild(am);
+
 
 
 
