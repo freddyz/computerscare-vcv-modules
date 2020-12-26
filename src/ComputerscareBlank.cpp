@@ -55,8 +55,8 @@ struct ComputerscareBlank : Module {
 	ComputerscareBlank()  {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		configParam(ANIMATION_SPEED, 0.f, 2.f, 0.1, "Animation Speed");
-		configParam(ANIMATION_ENABLED, 0.f, 1.f, 0.f, "Animation Enabled");
-		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 1.f, "Constant Frame Delay");
+		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
+		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
 
 		paths.push_back("empty");
 	}
@@ -403,6 +403,22 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		invertYMenuItem->text = "Invert Y-Axis";
 		invertYMenuItem->blank = blank;
 		menu->addChild(invertYMenuItem);
+
+		SmoothKnob* speedParam = new SmoothKnob();
+		speedParam->paramQuantity = blankModule->paramQuantities[ComputerscareBlank::ANIMATION_SPEED];
+		
+		MenuEntry* LabeledKnob = new MenuEntry();
+		MenuLabel* johnLabel = construct<MenuLabel>(&MenuLabel::text, "Animation Speed");
+		johnLabel->box.pos = Vec(speedParam->box.size.x,0);
+
+		LabeledKnob->addChild(johnLabel);
+		LabeledKnob->addChild(speedParam);
+
+		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Animation Speed"));
+		menu->addChild(LabeledKnob);
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
 
 
