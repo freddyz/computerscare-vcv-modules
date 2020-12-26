@@ -55,7 +55,7 @@ struct ComputerscareBlank : Module {
 
 	ComputerscareBlank()  {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(ANIMATION_SPEED, -2.f, 2.f, 1.0, "Animation Speed");
+		configParam(ANIMATION_SPEED, -10.f, 10.f, 1.0, "Animation Speed");
 		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
 		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
 		configParam(ANIMATION_MODE, 0.f, 3.f, 0.f, "Animation Mode");
@@ -68,8 +68,15 @@ struct ComputerscareBlank : Module {
 		if (stepCounter > samplesDelay) {
 			stepCounter = 0;
 			if (params[ANIMATION_ENABLED].getValue()) {
+
 				if (numFrames > 1) {
-					currentFrame ++;
+					if(params[ANIMATION_SPEED].getValue() >=0 ) {
+						currentFrame++;
+					}
+					else {
+						currentFrame--;
+					}
+					currentFrame+=numFrames;
 					currentFrame %= numFrames;
 				}
 			}
@@ -119,10 +126,10 @@ struct ComputerscareBlank : Module {
 		}
 		else {
 			if (params[CONSTANT_FRAME_DELAY].getValue()) {
-				frameDelay = base/speedKnob;
+				frameDelay = .04/speedKnob;
 			}
 			else {
-				frameDelay = frameDelaySeconds/speedKnob;
+				frameDelay = base/speedKnob;
 			}
 		}
 	}
