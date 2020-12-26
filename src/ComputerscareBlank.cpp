@@ -30,11 +30,13 @@ struct ComputerscareBlank : Module {
 	float frameDelay = .5;
 	int samplesDelay = 10000;
 	int speed = 100000;
-	int imageStatus=0;
+	int imageStatus = 0;
 
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		ANIMATION_SPEED,
+		ANIMATION_ENABLED,
+		CONSTANT_FRAME_DELAY,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -52,7 +54,9 @@ struct ComputerscareBlank : Module {
 
 	ComputerscareBlank()  {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(ANIMATION_SPEED, 0.f, 2.f, 1.f, "Animation Speed");
+		configParam(ANIMATION_SPEED, 0.f, 2.f, 0.1, "Animation Speed");
+		configParam(ANIMATION_ENABLED, 0.f, 1.f, 0.f, "Animation Enabled");
+		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 1.f, "Constant Frame Delay");
 
 		paths.push_back("empty");
 	}
@@ -61,12 +65,12 @@ struct ComputerscareBlank : Module {
 		samplesDelay = frameDelay * args.sampleRate;
 
 		if (stepCounter > samplesDelay) {
-			//DEBUG("samplesDelay: %i",samplesDelay);
-			//DEBUG("%f",args.sampleRate);
 			stepCounter = 0;
-			if (numFrames > 1) {
-				currentFrame ++;
-				currentFrame %= numFrames;
+			if (params[ANIMATION_ENABLED].getValue()) {
+				if (numFrames > 1) {
+					currentFrame ++;
+					currentFrame %= numFrames;
+				}
 			}
 		}
 	}
@@ -104,16 +108,44 @@ struct ComputerscareBlank : Module {
 		numFrames = frameCount;
 	}
 	void setImageStatus(int status) {
-		imageStatus=status;
+		imageStatus = status;
 	}
 	void setFrameDelay(float frameDelaySeconds) {
-		frameDelay = frameDelaySeconds;
+		if (params[CONSTANT_FRAME_DELAY].getValue()) {
+			frameDelay = params[ANIMATION_SPEED].getValue();
+		}
+		else {
+			frameDelay = frameDelaySeconds;
+		}
 	}
 	std::string getPath() {
 		//return numFrames > 0 ? paths[currentFrame] : "";
 		return paths[0];
 	}
-
+	void nextFrame() {
+		currentFrame++;
+		currentFrame %= numFrames;
+	}
+	void prevFrame() {
+		currentFrame--;
+		currentFrame += numFrames;
+		currentFrame %= numFrames;
+	}
+	void goToFrame(int frameNum) {
+		currentFrame = 0;
+	}
+	void goToRandomFrame() {
+		currentFrame = (int) std::floor(random::uniform()*numFrames);
+	}
+	void toggleAnimationEnabled() {
+		float current = params[ANIMATION_ENABLED].getValue();
+		if (current == 1.0) {
+			params[ANIMATION_ENABLED].setValue(0);
+		}
+		else {
+			params[ANIMATION_ENABLED].setValue(1);
+		}
+	}
 	json_t *dataToJson() override {
 		json_t *rootJ = json_object();
 		if (paths.size() > 0) {
@@ -246,9 +278,9 @@ struct PNGDisplay : TransparentWidget {
 			std::string modulePath = blankModule->getPath();
 			if (path != modulePath) {
 				DEBUG("path not module path");
-				DEBUG("path: %s, modulePath:%s",path.c_str(),modulePath.c_str());
+				DEBUG("path: %s, modulePath:%s", path.c_str(), modulePath.c_str());
 				gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
-				if(gifBuddy.getImageStatus() == 3) {
+				if (gifBuddy.getImageStatus() == 3) {
 					std::string badGifPath = asset::plugin(pluginInstance, "res/bad-gif.gif");
 					gifBuddy = AnimatedGifBuddy(args.vg, badGifPath.c_str());
 				}
@@ -266,7 +298,7 @@ struct PNGDisplay : TransparentWidget {
 				if (path != "empty") {
 					setZooms();
 				}
-				
+
 
 			}
 
@@ -457,6 +489,31 @@ struct ComputerscareBlankWidget : ModuleWidget {
 				blankModule->rotation %= 4;
 				e.consume(this);
 			} break;
+			case GLFW_KEY_J: {
+				blankModule->prevFrame();
+				e.consume(this);
+			} break;
+			case GLFW_KEY_L: {
+				blankModule->nextFrame();
+				e.consume(this);
+			} break;
+			case GLFW_KEY_K: {
+				blankModule->goToFrame(0);
+				e.consume(this);
+			} break;
+			case GLFW_KEY_I: {
+				blankModule->goToRandomFrame();
+				e.consume(this);
+			} break;
+			case GLFW_KEY_U: {
+				blankModule->goToRandomFrame();
+				e.consume(this);
+			} break;
+			case GLFW_KEY_P: {
+				blankModule->toggleAnimationEnabled();
+				e.consume(this);
+			} break;
+
 			}
 		}
 		ModuleWidget::onHoverKey(e);
