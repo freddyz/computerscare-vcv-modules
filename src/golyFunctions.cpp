@@ -54,7 +54,7 @@ void Goly::invoke(int algorithm, std::vector<float> gp, int num = 16) {
 		for (int i = 0; i < num; i++) {
 			float ip = (float)i / num;
 			float d = trigFactor*(ip - gp[0]);
-			currentValues[i] = gp[2] * (1+sinf(d*exp(-2*gp[1]+2)))/2 + gp[3];
+			currentValues[i] = gp[2] * (1+sinf(d*exp(-1.5*(gp[1]-3))))/2 + gp[3];
 		}
 		break;
 	case 4:

@@ -11,6 +11,14 @@ struct ComputerscareGolyPenerator;
 	knob2: algorithm
 	knob3: param 1
 */
+const std::string GolyPeneratorAvailableAlgorithmsArr[5] = {"Linear", "Sigmoid","Hump","Sinusoid","Pseudo-Random"};
+
+struct EnumParamQuantity : ParamQuantity {
+	std::string getDisplayValueString() override {
+		int val = getValue();
+		return GolyPeneratorAvailableAlgorithmsArr[val];
+	}
+};
 
 struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 	int counter = 0;
@@ -46,7 +54,7 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configParam(ALGORITHM , 0.f, 4.f, 0.f, "Algorithm");
+		configParam<EnumParamQuantity>(ALGORITHM , 0.f, 4.f, 0.f, "Algorithm");
 		configParam(IN_OFFSET, -1.f, 1.f, 0.f, "Channel Center");
 
 		configParam(IN_SCALE, -2.f, 2.f, 1.f, "Channel Spread");
@@ -60,7 +68,7 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 		availableAlgorithms.push_back("Hump");
 		availableAlgorithms.push_back("Sinusoid");
 		availableAlgorithms.push_back("Pseudo-Random");
-		
+
 
 		goly = Goly();
 
@@ -138,7 +146,7 @@ struct AlgorithmChildMenu : MenuItem {
 		for (unsigned int i = 0; i < penerator->availableAlgorithms.size(); i++) {
 			setAlgoItem *menuItem = new setAlgoItem(i);
 			//ParamSettingItem *menuItem = new ParamSettingItem(i,ComputerscareGolyPenerator::ALGORITHM);
-			
+
 			menuItem->text = penerator->availableAlgorithms[i];
 			menuItem->penerator = penerator;
 			menu->addChild(menuItem);
