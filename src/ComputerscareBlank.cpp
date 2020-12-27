@@ -6,15 +6,18 @@
 #include <fstream>
 #include <sstream>
 #include <thread>
+#include <dirent.h>
 
 struct ComputerscareBlank;
 
-struct ComputerscareBlank : Module {
+struct ComputerscareBlank : ComputerscareMenuParamModule {
 	bool loading = true;
 	bool loadedJSON = false;
 	std::string path;
+	std::string parentDirectory;
 
 	std::vector<std::string> paths;
+	std::vector<std::string> catalog;
 	float width = 120;
 	float height = 380;
 	int rotation = 0;
@@ -32,12 +35,16 @@ struct ComputerscareBlank : Module {
 	int speed = 100000;
 	int imageStatus = 0;
 
+	std::vector<std::string> animationModeDescriptions;
+	std::vector<std::string> endBehaviorDescriptions;
+
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		ANIMATION_SPEED,
 		ANIMATION_ENABLED,
 		CONSTANT_FRAME_DELAY,
 		ANIMATION_MODE,
+		END_BEHAVIOR,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -55,10 +62,27 @@ struct ComputerscareBlank : Module {
 
 	ComputerscareBlank()  {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(ANIMATION_SPEED, -10.f, 10.f, 1.0, "Animation Speed");
+		configMenuParam(ANIMATION_SPEED, 0.05f, 20.f, 1.0, "Animation Speed", 2,"x");
 		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
 		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
-		configParam(ANIMATION_MODE, 0.f, 3.f, 0.f, "Animation Mode");
+		configMenuParam(END_BEHAVIOR, 0.f, 5.f, 0.f, "Animation End Behavior", 2);
+
+		animationModeDescriptions.push_back("Forward");
+		animationModeDescriptions.push_back("Reverse");
+		animationModeDescriptions.push_back("Ping Pong");
+		animationModeDescriptions.push_back("Random Shuffled");
+		animationModeDescriptions.push_back("Full Random");
+
+		endBehaviorDescriptions.push_back("Repeat");
+		endBehaviorDescriptions.push_back("Stop");
+		endBehaviorDescriptions.push_back("Select Random");
+		endBehaviorDescriptions.push_back("Load Next");
+		endBehaviorDescriptions.push_back("Load Previous");
+
+		
+		configMenuParam(ANIMATION_MODE, 0.f, "Animation Mode",animationModeDescriptions);
+
+
 		paths.push_back("empty");
 	}
 	void process(const ProcessArgs &args) override {
@@ -70,14 +94,7 @@ struct ComputerscareBlank : Module {
 			if (params[ANIMATION_ENABLED].getValue()) {
 
 				if (numFrames > 1) {
-					if(params[ANIMATION_SPEED].getValue() >=0 ) {
-						currentFrame++;
-					}
-					else {
-						currentFrame--;
-					}
-					currentFrame+=numFrames;
-					currentFrame %= numFrames;
+					tickAnimation();
 				}
 			}
 		}
@@ -94,17 +111,49 @@ struct ComputerscareBlank : Module {
 		if (!pathC) {
 			return;
 		}
+		parentDirectory = dir;
 		std::string path = pathC;
 		std::free(pathC);
 
 		setPath(path);
 	}
+	void getContainingDirectory(int index = 0) {
+
+		std::string dir = rack::string::directory(paths[index]);
+
+		struct dirent* dirp = NULL;
+		DIR* rep = NULL;
+
+		rep = opendir(dir.c_str());
+
+		int i = 0;
+		catalog.clear();
+		//fichier.clear();
+		while ((dirp = readdir(rep)) != NULL) {
+			std::string name = dirp->d_name;
+
+			std::size_t found = name.find(".gif", name.length() - 5);
+			if (found != std::string::npos) {
+				catalog.push_back(name);
+				//DEBUG("we got gif:%s",name.c_str());
+			}
+		}
+	}
+	void loadRandomGif(int index = 0) {
+		std::string dir = rack::string::directory(paths[index]);
+		getContainingDirectory();
+		int randomIndex = floor(random::uniform() * catalog.size());
+
+		setPath(dir + "/" + catalog[randomIndex]);
+	}
+
 
 	void setPath(std::string path, int index = 0) {
 		//if (paths.size() <= index) {
 		//paths.push_back(path);
 		//}
 		//else {
+		numFrames = 0;
 		paths[index] = path;
 		//}
 		printf("setted %s\n", path.c_str());
@@ -126,16 +175,30 @@ struct ComputerscareBlank : Module {
 		}
 		else {
 			if (params[CONSTANT_FRAME_DELAY].getValue()) {
-				frameDelay = .04/speedKnob;
+				frameDelay = .04 / speedKnob;
 			}
 			else {
-				frameDelay = base/speedKnob;
+				frameDelay = base / speedKnob;
 			}
 		}
 	}
 	std::string getPath() {
 		//return numFrames > 0 ? paths[currentFrame] : "";
 		return paths[0];
+	}
+	void tickAnimation() {
+		if (params[ANIMATION_SPEED].getValue() >= 0 ) {
+			nextFrame();
+		}
+		else {
+			prevFrame();
+		}
+		if(currentFrame == 0) {
+			int eb = params[END_BEHAVIOR].getValue();
+			if(eb == 3 ) {
+				loadRandomGif();
+			}
+		}
 	}
 	void nextFrame() {
 		currentFrame++;
@@ -247,6 +310,32 @@ struct InvertYMenuItem: MenuItem {
 		MenuItem::step();
 	}
 };
+struct KeyboardControlChildMenu : MenuItem {
+	ComputerscareBlank *blank;
+
+	Menu *createChildMenu() override {
+		Menu *menu = new Menu;
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "A,S,D,F: Translate image position"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Z,X: Zoom in/out"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "J,L: Previous / next frame"));	
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "K: Go to first frame"));
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "I: Go to random frame"));
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "O: Load random image from same directory"));
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "P: Toggle animation on/off"));
+
+
+		InvertYMenuItem *invertYMenuItem = new InvertYMenuItem();
+		invertYMenuItem->text = "Invert Y-Axis";
+		invertYMenuItem->blank = blank;
+		menu->addChild(invertYMenuItem);
+
+		return menu;
+	}
+
+};
 
 struct PNGDisplay : TransparentWidget {
 	ComputerscareBlank *blankModule;
@@ -341,7 +430,7 @@ struct PNGDisplay : TransparentWidget {
 	}
 };
 
-struct ComputerscareBlankWidget : ModuleWidget {
+struct ComputerscareBlankWidget : MenuParamModuleWidget {
 	ComputerscareBlankWidget(ComputerscareBlank *blankModule) {
 
 		setModule(blankModule);
@@ -391,9 +480,13 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
 		menu->addChild(new MenuEntry);
 
-		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Keyboard Controls:"));
-		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "A,S,D,F: Translate image position"));
-		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Z,X: Zoom in/out"));
+		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Keyboard Controls:"));
+	
+		KeyboardControlChildMenu *kbMenu = new KeyboardControlChildMenu();
+		kbMenu->text = "Keyboard Controls";
+		kbMenu->rightText = RIGHT_ARROW;
+		kbMenu->blank = blank;
+		menu->addChild(kbMenu);
 
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
@@ -414,11 +507,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
-		InvertYMenuItem *invertYMenuItem = new InvertYMenuItem();
-		invertYMenuItem->text = "Invert Y-Axis";
-		invertYMenuItem->blank = blank;
-		menu->addChild(invertYMenuItem);
-
 		/*SmoothKnob* speedParam = new SmoothKnob();
 		speedParam->paramQuantity = blankModule->paramQuantities[ComputerscareBlank::ANIMATION_SPEED];
 
@@ -432,17 +520,20 @@ struct ComputerscareBlankWidget : ModuleWidget {
 		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Animation Speed"));
 		menu->addChild(LabeledKnob);*/
 
-		MenuParam* animEnabled = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED],0);
+		MenuParam* animEnabled = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED], 0);
 		menu->addChild(animEnabled);
 
 		MenuParam* speedParam = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_SPEED], 2);
 		menu->addChild(speedParam);
 
-		MenuParam* mp = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY], 2);
+		MenuParam* mp = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY], 0);
 		menu->addChild(mp);
 
 		MenuParam* am = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_MODE], 1);
 		menu->addChild(am);
+
+		MenuParam* eb = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::END_BEHAVIOR], 1);
+		menu->addChild(eb);
 
 
 
@@ -554,7 +645,10 @@ struct ComputerscareBlankWidget : ModuleWidget {
 				blankModule->toggleAnimationEnabled();
 				e.consume(this);
 			} break;
-
+			case GLFW_KEY_O: {
+				blankModule->loadRandomGif();
+				e.consume(this);
+			} break;
 			}
 		}
 		ModuleWidget::onHoverKey(e);

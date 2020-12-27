@@ -25,10 +25,10 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="11.313709"
-     inkscape:cx="34.04832"
-     inkscape:cy="278.57564"
+     inkscape:cx="30.33601"
+     inkscape:cy="360.7768"
      inkscape:document-units="mm"
-     inkscape:current-layer="text1023"
+     inkscape:current-layer="g1669"
      showgrid="false"
      units="px"
      inkscape:snap-bbox="true"
@@ -235,7 +235,7 @@
     </g>
     <g
        id="g9547"
-       transform="matrix(0.23127322,-0.07546583,0.02054862,0.22663881,-1.1606061,289.06733)">
+       transform="matrix(0.23127322,-0.07546583,0.02054862,0.22663881,-2.7040876,289.7923)">
       <g
          style="display:inline"
          inkscape:label="Layer 1"
@@ -370,8 +370,8 @@
          inkscape:connector-curvature="0" />
     </g>
     <path
-       style="fill:#fcfcfc;fill-opacity:1;stroke:#464646;stroke-width:0.296;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke fill markers"
-       d="m 0.84393651,279.05851 14.57839849,0.0321 -0.300846,0.96549 -0.42519,9.06913 -13.85235483,-0.0321 z"
+       style="fill:#fcfcfc;fill-opacity:1;stroke:#464646;stroke-width:0.327203;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;paint-order:stroke fill markers"
+       d="m 0.8595379,279.07411 14.5471951,0.0393 -0.300202,1.1823 -0.424279,11.10574 -13.82270645,-0.0393 z"
        id="rect1127"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="cccccc" />
