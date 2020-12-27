@@ -31,10 +31,12 @@ struct TinyChannelsSnapKnob: RoundBlackSnapKnob {
 	int prevSetting=-1;
 	int paramId=-1;
 
+
 	ComputerscarePolyModule *module;
 
 	TinyChannelsSnapKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-channels-empty-knob.svg")));
+		shadow->opacity = 0.f;
 	}
 	void randomize() override {return;}
 	void draw(const DrawArgs& args) override {

@@ -13,7 +13,9 @@ struct ComputerscareGolyPenerator;
 */
 const std::string GolyPeneratorAvailableAlgorithmsArr[5] = {"Linear", "Sigmoid","Hump","Sinusoid","Pseudo-Random"};
 
-struct EnumParamQuantity : ParamQuantity {
+
+//template <const std::string& options>
+struct GolyAlgoParamQuantity : ParamQuantity {
 	std::string getDisplayValueString() override {
 		int val = getValue();
 		return GolyPeneratorAvailableAlgorithmsArr[val];
@@ -54,7 +56,7 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configParam<EnumParamQuantity>(ALGORITHM , 0.f, 4.f, 0.f, "Algorithm");
+		configParam<GolyAlgoParamQuantity>(ALGORITHM , 0.f, 4.f, 0.f, "Algorithm");
 		configParam(IN_OFFSET, -1.f, 1.f, 0.f, "Channel Center");
 
 		configParam(IN_SCALE, -2.f, 2.f, 1.f, "Channel Spread");
@@ -141,7 +143,7 @@ struct AlgorithmChildMenu : MenuItem {
 
 	Menu *createChildMenu() override {
 		Menu *menu = new Menu;
-		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Farties"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Select an Algorithm... NOW"));
 
 		for (unsigned int i = 0; i < penerator->availableAlgorithms.size(); i++) {
 			setAlgoItem *menuItem = new setAlgoItem(i);
@@ -215,7 +217,7 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 
 		float xx;
 		float yy;
-		addLabeledKnob<ScrambleSnapKnob>("Algo", 4, 336, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
+		addLabeledKnob<ScrambleSnapKnob>("Algo", 4, 324, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
 		addLabeledKnob<SmoothKnob>("center", 28, 80, module, ComputerscareGolyPenerator::IN_OFFSET, 0, 0);
 		addLabeledKnob<SmallKnob>("spread", 5, 86, module, ComputerscareGolyPenerator::IN_SCALE, 0, 0);
 		addLabeledKnob<SmallKnob>("scale", 33, 290, module, ComputerscareGolyPenerator::OUT_SCALE, 0, 0);
@@ -223,10 +225,10 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 
 		//addLabeledKnob("ch out",5,90,module,ComputerscareGolyPenerator::POLY_CHANNELS,-2,0);
 
-		channelWidget = new PolyOutputChannelsWidget(Vec(8, 312), module, ComputerscareGolyPenerator::POLY_CHANNELS);
+		channelWidget = new PolyOutputChannelsWidget(Vec(28, 309), module, ComputerscareGolyPenerator::POLY_CHANNELS);
 		addChild(channelWidget);
 
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(28, 328), module, ComputerscareGolyPenerator::POLY_OUTPUT));
+		addOutput(createOutput<InPort>(Vec(28, 329), module, ComputerscareGolyPenerator::POLY_OUTPUT));
 
 	}
 	void appendContextMenu(Menu* menu) override {

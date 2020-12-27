@@ -32,7 +32,7 @@ struct MenuParam : MenuEntry {
 	ParamWidget* speedParam;
 	MenuLabel* johnLabel;
 	MenuLabel* displayString;
-	float controlRightMargin = 10;
+	float controlRightMargin = 6;
 
 	MenuParam(ParamQuantity* param, int type) {
 		if (type == 0) {

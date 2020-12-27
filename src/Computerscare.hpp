@@ -376,15 +376,26 @@ struct SmallKnob : RoundKnob {
 };
 struct ScrambleKnob : RoundKnob {
 	ScrambleKnob() {
+		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
 };
 struct ScrambleSnapKnob : RoundKnob {
 	ScrambleSnapKnob() {
 		snap=true;
+		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
 };
+struct ScrambleSnapKnobNoRandom : RoundKnob {
+	ScrambleSnapKnobNoRandom() {
+		snap=true;
+		shadow->opacity = 0.f;
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+	}
+	void randomize() override { return; }
+};
+
 struct SmallSnapKnob : RoundBlackSnapKnob {
 	//bool visible = true;
 
