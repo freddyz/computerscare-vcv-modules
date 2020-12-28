@@ -4,7 +4,7 @@
 
 struct ComputerscareHorseADoodleDoo;
 
-const std::string HorseAvailableModes[4] = {"Each Channel Independent", "All Channels Triggered by Ch. 1 sequence","Trigger Cascade:\nEach channel is triggered by the previous channel's trigger sequence","EOC Cascade:\nEach channel is triggered by the previous channel's EOC"};
+const std::string HorseAvailableModes[4] = {"Each channel outputs independent pulse & CV sequence", "All channels triggered by Ch. 1 sequence", "Trigger Cascade:\nEach channel is triggered by the previous channel's trigger sequence", "EOC Cascade:\nEach channel is triggered by the previous channel's EOC"};
 
 struct HorseModeParam : ParamQuantity {
 	std::string getDisplayValueString() override {
@@ -138,7 +138,8 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	float currentValues[16] = {0.f};
 	bool atFirstStepPoly[16] = {false};
 	int previousStep[16] = { -1};
-	bool shouldSetEOCHigh[16]={false};
+	bool shouldSetEOCHigh[16] = {false};
+	bool shouldOutputPulse[16] = {false};
 	enum ParamIds {
 		PATTERN_KNOB,
 		PATTERN_TRIM,
@@ -214,7 +215,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		configParam(DENSITY_TRIM, -1.f, 1.f, 0.f, "Density CV Trim");
 
 
-		configParam(PATTERN_SPREAD, 0.f, 1.f, 0.f, "Pattern Spread", "%", 0, 100);
+		configParam(PATTERN_SPREAD, 0.f, 1.f, 0.5f, "Pattern Spread", "%", 0, 100);
 		configParam(STEPS_SPREAD, -1.f, 1.f, 0.f, "Steps Spread", "%", 0, 100);
 		configParam(DENSITY_SPREAD, -1.f, 1.f, 0.f, "Density Spread", "%", 0, 100);
 
@@ -229,7 +230,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 		for (int i = 0; i < 16; i++) {
 			seq[i] = HorseSequencer(0.f, 8, 0.f, i);
-			previousStep[i]=-1;
+			previousStep[i] = -1;
 		}
 
 
@@ -296,6 +297,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 				}
 			}
 			else {
+				// no override, operate as normal.  Tick sequencer every clock, and tick CV if the trigger is high
 				seqVal[ch] = seq[ch].tickAndGet();
 				if (seqVal[ch]) {
 					cvVal[ch] = seq[ch].getCV();
@@ -305,12 +307,16 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			atFirstStepPoly[ch] =  (seq[ch].currentStep == 0);
 
 			shouldSetEOCHigh[ch] = atFirstStepPoly[ch] && previousStep[ch] != 0;
+			shouldOutputPulse[ch] = seqVal[ch] == 1 && (previousStep[ch] != seq[ch].currentStep);
+
 			previousStep[ch] = seq[ch].currentStep;
+
+
 
 		}
 
 		if (true || inputs[CLOCK_INPUT].isConnected()) {
-			outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && seqVal[ch] == 1) ? 10.0f : 0.0f, ch);
+			outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && shouldOutputPulse[ch]) ? 10.0f : 0.0f, ch);
 			//DEBUG("before output:%f",cvVal);
 			outputs[CV_OUTPUT].setVoltage(cvVal[ch], ch);
 			//outputs[EOC_OUTPUT].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
@@ -548,21 +554,6 @@ struct setModeItem : MenuItem
 	}
 };
 
-/*struct SetAllItem : MenuItem {
-	ComputerscareRolyPouter *pouter;
-
-	Menu *createChildMenu() override {
-		Menu *menu = new Menu;
-		for (int i = 1; i < 17; i++) {
-			ssmi *menuItem = new ssmi(i);
-			menuItem->text = "Set all to ch. " + std::to_string(i);
-			menuItem->pouter = pouter;
-			menu->addChild(menuItem);
-		}
-		return menu;
-	}
-
-};*/
 struct ModeChildMenu : MenuItem {
 	ComputerscareHorseADoodleDoo *horse;
 
@@ -576,7 +567,7 @@ struct ModeChildMenu : MenuItem {
 
 			menuItem->text = HorseAvailableModes[i];
 			menuItem->horse = horse;
-			menuItem->box.size.y=40;
+			menuItem->box.size.y = 40;
 			menu->addChild(menuItem);
 		}
 
@@ -594,9 +585,6 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareHorseADoodleDooPanel.svg")));
-
-			//module->panelRef = panel;
-
 			addChild(panel);
 
 		}
@@ -606,22 +594,12 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addInputBlock("Density", 10, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0, ComputerscareHorseADoodleDoo::DENSITY_SPREAD);
 		addParam(createParam<ScrambleSnapKnobNoRandom>(Vec(4, 234), module, ComputerscareHorseADoodleDoo::MODE_KNOB));
 
-
-		//addInputBlock("Mode", 0, 250, module, ComputerscareHorseADoodleDoo::MODE_KNOB,  0, 1);
-
-
-
-
-
-
-
-
-		for (int i = 0; i < 1; i++) {
+		/*for (int i = 0; i < 1; i++) {
 			horseDisplay = new HorseDisplay(i);
 			horseDisplay->module = module;
 
 			addChild(horseDisplay);
-		}
+		}*/
 
 		int outputY = 264;
 		int dy = 30;
@@ -685,20 +663,11 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		addParam(createParam<SmallKnob>(Vec(x + 32, y + 5), module, knobIndex + 1));
 		addInput(createInput<TinyJack>(Vec(x + 54, y + 6), module, inputIndex));
 		addParam(createParam<ScrambleKnob>(Vec(x + 55, y - 15), module, scrambleIndex));
-
-
-
-
-		//addChild(smallLetterDisplay);
-
 	}
 
 	void appendContextMenu(Menu* menu) override {
 		ComputerscareHorseADoodleDoo* horse = dynamic_cast<ComputerscareHorseADoodleDoo*>(this->module);
-
 		menu->addChild(new MenuEntry);
-
-
 		ModeChildMenu *modeMenu = new ModeChildMenu();
 		modeMenu->text = "Polyphonic Triggering Mode";
 		modeMenu->rightText = RIGHT_ARROW;
