@@ -31,6 +31,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	int numFrames = 0;
 	int stepCounter = 0;
 	float frameDelay = .5;
+	std::vector<float> frameDelays;
+
 	int samplesDelay = 10000;
 	int speed = 100000;
 	int imageStatus = 0;
@@ -48,9 +50,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		NUM_PARAMS
 	};
 	enum InputIds {
-		NUM_INPUTS,
-		CLOCK_INPUT,
-		RESET_INPUT
+		NUM_INPUTS
 	};
 	enum OutputIds {
 		NUM_OUTPUTS
@@ -62,7 +62,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 	ComputerscareBlank()  {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configMenuParam(ANIMATION_SPEED, 0.05f, 20.f, 1.0, "Animation Speed", 2,"x");
+		configMenuParam(ANIMATION_SPEED, 0.05f, 20.f, 1.0, "Animation Speed", 2, "x");
 		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
 		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
 		configMenuParam(END_BEHAVIOR, 0.f, 5.f, 0.f, "Animation End Behavior", 2);
@@ -79,8 +79,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		endBehaviorDescriptions.push_back("Load Next");
 		endBehaviorDescriptions.push_back("Load Previous");
 
-		
-		configMenuParam(ANIMATION_MODE, 0.f, "Animation Mode",animationModeDescriptions);
+
+		configMenuParam(ANIMATION_MODE, 0.f, "Animation Mode", animationModeDescriptions);
 
 
 		paths.push_back("empty");
@@ -97,6 +97,21 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					tickAnimation();
 				}
 			}
+		}
+		if (rightExpander.module && rightExpander.module->model == modelComputerscareBlankExpander) {
+			// Get message from right expander
+			float *message = (float*) rightExpander.module->leftExpander.producerMessage;
+			// Write message
+			/*for (int i = 0; i < 8; i++) {
+				message[i] = inputs[i].getVoltage() / 10.f;
+			}*/
+			if (stepCounter == 90) {
+
+
+			}
+			message[0] = (currentFrame == 0) ? 10.f : 0.f;
+			// Flip messages at the end of the timestep
+			rightExpander.module->leftExpander.messageFlipRequested = true;
 		}
 	}
 	void onReset() override {
@@ -182,6 +197,9 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			}
 		}
 	}
+	void setFrameDelays(std::vector<float> frameDelaysSeconds) {
+		frameDelays = frameDelaysSeconds;
+	}
 	std::string getPath() {
 		//return numFrames > 0 ? paths[currentFrame] : "";
 		return paths[0];
@@ -193,12 +211,13 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		else {
 			prevFrame();
 		}
-		if(currentFrame == 0) {
+		if (currentFrame == 0) {
 			int eb = params[END_BEHAVIOR].getValue();
-			if(eb == 3 ) {
+			if (eb == 3 ) {
 				loadRandomGif();
 			}
 		}
+		setFrameDelay(frameDelays[currentFrame]);
 	}
 	void nextFrame() {
 		currentFrame++;
@@ -317,7 +336,7 @@ struct KeyboardControlChildMenu : MenuItem {
 		Menu *menu = new Menu;
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "A,S,D,F: Translate image position"));
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Z,X: Zoom in/out"));
-		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "J,L: Previous / next frame"));	
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "J,L: Previous / next frame"));
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "K: Go to first frame"));
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "I: Go to random frame"));
@@ -391,6 +410,7 @@ struct PNGDisplay : TransparentWidget {
 				img = gifBuddy.getHandle();
 
 				blankModule->setFrameCount(gifBuddy.getFrameCount());
+				blankModule->setFrameDelays(gifBuddy.getAllFrameDelaysSeconds());
 				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
 				blankModule->setImageStatus(gifBuddy.getImageStatus());
 
@@ -421,12 +441,20 @@ struct PNGDisplay : TransparentWidget {
 				nvgFill(args.vg);
 				nvgClosePath(args.vg);
 			}
+			//if (blankModule->currentFrame != currentFrame) {
+				gifBuddy.displayGifFrame(args.vg, currentFrame);
+			//}
+		}
+	}
+	void step() override {
+		if (blankModule && blankModule->loadedJSON) {
 			if (blankModule->currentFrame != currentFrame) {
 				currentFrame = blankModule->currentFrame;
-				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(currentFrame));
-				gifBuddy.displayGifFrame(args.vg, currentFrame);
+				//blankModule->setFrameDelay(gifBuddy.getSecondsDelay(currentFrame));
+				
 			}
 		}
+		TransparentWidget::step();
 	}
 };
 
@@ -481,7 +509,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		menu->addChild(new MenuEntry);
 
 		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Keyboard Controls:"));
-	
+
 		KeyboardControlChildMenu *kbMenu = new KeyboardControlChildMenu();
 		kbMenu->text = "Keyboard Controls";
 		kbMenu->rightText = RIGHT_ARROW;
@@ -663,4 +691,89 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 	SmallLetterDisplay* smallLetterDisplay;
 };
 
+struct ComputerscareBlankExpander : Module {
+	float leftMessages[2][8] = {};
+	bool isConnected = false;
+	enum ParamIds {
+		NUM_PARAMS
+	};
+	enum InputIds {
+		CLOCK_INPUT,
+		RESET_INPUT,
+		SCAN_INPUT,
+		NUM_INPUTS
+	};
+	enum OutputIds {
+		EOC_OUTPUT,
+		NUM_OUTPUTS
+	};
+	enum LightIds {
+		NUM_LIGHTS
+	};
+
+	dsp::SchmittTrigger eocMessageReadTrigger;
+	dsp::PulseGenerator eocPulse;
+	dsp::PulseGenerator eachFramePulse;
+
+
+	ComputerscareBlankExpander() {
+
+		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+
+		leftExpander.producerMessage = leftMessages[0];
+		leftExpander.consumerMessage = leftMessages[1];
+	}
+
+	void process(const ProcessArgs &args) override {
+		if (leftExpander.module && leftExpander.module->model == modelComputerscareBlank) {
+			// Get consumer message
+			float *message = (float*) leftExpander.consumerMessage;
+			isConnected = true;
+
+			//eocMessageReadTrigger.process(message[0]);
+			if (eocMessageReadTrigger.process(message[0])) {
+				eocPulse.trigger(1e-3);
+			}
+			outputs[EOC_OUTPUT].setVoltage(eocPulse.process(args.sampleTime) ? 10.f : 0.f);
+			//DEBUG("HANG ON TO HIM MURPH!");
+			/*for (int i = 0; i < 8; i++) {
+				lights[i].setBrightness(message[i]);
+			}*/
+		}
+		else {
+			isConnected = false;
+			// No mother module is connected.
+			// TODO Clear the lights.
+		}
+	}
+};
+struct ComputerscareBlankExpanderWidget : ModuleWidget {
+	ComputerscareBlankExpanderWidget(ComputerscareBlankExpander *module) {
+		setModule(module);
+		box.size = Vec(30, 380);
+		{
+			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
+			panel->box.size = box.size;
+			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareCustomBlankExpanderPanel.svg")));
+			addChild(panel);
+		}
+
+		DEBUG("clock_input:%i", ComputerscareBlankExpander::CLOCK_INPUT);
+
+		float inStartY = 30;
+		float dY = 40;
+
+		float outStartY = 250;
+
+		addInput(createInput<InPort>(Vec(2, inStartY), module, ComputerscareBlankExpander::CLOCK_INPUT));
+		addInput(createInput<InPort>(Vec(2, inStartY + dY), module, ComputerscareBlankExpander::SCAN_INPUT));
+		addInput(createInput<InPort>(Vec(2, inStartY + 2 * dY), module, ComputerscareBlankExpander::RESET_INPUT));
+
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(2, outStartY), module, ComputerscareBlankExpander::EOC_OUTPUT));
+
+
+	}
+};
+
 Model *modelComputerscareBlank = createModel<ComputerscareBlank, ComputerscareBlankWidget>("computerscare-blank");
+Model *modelComputerscareBlankExpander = createModel<ComputerscareBlankExpander, ComputerscareBlankExpanderWidget>("computerscare-blank-expander");

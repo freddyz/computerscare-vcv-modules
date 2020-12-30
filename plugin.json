@@ -76,6 +76,11 @@
 			"description":"Customizable, resizable, lovable blank panel. \nLoad your own PNG, JPEG, BMP, or GIF.",
 			"tags":["Blank","Visual"]
 		},
+		{"slug":"computerscare-blank-expander",
+			"name":"Custom Blank Expander",
+			"description":"Allows CV Control of Computerscare Custom Blank GIF Animation",
+			"tags":["Blank","Visual"]
+		},
 		{"slug":"computerscare-stoly-fick-pigure",
 			"name":"Stoly Fick Pigure",
 			"description":"Draw a stick figure",

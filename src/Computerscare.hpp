@@ -39,6 +39,7 @@ extern Model *modelComputerscareSolyPequencer;
 extern Model *modelComputerscareFolyPace;
 extern Model *modelComputerscareStolyFickPigure;
 extern Model *modelComputerscareBlank;
+extern Model *modelComputerscareBlankExpander;
 extern Model *modelComputerscareGolyPenerator;
 extern Model *modelComputerscareMolyPatrix;
 

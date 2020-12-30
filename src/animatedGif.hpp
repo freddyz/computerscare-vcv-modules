@@ -146,6 +146,7 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 struct AnimatedGifBuddy {
 	std::vector<unsigned char*> framePointers;
 	std::vector<int> frameDelays;
+	std::vector<float> frameDelaysSeconds;
 	int imageHandle;
 	bool initialized = false;
 	int numFrames = -1;
@@ -183,13 +184,14 @@ struct AnimatedGifBuddy {
 			printf("image status:%i\n", imageStatus);
 			return 0;
 		}
+		updateFrameDelaysSeconds();
 		image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
 
 		initialized = true;
 		return image;
 	}
 	void displayGifFrame(NVGcontext* ctx, int frameNumber) {
-		if (initialized && frameNumber < numFrames && (imageStatus == 1 && numFrames > 0)) {
+		if (initialized && (frameNumber < numFrames) && (imageStatus == 1 && numFrames > 0)) {
 			const unsigned char* dataAtFrame = framePointers[frameNumber];
 			nvgUpdateImage(ctx, imageHandle, dataAtFrame);
 		}
@@ -206,5 +208,14 @@ struct AnimatedGifBuddy {
 			secondsDelay = ((float) frameDelays[frameNumber]) / 100;
 		}
 		return secondsDelay;
+	}
+	void updateFrameDelaysSeconds() {
+		frameDelaysSeconds.resize(0);
+		for (unsigned int i = 0; i < frameDelays.size(); i++) {
+			frameDelaysSeconds.push_back( ((float) frameDelays[i]) / 100);
+		}
+	}
+	std::vector<float> getAllFrameDelaysSeconds() {
+		return frameDelaysSeconds;
 	}
 };
