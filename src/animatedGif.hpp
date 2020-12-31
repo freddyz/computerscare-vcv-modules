@@ -147,6 +147,8 @@ struct AnimatedGifBuddy {
 	std::vector<unsigned char*> framePointers;
 	std::vector<int> frameDelays;
 	std::vector<float> frameDelaysSeconds;
+	float totalGifDuration;
+
 	int imageHandle;
 	bool initialized = false;
 	int numFrames = -1;
@@ -211,11 +213,18 @@ struct AnimatedGifBuddy {
 	}
 	void updateFrameDelaysSeconds() {
 		frameDelaysSeconds.resize(0);
+		totalGifDuration = 0.f;
+		float thisDurationSeconds;
 		for (unsigned int i = 0; i < frameDelays.size(); i++) {
-			frameDelaysSeconds.push_back( ((float) frameDelays[i]) / 100);
+			thisDurationSeconds = ((float) frameDelays[i]) / 100;
+			totalGifDuration += thisDurationSeconds;
+			frameDelaysSeconds.push_back(thisDurationSeconds );
 		}
 	}
 	std::vector<float> getAllFrameDelaysSeconds() {
 		return frameDelaysSeconds;
+	}
+	float getTotalGifDuration() {
+		return totalGifDuration;
 	}
 };

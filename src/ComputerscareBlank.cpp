@@ -13,6 +13,7 @@ struct ComputerscareBlank;
 struct ComputerscareBlank : ComputerscareMenuParamModule {
 	bool loading = true;
 	bool loadedJSON = false;
+	bool ready = false;
 	std::string path;
 	std::string parentDirectory;
 
@@ -29,16 +30,36 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	int imageFitEnum = 0;
 	int currentFrame = 0;
 	int numFrames = 0;
-	int stepCounter = 0;
+	int sampleCounter = 0;
 	float frameDelay = .5;
 	std::vector<float> frameDelays;
+	float totalGifDuration = 0.f;
 
 	int samplesDelay = 10000;
 	int speed = 100000;
 	int imageStatus = 0;
 
+	bool expanderConnected = false;
+
+	int clockMode = 0;
+	bool clockConnected = false;
+	bool resetConnected = false;
+	bool speedConnected = false;
+
+	float leftMessages[2][8] = {};
+
+	int pingPongDirection = 1;
+
+	float speedFactor = 1.f;
+
 	std::vector<std::string> animationModeDescriptions;
 	std::vector<std::string> endBehaviorDescriptions;
+
+	dsp::SchmittTrigger clockTrigger;
+	dsp::SchmittTrigger resetTrigger;
+
+	dsp::Timer syncTimer;
+
 
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
@@ -79,43 +100,82 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		endBehaviorDescriptions.push_back("Load Next");
 		endBehaviorDescriptions.push_back("Load Previous");
 
-
 		configMenuParam(ANIMATION_MODE, 0.f, "Animation Mode", animationModeDescriptions);
 
-
 		paths.push_back("empty");
+
+		leftExpander.producerMessage = leftMessages[0];
+		leftExpander.consumerMessage = leftMessages[1];
 	}
 	void process(const ProcessArgs &args) override {
-		stepCounter++;
+		sampleCounter++;
 		samplesDelay = frameDelay * args.sampleRate;
 
-		if (stepCounter > samplesDelay) {
-			stepCounter = 0;
-			if (params[ANIMATION_ENABLED].getValue()) {
+		bool shouldAdvanceAnimation = false;
+		if (leftExpander.module && leftExpander.module->model == modelComputerscareBlankExpander) {
+			expanderConnected = true;
+			// me
+			float *messageToSendToExpander = (float*) leftExpander.module->rightExpander.producerMessage;
 
-				if (numFrames > 1) {
-					tickAnimation();
+			float *messageFromExpander = (float*) leftExpander.consumerMessage;
+
+			clockMode = messageFromExpander[0];
+			clockConnected = messageFromExpander[1];
+			resetConnected = messageFromExpander[3];
+			speedConnected = messageFromExpander[5];
+
+			if (clockConnected) {
+				bool clockTriggered = clockTrigger.process(messageFromExpander[2]);
+				if (clockMode == 0) {
+					//sync
+					float currentSyncTime = syncTimer.process(args.sampleTime);
+					if (clockTriggered) {
+						syncTimer.reset();
+						setSyncTime(currentSyncTime);
+						goToFrame(0);
+					}
+				}
+
+				else if (clockMode == 1) {
+					//scan
+					float scanPosition = messageFromExpander[2];
+				}
+				else if (clockMode == 2) {
+					//frame advance
+					shouldAdvanceAnimation = clockTriggered;
 				}
 			}
-		}
-		if (rightExpander.module && rightExpander.module->model == modelComputerscareBlankExpander) {
-			// Get message from right expander
-			float *message = (float*) rightExpander.module->leftExpander.producerMessage;
-			// Write message
-			/*for (int i = 0; i < 8; i++) {
-				message[i] = inputs[i].getVoltage() / 10.f;
-			}*/
-			if (stepCounter == 90) {
 
-
+			if (resetConnected) {
+				if (resetTrigger.process(messageFromExpander[4])) {
+					DEBUG("RESSSSSTT");
+				}
 			}
-			message[0] = (currentFrame == 0) ? 10.f : 0.f;
+
+			messageToSendToExpander[0] = float (currentFrame);
 			// Flip messages at the end of the timestep
-			rightExpander.module->leftExpander.messageFlipRequested = true;
+			leftExpander.module->rightExpander.messageFlipRequested = true;
 		}
 		else {
+			expanderConnected = false;
+		}
+
+		if (clockConnected && (clockMode == 2)) {
+
+		}
+		else {
+			if (sampleCounter > samplesDelay) {
+				sampleCounter = 0;
+				shouldAdvanceAnimation = true;
+			}
+		}
+		if (params[ANIMATION_ENABLED].getValue() && shouldAdvanceAnimation) {
+			tickAnimation();
 		}
 	}
+
+
+
 	void onReset() override {
 		zoomX = 1;
 		zoomY = 1;
@@ -184,57 +244,106 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	void setImageStatus(int status) {
 		imageStatus = status;
 	}
+	void setSyncTime(float syncDuration) {
+		speedFactor = totalGifDuration / syncDuration;
+	}
 	void setFrameDelay(float frameDelaySeconds) {
 		float speedKnob = abs(params[ANIMATION_SPEED].getValue());
+		float appliedSpeedDivisor = 1;
 		float base = frameDelaySeconds;
-		if (speedKnob == 0) {
-			frameDelay = 10000000;
+
+		if (expanderConnected && clockConnected && (clockMode == 0)) {
+			appliedSpeedDivisor = speedFactor;
 		}
 		else {
-			if (params[CONSTANT_FRAME_DELAY].getValue()) {
-				frameDelay = .04 / speedKnob;
-			}
-			else {
-				frameDelay = base / speedKnob;
-			}
+			appliedSpeedDivisor = speedKnob;
 		}
+
+
+		if (params[CONSTANT_FRAME_DELAY].getValue()) {
+			frameDelay = .04 / appliedSpeedDivisor;
+		}
+		else {
+			frameDelay = base / appliedSpeedDivisor;
+		}
+
 	}
 	void setFrameDelays(std::vector<float> frameDelaysSeconds) {
 		frameDelays = frameDelaysSeconds;
+		ready = true;
+	}
+	void setTotalGifDuration(float totalDuration) {
+		totalGifDuration = totalDuration;
 	}
 	std::string getPath() {
 		//return numFrames > 0 ? paths[currentFrame] : "";
 		return paths[0];
 	}
 	void tickAnimation() {
-		if (params[ANIMATION_SPEED].getValue() >= 0 ) {
-			nextFrame();
-		}
-		else {
-			prevFrame();
-		}
-		if (currentFrame == 0) {
-			int eb = params[END_BEHAVIOR].getValue();
-			if (eb == 3 ) {
-				loadRandomGif();
+		if (numFrames > 1) {
+			int animationMode = params[ANIMATION_MODE].getValue();
+			if (params[ANIMATION_SPEED].getValue() >= 0 ) {
+				if (animationMode == 0) {
+					nextFrame();
+				} else if (animationMode == 1)  {
+					prevFrame();
+				}
+				else if (animationMode == 2) {
+					pingPongDirection == 1 ? nextFrame() : prevFrame();
+				}
+				else if (animationMode == 4 ) {
+					goToRandomFrame();
+				}
+
 			}
+			else {
+				prevFrame();
+			}
+			if (currentFrame == numFrames - 1) {
+				if (animationMode == 2 ) {
+					pingPongDirection = -1;
+				}
+			}
+			if (currentFrame == 0) {
+				int eb = params[END_BEHAVIOR].getValue();
+
+				if (animationMode == 2) {
+					pingPongDirection = 1;
+				}
+				if (eb == 3 ) {
+					loadRandomGif();
+				}
+			}
+			//setFrameDelay(frameDelays[currentFrame]);
 		}
-		setFrameDelay(frameDelays[currentFrame]);
+		DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
+	}
+	void setCurrentFrameDelayFromTable() {
+		if (ready) {
+			setFrameDelay(frameDelays[currentFrame]);
+		}
 	}
 	void nextFrame() {
 		currentFrame++;
 		currentFrame %= numFrames;
+		setCurrentFrameDelayFromTable();
 	}
 	void prevFrame() {
 		currentFrame--;
 		currentFrame += numFrames;
 		currentFrame %= numFrames;
+		setCurrentFrameDelayFromTable();
 	}
 	void goToFrame(int frameNum) {
-		currentFrame = 0;
+		sampleCounter = 0;
+		currentFrame = frameNum;
+		currentFrame += numFrames;
+		currentFrame %= numFrames;
+		setCurrentFrameDelayFromTable();
 	}
 	void goToRandomFrame() {
 		currentFrame = (int) std::floor(random::uniform() * numFrames);
+		setCurrentFrameDelayFromTable();
 	}
 	void toggleAnimationEnabled() {
 		float current = params[ANIMATION_ENABLED].getValue();
@@ -413,6 +522,7 @@ struct PNGDisplay : TransparentWidget {
 
 				blankModule->setFrameCount(gifBuddy.getFrameCount());
 				blankModule->setFrameDelays(gifBuddy.getAllFrameDelaysSeconds());
+				blankModule->setTotalGifDuration(gifBuddy.getTotalGifDuration());
 				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
 				blankModule->setImageStatus(gifBuddy.getImageStatus());
 
@@ -444,7 +554,7 @@ struct PNGDisplay : TransparentWidget {
 				nvgClosePath(args.vg);
 			}
 			//if (blankModule->currentFrame != currentFrame) {
-				gifBuddy.displayGifFrame(args.vg, currentFrame);
+			gifBuddy.displayGifFrame(args.vg, currentFrame);
 			//}
 		}
 	}
@@ -453,7 +563,7 @@ struct PNGDisplay : TransparentWidget {
 			if (blankModule->currentFrame != currentFrame) {
 				currentFrame = blankModule->currentFrame;
 				//blankModule->setFrameDelay(gifBuddy.getSecondsDelay(currentFrame));
-				
+
 			}
 		}
 		TransparentWidget::step();
