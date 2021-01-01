@@ -15,6 +15,7 @@ credit goes to urraka for this code:
 https://gist.github.com/urraka/685d9a6340b26b830d49
 */
 
+const int defaultFrameDelayCentiseconds = 4;
 
 typedef struct gif_result_t {
 	int delay;
@@ -29,7 +30,7 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 	FILE *f;
 	stbi__context s;
 	unsigned char *result = 0;
-	int frameDelay = 4;
+	int frameDelay = defaultFrameDelayCentiseconds;
 
 	if (!(f = stbi__fopen(filename, "rb"))) {
 		imageStatus = 3;
@@ -65,11 +66,10 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 			if (g.delay) {
 				gr->delay = g.delay;
 				frameDelay = g.delay;
-
 			}
 			else {
-				gr->delay = 4;
-				frameDelay = 4;
+				gr->delay = defaultFrameDelayCentiseconds;
+				frameDelay = defaultFrameDelayCentiseconds;
 			}
 			//printf("frame %i delay:%i\n", *frames, frameDelay);
 			frameDelays.push_back(frameDelay);
@@ -205,7 +205,7 @@ struct AnimatedGifBuddy {
 		return imageStatus;
 	}
 	float getSecondsDelay(int frameNumber) {
-		float secondsDelay = 0.05;
+		float secondsDelay = defaultFrameDelayCentiseconds / 100;
 		if (frameDelays.size()) {
 			secondsDelay = ((float) frameDelays[frameNumber]) / 100;
 		}

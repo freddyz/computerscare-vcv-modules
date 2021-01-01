@@ -132,7 +132,9 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					if (clockTriggered) {
 						syncTimer.reset();
 						setSyncTime(currentSyncTime);
-						goToFrame(0);
+						if(params[ANIMATION_ENABLED].getValue()) {
+							goToFrame(0);
+						}
 					}
 				}
 
@@ -245,7 +247,13 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		imageStatus = status;
 	}
 	void setSyncTime(float syncDuration) {
-		speedFactor = totalGifDuration / syncDuration;
+		if (params[CONSTANT_FRAME_DELAY].getValue() == 0) {
+			speedFactor = totalGifDuration / syncDuration;
+		}
+		else {
+			speedFactor = numFrames * defaultFrameDelayCentiseconds / syncDuration / 100;
+		}
+
 	}
 	void setFrameDelay(float frameDelaySeconds) {
 		float speedKnob = abs(params[ANIMATION_SPEED].getValue());
@@ -261,7 +269,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 
 		if (params[CONSTANT_FRAME_DELAY].getValue()) {
-			frameDelay = .04 / appliedSpeedDivisor;
+			frameDelay = defaultFrameDelayCentiseconds / appliedSpeedDivisor / 100;
 		}
 		else {
 			frameDelay = base / appliedSpeedDivisor;
