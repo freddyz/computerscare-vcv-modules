@@ -33,6 +33,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	int sampleCounter = 0;
 	float frameDelay = .5;
 	std::vector<float> frameDelays;
+	std::vector<int> frameMapForScan;
+
 	float totalGifDuration = 0.f;
 
 	int samplesDelay = 10000;
@@ -279,7 +281,21 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 	void setFrameDelays(std::vector<float> frameDelaysSeconds) {
 		frameDelays = frameDelaysSeconds;
+		setFrameMap();
 		ready = true;
+	}
+	void setFrameMap() {
+		frameMapForScan.resize(0);
+
+		//  tokenStack.insert(tokenStack.end(), terminalStack.begin(), terminalStack.end());
+
+		for (unsigned int i = 0; i < frameDelays.size(); i++) {
+			int currentCentiseconds = (int) (frameDelays[i] * 100);
+			for (int j = 0; j < currentCentiseconds; j++) {
+				frameMapForScan.push_back(i);
+			}
+		}
+
 	}
 	void setTotalGifDuration(float totalDuration) {
 		totalGifDuration = totalDuration;
@@ -360,7 +376,15 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		*/
 		if (ready) {
-			int frameNum = floor(((scanVoltage + 10.f) / 10.01f) * numFrames);
+			int frameNum;
+			float vu = (scanVoltage) / 10.01f;
+			if(params[CONSTANT_FRAME_DELAY].getValue()) {
+				frameNum = floor((vu) * numFrames);
+			}
+			else {
+				//frameMapForScan
+				frameNum = frameMapForScan[floor(vu*frameMapForScan.size())];
+			}
 			goToFrame(frameNum);
 		}
 	}
