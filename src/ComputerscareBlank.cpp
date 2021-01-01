@@ -132,7 +132,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					if (clockTriggered) {
 						syncTimer.reset();
 						setSyncTime(currentSyncTime);
-						if(params[ANIMATION_ENABLED].getValue()) {
+						if (params[ANIMATION_ENABLED].getValue()) {
 							goToFrame(0);
 						}
 					}
@@ -141,6 +141,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				else if (clockMode == 1) {
 					//scan
 					float scanPosition = messageFromExpander[2];
+					scanToPosition(scanPosition);
 				}
 				else if (clockMode == 2) {
 					//frame advance
@@ -352,6 +353,16 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	void goToRandomFrame() {
 		currentFrame = (int) std::floor(random::uniform() * numFrames);
 		setCurrentFrameDelayFromTable();
+	}
+	void scanToPosition(float scanVoltage) {
+		/* 0v = frame 0
+			10.0v = frame n-1
+
+		*/
+		if (ready) {
+			int frameNum = floor(((scanVoltage + 10.f) / 10.01f) * numFrames);
+			goToFrame(frameNum);
+		}
 	}
 	void toggleAnimationEnabled() {
 		float current = params[ANIMATION_ENABLED].getValue();
