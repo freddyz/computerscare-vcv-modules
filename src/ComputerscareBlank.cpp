@@ -40,6 +40,12 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	int samplesDelay = 10000;
 	int speed = 100000;
 	int imageStatus = 0;
+	/*
+		uninitialized: 0
+		gif: 1
+		not gif: 2
+		error:3
+	*/
 
 	bool expanderConnected = false;
 
@@ -110,7 +116,10 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		leftExpander.consumerMessage = leftMessages[1];
 	}
 	void process(const ProcessArgs &args) override {
-		sampleCounter++;
+		if (imageStatus == 1) {
+			sampleCounter++;
+		}
+
 		samplesDelay = frameDelay * args.sampleRate;
 
 		bool shouldAdvanceAnimation = false;
@@ -224,9 +233,13 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	void loadRandomGif(int index = 0) {
 		std::string dir = rack::string::directory(paths[index]);
 		getContainingDirectory();
-		int randomIndex = floor(random::uniform() * catalog.size());
-
-		setPath(dir + "/" + catalog[randomIndex]);
+		if (catalog.size()) {
+			int randomIndex = floor(random::uniform() * catalog.size());
+			setPath(dir + "/" + catalog[randomIndex]);
+		}
+		else {
+			DEBUG("no gifs in this directory");
+		}
 	}
 
 
@@ -339,9 +352,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					loadRandomGif();
 				}
 			}
-			//setFrameDelay(frameDelays[currentFrame]);
 		}
-		DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
+		//DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
 	}
 	void setCurrentFrameDelayFromTable() {
 		if (ready) {
@@ -349,26 +361,27 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		}
 	}
 	void nextFrame() {
-		currentFrame++;
-		currentFrame %= numFrames;
-		setCurrentFrameDelayFromTable();
+		goToFrame(currentFrame + 1);
+
 	}
 	void prevFrame() {
-		currentFrame--;
-		currentFrame += numFrames;
-		currentFrame %= numFrames;
-		setCurrentFrameDelayFromTable();
+		goToFrame(currentFrame - 1);
 	}
 	void goToFrame(int frameNum) {
-		sampleCounter = 0;
-		currentFrame = frameNum;
-		currentFrame += numFrames;
-		currentFrame %= numFrames;
-		setCurrentFrameDelayFromTable();
+		if (numFrames) {
+			sampleCounter = 0;
+			currentFrame = frameNum;
+			currentFrame += numFrames;
+			currentFrame %= numFrames;
+			setCurrentFrameDelayFromTable();
+		}
+		else {
+			DEBUG("no frames lol");
+		}
 	}
 	void goToRandomFrame() {
-		currentFrame = (int) std::floor(random::uniform() * numFrames);
-		setCurrentFrameDelayFromTable();
+		int randFrame = (int) std::floor(random::uniform() * numFrames);
+		goToFrame(randFrame);
 	}
 	void scanToPosition(float scanVoltage) {
 		/* 0v = frame 0
@@ -378,12 +391,12 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		if (ready) {
 			int frameNum;
 			float vu = (scanVoltage) / 10.01f;
-			if(params[CONSTANT_FRAME_DELAY].getValue()) {
+			if (params[CONSTANT_FRAME_DELAY].getValue()) {
 				frameNum = floor((vu) * numFrames);
 			}
 			else {
 				//frameMapForScan
-				frameNum = frameMapForScan[floor(vu*frameMapForScan.size())];
+				frameNum = frameMapForScan[floor(vu * frameMapForScan.size())];
 			}
 			goToFrame(frameNum);
 		}
