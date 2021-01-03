@@ -63,12 +63,6 @@ struct MenuParam : MenuEntry {
 		}
 		else if (type == 1) {
 			speedParam = new MediumDotSnapKnob();
-			/*
-			//addChild(construct<SubMenuAndKnob>);
-			submenu = new SubMenuAndKnob();
-			submenu->text = "select menu param control label";
-			submenu->rightText = RIGHT_ARROW;*/
-			
 		}
 		else if (type == 2) {
 			speedParam = new SmoothKnob();

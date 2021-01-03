@@ -8,6 +8,7 @@ struct ComputerscareBlankExpander : Module {
 	enum ParamIds {
 		CLOCK_MODE,
 		MANUAL_RESET_BUTTON,
+		ZERO_OFFSET,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -43,6 +44,7 @@ struct ComputerscareBlankExpander : Module {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		configParam(CLOCK_MODE, 0.f, 2.f, 0.f, "Clock Mode");
 		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f, "Manual Reset");
+		configParam(ZERO_OFFSET,-1.f,1.f,0.f,"Frame Zero Offset");
 
 		clockModeDescriptions.push_back("Sync");
 		clockModeDescriptions.push_back("Scan");
@@ -62,6 +64,7 @@ struct ComputerscareBlankExpander : Module {
 
 
 			float currentFrame = messageFromMother[0];
+			int numFrames = messageFromMother[1];
 			float currentSyncTime = syncTimer.process(args.sampleTime);
 
 			if (eocMessageReadTrigger.process(currentFrame == 0 ? 10.f : 0.f)) {
@@ -82,6 +85,8 @@ struct ComputerscareBlankExpander : Module {
 			
 			messageToSendToMother[5] = inputs[SPEED_INPUT].isConnected();
 			messageToSendToMother[6] = inputs[SPEED_INPUT].getVoltage();
+
+			messageToSendToMother[7] = params[ZERO_OFFSET].getValue();
 
 			outputs[EOC_OUTPUT].setVoltage(eocPulse.process(args.sampleTime) ? 10.f : 0.f);
 			outputs[EACH_FRAME_OUTPUT].setVoltage(eachFramePulse.process(args.sampleTime) ? 10.f : 0.f);
@@ -128,8 +133,11 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
 		addInput(createInput<InPort>(Vec(2, inStartY + 3*dY), module, ComputerscareBlankExpander::RESET_INPUT));
 		addInput(createInput<InPort>(Vec(2, inStartY + 4 * dY), module, ComputerscareBlankExpander::SPEED_INPUT));
 
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(2, outStartY + dY), module, ComputerscareBlankExpander::EACH_FRAME_OUTPUT));
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(2, outStartY), module, ComputerscareBlankExpander::EOC_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(2, outStartY), module, ComputerscareBlankExpander::EACH_FRAME_OUTPUT));
+		
+		
+		addParam(createParam<SmallKnob>(Vec(4, outStartY+dY), module, ComputerscareBlankExpander::ZERO_OFFSET));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(2, outStartY + dY*1.5), module, ComputerscareBlankExpander::EOC_OUTPUT));
 	}
 	void step() {
 

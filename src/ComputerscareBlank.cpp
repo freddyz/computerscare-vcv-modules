@@ -31,6 +31,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	float yOffset = 0.f;
 	int imageFitEnum = 0;
 	int currentFrame = 0;
+	int mappedFrame = 0;
 	int numFrames = 0;
 	int sampleCounter = 0;
 	float frameDelay = .5;
@@ -62,6 +63,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 	float speedFactor = 1.f;
 
+	float zeroOffset = 0.f;
+
 	std::vector<std::string> animationModeDescriptions;
 	std::vector<std::string> endBehaviorDescriptions;
 
@@ -78,6 +81,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		CONSTANT_FRAME_DELAY,
 		ANIMATION_MODE,
 		END_BEHAVIOR,
+		ZERO_OFFSET,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -97,6 +101,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
 		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
 		configMenuParam(END_BEHAVIOR, 0.f, 5.f, 0.f, "Animation End Behavior", 2);
+		configParam(ZERO_OFFSET, -1.f, 1.f, 0.f, "Frame Zero Offset");
 
 		animationModeDescriptions.push_back("Forward");
 		animationModeDescriptions.push_back("Reverse");
@@ -137,6 +142,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			resetConnected = messageFromExpander[3];
 			speedConnected = messageFromExpander[5];
 
+			zeroOffset = messageFromExpander[7];
+
 			if (clockConnected) {
 				bool clockTriggered = clockTrigger.process(messageFromExpander[2]);
 				if (clockMode == 0) {
@@ -170,6 +177,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			}
 
 			messageToSendToExpander[0] = float (currentFrame);
+			messageToSendToExpander[1] = float (numFrames);
 			// Flip messages at the end of the timestep
 			leftExpander.module->rightExpander.messageFlipRequested = true;
 		}
@@ -360,7 +368,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 	void setCurrentFrameDelayFromTable() {
 		if (ready) {
-			setFrameDelay(frameDelays[currentFrame]);
+			setFrameDelay(frameDelays[mappedFrame]);
 		}
 	}
 	void nextFrame() {
@@ -374,6 +382,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		if (numFrames) {
 			sampleCounter = 0;
 			currentFrame = frameNum;
+			mappedFrame = (currentFrame  + ((int)floor(zeroOffset * numFrames))+numFrames) % numFrames;
 			currentFrame += numFrames;
 			currentFrame %= numFrames;
 			setCurrentFrameDelayFromTable();
@@ -504,9 +513,9 @@ struct ssmi : MenuItem
 	//ComputerscareRolyPouter *pouter;
 	int mySetVal = 1;
 	ParamQuantity *myParamQuantity;
-	ssmi(int i,ParamQuantity* pq)
+	ssmi(int i, ParamQuantity* pq)
 	{
-		mySetVal=i;
+		mySetVal = i;
 		myParamQuantity = pq;
 	}
 
@@ -527,7 +536,7 @@ struct Strongbipper : MenuItem {
 	Menu *createChildMenu() override {
 		Menu *menu = new Menu;
 		for (unsigned int i = 0; i < options.size(); i++) {
-			ssmi *menuItem = new ssmi(i,param);
+			ssmi *menuItem = new ssmi(i, param);
 			menuItem->text = options[i];
 			//menuItem->pouter = pouter;
 			menu->addChild(menuItem);
@@ -535,7 +544,7 @@ struct Strongbipper : MenuItem {
 		return menu;
 	}
 	void step() override {
-		rightText = "("+options[param->getValue()]+") "+RIGHT_ARROW;
+		rightText = "(" + options[param->getValue()] + ") " + RIGHT_ARROW;
 		MenuItem::step();
 	}
 };
@@ -659,9 +668,8 @@ struct PNGDisplay : TransparentWidget {
 	}
 	void step() override {
 		if (blankModule && blankModule->loadedJSON) {
-			if (blankModule->currentFrame != currentFrame) {
-				currentFrame = blankModule->currentFrame;
-				//blankModule->setFrameDelay(gifBuddy.getSecondsDelay(currentFrame));
+			if (blankModule->mappedFrame != currentFrame) {
+				currentFrame = blankModule->mappedFrame;
 
 			}
 		}
@@ -778,7 +786,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 
 		menu->addChild(modeMenu);
 
-		
+
 
 		Strongbipper *endMenu = new Strongbipper();
 		endMenu->text = "Animation End Behavior";
