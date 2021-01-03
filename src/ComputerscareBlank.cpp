@@ -8,6 +8,8 @@
 #include <thread>
 #include <dirent.h>
 
+#define FONT_SIZE 13
+
 struct ComputerscareBlank;
 
 struct ComputerscareBlank : ComputerscareMenuParamModule {
@@ -162,7 +164,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 			if (resetConnected) {
 				if (resetTrigger.process(messageFromExpander[4])) {
-					DEBUG("RESSSSSTT");
+					DEBUG("RESET TRIGGER");
+					goToFrame(0);
 				}
 			}
 
@@ -496,6 +499,46 @@ struct InvertYMenuItem: MenuItem {
 		MenuItem::step();
 	}
 };
+struct ssmi : MenuItem
+{
+	//ComputerscareRolyPouter *pouter;
+	int mySetVal = 1;
+	ParamQuantity *myParamQuantity;
+	ssmi(int i,ParamQuantity* pq)
+	{
+		mySetVal=i;
+		myParamQuantity = pq;
+	}
+
+	void onAction(const event::Action &e) override
+	{
+		myParamQuantity->setValue(mySetVal);
+		//pouter->setAll(mySetVal);
+	}
+	void step() override {
+		rightText = myParamQuantity->getValue() == mySetVal ? "✔" : "";
+		MenuItem::step();
+	}
+};
+struct Strongbipper : MenuItem {
+	ParamQuantity* param;
+	std::vector<std::string> options;
+
+	Menu *createChildMenu() override {
+		Menu *menu = new Menu;
+		for (unsigned int i = 0; i < options.size(); i++) {
+			ssmi *menuItem = new ssmi(i,param);
+			menuItem->text = options[i];
+			//menuItem->pouter = pouter;
+			menu->addChild(menuItem);
+		}
+		return menu;
+	}
+	void step() override {
+		rightText = "("+options[param->getValue()]+") "+RIGHT_ARROW;
+		MenuItem::step();
+	}
+};
 struct KeyboardControlChildMenu : MenuItem {
 	ComputerscareBlank *blank;
 
@@ -725,12 +768,25 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		MenuParam* mp = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY], 0);
 		menu->addChild(mp);
 
-		MenuParam* am = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_MODE], 1);
-		menu->addChild(am);
 
-		MenuParam* eb = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::END_BEHAVIOR], 1);
-		menu->addChild(eb);
 
+		Strongbipper *modeMenu = new Strongbipper();
+		modeMenu->text = "Animation Mode";
+		modeMenu->rightText = RIGHT_ARROW;
+		modeMenu->param = blankModule->paramQuantities[ComputerscareBlank::ANIMATION_MODE];
+		modeMenu->options = blankModule->animationModeDescriptions;
+
+		menu->addChild(modeMenu);
+
+		
+
+		Strongbipper *endMenu = new Strongbipper();
+		endMenu->text = "Animation End Behavior";
+		endMenu->rightText = RIGHT_ARROW;
+		endMenu->param = blankModule->paramQuantities[ComputerscareBlank::END_BEHAVIOR];
+		endMenu->options = blankModule->endBehaviorDescriptions;
+
+		menu->addChild(endMenu);
 
 
 

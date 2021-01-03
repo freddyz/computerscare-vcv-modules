@@ -28,10 +28,33 @@ struct ParamAndType {
 		type = t;
 	}
 };
+
+struct SubMenuAndKnob : MenuItem {
+	SubMenuAndKnob() {
+		MenuItem();
+	}
+	Menu *createChildMenu() override {
+		Menu *menu = new Menu;
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Option 1"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Option 2"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Option 3"));
+
+		return menu;
+	}
+
+};
+/*
+
+KeyboardControlChildMenu *kbMenu = new KeyboardControlChildMenu();
+		kbMenu->text = "Keyboard Controls";
+		kbMenu->rightText = RIGHT_ARROW;
+		kbMenu->blank = blank;
+		menu->addChild(kbMenu);*/
 struct MenuParam : MenuEntry {
 	ParamWidget* speedParam;
 	MenuLabel* johnLabel;
 	MenuLabel* displayString;
+	SubMenuAndKnob *submenu;
 	float controlRightMargin = 6;
 
 	MenuParam(ParamQuantity* param, int type) {
@@ -40,23 +63,37 @@ struct MenuParam : MenuEntry {
 		}
 		else if (type == 1) {
 			speedParam = new MediumDotSnapKnob();
+			/*
+			//addChild(construct<SubMenuAndKnob>);
+			submenu = new SubMenuAndKnob();
+			submenu->text = "select menu param control label";
+			submenu->rightText = RIGHT_ARROW;*/
+			
 		}
 		else if (type == 2) {
 			speedParam = new SmoothKnob();
 		}
 		speedParam->paramQuantity = param;
 		speedParam->box.pos = Vec(controlRightMargin, 0);
-		box.size.y = 28;
+		box.size.y = 38;
 
 		johnLabel = construct<MenuLabel>(&MenuLabel::text, param->getLabel());
 		johnLabel->box.pos = Vec(speedParam->box.size.x + controlRightMargin * 2, 0);
 
 		addChild(speedParam);
 		addChild(johnLabel);
+		//if(type==1) {addChild(submenu);}
 	}
-
-
+	/*Menu *createChildMenu() override {
+		Menu *menu = new Menu;
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Option 1"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Option 2"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Option 3"));
+		menu->box.pos.x=10;
+		return menu;
+	}*/
 };
+
 
 /*
 	0: boolean
