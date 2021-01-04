@@ -1,6 +1,8 @@
 #include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
 #include "animatedGif.hpp"
+#include "CustomBlankFunctions.hpp"
+
 #include <osdialog.h>
 #include <iostream>
 #include <fstream>
@@ -10,7 +12,6 @@
 
 #define FONT_SIZE 13
 
-struct ComputerscareBlank;
 
 struct ComputerscareBlank : ComputerscareMenuParamModule {
 	bool loading = true;
@@ -43,6 +44,11 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	int samplesDelay = 10000;
 	int speed = 100000;
 	int imageStatus = 0;
+	bool scrubbing = false;
+	int scrubFrame = 0;
+
+	int pingPongDirection = 1;
+
 	/*
 		uninitialized: 0
 		gif: 1
@@ -59,7 +65,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 	float leftMessages[2][8] = {};
 
-	int pingPongDirection = 1;
+
 
 	float speedFactor = 1.f;
 
@@ -121,6 +127,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		leftExpander.producerMessage = leftMessages[0];
 		leftExpander.consumerMessage = leftMessages[1];
+
 	}
 	void process(const ProcessArgs &args) override {
 		if (imageStatus == 1) {
@@ -143,6 +150,10 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			speedConnected = messageFromExpander[5];
 
 			zeroOffset = messageFromExpander[7];
+
+			scrubbing = messageFromExpander[8];
+
+			updateScrubFrame();
 
 			if (clockConnected) {
 				bool clockTriggered = clockTrigger.process(messageFromExpander[2]);
@@ -199,7 +210,11 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		}
 	}
 
-
+	void updateScrubFrame() {
+		if (ready) {
+			scrubFrame = mapBlankFrameOffset(zeroOffset, numFrames);
+		}
+	}
 
 	void onReset() override {
 		zoomX = 1;
@@ -338,7 +353,12 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					prevFrame();
 				}
 				else if (animationMode == 2) {
-					pingPongDirection == 1 ? nextFrame() : prevFrame();
+					if (pingPongDirection == 1) {
+
+						nextFrame();
+					} else {
+						prevFrame();
+					}
 				}
 				else if (animationMode == 4 ) {
 					goToRandomFrame();
@@ -348,17 +368,23 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			else {
 				prevFrame();
 			}
-			if (currentFrame == numFrames - 1) {
-				if (animationMode == 2 ) {
-					pingPongDirection = -1;
+			if (animationMode == 2) {
+				//DEBUG("PRE ping current:%i,direction:%i", currentFrame, pingPongDirection);
+				if (pingPongDirection == 1) {
+					if (currentFrame == numFrames - 1) {
+						pingPongDirection = -1;
+					}
+				}
+				else {
+					if (currentFrame == 0) {
+						pingPongDirection = 1;
+					}
 				}
 			}
+
 			if (currentFrame == 0) {
 				int eb = params[END_BEHAVIOR].getValue();
 
-				if (animationMode == 2) {
-					pingPongDirection = 1;
-				}
 				if (eb == 3 ) {
 					loadRandomGif();
 				}
@@ -379,10 +405,10 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		goToFrame(currentFrame - 1);
 	}
 	void goToFrame(int frameNum) {
-		if (numFrames) {
+		if (numFrames && ready) {
 			sampleCounter = 0;
 			currentFrame = frameNum;
-			mappedFrame = (currentFrame  + ((int)floor(zeroOffset * numFrames))+numFrames) % numFrames;
+			mappedFrame = (currentFrame  + mapBlankFrameOffset(zeroOffset, numFrames)) % numFrames;
 			currentFrame += numFrames;
 			currentFrame %= numFrames;
 			setCurrentFrameDelayFromTable();
@@ -670,8 +696,47 @@ struct PNGDisplay : TransparentWidget {
 		if (blankModule && blankModule->loadedJSON) {
 			if (blankModule->mappedFrame != currentFrame) {
 				currentFrame = blankModule->mappedFrame;
-
 			}
+			if (blankModule->scrubbing) {
+				currentFrame = blankModule->scrubFrame;
+			}
+		}
+		TransparentWidget::step();
+	}
+};
+
+struct GiantFrameDisplay : TransparentWidget {
+	ComputerscareBlank *module;
+	SmallLetterDisplay *description;
+	SmallLetterDisplay *frameDisplay;
+	GiantFrameDisplay() {
+		box.size = Vec(200,380);
+
+		description = new SmallLetterDisplay();
+		description->value = "Frame Zero, for EOC output and reset input";
+		description->fontSize = 24;
+		description->breakRowWidth = 200.f;
+		description->box.pos.y = box.size.y - 130;
+
+
+		frameDisplay = new SmallLetterDisplay();
+		frameDisplay->fontSize = 90;
+		frameDisplay->box.size = Vec(300, 120);
+		frameDisplay->textOffset = Vec(0, 50);
+		frameDisplay->box.pos.y = box.size.y - 200;
+		frameDisplay->breakRowWidth = 200.f;
+		frameDisplay->baseColor = nvgRGBAf(0.8, 0.8, 0.8, 0.7);
+
+
+		
+		addChild(frameDisplay);
+		addChild(description);
+		TransparentWidget();
+	}
+	void step() {
+		if (module) {
+			visible = module->scrubbing;
+			frameDisplay->value = string::f("%i / %i", module->scrubFrame + 1, module->numFrames);
 		}
 		TransparentWidget::step();
 	}
@@ -720,14 +785,40 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		addChild(leftHandle);
 		addChild(rightHandle);
 
+		frameDisplay = new GiantFrameDisplay();
+		frameDisplay->module = blankModule;
+		addChild(frameDisplay);
+
 	}
 
 	void appendContextMenu(Menu* menu) override {
 		ComputerscareBlank* blank = dynamic_cast<ComputerscareBlank*>(this->blankModule);
 
+
+		Strongbipper *modeMenu = new Strongbipper();
+		modeMenu->text = "Animation Mode";
+		modeMenu->rightText = RIGHT_ARROW;
+		modeMenu->param = blankModule->paramQuantities[ComputerscareBlank::ANIMATION_MODE];
+		modeMenu->options = blankModule->animationModeDescriptions;
+
+
+
+
+
+		Strongbipper *endMenu = new Strongbipper();
+		endMenu->text = "Animation End Behavior";
+		endMenu->rightText = RIGHT_ARROW;
+		endMenu->param = blankModule->paramQuantities[ComputerscareBlank::END_BEHAVIOR];
+		endMenu->options = blankModule->endBehaviorDescriptions;
+		
+
+
 		menu->addChild(new MenuEntry);
 
 		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Keyboard Controls:"));
+
+		menu->addChild(modeMenu);
+		menu->addChild(endMenu);
 
 		KeyboardControlChildMenu *kbMenu = new KeyboardControlChildMenu();
 		kbMenu->text = "Keyboard Controls";
@@ -778,23 +869,6 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 
 
 
-		Strongbipper *modeMenu = new Strongbipper();
-		modeMenu->text = "Animation Mode";
-		modeMenu->rightText = RIGHT_ARROW;
-		modeMenu->param = blankModule->paramQuantities[ComputerscareBlank::ANIMATION_MODE];
-		modeMenu->options = blankModule->animationModeDescriptions;
-
-		menu->addChild(modeMenu);
-
-
-
-		Strongbipper *endMenu = new Strongbipper();
-		endMenu->text = "Animation End Behavior";
-		endMenu->rightText = RIGHT_ARROW;
-		endMenu->param = blankModule->paramQuantities[ComputerscareBlank::END_BEHAVIOR];
-		endMenu->options = blankModule->endBehaviorDescriptions;
-
-		menu->addChild(endMenu);
 
 
 
@@ -920,7 +994,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 	TransparentWidget *display;
 	ComputerscareResizeHandle *leftHandle;
 	ComputerscareResizeHandle *rightHandle;
-	SmallLetterDisplay* smallLetterDisplay;
+	GiantFrameDisplay* frameDisplay;
 };
 
 

@@ -1,24 +1,29 @@
 #include "Computerscare.hpp"
+#include "CustomBlankFunctions.hpp"
 
 struct ComputerscareBlankExpander;
 
-	struct FrameOffsetParam : ParamQuantity {
-		ComputerscareBlankExpander* module;
-		int numFrames = -1;
-		void setNumFrames(int num) { numFrames = num; }
-		std::string getDisplayValueString() override {
-			//return &module->params[paramId];
-			float val = getValue();
-			return string::f("%i", 1+((int) floor(val * numFrames )) % numFrames/*module->getFrameOffset()*/ );
-			//return "Frame " +((std:: string)val);//+ ((int) floor(val * module->numFrames * 0.999)) % module->numFrames;
-		}
-	};
+
+struct FrameOffsetParam : ParamQuantity {
+	ComputerscareBlankExpander* module;
+	int numFrames = -1;
+	void setNumFrames(int num) { numFrames = num; }
+	std::string getDisplayValueString() override {
+		//return &module->params[paramId];
+		float val = getValue();
+		return string::f("%i", 1 + mapBlankFrameOffset(val,numFrames));
+	}
+};
+
+
 
 struct ComputerscareBlankExpander : Module {
-	float rightMessages[2][8] = {};
+	float rightMessages[2][10] = {};
 	bool isConnected = false;
 	float lastFrame = -1;
 	int numFrames = 1;
+	bool scrubbing = false;
+
 
 	enum ParamIds {
 		CLOCK_MODE,
@@ -83,7 +88,7 @@ struct ComputerscareBlankExpander : Module {
 			float currentFrame = messageFromMother[0];
 			int newNumFrames = messageFromMother[1];
 
-			if(newNumFrames != numFrames) {
+			if (newNumFrames != numFrames) {
 				numFrames = newNumFrames;
 				frameOffsetQuantity->setNumFrames(numFrames);
 			}
@@ -111,6 +116,9 @@ struct ComputerscareBlankExpander : Module {
 
 			messageToSendToMother[7] = params[ZERO_OFFSET].getValue();
 
+			messageToSendToMother[8] = scrubbing;
+
+
 			outputs[EOC_OUTPUT].setVoltage(eocPulse.process(args.sampleTime) ? 10.f : 0.f);
 			outputs[EACH_FRAME_OUTPUT].setVoltage(eachFramePulse.process(args.sampleTime) ? 10.f : 0.f);
 
@@ -122,6 +130,23 @@ struct ComputerscareBlankExpander : Module {
 			// No mother module is connected.
 		}
 	}
+	void setScrubbing(bool scrub) {
+		scrubbing = scrub;
+	}
+};
+struct FrameScrubKnob : SmallKnob {
+	ComputerscareBlankExpander* module;
+	void onDragStart(const event::DragStart& e) override {
+		module->setScrubbing(true);
+		SmallKnob::onDragStart(e);
+	}
+	void onDragEnd(const event::DragEnd& e) override {
+		module->setScrubbing(false);
+		SmallKnob::onDragEnd(e);
+	}
+	void onDragMove(const event::DragMove& e) override {
+		SmallKnob::onDragMove(e);
+	};
 };
 struct ClockModeButton : app::SvgSwitch {
 	ClockModeButton() {
@@ -158,13 +183,16 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(2, outStartY), module, ComputerscareBlankExpander::EACH_FRAME_OUTPUT));
 
+		frameOffsetKnob = createParam<FrameScrubKnob>(Vec(6, outStartY + dY), module, ComputerscareBlankExpander::ZERO_OFFSET);
+		frameOffsetKnob->module = module;
 
-		addParam(createParam<SmallKnob>(Vec(4, outStartY + dY), module, ComputerscareBlankExpander::ZERO_OFFSET));
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(2, outStartY + dY * 1.5), module, ComputerscareBlankExpander::EOC_OUTPUT));
+		addParam(frameOffsetKnob);
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(2, outStartY + dY * 1.6), module, ComputerscareBlankExpander::EOC_OUTPUT));
 	}
 	void step() {
 
 		ModuleWidget::step();
 	}
+	FrameScrubKnob* frameOffsetKnob;
 };
 Model *modelComputerscareBlankExpander = createModel<ComputerscareBlankExpander, ComputerscareBlankExpanderWidget>("computerscare-blank-expander");

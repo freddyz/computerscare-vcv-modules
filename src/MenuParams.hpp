@@ -69,7 +69,7 @@ struct MenuParam : MenuEntry {
 		}
 		speedParam->paramQuantity = param;
 		speedParam->box.pos = Vec(controlRightMargin, 0);
-		box.size.y = 38;
+		box.size.y = 32;
 
 		johnLabel = construct<MenuLabel>(&MenuLabel::text, param->getLabel());
 		johnLabel->box.pos = Vec(speedParam->box.size.x + controlRightMargin * 2, 0);

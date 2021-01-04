@@ -53,7 +53,7 @@ static const NVGcolor COLOR_COMPUTERSCARE_YELLOW = nvgRGB(0xE4, 0xC4, 0x21);
 static const NVGcolor COLOR_COMPUTERSCARE_BLUE = nvgRGB(0x24, 0x44, 0xC1);
 static const NVGcolor COLOR_COMPUTERSCARE_PINK = nvgRGB(0xAA, 0x18, 0x31);
 static const NVGcolor COLOR_COMPUTERSCARE_TRANSPARENT = nvgRGBA(0x00, 0x00, 0x00, 0x00);
-static const NVGcolor BLACK=nvgRGB(0x00,0x00,0x00);
+static const NVGcolor BLACK = nvgRGB(0x00, 0x00, 0x00);
 
 
 namespace rack {
@@ -113,7 +113,7 @@ struct InputBlockBackground : TransparentWidget {
 		nvgBeginPath(args.vg);
 		nvgRect(args.vg, box.pos.x, box.pos.y, box.size.x, box.size.y);
 		nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_BLUE);
-		nvgStrokeWidth(args.vg,2.5);
+		nvgStrokeWidth(args.vg, 2.5);
 		nvgFillColor(args.vg, COLOR_COMPUTERSCARE_LIGHT_GREEN);
 		nvgFill(args.vg);
 		Widget::draw(args);
@@ -128,15 +128,15 @@ struct IsoButton : SvgSwitch {
 	}
 };
 struct SmallIsoButton : app::SvgSwitch {
-	bool disabled=true;
-	bool lastDisabled=false;
+	bool disabled = true;
+	bool lastDisabled = false;
 	std::vector<std::shared_ptr<Svg>> enabledFrames;
 	std::vector<std::shared_ptr<Svg>> disabledFrames;
 
 	SmallIsoButton() {
 		enabledFrames.push_back(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-up.svg")));
 		enabledFrames.push_back(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-down.svg")));
-		
+
 		disabledFrames.push_back(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-up-grey.svg")));
 		disabledFrames.push_back(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-small-down-grey.svg")));
 
@@ -148,16 +148,16 @@ struct SmallIsoButton : app::SvgSwitch {
 
 	void step() override {
 		if (disabled != lastDisabled) {
-			if(disabled) {
-				frames[0]=disabledFrames[0];
-				frames[1]=disabledFrames[1];
+			if (disabled) {
+				frames[0] = disabledFrames[0];
+				frames[1] = disabledFrames[1];
 			}
 			else {
-				frames[0]=enabledFrames[0];
-				frames[1]=enabledFrames[1];
+				frames[0] = enabledFrames[0];
+				frames[1] = enabledFrames[1];
 			}
 			onChange(*(new event::Change()));
-			fb->dirty=true;
+			fb->dirty = true;
 			dirtyValue = -20.f;
 			lastDisabled = disabled;
 
@@ -383,14 +383,14 @@ struct ScrambleKnob : RoundKnob {
 };
 struct ScrambleSnapKnob : RoundKnob {
 	ScrambleSnapKnob() {
-		snap=true;
+		snap = true;
 		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
 };
 struct ScrambleSnapKnobNoRandom : RoundKnob {
 	ScrambleSnapKnobNoRandom() {
-		snap=true;
+		snap = true;
 		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
@@ -484,7 +484,7 @@ struct SmallLetterDisplay : Widget {
 	std::string defaultFontPath = "res/Oswald-Regular.ttf";
 	NVGcolor baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
 	NVGcolor textColor = nvgRGB(0x10, 0x10, 0x00);
-	Vec textOffset = Vec(0,0);
+	Vec textOffset = Vec(0, 0);
 
 	float letterSpacing = 2.5;
 	int textAlign = 1;
