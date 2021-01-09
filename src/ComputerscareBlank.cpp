@@ -9,6 +9,8 @@
 #include <sstream>
 #include <thread>
 #include <dirent.h>
+#include <algorithm>
+#include <random>
 
 #define FONT_SIZE 13
 
@@ -38,6 +40,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	float frameDelay = .5;
 	std::vector<float> frameDelays;
 	std::vector<int> frameMapForScan;
+	std::vector<int> shuffledFrames;
 
 	float totalGifDuration = 0.f;
 
@@ -48,6 +51,12 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	int scrubFrame = 0;
 
 	int pingPongDirection = 1;
+
+	float speedFactor = 1.f;
+
+	float zeroOffset = 0.f;
+
+	bool tick = false;
 
 	/*
 		uninitialized: 0
@@ -63,31 +72,26 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	bool resetConnected = false;
 	bool speedConnected = false;
 
-	float leftMessages[2][8] = {};
-
-
-
-	float speedFactor = 1.f;
-
-	float zeroOffset = 0.f;
-
 	std::vector<std::string> animationModeDescriptions;
 	std::vector<std::string> endBehaviorDescriptions;
 
 	dsp::SchmittTrigger clockTrigger;
 	dsp::SchmittTrigger resetTrigger;
+	dsp::SchmittTrigger resetButtonTrigger;
 
 	dsp::Timer syncTimer;
 
 
 	ComputerscareSVGPanel* panelRef;
+
+	float leftMessages[2][8] = {};
+
 	enum ParamIds {
 		ANIMATION_SPEED,
 		ANIMATION_ENABLED,
 		CONSTANT_FRAME_DELAY,
 		ANIMATION_MODE,
 		END_BEHAVIOR,
-		ZERO_OFFSET,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -107,7 +111,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
 		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
 		configMenuParam(END_BEHAVIOR, 0.f, 5.f, 0.f, "Animation End Behavior", 2);
-		configParam(ZERO_OFFSET, -1.f, 1.f, 0.f, "Frame Zero Offset");
 
 		animationModeDescriptions.push_back("Forward");
 		animationModeDescriptions.push_back("Reverse");
@@ -153,6 +156,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 			scrubbing = messageFromExpander[8];
 
+
+
 			updateScrubFrame();
 
 			if (clockConnected) {
@@ -186,9 +191,16 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					goToFrame(0);
 				}
 			}
+			if(resetButtonTrigger.process(messageFromExpander[9])) {
+				goToFrame(0);
+			}
 
 			messageToSendToExpander[0] = float (currentFrame);
 			messageToSendToExpander[1] = float (numFrames);
+			messageToSendToExpander[2] = float (mappedFrame);
+			messageToSendToExpander[3] = float (scrubFrame);
+			messageToSendToExpander[4] = float (tick);
+			
 			// Flip messages at the end of the timestep
 			leftExpander.module->rightExpander.messageFlipRequested = true;
 		}
@@ -321,6 +333,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	void setFrameDelays(std::vector<float> frameDelaysSeconds) {
 		frameDelays = frameDelaysSeconds;
 		setFrameMap();
+		setFrameShuffle();
 		ready = true;
 	}
 	void setFrameMap() {
@@ -334,6 +347,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				frameMapForScan.push_back(i);
 			}
 		}
+	}
+	void setFrameShuffle() {
+		shuffledFrames.resize(0);
+		for(int i=0; i < numFrames; i++) {
+			shuffledFrames.push_back(i);
+		}
+		auto rng = std::default_random_engine {};
+		std::shuffle(std::begin(shuffledFrames), std::end(shuffledFrames), rng);
 
 	}
 	void setTotalGifDuration(float totalDuration) {
@@ -347,7 +368,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		if (numFrames > 1) {
 			int animationMode = params[ANIMATION_MODE].getValue();
 			if (params[ANIMATION_SPEED].getValue() >= 0 ) {
-				if (animationMode == 0) {
+				if (animationMode == 0 || animationMode == 3) {
 					nextFrame();
 				} else if (animationMode == 1)  {
 					prevFrame();
@@ -363,6 +384,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				else if (animationMode == 4 ) {
 					goToRandomFrame();
 				}
+				tick = !tick;
 
 			}
 			else {
@@ -409,9 +431,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			sampleCounter = 0;
 			currentFrame = frameNum;
 			mappedFrame = (currentFrame  + mapBlankFrameOffset(zeroOffset, numFrames)) % numFrames;
+			if(params[ANIMATION_MODE].getValue() == 3) {
+				mappedFrame = shuffledFrames[mappedFrame];
+			}
+			
 			currentFrame += numFrames;
 			currentFrame %= numFrames;
 			setCurrentFrameDelayFromTable();
+			DEBUG("currentFrame:%i, mappedFrame:%i, scrubFrame:%i",currentFrame,mappedFrame,scrubFrame);
 		}
 		else {
 			DEBUG("no frames lol");
@@ -555,7 +582,7 @@ struct ssmi : MenuItem
 		MenuItem::step();
 	}
 };
-struct Strongbipper : MenuItem {
+struct ParamSelectMenu : MenuItem {
 	ParamQuantity* param;
 	std::vector<std::string> options;
 
@@ -731,12 +758,15 @@ struct GiantFrameDisplay : TransparentWidget {
 		
 		addChild(frameDisplay);
 		addChild(description);
-		TransparentWidget();
+		//TransparentWidget();
 	}
 	void step() {
 		if (module) {
 			visible = module->scrubbing;
 			frameDisplay->value = string::f("%i / %i", module->scrubFrame + 1, module->numFrames);
+		}
+		else {
+			visible = false;
 		}
 		TransparentWidget::step();
 	}
@@ -795,27 +825,20 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		ComputerscareBlank* blank = dynamic_cast<ComputerscareBlank*>(this->blankModule);
 
 
-		Strongbipper *modeMenu = new Strongbipper();
+		modeMenu = new ParamSelectMenu();
 		modeMenu->text = "Animation Mode";
 		modeMenu->rightText = RIGHT_ARROW;
 		modeMenu->param = blankModule->paramQuantities[ComputerscareBlank::ANIMATION_MODE];
 		modeMenu->options = blankModule->animationModeDescriptions;
 
-
-
-
-
-		Strongbipper *endMenu = new Strongbipper();
+		endMenu = new ParamSelectMenu();
 		endMenu->text = "Animation End Behavior";
 		endMenu->rightText = RIGHT_ARROW;
 		endMenu->param = blankModule->paramQuantities[ComputerscareBlank::END_BEHAVIOR];
 		endMenu->options = blankModule->endBehaviorDescriptions;
 		
-
-
 		menu->addChild(new MenuEntry);
 
-		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Keyboard Controls:"));
 
 		menu->addChild(modeMenu);
 		menu->addChild(endMenu);
@@ -995,6 +1018,8 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 	ComputerscareResizeHandle *leftHandle;
 	ComputerscareResizeHandle *rightHandle;
 	GiantFrameDisplay* frameDisplay;
+	ParamSelectMenu *modeMenu;
+	ParamSelectMenu *endMenu;
 };
 
 
