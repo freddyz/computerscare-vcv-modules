@@ -52,7 +52,7 @@ struct ComputerscareDebug : Module {
 	int outputRangeEnum = 0;
 
 
-	float outputRanges[6][2];
+	float outputRanges[8][2];
 
 	int stepCounter;
 	dsp::SchmittTrigger clockTriggers[NUM_LINES];
