@@ -190,7 +190,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 			if (resetConnected) {
 				if (resetTrigger.process(messageFromExpander[4])) {
-					DEBUG("RESET TRIGGER");
 					goToFrame(0);
 				}
 			}
