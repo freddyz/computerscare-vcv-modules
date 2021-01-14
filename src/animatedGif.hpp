@@ -48,7 +48,6 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 
 		memset(&g, 0, sizeof(g));
 		memset(&head, 0, sizeof(head));
-		printf("%i\n", g);
 
 		*frames = 0;
 
@@ -98,10 +97,10 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 		{
 			unsigned int size = 4 * g.w * g.h;
 			unsigned char *p = 0;
-			printf("malloc amount %i\n", *frames * (size + 2));
+			//printf("malloc amount %i\n", *frames * (size + 2));
 
 			result = (unsigned char*)stbi__malloc(*frames * (size + 2));
-			printf("result:%i, frames:%i, size:%i\n", result, *frames, size);
+			//printf("result:%i, frames:%i, size:%i\n", result, *frames, size);
 			gr = &head;
 			p = result;
 			int counter = 0;
@@ -120,11 +119,11 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 				if (prev != &head) STBI_FREE(prev);
 			}
 		}
-		printf("framePointers.size() %i\n", framePointers.size());
-		if (framePointers.size()) {
+		//printf("framePointers.size() %i\n", framePointers.size());
+		/*if (framePointers.size()) {
 			printf("first frame address p:%i\n", framePointers[0]);
 			printf("second frame address p:%i\n", framePointers[1]);
-		}
+		}*/
 		imageStatus = 1;
 	}
 	else
@@ -161,7 +160,7 @@ struct AnimatedGifBuddy {
 		imageHandle = animatedGifCreateImage(ctx, filename, 0);
 	}
 	int getHandle() {
-		printf("imageHandle:%i\n", imageHandle);
+		//printf("imageHandle:%i\n", imageHandle);
 		return imageHandle;
 	}
 	int animatedGifCreateImage(NVGcontext* ctx, const char* filename, int imageFlags) {
@@ -173,11 +172,11 @@ struct AnimatedGifBuddy {
 
 		framePointers = {};
 		frameDelays = {};
-		printf("framePointers.size BEFORE %i\n", framePointers.size());
+		//printf("framePointers.size BEFORE %i\n", framePointers.size());
 		img = stbi_xload(filename, &w, &h, &frame, framePointers, frameDelays, imageStatus);
-		printf(filename);
-		printf("\nframe delay:%i\n", frameDelay);
-		printf("loaded %i frames\n", framePointers.size());
+		//printf(filename);
+		//printf("\nframe delay:%i\n", frameDelay);
+		//printf("loaded %i frames\n", framePointers.size());
 		numFrames = (int) framePointers.size();
 		//printVector(framePointers);
 		if (img == NULL) {
