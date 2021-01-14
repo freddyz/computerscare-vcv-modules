@@ -23,7 +23,6 @@ struct ComputerscareBlankExpander : Module {
 	float lastFrame = -1;
 	int numFrames = 1;
 	bool scrubbing = false;
-	int lastTick = -1;
 
 
 	enum ParamIds {
@@ -88,10 +87,6 @@ struct ComputerscareBlankExpander : Module {
 
 			float currentFrame = messageFromMother[0];
 			int newNumFrames = messageFromMother[1];
-			int mappedFrame = messageFromMother[2];
-			int scrubFrame = messageFromMother[3];
-			int tick = messageFromMother[4];
-			
 
 			if (newNumFrames != numFrames) {
 				numFrames = newNumFrames;
@@ -100,10 +95,10 @@ struct ComputerscareBlankExpander : Module {
 
 			float currentSyncTime = syncTimer.process(args.sampleTime);
 
-			if (eocMessageReadTrigger.process(mappedFrame == scrubFrame ? 10.f : 0.f)) {
+			if (eocMessageReadTrigger.process(currentFrame == 0 ? 10.f : 0.f)) {
 				eocPulse.trigger(1e-3);
 			}
-			if (eachFrameReadTrigger.process(lastTick != tick ? 10.f : 0.f)) {
+			if (eachFrameReadTrigger.process(abs(currentFrame - lastFrame) * 10)) {
 				eachFramePulse.trigger(1e-3);
 			}
 
@@ -123,15 +118,12 @@ struct ComputerscareBlankExpander : Module {
 
 			messageToSendToMother[8] = scrubbing;
 
-			messageToSendToMother[9] = params[MANUAL_RESET_BUTTON].getValue()*10;
-
 
 			outputs[EOC_OUTPUT].setVoltage(eocPulse.process(args.sampleTime) ? 10.f : 0.f);
 			outputs[EACH_FRAME_OUTPUT].setVoltage(eachFramePulse.process(args.sampleTime) ? 10.f : 0.f);
 
 			rightExpander.module->leftExpander.messageFlipRequested = true;
 			lastFrame = currentFrame;
-			lastTick = tick;
 		}
 		else {
 			isConnected = false;
