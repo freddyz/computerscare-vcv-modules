@@ -210,7 +210,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			expanderConnected = false;
 		}
 
-		if (clockConnected && (clockMode == 2)) {
+		if (expanderConnected && clockConnected && (clockMode == 2)) {
 
 		}
 		else {

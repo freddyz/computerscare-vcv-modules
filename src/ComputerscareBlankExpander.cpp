@@ -19,7 +19,7 @@ struct FrameOffsetParam : ParamQuantity {
 
 struct ComputerscareBlankExpander : Module {
 	float rightMessages[2][10] = {};
-	bool isConnected = false;
+	bool motherConnected = false;
 	float lastFrame = -1;
 	int numFrames = 1;
 	bool scrubbing = false;
@@ -81,7 +81,7 @@ struct ComputerscareBlankExpander : Module {
 		if (rightExpander.module && rightExpander.module->model == modelComputerscareBlank) {
 			// Get consumer message
 			float *messageFromMother = (float*) rightExpander.consumerMessage;
-			isConnected = true;
+			motherConnected = true;
 
 			float *messageToSendToMother = (float*) rightExpander.module->leftExpander.producerMessage;
 
@@ -97,8 +97,6 @@ struct ComputerscareBlankExpander : Module {
 				numFrames = newNumFrames;
 				frameOffsetQuantity->setNumFrames(numFrames);
 			}
-
-			float currentSyncTime = syncTimer.process(args.sampleTime);
 
 			if (eocMessageReadTrigger.process(mappedFrame == scrubFrame ? 10.f : 0.f)) {
 				eocPulse.trigger(1e-3);
@@ -134,7 +132,7 @@ struct ComputerscareBlankExpander : Module {
 			lastTick = tick;
 		}
 		else {
-			isConnected = false;
+			motherConnected = false;
 			// No mother module is connected.
 		}
 	}
@@ -164,6 +162,26 @@ struct ClockModeButton : app::SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/blank-clock-mode-frame.svg")));
 	}
 };
+struct LogoWidget : SvgWidget {
+	ComputerscareBlankExpander *module;
+	int motherConnected = -1;
+	LogoWidget() {
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-logo-normal.svg")));
+		SvgWidget();
+	}
+	void step() override {
+		if(module) {
+			if(module->motherConnected != motherConnected) {
+				if(module->motherConnected) {
+					setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-logo-normal.svg")));
+				} else {
+					setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-logo-sad.svg")));
+				}
+			}
+			motherConnected = module->motherConnected;
+		}
+	}
+};
 struct ComputerscareBlankExpanderWidget : ModuleWidget {
 	ComputerscareBlankExpanderWidget(ComputerscareBlankExpander *module) {
 		setModule(module);
@@ -174,6 +192,10 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareCustomBlankExpanderPanel.svg")));
 			addChild(panel);
 		}
+
+		LogoWidget *logo = new LogoWidget();
+		logo->module = module;
+		addChild(logo);
 
 		float inStartY = 20;
 		float dY = 40;
