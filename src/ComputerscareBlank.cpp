@@ -57,6 +57,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	float zeroOffset = 0.f;
 
 	bool tick = false;
+	float lastShuffle = 2.f;
 
 	/*
 		uninitialized: 0
@@ -92,6 +93,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		CONSTANT_FRAME_DELAY,
 		ANIMATION_MODE,
 		END_BEHAVIOR,
+		SHUFFLE_SEED,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -106,12 +108,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 
 	ComputerscareBlank()  {
-		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configMenuParam(ANIMATION_SPEED, 0.05f, 20.f, 1.0, "Animation Speed", 2, "x");
-		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
-		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
-		configMenuParam(END_BEHAVIOR, 0.f, 5.f, 0.f, "Animation End Behavior", 2);
-
 		animationModeDescriptions.push_back("Forward");
 		animationModeDescriptions.push_back("Reverse");
 		animationModeDescriptions.push_back("Ping Pong");
@@ -124,7 +120,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		endBehaviorDescriptions.push_back("Load Next");
 		endBehaviorDescriptions.push_back("Load Previous");
 
+		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+
+		configMenuParam(ANIMATION_SPEED, 0.05f, 20.f, 1.f, "Animation Speed", 2, "x");
+		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
+		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
 		configMenuParam(ANIMATION_MODE, 0.f, "Animation Mode", animationModeDescriptions);
+		configMenuParam(END_BEHAVIOR, 0.f, "Animation End Behavior", endBehaviorDescriptions);
+		configMenuParam(SHUFFLE_SEED, 0.f, 1.f, 0.5f, "Shuffle Seed", 2);
 
 		paths.push_back("empty");
 
@@ -191,7 +194,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					goToFrame(0);
 				}
 			}
-			if(resetButtonTrigger.process(messageFromExpander[9])) {
+			if (resetButtonTrigger.process(messageFromExpander[9])) {
 				goToFrame(0);
 			}
 
@@ -200,7 +203,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			messageToSendToExpander[2] = float (mappedFrame);
 			messageToSendToExpander[3] = float (scrubFrame);
 			messageToSendToExpander[4] = float (tick);
-			
+
 			// Flip messages at the end of the timestep
 			leftExpander.module->rightExpander.messageFlipRequested = true;
 		}
@@ -350,11 +353,12 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 	void setFrameShuffle() {
 		shuffledFrames.resize(0);
-		for(int i=0; i < numFrames; i++) {
+		for (int i = 0; i < numFrames; i++) {
 			shuffledFrames.push_back(i);
 		}
-		auto rng = std::default_random_engine {};
-		std::shuffle(std::begin(shuffledFrames), std::end(shuffledFrames), rng);
+		unsigned seed = (unsigned) (floor(params[SHUFFLE_SEED].getValue() * 999101));
+
+		std::shuffle(std::begin(shuffledFrames), std::end(shuffledFrames), std::default_random_engine(seed));
 
 	}
 	void setTotalGifDuration(float totalDuration) {
@@ -375,7 +379,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				}
 				else if (animationMode == 2) {
 					if (pingPongDirection == 1) {
-
 						nextFrame();
 					} else {
 						prevFrame();
@@ -411,8 +414,16 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					loadRandomGif();
 				}
 			}
+
+			float shuf = params[SHUFFLE_SEED].getValue();
+			if (shuf != lastShuffle) {
+				DEBUG("reshuffle!!!");
+				setFrameShuffle();
+			}
+			lastShuffle = shuf;
+			//DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
 		}
-		//DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
+
 	}
 	void setCurrentFrameDelayFromTable() {
 		if (ready) {
@@ -427,21 +438,18 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		goToFrame(currentFrame - 1);
 	}
 	void goToFrame(int frameNum) {
-		if (numFrames && ready) {
+		if (numFrames && ready && frameNum != currentFrame) {
 			sampleCounter = 0;
 			currentFrame = frameNum;
 			mappedFrame = (currentFrame  + mapBlankFrameOffset(zeroOffset, numFrames)) % numFrames;
-			if(params[ANIMATION_MODE].getValue() == 3) {
+			if (params[ANIMATION_MODE].getValue() == 3) {
 				mappedFrame = shuffledFrames[mappedFrame];
 			}
-			
+
 			currentFrame += numFrames;
 			currentFrame %= numFrames;
 			setCurrentFrameDelayFromTable();
-			DEBUG("currentFrame:%i, mappedFrame:%i, scrubFrame:%i",currentFrame,mappedFrame,scrubFrame);
-		}
-		else {
-			DEBUG("no frames lol");
+			DEBUG("currentFrame:%i, mappedFrame:%i, scrubFrame:%i", currentFrame, mappedFrame, scrubFrame);
 		}
 	}
 	void goToRandomFrame() {
@@ -737,7 +745,7 @@ struct GiantFrameDisplay : TransparentWidget {
 	SmallLetterDisplay *description;
 	SmallLetterDisplay *frameDisplay;
 	GiantFrameDisplay() {
-		box.size = Vec(200,380);
+		box.size = Vec(200, 380);
 
 		description = new SmallLetterDisplay();
 		description->value = "Frame Zero, for EOC output and reset input";
@@ -755,7 +763,7 @@ struct GiantFrameDisplay : TransparentWidget {
 		frameDisplay->baseColor = nvgRGBAf(0.8, 0.8, 0.8, 0.7);
 
 
-		
+
 		addChild(frameDisplay);
 		addChild(description);
 		//TransparentWidget();
@@ -836,7 +844,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		endMenu->rightText = RIGHT_ARROW;
 		endMenu->param = blankModule->paramQuantities[ComputerscareBlank::END_BEHAVIOR];
 		endMenu->options = blankModule->endBehaviorDescriptions;
-		
+
 		menu->addChild(new MenuEntry);
 
 
@@ -881,18 +889,17 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Animation Speed"));
 		menu->addChild(LabeledKnob);*/
 
-		MenuParam* animEnabled = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED], 0);
+		MenuParam* animEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED], 0);
 		menu->addChild(animEnabled);
 
-		MenuParam* speedParam = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::ANIMATION_SPEED], 2);
+		MenuParam* speedParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED], 2);
 		menu->addChild(speedParam);
 
-		MenuParam* mp = new MenuParam(blankModule->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY], 0);
+		MenuParam* mp = new MenuParam(blank->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY], 0);
 		menu->addChild(mp);
 
-
-
-
+		MenuParam* shuffleParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED], 2);
+		menu->addChild(shuffleParam);
 
 
 	}
@@ -1017,7 +1024,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 	TransparentWidget *display;
 	ComputerscareResizeHandle *leftHandle;
 	ComputerscareResizeHandle *rightHandle;
-	GiantFrameDisplay* frameDisplay;
+	GiantFrameDisplay *frameDisplay;
 	ParamSelectMenu *modeMenu;
 	ParamSelectMenu *endMenu;
 };

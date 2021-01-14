@@ -51,7 +51,7 @@ KeyboardControlChildMenu *kbMenu = new KeyboardControlChildMenu();
 		kbMenu->blank = blank;
 		menu->addChild(kbMenu);*/
 struct MenuParam : MenuEntry {
-	ParamWidget* speedParam;
+	ParamWidget* pWidget;
 	MenuLabel* johnLabel;
 	MenuLabel* displayString;
 	SubMenuAndKnob *submenu;
@@ -59,22 +59,22 @@ struct MenuParam : MenuEntry {
 
 	MenuParam(ParamQuantity* param, int type) {
 		if (type == 0) {
-			speedParam = new SmallIsoButton();
+			pWidget = new SmallIsoButton();
 		}
 		else if (type == 1) {
-			speedParam = new MediumDotSnapKnob();
+			pWidget = new MediumDotSnapKnob();
 		}
 		else if (type == 2) {
-			speedParam = new SmoothKnob();
+			pWidget = new SmoothKnob();
 		}
-		speedParam->paramQuantity = param;
-		speedParam->box.pos = Vec(controlRightMargin, 0);
+		pWidget->paramQuantity = param;
+		pWidget->box.pos = Vec(controlRightMargin, 0);
 		box.size.y = 32;
 
 		johnLabel = construct<MenuLabel>(&MenuLabel::text, param->getLabel());
-		johnLabel->box.pos = Vec(speedParam->box.size.x + controlRightMargin * 2, 0);
+		johnLabel->box.pos = Vec(pWidget->box.size.x + controlRightMargin * 2, 0);
 
-		addChild(speedParam);
+		addChild(pWidget);
 		addChild(johnLabel);
 		//if(type==1) {addChild(submenu);}
 	}

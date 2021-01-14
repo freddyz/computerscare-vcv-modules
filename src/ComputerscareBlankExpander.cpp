@@ -11,7 +11,7 @@ struct FrameOffsetParam : ParamQuantity {
 	std::string getDisplayValueString() override {
 		//return &module->params[paramId];
 		float val = getValue();
-		return string::f("%i", 1 + mapBlankFrameOffset(val,numFrames));
+		return string::f("%i", 1 + mapBlankFrameOffset(val, numFrames));
 	}
 };
 
@@ -91,7 +91,7 @@ struct ComputerscareBlankExpander : Module {
 			int mappedFrame = messageFromMother[2];
 			int scrubFrame = messageFromMother[3];
 			int tick = messageFromMother[4];
-			
+
 
 			if (newNumFrames != numFrames) {
 				numFrames = newNumFrames;
@@ -123,7 +123,7 @@ struct ComputerscareBlankExpander : Module {
 
 			messageToSendToMother[8] = scrubbing;
 
-			messageToSendToMother[9] = params[MANUAL_RESET_BUTTON].getValue()*10;
+			messageToSendToMother[9] = params[MANUAL_RESET_BUTTON].getValue() * 10;
 
 
 			outputs[EOC_OUTPUT].setVoltage(eocPulse.process(args.sampleTime) ? 10.f : 0.f);
