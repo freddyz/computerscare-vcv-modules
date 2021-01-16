@@ -826,6 +826,11 @@ struct GiantFrameDisplay : TransparentWidget {
 		}
 		TransparentWidget::step();
 	}
+	void draw(const DrawArgs &args) {
+		if (!module) {
+			visible = false;
+		}
+	}
 };
 
 struct ComputerscareBlankWidget : MenuParamModuleWidget {
