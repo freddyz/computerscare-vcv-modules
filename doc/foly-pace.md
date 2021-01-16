@@ -1,6 +1,6 @@
 # Foly Pace
 
-Draws a goofy face.
+Draws a photorealistic face.  Powered by machine learning, AI, and advanced algorithms.
 
 Tips:
 - Use a polyphonic signal to get the most variety

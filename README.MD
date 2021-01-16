@@ -17,6 +17,6 @@
 - [Moly Patrix](./doc/poly-utilities.md): Polyphonic matrix mixer
 
 ## Visualization
-- [Foly Pace](./doc/foly-pace.md): Draws a goofy face.  Use polyphonic input for maximum weirdness
+- [Foly Pace](./doc/foly-pace.md): Draws a photorealistic face.  Use polyphonic input for maximum weirdness
 - [Stoly Fick Pigure](./doc/stoly-fick-pigure.md): Dancing stick figure.  Use polyphonic input for the sickest moves
-- [Custom Blank](./doc/custom-blank.md): Resizable blank module.  Load your own image file (.png, .jpeg, .bmp)
+- [Custom Blank](./doc/custom-blank.md): Resizable blank module.  Load your own image file (PNG, JPEG, BMP, or Animated GIF)
