@@ -119,28 +119,28 @@ struct MultiselectParamQuantity;
 
 struct ComputerscareMenuParamModule : Module {
 	std::vector<ParamAndType*> paramList;
-	std::map<int,ParamAndType*> pidMap;
+	std::map<int, ParamAndType*> pidMap;
 	ParamQuantity* pq;
 	void configMenuParam(int paramId, float minValue, float maxValue, float defaultValue, std::string label = "", int controlType = 2, std::string unit = "", float displayBase = 0.f, float displayMultiplier = 1.f, float displayOffset = 0.f) {
-		
+
 		configParam(paramId, minValue, maxValue, defaultValue, label, unit, displayBase, displayMultiplier);
 		pq = paramQuantities[paramId];
 		ParamAndType* pt = new ParamAndType(pq, controlType);
 		paramList.push_back(pt);
 
 	}
-	void configMenuParam(int paramId, float defaultValue,std::string label= "",std::vector<std::string> options = {}) {
+	void configMenuParam(int paramId, float defaultValue, std::string label = "", std::vector<std::string> options = {}) {
 		int size = (int) options.size();
-		configParam<MultiselectParamQuantity>(paramId,0,size-1,defaultValue,label);
+		configParam<MultiselectParamQuantity>(paramId, 0, size - 1, defaultValue, label);
 		pq = paramQuantities[paramId];
 		ParamAndType* pt = new ParamAndType(pq, 2);
 		paramList.push_back(pt);
-		pidMap.insert({paramId,pt});
+		pidMap.insert({paramId, pt});
 	}
 	std::vector<ParamAndType*> getParamList() {
 		return paramList;
 	}
-	std::string getOptionValue(int paramId,int index) {
+	std::string getOptionValue(int paramId, int index) {
 		//std::vector<std::string> *options = pidMap.find(paramId);
 		//return pidMap.find(paramId).at(index);
 		return "charles";
@@ -150,7 +150,7 @@ struct MultiselectParamQuantity : ParamQuantity {
 	ComputerscareMenuParamModule* module;
 	std::string getDisplayValueString() override {
 		int index = Quantity::getValue();
-		return module->getOptionValue(paramId,index);
+		return module->getOptionValue(paramId, index);
 	}
 };
 struct MenuParamModuleWidget : ModuleWidget {
@@ -173,9 +173,9 @@ struct MenuParamModuleWidget : ModuleWidget {
 struct ParamSettingItem : MenuItem {
 	int myVal;
 	Param* myParam;
-	ParamSettingItem(int val,Param *param) {
-		myVal=val;
-		myParam=param;
+	ParamSettingItem(int val, Param *param) {
+		myVal = val;
+		myParam = param;
 	}
 	void onAction(const event::Action &e) override {
 		myParam->setValue(myVal);

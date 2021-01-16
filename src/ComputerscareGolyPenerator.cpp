@@ -11,7 +11,7 @@ struct ComputerscareGolyPenerator;
 	knob2: algorithm
 	knob3: param 1
 */
-const std::string GolyPeneratorAvailableAlgorithmsArr[5] = {"Linear", "Sigmoid","Hump","Sinusoid","Pseudo-Random"};
+const std::string GolyPeneratorAvailableAlgorithmsArr[5] = {"Linear", "Sigmoid", "Hump", "Sinusoid", "Pseudo-Random"};
 
 
 //template <const std::string& options>

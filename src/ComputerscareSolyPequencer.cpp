@@ -92,8 +92,8 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 				currentReset[i] = resetTriggers[i].process(inputs[RESET_INPUT].getVoltage(i));
 				isHigh[i] = clockTriggers[i].isHigh();
 			}
-			for(int i =0; i < 16; i++) {
-				eoc[i] = (currentClock[clockChannels[i]-1] && isHigh[clockChannels[i]-1]) || (currentReset[resetChannels[i]-1] && resetTriggers[resetChannels[i]-1].isHigh());
+			for (int i = 0; i < 16; i++) {
+				eoc[i] = (currentClock[clockChannels[i] - 1] && isHigh[clockChannels[i] - 1]) || (currentReset[resetChannels[i] - 1] && resetTriggers[resetChannels[i] - 1].isHigh());
 			}
 			for (int j = 0; j < polyChannels; j++) {
 				if (globalClocked || currentClock[clockChannels[j] - 1]) {
@@ -107,7 +107,7 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 
 
 				}
-				if(numReset == 1 && currentReset[0]) {
+				if (numReset == 1 && currentReset[0]) {
 					currentStep[j] = 0;
 				}
 				else if (j <= numReset && currentReset[j]) {
@@ -116,9 +116,9 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 			}
 			for (int c = 0; c < polyChannels; c++) {
 				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage(currentStep[c]), c);
-				outputs[EOC_OUTPUT].setVoltage(currentStep[c]==0 && eoc[c] ? 10.f : 0.f,c);
+				outputs[EOC_OUTPUT].setVoltage(currentStep[c] == 0 && eoc[c] ? 10.f : 0.f, c);
 			}
-			
+
 		}
 		if (manualReset) {
 			resetAll();

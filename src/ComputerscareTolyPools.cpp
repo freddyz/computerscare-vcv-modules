@@ -28,7 +28,7 @@ struct ComputerscareTolyPools : Module {
 	int counter = 83910;
 	int numChannels = 16;
 	int rotation = 0;
-	int numInputChannels=1;
+	int numInputChannels = 1;
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
 		ROTATE_KNOB,
@@ -70,10 +70,10 @@ struct ComputerscareTolyPools : Module {
 			rotation = params[ROTATE_KNOB].getValue();
 			numInputChannels = inputs[POLY_INPUT].getChannels();
 		}
-		if(inputs[NUM_CHANNELS_CV].isConnected()) {
+		if (inputs[NUM_CHANNELS_CV].isConnected()) {
 			numChannels = mapVoltageToChannelCount(inputs[NUM_CHANNELS_CV].getVoltage(0));
 		}
-		if(inputs[ROTATE_CV].isConnected()) {
+		if (inputs[ROTATE_CV].isConnected()) {
 			rotation = mapVoltageToChannelCount(inputs[ROTATE_CV].getVoltage(0));
 		}
 		outputs[POLY_OUTPUT].setChannels(numChannels);
@@ -104,10 +104,10 @@ struct PoolsSmallDisplay : SmallLetterDisplay
 			if (type == 0) {
 				value = std::to_string(module->numChannels);
 			}
-			else if(type == 1) {
+			else if (type == 1) {
 				value = std::to_string(module->rotation);
 			}
-			else if(type==2) {
+			else if (type == 2) {
 				value = std::to_string(module->numInputChannels);
 			}
 
@@ -156,10 +156,10 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
 
 		addLabeledKnob("Num Output Channels", 10, 156, module, ComputerscareTolyPools::NUM_CHANNELS_KNOB, -14, -24, 0);
 		addInput(createInput<InPort>(Vec(10, 186), module, ComputerscareTolyPools::NUM_CHANNELS_CV));
-		
+
 		addLabeledKnob("Rotation", 10, 256, module, ComputerscareTolyPools::ROTATE_KNOB, -13, -5, 1);
-		addInput(createInput<InPort>(Vec(10,286), module, ComputerscareTolyPools::ROTATE_CV));
-		
+		addInput(createInput<InPort>(Vec(10, 286), module, ComputerscareTolyPools::ROTATE_CV));
+
 
 		addOutput(createOutput<OutPort>(Vec(28, 30), module, ComputerscareTolyPools::POLY_OUTPUT));
 

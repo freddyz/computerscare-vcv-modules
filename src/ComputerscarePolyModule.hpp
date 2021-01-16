@@ -11,7 +11,7 @@ struct AutoParamQuantity : ParamQuantity {
 
 struct ComputerscarePolyModule : Module {
 	int polyChannels = 16;
-	int polyChannelsKnobSetting=0;
+	int polyChannelsKnobSetting = 0;
 	int counterPeriod = 64;
 	int counter = counterPeriod + 1;
 
@@ -28,8 +28,8 @@ struct ComputerscarePolyModule : Module {
 struct TinyChannelsSnapKnob: RoundBlackSnapKnob {
 	std::shared_ptr<Svg> manualChannelsSetSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-channels-empty-knob.svg"));
 	std::shared_ptr<Svg> autoChannelsSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-channels-empty-knob-auto-mode.svg"));
-	int prevSetting=-1;
-	int paramId=-1;
+	int prevSetting = -1;
+	int paramId = -1;
 
 
 	ComputerscarePolyModule *module;
@@ -57,9 +57,9 @@ struct TinyChannelsSnapKnob: RoundBlackSnapKnob {
 struct PolyChannelsDisplay : SmallLetterDisplay
 {
 	ComputerscarePolyModule *module;
-	bool controlled=false;
-	int prevChannels=-1;
-	int paramId=-1;
+	bool controlled = false;
+	int prevChannels = -1;
+	int paramId = -1;
 
 	PolyChannelsDisplay(math::Vec pos)
 	{
@@ -76,12 +76,12 @@ struct PolyChannelsDisplay : SmallLetterDisplay
 		if (module)
 		{
 			int newChannels = module->polyChannels;
-			if(newChannels != prevChannels) {
+			if (newChannels != prevChannels) {
 				std::string str = std::to_string(newChannels);
 				value = str;
-				prevChannels=newChannels;
+				prevChannels = newChannels;
 			}
-			
+
 		}
 		SmallLetterDisplay::draw(args);
 	}
@@ -90,15 +90,15 @@ struct PolyOutputChannelsWidget : Widget {
 	ComputerscarePolyModule *module;
 	PolyChannelsDisplay *channelCountDisplay;
 	TinyChannelsSnapKnob *channelsKnob;
-	PolyOutputChannelsWidget(math::Vec pos,ComputerscarePolyModule *mod,int paramId) {
+	PolyOutputChannelsWidget(math::Vec pos, ComputerscarePolyModule *mod, int paramId) {
 		module = mod;
 
-		channelsKnob = createParam<TinyChannelsSnapKnob>(pos.plus(Vec(7,3)),module,paramId);
-		channelsKnob->module=module;
-		channelsKnob->paramId=paramId;
+		channelsKnob = createParam<TinyChannelsSnapKnob>(pos.plus(Vec(7, 3)), module, paramId);
+		channelsKnob->module = module;
+		channelsKnob->paramId = paramId;
 
 		channelCountDisplay = new PolyChannelsDisplay(pos);
-		
+
 		channelCountDisplay->module = module;
 
 		addChild(channelsKnob);

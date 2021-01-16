@@ -129,13 +129,13 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 	}
 	void toggleMomentary() {
 		momentary = !momentary;
-		if(momentary) {
+		if (momentary) {
 			switchOffAllButtonsButOne(-1);
 		}
 	}
 	void toggleRadio() {
 		radioMode = !radioMode;
-		if(radioMode) {
+		if (radioMode) {
 			switchOffAllButtonsButOne(-1);
 		}
 	}
@@ -156,20 +156,20 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 			checkForParamChanges();
 		}
 
-		if(numAChannels == 1) {
+		if (numAChannels == 1) {
 			min = inputs[A_INPUT].getVoltage(0);
 		}
-		if(numBChannels == 1) {
+		if (numBChannels == 1) {
 			max = inputs[B_INPUT].getVoltage(0);
 		}
-		for(int i = 0; i < polyChannels; i++) {
-			if(numAChannels != 1) {
-				min = i< numAChannels ? inputs[A_INPUT].getVoltage(i) : rangeMin;
+		for (int i = 0; i < polyChannels; i++) {
+			if (numAChannels != 1) {
+				min = i < numAChannels ? inputs[A_INPUT].getVoltage(i) : rangeMin;
 			}
-			if(numBChannels != 1) {
-				max = i< numBChannels ? inputs[B_INPUT].getVoltage(i) : rangeMax;
+			if (numBChannels != 1) {
+				max = i < numBChannels ? inputs[B_INPUT].getVoltage(i) : rangeMax;
 			}
-			spread = max-min;
+			spread = max - min;
 			outputs[POLY_OUTPUT].setVoltage(params[TOGGLE + i].getValue()*spread + min, i);
 		}
 	}
@@ -180,7 +180,7 @@ struct DisableableParamWidget : SmallIsoButton {
 	ComputerscareBolyPuttons *module;
 	SmallLetterDisplay *smallLetterDisplay;
 	int channel;
-	Vec labelOffset = Vec(0,0);
+	Vec labelOffset = Vec(0, 0);
 
 
 	DisableableParamWidget() {
@@ -204,7 +204,7 @@ struct DisableableParamWidget : SmallIsoButton {
 			//smallLetterDisplay
 			//smallLetterDisplay->box.pos=box.pos;//.plus(Vec(0,0/*disabled ? 5 : 0,0*/));
 		}
-		smallLetterDisplay->value = std::to_string(channel+1);
+		smallLetterDisplay->value = std::to_string(channel + 1);
 		SmallIsoButton::step();
 	}
 	void draw(const DrawArgs &ctx) override {

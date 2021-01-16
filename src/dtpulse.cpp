@@ -368,8 +368,8 @@ bool matchParens(std::string value) {
 }
 void printVector(std::vector <int> intVector) {
   //printf("int vector of size %i\n",intVector.size());
-  for(unsigned int i= 0; i < intVector.size(); i++) {
-    printf("%i ",intVector[i]);
+  for (unsigned int i = 0; i < intVector.size(); i++) {
+    printf("%i ", intVector[i]);
   }
   printf("\n");
 }
@@ -393,24 +393,24 @@ void whoKnowsLaundryPoly(std::string input) {
 }
 LaundryPoly::LaundryPoly(std::string formula) {
   std::string newFormula = "";
-    bool myInError=false;
-    maxSteps=-1;
-    int ns;
-    std::vector<std::string> semisep = split(formula,';');
-    int semilen = semisep.size();
-   for (int i = 0; i < 16; i++ ) {
+  bool myInError = false;
+  maxSteps = -1;
+  int ns;
+  std::vector<std::string> semisep = split(formula, ';');
+  int semilen = semisep.size();
+  for (int i = 0; i < 16; i++ ) {
     //newFormula = formula;
-    newFormula=semilen==0 ? formula : semisep[i%semilen];//i%semilen];
+    newFormula = semilen == 0 ? formula : semisep[i % semilen]; //i%semilen];
     replaceAll(newFormula, "#", "<" + std::to_string(static_cast<long long>(i + 1)) + ">");
     lss[i] = LaundrySoupSequence(newFormula);
     ns = lss[i].numSteps;
-    if(ns > maxSteps) {
+    if (ns > maxSteps) {
       maxSteps = ns;
       maxIndex = i;
     }
     myInError = myInError || lss[i].inError;
   }
-  inError=myInError;
+  inError = myInError;
 }
 LaundryPoly::LaundryPoly() {
   LaundryPoly("");
@@ -473,10 +473,10 @@ void LaundrySoupSequence::Setup(std::vector<Token> tokens) {
   workingPulseSequence = duplicateIntVector(pulseSequence);
   numSteps = (int) pulseSequence.size();
   readHead = -1;
-  inError=false;
+  inError = false;
 }
 void LaundrySoupSequence::print() {
-  printf("  LaundrySoupSequence inError:%d, tokenStack:\n",inError);
+  printf("  LaundrySoupSequence inError:%d, tokenStack:\n", inError);
   //printTokenVector(tokenStack);
   //printf("  Laundry pulseSequence:\n");
   //printVector(pulseSequence);
@@ -488,14 +488,14 @@ std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> token
   int thisGate;
   for (unsigned int i = 0; i < tokens.size(); i++) {
     thisVal = tokens[i].duration;
-    
+
     //horrible hacky way to not crash Rack via entering a ridiculously long sequence
     //mostly to protect the higher channels of 4^#.  Laundry soup can still break Rack
     //with something like this 1@999999999999
-    thisVal = std::min(std::max(1,MAX_LENGTH-length),thisVal);
+    thisVal = std::min(std::max(1, MAX_LENGTH - length), thisVal);
     thisGate = (tokens[i].type == "ChanceOfInteger" ? 2 : (tokens[i].value == "0" ? 0 : 1));
     output.push_back(thisGate);
-    length+=thisVal;
+    length += thisVal;
     for (int j = 1; j < thisVal; j++) {
       output.push_back(0);
     }
@@ -650,16 +650,16 @@ Token::Token(std::string t, std::string v, int dex, int dur) {
   duration = dur;
 }
 Token::Token(std::string t, int val) {
-	type=t;
-	value = std::to_string(static_cast<long long>(val));
-	index=-1;
-	duration=std::max(val,1);
+  type = t;
+  value = std::to_string(static_cast<long long>(val));
+  index = -1;
+  duration = std::max(val, 1);
 }
 Token::Token(const Token& source) {
-	type=source.type;
-	value=source.value;
-	index=source.index;
-	duration=source.duration;
+  type = source.type;
+  value = source.value;
+  index = source.index;
+  duration = source.duration;
 }
 Parser::Parser(std::string expr) {
   tokens = tokenizeString(expr);
@@ -672,14 +672,14 @@ Parser::Parser() {
 void Parser::setForLaundryPoly() {
   Token t = tokens[0];
   while (t.type != "NULL") {
-    tokenStack.push_back(Token(t.type, t.value, t.index,t.duration ));
+    tokenStack.push_back(Token(t.type, t.value, t.index, t.duration ));
     t = skipAndPeekToken();
   }
   printf("setForLaundryPoly\n");
   printTokenVector(tokenStack);
 }
 void Parser::setForLaundry() {
-	std::vector<std::string> laundryBinaryOp = {"Plus","Minus","Asterix","Backslash","Caret","Ampersand"};
+  std::vector<std::string> laundryBinaryOp = {"Plus", "Minus", "Asterix", "Backslash", "Caret", "Ampersand"};
   std::vector<std::string> laundryInterleaveAny = {"Letter", "Integer", "ChanceOfInteger", "Digit", "LeftParen", "RightParen", "Channel"};
   std::vector<std::string> laundryAtExpandAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Channel"};
   std::vector<std::string> laundrySquareAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Comma", "Channel"};
@@ -693,42 +693,42 @@ void Parser::setForLaundry() {
     tokenStack = {};
 
     setForExactIntegers(tokens[0]);
-		if(!inError) {
-			currentIndex = 0;
-			tokens=tokenStack;
-			tokenStack={};
-			setFormula(peekToken(),laundryBinaryOp,true);
     if (!inError) {
       currentIndex = 0;
       tokens = tokenStack;
       tokenStack = {};
-      setForChanceOfIntegers(peekToken());
+      setFormula(peekToken(), laundryBinaryOp, true);
       if (!inError) {
         currentIndex = 0;
         tokens = tokenStack;
         tokenStack = {};
-        setForInterleave(peekToken(), laundryInterleaveAny);
+        setForChanceOfIntegers(peekToken());
         if (!inError) {
           currentIndex = 0;
           tokens = tokenStack;
           tokenStack = {};
-          setForAtExpand(peekToken(), laundryAtExpandAny, true);
-
+          setForInterleave(peekToken(), laundryInterleaveAny);
           if (!inError) {
             currentIndex = 0;
             tokens = tokenStack;
             tokenStack = {};
-            setForSquareBrackets(peekToken(), laundrySquareAny, true);
+            setForAtExpand(peekToken(), laundryAtExpandAny, true);
 
             if (!inError) {
               currentIndex = 0;
               tokens = tokenStack;
               tokenStack = {};
-              setFinal(peekToken(), laundryFinalAny);
+              setForSquareBrackets(peekToken(), laundrySquareAny, true);
+
+              if (!inError) {
+                currentIndex = 0;
+                tokens = tokenStack;
+                tokenStack = {};
+                setFinal(peekToken(), laundryFinalAny);
+              }
             }
           }
         }
-				}
       }
     }
   }
@@ -857,9 +857,9 @@ void Parser::setForExactIntegers(Token t) {
     t = skipAndPeekToken();
   }
 }
-void Parser::setFormula(Token t,std::vector<std::string> operatorWhitelist,bool laundryMode) {
+void Parser::setFormula(Token t, std::vector<std::string> operatorWhitelist, bool laundryMode) {
   while (t.type != "NULL") {
-    ParseFormula(t,operatorWhitelist,laundryMode);
+    ParseFormula(t, operatorWhitelist, laundryMode);
     if (peekToken().type != "NULL") {
       tokenStack.push_back(peekToken());
     }
@@ -917,54 +917,54 @@ void Parser::ParseVariable(Token t) {
     tokenStack.push_back(Token("ChannelVariable", "1", -1, std::stoi("5")));
   }
 }
-void Parser::ParseFormula(Token t,std::vector<std::string> operatorWhitelist, bool laundryMode) {
-	std::vector<Token> terminalStack;
-	std::vector<Token> operatorStack;
-	std::vector<std::string> whitelist = operatorWhitelist;
-	whitelist.push_back("Integer");
-	whitelist.push_back("Digit");
-	while(matchesAny(t.type,whitelist)) {
-					if(t.type=="Integer" || t.type=="Digit") {
-						if(operatorStack.size() > 0) {
-							if(terminalStack.size() > 0) {
-								//apply them
-								std::string op = operatorStack.back().type;
-								operatorStack.pop_back();
-								int lhs = terminalStack.back().duration;
-								int rhs = t.duration;
-								int result =lhs;
-								terminalStack.pop_back();
-								if(op=="Asterix") {
-									result=lhs*rhs;
-								} else if(op=="Ampersand") {
-									result=lhs%rhs;
-									} else if(op=="Plus") {
-										result=lhs+rhs;
-									}
-									else if(op=="Minus") {
-										result=lhs-rhs;
-									}
-									else if(op=="Backslash") {
-										result = lhs/rhs;
-									}
-									else if(op=="Caret") {
-										result= myPow(lhs,rhs);
-									}
-								terminalStack.push_back(Token("Integer",result));
-							}
-							else {
-								inError=true;
-							}
-						}	
-						else {
-								terminalStack.push_back(t);
-						}
-					}
-					else { //operator
-						operatorStack.push_back(t);
-					}
-		t = skipAndPeekToken();
-	}
+void Parser::ParseFormula(Token t, std::vector<std::string> operatorWhitelist, bool laundryMode) {
+  std::vector<Token> terminalStack;
+  std::vector<Token> operatorStack;
+  std::vector<std::string> whitelist = operatorWhitelist;
+  whitelist.push_back("Integer");
+  whitelist.push_back("Digit");
+  while (matchesAny(t.type, whitelist)) {
+    if (t.type == "Integer" || t.type == "Digit") {
+      if (operatorStack.size() > 0) {
+        if (terminalStack.size() > 0) {
+          //apply them
+          std::string op = operatorStack.back().type;
+          operatorStack.pop_back();
+          int lhs = terminalStack.back().duration;
+          int rhs = t.duration;
+          int result = lhs;
+          terminalStack.pop_back();
+          if (op == "Asterix") {
+            result = lhs * rhs;
+          } else if (op == "Ampersand") {
+            result = lhs % rhs;
+          } else if (op == "Plus") {
+            result = lhs + rhs;
+          }
+          else if (op == "Minus") {
+            result = lhs - rhs;
+          }
+          else if (op == "Backslash") {
+            result = lhs / rhs;
+          }
+          else if (op == "Caret") {
+            result = myPow(lhs, rhs);
+          }
+          terminalStack.push_back(Token("Integer", result));
+        }
+        else {
+          inError = true;
+        }
+      }
+      else {
+        terminalStack.push_back(t);
+      }
+    }
+    else { //operator
+      operatorStack.push_back(t);
+    }
+    t = skipAndPeekToken();
+  }
   tokenStack.insert(tokenStack.end(), terminalStack.begin(), terminalStack.end());
 }
 void Parser::ParseExactInteger(Token t) {
@@ -1101,7 +1101,7 @@ void Parser::ParseAtExpand(Token t, std::vector<std::string> whitelist, bool lau
       t = skipAndPeekToken();
     }
     atNum = ParseAtPart(t);
-    atNum = std::min(atNum,MAX_LENGTH);
+    atNum = std::min(atNum, MAX_LENGTH);
     if (laundryMode) {
       proposedTokens = atExpandTokens(tokenVec, atNum);
     }
@@ -1317,11 +1317,11 @@ void whoKnowsQuantize(std::string input) {
   //float in = std::stof(input);
   //printf("closest: %f\n",q.quantize(in));
   //printf("even   : %f\n",q.quantizeEven(in));
-	Quantizer q = Quantizer(input,12,0);
-	q.print();
-	//float in = std::stof(input);
-	//printf("closest: %f\n",q.quantize(in));
-	//printf("even   : %f\n",q.quantizeEven(in));
+  Quantizer q = Quantizer(input, 12, 0);
+  q.print();
+  //float in = std::stof(input);
+  //printf("closest: %f\n",q.quantize(in));
+  //printf("even   : %f\n",q.quantizeEven(in));
 }
 Quantizer::Quantizer() {
   Quantizer("2212221", 12, 0);
@@ -1394,7 +1394,7 @@ float Quantizer::quantizeEven(float input) {
 }
 
 void Quantizer::print() {
-	printFloatVector(mappedValues);	
+  printFloatVector(mappedValues);
 }
 std::string getByteString(float f) {
   unsigned char const * p = reinterpret_cast<unsigned char const *>(&f);
@@ -1430,24 +1430,24 @@ int myPow(int x, int p)
   if (p == 0) return 1;
   if (p == 1) return x;
 
-  int tmp = myPow(x, p/2);
-  if (p%2 == 0) return tmp * tmp;
+  int tmp = myPow(x, p / 2);
+  if (p % 2 == 0) return tmp * tmp;
   else return x * tmp * tmp;
 }
 std::vector<std::string> split(std::string strToSplit, char delimeter)
 {
-    std::stringstream ss(strToSplit);
-    std::string item;
-    std::vector<std::string> splittedStrings;
-    while (std::getline(ss, item, delimeter))
-    {
-       splittedStrings.push_back(item);
-    }
-    return splittedStrings;
+  std::stringstream ss(strToSplit);
+  std::string item;
+  std::vector<std::string> splittedStrings;
+  while (std::getline(ss, item, delimeter))
+  {
+    splittedStrings.push_back(item);
+  }
+  return splittedStrings;
 }
-void swap (int *a, int *b)  
-{  
-    int temp = *a;  
-    *a = *b;  
-    *b = temp;  
+void swap (int *a, int *b)
+{
+  int temp = *a;
+  *a = *b;
+  *b = temp;
 }

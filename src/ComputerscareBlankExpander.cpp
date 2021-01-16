@@ -170,9 +170,9 @@ struct LogoWidget : SvgWidget {
 		SvgWidget();
 	}
 	void step() override {
-		if(module) {
-			if(module->motherConnected != motherConnected) {
-				if(module->motherConnected) {
+		if (module) {
+			if (module->motherConnected != motherConnected) {
+				if (module->motherConnected) {
 					setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-logo-normal.svg")));
 				} else {
 					setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-logo-sad.svg")));
