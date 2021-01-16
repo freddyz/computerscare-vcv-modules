@@ -1,5 +1,5 @@
 # computerscare modules for VCV Rack
-<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/all-computerscare-modules-v1.png" width="900" alt="Computerscare Modules for VCV Rack" />
+<img src="computerscare-1.4-all-modules.png" width="1000" alt="Computerscare Modules for VCV Rack" />
 
 ## Platinum Collection
 - [Father & Son Patch Sequencer](./doc/father-and-son.md): 16 scene, polyphonic patch matrix
