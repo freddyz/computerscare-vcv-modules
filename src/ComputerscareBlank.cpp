@@ -11,6 +11,7 @@
 #include <dirent.h>
 #include <algorithm>
 #include <random>
+#include <settings.hpp>
 
 #define FONT_SIZE 13
 
@@ -59,6 +60,11 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 	bool tick = false;
 	float lastShuffle = 2.f;
+
+	float lastZoom = -100;
+	int zoomCheckInterval = 5000;
+	int zoomCheckCounter = 0;
+	bool pauseAnimation = true;
 
 	/*
 		uninitialized: 0
@@ -139,6 +145,17 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	void process(const ProcessArgs &args) override {
 		if (imageStatus == 1) {
 			sampleCounter++;
+			zoomCheckCounter++;
+			if (zoomCheckCounter > zoomCheckInterval) {
+				if (settings::zoom != lastZoom) {
+					pauseAnimation = true;
+				}
+				else {
+					pauseAnimation = false;
+				}
+				lastZoom = settings::zoom;
+				zoomCheckCounter = 0;
+			}
 		}
 
 		samplesDelay = frameDelay * args.sampleRate;
@@ -258,7 +275,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		rep = opendir(dir.c_str());
 
-		int i = 0;
 		catalog.clear();
 		//fichier.clear();
 		while ((dirp = readdir(rep)) != NULL) {
@@ -454,6 +470,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			//DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
 		}
 
+
 	}
 	void setCurrentFrameDelayFromTable() {
 		if (ready) {
@@ -479,7 +496,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			currentFrame += numFrames;
 			currentFrame %= numFrames;
 			setCurrentFrameDelayFromTable();
-			DEBUG("currentFrame:%i, mappedFrame:%i, scrubFrame:%i", currentFrame, mappedFrame, scrubFrame);
+			//DEBUG("currentFrame:%i, mappedFrame:%i, scrubFrame:%i", currentFrame, mappedFrame, scrubFrame);
 		}
 	}
 	void goToRandomFrame() {
@@ -753,9 +770,9 @@ struct PNGDisplay : TransparentWidget {
 				nvgFill(args.vg);
 				nvgClosePath(args.vg);
 			}
-			//if (blankModule->currentFrame != currentFrame) {
-			gifBuddy.displayGifFrame(args.vg, currentFrame);
-			//}
+			if (!blankModule->pauseAnimation) {
+				gifBuddy.displayGifFrame(args.vg, currentFrame);
+			}
 		}
 	}
 	void step() override {

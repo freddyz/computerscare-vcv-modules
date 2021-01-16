@@ -165,7 +165,7 @@ struct AnimatedGifBuddy {
 		return imageHandle;
 	}
 	int animatedGifCreateImage(NVGcontext* ctx, const char* filename, int imageFlags) {
-		int w, h, n, image;
+		int w, h, image;
 		unsigned char* img;
 		int frame = 0;
 		stbi_set_unpremultiply_on_load(1);
@@ -231,7 +231,7 @@ struct AnimatedGifBuddy {
 		//2* total duration - frame0 - frameN-1
 		totalPingPongDurations.resize(0);
 
-		for (unsigned int i = 0; i < numFrames; i++) {
+		for (int i = 0; i < numFrames; i++) {
 			float endpointDurations = frameDelaysSeconds[i] + frameDelaysSeconds[(i - 1 + numFrames) % numFrames];
 			totalPingPongDurations.push_back(2 * totalGifDuration - endpointDurations);
 		}
