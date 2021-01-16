@@ -41,6 +41,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	std::vector<float> frameDelays;
 	std::vector<int> frameMapForScan;
 	std::vector<int> shuffledFrames;
+	std::vector<float> gifDurationsForPingPong;
 
 	float totalGifDuration = 0.f;
 
@@ -143,7 +144,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		samplesDelay = frameDelay * args.sampleRate;
 
 		bool shouldAdvanceAnimation = false;
-		if (leftExpander.module && leftExpander.module->model == modelComputerscareBlankExpander) {
+		if (ready && leftExpander.module && leftExpander.module->model == modelComputerscareBlankExpander) {
 			expanderConnected = true;
 			// me
 			float *messageToSendToExpander = (float*) leftExpander.module->rightExpander.producerMessage;
@@ -303,13 +304,24 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		imageStatus = status;
 	}
 	void setSyncTime(float syncDuration) {
-		if (params[CONSTANT_FRAME_DELAY].getValue() == 0) {
-			speedFactor = totalGifDuration / syncDuration;
+		bool constantFrameDelay = params[CONSTANT_FRAME_DELAY].getValue() == 1;
+		if (params[ANIMATION_MODE].getValue() == 2) { //pingpong
+			float totalDurationForCurrentZeroOffset = gifDurationsForPingPong[mapBlankFrameOffset(zeroOffset, numFrames)];
+			if (constantFrameDelay) {
+				speedFactor = (2 * numFrames - 2) * defaultFrameDelayCentiseconds / syncDuration / 100;
+			}
+			else {
+				speedFactor = totalDurationForCurrentZeroOffset / syncDuration;
+			}
 		}
-		else {
-			speedFactor = numFrames * defaultFrameDelayCentiseconds / syncDuration / 100;
+		else { //all other modes
+			if (constantFrameDelay) {
+				speedFactor = numFrames * defaultFrameDelayCentiseconds / syncDuration / 100;
+			}
+			else {
+				speedFactor = totalGifDuration / syncDuration;
+			}
 		}
-
 	}
 	void setFrameDelay(float frameDelaySeconds) {
 		float speedKnob = abs(params[ANIMATION_SPEED].getValue());
@@ -336,7 +348,10 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		frameDelays = frameDelaysSeconds;
 		setFrameMap();
 		setFrameShuffle();
-		ready = true;
+
+	}
+	void setReady(bool v) {
+		ready = v;
 	}
 	void setFrameMap() {
 		frameMapForScan.resize(0);
@@ -362,6 +377,22 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 	void setTotalGifDuration(float totalDuration) {
 		totalGifDuration = totalDuration;
+	}
+	void setTotalGifDurationIfInPingPongMode(std::vector<float> durs) {
+		/* the gif has a different total pingpong duration depending on where the reset frame is
+			eg a gif with frame durations:
+			1) 100
+			2) 5
+			3) 5
+			4) 5
+
+			if ponging around frame 1 has duration: 100(1)+ 5(2) + 5(3) + 5(4) + 5(3) + 5(2) = 125
+
+			but if ponging around frame 3: 5(3) + 5(4) + 100(1) + 5(2) + 100(1) + 5(4) = 240
+
+		*/
+		gifDurationsForPingPong = durs;
+
 	}
 	std::string getPath() {
 		//return numFrames > 0 ? paths[currentFrame] : "";
@@ -440,7 +471,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		if (numFrames && ready && frameNum != currentFrame) {
 			sampleCounter = 0;
 			currentFrame = frameNum;
-			mappedFrame = (currentFrame  + mapBlankFrameOffset(zeroOffset, numFrames)) % numFrames;
+			mappedFrame = (currentFrame  + mapBlankFrameOffset(zeroOffset, numFrames) + numFrames) % numFrames;
 			if (params[ANIMATION_MODE].getValue() == 3) {
 				mappedFrame = shuffledFrames[mappedFrame];
 			}
@@ -691,9 +722,10 @@ struct PNGDisplay : TransparentWidget {
 				blankModule->setFrameCount(gifBuddy.getFrameCount());
 				blankModule->setFrameDelays(gifBuddy.getAllFrameDelaysSeconds());
 				blankModule->setTotalGifDuration(gifBuddy.getTotalGifDuration());
+				blankModule->setTotalGifDurationIfInPingPongMode(gifBuddy.getPingPongGifDuration());
 				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
 				blankModule->setImageStatus(gifBuddy.getImageStatus());
-
+				blankModule->setReady(true);
 
 
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);

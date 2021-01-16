@@ -146,6 +146,7 @@ struct AnimatedGifBuddy {
 	std::vector<unsigned char*> framePointers;
 	std::vector<int> frameDelays;
 	std::vector<float> frameDelaysSeconds;
+	std::vector<float> totalPingPongDurations;
 	float totalGifDuration;
 
 	int imageHandle;
@@ -217,7 +218,7 @@ struct AnimatedGifBuddy {
 		for (unsigned int i = 0; i < frameDelays.size(); i++) {
 			thisDurationSeconds = ((float) frameDelays[i]) / 100;
 			totalGifDuration += thisDurationSeconds;
-			frameDelaysSeconds.push_back(thisDurationSeconds );
+			frameDelaysSeconds.push_back(thisDurationSeconds);
 		}
 	}
 	std::vector<float> getAllFrameDelaysSeconds() {
@@ -225,5 +226,15 @@ struct AnimatedGifBuddy {
 	}
 	float getTotalGifDuration() {
 		return totalGifDuration;
+	}
+	std::vector<float> getPingPongGifDuration() {
+		//2* total duration - frame0 - frameN-1
+		totalPingPongDurations.resize(0);
+
+		for (unsigned int i = 0; i < numFrames; i++) {
+			float endpointDurations = frameDelaysSeconds[i] + frameDelaysSeconds[(i - 1 + numFrames) % numFrames];
+			totalPingPongDurations.push_back(2 * totalGifDuration - endpointDurations);
+		}
+		return totalPingPongDurations;
 	}
 };
