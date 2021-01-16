@@ -3,6 +3,8 @@
 
 struct ComputerscareBlankExpander;
 
+const std::string clockModeDescriptions[3] = {"Sync\nAnimation will synchronize to a steady clock signal", "Scan\nAnimation will linearly follow a 0-10v CV.  0v => frame 1, 10v => last frame", "Frame Advance\nClock signal will advance the animation by 1 frame" };
+
 
 struct FrameOffsetParam : ParamQuantity {
 	ComputerscareBlankExpander* module;
@@ -12,6 +14,15 @@ struct FrameOffsetParam : ParamQuantity {
 		//return &module->params[paramId];
 		float val = getValue();
 		return string::f("%i", 1 + mapBlankFrameOffset(val, numFrames));
+	}
+};
+
+
+//template <const std::string& options>
+struct ClockModeParamQuantity : ParamQuantity {
+	std::string getDisplayValueString() override {
+		int val = getValue();
+		return clockModeDescriptions[val];
 	}
 };
 
@@ -57,22 +68,16 @@ struct ComputerscareBlankExpander : Module {
 
 	dsp::Timer syncTimer;
 
-	std::vector<std::string> clockModeDescriptions;
-
 	FrameOffsetParam* frameOffsetQuantity;
 
 	ComputerscareBlankExpander() {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(CLOCK_MODE, 0.f, 2.f, 0.f, "Clock Mode");
+		configParam<ClockModeParamQuantity>(CLOCK_MODE, 0.f, 2.f, 0.f, "Clock Mode");
 		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f, "Manual Reset");
 		configParam<FrameOffsetParam>(ZERO_OFFSET, 0.f, 0.999f, 0.f, "EOC / Reset Frame #");
 
 		frameOffsetQuantity = dynamic_cast<FrameOffsetParam*>(paramQuantities[ZERO_OFFSET]);
-
-		clockModeDescriptions.push_back("Sync");
-		clockModeDescriptions.push_back("Scan");
-		clockModeDescriptions.push_back("Frame Advance");
 
 		rightExpander.producerMessage = rightMessages[0];
 		rightExpander.consumerMessage = rightMessages[1];
