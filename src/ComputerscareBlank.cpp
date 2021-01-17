@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <random>
 #include <settings.hpp>
+#include <cctype>
+#include <algorithm>
 
 #define FONT_SIZE 13
 
@@ -25,6 +27,9 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 	std::vector<std::string> paths;
 	std::vector<std::string> catalog;
+	int fileIndexInCatalog;
+	unsigned int numFilesInCatalog = 0;
+
 	float width = 120;
 	float height = 380;
 	int rotation = 0;
@@ -260,15 +265,18 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		if (!pathC) {
 			return;
 		}
-		parentDirectory = dir;
+
 		std::string path = pathC;
 		std::free(pathC);
 
 		setPath(path);
 	}
-	void getContainingDirectory(int index = 0) {
+	void setContainingDirectory(int index = 0) {
 
 		std::string dir = rack::string::directory(paths[index]);
+		std::string currentImageFullpath;
+		parentDirectory = dir;
+		int imageIndex = 0;;
 
 		struct dirent* dirp = NULL;
 		DIR* rep = NULL;
@@ -281,24 +289,54 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			std::string name = dirp->d_name;
 
 			std::size_t found = name.find(".gif", name.length() - 5);
+			if (found == std::string::npos) found = name.find(".png", name.length() - 5);
+			if (found == std::string::npos) found = name.find(".jpg", name.length() - 5);
+			if (found == std::string::npos) found = name.find(".jpeg", name.length() - 5);
+			if (found == std::string::npos) found = name.find(".bmp", name.length() - 5);
 			if (found != std::string::npos) {
-				catalog.push_back(name);
-				//DEBUG("we got gif:%s",name.c_str());
+				currentImageFullpath = parentDirectory + "/" + name;
+				catalog.push_back(currentImageFullpath);
+				if (currentImageFullpath == paths[index]) {
+					fileIndexInCatalog = imageIndex;
+				}
+				//DEBUG("we got gif:%s", name.c_str());
+				imageIndex++;
 			}
 		}
-	}
-	void loadRandomGif(int index = 0) {
-		std::string dir = rack::string::directory(paths[index]);
-		getContainingDirectory();
-		if (catalog.size()) {
-			int randomIndex = floor(random::uniform() * catalog.size());
-			setPath(dir + "/" + catalog[randomIndex]);
-		}
-		else {
-			DEBUG("no gifs in this directory");
-		}
+		numFilesInCatalog = catalog.size();
 	}
 
+	void loadRandomGif() {
+		fileIndexInCatalog = floor(random::uniform() * numFilesInCatalog);
+		loadNewFileByIndex();
+	}
+
+	void loadNewFileByIndex() {
+		DEBUG("numFilesInCatalog:%i", numFilesInCatalog);
+		if (numFilesInCatalog > 0) {
+			setPath(catalog[fileIndexInCatalog]);
+		}
+	}
+	void nextFileInCatalog() {
+		if (numFilesInCatalog > 0) {
+			fileIndexInCatalog++;
+			fileIndexInCatalog %= numFilesInCatalog;
+			loadNewFileByIndex();
+		}
+	}
+	void prevFileInCatalog() {
+		if (numFilesInCatalog > 0) {
+			fileIndexInCatalog--;
+			fileIndexInCatalog += numFilesInCatalog;
+			fileIndexInCatalog %= numFilesInCatalog;
+			loadNewFileByIndex();
+		}
+	}
+	void goToFileInCatelog(int index) {
+		fileIndexInCatalog = index;
+		fileIndexInCatalog %= numFilesInCatalog;
+		loadNewFileByIndex();
+	}
 
 	void setPath(std::string path, int index = 0) {
 		//if (paths.size() <= index) {
@@ -456,8 +494,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			if (currentFrame == 0) {
 				int eb = params[END_BEHAVIOR].getValue();
 
-				if (eb == 3 ) {
+				if (eb == 2 ) {
 					loadRandomGif();
+				}
+				else if (eb == 3) {
+					nextFileInCatalog();
+				}
+				else if (eb == 4) {
+					prevFileInCatalog();
 				}
 			}
 
@@ -668,6 +712,8 @@ struct KeyboardControlChildMenu : MenuItem {
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "I: Go to random frame"));
 
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "[  (left square bracket): Load previous image from same directory"));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "]  (right square bracket): Load next image from same directory"));
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "O: Load random image from same directory"));
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "P: Toggle animation on/off"));
@@ -698,7 +744,8 @@ struct PNGDisplay : TransparentWidget {
 	}
 
 
-	void setZooms() {
+	void resetZooms() {
+		DEBUG("resetting zooms lol");
 		if (blankModule->imageFitEnum == 0) {
 			blankModule->zoomX = blankModule->width / imgWidth;
 			blankModule->zoomY = blankModule->height / imgHeight;
@@ -720,8 +767,9 @@ struct PNGDisplay : TransparentWidget {
 		else if (blankModule->imageFitEnum == 3) {
 
 		}
+	}
 
-
+	void setOffsets() {
 	}
 	void draw(const DrawArgs &args) override {
 		if (blankModule && blankModule->loadedJSON) {
@@ -742,22 +790,30 @@ struct PNGDisplay : TransparentWidget {
 				blankModule->setTotalGifDurationIfInPingPongMode(gifBuddy.getPingPongGifDuration());
 				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
 				blankModule->setImageStatus(gifBuddy.getImageStatus());
+				blankModule->setContainingDirectory();
 				blankModule->setReady(true);
 
 
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
-				path = modulePath;
-				if (path != "empty") {
-					setZooms();
+
+				//empty->anything then dont reset
+				//not empty -> anything then reset
+
+				if (modulePath != "empty") {
+					DEBUG("path:%s", modulePath.c_str());
 				}
+				if (path == "empty") {
+					//resetZooms();
+				}
+				path = modulePath;
 
 
 			}
 
 			if (blankModule->imageFitEnum != lastEnum && lastEnum != -1) {
 				lastEnum = blankModule->imageFitEnum;
-				setZooms();
+				resetZooms();
 			}
 			lastEnum = blankModule->imageFitEnum;
 			if (!path.empty() && path != "empty") {
@@ -796,7 +852,7 @@ struct GiantFrameDisplay : TransparentWidget {
 		box.size = Vec(200, 380);
 
 		description = new SmallLetterDisplay();
-		description->value = "Frame Zero, for EOC output and reset input";
+		description->value = "Frame Zero, for EOC output, reset input, and sync mode";
 		description->fontSize = 24;
 		description->breakRowWidth = 200.f;
 		description->box.pos.y = box.size.y - 130;
@@ -814,7 +870,8 @@ struct GiantFrameDisplay : TransparentWidget {
 
 		addChild(frameDisplay);
 		addChild(description);
-		//TransparentWidget();
+
+		TransparentWidget();
 	}
 	void step() {
 		if (module) {
@@ -977,7 +1034,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 
 					bgPanel->box.size.x = box.size.x;
 					rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
-					pngDisplay->setZooms();
+					pngDisplay->resetZooms();
 				}
 				panel->visible = blankModule->path.empty();
 			}
@@ -1070,6 +1127,15 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 				blankModule->loadRandomGif();
 				e.consume(this);
 			} break;
+			case GLFW_KEY_LEFT_BRACKET: {
+				blankModule->prevFileInCatalog();
+				e.consume(this);
+			} break;
+			case GLFW_KEY_RIGHT_BRACKET: {
+				blankModule->nextFileInCatalog();
+				e.consume(this);
+			} break;
+
 			}
 		}
 		ModuleWidget::onHoverKey(e);
