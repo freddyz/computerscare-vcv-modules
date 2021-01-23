@@ -782,7 +782,7 @@ struct PNGDisplay : TransparentWidget {
 				DEBUG("path: %s, modulePath:%s", path.c_str(), modulePath.c_str());
 				gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
 				if (gifBuddy.getImageStatus() == 3) {
-					std::string badGifPath = asset::plugin(pluginInstance, "res/bad-gif.gif");
+					std::string badGifPath = asset::plugin(pluginInstance, "res/broken-file.gif");
 					gifBuddy = AnimatedGifBuddy(args.vg, badGifPath.c_str());
 				}
 				img = gifBuddy.getHandle();
