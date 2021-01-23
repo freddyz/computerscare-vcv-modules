@@ -360,12 +360,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	void setSyncTime(float syncDuration) {
 		bool constantFrameDelay = params[CONSTANT_FRAME_DELAY].getValue() == 1;
 		if (params[ANIMATION_MODE].getValue() == 2) { //pingpong
-			float totalDurationForCurrentZeroOffset = gifDurationsForPingPong[mapBlankFrameOffset(zeroOffset, numFrames)];
-			if (constantFrameDelay) {
-				speedFactor = (2 * numFrames - 2) * defaultFrameDelayCentiseconds / syncDuration / 100;
-			}
-			else {
-				speedFactor = totalDurationForCurrentZeroOffset / syncDuration;
+			if (numFrames > 1) {
+				float totalDurationForCurrentZeroOffset = gifDurationsForPingPong[mapBlankFrameOffset(zeroOffset, numFrames)];
+				if (constantFrameDelay) {
+					speedFactor = (2 * numFrames - 2) * defaultFrameDelayCentiseconds / syncDuration / 100;
+				}
+				else {
+					speedFactor = totalDurationForCurrentZeroOffset / syncDuration;
+				}
 			}
 		}
 		else { //all other modes
@@ -491,19 +493,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				}
 			}
 
-			if (currentFrame == 0) {
-				int eb = params[END_BEHAVIOR].getValue();
-
-				if (eb == 2 ) {
-					loadRandomGif();
-				}
-				else if (eb == 3) {
-					nextFileInCatalog();
-				}
-				else if (eb == 4) {
-					prevFileInCatalog();
-				}
-			}
+			checkAndPerformEndAction();
 
 			float shuf = params[SHUFFLE_SEED].getValue();
 			if (shuf != lastShuffle) {
@@ -513,8 +503,21 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			lastShuffle = shuf;
 			//DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
 		}
+	}
+	void checkAndPerformEndAction() {
+		if (currentFrame == 0) {
+			int eb = params[END_BEHAVIOR].getValue();
 
-
+			if (eb == 2 ) {
+				loadRandomGif();
+			}
+			else if (eb == 3) {
+				nextFileInCatalog();
+			}
+			else if (eb == 4) {
+				prevFileInCatalog();
+			}
+		}
 	}
 	void setCurrentFrameDelayFromTable() {
 		if (ready) {
@@ -552,7 +555,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			10.0v = frame n-1
 
 		*/
-		if (ready) {
+		if (ready && numFrames > 1) {
 			int frameNum;
 			float vu = (scanVoltage) / 10.01f;
 			if (params[CONSTANT_FRAME_DELAY].getValue()) {
@@ -887,6 +890,7 @@ struct GiantFrameDisplay : TransparentWidget {
 		if (!module) {
 			visible = false;
 		}
+		TransparentWidget::draw(args);
 	}
 };
 
