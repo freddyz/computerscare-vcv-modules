@@ -80,7 +80,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 	bool expanderConnected = false;
 
-	int clockMode = 0;
+	int clockMode = CLOCK_MODE_SYNC;
 	bool clockConnected = false;
 	bool resetConnected = false;
 	bool speedConnected = false;
@@ -98,6 +98,12 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	ComputerscareSVGPanel* panelRef;
 
 	float leftMessages[2][10] = {};
+
+	enum ClockModes {
+		CLOCK_MODE_SYNC,
+		CLOCK_MODE_SCAN,
+		CLOCK_MODE_FRAME
+	};
 
 	enum ParamIds {
 		ANIMATION_SPEED,
@@ -188,7 +194,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 			if (clockConnected) {
 				bool clockTriggered = clockTrigger.process(messageFromExpander[2]);
-				if (clockMode == 0) {
+				if (clockMode == CLOCK_MODE_SYNC) {
 					//sync
 					float currentSyncTime = syncTimer.process(args.sampleTime);
 					if (clockTriggered) {
@@ -200,12 +206,12 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					}
 				}
 
-				else if (clockMode == 1) {
+				else if (clockMode == CLOCK_MODE_SCAN) {
 					//scan
 					float scanPosition = messageFromExpander[2];
 					scanToPosition(scanPosition);
 				}
-				else if (clockMode == 2) {
+				else if (clockMode == CLOCK_MODE_FRAME) {
 					//frame advance
 					shouldAdvanceAnimation = clockTriggered;
 				}
@@ -233,8 +239,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			expanderConnected = false;
 		}
 
-		if (expanderConnected && clockConnected && (clockMode == 2)) {
-
+		if (expanderConnected && clockConnected && (clockMode == CLOCK_MODE_FRAME)) {
+			//no-op for frame mode for some reason?
 		}
 		else {
 			if (sampleCounter > samplesDelay) {
@@ -384,7 +390,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		float appliedSpeedDivisor = 1;
 		float base = frameDelaySeconds;
 
-		if (expanderConnected && clockConnected && (clockMode == 0)) {
+		if (expanderConnected && clockConnected && (clockMode == CLOCK_MODE_SYNC)) {
 			appliedSpeedDivisor = speedFactor;
 		}
 		else {

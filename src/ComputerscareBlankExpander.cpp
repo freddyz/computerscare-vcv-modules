@@ -3,7 +3,7 @@
 
 struct ComputerscareBlankExpander;
 
-const std::string clockModeDescriptions[3] = {"Sync\nAnimation will synchronize to a steady clock signal", "Scan\nAnimation will linearly follow a 0-10v CV.  0v => frame 1, 10v => last frame", "Frame Advance\nClock signal will advance the animation by 1 frame" };
+const std::string clockModeDescriptions[3] = {"Sync\nAnimation will synchronize to a steady clock signal", "Scan\nAnimation will linearly follow a 0-10v CV.  0v → frame 1, 10v → last frame", "Frame Advance\nClock signal will advance the animation by 1 frame" };
 
 
 struct FrameOffsetParam : ParamQuantity {
