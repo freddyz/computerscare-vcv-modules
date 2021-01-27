@@ -29,7 +29,7 @@ struct ClockModeParamQuantity : ParamQuantity {
 
 
 struct ComputerscareBlankExpander : Module {
-	float rightMessages[2][10] = {};
+	float rightMessages[2][11] = {};
 	bool motherConnected = false;
 	float lastFrame = -1;
 	int numFrames = 1;
@@ -41,12 +41,13 @@ struct ComputerscareBlankExpander : Module {
 		CLOCK_MODE,
 		MANUAL_RESET_BUTTON,
 		ZERO_OFFSET,
+		MANUAL_NEXT_FILE_BUTTON,
 		NUM_PARAMS
 	};
 	enum InputIds {
 		SYNC_INPUT,
 		RESET_INPUT,
-		SPEED_INPUT,
+		NEXT_FILE_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
@@ -76,6 +77,7 @@ struct ComputerscareBlankExpander : Module {
 		configParam<ClockModeParamQuantity>(CLOCK_MODE, 0.f, 2.f, 0.f, "Clock Mode");
 		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f, "Manual Reset");
 		configParam<FrameOffsetParam>(ZERO_OFFSET, 0.f, 0.999f, 0.f, "EOC / Reset Frame #");
+		configParam(MANUAL_NEXT_FILE_BUTTON, 0.f, 1.f, 0.f, "Next File (see right click menu of mother for options)");
 
 		frameOffsetQuantity = dynamic_cast<FrameOffsetParam*>(paramQuantities[ZERO_OFFSET]);
 
@@ -119,14 +121,16 @@ struct ComputerscareBlankExpander : Module {
 			messageToSendToMother[3] = inputs[RESET_INPUT].isConnected();
 			messageToSendToMother[4] = inputs[RESET_INPUT].getVoltage();
 
-			messageToSendToMother[5] = 0.f;
-			messageToSendToMother[6] = 0.f;
+			messageToSendToMother[5] = inputs[NEXT_FILE_INPUT].isConnected();
+			messageToSendToMother[6] = inputs[NEXT_FILE_INPUT].getVoltage();;
 
 			messageToSendToMother[7] = params[ZERO_OFFSET].getValue();
 
 			messageToSendToMother[8] = scrubbing;
 
 			messageToSendToMother[9] = params[MANUAL_RESET_BUTTON].getValue() * 10;
+
+			messageToSendToMother[10] = params[MANUAL_NEXT_FILE_BUTTON].getValue() * 10;
 
 
 			outputs[EOC_OUTPUT].setVoltage(eocPulse.process(args.sampleTime) ? 10.f : 0.f);
@@ -207,11 +211,14 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
 
 		float outStartY = 250;
 
-		addParam(createParam<ClockModeButton>(Vec(0.5, inStartY + dY / 2), module, ComputerscareBlankExpander::CLOCK_MODE));
-		addInput(createInput<InPort>(Vec(2, inStartY + dY), module, ComputerscareBlankExpander::SYNC_INPUT));
+		addParam(createParam<ClockModeButton>(Vec(0.5, inStartY + .25 * dY), module, ComputerscareBlankExpander::CLOCK_MODE));
+		addInput(createInput<InPort>(Vec(2, inStartY + 0.75 * dY), module, ComputerscareBlankExpander::SYNC_INPUT));
 
-		addParam(createParam<ComputerscareResetButton>(Vec(0, inStartY + 2 * dY), module, ComputerscareBlankExpander::MANUAL_RESET_BUTTON));
-		addInput(createInput<InPort>(Vec(2, inStartY + 2.5 * dY), module, ComputerscareBlankExpander::RESET_INPUT));
+		addParam(createParam<ComputerscareResetButton>(Vec(0, inStartY + 1.75 * dY), module, ComputerscareBlankExpander::MANUAL_RESET_BUTTON));
+		addInput(createInput<InPort>(Vec(2, inStartY + 2.25 * dY), module, ComputerscareBlankExpander::RESET_INPUT));
+
+		addParam(createParam<ComputerscareNextButton>(Vec(0, inStartY + 3.25 * dY), module, ComputerscareBlankExpander::MANUAL_NEXT_FILE_BUTTON));
+		addInput(createInput<InPort>(Vec(2, inStartY + 3.75 * dY), module, ComputerscareBlankExpander::NEXT_FILE_INPUT));
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(2, 236), module, ComputerscareBlankExpander::EACH_FRAME_OUTPUT));
 

@@ -83,21 +83,26 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	int clockMode = CLOCK_MODE_SYNC;
 	bool clockConnected = false;
 	bool resetConnected = false;
-	bool speedConnected = false;
+	bool nextFileInputConnected = false;
 
 	std::vector<std::string> animationModeDescriptions;
 	std::vector<std::string> endBehaviorDescriptions;
+	std::vector<std::string> nextFileDescriptions;
+
 
 	dsp::SchmittTrigger clockTrigger;
 	dsp::SchmittTrigger resetTrigger;
 	dsp::SchmittTrigger resetButtonTrigger;
+
+	dsp::SchmittTrigger nextFileTrigger;
+	dsp::SchmittTrigger nextFileButtonTrigger;
 
 	dsp::Timer syncTimer;
 
 
 	ComputerscareSVGPanel* panelRef;
 
-	float leftMessages[2][10] = {};
+	float leftMessages[2][11] = {};
 
 	enum ClockModes {
 		CLOCK_MODE_SYNC,
@@ -112,6 +117,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		ANIMATION_MODE,
 		END_BEHAVIOR,
 		SHUFFLE_SEED,
+		NEXT_FILE_BEHAVIOR,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -138,13 +144,17 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		endBehaviorDescriptions.push_back("Load Next");
 		endBehaviorDescriptions.push_back("Load Previous");
 
+		nextFileDescriptions.push_back("Load Next (Alphabetical) File in Directory");
+		nextFileDescriptions.push_back("Load Previous (Alphabetical) File in Directory");
+		nextFileDescriptions.push_back("Load Random File from Directory");
+
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
 		configMenuParam(ANIMATION_SPEED, 0.05f, 20.f, 1.f, "Animation Speed", 2, "x");
 		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
 		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
 		configMenuParam(ANIMATION_MODE, 0.f, "Animation Mode", animationModeDescriptions);
-		configMenuParam(END_BEHAVIOR, 0.f, "Animation End Behavior", endBehaviorDescriptions);
+		configMenuParam(NEXT_FILE_BEHAVIOR, 0.f, "Next File Trigger / Button Behavior", nextFileDescriptions);
 		configMenuParam(SHUFFLE_SEED, 0.f, 1.f, 0.5f, "Shuffle Seed", 2);
 
 		paths.push_back("empty");
@@ -172,6 +182,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		samplesDelay = frameDelay * args.sampleRate;
 
 		bool shouldAdvanceAnimation = false;
+		bool clockTriggered = false;
+
 		if (ready && leftExpander.module && leftExpander.module->model == modelComputerscareBlankExpander) {
 			expanderConnected = true;
 			// me
@@ -182,7 +194,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			clockMode = messageFromExpander[0];
 			clockConnected = messageFromExpander[1];
 			resetConnected = messageFromExpander[3];
-			speedConnected = messageFromExpander[5];
+			nextFileInputConnected = messageFromExpander[5];
 
 			zeroOffset = messageFromExpander[7];
 
@@ -193,7 +205,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			updateScrubFrame();
 
 			if (clockConnected) {
-				bool clockTriggered = clockTrigger.process(messageFromExpander[2]);
+				clockTriggered = clockTrigger.process(messageFromExpander[2]);
 				if (clockMode == CLOCK_MODE_SYNC) {
 					//sync
 					float currentSyncTime = syncTimer.process(args.sampleTime);
@@ -215,6 +227,16 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					//frame advance
 					shouldAdvanceAnimation = clockTriggered;
 				}
+			}
+
+			if (nextFileInputConnected) {
+				if (nextFileTrigger.process(messageFromExpander[6])) {
+					checkAndPerformEndAction(true);
+				}
+			}
+
+			if (nextFileButtonTrigger.process(messageFromExpander[10])) {
+				checkAndPerformEndAction(true);
 			}
 
 			if (resetConnected) {
@@ -248,8 +270,18 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				shouldAdvanceAnimation = true;
 			}
 		}
-		if (params[ANIMATION_ENABLED].getValue() && shouldAdvanceAnimation) {
-			tickAnimation();
+		if (numFrames > 1) {
+			if (params[ANIMATION_ENABLED].getValue() && shouldAdvanceAnimation) {
+				tickAnimation();
+				//checkAndPerformEndAction();
+			}
+		}
+		else {
+			if ((clockTriggered && (clockConnected && clockMode == CLOCK_MODE_SYNC)) || numFrames > 1) {
+				if (currentFrame == 0) {
+					//checkAndPerformEndAction();
+				}
+			}
 		}
 	}
 
@@ -318,7 +350,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 
 	void loadNewFileByIndex() {
-		DEBUG("numFilesInCatalog:%i", numFilesInCatalog);
 		if (numFilesInCatalog > 0) {
 			setPath(catalog[fileIndexInCatalog]);
 		}
@@ -357,7 +388,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		currentFrame = 0;
 	}
 	void setFrameCount(int frameCount) {
-		DEBUG("setting frame count %i", frameCount);
 		numFrames = frameCount;
 	}
 	void setImageStatus(int status) {
@@ -499,29 +529,26 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				}
 			}
 
-			checkAndPerformEndAction();
-
 			float shuf = params[SHUFFLE_SEED].getValue();
 			if (shuf != lastShuffle) {
-				DEBUG("reshuffle!!!");
 				setFrameShuffle();
 			}
 			lastShuffle = shuf;
 			//DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
 		}
 	}
-	void checkAndPerformEndAction() {
-		if (currentFrame == 0) {
-			int eb = params[END_BEHAVIOR].getValue();
+	void checkAndPerformEndAction(bool forceEndAction = false) {
+		if (currentFrame == 0 || forceEndAction) {
+			int eb = params[NEXT_FILE_BEHAVIOR].getValue();
 
-			if (eb == 2 ) {
-				loadRandomGif();
-			}
-			else if (eb == 3) {
+			if (eb == 0) {
 				nextFileInCatalog();
 			}
-			else if (eb == 4) {
+			else if (eb == 1) {
 				prevFileInCatalog();
+			}
+			else if (eb == 2 ) {
+				loadRandomGif();
 			}
 		}
 	}
@@ -893,10 +920,9 @@ struct GiantFrameDisplay : TransparentWidget {
 		TransparentWidget::step();
 	}
 	void draw(const DrawArgs &args) {
-		if (!module) {
-			visible = false;
+		if (module) {
+			TransparentWidget::draw(args);
 		}
-		TransparentWidget::draw(args);
 	}
 };
 
@@ -960,10 +986,10 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		modeMenu->options = blankModule->animationModeDescriptions;
 
 		endMenu = new ParamSelectMenu();
-		endMenu->text = "Animation End Behavior";
+		endMenu->text = "Next File Trigger / Button Behavior";
 		endMenu->rightText = RIGHT_ARROW;
-		endMenu->param = blankModule->paramQuantities[ComputerscareBlank::END_BEHAVIOR];
-		endMenu->options = blankModule->endBehaviorDescriptions;
+		endMenu->param = blankModule->paramQuantities[ComputerscareBlank::NEXT_FILE_BEHAVIOR];
+		endMenu->options = blankModule->nextFileDescriptions;
 
 		menu->addChild(new MenuEntry);
 
