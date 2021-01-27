@@ -327,10 +327,15 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			std::string name = dirp->d_name;
 
 			std::size_t found = name.find(".gif", name.length() - 5);
+			if (found == std::string::npos) found = name.find(".GIF", name.length() - 5);
 			if (found == std::string::npos) found = name.find(".png", name.length() - 5);
+			if (found == std::string::npos) found = name.find(".PNG", name.length() - 5);
 			if (found == std::string::npos) found = name.find(".jpg", name.length() - 5);
+			if (found == std::string::npos) found = name.find(".JPG", name.length() - 5);
 			if (found == std::string::npos) found = name.find(".jpeg", name.length() - 5);
+			if (found == std::string::npos) found = name.find(".JPEG", name.length() - 5);
 			if (found == std::string::npos) found = name.find(".bmp", name.length() - 5);
+			if (found == std::string::npos) found = name.find(".BMP", name.length() - 5);
 			if (found != std::string::npos) {
 				currentImageFullpath = parentDirectory + "/" + name;
 				catalog.push_back(currentImageFullpath);
@@ -833,14 +838,14 @@ struct PNGDisplay : TransparentWidget {
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
 
-				//empty->anything then dont reset
+				//path==empty means that it is 1st load of the module from JSON
 				//not empty -> anything then reset
 
 				if (modulePath != "empty") {
 					DEBUG("path:%s", modulePath.c_str());
 				}
-				if (path == "empty") {
-					//resetZooms();
+				if (path != "empty") {
+					resetZooms();
 				}
 				path = modulePath;
 
