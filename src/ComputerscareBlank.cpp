@@ -98,6 +98,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	dsp::SchmittTrigger nextFileButtonTrigger;
 
 	dsp::Timer syncTimer;
+	dsp::Timer slideshowTimer;
 
 
 	ComputerscareSVGPanel* panelRef;
@@ -118,6 +119,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		END_BEHAVIOR,
 		SHUFFLE_SEED,
 		NEXT_FILE_BEHAVIOR,
+		SLIDESHOW_ACTIVE,
+		SLIDESHOW_TIME,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -157,6 +160,9 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		configMenuParam(NEXT_FILE_BEHAVIOR, 0.f, "Next File Trigger / Button Behavior", nextFileDescriptions);
 		configMenuParam(SHUFFLE_SEED, 0.f, 1.f, 0.5f, "Shuffle Seed", 2);
 
+		configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
+		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.f, "Slideshow Time", 2, " Computerscare Time Units", 2, 1, 0);
+
 		paths.push_back("empty");
 
 		leftExpander.producerMessage = leftMessages[0];
@@ -177,6 +183,15 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				lastZoom = settings::zoom;
 				zoomCheckCounter = 0;
 			}
+		}
+
+		if (params[SLIDESHOW_ACTIVE].getValue()) {
+			float dTime = exp(5 * params[SLIDESHOW_TIME].getValue());
+			if (slideshowTimer.process(args.sampleTime) > dTime) {
+				checkAndPerformEndAction(true);
+				slideshowTimer.reset();
+			}
+
 		}
 
 		samplesDelay = frameDelay * args.sampleRate;
@@ -1052,6 +1067,12 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		MenuParam* shuffleParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED], 2);
 		menu->addChild(shuffleParam);
 
+
+		MenuParam* slideshowEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_ACTIVE], 0);
+		menu->addChild(slideshowEnabled);
+
+		MenuParam* slideshowSpeedParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME], 2);
+		menu->addChild(slideshowSpeedParam);
 
 	}
 	void step() override {
