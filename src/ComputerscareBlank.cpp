@@ -153,7 +153,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configMenuParam(ANIMATION_SPEED, 0.05f, 20.f, 1.f, "Animation Speed", 2, "x");
+		configMenuParam(ANIMATION_SPEED, -1.f, 1.f, 0.f, "Animation Speed", 2, "x", 20.f);
 		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
 		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
 		configMenuParam(ANIMATION_MODE, 0.f, "Animation Mode", animationModeDescriptions);
@@ -161,7 +161,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		configMenuParam(SHUFFLE_SEED, 0.f, 1.f, 0.5f, "Shuffle Seed", 2);
 
 		configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
-		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.f, "Slideshow Time", 2, " Computerscare Time Units", 2, 1, 0);
+		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.f, "Slideshow Time", 2, " s",  1000.f);
 
 		paths.push_back("empty");
 
@@ -186,7 +186,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		}
 
 		if (params[SLIDESHOW_ACTIVE].getValue()) {
-			float dTime = exp(5 * params[SLIDESHOW_TIME].getValue());
+			//float dTime = exp(5 * params[SLIDESHOW_TIME].getValue());
+			float dTime =  std::pow(1000.f , params[SLIDESHOW_TIME].getValue());
 			if (slideshowTimer.process(args.sampleTime) > dTime) {
 				checkAndPerformEndAction(true);
 				slideshowTimer.reset();
@@ -436,7 +437,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		}
 	}
 	void setFrameDelay(float frameDelaySeconds) {
-		float speedKnob = abs(params[ANIMATION_SPEED].getValue());
+		float speedKnob = std::pow(20.f, params[ANIMATION_SPEED].getValue());
 		float appliedSpeedDivisor = 1;
 		float base = frameDelaySeconds;
 
