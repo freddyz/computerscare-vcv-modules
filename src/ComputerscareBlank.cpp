@@ -161,7 +161,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		configMenuParam(SHUFFLE_SEED, 0.f, 1.f, 0.5f, "Shuffle Seed", 2);
 
 		configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
-		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.f, "Slideshow Time", 2, " s",  1000.f);
+		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.f, "Slideshow Time", 2, " s",  400.f, 3.f);
 
 		paths.push_back("empty");
 
@@ -187,7 +187,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		if (params[SLIDESHOW_ACTIVE].getValue()) {
 			//float dTime = exp(5 * params[SLIDESHOW_TIME].getValue());
-			float dTime =  std::pow(1000.f , params[SLIDESHOW_TIME].getValue());
+			float dTime =  3 * std::pow(400.f , params[SLIDESHOW_TIME].getValue());
 			if (slideshowTimer.process(args.sampleTime) > dTime) {
 				checkAndPerformEndAction(true);
 				slideshowTimer.reset();

@@ -155,8 +155,7 @@ struct MultiselectParamQuantity : ParamQuantity {
 };
 struct MenuParamModuleWidget : ModuleWidget {
 	MenuParamModuleWidget() {
-
-		DEBUG("Im inside MenuParamModuleWidget dontcha know");
+		//DEBUG("Im inside MenuParamModuleWidget dontcha know");
 	}
 	/*std::vector<ParamAndType> *myListOParams;
 	MenuParamModuleWidget(std::vector<ParamAndType> *paramList) {
