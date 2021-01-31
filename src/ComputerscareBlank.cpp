@@ -21,6 +21,8 @@
 struct ComputerscareBlank : ComputerscareMenuParamModule {
 	bool loading = true;
 	bool loadedJSON = false;
+	bool jsonFlag = false;
+
 	bool ready = false;
 	std::string path;
 	std::string parentDirectory;
@@ -802,7 +804,6 @@ struct PNGDisplay : TransparentWidget {
 
 
 	void resetZooms() {
-		DEBUG("resetting zooms lol");
 		if (blankModule->imageFitEnum == 0) {
 			blankModule->zoomX = blankModule->width / imgWidth;
 			blankModule->zoomY = blankModule->height / imgHeight;
@@ -854,15 +855,22 @@ struct PNGDisplay : TransparentWidget {
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
 
-				//path==empty means that it is 1st load of the module from JSON
-				//not empty -> anything then reset
+				/*
+					1) user selects image from dialog: reset zooms
+					2) change came from slideshow: reset zooms
 
-				if (modulePath != "empty") {
-					DEBUG("path:%s", modulePath.c_str());
-				}
-				if (path != "empty") {
+					3) loaded from JSON dont reset zooms
+				*/
+
+				if (blankModule->jsonFlag ) {
+					//dont want to reset zooms if loading from json
+					//unsure of another way to distinguish (1) from (3)
+					//other than this janky flag
+					blankModule->jsonFlag = false;
+				} else {
 					resetZooms();
 				}
+
 				path = modulePath;
 
 
@@ -1007,7 +1015,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		modeMenu->options = blankModule->animationModeDescriptions;
 
 		endMenu = new ParamSelectMenu();
-		endMenu->text = "Next File Trigger / Button Behavior";
+		endMenu->text = "Slideshow / Next File Behavior";
 		endMenu->rightText = RIGHT_ARROW;
 		endMenu->param = blankModule->paramQuantities[ComputerscareBlank::NEXT_FILE_BEHAVIOR];
 		endMenu->options = blankModule->nextFileDescriptions;
@@ -1088,6 +1096,8 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 				//pngDisplay->box.pos.y = blankModule->yOffset;
 				rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
 				blankModule->loadedJSON = true;
+				blankModule->jsonFlag = true;
+
 			}
 			else {
 				if (box.size.x != blankModule->width) {
