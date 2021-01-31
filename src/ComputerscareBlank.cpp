@@ -163,7 +163,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		configMenuParam(SHUFFLE_SEED, 0.f, 1.f, 0.5f, "Shuffle Seed", 2);
 
 		configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
-		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.f, "Slideshow Time", 2, " s",  400.f, 3.f);
+		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.200948f, "Slideshow Time", 2, " s",  400.f, 3.f);
 
 		paths.push_back("empty");
 
