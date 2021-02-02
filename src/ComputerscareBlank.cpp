@@ -516,28 +516,22 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	void tickAnimation() {
 		if (numFrames > 1) {
 			int animationMode = params[ANIMATION_MODE].getValue();
-			if (params[ANIMATION_SPEED].getValue() >= 0 ) {
-				if (animationMode == 0 || animationMode == 3) {
-					nextFrame();
-				} else if (animationMode == 1)  {
-					prevFrame();
-				}
-				else if (animationMode == 2) {
-					if (pingPongDirection == 1) {
-						nextFrame();
-					} else {
-						prevFrame();
-					}
-				}
-				else if (animationMode == 4 ) {
-					goToRandomFrame();
-				}
-				tick = !tick;
-
-			}
-			else {
+			if (animationMode == 0 || animationMode == 3) {
+				nextFrame();
+			} else if (animationMode == 1)  {
 				prevFrame();
 			}
+			else if (animationMode == 2) {
+				if (pingPongDirection == 1) {
+					nextFrame();
+				} else {
+					prevFrame();
+				}
+			}
+			else if (animationMode == 4 ) {
+				goToRandomFrame();
+			}
+			tick = !tick;
 			if (animationMode == 2) {
 				//DEBUG("PRE ping current:%i,direction:%i", currentFrame, pingPongDirection);
 				if (pingPongDirection == 1) {
