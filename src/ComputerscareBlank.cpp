@@ -21,6 +21,8 @@
 struct ComputerscareBlank : ComputerscareMenuParamModule {
 	bool loading = true;
 	bool loadedJSON = false;
+	bool jsonFlag = false;
+
 	bool ready = false;
 	std::string path;
 	std::string parentDirectory;
@@ -98,6 +100,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	dsp::SchmittTrigger nextFileButtonTrigger;
 
 	dsp::Timer syncTimer;
+	dsp::Timer slideshowTimer;
 
 
 	ComputerscareSVGPanel* panelRef;
@@ -118,6 +121,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		END_BEHAVIOR,
 		SHUFFLE_SEED,
 		NEXT_FILE_BEHAVIOR,
+		SLIDESHOW_ACTIVE,
+		SLIDESHOW_TIME,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -150,12 +155,15 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configMenuParam(ANIMATION_SPEED, 0.05f, 20.f, 1.f, "Animation Speed", 2, "x");
+		configMenuParam(ANIMATION_SPEED, -1.f, 1.f, 0.f, "Animation Speed", 2, "x", 20.f);
 		configParam(ANIMATION_ENABLED, 0.f, 1.f, 1.f, "Animation Enabled");
 		configParam(CONSTANT_FRAME_DELAY, 0.f, 1.f, 0.f, "Constant Frame Delay");
 		configMenuParam(ANIMATION_MODE, 0.f, "Animation Mode", animationModeDescriptions);
 		configMenuParam(NEXT_FILE_BEHAVIOR, 0.f, "Next File Trigger / Button Behavior", nextFileDescriptions);
 		configMenuParam(SHUFFLE_SEED, 0.f, 1.f, 0.5f, "Shuffle Seed", 2);
+
+		configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
+		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.200948f, "Slideshow Time", 2, " s",  400.f, 3.f);
 
 		paths.push_back("empty");
 
@@ -177,6 +185,16 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				lastZoom = settings::zoom;
 				zoomCheckCounter = 0;
 			}
+		}
+
+		if (params[SLIDESHOW_ACTIVE].getValue()) {
+			//float dTime = exp(5 * params[SLIDESHOW_TIME].getValue());
+			float dTime =  3 * std::pow(400.f , params[SLIDESHOW_TIME].getValue());
+			if (slideshowTimer.process(args.sampleTime) > dTime) {
+				checkAndPerformEndAction(true);
+				slideshowTimer.reset();
+			}
+
 		}
 
 		samplesDelay = frameDelay * args.sampleRate;
@@ -421,7 +439,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		}
 	}
 	void setFrameDelay(float frameDelaySeconds) {
-		float speedKnob = abs(params[ANIMATION_SPEED].getValue());
+		float speedKnob = std::pow(20.f, params[ANIMATION_SPEED].getValue());
 		float appliedSpeedDivisor = 1;
 		float base = frameDelaySeconds;
 
@@ -498,28 +516,22 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	void tickAnimation() {
 		if (numFrames > 1) {
 			int animationMode = params[ANIMATION_MODE].getValue();
-			if (params[ANIMATION_SPEED].getValue() >= 0 ) {
-				if (animationMode == 0 || animationMode == 3) {
-					nextFrame();
-				} else if (animationMode == 1)  {
-					prevFrame();
-				}
-				else if (animationMode == 2) {
-					if (pingPongDirection == 1) {
-						nextFrame();
-					} else {
-						prevFrame();
-					}
-				}
-				else if (animationMode == 4 ) {
-					goToRandomFrame();
-				}
-				tick = !tick;
-
-			}
-			else {
+			if (animationMode == 0 || animationMode == 3) {
+				nextFrame();
+			} else if (animationMode == 1)  {
 				prevFrame();
 			}
+			else if (animationMode == 2) {
+				if (pingPongDirection == 1) {
+					nextFrame();
+				} else {
+					prevFrame();
+				}
+			}
+			else if (animationMode == 4 ) {
+				goToRandomFrame();
+			}
+			tick = !tick;
 			if (animationMode == 2) {
 				//DEBUG("PRE ping current:%i,direction:%i", currentFrame, pingPongDirection);
 				if (pingPongDirection == 1) {
@@ -786,7 +798,6 @@ struct PNGDisplay : TransparentWidget {
 
 
 	void resetZooms() {
-		DEBUG("resetting zooms lol");
 		if (blankModule->imageFitEnum == 0) {
 			blankModule->zoomX = blankModule->width / imgWidth;
 			blankModule->zoomY = blankModule->height / imgHeight;
@@ -838,15 +849,22 @@ struct PNGDisplay : TransparentWidget {
 				nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
 				imgRatio = ((float)imgWidth / (float)imgHeight);
 
-				//path==empty means that it is 1st load of the module from JSON
-				//not empty -> anything then reset
+				/*
+					1) user selects image from dialog: reset zooms
+					2) change came from slideshow: reset zooms
 
-				if (modulePath != "empty") {
-					DEBUG("path:%s", modulePath.c_str());
-				}
-				if (path != "empty") {
+					3) loaded from JSON dont reset zooms
+				*/
+
+				if (blankModule->jsonFlag ) {
+					//dont want to reset zooms if loading from json
+					//unsure of another way to distinguish (1) from (3)
+					//other than this janky flag
+					blankModule->jsonFlag = false;
+				} else {
 					resetZooms();
 				}
+
 				path = modulePath;
 
 
@@ -991,7 +1009,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		modeMenu->options = blankModule->animationModeDescriptions;
 
 		endMenu = new ParamSelectMenu();
-		endMenu->text = "Next File Trigger / Button Behavior";
+		endMenu->text = "Slideshow / Next File Behavior";
 		endMenu->rightText = RIGHT_ARROW;
 		endMenu->param = blankModule->paramQuantities[ComputerscareBlank::NEXT_FILE_BEHAVIOR];
 		endMenu->options = blankModule->nextFileDescriptions;
@@ -1053,6 +1071,12 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		menu->addChild(shuffleParam);
 
 
+		MenuParam* slideshowEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_ACTIVE], 0);
+		menu->addChild(slideshowEnabled);
+
+		MenuParam* slideshowSpeedParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME], 2);
+		menu->addChild(slideshowSpeedParam);
+
 	}
 	void step() override {
 		if (module) {
@@ -1066,6 +1090,8 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 				//pngDisplay->box.pos.y = blankModule->yOffset;
 				rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
 				blankModule->loadedJSON = true;
+				blankModule->jsonFlag = true;
+
 			}
 			else {
 				if (box.size.x != blankModule->width) {

@@ -123,7 +123,7 @@ struct ComputerscareMenuParamModule : Module {
 	ParamQuantity* pq;
 	void configMenuParam(int paramId, float minValue, float maxValue, float defaultValue, std::string label = "", int controlType = 2, std::string unit = "", float displayBase = 0.f, float displayMultiplier = 1.f, float displayOffset = 0.f) {
 
-		configParam(paramId, minValue, maxValue, defaultValue, label, unit, displayBase, displayMultiplier);
+		configParam(paramId, minValue, maxValue, defaultValue, label, unit, displayBase, displayMultiplier, displayOffset);
 		pq = paramQuantities[paramId];
 		ParamAndType* pt = new ParamAndType(pq, controlType);
 		paramList.push_back(pt);
@@ -155,8 +155,7 @@ struct MultiselectParamQuantity : ParamQuantity {
 };
 struct MenuParamModuleWidget : ModuleWidget {
 	MenuParamModuleWidget() {
-
-		DEBUG("Im inside MenuParamModuleWidget dontcha know");
+		//DEBUG("Im inside MenuParamModuleWidget dontcha know");
 	}
 	/*std::vector<ParamAndType> *myListOParams;
 	MenuParamModuleWidget(std::vector<ParamAndType> *paramList) {
