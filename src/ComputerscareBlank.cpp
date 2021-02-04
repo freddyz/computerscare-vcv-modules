@@ -1146,7 +1146,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 			} break;
 			}
 		}
-		if (e.action == GLFW_RELEASE && !e.mods ) {
+		if (e.action == GLFW_RELEASE) {
 			switch (e.key) {
 			case GLFW_KEY_K: {
 				blankModule->goToFrame(0);
