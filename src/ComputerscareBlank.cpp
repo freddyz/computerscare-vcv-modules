@@ -326,6 +326,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		std::free(pathC);
 
 		setPath(path);
+		jsonFlag = false;
 	}
 	void setContainingDirectory(int index = 0) {
 
