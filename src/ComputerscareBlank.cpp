@@ -586,7 +586,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		if (numFrames && ready && frameNum != currentFrame) {
 			sampleCounter = 0;
 			currentFrame = frameNum;
-			mappedFrame = (currentFrame  + mapBlankFrameOffset(zeroOffset, numFrames) + numFrames) % numFrames;
+			mappedFrame = (currentFrame  + mapBlankFrameOffset(zeroOffset, numFrames) + 10 * numFrames) % numFrames;
 			if (params[ANIMATION_MODE].getValue() == 3) {
 				mappedFrame = shuffledFrames[mappedFrame];
 			}
