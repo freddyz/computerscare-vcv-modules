@@ -123,6 +123,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		NEXT_FILE_BEHAVIOR,
 		SLIDESHOW_ACTIVE,
 		SLIDESHOW_TIME,
+		LIGHT_WIDGET_MODE,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -164,6 +165,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
 		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.200948f, "Slideshow Time", 2, " s",  400.f, 3.f);
+		configParam(LIGHT_WIDGET_MODE, 0.f, 1.f, 0.f, "Keep image fully opaque when used with ModularFungi Lights Off");
 
 		paths.push_back("empty");
 
@@ -303,6 +305,9 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		}
 	}
 
+	bool getLightWidgetMode() {
+		return params[LIGHT_WIDGET_MODE].getValue();
+	}
 	void updateScrubFrame() {
 		if (ready) {
 			scrubFrame = mapBlankFrameOffset(zeroOffset, numFrames);
@@ -783,7 +788,8 @@ struct KeyboardControlChildMenu : MenuItem {
 
 };
 
-struct PNGDisplay : TransparentWidget {
+template <class TBase>
+struct tPNGDisplay : TBase {
 	ComputerscareBlank *blankModule;
 
 	int imgWidth, imgHeight;
@@ -794,7 +800,7 @@ struct PNGDisplay : TransparentWidget {
 	int currentFrame = -1;
 	AnimatedGifBuddy gifBuddy;
 
-	PNGDisplay() {
+	tPNGDisplay() {
 	}
 
 
@@ -824,7 +830,7 @@ struct PNGDisplay : TransparentWidget {
 
 	void setOffsets() {
 	}
-	void draw(const DrawArgs &args) override {
+	void draw(const rack::Widget::DrawArgs &args) override {
 		if (blankModule && blankModule->loadedJSON) {
 			std::string modulePath = blankModule->getPath();
 			if (path != modulePath) {
@@ -900,9 +906,55 @@ struct PNGDisplay : TransparentWidget {
 				currentFrame = blankModule->scrubFrame;
 			}
 		}
-		TransparentWidget::step();
+		TBase::step();
 	}
 };
+
+//this is so CustomBlank can optionally stay fully opaque when ModularFungi LightOff module is used
+typedef tPNGDisplay<LightWidget> PNGDisplayLightWidget;
+typedef tPNGDisplay<TransparentWidget> PNGDisplayTransparentWidget;
+
+struct PNGDisplay : Widget {
+	int counter = 0;
+	bool lightWidgetMode = false;
+	PNGDisplay(ComputerscareBlank *blankModule) {
+		module = blankModule;
+
+		pngLight = new PNGDisplayLightWidget();
+		pngLight->blankModule = blankModule;
+
+		pngTransparent = new PNGDisplayTransparentWidget();
+		pngTransparent->blankModule = blankModule;
+
+		addChild(pngTransparent);
+		Widget();
+	}
+	void resetZooms() {
+		pngLight->resetZooms();
+		pngTransparent->resetZooms();
+	}
+	void step() override {
+		if (module) {
+			bool moduleLightWidgetMode = module->getLightWidgetMode();
+			if (moduleLightWidgetMode != lightWidgetMode) {
+				lightWidgetMode = moduleLightWidgetMode;
+				if (lightWidgetMode) {
+					removeChild(pngTransparent);
+					addChild(pngLight);
+				} else {
+					removeChild(pngLight);
+					addChild(pngTransparent);
+				}
+			}
+		}
+		//pngLight->hide();
+		Widget::step();
+	}
+	PNGDisplayLightWidget *pngLight;
+	PNGDisplayTransparentWidget *pngTransparent;
+	ComputerscareBlank *module;
+};
+
 
 struct GiantFrameDisplay : TransparentWidget {
 	ComputerscareBlank *module;
@@ -975,8 +1027,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 
 		if (blankModule) {
 			{
-				PNGDisplay *pngDisplay = new PNGDisplay();
-				pngDisplay->blankModule = blankModule;
+				PNGDisplay *pngDisplay = new PNGDisplay(blankModule);
 				pngDisplay->box.pos = Vec(0, 0);
 
 				pngDisplay->box.size = Vec( blankModule->width , blankModule->height );
@@ -1077,6 +1128,10 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 
 		MenuParam* slideshowSpeedParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME], 2);
 		menu->addChild(slideshowSpeedParam);
+
+		MenuParam* lightWidgetMode = new MenuParam(blank->paramQuantities[ComputerscareBlank::LIGHT_WIDGET_MODE], 0);
+		menu->addChild(lightWidgetMode);
+
 
 	}
 	void step() override {
