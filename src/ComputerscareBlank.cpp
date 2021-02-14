@@ -242,7 +242,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					//sync
 					float currentSyncTime = syncTimer.process(args.sampleTime);
 					if (clockTriggered) {
-						DEBUG("mother sync'd, time:%f", currentSyncTime);
 						syncTimer.reset();
 						setSyncTime(currentSyncTime);
 						if (params[ANIMATION_ENABLED].getValue()) {
@@ -567,13 +566,13 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		if (numFrames > 1) {
 			int animationMode = params[ANIMATION_MODE].getValue();
 
-			bool onFinalFrame = currentFrame == numFrames - 1;
+			bool onFinalFrame = currentFrame == frameScripts[animationMode].size() - 1;
 
 			if (animationMode == ANIMATION_RANDOM) {
 				onFinalFrame = false;
 			}
 
-			if (clockConnected && clockMode == CLOCK_MODE_SYNC && onFinalFrame && false) {
+			if (clockConnected && clockMode == CLOCK_MODE_SYNC && onFinalFrame) {
 				//hold up animation back to 1st frame when controlled.  Wait for clock signal
 			}
 			else {
@@ -595,7 +594,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			}
 			tick = !tick;
 			if (animationMode == ANIMATION_PINGPONG) {
-				//DEBUG("PRE ping current:%i,direction:%i", currentFrame, pingPongDirection);
 				if (pingPongDirection == 1) {
 					if (currentFrame == numFrames - 1) {
 						pingPongDirection = -1;
@@ -613,7 +611,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				setFrameShuffle();
 			}
 			lastShuffle = shuf;
-			//DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
 		}
 	}
 	void checkAndPerformEndAction(bool forceEndAction = false) {
@@ -662,9 +659,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 
 			setCurrentFrameDelayFromTable();
-			if (currentFrame == 0) {
-				DEBUG("MOTHER currentFrame:%i, mappedFrame:%i, scrubFrame:%i", currentFrame, mappedFrame, scrubFrame);
-			}
 		}
 	}
 	void goToRandomFrame() {
