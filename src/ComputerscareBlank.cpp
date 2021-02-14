@@ -50,6 +50,11 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	std::vector<int> frameMapForScan;
 	std::vector<int> shuffledFrames;
 	std::vector<float> gifDurationsForPingPong;
+	std::vector<int> framesForward;
+	std::vector<int> framesReverse;
+	std::vector<int> framesPingpong;
+
+	std::vector<std::vector<int>> frameScripts;
 
 	float totalGifDuration = 0.f;
 
@@ -113,6 +118,13 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		CLOCK_MODE_FRAME
 	};
 
+	enum AnimationModes {
+		ANIMATION_FORWARD,
+		ANIMATION_REVERSE,
+		ANIMATION_PINGPONG,
+		ANIMATION_SHUFFLE,
+		ANIMATION_RANDOM
+	};
 	enum ParamIds {
 		ANIMATION_SPEED,
 		ANIMATION_ENABLED,
@@ -230,6 +242,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					//sync
 					float currentSyncTime = syncTimer.process(args.sampleTime);
 					if (clockTriggered) {
+						DEBUG("mother sync'd, time:%f", currentSyncTime);
 						syncTimer.reset();
 						setSyncTime(currentSyncTime);
 						if (params[ANIMATION_ENABLED].getValue()) {
@@ -424,7 +437,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 	void setSyncTime(float syncDuration) {
 		bool constantFrameDelay = params[CONSTANT_FRAME_DELAY].getValue() == 1;
-		if (params[ANIMATION_MODE].getValue() == 2) { //pingpong
+		if (params[ANIMATION_MODE].getValue() == ANIMATION_PINGPONG) {
 			if (numFrames > 1) {
 				float totalDurationForCurrentZeroOffset = gifDurationsForPingPong[mapBlankFrameOffset(zeroOffset, numFrames)];
 				if (constantFrameDelay) {
@@ -469,6 +482,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		frameDelays = frameDelaysSeconds;
 		setFrameMap();
 		setFrameShuffle();
+		setRegularFrameOrders();
+
+		frameScripts.resize(0);
+		frameScripts.push_back(framesForward);
+		frameScripts.push_back(framesReverse);
+		frameScripts.push_back(framesPingpong);
+		frameScripts.push_back(shuffledFrames);
+		frameScripts.push_back(framesForward);
 
 	}
 	void setReady(bool v) {
@@ -496,6 +517,19 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		std::shuffle(std::begin(shuffledFrames), std::end(shuffledFrames), std::default_random_engine(seed));
 
 	}
+	void setRegularFrameOrders() {
+		framesForward.resize(0);
+		framesReverse.resize(0);
+		framesPingpong.resize(0);
+		for (int i = 0; i < numFrames; i++) {
+			framesForward.push_back(i);
+			framesReverse.push_back(numFrames - i - 1);
+			framesPingpong.push_back(i);
+		}
+		framesPingpong.insert( framesPingpong.end(), framesReverse.begin() + 1, framesReverse.end() - 1 );
+
+
+	}
 	void setTotalGifDuration(float totalDuration) {
 		totalGifDuration = totalDuration;
 	}
@@ -519,26 +553,48 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		//return numFrames > 0 ? paths[currentFrame] : "";
 		return paths[0];
 	}
+
+	/*
+	enum AnimationModes {
+		ANIMATION_FORWARD,
+		ANIMATION_REVERSE,
+		ANIMATION_PINGPONG,
+		ANIMATION_SHUFFLE,
+		ANIMATION_RANDOM
+	};
+	*/
 	void tickAnimation() {
 		if (numFrames > 1) {
 			int animationMode = params[ANIMATION_MODE].getValue();
-			if (animationMode == 0 || animationMode == 3) {
-				nextFrame();
-			} else if (animationMode == 1)  {
-				prevFrame();
+
+			bool onFinalFrame = currentFrame == numFrames - 1;
+
+			if (animationMode == ANIMATION_RANDOM) {
+				onFinalFrame = false;
 			}
-			else if (animationMode == 2) {
-				if (pingPongDirection == 1) {
+
+			if (clockConnected && clockMode == CLOCK_MODE_SYNC && onFinalFrame && false) {
+				//hold up animation back to 1st frame when controlled.  Wait for clock signal
+			}
+			else {
+				/*if (animationMode == ANIMATION_FORWARD || animationMode == ANIMATION_SHUFFLE) {
 					nextFrame();
-				} else {
+				} else if (animationMode == ANIMATION_REVERSE)  {
 					prevFrame();
 				}
+				else if (animationMode == ANIMATION_PINGPONG) {
+					if (pingPongDirection == 1) {
+						nextFrame();
+					} else {
+						prevFrame();
+					}
+				}*/nextFrame();
 			}
-			else if (animationMode == 4 ) {
+			if (animationMode == ANIMATION_RANDOM ) {
 				goToRandomFrame();
 			}
 			tick = !tick;
-			if (animationMode == 2) {
+			if (animationMode == ANIMATION_PINGPONG) {
 				//DEBUG("PRE ping current:%i,direction:%i", currentFrame, pingPongDirection);
 				if (pingPongDirection == 1) {
 					if (currentFrame == numFrames - 1) {
@@ -589,17 +645,26 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 	void goToFrame(int frameNum) {
 		if (numFrames && ready && frameNum != currentFrame) {
-			sampleCounter = 0;
-			currentFrame = frameNum;
-			mappedFrame = (currentFrame  + mapBlankFrameOffset(zeroOffset, numFrames) + 10 * numFrames) % numFrames;
-			if (params[ANIMATION_MODE].getValue() == 3) {
-				mappedFrame = shuffledFrames[mappedFrame];
-			}
 
-			currentFrame += numFrames;
-			currentFrame %= numFrames;
+			int animationMode = params[ANIMATION_MODE].getValue();
+
+			sampleCounter = 0;
+
+			unsigned int numScriptFrames = frameScripts[animationMode].size();
+
+			currentFrame = frameNum + numScriptFrames * 10;
+			currentFrame %= numScriptFrames;
+			mappedFrame = currentFrame;
+
+			mappedFrame = frameScripts[animationMode][mappedFrame];
+			mappedFrame  += mapBlankFrameOffset(zeroOffset, numFrames) + 10 * numFrames;
+			mappedFrame %= numFrames;
+
+
 			setCurrentFrameDelayFromTable();
-			//DEBUG("currentFrame:%i, mappedFrame:%i, scrubFrame:%i", currentFrame, mappedFrame, scrubFrame);
+			if (currentFrame == 0) {
+				DEBUG("MOTHER currentFrame:%i, mappedFrame:%i, scrubFrame:%i", currentFrame, mappedFrame, scrubFrame);
+			}
 		}
 	}
 	void goToRandomFrame() {
