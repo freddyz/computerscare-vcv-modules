@@ -2,6 +2,10 @@
 
 #include "dtpulse.hpp"
 
+#include <iostream>
+#include <string>
+#include <sstream>
+
 struct ComputerscareHorseADoodleDoo;
 
 const std::string HorseAvailableModes[4] = {"Each channel outputs independent pulse & CV sequence", "All channels triggered by Ch. 1 sequence", "Trigger Cascade:\nEach channel is triggered by the previous channel's trigger sequence", "EOC Cascade:\nEach channel is triggered by the previous channel's EOC"};
@@ -12,6 +16,8 @@ struct HorseModeParam : ParamQuantity {
 		return HorseAvailableModes[val];
 	}
 };
+
+
 
 struct HorseSequencer {
 	float pattern = 0.f;
@@ -84,6 +90,7 @@ struct HorseSequencer {
 		cvSequence = newCV;
 	}
 	void checkAndArm(float patt, int steps, float dens) {
+
 		if (pattern != patt || numSteps != steps || density != dens) {
 			pendingPattern = patt;
 			pendingNumSteps = steps;
@@ -106,6 +113,7 @@ struct HorseSequencer {
 		pattern = patt;
 		currentStep = 0;
 		makeAbsolute();
+
 	}
 	void tick() {
 		currentStep++;
@@ -130,6 +138,9 @@ struct HorseSequencer {
 		tick();
 		return get();
 	}
+	int getNumSteps() {
+		return numSteps;
+	}
 };
 
 struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
@@ -140,6 +151,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	int previousStep[16] = { -1};
 	bool shouldSetEOCHigh[16] = {false};
 	bool shouldOutputPulse[16] = {false};
+
 	enum ParamIds {
 		PATTERN_KNOB,
 		PATTERN_TRIM,
@@ -202,6 +214,35 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 	HorseSequencer seq[16];
 
+
+
+	struct HorseStepsSpreadParam: ParamQuantity {
+		std::string newLineSepIntVector(std::vector<int> vec) {
+			std::string out = "";
+			for (unsigned int i = 0; i < vec.size(); i++) {
+				out = out + std::to_string(vec[i]) + "\n";
+			}
+			return out;
+		}
+		virtual std::string getDiarrhea() {
+			return dynamic_cast<ComputerscareHorseADoodleDoo*>(module)->getAllStepsDisplay();
+		}
+		std::string getDisplayValueString() override {
+			float val = getValue();
+			return std::to_string(100 * val) + "%\n" + getDiarrhea();
+		}
+	};
+
+	struct HorseDensitySpreadParam: ParamQuantity {
+		virtual std::string getAllPolyChannelsDisplayString() {
+			return dynamic_cast<ComputerscareHorseADoodleDoo*>(module)->getAllDensityDisplay();
+		}
+		std::string getDisplayValueString() override {
+			float val = getValue();
+			return std::to_string(100 * val) + "%\n" + getAllPolyChannelsDisplayString();
+		}
+	};
+
 	ComputerscareHorseADoodleDoo()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -216,8 +257,8 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 
 		configParam(PATTERN_SPREAD, 0.f, 1.f, 0.5f, "Pattern Spread", "%", 0, 100);
-		configParam(STEPS_SPREAD, -1.f, 1.f, 0.f, "Steps Spread", "%", 0, 100);
-		configParam(DENSITY_SPREAD, -1.f, 1.f, 0.f, "Density Spread", "%", 0, 100);
+		configParam<HorseStepsSpreadParam>(STEPS_SPREAD, -1.f, 1.f, 0.f, "Steps Spread", "", 0, 100);
+		configParam<HorseDensitySpreadParam>(DENSITY_SPREAD, -1.f, 1.f, 0.f, "Density Spread", "", 0, 100);
 
 		configParam<AutoParamQuantity>(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
 
@@ -235,6 +276,47 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 
 	}
+
+	std::vector<int> getAllSteps() {
+		std::vector<int> out = {};
+		for (int i = 0; i < polyChannels; i++) {
+			out.push_back(seq[i].getNumSteps());
+		}
+		return out;
+	}
+	std::string getAllStepsDisplay(std::string sep = "\n") {
+		std::string out = "";
+		for (int i = 0; i < polyChannels; i++) {
+
+			out += "ch " + string::f("%*d", 2, i + 1) + ": ";
+			if (seq[i].pendingChange) {
+				out = out + std::to_string(seq[i].pendingNumSteps);
+				out = out + " (" + std::to_string(seq[i].numSteps) + ")";
+			}
+			else {
+				out = out + std::to_string(seq[i].getNumSteps());
+			}
+			out += sep;
+		}
+		return out;
+	}
+	std::string getAllDensityDisplay(std::string sep = "\n") {
+		std::string out = "";
+		for (int i = 0; i < polyChannels; i++) {
+
+			out += "ch " + string::f("%*d", 2, i + 1) + ": ";
+			if (seq[i].pendingChange) {
+				out = out + string::f("%.*g", 3, 100 * seq[i].pendingDensity) + "%";
+				out = out + " (" + string::f("%.*g", 3, 100 * seq[i].density) + "%)";
+			}
+			else {
+				out = out + string::f("%.*g", 3, 100 * seq[i].density) + "%";
+			}
+			out += sep;
+		}
+		return out;
+	}
+
 	void setMode(int newMode) {
 		params[MODE_KNOB].setValue(newMode);
 	}
@@ -272,6 +354,9 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			patternVal += i * params[PATTERN_SPREAD].getValue();
 			stepsVal += std::floor(params[STEPS_SPREAD].getValue() * i * stepsVal);
 			densityVal += params[DENSITY_SPREAD].getValue() * i / 10;
+
+			stepsVal = std::max(2, stepsVal);
+			densityVal = std::fmax(0, std::fmin(1, densityVal));
 
 			seq[i].checkAndArm(patternVal, stepsVal, densityVal);
 		}
@@ -575,6 +660,7 @@ struct ModeChildMenu : MenuItem {
 	}
 
 };
+
 struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 	ComputerscareHorseADoodleDooWidget(ComputerscareHorseADoodleDoo *module) {
 
