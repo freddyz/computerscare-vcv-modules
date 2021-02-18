@@ -214,7 +214,15 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 	HorseSequencer seq[16];
 
-
+	struct HorsePatternParamQ: ParamQuantity {
+		virtual std::string getString() {
+			return dynamic_cast<ComputerscareHorseADoodleDoo*>(module)->getPatternDisplay();
+		}
+		std::string getDisplayValueString() override {
+			float val = getValue();
+			return std::to_string(val) + "\n" + getString();
+		}
+	};
 
 	struct HorseStepsSpreadParam: ParamQuantity {
 		std::string newLineSepIntVector(std::vector<int> vec) {
@@ -243,11 +251,20 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		}
 	};
 
+	struct HorseResetParamQ: ParamQuantity {
+		virtual std::string getResetTransportDisplay() {
+			return dynamic_cast<ComputerscareHorseADoodleDoo*>(module)->getResetTransportDisplay();
+		}
+		std::string getDisplayValueString() override {
+			return "\n" + getResetTransportDisplay();
+		}
+	};
+
 	ComputerscareHorseADoodleDoo()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configParam(PATTERN_KNOB, 0.f, 10.f, 0.f, "Pattern");
+		configParam<HorsePatternParamQ>(PATTERN_KNOB, 0.f, 10.f, 0.f, "Pattern");
 		configParam(STEPS_KNOB, 2.f, 64.f, 8.f, "Number of Steps");
 		configParam(DENSITY_KNOB, 0.f, 1.f, 0.5f, "Density", "%", 0, 100);
 
@@ -264,8 +281,8 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 
 		configParam<HorseModeParam>(MODE_KNOB, 0.f, 3.f, 0.f, "Mode");
 
-		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
-		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
+		configParam<HorseResetParamQ>(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f, "Reset all Sequences");
+		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f, "Advance all Sequences");
 
 
 
@@ -312,6 +329,35 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			else {
 				out = out + string::f("%.*g", 3, 100 * seq[i].density) + "%";
 			}
+			out += sep;
+		}
+		return out;
+	}
+	std::string getResetTransportDisplay(std::string sep = "\n") {
+		std::string out = "";
+		for (int i = 0; i < polyChannels; i++) {
+
+			out += "ch " + string::f("%*d", 2, i + 1) + ": ";
+			out = out + string::f("%*d", 4, seq[i].currentStep + 1);
+			out = out + " / " + string::f("%*d", 4, seq[i].numSteps);
+
+			out += sep;
+		}
+		return out;
+	}
+	std::string getPatternDisplay(std::string sep = "\n") {
+		std::string out = "";
+		for (int i = 0; i < polyChannels; i++) {
+
+			out += "ch " + string::f("%*d", 2, i + 1) + ": ";
+			int current = seq[i].currentStep;
+			for (int j = 0; j < seq[i].pendingNumSteps; j++) {
+
+				bool highStep = seq[i].absoluteSequence[j] == 1;
+
+				out += (current == j) ? (highStep ? "☺" : "☹") : ( highStep ? "x" : "_");
+			}
+
 			out += sep;
 		}
 		return out;
@@ -676,8 +722,8 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		}
 
 		addInputBlock("Pattern", 10, 100, module, 0,  ComputerscareHorseADoodleDoo::PATTERN_CV, 0, ComputerscareHorseADoodleDoo::PATTERN_SPREAD);
-		addInputBlock("Length", 10, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1, ComputerscareHorseADoodleDoo::STEPS_SPREAD);
-		addInputBlock("Density", 10, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0, ComputerscareHorseADoodleDoo::DENSITY_SPREAD);
+		addInputBlock("Length", 10, 150, module, 2,  ComputerscareHorseADoodleDoo::STEPS_CV, 1, ComputerscareHorseADoodleDoo::STEPS_SPREAD, false);
+		addInputBlock("Density", 10, 200, module, 4,  ComputerscareHorseADoodleDoo::DENSITY_CV, 0, ComputerscareHorseADoodleDoo::DENSITY_SPREAD, false);
 		addParam(createParam<ScrambleSnapKnobNoRandom>(Vec(4, 234), module, ComputerscareHorseADoodleDoo::MODE_KNOB));
 
 		/*for (int i = 0; i < 1; i++) {
@@ -710,7 +756,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 	}
 
 
-	void addInputBlock(std::string label, int x, int y, ComputerscareHorseADoodleDoo *module, int knobIndex,  int inputIndex, int knobType, int scrambleIndex) {
+	void addInputBlock(std::string label, int x, int y, ComputerscareHorseADoodleDoo *module, int knobIndex,  int inputIndex, int knobType, int scrambleIndex, bool allowScrambleRandom = true) {
 
 		smallLetterDisplay = new SmallLetterDisplay();
 		smallLetterDisplay->box.size = Vec(5, 10);
@@ -748,7 +794,13 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		}
 		addParam(createParam<SmallKnob>(Vec(x + 32, y + 5), module, knobIndex + 1));
 		addInput(createInput<TinyJack>(Vec(x + 54, y + 6), module, inputIndex));
-		addParam(createParam<ScrambleKnob>(Vec(x + 55, y - 15), module, scrambleIndex));
+		if (allowScrambleRandom) {
+			addParam(createParam<ScrambleKnob>(Vec(x + 55, y - 15), module, scrambleIndex));
+		}
+		else {
+			addParam(createParam<ScrambleKnobNoRandom>(Vec(x + 55, y - 15), module, scrambleIndex));
+		}
+
 	}
 
 	void appendContextMenu(Menu* menu) override {

@@ -382,12 +382,21 @@ struct SmallKnob : RoundKnob {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
 	}
 };
+
 struct ScrambleKnob : RoundKnob {
 	ScrambleKnob() {
 		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
 };
+struct ScrambleKnobNoRandom : RoundKnob {
+	ScrambleKnobNoRandom() {
+		shadow->opacity = 0.f;
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+	}
+	void randomize() override { return; }
+};
+
 struct ScrambleSnapKnob : RoundKnob {
 	ScrambleSnapKnob() {
 		snap = true;
