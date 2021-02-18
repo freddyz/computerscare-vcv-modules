@@ -5,7 +5,8 @@ Trigger & CV sequencer with a mantra: turn one knob, get an interesting sequence
 ## Pattern: 
 Selects a unique trigger & CV sequence.  Small changes in the pattern value lead to large changes in the trigger & CV sequences.  Enable tooltips to see a visualization of each poly channel sequence and current active step.
 
-## Pattern Spread: How much the pattern changes through the polyphony.  If this is set to 0%, every polyphonic channel will output the exact same trigger & CV sequence.
+### Pattern Spread: 
+How much the pattern changes through the polyphony.  If this is set to 0%, every polyphonic channel will output the exact same trigger & CV sequence.
 
 ## Length: 
 Select how many steps are in the sequence. 
