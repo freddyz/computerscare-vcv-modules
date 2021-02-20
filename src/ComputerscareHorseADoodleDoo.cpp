@@ -225,7 +225,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	};
 	struct HorsePatternSpreadParam: ParamQuantity {
 		virtual std::string getAllPolyChannelsPatternDisplayString() {
-			return dynamic_cast<ComputerscareHorseADoodleDoo*>(module)->getAllPatternValueDisplay();
+			return dynamic_cast<ComputerscareHorseADoodleDoo*>(module)->getPatternDisplay(true, false);
 		}
 		std::string getDisplayValueString() override {
 			float val = getValue();
@@ -371,17 +371,21 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		}
 		return out;
 	}
-	std::string getPatternDisplay(std::string sep = "\n") {
+	std::string getPatternDisplay(bool showPatternValue = false, bool showTransport = true, std::string sep = "\n") {
 		std::string out = "";
 		for (int i = 0; i < polyChannels; i++) {
 
 			out += "ch " + string::f("%*d", 2, i + 1) + ": ";
 			int current = seq[i].currentStep;
+
+			if (showPatternValue) {
+				out += std::to_string(seq[i].pattern) + " ";
+			}
 			for (int j = 0; j < seq[i].pendingNumSteps; j++) {
 
 				bool highStep = seq[i].absoluteSequence[j] == 1;
 
-				out += (current == j) ? (highStep ? "☺" : "☹") : ( highStep ? "x" : "_");
+				out += (showTransport && current == j) ? (highStep ? "☺" : "☹") : ( highStep ? "x" : "_");
 			}
 
 			out += sep;
