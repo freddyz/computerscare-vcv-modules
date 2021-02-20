@@ -117,7 +117,7 @@ struct MenuParam : MenuEntry {
 
 struct MultiselectParamQuantity;
 
-struct ComputerscareMenuParamModule : Module {
+struct ComputerscareMenuParamModule : ComputerscarePolyModule {
 	std::vector<ParamAndType*> paramList;
 	std::map<int, ParamAndType*> pidMap;
 	ParamQuantity* pq;
@@ -146,6 +146,7 @@ struct ComputerscareMenuParamModule : Module {
 		return "charles";
 	}
 };
+
 struct MultiselectParamQuantity : ParamQuantity {
 	ComputerscareMenuParamModule* module;
 	std::string getDisplayValueString() override {

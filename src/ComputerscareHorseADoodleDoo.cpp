@@ -24,10 +24,12 @@ struct HorseSequencer {
 	int numSteps = 8;
 	int currentStep = -1;
 	float density = 0.5f;
+	float phase = 0.f;
 
 	float pendingPattern = 0.f;
 	int pendingNumSteps = 8;
 	float pendingDensity = 0.5f;
+	float pendingPhase = 0.f;
 	bool pendingChange = 0;
 	bool forceChange = 0;
 
@@ -46,11 +48,12 @@ struct HorseSequencer {
 	HorseSequencer() {
 
 	}
-	HorseSequencer(float patt, int steps, float dens, int ch) {
+	HorseSequencer(float patt, int steps, float dens, int ch, float phi) {
 		numSteps = steps;
 		density = dens;
 		pattern = patt;
 		channel = ch;
+		phase = phi;
 		makeAbsolute();
 	}
 	void makeAbsolute() {
@@ -69,7 +72,6 @@ struct HorseSequencer {
 		}*/
 
 
-		float cvRange = std::sin(primes[9] * pattern - otherPrimes[3]);
 		int cvRoot = 0;//std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
 		float trigConst = 2 * M_PI / ((float)numSteps);
 
@@ -79,7 +81,7 @@ struct HorseSequencer {
 			float arg = pattern + ((float) i) * trigConst;
 			for (int k = 0; k < 4; k++) {
 				val += std::sin(primes[((i + 1) * (k + 1)) % 16] * arg + otherPrimes[(otherPrimes[0] + i) % 16]);
-				cvVal += std::sin(primes[((i + 11) * (k + 1) + 201) % 16] * arg + otherPrimes[(otherPrimes[3] + i - 7) % 16]);
+				cvVal += std::sin(primes[((i + 11) * (k + 1) + 201) % 16] * arg + otherPrimes[(otherPrimes[3] + i - 7) % 16] + phase);
 				//cvVal+=i/12;
 			}
 			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
@@ -89,12 +91,13 @@ struct HorseSequencer {
 		absoluteSequence = newSeq;
 		cvSequence = newCV;
 	}
-	void checkAndArm(float patt, int steps, float dens) {
+	void checkAndArm(float patt, int steps, float dens, float phi) {
 
-		if (pattern != patt || numSteps != steps || density != dens) {
+		if (pattern != patt || numSteps != steps || density != dens || phase != phi) {
 			pendingPattern = patt;
 			pendingNumSteps = steps;
 			pendingDensity = dens;
+			pendingPhase = phi;
 			pendingChange = true;
 		}
 	}
@@ -106,11 +109,13 @@ struct HorseSequencer {
 		pendingPattern = pattern;
 		pendingNumSteps = numSteps;
 		pendingDensity = density;
+		pendingPhase = phase;
 	}
-	void change(float patt, int steps, float dens) {
+	void change(float patt, int steps, float dens, float phi) {
 		numSteps = std::max(1, steps);
 		density = std::fmax(0, dens);
 		pattern = patt;
+		phase = phi;
 		currentStep = 0;
 		makeAbsolute();
 
@@ -119,7 +124,7 @@ struct HorseSequencer {
 		currentStep++;
 		currentStep %= numSteps;
 		if ((currentStep == 0 && pendingChange) || forceChange) {
-			change(pendingPattern, pendingNumSteps, pendingDensity);
+			change(pendingPattern, pendingNumSteps, pendingDensity, pendingPhase);
 			pendingChange = false;
 			forceChange = false;
 			currentStep = 0;
@@ -143,7 +148,7 @@ struct HorseSequencer {
 	}
 };
 
-struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
+struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	int counter = 0;
 	ComputerscareSVGPanel* panelRef;
 	float currentValues[16] = {0.f};
@@ -168,8 +173,10 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		STEPS_SPREAD,
 		DENSITY_SPREAD,
 		MANUAL_CLOCK_BUTTON,
+		CV_SCALE,
+		CV_OFFSET,
+		CV_PHASE,
 		NUM_PARAMS
-
 	};
 	enum InputIds {
 		CLOCK_INPUT,
@@ -200,6 +207,10 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	int lastStepsKnob = 2;
 	float lastDensityKnob = 0.f;
 	int lastPolyKnob = 0;
+	float lastPhaseKnob = 0.f;
+
+	float cvOffset = 0.f;
+	float cvScale = 1.f;
 
 	int mode = 1;
 
@@ -293,10 +304,13 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		configParam<HorseResetParamQ>(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f, "Reset all Sequences");
 		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f, "Advance all Sequences");
 
+		configMenuParam(CV_SCALE, -2.f, 2.f, 1.f, "CV Scale", 2);
+		configMenuParam(CV_OFFSET, -10.f, 10.f, 0.f, "CV Offset", 2);
+		configMenuParam(CV_PHASE, -3.14159f, 3.14159f, 0.f, "CV Phase", 2);
 
 
 		for (int i = 0; i < 16; i++) {
-			seq[i] = HorseSequencer(0.f, 8, 0.f, i);
+			seq[i] = HorseSequencer(0.f, 8, 0.f, i, 0.f);
 			previousStep[i] = -1;
 		}
 
@@ -407,10 +421,14 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		int clockNum = inputs[CLOCK_INPUT].getChannels();
 		int resetNum = inputs[RESET_INPUT].getChannels();
 
+		cvScale = params[CV_SCALE].getValue();
+		cvOffset = params[CV_OFFSET].getValue();
 
 		mode = params[MODE_KNOB].getValue();
 		lastStepsKnob = std::floor(params[STEPS_KNOB].getValue());
 		lastPolyKnob = std::floor(params[POLY_KNOB].getValue());
+
+		lastPhaseKnob = params[CV_PHASE].getValue();
 
 		polyChannels = lastPolyKnob == 0 ? std::max(clockNum, std::max(pattNum, std::max(stepsNum, densityNum))) : lastPolyKnob;
 
@@ -435,7 +453,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			stepsVal = std::max(2, stepsVal);
 			densityVal = std::fmax(0, std::fmin(1, densityVal));
 
-			seq[i].checkAndArm(patternVal, stepsVal, densityVal);
+			seq[i].checkAndArm(patternVal, stepsVal, densityVal, lastPhaseKnob);
 		}
 	}
 	void processChannel(int ch, bool clocked, bool reset, bool clockInputHigh, int overrideMode = 0, bool overriddenTriggerHigh = false) {
@@ -480,7 +498,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		if (true || inputs[CLOCK_INPUT].isConnected()) {
 			outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && shouldOutputPulse[ch]) ? 10.0f : 0.0f, ch);
 			//DEBUG("before output:%f",cvVal);
-			outputs[CV_OUTPUT].setVoltage(cvVal[ch], ch);
+			outputs[CV_OUTPUT].setVoltage(cvScale * cvVal[ch] + cvOffset, ch);
 			//outputs[EOC_OUTPUT].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
 		}
 		else {
@@ -728,6 +746,17 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		modeMenu->rightText = RIGHT_ARROW;
 		modeMenu->horse = horse;
 		menu->addChild(modeMenu);
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+
+		MenuParam* cvScaleParamControl = new MenuParam(horse->paramQuantities[ComputerscareHorseADoodleDoo::CV_SCALE], 2);
+		menu->addChild(cvScaleParamControl);
+
+		MenuParam* cvOffsetParamControl = new MenuParam(horse->paramQuantities[ComputerscareHorseADoodleDoo::CV_OFFSET], 2);
+		menu->addChild(cvOffsetParamControl);
+
+		MenuParam* cvPhaseParamControl = new MenuParam(horse->paramQuantities[ComputerscareHorseADoodleDoo::CV_PHASE], 2);
+		menu->addChild(cvPhaseParamControl);
 	}
 	PolyOutputChannelsWidget* channelWidget;
 	NumStepsOverKnobDisplay* numStepsKnob;
