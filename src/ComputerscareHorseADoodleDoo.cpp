@@ -215,12 +215,21 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 	HorseSequencer seq[16];
 
 	struct HorsePatternParamQ: ParamQuantity {
-		virtual std::string getString() {
+		virtual std::string getPatternString() {
 			return dynamic_cast<ComputerscareHorseADoodleDoo*>(module)->getPatternDisplay();
 		}
 		std::string getDisplayValueString() override {
 			float val = getValue();
-			return std::to_string(val) + "\n" + getString();
+			return std::to_string(val) + "\n" + getPatternString();
+		}
+	};
+	struct HorsePatternSpreadParam: ParamQuantity {
+		virtual std::string getAllPolyChannelsPatternDisplayString() {
+			return dynamic_cast<ComputerscareHorseADoodleDoo*>(module)->getAllPatternValueDisplay();
+		}
+		std::string getDisplayValueString() override {
+			float val = getValue();
+			return std::to_string(100 * val) + "%\n" + getAllPolyChannelsPatternDisplayString();
 		}
 	};
 
@@ -232,12 +241,12 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			}
 			return out;
 		}
-		virtual std::string getDiarrhea() {
+		virtual std::string allStepsDisplay() {
 			return dynamic_cast<ComputerscareHorseADoodleDoo*>(module)->getAllStepsDisplay();
 		}
 		std::string getDisplayValueString() override {
 			float val = getValue();
-			return std::to_string(100 * val) + "%\n" + getDiarrhea();
+			return std::to_string(100 * val) + "%\n" + allStepsDisplay();
 		}
 	};
 
@@ -273,7 +282,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		configParam(DENSITY_TRIM, -1.f, 1.f, 0.f, "Density CV Trim");
 
 
-		configParam(PATTERN_SPREAD, 0.f, 1.f, 0.5f, "Pattern Spread", "%", 0, 100);
+		configParam<HorsePatternSpreadParam>(PATTERN_SPREAD, 0.f, 1.f, 0.5f, "Pattern Spread", "", 0, 100);
 		configParam<HorseStepsSpreadParam>(STEPS_SPREAD, -1.f, 1.f, 0.f, "Steps Spread", "", 0, 100);
 		configParam<HorseDensitySpreadParam>(DENSITY_SPREAD, -1.f, 1.f, 0.f, "Density Spread", "", 0, 100);
 
@@ -301,6 +310,23 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 		}
 		return out;
 	}
+	std::string getAllPatternValueDisplay(std::string sep = "\n") {
+		std::string out = "";
+		for (int i = 0; i < polyChannels; i++) {
+
+			out += "ch " + string::f("%*d", 2, i + 1) + ": ";
+			if (seq[i].pendingChange) {
+				out = out + std::to_string(seq[i].pendingPattern);
+				out = out + " (" + std::to_string(seq[i].pattern) + ")";
+			}
+			else {
+				out = out + std::to_string(seq[i].pattern);
+			}
+			out += sep;
+		}
+		return out;
+	}
+
 	std::string getAllStepsDisplay(std::string sep = "\n") {
 		std::string out = "";
 		for (int i = 0; i < polyChannels; i++) {
