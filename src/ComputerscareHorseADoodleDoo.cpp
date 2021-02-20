@@ -381,11 +381,12 @@ struct ComputerscareHorseADoodleDoo : ComputerscarePolyModule {
 			if (showPatternValue) {
 				out += std::to_string(seq[i].pattern) + " ";
 			}
-			for (int j = 0; j < seq[i].pendingNumSteps; j++) {
+			for (int j = 0; j < seq[i].numSteps; j++) {
 
 				bool highStep = seq[i].absoluteSequence[j] == 1;
 
 				out += (showTransport && current == j) ? (highStep ? "☺" : "☹") : ( highStep ? "x" : "_");
+				out += j % 192 == 191 ? "\n" : "";
 			}
 
 			out += sep;
