@@ -582,121 +582,7 @@ struct NumStepsOverKnobDisplay : SmallLetterDisplay
 	}
 };
 
-struct HorseDisplay : TransparentWidget {
-	ComputerscareHorseADoodleDoo *module;
-	int ch = 0;
 
-	HorseDisplay(int chan = 0) {
-		ch = chan;
-
-	}
-
-	void drawHorse(const DrawArgs &args, float x = 0.f) {
-
-		DrawHelper draw =  DrawHelper(args.vg);
-		NVGcolor highlightColor = draw.sincolor(ch + 2.f);
-
-		float dy = 380 / (float)(module->seq[ch].numSteps);
-		float mid = module->seq[ch].numSteps / 2;
-
-		float dh = 0.2;//multiplicitive on original height
-		float zDistance = 20;
-
-
-
-
-		for (int i = 0; i < module->seq[ch].numSteps; i++) {
-			nvgBeginPath(args.vg);
-			float xx = 70 - ch * 7;
-			float yy = i * dy;
-
-			float ip = i / module->seq[ch].numSteps;
-			float width = 6.f;
-			float height = dy;
-
-			if (module->seq[ch].absoluteSequence[i] == 1 || i == module->seq[ch].currentStep) {
-
-				float xCloseTop = xx;
-				float yCloseTop = yy;
-				float xFarTop = xx - zDistance;
-				float yFarTop = 100;
-				float xFarBottom = xFarTop;
-				float yFarBottom = yFarTop;
-				float xCloseBottom = xCloseTop;
-				float yCloseBottom = yCloseTop + height;
-
-
-				// left side wall
-				if (i == module->seq[ch].currentStep) {
-					nvgFillColor(args.vg, COLOR_COMPUTERSCARE_RED );
-				}
-				else {
-					nvgFillColor(args.vg, highlightColor);
-				}
-
-				nvgStrokeColor(args.vg, BLACK);
-				nvgStrokeWidth(args.vg, .2);
-
-
-				nvgBeginPath(args.vg);
-				nvgMoveTo(args.vg, xCloseTop, yCloseTop);
-				nvgLineTo(args.vg, xFarTop, yFarTop);
-				nvgLineTo(args.vg, xFarBottom, yFarBottom);
-				nvgLineTo(args.vg, xCloseBottom, yCloseBottom);
-				nvgLineTo(args.vg, xCloseTop, yCloseTop);
-				nvgClosePath(args.vg);
-				//nvgRect(args.vg, xx,yy,width,height);
-				nvgFill(args.vg);
-				nvgStroke(args.vg);
-
-
-
-				//top
-				nvgStrokeWidth(args.vg, 1.f);
-				if (i == module->seq[ch].currentStep) {
-					nvgFillColor(args.vg, nvgRGB(0xE2, 0x22, 0x12));
-				}
-				else {
-					nvgFillColor(args.vg, highlightColor);
-				}
-				nvgBeginPath(args.vg);
-				nvgRect(args.vg, xx, yy, width, dy);
-				nvgClosePath(args.vg);
-				//nvgRect(args.vg, xx,yy,width,height);
-				nvgFill(args.vg);
-				nvgStroke(args.vg);
-
-
-
-
-				//nvgRestore(args.vg);
-
-				//nvgReset(args.vg);
-
-
-
-			}
-			else {
-				//nvgFillColor(args.vg,COLOR_COMPUTERSCARE_TRANSPARENT);
-			}
-			//nvgFillColor(args.vg, module->seq.absoluteSequence[i] == 1 ? COLOR_COMPUTERSCARE_RED : COLOR_COMPUTERSCARE_TRANSPARENT);
-
-
-
-		}
-	}
-
-	void draw(const DrawArgs &args) override {
-		if (!module) {
-			//drawHorse(args, 3);
-		}
-		else {
-			if (ch < module->polyChannels) {
-				//drawHorse(args, 3);
-			}
-		}
-	}
-};
 struct setModeItem : MenuItem
 {
 	ComputerscareHorseADoodleDoo *horse;
@@ -844,7 +730,6 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		menu->addChild(modeMenu);
 	}
 	PolyOutputChannelsWidget* channelWidget;
-	HorseDisplay* horseDisplay;
 	NumStepsOverKnobDisplay* numStepsKnob;
 	InputBlockBackground* background;
 	SmallLetterDisplay* smallLetterDisplay;
