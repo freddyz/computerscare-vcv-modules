@@ -150,7 +150,6 @@ struct HorseSequencer {
 
 struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	int counter = 0;
-	ComputerscareSVGPanel* panelRef;
 	float currentValues[16] = {0.f};
 	bool atFirstStepPoly[16] = {false};
 	int previousStep[16] = { -1};
@@ -760,7 +759,6 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 	}
 	PolyOutputChannelsWidget* channelWidget;
 	NumStepsOverKnobDisplay* numStepsKnob;
-	InputBlockBackground* background;
 	SmallLetterDisplay* smallLetterDisplay;
 };
 

@@ -780,7 +780,6 @@ struct InvertYMenuItem: MenuItem {
 };
 struct ssmi : MenuItem
 {
-	//ComputerscareRolyPouter *pouter;
 	int mySetVal = 1;
 	ParamQuantity *myParamQuantity;
 	ssmi(int i, ParamQuantity* pq)
@@ -1061,7 +1060,7 @@ struct GiantFrameDisplay : TransparentWidget {
 	}
 };
 
-struct ComputerscareBlankWidget : MenuParamModuleWidget {
+struct ComputerscareBlankWidget : ModuleWidget {
 	ComputerscareBlankWidget(ComputerscareBlank *blankModule) {
 
 		setModule(blankModule);
@@ -1169,27 +1168,29 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Animation Speed"));
 		menu->addChild(LabeledKnob);*/
 
-		MenuParam* animEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED], 0);
+		//MenuParam* animEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED], 0);
+		MenuToggle* animEnabled = new MenuToggle(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED]);
 		menu->addChild(animEnabled);
+
+		MenuToggle* constantDelay = new MenuToggle(blank->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY]);
+		menu->addChild(constantDelay);
+
+		MenuToggle* slideshowEnabled = new MenuToggle(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_ACTIVE]);
+		menu->addChild(slideshowEnabled);
+
+		MenuToggle* lightWidgetMode = new MenuToggle(blank->paramQuantities[ComputerscareBlank::LIGHT_WIDGET_MODE]);
+		menu->addChild(lightWidgetMode);
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
 		MenuParam* speedParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED], 2);
 		menu->addChild(speedParam);
 
-		MenuParam* mp = new MenuParam(blank->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY], 0);
-		menu->addChild(mp);
-
 		MenuParam* shuffleParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED], 2);
 		menu->addChild(shuffleParam);
 
-
-		MenuParam* slideshowEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_ACTIVE], 0);
-		menu->addChild(slideshowEnabled);
-
 		MenuParam* slideshowSpeedParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME], 2);
 		menu->addChild(slideshowSpeedParam);
-
-		MenuParam* lightWidgetMode = new MenuParam(blank->paramQuantities[ComputerscareBlank::LIGHT_WIDGET_MODE], 0);
-		menu->addChild(lightWidgetMode);
 
 
 	}

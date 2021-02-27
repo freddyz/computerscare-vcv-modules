@@ -50,8 +50,46 @@ KeyboardControlChildMenu *kbMenu = new KeyboardControlChildMenu();
 		kbMenu->rightText = RIGHT_ARROW;
 		kbMenu->blank = blank;
 		menu->addChild(kbMenu);*/
+
+struct SmoothSlider : ui::Slider {
+	SmoothSlider(ParamQuantity* paramQ) {
+		box.size.x = 180.0f;
+		quantity = paramQ;
+	}
+};
+
+struct MomentaryButton : ui::Button {
+	MomentaryButton(ParamQuantity* paramQ) {
+		box.size.x = 32.f;
+		quantity = paramQ;
+	}
+};
+
+struct MenuToggle : MenuItem
+{
+	ParamQuantity *myParamQuantity;
+	MenuToggle(ParamQuantity* pq)
+	{
+		myParamQuantity = pq;
+		text = pq->getLabel();
+	}
+
+	void onAction(const event::Action &e) override
+	{
+		myParamQuantity->setValue( myParamQuantity->getValue() == 0 ? 1 : 0);
+	}
+	void step() override {
+		rightText = myParamQuantity->getValue() == 1 ? "✔" : "";
+		MenuItem::step();
+	}
+};
+
 struct MenuParam : MenuEntry {
 	ParamWidget* pWidget;
+
+	SmoothSlider* slider;
+	MenuToggle *toggle;
+
 	MenuLabel* johnLabel;
 	MenuLabel* displayString;
 	SubMenuAndKnob *submenu;
@@ -59,23 +97,34 @@ struct MenuParam : MenuEntry {
 
 	MenuParam(ParamQuantity* param, int type) {
 		if (type == 0) {
-			pWidget = new SmallIsoButton();
+			toggle = new MenuToggle(param);
+
+			//toggle->box.pos = Vec(controlRightMargin, 0);
+			addChild(toggle);
+			//johnLabel = construct<MenuLabel>(&MenuLabel::text, param->getLabel());
+			//johnLabel->box.pos = Vec(button->box.size.x + controlRightMargin * 2, 0);
+
+			//addChild(johnLabel);
 		}
 		else if (type == 1) {
 			pWidget = new MediumDotSnapKnob();
+			pWidget->paramQuantity = param;
+			pWidget->box.pos = Vec(controlRightMargin, 0);
+
+			addChild(pWidget);
+			johnLabel = construct<MenuLabel>(&MenuLabel::text, param->getLabel());
+			johnLabel->box.pos = Vec((type == 2 ? slider->box.size.x : pWidget->box.size.x) + controlRightMargin * 2, 0);
+			addChild(johnLabel);
 		}
 		else if (type == 2) {
-			pWidget = new SmoothKnob();
+			slider = new SmoothSlider(param);
+			slider->box.pos = Vec(controlRightMargin, 0);
+			addChild(slider);
+
 		}
-		pWidget->paramQuantity = param;
-		pWidget->box.pos = Vec(controlRightMargin, 0);
 		box.size.y = 32;
 
-		johnLabel = construct<MenuLabel>(&MenuLabel::text, param->getLabel());
-		johnLabel->box.pos = Vec(pWidget->box.size.x + controlRightMargin * 2, 0);
 
-		addChild(pWidget);
-		addChild(johnLabel);
 		//if(type==1) {addChild(submenu);}
 	}
 	/*Menu *createChildMenu() override {
