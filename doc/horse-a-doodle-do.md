@@ -36,14 +36,14 @@ How the density changes across the poly channels.  If this is set positive, high
 All sections include a CV input and attenuverter for explicily setting the pattern, length, and density of each poly sequence.
 
 ## Modes of operation (mode knob, or right click menu):
--Each channel outputs independent pulse & CV sequence
--All channels triggered by Ch. 1 sequence: The CV of every channel will only change when ch1's does.  All channels triggers are set to ch1
--Trigger Cascade: Each channel is triggered by the previous channel's trigger sequence
--EOC Cascade: Each channel is triggered by the previous channel's EOC
+- Each channel outputs independent pulse & CV sequence
+- All channels triggered by Ch. 1 sequence: The CV of every channel will only change when ch1's does.  All channels triggers are set to ch1
+- Trigger Cascade: Each channel is triggered by the previous channel's trigger sequence
+- EOC Cascade: Each channel is triggered by the previous channel's EOC
 
 Enable tooltips and hover over the main "pattern" knob for a visualization of how these different modes work
 
 ## Right Click options
--CV Offset: Global offset voltage for all CV sequences
--CV Scale: Global scale for all CV sequences
--CV Phase: Change this to keep the same trigger sequences but change the CV sequence
+- CV Offset: Global offset voltage for all CV sequences
+- CV Scale: Global scale for all CV sequences
+- CV Phase: Change this to keep the same trigger sequences but change the CV sequence
