@@ -15,7 +15,8 @@
 - [Roly Pouter](./doc/poly-utilities.md): Re-routes the channels of a polyphonic signal
 - [Soly Pequencer](./doc/poly-utilities.md): Sequentially outputs the individual channel voltages of a polyphonic signal
 - [Toly Pools](./doc/poly-utilities.md): Rotate a polyphonic signal, set/get/display polyphonic channel count
-- [Moly Patrix](./doc/poly-utilities.md): Polyphonic matrix mixer
+- [Moly Patrix](./doc/moly-patrix.md): Polyphonic matrix mixer
+- [Goly Penerator](./doc/goly-penerator.md): Generate constant polyphonic CV via various algorithms
 
 ## Visualization
 - [Foly Pace](./doc/foly-pace.md): Draws a photorealistic face.  Use polyphonic input for maximum weirdness
