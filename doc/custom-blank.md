@@ -1,5 +1,7 @@
 # Custom Blank
 
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/custom-blank-with-expander.png" width="500" alt="Computerscare Custom Blank with Expander" />
+
 - Resizable (click & drag the sides of the module.
 - Add your own PNG, JPEG, BMP, or Animated GIF
 - Move the image with keyboard keys A,S,D,W. Zoom in/out with Z,X
@@ -10,3 +12,9 @@
   - Free: image will not be automatically scaled.  You can still move/resize with the ASDW/ZX keys
 
 ## Expander
+Connect to LEFT side of Custom Blank (it must be left side, the right side will not work)
+
+Control GIF animation via the clock input with 3 different clock modes:
+- Sync: Animation will synchronize to a steady clock signal
+- Scan: Animation will linearly follow a 0-10v CV.  0v → frame 1, 10v → last frame
+- Frame Advance: Clock signal will advance the animation by 1 frame
