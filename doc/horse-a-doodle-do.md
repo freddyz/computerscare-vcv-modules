@@ -43,6 +43,8 @@ All sections include a CV input and attenuverter for explicily setting the patte
 
 Enable tooltips and hover over the main "pattern" knob for a visualization of how these different modes work
 
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-right-click.jpg" width="500" alt="Horse a Doodle Doo Right click options" />
+
 ## Right Click options
 - CV Offset: Global offset voltage for all CV sequences
 - CV Scale: Global scale for all CV sequences
