@@ -900,12 +900,19 @@ struct tPNGDisplay : TBase {
 					gifBuddy = AnimatedGifBuddy(args.vg, badGifPath.c_str());
 				}
 				img = gifBuddy.getHandle();
+				int numImageFrames = gifBuddy.getFrameCount();
 
-				blankModule->setFrameCount(gifBuddy.getFrameCount());
-				blankModule->setFrameDelays(gifBuddy.getAllFrameDelaysSeconds());
-				blankModule->setTotalGifDuration(gifBuddy.getTotalGifDuration());
-				blankModule->setTotalGifDurationIfInPingPongMode(gifBuddy.getPingPongGifDuration());
-				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
+				blankModule->setFrameCount(numImageFrames);
+
+				//if this check isnt performed, windows crashes with non-gifs due to
+				//the call to vector insert
+				if(numImageFrames > 1) {
+					blankModule->setFrameCount(gifBuddy.getFrameCount());
+					blankModule->setFrameDelays(gifBuddy.getAllFrameDelaysSeconds());
+					blankModule->setTotalGifDuration(gifBuddy.getTotalGifDuration());
+					blankModule->setTotalGifDurationIfInPingPongMode(gifBuddy.getPingPongGifDuration());
+					blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
+				}
 				blankModule->setImageStatus(gifBuddy.getImageStatus());
 				blankModule->setContainingDirectory();
 				blankModule->setReady(true);
