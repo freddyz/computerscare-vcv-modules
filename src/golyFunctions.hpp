@@ -18,11 +18,11 @@ extern std::string knobandinputlookup;
 #endif
 
 class Goly {
-	public:
-		float currentValues[16];
-	
-		Goly();
-		void invoke(int algorithm,std::vector<float> gp);
-		void invoke(int algorithm,std::vector<float> gp,int num);
-		
+public:
+	float currentValues[16];
+
+	Goly();
+	void invoke(int algorithm, std::vector<float> gp);
+	void invoke(int algorithm, std::vector<float> gp, int num);
+
 };

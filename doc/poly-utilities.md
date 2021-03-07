@@ -1,15 +1,14 @@
 # Computerscare Modules Polyphonic Utilities
 <img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/computerscare-poly-utilities.png" width="600" alt="Computerscare Polyphonic Utilities" />
 
-
 ## Knoly Pobs
 
-16 knobs, polyphonic output, range: 0 - 10 volts.
+16 knobs, polyphonic output, Default range: 0 - 10 volts.  Global scale & offset knobs to adjust all output channel values simultaniously.
 
 
 ## Boly Puttons
 
-16 latch buttons.  On/off voltages selectable via right-click menu.  Plugging in a polyphonic signal to the A/B inputs will override the selected on/off values and use the CV signals instead.  If a monophonic signal is plugged into the "A" input, its voltage will be used for ALL "off/up" buttons.  If an n-channel signal is plugged into the "A" input, the "off/up" button voltages will match the "A" channels up to n, and then re-start at "A" channel 1.  Behavior is the same for the "B" input.  Note that this behavior is different than the recommended method of handling polyphonic signals.
+16 latch buttons.  On/off voltages selectable via right-click menu.  Plugging in a polyphonic signal to the A/B inputs will override the selected on/off values and use the CV signals instead.  If a monophonic signal is plugged into the "A" input, its voltage will be used for ALL "off/up" buttons.  Number of output channels will be the maximum of: number of channels from "A" input, number of channels from "B", input, or the manual poly channels knob setting
 
 
 ## Roly Pouter
@@ -19,7 +18,7 @@ Re-route the channels of a polyphonic signal.  If you select an input channel th
 
 ## Soly Pequencer
 
-Sequentially output the individual channel voltages of a polyphonic signal.  Connecting a polyphonic signal to the clock input allows for multiple independent sequences.  Polyphonic reset channels beyond the number of channels of the clock signal are ignored.  I think that the clock/reset buttons will apply to all channels.
+Sequentially output the individual channel voltages of a polyphonic signal.  Connecting a polyphonic signal to the clock input allows for multiple independent sequences.  Polyphonic reset channels beyond the number of channels of the clock signal are ignored.  The clock/reset buttons apply to all channels.
 
 
 ## Toly Pools
@@ -29,3 +28,6 @@ Sequentially output the individual channel voltages of a polyphonic signal.  Con
 * Knob and CV for setting output channel count (0 - 10 volts linearly mapped to 1-16 output channels)
 * Knob and CV for rotating the polyphonic signal (0 - 10 volts sets rotation of 0-15 channels.  For example: rotation of "1" will move input channel 2 -> output channel 1, input channel 3->output channel 2, ...  input channel 16 -> output channel 1)
 
+
+### Poly Channels Knob
+Most Poly Utilities have the small poly channels knob which sets how many poly channels the output signal has.  Puttons, Pouter, and Pequencer all support "automatic" mode for this knob when turned all the way to left.  When in this position, the poly output channels will be set to equal the poly input channels.

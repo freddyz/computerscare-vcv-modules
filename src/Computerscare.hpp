@@ -39,6 +39,7 @@ extern Model *modelComputerscareSolyPequencer;
 extern Model *modelComputerscareFolyPace;
 extern Model *modelComputerscareStolyFickPigure;
 extern Model *modelComputerscareBlank;
+extern Model *modelComputerscareBlankExpander;
 extern Model *modelComputerscareGolyPenerator;
 extern Model *modelComputerscareMolyPatrix;
 
@@ -206,6 +207,13 @@ struct ComputerscareResetButton : app::SvgSwitch {
 		momentary = true;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-rst-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-rst-text-red.svg")));
+	}
+};
+struct ComputerscareNextButton : app::SvgSwitch {
+	ComputerscareNextButton() {
+		momentary = true;
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-next-button.svg")));
+		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-next-button-down.svg")));
 	}
 };
 struct ComputerscareClearButton : app::SvgSwitch {
@@ -384,11 +392,37 @@ struct SmallKnob : RoundKnob {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
 	}
 };
+
 struct ScrambleKnob : RoundKnob {
 	ScrambleKnob() {
+		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
 };
+struct ScrambleKnobNoRandom : RoundKnob {
+	ScrambleKnobNoRandom() {
+		shadow->opacity = 0.f;
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+	}
+	void randomize() override { return; }
+};
+
+struct ScrambleSnapKnob : RoundKnob {
+	ScrambleSnapKnob() {
+		snap = true;
+		shadow->opacity = 0.f;
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+	}
+};
+struct ScrambleSnapKnobNoRandom : RoundKnob {
+	ScrambleSnapKnobNoRandom() {
+		snap = true;
+		shadow->opacity = 0.f;
+		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+	}
+	void randomize() override { return; }
+};
+
 struct SmallSnapKnob : RoundBlackSnapKnob {
 	//bool visible = true;
 
@@ -533,3 +567,4 @@ struct SmallLetterDisplay : Widget {
 #include "pointFunctions.hpp"
 #include "drawFunctions.hpp"
 #include "ComputerscarePolyModule.hpp"
+#include "MenuParams.hpp"

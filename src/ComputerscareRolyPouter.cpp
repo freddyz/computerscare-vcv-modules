@@ -282,28 +282,6 @@ struct OneToOneItem: MenuItem {
 		MenuItem::step();
 	}
 };
-/*struct LaundryChannelsItem : MenuItem {
-  ComputerscareLaundrySoup *module;
-  int row;
-  Menu *createChildMenu() override {
-    Menu *menu = new Menu;
-    for (int channels = -1; channels <= 16; channels++) {
-      LaundryChannelItem *item = new LaundryChannelItem;
-      item->row = row;
-      if (channels < 0)
-        item->text = "Automatic";
-      else
-        item->text = string::f("%d", channels);
-      if (row > -1) {
-        item->rightText = CHECKMARK(module->channelCountEnum[row] == channels);
-      }
-      item->module = module;
-      item->channels = channels;
-      menu->addChild(item);
-    }
-    return menu;
-  }
-};*/
 
 struct SetAllItem : MenuItem {
 	ComputerscareRolyPouter *pouter;

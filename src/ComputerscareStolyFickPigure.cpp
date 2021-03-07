@@ -36,18 +36,18 @@ struct StolyFickPigure : Module {
 	float lastScramble = 0;
 
 	int A = 31;
-	int B = 32; 
+	int B = 32;
 	int C = 29;
 	int D = 2;
 
 
 	StolyFickPigure() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-			const float timeBase = (float) BUFFER_SIZE / 6;
+		const float timeBase = (float) BUFFER_SIZE / 6;
 
-			for(int i = 0; i < 16; i++) {
-				cmap[i]=i;
-			}
+		for (int i = 0; i < 16; i++) {
+			cmap[i] = i;
+		}
 
 		configParam(TIME_PARAM, 6.f, 16.f, 14.f, "Time", " ms/div", 1 / 2.f, 1000 * timeBase);
 
@@ -56,21 +56,21 @@ struct StolyFickPigure : Module {
 
 		configParam(SCRAMBLE, -10.f, 10.f, 0.f, "Scrambling");
 
-	
+
 	}
 
 	void onReset() override {
 		//std::memset(bufferX, 0, sizeof(bufferX));
 	}
 	void updateScramble(float v) {
-		for(int i = 0; i < 16; i++) {
-			cmap[i] = (i*A+B+(int)std::floor(v*1010.1))%16;
+		for (int i = 0; i < 16; i++) {
+			cmap[i] = (i * A + B + (int)std::floor(v * 1010.1)) % 16;
 		}
 	}
 	void checkScramble() {
 		float xx = params[SCRAMBLE].getValue();
-		if(lastScramble != xx) {
-			lastScramble= xx;
+		if (lastScramble != xx) {
+			lastScramble = xx;
 			updateScramble(xx);
 		}
 	}
@@ -88,7 +88,7 @@ struct StolyFickPigure : Module {
 			this->channelsX = channelsX;
 		}
 
-		if(cnt > 4101) {
+		if (cnt > 4101) {
 
 			checkScramble();
 			cnt = 0;
@@ -161,120 +161,120 @@ struct StolyFickPigureDisplay : TransparentWidget {
 		nvgFillColor(args.vg, faceColor);
 		nvgStrokeWidth(args.vg, 3.2);
 
-		float size = 1+sin(O-29)/4;
+		float size = 1 + sin(O - 29) / 4;
 
 		//crotch
-		float cx = 62*(1+(sin(E+F)-sin(P+O/2+50))/40000);
-		float cy = 210*(1+(sin(A+G-12)-sin(P+H/2))/11000);
+		float cx = 62 * (1 + (sin(E + F) - sin(P + O / 2 + 50)) / 40000);
+		float cy = 210 * (1 + (sin(A + G - 12) - sin(P + H / 2)) / 11000);
 
 		//thigh spread, length, direction
-		float thighSpread = (2+sin(J+I+K)-sin(A-N/2))/4;
-		float thighLength = 50*(1+(sin(C-100+F+K*2)+sin(C+L-10))/6);
-		float thighDirection = (sin(J+O-211)-sin(P*2+I)-sin(B+K))/2;
+		float thighSpread = (2 + sin(J + I + K) - sin(A - N / 2)) / 4;
+		float thighLength = 50 * (1 + (sin(C - 100 + F + K * 2) + sin(C + L - 10)) / 6);
+		float thighDirection = (sin(J + O - 211) - sin(P * 2 + I) - sin(B + K)) / 2;
 
 
 		//ankle spread,length,direction
-		float ankleSpread = (2+sin(O-B)/2+sin(F+2)/2+sin(P-E-D+19.2))/13;
-		float ankleLength = thighLength*(1+(sin(F+A+J-K/2+9))/9);
-		float ankleDirection =  3*M_PI/2+(3+sin(J+M-L-101)-sin(P-B+22)-sin(H))/8;
+		float ankleSpread = (2 + sin(O - B) / 2 + sin(F + 2) / 2 + sin(P - E - D + 19.2)) / 13;
+		float ankleLength = thighLength * (1 + (sin(F + A + J - K / 2 + 9)) / 9);
+		float ankleDirection =  3 * M_PI / 2 + (3 + sin(J + M - L - 101) - sin(P - B + 22) - sin(H)) / 8;
 
-		float leftKneeArg = 3*M_PI/2 +thighDirection + thighSpread;
-		float rightKneeArg = 3*M_PI/2 +thighDirection - thighSpread;
-		
-
-		float leftAnkleArg =  ankleDirection+ankleSpread;
-		float rightAnkleArg =  ankleDirection-ankleSpread;
+		float leftKneeArg = 3 * M_PI / 2 + thighDirection + thighSpread;
+		float rightKneeArg = 3 * M_PI / 2 + thighDirection - thighSpread;
 
 
-		float leftKneeX=cx+thighLength*cos(leftKneeArg);
-		float leftKneeY=cy-thighLength*sin(leftKneeArg);
+		float leftAnkleArg =  ankleDirection + ankleSpread;
+		float rightAnkleArg =  ankleDirection - ankleSpread;
 
-		float leftAnkleX = leftKneeX+ankleLength*cos(leftAnkleArg);
-		float leftAnkleY = leftKneeY-ankleLength*sin(leftAnkleArg);
 
-		float rightKneeX=cx+thighLength*cos(rightKneeArg);
-		float rightKneeY=cy-thighLength*sin(rightKneeArg);
+		float leftKneeX = cx + thighLength * cos(leftKneeArg);
+		float leftKneeY = cy - thighLength * sin(leftKneeArg);
 
-		float rightAnkleX = rightKneeX+ankleLength*cos(rightAnkleArg);
-		float rightAnkleY = rightKneeY-ankleLength*sin(rightAnkleArg);
+		float leftAnkleX = leftKneeX + ankleLength * cos(leftAnkleArg);
+		float leftAnkleY = leftKneeY - ankleLength * sin(leftAnkleArg);
+
+		float rightKneeX = cx + thighLength * cos(rightKneeArg);
+		float rightKneeY = cy - thighLength * sin(rightKneeArg);
+
+		float rightAnkleX = rightKneeX + ankleLength * cos(rightAnkleArg);
+		float rightAnkleY = rightKneeY - ankleLength * sin(rightAnkleArg);
 
 
 		nvgBeginPath(args.vg);
-		
-		
-		nvgMoveTo(args.vg, leftAnkleX,leftAnkleY);
-		nvgLineTo(args.vg, leftKneeX,leftKneeY);
-		nvgLineTo(args.vg, cx,cy);
-		nvgLineTo(args.vg, rightKneeX,rightKneeY);
-		nvgLineTo(args.vg, rightAnkleX,rightAnkleY);
+
+
+		nvgMoveTo(args.vg, leftAnkleX, leftAnkleY);
+		nvgLineTo(args.vg, leftKneeX, leftKneeY);
+		nvgLineTo(args.vg, cx, cy);
+		nvgLineTo(args.vg, rightKneeX, rightKneeY);
+		nvgLineTo(args.vg, rightAnkleX, rightAnkleY);
 
 		//nvgClosePath(args.vg);
 		nvgStroke(args.vg);
 
 
 		//torso length,direction
-		float torsoLength=thighLength*(1.4+(sin(A-12))/4);
-		float torsoDirection=M_PI/2+sin(D)/2;
+		float torsoLength = thighLength * (1.4 + (sin(A - 12)) / 4);
+		float torsoDirection = M_PI / 2 + sin(D) / 2;
 
-		float neckX = cx+torsoLength*cos(torsoDirection);
-		float neckY = cy-torsoLength*sin(torsoDirection);
-
-		nvgBeginPath(args.vg);
-		nvgMoveTo(args.vg,cx,cy);
-		nvgLineTo(args.vg,neckX,neckY);
-		nvgStroke(args.vg);
-		
-		float armLength=torsoLength*(2+(sin(N+14)-sin(P-L-3))/2)/4;
-		float forearmLength=armLength*(1+(2+(sin(F+B+2)-sin(E)))/300);
-		float armDirection=3*M_PI/2+0.2*(sin(C-M));
-		float armSpread=sin(B+P-A)+sin(N-J);
-
-		float leftElbowArg=armDirection+armSpread;
-		float rightElbowArg=armDirection-armSpread;
-		
-		float leftHandArg=sin(E+22+A-4);
-		float rightHandArg=sin(F+22-B);
-		
-		float leftElbowX = neckX+armLength*cos(leftElbowArg);
-		float leftElbowY = neckY-armLength*sin(leftElbowArg);
-
-		float leftHandX=leftElbowX+forearmLength*cos(leftHandArg);
-		float leftHandY=leftElbowY-forearmLength*sin(leftHandArg);
-		
-		float rightElbowX = neckX+armLength*cos(rightElbowArg);
-		float rightElbowY = neckY-armLength*sin(rightElbowArg);
-
-		float rightHandX=rightElbowX+forearmLength*cos(rightHandArg);
-		float rightHandY=rightElbowY-forearmLength*sin(rightHandArg);
+		float neckX = cx + torsoLength * cos(torsoDirection);
+		float neckY = cy - torsoLength * sin(torsoDirection);
 
 		nvgBeginPath(args.vg);
-		nvgMoveTo(args.vg,neckX,neckY);
-		nvgLineTo(args.vg,leftElbowX,leftElbowY);
-		nvgLineTo(args.vg,leftHandX,leftHandY);
+		nvgMoveTo(args.vg, cx, cy);
+		nvgLineTo(args.vg, neckX, neckY);
 		nvgStroke(args.vg);
-		
-		nvgBeginPath(args.vg);
-		nvgMoveTo(args.vg,neckX,neckY);
-		nvgLineTo(args.vg,rightElbowX,rightElbowY);
-		nvgLineTo(args.vg,rightHandX,rightHandY);
-		nvgStroke(args.vg);
-		
-		float headHeight = torsoLength*(0.5+sin(H-E-I-D)/9-sin(F+B-C+E)/7);
-		float headWidth = headHeight*(0.6+sin(I+D-M/2)/7+sin(G/2+J-10)/6);
-		float headAngle = M_PI/2 + (sin(C+A)/6+sin(D+G)/9);
 
-		float headRotation=sin(C+A)/2+sin(M/2)/3;
-		
+		float armLength = torsoLength * (2 + (sin(N + 14) - sin(P - L - 3)) / 2) / 4;
+		float forearmLength = armLength * (1 + (2 + (sin(F + B + 2) - sin(E))) / 300);
+		float armDirection = 3 * M_PI / 2 + 0.2 * (sin(C - M));
+		float armSpread = sin(B + P - A) + sin(N - J);
+
+		float leftElbowArg = armDirection + armSpread;
+		float rightElbowArg = armDirection - armSpread;
+
+		float leftHandArg = sin(E + 22 + A - 4);
+		float rightHandArg = sin(F + 22 - B);
+
+		float leftElbowX = neckX + armLength * cos(leftElbowArg);
+		float leftElbowY = neckY - armLength * sin(leftElbowArg);
+
+		float leftHandX = leftElbowX + forearmLength * cos(leftHandArg);
+		float leftHandY = leftElbowY - forearmLength * sin(leftHandArg);
+
+		float rightElbowX = neckX + armLength * cos(rightElbowArg);
+		float rightElbowY = neckY - armLength * sin(rightElbowArg);
+
+		float rightHandX = rightElbowX + forearmLength * cos(rightHandArg);
+		float rightHandY = rightElbowY - forearmLength * sin(rightHandArg);
+
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg, neckX, neckY);
+		nvgLineTo(args.vg, leftElbowX, leftElbowY);
+		nvgLineTo(args.vg, leftHandX, leftHandY);
+		nvgStroke(args.vg);
+
+		nvgBeginPath(args.vg);
+		nvgMoveTo(args.vg, neckX, neckY);
+		nvgLineTo(args.vg, rightElbowX, rightElbowY);
+		nvgLineTo(args.vg, rightHandX, rightHandY);
+		nvgStroke(args.vg);
+
+		float headHeight = torsoLength * (0.5 + sin(H - E - I - D) / 9 - sin(F + B - C + E) / 7);
+		float headWidth = headHeight * (0.6 + sin(I + D - M / 2) / 7 + sin(G / 2 + J - 10) / 6);
+		float headAngle = M_PI / 2 + (sin(C + A) / 6 + sin(D + G) / 9);
+
+		float headRotation = sin(C + A) / 2 + sin(M / 2) / 3;
+
 		nvgBeginPath(args.vg);
 
 		nvgTranslate(args.vg, neckX, neckY);
-		nvgRotate(args.vg,headRotation);
-		nvgEllipse(args.vg, 0,-headHeight,headWidth,headHeight);
+		nvgRotate(args.vg, headRotation);
+		nvgEllipse(args.vg, 0, -headHeight, headWidth, headHeight);
 
 		nvgFill(args.vg);
 		nvgStroke(args.vg);
 
-	
+
 		nvgResetScissor(args.vg);
 		//nvgRestore(args.vg);
 	}

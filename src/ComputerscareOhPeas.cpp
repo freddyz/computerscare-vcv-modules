@@ -52,12 +52,12 @@ struct ComputerscareOhPeas : Module
     int numDivisions = 12;
     int globalTranspose = 0;
     bool evenQuantizeMode = true;
-    bool manualSet=true;
+    bool manualSet = true;
 
-    int checkCounter=9999;
-    int checkPeriod=1000;
+    int checkCounter = 9999;
+    int checkPeriod = 1000;
     std::string currentFormula = "221222";
-    std::string lastFormula="52";
+    std::string lastFormula = "52";
 
 
     std::string numDivisionsString = "";
@@ -99,7 +99,7 @@ struct ComputerscareOhPeas : Module
         json_t *textJ = json_object_get(rootJ, "sequences");
         if (textJ) {
             currentFormula = json_string_value(textJ);
-            manualSet=true;
+            manualSet = true;
         }
 
     }
@@ -109,10 +109,10 @@ struct ComputerscareOhPeas : Module
         this->quant = Quantizer(this->currentFormula.c_str(), this->numDivisions, this->globalTranspose);
     }
     void checkForChange() {
-        if(lastFormula != currentFormula) {
+        if (lastFormula != currentFormula) {
             setQuant();
         }
-        lastFormula=currentFormula;
+        lastFormula = currentFormula;
     }
     // For more advanced Module features, read Rack's engine.hpp header file
     // - toJson, fromJson: serialization of internal data
@@ -123,9 +123,9 @@ struct ComputerscareOhPeas : Module
 
 void ComputerscareOhPeas::process(const ProcessArgs &args)
 {
-    if(checkCounter > checkPeriod) {
+    if (checkCounter > checkPeriod) {
         checkForChange();
-        checkCounter=0;
+        checkCounter = 0;
     }
     checkCounter++;
 
@@ -218,10 +218,10 @@ struct PeasTF2 : ComputerscareTextField
     {
         if (module)
         {
-            if(module->manualSet) {
-                text=module->currentFormula;
-                printf("manualSet to %s\n",text.c_str());
-                module->manualSet=false;
+            if (module->manualSet) {
+                text = module->currentFormula;
+                printf("manualSet to %s\n", text.c_str());
+                module->manualSet = false;
             }
             if (text.c_str() != module->currentFormula)
             {
@@ -230,7 +230,7 @@ struct PeasTF2 : ComputerscareTextField
 
         }
         else {
-            text="2212221";
+            text = "2212221";
         }
         ComputerscareTextField::draw(args);
     }
@@ -359,7 +359,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget
             addOutput(createOutput<InPort>(mm2px(Vec(xx + 1, y + 108)),  module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
 
         }
-        peas=module;
+        peas = module;
     }
 
     void fromJson(json_t *rootJ) override
@@ -370,8 +370,8 @@ struct ComputerscareOhPeasWidget : ModuleWidget
         // legacy
         json_t *textJ = json_object_get(rootJ, "sequences");
         if (textJ) {
-            peas->currentFormula=json_string_value(textJ);
-            peas->manualSet=true;
+            peas->currentFormula = json_string_value(textJ);
+            peas->manualSet = true;
         }
     }
 

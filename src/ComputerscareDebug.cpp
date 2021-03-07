@@ -52,7 +52,7 @@ struct ComputerscareDebug : Module {
 	int outputRangeEnum = 0;
 
 
-	float outputRanges[6][2];
+	float outputRanges[8][2];
 
 	int stepCounter;
 	dsp::SchmittTrigger clockTriggers[NUM_LINES];
@@ -243,13 +243,13 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		stepCounter = 0;
 
 		thisVal = "";
-		std::string thisLine="";
+		std::string thisLine = "";
 		for ( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
 		{
 			thisLine = logLines[a] >= 0 ? "+" : "";
 			thisLine += std::to_string(logLines[a]);
 			thisLine = thisLine.substr(0, 9);
-			thisVal+= (a > 0 ? "\n" : "")+thisLine;
+			thisVal += (a > 0 ? "\n" : "") + thisLine;
 
 			outputs[POLY_OUTPUT].setVoltage(logLines[a], a);
 		}

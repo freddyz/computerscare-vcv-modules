@@ -238,7 +238,7 @@ struct ComputerscareLaundrySoup : Module {
         channelCount[index] = 16;
       } else {
         size_t n = std::count(currentFormula[index].begin(), currentFormula[index].end(), ';');
-        channelCount[index] = std::min((int)n+1,16);
+        channelCount[index] = std::min((int)n + 1, 16);
       }
     } else {
       channelCount[index] = channelCountEnum[index];
