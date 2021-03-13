@@ -10,7 +10,7 @@ const int numOutputs = 16;
 
 std::string generateNewPatchName() {
 	std::string currentPatchName = APP->patch->path;
-	size_t lastindex = currentPatchName.find_last_of("."); 
+	size_t lastindex = currentPatchName.find_last_of(".");
 	std::string rawname = currentPatchName.substr(0, lastindex);
 	return rawname + "-v.vcv";
 }
@@ -50,18 +50,56 @@ struct ComputerscarePatchVersioning : Module {
 		outputs[POLY_OUTPUT].setChannels(16);*/
 	}
 	void process(const ProcessArgs &args) override {
-		 bool saveClicked = saveTrigger.process(params[SAVE_BUTTON].getValue());
-		 if(saveClicked) {
-		 	std::string newPatchName = generateNewPatchName();
-		 	APP->patch->save(newPatchName);
-		 	APP->patch->path = newPatchName;
-			APP->history->setSaved();
-		 }
+		bool saveClicked = saveTrigger.process(params[SAVE_BUTTON].getValue());
+		if (saveClicked) {
+			savePatch();
+		}
+	}
+	void savePatch() {
+
+		std::string newPatchName = generateNewPatchName();
+		APP->patch->save(newPatchName);
+		APP->patch->path = newPatchName;
+		APP->history->setSaved();
 	}
 
 };
+struct KeyContainer : Widget {
+	ComputerscarePatchVersioning* module = NULL;
 
+	void onHoverKey(const event::HoverKey& e) override {
+		if (module && !module->bypass) {
+
+			if (e.action == GLFW_PRESS || e.action == GLFW_REPEAT) {
+				/*module->keys[idx].mods & GLFW_MOD_ALT ? 0.7f : 0.f);
+				module->lights[StrokeModule<PORTS>::LIGHT_CTRL + idx].setBrightness(module->keys[idx].mods & GLFW_MOD_CONTROL ? 0.7f : 0.f);
+				module->lights[StrokeModule<PORTS>::LIGHT_SHIFT + idx].setBrightness(module->keys[idx].mods & GLFW_MOD_SHIFT*/
+
+
+				if (e.key == GLFW_KEY_S) {
+					if ((e.mods & RACK_MOD_MASK) == GLFW_MOD_ALT) {
+						module->savePatch();
+						e.consume(this);
+					}
+
+				}
+			}
+
+			/*if (e.action == GLFW_RELEASE) {
+				for (int i = 0; i < PORTS; i++) {
+					if (e.key == module->keys[i].key) {
+						module->keyDisable(i);
+						e.consume(this);
+					}
+				}
+			}*/
+		}
+		Widget::onHoverKey(e);
+	}
+
+};
 struct ComputerscarePatchVersioningWidget : ModuleWidget {
+	KeyContainer* keyContainer = NULL;
 	ComputerscarePatchVersioningWidget(ComputerscarePatchVersioning *module) {
 
 		setModule(module);
@@ -80,12 +118,25 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 
 		}
 
+		if (module) {
+			keyContainer = new KeyContainer;
+			keyContainer->module = module;
+			// This is where the magic happens: add a new widget on top-level to Rack
+			APP->scene->rack->addChild(keyContainer);
+		}
+
 		addParam(createParam<MomentaryIsoButton>(Vec(50, 100), module, ComputerscarePatchVersioning::SAVE_BUTTON));
 
 
 
 
 
+	}
+	~ComputerscarePatchVersioningWidget() {
+		if (keyContainer) {
+			APP->scene->rack->removeChild(keyContainer);
+			delete keyContainer;
+		}
 	}
 
 };
