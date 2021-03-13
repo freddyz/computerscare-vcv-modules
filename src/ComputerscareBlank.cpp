@@ -50,6 +50,11 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	std::vector<int> frameMapForScan;
 	std::vector<int> shuffledFrames;
 	std::vector<float> gifDurationsForPingPong;
+	std::vector<int> framesForward;
+	std::vector<int> framesReverse;
+	std::vector<int> framesPingpong;
+
+	std::vector<std::vector<int>> frameScripts;
 
 	float totalGifDuration = 0.f;
 
@@ -113,6 +118,13 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		CLOCK_MODE_FRAME
 	};
 
+	enum AnimationModes {
+		ANIMATION_FORWARD,
+		ANIMATION_REVERSE,
+		ANIMATION_PINGPONG,
+		ANIMATION_SHUFFLE,
+		ANIMATION_RANDOM
+	};
 	enum ParamIds {
 		ANIMATION_SPEED,
 		ANIMATION_ENABLED,
@@ -123,6 +135,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		NEXT_FILE_BEHAVIOR,
 		SLIDESHOW_ACTIVE,
 		SLIDESHOW_TIME,
+		LIGHT_WIDGET_MODE,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -164,6 +177,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
 		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.200948f, "Slideshow Time", 2, " s",  400.f, 3.f);
+		configParam(LIGHT_WIDGET_MODE, 0.f, 1.f, 0.f, "Keep image fully opaque when used with ModularFungi Lights Off");
 
 		paths.push_back("empty");
 
@@ -303,6 +317,9 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		}
 	}
 
+	bool getLightWidgetMode() {
+		return params[LIGHT_WIDGET_MODE].getValue();
+	}
 	void updateScrubFrame() {
 		if (ready) {
 			scrubFrame = mapBlankFrameOffset(zeroOffset, numFrames);
@@ -419,7 +436,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 	void setSyncTime(float syncDuration) {
 		bool constantFrameDelay = params[CONSTANT_FRAME_DELAY].getValue() == 1;
-		if (params[ANIMATION_MODE].getValue() == 2) { //pingpong
+		if (params[ANIMATION_MODE].getValue() == ANIMATION_PINGPONG) {
 			if (numFrames > 1) {
 				float totalDurationForCurrentZeroOffset = gifDurationsForPingPong[mapBlankFrameOffset(zeroOffset, numFrames)];
 				if (constantFrameDelay) {
@@ -464,6 +481,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		frameDelays = frameDelaysSeconds;
 		setFrameMap();
 		setFrameShuffle();
+		setRegularFrameOrders();
+
+		frameScripts.resize(0);
+		frameScripts.push_back(framesForward);
+		frameScripts.push_back(framesReverse);
+		frameScripts.push_back(framesPingpong);
+		frameScripts.push_back(shuffledFrames);
+		frameScripts.push_back(framesForward);
 
 	}
 	void setReady(bool v) {
@@ -491,6 +516,19 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		std::shuffle(std::begin(shuffledFrames), std::end(shuffledFrames), std::default_random_engine(seed));
 
 	}
+	void setRegularFrameOrders() {
+		framesForward.resize(0);
+		framesReverse.resize(0);
+		framesPingpong.resize(0);
+		for (int i = 0; i < numFrames; i++) {
+			framesForward.push_back(i);
+			framesReverse.push_back(numFrames - i - 1);
+			framesPingpong.push_back(i);
+		}
+		framesPingpong.insert( framesPingpong.end(), framesReverse.begin() + 1, framesReverse.end() - 1 );
+
+
+	}
 	void setTotalGifDuration(float totalDuration) {
 		totalGifDuration = totalDuration;
 	}
@@ -514,27 +552,48 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		//return numFrames > 0 ? paths[currentFrame] : "";
 		return paths[0];
 	}
+
+	/*
+	enum AnimationModes {
+		ANIMATION_FORWARD,
+		ANIMATION_REVERSE,
+		ANIMATION_PINGPONG,
+		ANIMATION_SHUFFLE,
+		ANIMATION_RANDOM
+	};
+	*/
 	void tickAnimation() {
 		if (numFrames > 1) {
 			int animationMode = params[ANIMATION_MODE].getValue();
-			if (animationMode == 0 || animationMode == 3) {
-				nextFrame();
-			} else if (animationMode == 1)  {
-				prevFrame();
+
+			bool onFinalFrame = currentFrame == frameScripts[animationMode].size() - 1;
+
+			if (animationMode == ANIMATION_RANDOM) {
+				onFinalFrame = false;
 			}
-			else if (animationMode == 2) {
-				if (pingPongDirection == 1) {
+
+			if (clockConnected && clockMode == CLOCK_MODE_SYNC && onFinalFrame) {
+				//hold up animation back to 1st frame when controlled.  Wait for clock signal
+			}
+			else {
+				/*if (animationMode == ANIMATION_FORWARD || animationMode == ANIMATION_SHUFFLE) {
 					nextFrame();
-				} else {
+				} else if (animationMode == ANIMATION_REVERSE)  {
 					prevFrame();
 				}
+				else if (animationMode == ANIMATION_PINGPONG) {
+					if (pingPongDirection == 1) {
+						nextFrame();
+					} else {
+						prevFrame();
+					}
+				}*/nextFrame();
 			}
-			else if (animationMode == 4 ) {
+			if (animationMode == ANIMATION_RANDOM ) {
 				goToRandomFrame();
 			}
 			tick = !tick;
-			if (animationMode == 2) {
-				//DEBUG("PRE ping current:%i,direction:%i", currentFrame, pingPongDirection);
+			if (animationMode == ANIMATION_PINGPONG) {
 				if (pingPongDirection == 1) {
 					if (currentFrame == numFrames - 1) {
 						pingPongDirection = -1;
@@ -552,7 +611,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				setFrameShuffle();
 			}
 			lastShuffle = shuf;
-			//DEBUG("current:%i, samplesDelay:%i", currentFrame, samplesDelay);
 		}
 	}
 	void checkAndPerformEndAction(bool forceEndAction = false) {
@@ -584,17 +642,23 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 	void goToFrame(int frameNum) {
 		if (numFrames && ready && frameNum != currentFrame) {
-			sampleCounter = 0;
-			currentFrame = frameNum;
-			mappedFrame = (currentFrame  + mapBlankFrameOffset(zeroOffset, numFrames) + 10 * numFrames) % numFrames;
-			if (params[ANIMATION_MODE].getValue() == 3) {
-				mappedFrame = shuffledFrames[mappedFrame];
-			}
 
-			currentFrame += numFrames;
-			currentFrame %= numFrames;
+			int animationMode = params[ANIMATION_MODE].getValue();
+
+			sampleCounter = 0;
+
+			unsigned int numScriptFrames = frameScripts[animationMode].size();
+
+			currentFrame = frameNum + numScriptFrames * 10;
+			currentFrame %= numScriptFrames;
+			mappedFrame = currentFrame;
+
+			mappedFrame = frameScripts[animationMode][mappedFrame];
+			mappedFrame  += mapBlankFrameOffset(zeroOffset, numFrames) + 10 * numFrames;
+			mappedFrame %= numFrames;
+
+
 			setCurrentFrameDelayFromTable();
-			//DEBUG("currentFrame:%i, mappedFrame:%i, scrubFrame:%i", currentFrame, mappedFrame, scrubFrame);
 		}
 	}
 	void goToRandomFrame() {
@@ -716,7 +780,6 @@ struct InvertYMenuItem: MenuItem {
 };
 struct ssmi : MenuItem
 {
-	//ComputerscareRolyPouter *pouter;
 	int mySetVal = 1;
 	ParamQuantity *myParamQuantity;
 	ssmi(int i, ParamQuantity* pq)
@@ -783,7 +846,8 @@ struct KeyboardControlChildMenu : MenuItem {
 
 };
 
-struct PNGDisplay : TransparentWidget {
+template <class TBase>
+struct tPNGDisplay : TBase {
 	ComputerscareBlank *blankModule;
 
 	int imgWidth, imgHeight;
@@ -794,7 +858,7 @@ struct PNGDisplay : TransparentWidget {
 	int currentFrame = -1;
 	AnimatedGifBuddy gifBuddy;
 
-	PNGDisplay() {
+	tPNGDisplay() {
 	}
 
 
@@ -824,7 +888,7 @@ struct PNGDisplay : TransparentWidget {
 
 	void setOffsets() {
 	}
-	void draw(const DrawArgs &args) override {
+	void draw(const rack::Widget::DrawArgs &args) override {
 		if (blankModule && blankModule->loadedJSON) {
 			std::string modulePath = blankModule->getPath();
 			if (path != modulePath) {
@@ -836,12 +900,19 @@ struct PNGDisplay : TransparentWidget {
 					gifBuddy = AnimatedGifBuddy(args.vg, badGifPath.c_str());
 				}
 				img = gifBuddy.getHandle();
+				int numImageFrames = gifBuddy.getFrameCount();
 
-				blankModule->setFrameCount(gifBuddy.getFrameCount());
-				blankModule->setFrameDelays(gifBuddy.getAllFrameDelaysSeconds());
-				blankModule->setTotalGifDuration(gifBuddy.getTotalGifDuration());
-				blankModule->setTotalGifDurationIfInPingPongMode(gifBuddy.getPingPongGifDuration());
-				blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
+				blankModule->setFrameCount(numImageFrames);
+
+				//if this check isnt performed, windows crashes with non-gifs due to
+				//the call to vector insert
+				if(numImageFrames > 1) {
+					blankModule->setFrameCount(gifBuddy.getFrameCount());
+					blankModule->setFrameDelays(gifBuddy.getAllFrameDelaysSeconds());
+					blankModule->setTotalGifDuration(gifBuddy.getTotalGifDuration());
+					blankModule->setTotalGifDurationIfInPingPongMode(gifBuddy.getPingPongGifDuration());
+					blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
+				}
 				blankModule->setImageStatus(gifBuddy.getImageStatus());
 				blankModule->setContainingDirectory();
 				blankModule->setReady(true);
@@ -900,9 +971,55 @@ struct PNGDisplay : TransparentWidget {
 				currentFrame = blankModule->scrubFrame;
 			}
 		}
-		TransparentWidget::step();
+		TBase::step();
 	}
 };
+
+//this is so CustomBlank can optionally stay fully opaque when ModularFungi LightOff module is used
+typedef tPNGDisplay<LightWidget> PNGDisplayLightWidget;
+typedef tPNGDisplay<TransparentWidget> PNGDisplayTransparentWidget;
+
+struct PNGDisplay : Widget {
+	int counter = 0;
+	bool lightWidgetMode = false;
+	PNGDisplay(ComputerscareBlank *blankModule) {
+		module = blankModule;
+
+		pngLight = new PNGDisplayLightWidget();
+		pngLight->blankModule = blankModule;
+
+		pngTransparent = new PNGDisplayTransparentWidget();
+		pngTransparent->blankModule = blankModule;
+
+		addChild(pngTransparent);
+		Widget();
+	}
+	void resetZooms() {
+		pngLight->resetZooms();
+		pngTransparent->resetZooms();
+	}
+	void step() override {
+		if (module) {
+			bool moduleLightWidgetMode = module->getLightWidgetMode();
+			if (moduleLightWidgetMode != lightWidgetMode) {
+				lightWidgetMode = moduleLightWidgetMode;
+				if (lightWidgetMode) {
+					removeChild(pngTransparent);
+					addChild(pngLight);
+				} else {
+					removeChild(pngLight);
+					addChild(pngTransparent);
+				}
+			}
+		}
+		//pngLight->hide();
+		Widget::step();
+	}
+	PNGDisplayLightWidget *pngLight;
+	PNGDisplayTransparentWidget *pngTransparent;
+	ComputerscareBlank *module;
+};
+
 
 struct GiantFrameDisplay : TransparentWidget {
 	ComputerscareBlank *module;
@@ -950,7 +1067,7 @@ struct GiantFrameDisplay : TransparentWidget {
 	}
 };
 
-struct ComputerscareBlankWidget : MenuParamModuleWidget {
+struct ComputerscareBlankWidget : ModuleWidget {
 	ComputerscareBlankWidget(ComputerscareBlank *blankModule) {
 
 		setModule(blankModule);
@@ -975,8 +1092,7 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 
 		if (blankModule) {
 			{
-				PNGDisplay *pngDisplay = new PNGDisplay();
-				pngDisplay->blankModule = blankModule;
+				PNGDisplay *pngDisplay = new PNGDisplay(blankModule);
 				pngDisplay->box.pos = Vec(0, 0);
 
 				pngDisplay->box.size = Vec( blankModule->width , blankModule->height );
@@ -1059,24 +1175,30 @@ struct ComputerscareBlankWidget : MenuParamModuleWidget {
 		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Animation Speed"));
 		menu->addChild(LabeledKnob);*/
 
-		MenuParam* animEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED], 0);
+		//MenuParam* animEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED], 0);
+		MenuToggle* animEnabled = new MenuToggle(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED]);
 		menu->addChild(animEnabled);
+
+		MenuToggle* constantDelay = new MenuToggle(blank->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY]);
+		menu->addChild(constantDelay);
+
+		MenuToggle* slideshowEnabled = new MenuToggle(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_ACTIVE]);
+		menu->addChild(slideshowEnabled);
+
+		MenuToggle* lightWidgetMode = new MenuToggle(blank->paramQuantities[ComputerscareBlank::LIGHT_WIDGET_MODE]);
+		menu->addChild(lightWidgetMode);
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
 		MenuParam* speedParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED], 2);
 		menu->addChild(speedParam);
 
-		MenuParam* mp = new MenuParam(blank->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY], 0);
-		menu->addChild(mp);
-
 		MenuParam* shuffleParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED], 2);
 		menu->addChild(shuffleParam);
 
-
-		MenuParam* slideshowEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_ACTIVE], 0);
-		menu->addChild(slideshowEnabled);
-
 		MenuParam* slideshowSpeedParam = new MenuParam(blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME], 2);
 		menu->addChild(slideshowSpeedParam);
+
 
 	}
 	void step() override {

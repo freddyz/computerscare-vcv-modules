@@ -105,7 +105,7 @@ struct ComputerscareBlankExpander : Module {
 				frameOffsetQuantity->setNumFrames(numFrames);
 			}
 
-			if (eocMessageReadTrigger.process(mappedFrame == scrubFrame ? 10.f : 0.f)) {
+			if (eocMessageReadTrigger.process(currentFrame == 0 ? 10.f : 0.f)) {
 				eocPulse.trigger(1e-3);
 			}
 			if (eachFrameReadTrigger.process(lastTick != tick ? 10.f : 0.f)) {
