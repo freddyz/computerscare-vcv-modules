@@ -186,10 +186,11 @@ struct AnimatedGifBuddy {
 			printf("image status:%i\n", imageStatus);
 			return 0;
 		}
-		updateFrameDelaysSeconds();
-		image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
-
-		initialized = true;
+		else {
+			updateFrameDelaysSeconds();
+			image = nvgCreateImageRGBA(ctx, w, h, imageFlags, img);
+			initialized = true;
+		}
 		return image;
 	}
 	void displayGifFrame(NVGcontext* ctx, int frameNumber) {

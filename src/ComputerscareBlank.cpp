@@ -346,40 +346,40 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		jsonFlag = false;
 	}
 	void setContainingDirectory(int index = 0) {
-
 		std::string dir = rack::string::directory(paths[index]);
 		std::string currentImageFullpath;
 		parentDirectory = dir;
 		int imageIndex = 0;;
 
+
 		struct dirent* dirp = NULL;
 		DIR* rep = NULL;
-
 		rep = opendir(dir.c_str());
-
 		catalog.clear();
 		//fichier.clear();
-		while ((dirp = readdir(rep)) != NULL) {
-			std::string name = dirp->d_name;
+		if (rep) {
+			while ((dirp = readdir(rep)) != NULL) {
+				std::string name = dirp->d_name;
 
-			std::size_t found = name.find(".gif", name.length() - 5);
-			if (found == std::string::npos) found = name.find(".GIF", name.length() - 5);
-			if (found == std::string::npos) found = name.find(".png", name.length() - 5);
-			if (found == std::string::npos) found = name.find(".PNG", name.length() - 5);
-			if (found == std::string::npos) found = name.find(".jpg", name.length() - 5);
-			if (found == std::string::npos) found = name.find(".JPG", name.length() - 5);
-			if (found == std::string::npos) found = name.find(".jpeg", name.length() - 5);
-			if (found == std::string::npos) found = name.find(".JPEG", name.length() - 5);
-			if (found == std::string::npos) found = name.find(".bmp", name.length() - 5);
-			if (found == std::string::npos) found = name.find(".BMP", name.length() - 5);
-			if (found != std::string::npos) {
-				currentImageFullpath = parentDirectory + "/" + name;
-				catalog.push_back(currentImageFullpath);
-				if (currentImageFullpath == paths[index]) {
-					fileIndexInCatalog = imageIndex;
+				std::size_t found = name.find(".gif", name.length() - 5);
+				if (found == std::string::npos) found = name.find(".GIF", name.length() - 5);
+				if (found == std::string::npos) found = name.find(".png", name.length() - 5);
+				if (found == std::string::npos) found = name.find(".PNG", name.length() - 5);
+				if (found == std::string::npos) found = name.find(".jpg", name.length() - 5);
+				if (found == std::string::npos) found = name.find(".JPG", name.length() - 5);
+				if (found == std::string::npos) found = name.find(".jpeg", name.length() - 5);
+				if (found == std::string::npos) found = name.find(".JPEG", name.length() - 5);
+				if (found == std::string::npos) found = name.find(".bmp", name.length() - 5);
+				if (found == std::string::npos) found = name.find(".BMP", name.length() - 5);
+				if (found != std::string::npos) {
+					currentImageFullpath = parentDirectory + "/" + name;
+					catalog.push_back(currentImageFullpath);
+					if (currentImageFullpath == paths[index]) {
+						fileIndexInCatalog = imageIndex;
+					}
+					//DEBUG("we got gif:%s", name.c_str());
+					imageIndex++;
 				}
-				//DEBUG("we got gif:%s", name.c_str());
-				imageIndex++;
 			}
 		}
 		numFilesInCatalog = catalog.size();
@@ -856,6 +856,7 @@ struct tPNGDisplay : TBase {
 	std::string path = "empty";
 	int img = 0;
 	int currentFrame = -1;
+	bool missingOrBroken = false;
 	AnimatedGifBuddy gifBuddy;
 
 	tPNGDisplay() {
@@ -895,9 +896,14 @@ struct tPNGDisplay : TBase {
 				DEBUG("path not module path");
 				DEBUG("path: %s, modulePath:%s", path.c_str(), modulePath.c_str());
 				gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
+
 				if (gifBuddy.getImageStatus() == 3) {
 					std::string badGifPath = asset::plugin(pluginInstance, "res/broken-file.gif");
 					gifBuddy = AnimatedGifBuddy(args.vg, badGifPath.c_str());
+					missingOrBroken = true;
+				}
+				else {
+					missingOrBroken = false;
 				}
 				img = gifBuddy.getHandle();
 				int numImageFrames = gifBuddy.getFrameCount();
@@ -906,14 +912,18 @@ struct tPNGDisplay : TBase {
 
 				//if this check isnt performed, windows crashes with non-gifs due to
 				//the call to vector insert
-				if(numImageFrames > 1) {
+				if (numImageFrames > 1) {
 					blankModule->setFrameCount(gifBuddy.getFrameCount());
 					blankModule->setFrameDelays(gifBuddy.getAllFrameDelaysSeconds());
 					blankModule->setTotalGifDuration(gifBuddy.getTotalGifDuration());
 					blankModule->setTotalGifDurationIfInPingPongMode(gifBuddy.getPingPongGifDuration());
 					blankModule->setFrameDelay(gifBuddy.getSecondsDelay(0));
 				}
-				blankModule->setImageStatus(gifBuddy.getImageStatus());
+
+				int imageStatus = gifBuddy.getImageStatus();
+				blankModule->setImageStatus(imageStatus);
+
+				//couldnt load file
 				blankModule->setContainingDirectory();
 				blankModule->setReady(true);
 
@@ -928,7 +938,7 @@ struct tPNGDisplay : TBase {
 					3) loaded from JSON dont reset zooms
 				*/
 
-				if (blankModule->jsonFlag ) {
+				if (blankModule->jsonFlag && !missingOrBroken) {
 					//dont want to reset zooms if loading from json
 					//unsure of another way to distinguish (1) from (3)
 					//other than this janky flag
@@ -938,7 +948,6 @@ struct tPNGDisplay : TBase {
 				}
 
 				path = modulePath;
-
 
 			}
 
