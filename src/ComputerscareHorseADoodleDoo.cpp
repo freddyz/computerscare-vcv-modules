@@ -9,6 +9,8 @@
 struct ComputerscareHorseADoodleDoo;
 
 const std::string HorseAvailableModes[4] = {"Each channel outputs independent pulse & CV sequence", "All channels triggered by Ch. 1 sequence", "Trigger Cascade:\nEach channel is triggered by the previous channel's trigger sequence", "EOC Cascade:\nEach channel is triggered by the previous channel's EOC"};
+const std::string HorseAvailableGateModes[2] = {"Pass through the clock signal for each gate", "Variable gates"};
+
 
 struct HorseModeParam : ParamQuantity {
 	std::string getDisplayValueString() override {
@@ -17,6 +19,12 @@ struct HorseModeParam : ParamQuantity {
 	}
 };
 
+struct HorseGateModeParam : ParamQuantity {
+	std::string getDisplayValueString() override {
+		int val = getValue();
+		return HorseAvailableGateModes[val];
+	}
+};
 
 
 struct HorseSequencer {
@@ -25,6 +33,8 @@ struct HorseSequencer {
 	int currentStep = -1;
 	float density = 0.5f;
 	float phase = 0.f;
+	float phase2 = 0.f;
+	float gatePhase = 0.f;
 
 	float pendingPattern = 0.f;
 	int pendingNumSteps = 8;
@@ -44,6 +54,9 @@ struct HorseSequencer {
 	std::vector<int> somethin = {1, 0, 0, 1};
 	std::vector<int> absoluteSequence;
 	std::vector<float> cvSequence;
+	std::vector<float> cv2Sequence;
+	std::vector<float> gateLengthSequence;
+
 
 	HorseSequencer() {
 
@@ -59,9 +72,13 @@ struct HorseSequencer {
 	void makeAbsolute() {
 		std::vector<int> newSeq;
 		std::vector<float> newCV;
+		std::vector<float> newCV2;
+		std::vector<float> newGateLength;
 
 		newSeq.resize(0);
 		newCV.resize(0);
+		newCV2.resize(0);
+		newGateLength.resize(0);
 		/*for (int i = 0; i < 16; i++) {
 			int dex = ((int)std::floor(pattern * primes[i]) + otherPrimes[i]) % 16;
 
@@ -72,24 +89,35 @@ struct HorseSequencer {
 		}*/
 
 
-		int cvRoot = 0;//std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
+		float cvRoot = 0.f;//std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
+		float cv2Root = 0.f;
 		float trigConst = 2 * M_PI / ((float)numSteps);
 
 		for (int i = 0; i < numSteps; i++) {
 			float val = 0.f;
 			float cvVal = 0.f;
+			float cv2Val = 0.f;
+			float gateLengthVal = 0.f;
 			float arg = pattern + ((float) i) * trigConst;
 			for (int k = 0; k < 4; k++) {
 				val += std::sin(primes[((i + 1) * (k + 1)) % 16] * arg + otherPrimes[(otherPrimes[0] + i) % 16]);
 				cvVal += std::sin(primes[((i + 11) * (k + 1) + 201) % 16] * arg + otherPrimes[(otherPrimes[3] + i - 7) % 16] + phase);
+
+				cv2Val += std::sin(primes[((i + 12) * (k + 2) + 31) % 16] * arg + otherPrimes[(otherPrimes[6] + i - 17) % 16] + phase2);
+
+				gateLengthVal += std::sin(primes[((i + 13) * (k + 3) + 101) % 16] * arg + otherPrimes[(otherPrimes[4] + 3 * i - 17) % 16] + gatePhase);
 				//cvVal+=i/12;
 			}
 			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
 			newCV.push_back(cvRoot + (cvVal + 4) / .8);
+			newCV2.push_back(cv2Root + (cv2Val + 4) / .8);
+			newGateLength.push_back(gateLengthVal);
 		}
 		//printVector(newSeq);
 		absoluteSequence = newSeq;
 		cvSequence = newCV;
+		cv2Sequence = newCV2;
+		gateLengthSequence = newGateLength;
 	}
 	void checkAndArm(float patt, int steps, float dens, float phi) {
 
@@ -138,6 +166,12 @@ struct HorseSequencer {
 	}
 	float getCV() {
 		return cvSequence[currentStep];
+	}
+	float getCV2() {
+		return cv2Sequence[currentStep];
+	}
+	float getGateLength() {
+		return gateLengthSequence[currentStep];
 	}
 	int tickAndGet() {
 		tick();
