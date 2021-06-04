@@ -57,6 +57,8 @@ struct HorseSequencer {
 	std::vector<float> cv2Sequence;
 	std::vector<float> gateLengthSequence;
 
+	std::vector<int> timeToNextStep;
+
 
 	HorseSequencer() {
 
@@ -79,6 +81,7 @@ struct HorseSequencer {
 		newCV.resize(0);
 		newCV2.resize(0);
 		newGateLength.resize(0);
+
 		/*for (int i = 0; i < 16; i++) {
 			int dex = ((int)std::floor(pattern * primes[i]) + otherPrimes[i]) % 16;
 
@@ -118,6 +121,8 @@ struct HorseSequencer {
 		cvSequence = newCV;
 		cv2Sequence = newCV2;
 		gateLengthSequence = newGateLength;
+
+		setTimeToNextStep();
 	}
 	void checkAndArm(float patt, int steps, float dens, float phi) {
 
@@ -158,6 +163,23 @@ struct HorseSequencer {
 			currentStep = 0;
 		}
 	}
+	void setTimeToNextStep() {
+		timeToNextStep.resize(0);
+		timeToNextStep.resize(numSteps);
+		int counter = 0;
+		int timeIndex = 0;
+		for (unsigned int i = 0; i < numSteps * 2; i++) {
+			if (absoluteSequence[i % numSteps]) {
+				timeToNextStep[timeIndex % numSteps] = counter;
+				timeIndex = i;
+				counter = 1;
+			}
+			else {
+				timeToNextStep[i % numSteps] = 0;
+				counter++;
+			}
+		}
+	}
 	void reset() {
 		currentStep = 0;
 	}
@@ -172,6 +194,9 @@ struct HorseSequencer {
 	}
 	float getGateLength() {
 		return gateLengthSequence[currentStep];
+	}
+	int getTimeToNextStep() {
+		return timeToNextStep[currentStep];
 	}
 	int tickAndGet() {
 		tick();
@@ -543,13 +568,14 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 
 			previousStep[ch] = seq[ch].currentStep;
 
-			if (ch == 0) {
-				int len = seq[ch].getGateLength();
-				DEBUG("step:%i,len:%i", seq[ch].currentStep, len);
-				if (true && shouldOutputPulse[ch]) {
-					gatePulse[ch].reset();
-					gatePulse[ch].trigger(syncTime[ch] * (len > 4 ? .5 : 0.125));
-				}
+			int len = seq[ch].getGateLength();
+			int ttns = seq[ch].getTimeToNextStep();
+			if (ch == 0 || ch == 1) {
+				DEBUG("ch:%i,step:%i,len:%i,ttns:%i", ch, seq[ch].currentStep, len, ttns);
+			}
+			if (true && shouldOutputPulse[ch]) {
+				gatePulse[ch].reset();
+				gatePulse[ch].trigger(syncTime[0] * ttns * (len > 8 ? .93 : 0.25));
 			}
 
 
@@ -582,7 +608,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		//}
 	}
 	void setSyncTime(int channel, float time) {
-		DEBUG("ch:%i,time:%f", channel, time);
+		//DEBUG("ch:%i,time:%f", channel, time);
 		syncTime[channel] = time;
 	}
 	void process(const ProcessArgs &args) override {
