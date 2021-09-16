@@ -575,7 +575,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 			}
 			if (true && shouldOutputPulse[ch]) {
 				gatePulse[ch].reset();
-				gatePulse[ch].trigger(syncTime[0] * ttns * (len > 8 ? .93 : 0.25));
+				gatePulse[ch].trigger(syncTime[0] * ttns * (len > 8 ? .7 : 0.25));
 			}
 
 
