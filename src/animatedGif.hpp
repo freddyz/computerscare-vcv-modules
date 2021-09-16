@@ -104,7 +104,7 @@ STBIDEF unsigned char *stbi_xload(char const *filename, int *x, int *y, int *fra
 			gr = &head;
 			p = result;
 			int counter = 0;
-			while (gr && counter < 128)
+			while (gr && counter < 65536)
 			{
 				prev = gr;
 				//printf("p:%i, &p:%i, *p:%i\n", p, &p, *p);
