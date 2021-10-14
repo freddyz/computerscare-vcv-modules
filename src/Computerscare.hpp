@@ -8,7 +8,7 @@
 #include "widget/SvgWidget.hpp"
 #include "app/PortWidget.hpp"
 #include "app/CircularShadow.hpp"
-#include "app.hpp"
+#include "app/SvgSwitch.hpp"
 
 
 
@@ -127,7 +127,7 @@ struct IsoButton : SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-up.svg")));
 	}
 };
-struct SmallIsoButton : app::SvgSwitch {
+struct SmallIsoButton : SvgSwitch {
 	bool disabled = true;
 	bool lastDisabled = false;
 	std::vector<std::shared_ptr<Svg>> enabledFrames;
