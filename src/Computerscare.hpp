@@ -158,7 +158,6 @@ struct SmallIsoButton : SvgSwitch {
 			}
 			onChange(*(new event::Change()));
 			fb->dirty = true;
-			dirtyValue = -20.f;
 			lastDisabled = disabled;
 
 		}

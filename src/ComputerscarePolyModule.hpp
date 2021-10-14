@@ -43,7 +43,6 @@ struct TinyChannelsSnapKnob: RoundBlackSnapKnob {
 			int currentSetting = module->params[paramId].getValue();;
 			if (currentSetting != prevSetting) {
 				setSvg(currentSetting == 0 ? autoChannelsSvg : manualChannelsSetSvg);
-				dirtyValue = -20.f;
 				prevSetting = currentSetting;
 			}
 		}
