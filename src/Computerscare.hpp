@@ -179,9 +179,6 @@ struct ThreeVerticalXSwitch : app::SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-3.svg")));
 		shadow->opacity = 0.f;
 	}
-	void randomize() override {
-		return;
-	}
 };
 struct ComputerscareDebugFour : app::SvgSwitch {
 	ComputerscareDebugFour() {
@@ -350,7 +347,6 @@ struct LrgKnob : RoundBlackSnapKnob {
 	LrgKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-big-knob-effed.svg")));
 	}
-	void randomize() override { return; }
 };
 
 
@@ -375,7 +371,6 @@ struct SmoothKnobNoRandom : RoundKnob {
 	SmoothKnobNoRandom() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
 	}
-	void randomize() override { return; }
 };
 struct SmallKnob : RoundKnob {
 	SmallKnob() {
@@ -394,7 +389,6 @@ struct ScrambleKnobNoRandom : RoundKnob {
 		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
-	void randomize() override { return; }
 };
 
 struct ScrambleSnapKnob : RoundKnob {
@@ -410,7 +404,6 @@ struct ScrambleSnapKnobNoRandom : RoundKnob {
 		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
-	void randomize() override { return; }
 };
 
 struct SmallSnapKnob : RoundBlackSnapKnob {
