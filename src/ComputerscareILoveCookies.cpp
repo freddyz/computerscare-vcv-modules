@@ -1,7 +1,6 @@
 #include "Computerscare.hpp"
 #include "dsp/digital.hpp"
 #include "dsp/filter.hpp"
-#include "window.hpp"
 #include "dtpulse.hpp"
 
 #include <string>
@@ -666,7 +665,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   }
 
 
-  void fromJson(json_t *rootJ) override
+  /*void fromJson(json_t *rootJ) override
   { std::string val;
     ModuleWidget::fromJson(rootJ);
     json_t *sequencesJ = json_object_get(rootJ, "sequences");//legacy
@@ -681,7 +680,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       }
       cookies->jsonLoaded = true;
     }
-    /*else {
+    else {
       json_t *textJLegacy = json_object_get(rootJ, "data");
       if (textJLegacy) {
         json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
@@ -696,8 +695,8 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
           }
         }
       }
-    }*/
-  }
+    }
+  }*/
 
 
   ComputerscareILoveCookies *cookies;

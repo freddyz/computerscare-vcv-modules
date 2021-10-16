@@ -264,11 +264,11 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 
 	}
 
-	void fromJson(json_t *rootJ) override
+	/*void fromJson(json_t *rootJ) override
 	{
 		ModuleWidget::fromJson(rootJ);
 		bolyPuttons->legacyJSON(rootJ);
-	}
+	}*/
 	void appendContextMenu(Menu *menu) override;
 
 	DisableableParamWidget* button;

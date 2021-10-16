@@ -362,7 +362,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget
         peas = module;
     }
 
-    void fromJson(json_t *rootJ) override
+    /*void fromJson(json_t *rootJ) override
     {
         std::string val;
         ModuleWidget::fromJson(rootJ);
@@ -373,7 +373,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget
             peas->currentFormula = json_string_value(textJ);
             peas->manualSet = true;
         }
-    }
+    }*/
 
     ComputerscareOhPeas *peas;
     PeasTF2 *textFieldTemp;

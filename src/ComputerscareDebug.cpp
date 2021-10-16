@@ -271,7 +271,6 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 			Widget::draw(args);
 		}
 	};
-	void randomize() override { return; }
 };
 ////////////////////////////////////
 struct StringDisplayWidget3 : Widget {
@@ -405,7 +404,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		json_object_set_new(rootJ, "lines", sequencesJ);
 		return rootJ;
 	}*/
-	void fromJson(json_t *rootJ) override
+	/*void fromJson(json_t *rootJ) override
 	{
 		float val;
 		ModuleWidget::fromJson(rootJ);
@@ -426,7 +425,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		}
 
 
-	}
+	}*/
 	void appendContextMenu(Menu *menu) override;
 	ComputerscareDebug *debug;
 };

@@ -139,7 +139,6 @@ struct DisableableSmallKnob : RoundKnob {
     setSvg(enabledThemes[themeIndex]);
     shadow->box.size = math::Vec(0, 0);
     shadow->opacity = 0.f;
-    dirtyValue = -21.f;
   }
 
   void draw(const DrawArgs& args) override {
@@ -147,7 +146,6 @@ struct DisableableSmallKnob : RoundKnob {
       bool candidateDisabled = (module->numInputChannels != 0 && inputChannel > module->numInputChannels - 1 || outputChannel > module->polyChannels - 1) ;
       if (disabled != candidateDisabled || !initialized) {
         setSvg(candidateDisabled ? disabledSvg : enabledThemes[themeIndex]);
-        dirtyValue = -20.f;
         disabled = candidateDisabled;
         initialized = true;
       }
@@ -156,14 +154,14 @@ struct DisableableSmallKnob : RoundKnob {
     }
     RoundKnob::draw(args);
   }
-  void randomize() override {
+  /*void randomize() override {
     if (randomizable) {
       RoundKnob::randomize();
     }
     else {
       return;
     }
-  }
+  }*/
 };
 
 struct ComputerscareMolyPatrixWidget : ModuleWidget {

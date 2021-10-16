@@ -535,15 +535,15 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   }
 
 
-  void fromJson(json_t *rootJ) override
-  {
-    ModuleWidget::fromJson(rootJ);
-    json_t *button_statesJ = json_object_get(rootJ, "buttons");
-    if (button_statesJ) {
-      //there be legacy JSON
-      fatherSon->dataFromJson(rootJ);
-    }
-  }
+  /* void fromJson(json_t *rootJ) override
+   {
+     ModuleWidget::fromJson(rootJ);
+     json_t *button_statesJ = json_object_get(rootJ, "buttons");
+     if (button_statesJ) {
+       //there be legacy JSON
+       fatherSon->dataFromJson(rootJ);
+     }
+   }*/
   void appendContextMenu(Menu *menu) override;
 
   ComputerscarePatchSequencer *fatherSon;
