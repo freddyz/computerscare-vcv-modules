@@ -182,12 +182,10 @@ struct DisableableSnapKnob : RoundBlackSnapKnob {
 		}
 		if (disabled != lastDisabled) {
 			setSvg(disabled ? disabledSvg : enabledSvg);
-			dirtyValue = -20.f;
 			lastDisabled = disabled;
 		}
 		RoundBlackSnapKnob::step();
 	}
-	void randomize() override {return;}
 };
 struct ComputerscareRolyPouterWidget : ModuleWidget {
 	ComputerscareRolyPouterWidget(ComputerscareRolyPouter *module) {
