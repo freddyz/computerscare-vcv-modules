@@ -7,11 +7,9 @@ const std::string clockModeDescriptions[3] = {"Sync\nAnimation will synchronize 
 
 
 struct FrameOffsetParam : ParamQuantity {
-	ComputerscareBlankExpander* module;
 	int numFrames = -1;
 	void setNumFrames(int num) { numFrames = num; }
 	std::string getDisplayValueString() override {
-		//return &module->params[paramId];
 		float val = getValue();
 		return string::f("%i", 1 + mapBlankFrameOffset(val, numFrames));
 	}
