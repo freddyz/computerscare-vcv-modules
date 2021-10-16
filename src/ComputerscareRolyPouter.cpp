@@ -165,7 +165,7 @@ struct PouterSmallDisplay : SmallLetterDisplay
 		SmallLetterDisplay::draw(args);
 	}
 };
-struct DisableableSnapKnob : RoundBlackSnapKnob {
+struct DisableableSnapKnob : RoundKnob {
 	ComputerscarePolyModule *module;
 	int channel;
 	bool disabled = false;
@@ -174,7 +174,9 @@ struct DisableableSnapKnob : RoundBlackSnapKnob {
 	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator-disabled.svg"));
 
 	DisableableSnapKnob() {
-		RoundBlackSnapKnob();
+		snap = true;
+		shadow->opacity = 0.f;
+		RoundKnob();
 	}
 	void step() override {
 		if (module) {
@@ -184,7 +186,7 @@ struct DisableableSnapKnob : RoundBlackSnapKnob {
 			setSvg(disabled ? disabledSvg : enabledSvg);
 			lastDisabled = disabled;
 		}
-		RoundBlackSnapKnob::step();
+		RoundKnob::step();
 	}
 };
 struct ComputerscareRolyPouterWidget : ModuleWidget {
