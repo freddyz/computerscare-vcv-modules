@@ -64,9 +64,6 @@ struct NoRandomSmallKnob : SmallKnob {
 	NoRandomSmallKnob() {
 		SmallKnob();
 	};
-	void randomize() override {
-		return;
-	}
 };
 struct NoRandomMediumSmallKnob : RoundKnob {
 	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob.svg"));
@@ -75,9 +72,6 @@ struct NoRandomMediumSmallKnob : RoundKnob {
 		setSvg(enabledSvg);
 		RoundKnob();
 	};
-	void randomize() override {
-		return;
-	}
 };
 
 struct DisableableSmoothKnob : RoundKnob {
@@ -99,7 +93,6 @@ struct DisableableSmoothKnob : RoundKnob {
 			bool candidate = channel > module->polyChannels - 1;
 			if (disabled != candidate) {
 				setSvg(candidate ? disabledSvg : enabledSvg);
-				dirtyValue = -20.f;
 				disabled = candidate;
 			}
 		}
