@@ -333,7 +333,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		yOffset = 0;
 	}
 	void loadImageDialog(int index = 0) {
-		std::string dir = this->paths[index].empty() ?  asset::user("../") : rack::string::directory(this->paths[index]);
+		std::string dir = this->paths[index].empty() ?  asset::user("../") : asset::user(this->paths[index]);
 		char* pathC = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
 		if (!pathC) {
 			return;
@@ -346,7 +346,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		jsonFlag = false;
 	}
 	void setContainingDirectory(int index = 0) {
-		std::string dir = rack::string::directory(paths[index]);
+		std::string dir = asset::user(paths[index]);
 		std::string currentImageFullpath;
 		parentDirectory = dir;
 		int imageIndex = 0;;
