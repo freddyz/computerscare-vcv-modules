@@ -197,10 +197,10 @@ struct ComputerscareMenuParamModule : ComputerscarePolyModule {
 };
 
 struct MultiselectParamQuantity : ParamQuantity {
-	ComputerscareMenuParamModule* module;
 	std::string getDisplayValueString() override {
+		ComputerscareMenuParamModule* menuParamModule = reinterpret_cast<ComputerscareMenuParamModule*>(this->module);
 		int index = Quantity::getValue();
-		return module->getOptionValue(paramId, index);
+		return menuParamModule->getOptionValue(paramId, index);
 	}
 };
 struct MenuParamModuleWidget : ModuleWidget {
