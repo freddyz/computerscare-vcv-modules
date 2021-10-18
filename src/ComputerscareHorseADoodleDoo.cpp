@@ -307,6 +307,13 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		configMenuParam(CV_OFFSET, -10.f, 10.f, 0.f, "CV Offset", 2);
 		configMenuParam(CV_PHASE, -3.14159f, 3.14159f, 0.f, "CV Phase", 2);
 
+		getParamQuantity(POLY_KNOB)->randomizeEnabled = false;
+
+		getParamQuantity(MODE_KNOB)->randomizeEnabled = false;
+
+		getParamQuantity(PATTERN_SPREAD)->randomizeEnabled = false;
+		getParamQuantity(STEPS_SPREAD)->randomizeEnabled = false;
+		getParamQuantity(DENSITY_SPREAD)->randomizeEnabled = false;
 
 		for (int i = 0; i < 16; i++) {
 			seq[i] = HorseSequencer(0.f, 8, 0.f, i, 0.f);

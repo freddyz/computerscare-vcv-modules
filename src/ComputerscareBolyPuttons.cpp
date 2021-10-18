@@ -46,6 +46,8 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 		}
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 
+		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+
 		outputRanges[0][0] = 0.f;
 		outputRanges[0][1] = 10.f;
 		outputRanges[1][0] = -5.f;

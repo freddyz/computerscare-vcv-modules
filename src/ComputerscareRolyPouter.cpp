@@ -42,6 +42,9 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 		configParam(RANDOMIZE_ONE_TO_ONE, 0.f, 1.f, 0.f);
 
+		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+		getParamQuantity(RANDOMIZE_ONE_TO_ONE)->randomizeEnabled = false;
+
 	}
 	void setAll(int setVal) {
 		for (int i = 0; i < 16; i++) {
