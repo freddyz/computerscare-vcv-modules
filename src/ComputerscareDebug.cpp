@@ -95,8 +95,11 @@ struct ComputerscareDebug : Module {
 
 		stepCounter = 0;
 
-		//params[MANUAL_TRIGGER].randomizable=false;
-		//params[MANUAL_CLEAR_TRIGGER].randomizable=false;
+		getParamQuantity(SWITCH_VIEW)->randomizeEnabled = false;
+		getParamQuantity(WHICH_CLOCK)->randomizeEnabled = false;
+		getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
+		getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
+
 
 	}
 	void process(const ProcessArgs &args) override;

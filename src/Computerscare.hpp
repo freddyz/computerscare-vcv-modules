@@ -405,12 +405,10 @@ struct ScrambleSnapKnobNoRandom : RoundKnob {
 	}
 };
 
-struct SmallSnapKnob : RoundBlackSnapKnob {
-	//bool visible = true;
-
-	//CircularShadow *shadow;
+struct SmallSnapKnob : RoundKnob {
 	SmallSnapKnob() {
 
+		snap = true;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
 		shadow->box.size = math::Vec(0, 0);
 		shadow->opacity = 0.f;
