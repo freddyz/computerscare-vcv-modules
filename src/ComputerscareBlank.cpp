@@ -190,13 +190,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			sampleCounter++;
 			zoomCheckCounter++;
 			if (zoomCheckCounter > zoomCheckInterval) {
-				if (settings::zoom != lastZoom) {
+				float zoom =  APP->scene->rackScroll->getZoom();
+				if (zoom != lastZoom) {
 					pauseAnimation = true;
 				}
 				else {
 					pauseAnimation = false;
 				}
-				lastZoom = settings::zoom;
+				lastZoom = zoom;
 				zoomCheckCounter = 0;
 			}
 		}
