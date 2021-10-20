@@ -215,8 +215,6 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		display->box.size = Vec(box.size.x, 400);
 		addChild(display);
 
-		float xx;
-		float yy;
 		addLabeledKnob<ScrambleSnapKnob>("Algo", 4, 324, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
 		addLabeledKnob<SmoothKnob>("center", 28, 80, module, ComputerscareGolyPenerator::IN_OFFSET, 0, 0);
 		addLabeledKnob<SmallKnob>("spread", 5, 86, module, ComputerscareGolyPenerator::IN_SCALE, 0, 0);
