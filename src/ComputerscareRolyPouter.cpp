@@ -165,6 +165,10 @@ struct PouterSmallDisplay : SmallLetterDisplay
 			}
 			value = str;
 		}
+		else {
+			textColor = okayColor;
+			value = std::to_string(ch + 1);
+		}
 		SmallLetterDisplay::draw(args);
 	}
 };
@@ -185,8 +189,16 @@ struct DisableableSnapKnob : RoundKnob {
 		if (module) {
 			disabled = channel > module->polyChannels - 1;
 		}
+		else {
+			disabled = false;
+			setSvg(enabledSvg);
+			onChange(*(new event::Change()));
+			fb->dirty = true;
+		}
 		if (disabled != lastDisabled) {
 			setSvg(disabled ? disabledSvg : enabledSvg);
+			onChange(*(new event::Change()));
+			fb->dirty = true;
 			lastDisabled = disabled;
 		}
 		RoundKnob::step();

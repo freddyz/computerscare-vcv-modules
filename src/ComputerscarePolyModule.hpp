@@ -48,6 +48,7 @@ struct TinyChannelsSnapKnob: RoundKnob {
 			}
 		}
 		else {
+
 		}
 		RoundKnob::draw(args);
 	}
@@ -81,6 +82,9 @@ struct PolyChannelsDisplay : SmallLetterDisplay
 				prevChannels = newChannels;
 			}
 
+		}
+		else {
+			value = std::to_string(16);
 		}
 		SmallLetterDisplay::draw(args);
 	}

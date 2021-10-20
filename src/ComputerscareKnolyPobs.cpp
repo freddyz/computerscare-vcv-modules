@@ -92,18 +92,19 @@ struct DisableableSmoothKnob : RoundKnob {
 		shadow->box.size = math::Vec(0, 0);
 		shadow->opacity = 0.f;
 	}
-
-	void draw(const DrawArgs& args) override {
+	void step() override {
 		if (module) {
 			bool candidate = channel > module->polyChannels - 1;
 			if (disabled != candidate) {
 				setSvg(candidate ? disabledSvg : enabledSvg);
+				onChange(*(new event::Change()));
+				fb->dirty = true;
 				disabled = candidate;
 			}
 		}
 		else {
 		}
-		RoundKnob::draw(args);
+		RoundKnob::step();
 	}
 };
 
