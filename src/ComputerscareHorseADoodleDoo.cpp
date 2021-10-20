@@ -602,6 +602,9 @@ struct NumStepsOverKnobDisplay : SmallLetterDisplay
 			}
 			value = str;
 		}
+		else {
+			value = std::to_string((random::u32() % 64) + 1);
+		}
 		SmallLetterDisplay::draw(args);
 	}
 };

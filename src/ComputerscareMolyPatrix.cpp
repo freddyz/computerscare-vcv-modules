@@ -54,13 +54,16 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
       for (int j = 0; j < numColumns; j++) {
         configParam(KNOB + i * 16 + j, -2.f, 2.f, i == j ? 1.f : 0.f, "Input ch." + std::to_string(i + 1) + " → Output ch." + std::to_string(j + 1));
       }
-      configParam(OUTPUT_TRIM, -2.f, 2.f, 1.f, "Output Attenuation");
-      configParam(OUTPUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
-      configParam(INPUT_TRIM, -2.f, 2.f, 1.f, "Input Attenuation");
 
-      configParam(INPUT_OFFSET, -10.f, 10.f, 0.f, "Input Offset");
-      configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
     }
+    configParam(OUTPUT_TRIM, -2.f, 2.f, 1.f, "Output Attenuation");
+    configParam(OUTPUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
+    configParam(INPUT_TRIM, -2.f, 2.f, 1.f, "Input Attenuation");
+
+    configParam(INPUT_OFFSET, -10.f, 10.f, 0.f, "Input Offset");
+    configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
+
+    getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
 
   }
   void checkPoly() override {
