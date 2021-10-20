@@ -112,6 +112,9 @@ struct PoolsSmallDisplay : SmallLetterDisplay
 			}
 
 		}
+		else {
+			value = std::to_string((random::u32() % 16) + 1);
+		}
 		SmallLetterDisplay::draw(args);
 	}
 

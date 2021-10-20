@@ -167,7 +167,7 @@ struct PouterSmallDisplay : SmallLetterDisplay
 		}
 		else {
 			textColor = okayColor;
-			value = std::to_string(ch + 1);
+			value = std::to_string((random::u32() % 16) + 1);
 		}
 		SmallLetterDisplay::draw(args);
 	}

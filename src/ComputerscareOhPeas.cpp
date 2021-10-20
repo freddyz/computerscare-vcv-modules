@@ -220,7 +220,6 @@ struct PeasTF2 : ComputerscareTextField
         {
             if (module->manualSet) {
                 text = module->currentFormula;
-                printf("manualSet to %s\n", text.c_str());
                 module->manualSet = false;
             }
             if (text.c_str() != module->currentFormula)
@@ -264,6 +263,9 @@ struct PeasSmallDisplay : SmallLetterDisplay
                 value = numDivisionsDisplay;
             }
 
+        }
+        else {
+            value = std::to_string((random::u32() % 24) + 1);
         }
         SmallLetterDisplay::draw(args);
     }

@@ -153,6 +153,9 @@ struct PequencerSmallDisplay : SmallLetterDisplay
 
 
 		}
+		else {
+			value = std::to_string((random::u32() % 16));
+		}
 		SmallLetterDisplay::draw(args);
 	}
 

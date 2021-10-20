@@ -191,6 +191,7 @@ struct ComputerscareDebugFour : app::SvgSwitch {
 struct ComputerscareResetButton : app::SvgSwitch {
 	ComputerscareResetButton() {
 		momentary = true;
+		shadow->opacity = 0.f;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-rst-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-rst-text-red.svg")));
 	}
@@ -198,6 +199,8 @@ struct ComputerscareResetButton : app::SvgSwitch {
 struct ComputerscareNextButton : app::SvgSwitch {
 	ComputerscareNextButton() {
 		momentary = true;
+
+		shadow->opacity = 0.f;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-next-button.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-next-button-down.svg")));
 	}
@@ -205,6 +208,8 @@ struct ComputerscareNextButton : app::SvgSwitch {
 struct ComputerscareClearButton : app::SvgSwitch {
 	ComputerscareClearButton() {
 		momentary = true;
+
+		shadow->opacity = 0.f;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-CLEAR-BUTTON-UP.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-CLEAR-BUTTON-DOWN.svg")));
 	}
@@ -213,12 +218,16 @@ struct ComputerscareClearButton : app::SvgSwitch {
 struct ComputerscareClockButton : app::SvgSwitch {
 	ComputerscareClockButton() {
 		momentary = true;
+
+		shadow->opacity = 0.f;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-clk-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-clk-text-red.svg")));
 	}
 };
 struct ComputerscareInvisibleButton : app::SvgSwitch {
 	ComputerscareInvisibleButton() {
+
+		shadow->opacity = 0.f;
 		momentary = true;
 
 
@@ -351,6 +360,7 @@ struct LrgKnob : RoundBlackSnapKnob {
 
 struct MediumSnapKnob : RoundBlackSnapKnob {
 	MediumSnapKnob() {
+		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
 	}
 };
@@ -485,7 +495,7 @@ struct ComputerscareTextField : ui::TextField {
 struct SmallLetterDisplay : Widget {
 
 	std::string value;
-	std::shared_ptr<Font> font;
+	std::string fontPath;
 	int fontSize = 19;
 	std::string defaultFontPath = "res/Oswald-Regular.ttf";
 	NVGcolor baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
@@ -501,16 +511,19 @@ struct SmallLetterDisplay : Widget {
 
 	SmallLetterDisplay() {
 		value = "";
-		font = APP->window->loadFont(asset::plugin(pluginInstance, defaultFontPath));
+		fontPath = asset::plugin(pluginInstance, defaultFontPath);
 	};
-	SmallLetterDisplay(std::string fontPath) {
+	SmallLetterDisplay(std::string providedFontPath) {
 		value = "";
-		font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
+		fontPath = asset::plugin(pluginInstance, providedFontPath);
 	};
 
 	void draw(const DrawArgs &ctx) override
 	{
 		// Background
+
+
+		std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
 		NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
 		NVGcolor doubleblinkColor = COLOR_COMPUTERSCARE_YELLOW;
 
@@ -530,16 +543,20 @@ struct SmallLetterDisplay : Widget {
 		nvgFill(ctx.vg);
 
 		// text
-		nvgFontSize(ctx.vg, fontSize);
-		nvgFontFaceId(ctx.vg, font->handle);
-		nvgTextLetterSpacing(ctx.vg, letterSpacing);
-		nvgTextLineHeight(ctx.vg, 0.7);
-		nvgTextAlign(ctx.vg, textAlign);
 
-		Vec textPos = Vec(6.0f, 12.0f).plus(textOffset);
-		NVGcolor color = (!blink || doubleblink) ? textColor : COLOR_COMPUTERSCARE_YELLOW;
-		nvgFillColor(ctx.vg, color);
-		nvgTextBox(ctx.vg, textPos.x, textPos.y, breakRowWidth, value.c_str(), NULL);
+		if (font) {
+			nvgFontFaceId(ctx.vg, font->handle);
+			nvgFontSize(ctx.vg, fontSize);
+
+			nvgTextLetterSpacing(ctx.vg, letterSpacing);
+			nvgTextLineHeight(ctx.vg, 0.7);
+			nvgTextAlign(ctx.vg, textAlign);
+
+			Vec textPos = Vec(6.0f, 12.0f).plus(textOffset);
+			NVGcolor color = (!blink || doubleblink) ? textColor : COLOR_COMPUTERSCARE_YELLOW;
+			nvgFillColor(ctx.vg, color);
+			nvgTextBox(ctx.vg, textPos.x, textPos.y, breakRowWidth, value.c_str(), NULL);
+		}
 
 	}
 };

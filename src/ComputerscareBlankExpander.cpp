@@ -163,6 +163,7 @@ struct FrameScrubKnob : SmallKnob {
 };
 struct ClockModeButton : app::SvgSwitch {
 	ClockModeButton() {
+		shadow->opacity = 0.f;
 		//momentary = true;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/blank-clock-mode-sync.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/blank-clock-mode-scan.svg")));
