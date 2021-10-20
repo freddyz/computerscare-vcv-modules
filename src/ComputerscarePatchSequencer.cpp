@@ -74,6 +74,8 @@ struct ComputerscarePatchSequencer : Module {
     for (int i = 0; i < numOutputs; i++) {
       channelCount[i] = 0;
     }
+    getParamQuantity(STEPS_PARAM)->randomizeEnabled = false;
+
   }
   void process(const ProcessArgs &args) override;
 
