@@ -351,21 +351,26 @@ struct InPort : ComputerscareSvgPort {
 // Knobs
 
 
-struct LrgKnob : RoundBlackSnapKnob {
+struct LrgKnob : RoundKnob {
 	LrgKnob() {
+		snap = true;
+		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-big-knob-effed.svg")));
 	}
 };
 
 
-struct MediumSnapKnob : RoundBlackSnapKnob {
+struct MediumSnapKnob : RoundKnob {
 	MediumSnapKnob() {
+		snap = true;
 		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
 	}
 };
-struct MediumDotSnapKnob : RoundBlackSnapKnob {
+struct MediumDotSnapKnob : RoundKnob {
 	MediumDotSnapKnob() {
+		shadow->opacity = 0.f;
+		snap = true;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator.svg")));
 	}
 };

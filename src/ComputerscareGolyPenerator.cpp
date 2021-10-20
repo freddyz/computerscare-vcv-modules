@@ -65,6 +65,8 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 		configParam(OUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
 
+		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+
 		availableAlgorithms.push_back("Linear");
 		availableAlgorithms.push_back("Sigmoid");
 		availableAlgorithms.push_back("Hump");
