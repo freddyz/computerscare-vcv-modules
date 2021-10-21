@@ -117,6 +117,11 @@
 			"description":"Rhythm generator",
 			"tags":["Sequencer","Clock Modulator","Polyphonic"],
 			"manualUrl":"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
+		},{"slug":"computerscare-pulti-moly",
+			"name":"Pulti Moly",
+			"description":"Ultraphonic Polyphonic Processor",
+			"tags":["Polyphonic"],
+			"manualUrl":"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
 		}
 	]
 }
