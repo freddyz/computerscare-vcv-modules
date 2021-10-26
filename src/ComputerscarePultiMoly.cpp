@@ -22,7 +22,11 @@ struct ComputerscarePultiMoly : ComputerscarePolyModule {
     //matrix multiplication
     C = T * I + O
 
-    city[i][ch] = inputTrim[i][ch]*inputs[i][ch]+offset[i][ch]
+    //would require 16^4 = 65536 float values, taking up about 3MB
+
+    city[z][ch] = inputTrim[i][ch]*inputs[i][ch]+offset[i][ch] + globalChannelOffset[ch]
+
+    city[z][ch] = matrix[z]
 
   */
 
@@ -68,10 +72,17 @@ struct ComputerscarePultiMoly : ComputerscarePolyModule {
       configParam(EDITING_FOCUS + i, 1.f, 16.f, 1.f, "Editing ");
       configParam(CITY_SCALE + i, -2.f, 2.f, 1.f, "Block " + std::to_string(i + 1) + " scale");
       configParam(CITY_OFFSET + i, -10.f, 10.f, 0.f, "Block " + std::to_string(i + 1) + " offset", " volts");
+
+      getParamQuantity(EDITING_FOCUS + i)->randomizeEnabled = false;
+      getParamQuantity(CITY_SCALE + i)->randomizeEnabled = false;
+      getParamQuantity(CITY_OFFSET + i)->randomizeEnabled = false;
+
     }
     for (int i = 0; i < numInputCities; i++) {
       configInput(CITY_INPUT + i, "City " + std::to_string(i + 1) + " Input");
       configOutput(CITY_OUTPUT + i, "City " + std::to_string(i + 1) + " Output");
+
+
     }
     configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
     configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale");
@@ -164,6 +175,35 @@ struct DisableableSmoothKnob : RoundKnob {
     RoundKnob::step();
   }
 };
+struct DisableableSnapSmoothKnob : RoundKnob {
+  std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator.svg"));
+  std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob-disabled.svg"));
+
+  int channel = 0;
+  bool disabled = false;
+  ComputerscarePolyModule *module;
+
+  DisableableSnapSmoothKnob() {
+    setSvg(enabledSvg);
+    snap = true;
+    shadow->box.size = math::Vec(0, 0);
+    shadow->opacity = 0.f;
+  }
+  void step() override {
+    if (module) {
+      bool candidate = channel > module->polyChannels - 1;
+      if (disabled != candidate) {
+        setSvg(candidate ? disabledSvg : enabledSvg);
+        onChange(*(new event::Change()));
+        fb->dirty = true;
+        disabled = candidate;
+      }
+    }
+    else {
+    }
+    RoundKnob::step();
+  }
+};
 
 struct ComputerscarePultiMolyWidget : ModuleWidget {
   ComputerscarePultiMolyWidget(ComputerscarePultiMoly *module) {
@@ -189,6 +229,9 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
     //addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscarePultiMoly::EDITING_CITY));
 
 
+
+    float xEditingFocus;
+    float yEditingFocus;
 
     float xx;
     float yy;
@@ -220,16 +263,16 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
     for (int block = 0; block < numKnobBlocks; block++) {
       xx = xInitial + block * citySpacing + 1.4f ;
       yy = yInitial - 33;
-      addLabeledKnob("Horphald", xx, yy, module, ComputerscarePultiMoly::EDITING_FOCUS + block , 0, 0, 0);
+      addLabeledKnobZZ("Edit", xx + 15, yy - 25, module, ComputerscarePultiMoly::EDITING_FOCUS + block , 0, 0, block, 1);
       //addParam(createParam<NoRandomMediumSmallKnob>(Vec(xx , yy + 20 ), module, ComputerscarePultiMoly::EDITING_FOCUS + block));
 
       addParam(createParam<NoRandomSmallKnob>(Vec(xx , yy ), module, ComputerscarePultiMoly::CITY_SCALE + block));
-      addParam(createParam<NoRandomMediumSmallKnob>(Vec(xx + 32, yy - 57), module, ComputerscarePultiMoly::CITY_OFFSET + block));
+      addParam(createParam<NoRandomMediumSmallKnob>(Vec(xx + 32, yy), module, ComputerscarePultiMoly::CITY_OFFSET + block));
 
       for (int i = 0; i < numKnobs; i++) {
         xx = xInitial + block * citySpacing + 1.4f + 24.3 * (i - i % 8) / 8;
         yy = yInitial + ySpacing * (i % 8) +  yRightColumnOffset * (i - i % 8) ;
-        addLabeledKnob(std::to_string(i + 1), xx, yy, module, ComputerscarePultiMoly::EDIT_KNOB + i + block * numKnobs, 0, 0, i);
+        addLabeledKnobZZ(std::to_string(i + 1), xx, yy, module, ComputerscarePultiMoly::EDIT_KNOB + i + block * numKnobs, 0, 0, i, 0);
       }
     }
 
@@ -279,7 +322,7 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
   };
 
 
-  void addLabeledKnob(std::string label, int x, int y, ComputerscarePultiMoly *module, int index, float labelDx, float labelDy, int channel) {
+  void addLabeledKnobZZ(std::string label, int x, int y, ComputerscarePultiMoly *module, int index, float labelDx, float labelDy, int channel, int type = 0) {
 
     smallLetterDisplay = new SmallLetterDisplay();
     smallLetterDisplay->box.size = Vec(5, 10);
@@ -287,13 +330,26 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
     smallLetterDisplay->value = label;
     smallLetterDisplay->textAlign = 1;
 
-    ParamWidget* pob =  createParam<DisableableSmoothKnob>(Vec(x, y), module, index);
+    ParamWidget* pob;
 
-    DisableableSmoothKnob* fader = dynamic_cast<DisableableSmoothKnob*>(pob);
-    fader->module = module;
-    fader->channel = channel;
 
-    addParam(fader);
+    if (type == 0) {
+      DisableableSmoothKnob* fader;
+      pob =  createParam<DisableableSmoothKnob>(Vec(x, y), module, index);
+      fader = dynamic_cast<DisableableSmoothKnob*>(pob);
+      fader->module = module;
+      fader->channel = channel;
+      addParam(fader);
+    } else if (type == 1) {
+      DisableableSnapSmoothKnob* fader;
+      pob =  createParam<DisableableSnapSmoothKnob>(Vec(x, y), module, index);
+      fader = dynamic_cast<DisableableSnapSmoothKnob*>(pob);
+      fader->module = module;
+      fader->channel = channel;
+      addParam(fader);
+    }
+
+
     smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
     addChild(smallLetterDisplay);
   }
@@ -301,7 +357,7 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
   PolyChannelsDisplay* channelDisplay;
   DisableableSmoothKnob* fader;
   SmallLetterDisplay* smallLetterDisplay;
-  //FocusHighlightPort* focusHighlightPort;
+  FocusHighlightPort* focusHighlightPort;
 };
 
 Model *modelComputerscarePultiMoly = createModel<ComputerscarePultiMoly, ComputerscarePultiMolyWidget>("computerscare-pulti-moly");
