@@ -51,6 +51,10 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
     for (int i = 0; i < numRows; i++) {
       configParam(INPUT_ROW_TRIM + i, -2.f, 2.f, 1.f, "Input Channel " + std::to_string(i + 1) + " Attenuation");
       configParam(OUTPUT_COLUMN_TRIM + i, -2.f, 2.f, 1.f, "Output Channel " + std::to_string(i + 1) + " Attenuation");
+
+      getParamQuantity(INPUT_ROW_TRIM + i)->randomizeEnabled = false;
+      getParamQuantity(OUTPUT_COLUMN_TRIM + i)->randomizeEnabled = false;
+
       for (int j = 0; j < numColumns; j++) {
         configParam(KNOB + i * 16 + j, -2.f, 2.f, i == j ? 1.f : 0.f, "Input ch." + std::to_string(i + 1) + " → Output ch." + std::to_string(j + 1));
       }
@@ -59,10 +63,14 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
     configParam(OUTPUT_TRIM, -2.f, 2.f, 1.f, "Output Attenuation");
     configParam(OUTPUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
     configParam(INPUT_TRIM, -2.f, 2.f, 1.f, "Input Attenuation");
-
     configParam(INPUT_OFFSET, -10.f, 10.f, 0.f, "Input Offset");
-    configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
+    getParamQuantity(OUTPUT_TRIM)->randomizeEnabled = false;
+    getParamQuantity(OUTPUT_OFFSET)->randomizeEnabled = false;
+    getParamQuantity(INPUT_TRIM)->randomizeEnabled = false;
+    getParamQuantity(INPUT_OFFSET)->randomizeEnabled = false;
 
+
+    configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
 
   }
@@ -150,6 +158,8 @@ struct DisableableSmallKnob : RoundKnob {
       if (disabled != candidateDisabled || !initialized) {
         setSvg(candidateDisabled ? disabledSvg : enabledThemes[themeIndex]);
         disabled = candidateDisabled;
+        onChange(*(new event::Change()));
+        fb->dirty = true;
         initialized = true;
       }
     }
@@ -157,14 +167,6 @@ struct DisableableSmallKnob : RoundKnob {
     }
     RoundKnob::draw(args);
   }
-  /*void randomize() override {
-    if (randomizable) {
-      RoundKnob::randomize();
-    }
-    else {
-      return;
-    }
-  }*/
 };
 
 struct ComputerscareMolyPatrixWidget : ModuleWidget {
