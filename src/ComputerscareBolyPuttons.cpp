@@ -183,6 +183,7 @@ struct DisableableParamWidget : SmallIsoButton {
 	SmallLetterDisplay *smallLetterDisplay;
 	int channel;
 	Vec labelOffset = Vec(0, 0);
+	bool pressed = false;
 
 
 	DisableableParamWidget() {
@@ -201,17 +202,20 @@ struct DisableableParamWidget : SmallIsoButton {
 		if (module) {
 			disabled = channel > module->polyChannels - 1;
 			momentary = module->momentary;
-			bool pressed = module->params[channel].getValue() == 1.f;
-			labelOffset = Vec(pressed ? 3.f : -4.f, pressed ? 7.f : 2.f);
-			//smallLetterDisplay
-			//smallLetterDisplay->box.pos=box.pos;//.plus(Vec(0,0/*disabled ? 5 : 0,0*/));
+			pressed = module->params[channel].getValue() == 1.f;
 		}
-		smallLetterDisplay->value = std::to_string(channel + 1);
+		else {
+			disabled = false;
+		}
+
+
 		SmallIsoButton::step();
 	}
 	void draw(const DrawArgs &ctx) override {
-		//addChild(smallLetterDisplay);
-		smallLetterDisplay->textOffset = labelOffset;//.plus(labelOffset);
+		labelOffset = Vec(pressed ? 3.f : -4.f, pressed ? 7.f : 2.f);
+		smallLetterDisplay->value = std::to_string(channel + 1);
+
+		smallLetterDisplay->textOffset = labelOffset;
 		SmallIsoButton::draw(ctx);
 	}
 };
