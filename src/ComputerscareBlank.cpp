@@ -347,17 +347,17 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		jsonFlag = false;
 	}
 	void setContainingDirectory(int index = 0) {
-		std::string dir = asset::user(paths[index]);
+		std::string dir = system::getDirectory(asset::user(paths[index]));
 		std::string currentImageFullpath;
 		parentDirectory = dir;
-		int imageIndex = 0;;
 
+		int imageIndex = 0;;
 
 		struct dirent* dirp = NULL;
 		DIR* rep = NULL;
 		rep = opendir(dir.c_str());
 		catalog.clear();
-		//fichier.clear();
+
 		if (rep) {
 			while ((dirp = readdir(rep)) != NULL) {
 				std::string name = dirp->d_name;
@@ -378,7 +378,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					if (currentImageFullpath == paths[index]) {
 						fileIndexInCatalog = imageIndex;
 					}
-					//DEBUG("we got gif:%s", name.c_str());
 					imageIndex++;
 				}
 			}
@@ -418,15 +417,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 
 	void setPath(std::string path, int index = 0) {
-		//if (paths.size() <= index) {
-		//paths.push_back(path);
-		//}
-		//else {
 		numFrames = 0;
 		paths[index] = path;
-		//}
-		printf("setted %s\n", path.c_str());
-		//numFrames = paths.size();
 		currentFrame = 0;
 	}
 	void setFrameCount(int frameCount) {
