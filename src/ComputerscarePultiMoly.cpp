@@ -8,10 +8,12 @@ const int numToggles = 16;
 
 const int numInputs = 16;
 const int numOutputs = 16;
-const int numMultiphony = 16;
+
 const int numInputCities = 16;
 
 const int numKnobBlocks = 2;
+
+const int numPolyChannels = 16;
 
 
 struct ComputerscarePultiMoly : ComputerscarePolyModule {
@@ -30,7 +32,11 @@ struct ComputerscarePultiMoly : ComputerscarePolyModule {
 
   */
 
-  float cityValues[numMultiphony][numKnobs] = {};
+  float cityValues[numOutputs][numKnobs] = {};
+  float cityScaleValues[numOutputs] = {};
+  float cityOffsetValues[numOutputs] = {};
+
+  int lastEditKnobs[numKnobBlocks] = {};
 
 
   enum ParamIds {
@@ -64,6 +70,7 @@ struct ComputerscarePultiMoly : ComputerscarePolyModule {
 
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
+    initStorage();
 
     for (int i = 0; i < numKnobs * numKnobBlocks; i++) {
       configParam(EDIT_KNOB + i, 0.f, 10.f, 0.f, "Edit Block " + std::to_string(((i - i % numKnobs)) / numKnobs + 1) + ", ch " + std::to_string((i % numKnobs) + 1));
@@ -76,6 +83,8 @@ struct ComputerscarePultiMoly : ComputerscarePolyModule {
       getParamQuantity(EDITING_FOCUS + i)->randomizeEnabled = false;
       getParamQuantity(CITY_SCALE + i)->randomizeEnabled = false;
       getParamQuantity(CITY_OFFSET + i)->randomizeEnabled = false;
+
+      lastEditKnobs[i] = 0;
 
     }
     for (int i = 0; i < numInputCities; i++) {
@@ -95,11 +104,20 @@ struct ComputerscarePultiMoly : ComputerscarePolyModule {
     getParamQuantity(GLOBAL_OFFSET)->randomizeEnabled = false;
 
   }
+  void initStorage() {
+    for (int i = 0; i < numOutputs; i++) {
+      cityScaleValues[i] = 1.f;
+      cityOffsetValues[i] = 0.f;
+      for (int ch = 0; ch < numPolyChannels; ch++) {
+        cityValues[i][ch] = 0.f;
+      }
+    }
+  }
   void processCityOutput(int index) {
-    float trim = params[GLOBAL_SCALE].getValue();
-    float offset = params[GLOBAL_OFFSET].getValue();
+    float trim = cityScaleValues[index];
+    float offset = cityOffsetValues[index];
     for (int i = 0; i < polyChannels; i++) {
-      outputs[CITY_OUTPUT + index].setVoltage(cityValues[index][i], i);
+      outputs[CITY_OUTPUT + index].setVoltage(trim * cityValues[index][i] + offset, i);
     }
   }
   void process(const ProcessArgs &args) override {
@@ -119,19 +137,94 @@ struct ComputerscarePultiMoly : ComputerscarePolyModule {
     checkKnobs();
   }
   float calculateValue(int city, int ch) {
-    float scale = params[CITY_SCALE + city].getValue();
-    float offset = params[CITY_OFFSET + city].getValue();
-    return scale * params[EDIT_KNOB + city * numKnobs + ch].getValue() + offset;
+    // float scale = params[CITY_SCALE + city].getValue();
+    //float offset = params[CITY_OFFSET + city].getValue();
+    // return scale * params[EDIT_KNOB + city * numKnobs + ch].getValue() + offset;
+    return params[EDIT_KNOB + city * numKnobs + ch].getValue();
   }
   void checkKnobs() {
     for (int city = 0; city < numKnobBlocks; city++) {
-      for (int ch = 0; ch < numKnobs; ch++) {
-        cityValues[city][ch] = calculateValue(city, ch);
+      int editKnobValue = params[EDITING_FOCUS + city].getValue();
+      if (lastEditKnobs[city] != editKnobValue) {
+        lastEditKnobs[city] = editKnobValue;
+        setEditKnobsFromCityValues(city, editKnobValue - 1);
       }
-      processCityOutput(city);
+      cityScaleValues[lastEditKnobs[city] - 1] = params[CITY_SCALE + city].getValue();
+      cityOffsetValues[lastEditKnobs[city] - 1] = params[CITY_OFFSET + city].getValue();
+
+      //float offset = params[CITY_OFFSET + city].getValue();
+      for (int ch = 0; ch < numKnobs; ch++) {
+        cityValues[lastEditKnobs[city] - 1][ch] = calculateValue(city, ch);
+      }
+    }
+    for (int outputCity = 0; outputCity < numOutputs; outputCity++) {
+      processCityOutput(outputCity);
     }
   }
+  void setEditKnobsFromCityValues(int block, int city) {
+    params[CITY_SCALE + block].setValue(cityScaleValues[lastEditKnobs[block] - 1]);
+    params[CITY_OFFSET + block].setValue(cityOffsetValues[lastEditKnobs[block] - 1]);
+
+    for (int i = 0; i < numKnobs; i++) {
+      params[EDIT_KNOB + block * numKnobs + i].setValue(cityValues[city][i]);
+    }
+  }
+  void dataFromJson(json_t *rootJ) override {
+
+    json_t *cityValuesJ = json_object_get(rootJ, "cityValues");
+    json_t *cityOffsetsJ = json_object_get(rootJ, "cityOffsets");
+    json_t *cityScalesJ = json_object_get(rootJ, "cityScales");
+
+    //json_real_value
+
+
+    if (cityOffsetsJ)
+    {
+      for (int city = 0; city < numOutputs; city++) {
+        json_t *cityOffsetJ = json_array_get(cityOffsetsJ, city);
+        if (cityOffsetJ) {
+          cityOffsetValues[city] = json_real_value(cityOffsetJ);
+        }
+
+        json_t *cityScaleJ = json_array_get(cityScalesJ, city);
+        if (cityScaleJ) {
+          cityScaleValues[city] = json_real_value(cityScaleJ);
+        }
+
+        for (int ch = 0; ch < numPolyChannels; ch++) {
+          json_t *cityValueJ = json_array_get(cityValuesJ, city * numPolyChannels + ch);
+          if (cityValueJ) {
+            cityValues[city][ch] = json_real_value(cityValueJ);
+          }
+        }
+      }
+    }
+  }
+  json_t *dataToJson() override {
+    json_t *rootJ = json_object();
+    json_t *cityValuesJ = json_array();
+    json_t *cityOffsetsJ = json_array();
+    json_t *cityScalesJ = json_array();
+    for (int k = 0; k < numOutputs; k++) {
+      json_t *coffset_j = json_real(cityOffsetValues[k]);
+      json_array_append_new(cityOffsetsJ, coffset_j);
+
+      json_t *cscale_j = json_real(cityScaleValues[k]);
+      json_array_append_new(cityScalesJ, cscale_j);
+
+      for (int i = 0; i < numKnobs; i++)
+      {
+        json_t *cv_j = json_real(cityValues[k][i]);
+        json_array_append_new(cityValuesJ, cv_j);
+      }
+    }
+    json_object_set_new(rootJ, "cityValues", cityValuesJ);
+    json_object_set_new(rootJ, "cityOffsets", cityOffsetsJ);
+    json_object_set_new(rootJ, "cityScales", cityScalesJ);
+    return rootJ;
+  }
 };
+
 
 struct NoRandomSmallKnob : SmallKnob {
   NoRandomSmallKnob() {
@@ -263,7 +356,7 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
     for (int block = 0; block < numKnobBlocks; block++) {
       xx = xInitial + block * citySpacing + 1.4f ;
       yy = yInitial - 33;
-      addLabeledKnobZZ("Edit", xx + 15, yy - 25, module, ComputerscarePultiMoly::EDITING_FOCUS + block , 0, 0, block, 1);
+      addLabeledKnob("Edit", xx + 15, yy - 25, module, ComputerscarePultiMoly::EDITING_FOCUS + block , 0, 0, block, 1);
       //addParam(createParam<NoRandomMediumSmallKnob>(Vec(xx , yy + 20 ), module, ComputerscarePultiMoly::EDITING_FOCUS + block));
 
       addParam(createParam<NoRandomSmallKnob>(Vec(xx , yy ), module, ComputerscarePultiMoly::CITY_SCALE + block));
@@ -272,7 +365,7 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
       for (int i = 0; i < numKnobs; i++) {
         xx = xInitial + block * citySpacing + 1.4f + 24.3 * (i - i % 8) / 8;
         yy = yInitial + ySpacing * (i % 8) +  yRightColumnOffset * (i - i % 8) ;
-        addLabeledKnobZZ(std::to_string(i + 1), xx, yy, module, ComputerscarePultiMoly::EDIT_KNOB + i + block * numKnobs, 0, 0, i, 0);
+        addLabeledKnob(std::to_string(i + 1), xx, yy, module, ComputerscarePultiMoly::EDIT_KNOB + i + block * numKnobs, 0, 0, i, 0);
       }
     }
 
@@ -322,7 +415,7 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
   };
 
 
-  void addLabeledKnobZZ(std::string label, int x, int y, ComputerscarePultiMoly *module, int index, float labelDx, float labelDy, int channel, int type = 0) {
+  void addLabeledKnob(std::string label, int x, int y, ComputerscarePultiMoly *module, int index, float labelDx, float labelDy, int channel, int type = 0) {
 
     smallLetterDisplay = new SmallLetterDisplay();
     smallLetterDisplay->box.size = Vec(5, 10);
