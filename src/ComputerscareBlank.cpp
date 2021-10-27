@@ -177,7 +177,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
 		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.200948f, "Slideshow Time", 2, " s",  400.f, 3.f);
-		configParam(LIGHT_WIDGET_MODE, 0.f, 1.f, 0.f, "Keep image fully opaque when used with ModularFungi Lights Off");
+		configParam(LIGHT_WIDGET_MODE, 0.f, 1.f, 0.f, "Keep image fully opaque when dimming room lights");
 
 		paths.push_back("empty");
 
@@ -852,6 +852,8 @@ struct tPNGDisplay : TBase {
 	bool missingOrBroken = false;
 	AnimatedGifBuddy gifBuddy;
 
+	bool lightWidgetMode = false;
+
 	tPNGDisplay() {
 	}
 
@@ -882,7 +884,19 @@ struct tPNGDisplay : TBase {
 
 	void setOffsets() {
 	}
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1 && lightWidgetMode) {
+			drawImage(args);
+		}
+		Widget::drawLayer(args, layer);
+	}
 	void draw(const rack::Widget::DrawArgs &args) override {
+		if (!lightWidgetMode) {
+			drawImage(args);
+		}
+	}
+
+	void drawImage(const BGPanel::DrawArgs& args) {
 		if (blankModule && blankModule->loadedJSON) {
 			std::string modulePath = blankModule->getPath();
 			if (path != modulePath) {
@@ -977,8 +991,7 @@ struct tPNGDisplay : TBase {
 	}
 };
 
-//this is so CustomBlank can optionally stay fully opaque when ModularFungi LightOff module is used
-typedef tPNGDisplay<LightWidget> PNGDisplayLightWidget;
+
 typedef tPNGDisplay<TransparentWidget> PNGDisplayTransparentWidget;
 
 struct PNGDisplay : Widget {
@@ -987,9 +1000,6 @@ struct PNGDisplay : Widget {
 	PNGDisplay(ComputerscareBlank *blankModule) {
 		module = blankModule;
 
-		pngLight = new PNGDisplayLightWidget();
-		pngLight->blankModule = blankModule;
-
 		pngTransparent = new PNGDisplayTransparentWidget();
 		pngTransparent->blankModule = blankModule;
 
@@ -997,7 +1007,6 @@ struct PNGDisplay : Widget {
 		Widget();
 	}
 	void resetZooms() {
-		pngLight->resetZooms();
 		pngTransparent->resetZooms();
 	}
 	void step() override {
@@ -1005,19 +1014,11 @@ struct PNGDisplay : Widget {
 			bool moduleLightWidgetMode = module->getLightWidgetMode();
 			if (moduleLightWidgetMode != lightWidgetMode) {
 				lightWidgetMode = moduleLightWidgetMode;
-				if (lightWidgetMode) {
-					removeChild(pngTransparent);
-					addChild(pngLight);
-				} else {
-					removeChild(pngLight);
-					addChild(pngTransparent);
-				}
+				pngTransparent->lightWidgetMode = lightWidgetMode;
 			}
 		}
-		//pngLight->hide();
 		Widget::step();
 	}
-	PNGDisplayLightWidget *pngLight;
 	PNGDisplayTransparentWidget *pngTransparent;
 	ComputerscareBlank *module;
 };
@@ -1164,20 +1165,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
-		/*SmoothKnob* speedParam = new SmoothKnob();
-		speedParam->paramQuantity = blankModule->paramQuantities[ComputerscareBlank::ANIMATION_SPEED];
-
-		MenuEntry* LabeledKnob = new MenuEntry();
-		MenuLabel* johnLabel = construct<MenuLabel>(&MenuLabel::text, "Animation Speed");
-		johnLabel->box.pos = Vec(speedParam->box.size.x,0);
-
-		LabeledKnob->addChild(johnLabel);
-		LabeledKnob->addChild(speedParam);
-
-		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Animation Speed"));
-		menu->addChild(LabeledKnob);*/
-
-		//MenuParam* animEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED], 0);
 		MenuToggle* animEnabled = new MenuToggle(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED]);
 		menu->addChild(animEnabled);
 
@@ -1211,8 +1198,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
 				bgPanel->box.size.x = blankModule->width;
 				panel->box.pos.x = blankModule->width / 2 - 60.f;
 				pngDisplay->box.size.x = blankModule->width;
-				//pngDisplay->box.pos.x = blankModule->xOffset;
-				//pngDisplay->box.pos.y = blankModule->yOffset;
+
 				rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
 				blankModule->loadedJSON = true;
 				blankModule->jsonFlag = true;
