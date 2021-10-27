@@ -35,13 +35,11 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 		NUM_LIGHTS
 	};
 
-
 	ComputerscareBolyPuttons()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
 		for (int i = 0; i < numToggles; i++) {
-			//configParam(KNOB + i, 0.0f, 10.0f, 0.0f);
 			configParam(TOGGLE + i, 0.f, 1.f, 0.f, "Channel " + std::to_string(i + 1));
 		}
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
@@ -192,8 +190,7 @@ struct DisableableParamWidget : SmallIsoButton {
 		smallLetterDisplay->fontSize = 17;
 		smallLetterDisplay->value = "";
 		smallLetterDisplay->textAlign = 1;
-		smallLetterDisplay->box.pos = box.pos;//Vec(box.pos.x,box.pos.y);
-		//smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
+		smallLetterDisplay->box.pos = box.pos;
 
 		addChild(smallLetterDisplay);
 		SmallIsoButton();
@@ -207,8 +204,6 @@ struct DisableableParamWidget : SmallIsoButton {
 		else {
 			disabled = false;
 		}
-
-
 		SmallIsoButton::step();
 	}
 	void draw(const DrawArgs &ctx) override {
@@ -224,7 +219,6 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 	ComputerscareBolyPuttonsWidget(ComputerscareBolyPuttons *module) {
 
 		setModule(module);
-		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareKnolyPobsPanel.svg")));
 		box.size = Vec(4 * 15, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
@@ -262,12 +256,6 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 		button->module = module;
 		button->channel = index;
 		addParam(button);
-
-
-		//addParam(createParam<DisableableParamWidget>(Vec(x, y), module, ComputerscareBolyPuttons::TOGGLE + index));
-
-
-
 	}
 
 	/*void fromJson(json_t *rootJ) override
