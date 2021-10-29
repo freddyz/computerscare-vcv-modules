@@ -47,8 +47,8 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 	ComputerscareSolyPequencer()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
-		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
+		configButton(MANUAL_CLOCK_BUTTON, "Manual Clock Advance");
+		configButton(MANUAL_RESET_BUTTON, "Manual Reset");
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 
 		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;

@@ -68,10 +68,10 @@ struct ComputerscareDebug : Module {
 
 	ComputerscareDebug() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(MANUAL_TRIGGER, 0.0f, 1.0f, 0.0f, "Manual Trigger");
-		configParam(MANUAL_CLEAR_TRIGGER, 0.0f, 1.0f, 0.0f, "Clear");
-		configParam(SWITCH_VIEW, 0.0f, 2.0f, 2.0f, "Input Mode");
-		configParam(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode");
+		configButton(MANUAL_TRIGGER, "Manual Trigger");
+		configButton(MANUAL_CLEAR_TRIGGER, "Reset/Clear");
+		configSwitch(SWITCH_VIEW, 0.0f, 2.0f, 2.0f, "Input Mode", {"Single-Channel", "Internal", "Polyphonic"});
+		configSwitch(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode", {"Single-Channel", "Internal", "Polyphonic"});
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 

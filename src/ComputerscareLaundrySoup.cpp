@@ -114,17 +114,25 @@ struct ComputerscareLaundrySoup : Module {
       checkIfShouldChange(i);
       resetOneOfThem(i);
 
-      configInput(CLOCK_INPUT + i, "Row " + std::to_string(i + 1) + " Clock");
-      configInput(RESET_INPUT + i, "Row " + std::to_string(i + 1) + " Reset");
+      std::string rowi = std::to_string(i + 1);
 
-      configOutput(TRG_OUTPUT + i, "Row " + std::to_string(i + 1) + " Trigger");
-      configOutput(FIRST_STEP_OUTPUT + i, "Row " + std::to_string(i + 1) + " End of Cycle");
+      configButton(INDIVIDUAL_RESET_PARAM + i, "Reset Row " + rowi );
+
+      configInput(CLOCK_INPUT + i, "Row " + rowi + " Clock");
+      configInput(RESET_INPUT + i, "Row " + rowi + " Reset");
+
+      configOutput(TRG_OUTPUT + i, "Row " + rowi + " Trigger");
+      configOutput(FIRST_STEP_OUTPUT + i, "Row " + rowi + " End of Cycle");
 
       LaundryPoly lp = LaundryPoly(currentFormula[i]);
       laundryPoly[i] = lp;
       channelCountEnum[i] = -1;
       channelCount[i] = 1;
     }
+
+    configButton(MANUAL_CLOCK_PARAM, "Manual Clock Advance");
+    configButton(MANUAL_RESET_PARAM, "Manual Reset");
+
     configInput(GLOBAL_CLOCK_INPUT, "Global Clock");
     configInput(GLOBAL_RESET_INPUT, "Global Reset");
   }

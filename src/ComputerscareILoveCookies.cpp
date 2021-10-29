@@ -102,11 +102,15 @@ struct ComputerscareILoveCookies : Module {
       checkIfShouldChange(i);
       resetOneOfThem(i);
 
-      configInput(CLOCK_INPUT + i, "Row " + std::to_string(i + 1) + " Clock");
-      configInput(RESET_INPUT + i, "Row " + std::to_string(i + 1) + " Reset");
+      std::string rowi = std::to_string(i + 1);
 
-      configOutput(TRG_OUTPUT + i, "Row " + std::to_string(i + 1) + " CV");
-      configOutput(FIRST_STEP_OUTPUT + i, "Row " + std::to_string(i + 1) + " End of Cycle");
+      configButton(INDIVIDUAL_RESET_PARAM + i, "Reset Row " + rowi );
+
+      configInput(CLOCK_INPUT + i, "Row " + rowi + " Clock");
+      configInput(RESET_INPUT + i, "Row " + rowi + " Reset");
+
+      configOutput(TRG_OUTPUT + i, "Row " + rowi + " CV");
+      configOutput(FIRST_STEP_OUTPUT + i, "Row " + rowi + " End of Cycle");
     }
     for (int k = 0; k < numKnobs; k++) {
       configParam( KNOB_PARAM + k, 0.f, 10.f, 0.0f, string::f("knob %c", knoblookup[k]));
@@ -114,8 +118,12 @@ struct ComputerscareILoveCookies : Module {
       configInput(SIGNAL_INPUT + k, string::f("%c", uppercaseLetters.at(k)));
     }
 
+    configButton(MANUAL_CLOCK_PARAM, "Manual Clock Advance");
+    configButton(MANUAL_RESET_PARAM, "Manual Reset");
+
     configInput(GLOBAL_CLOCK_INPUT, "Global Clock");
     configInput(GLOBAL_RESET_INPUT, "Global Reset");
+
   }
   json_t *dataToJson() override {
     json_t *rootJ = json_object();
