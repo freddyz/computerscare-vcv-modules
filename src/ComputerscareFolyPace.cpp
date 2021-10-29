@@ -51,6 +51,7 @@ struct FolyPace : Module {
 		configParam(OFFSET, -5.f, 5.f, 0.f, "Input Offset", " Volts");
 		configParam(SCRAMBLE, -10.f, 10.f, 0.f, "Scrambling");
 
+		configInput(X_INPUT, "Main");
 
 
 	}

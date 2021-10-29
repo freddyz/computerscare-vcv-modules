@@ -56,6 +56,7 @@ struct StolyFickPigure : Module {
 
 		configParam(SCRAMBLE, -10.f, 10.f, 0.f, "Scrambling");
 
+		configInput(X_INPUT, "Main");
 
 	}
 

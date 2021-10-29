@@ -73,8 +73,14 @@ struct ComputerscarePatchSequencer : Module {
     configParam(STEPS_PARAM, 1.f, 16.f, 2.0f, "Number of Steps");
     for (int i = 0; i < numOutputs; i++) {
       channelCount[i] = 0;
+      configInput(INPUT_JACKS + i, "Row " + std::to_string(i + 1));
+      configOutput(OUTPUTS + i, "Column " + std::to_string(i + 1));
     }
     getParamQuantity(STEPS_PARAM)->randomizeEnabled = false;
+
+    configInput(TRG_INPUT, "Clock");
+    configInput(RESET_INPUT, "Reset Trigger");
+    configInput(RANDOMIZE_INPUT, "Randomize Trigger");
 
   }
   void process(const ProcessArgs &args) override;

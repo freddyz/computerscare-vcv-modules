@@ -52,6 +52,13 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 
 		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+
+		configInput(POLY_INPUT, "Main");
+		configInput(CLOCK_INPUT, "Clock");
+		configInput(RESET_INPUT, "Reset Trigger");
+
+		configOutput(POLY_OUTPUT, "Main");
+		configOutput(EOC_OUTPUT, "End of Cycle");
 	}
 	void resetAll() {
 		for (int i = 0; i < 16; i++) {

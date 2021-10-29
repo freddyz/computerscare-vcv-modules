@@ -30,7 +30,7 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
     INPUT_ATTENUATION_CV,
     INPUT_OFFSET_CV,
     OUTPUT_ATTENUATION_CV,
-    OUTPUT_ATTENUATION_OFFSET,
+    OUTPUT_OFFSET_CV,
     NUM_INPUTS
   };
   enum OutputIds {
@@ -72,6 +72,13 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
 
     configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+
+    configInput(POLY_INPUT, "Main");
+
+    configInput(INPUT_ATTENUATION_CV, "Input Attenuation");
+    configInput(OUTPUT_ATTENUATION_CV, "Output Attenuation");
+
+    configOutput(POLY_OUTPUT, "Main");
 
   }
   void checkPoly() override {

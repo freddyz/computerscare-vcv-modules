@@ -46,6 +46,10 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 
 		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
 
+		configInput(A_INPUT, "A (Button Up)");
+		configInput(B_INPUT, "B (Button Down)");
+		configOutput(POLY_OUTPUT, "Main");
+
 		outputRanges[0][0] = 0.f;
 		outputRanges[0][1] = 10.f;
 		outputRanges[1][0] = -5.f;

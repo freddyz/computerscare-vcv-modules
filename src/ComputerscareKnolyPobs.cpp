@@ -46,6 +46,8 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 		getParamQuantity(GLOBAL_SCALE)->randomizeEnabled = false;
 		getParamQuantity(GLOBAL_OFFSET)->randomizeEnabled = false;
 
+		configOutput(POLY_OUTPUT, "Main");
+
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();

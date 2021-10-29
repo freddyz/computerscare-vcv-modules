@@ -75,6 +75,12 @@ struct ComputerscareDebug : Module {
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 
+		configInput(VAL_INPUT, "Value");
+		configInput(TRG_INPUT, "Clock");
+		configInput(CLR_INPUT, "Reset");
+		configOutput(POLY_OUTPUT, "Main");
+
+
 
 		outputRanges[0][0] = 0.f;
 		outputRanges[0][1] = 10.f;

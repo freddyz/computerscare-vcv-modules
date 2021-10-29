@@ -22,6 +22,7 @@ const int numKnobs = numKnobRows * numKnobColumns;
 const int numInputs = numInputRows * numInputColumns;
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED, COLOR_COMPUTERSCARE_YELLOW, COLOR_COMPUTERSCARE_BLUE};
 
+const std::string uppercaseLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 struct ComputerscareILoveCookies : Module {
   enum ParamIds {
@@ -100,10 +101,21 @@ struct ComputerscareILoveCookies : Module {
       setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
+
+      configInput(CLOCK_INPUT + i, "Row " + std::to_string(i + 1) + " Clock");
+      configInput(RESET_INPUT + i, "Row " + std::to_string(i + 1) + " Reset");
+
+      configOutput(TRG_OUTPUT + i, "Row " + std::to_string(i + 1) + " CV");
+      configOutput(FIRST_STEP_OUTPUT + i, "Row " + std::to_string(i + 1) + " End of Cycle");
     }
     for (int k = 0; k < numKnobs; k++) {
       configParam( KNOB_PARAM + k, 0.f, 10.f, 0.0f, string::f("knob %c", knoblookup[k]));
+
+      configInput(SIGNAL_INPUT + k, string::f("%c", uppercaseLetters.at(k)));
     }
+
+    configInput(GLOBAL_CLOCK_INPUT, "Global Clock");
+    configInput(GLOBAL_RESET_INPUT, "Global Reset");
   }
   json_t *dataToJson() override {
     json_t *rootJ = json_object();
