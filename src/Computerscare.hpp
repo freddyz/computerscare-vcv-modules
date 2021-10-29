@@ -2,16 +2,6 @@
 
 #include "rack.hpp"
 
-#include "app/common.hpp"
-#include "widget/TransparentWidget.hpp"
-#include "widget/FramebufferWidget.hpp"
-#include "widget/SvgWidget.hpp"
-#include "app/PortWidget.hpp"
-#include "app/CircularShadow.hpp"
-#include "app/SvgSwitch.hpp"
-
-
-
 using namespace rack;
 
 // Forward-declare the Plugin, defined in Template.cpp
