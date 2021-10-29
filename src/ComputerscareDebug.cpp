@@ -99,6 +99,8 @@ struct ComputerscareDebug : Module {
 		getParamQuantity(WHICH_CLOCK)->randomizeEnabled = false;
 		getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
 		getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
+
+		randomizeStorage();
 	}
 	void process(const ProcessArgs &args) override;
 
@@ -208,6 +210,8 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 	inputChannel = floor(params[INPUT_CHANNEL_FOCUS].getValue());
 	clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].getValue());
 
+	bool inputConnected = inputs[VAL_INPUT].isConnected();
+
 	float min = outputRanges[outputRangeEnum][0];
 	float max = outputRanges[outputRangeEnum][1];
 	float spread = max - min;
@@ -236,15 +240,17 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 	}
 	else if (clockMode == INTERNAL_MODE) {
-		if (inputMode == POLY_MODE) {
-			for (int i = 0; i < 16; i++) {
-				logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+		if (inputConnected) {
+			if (inputMode == POLY_MODE) {
+				for (int i = 0; i < 16; i++) {
+					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+				}
+			}
+			else if (inputMode == SINGLE_MODE) {
+				logLines[inputChannel] = inputs[VAL_INPUT].getVoltage(inputChannel);
 			}
 		}
-		else if (inputMode == SINGLE_MODE) {
-			logLines[inputChannel] = inputs[VAL_INPUT].getVoltage(inputChannel);
-		}
-		else if (inputMode == INTERNAL_MODE) {
+		if (inputMode == INTERNAL_MODE) {
 			for (int i = 0; i < 16; i++) {
 				logLines[i] = min + spread * random::uniform();
 			}
