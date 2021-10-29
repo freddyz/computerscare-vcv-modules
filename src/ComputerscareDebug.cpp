@@ -99,8 +99,6 @@ struct ComputerscareDebug : Module {
 		getParamQuantity(WHICH_CLOCK)->randomizeEnabled = false;
 		getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
 		getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
-
-
 	}
 	void process(const ProcessArgs &args) override;
 
@@ -150,11 +148,54 @@ struct ComputerscareDebug : Module {
 		}
 
 	}
-	// For more advanced Module features, read Rack's engine.hpp header file
-	// - toJson, fromJson: serialization of internal data
-	// - onSampleRateChange: event triggered by a change of sample rate
-	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
+	int setChannelCount() {
+		clockMode = floor(params[WHICH_CLOCK].getValue());
 
+		inputMode = floor(params[SWITCH_VIEW].getValue());
+
+
+		int numInputChannels = inputs[VAL_INPUT].getChannels();
+		int numClockChannels = inputs[TRG_INPUT].getChannels();
+
+		bool inputConnected = inputs[VAL_INPUT].isConnected();
+		bool clockConnected = inputs[TRG_INPUT].isConnected();
+
+		bool noConnection = !inputConnected && !clockConnected;
+
+		int numOutputChannels = 16;
+
+		if (!noConnection) {
+
+			if (clockMode == SINGLE_MODE) {
+				if (inputMode == POLY_MODE) {
+					numOutputChannels = numInputChannels;
+				}
+			}
+			else if (clockMode == INTERNAL_MODE) {
+				if (inputMode == POLY_MODE) {
+					numOutputChannels = numInputChannels;
+					for (int i = 0; i < 16; i++) {
+						logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+					}
+				}
+			}
+			else if (clockMode == POLY_MODE) {
+				if (inputMode == POLY_MODE) {
+					numOutputChannels = std::min(numInputChannels, numClockChannels);
+				}
+				else if (inputMode == SINGLE_MODE) {
+					numOutputChannels = numClockChannels;
+				}
+				else if (inputMode == INTERNAL_MODE) {
+					numOutputChannels = numClockChannels;
+				}
+
+			}
+		}
+		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
+
+		return numOutputChannels;
+	}
 };
 
 void ComputerscareDebug::process(const ProcessArgs &args) {
@@ -167,18 +208,11 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 	inputChannel = floor(params[INPUT_CHANNEL_FOCUS].getValue());
 	clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].getValue());
 
-	int numInputChannels = inputs[VAL_INPUT].getChannels();
-	int numClockChannels = inputs[TRG_INPUT].getChannels();
-
-	int numOutputChannels = 16;
-
 	float min = outputRanges[outputRangeEnum][0];
 	float max = outputRanges[outputRangeEnum][1];
 	float spread = max - min;
+
 	if (clockMode == SINGLE_MODE) {
-		if (inputMode == POLY_MODE) {
-			numOutputChannels = numInputChannels;
-		}
 		if (clockTriggers[clockChannel].process(inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 			if (inputMode == POLY_MODE) {
 				for (int i = 0; i < 16; i++) {
@@ -203,7 +237,6 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 	}
 	else if (clockMode == INTERNAL_MODE) {
 		if (inputMode == POLY_MODE) {
-			numOutputChannels = numInputChannels;
 			for (int i = 0; i < 16; i++) {
 				logLines[i] = inputs[VAL_INPUT].getVoltage(i);
 			}
@@ -219,7 +252,6 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 	}
 	else if (clockMode == POLY_MODE) {
 		if (inputMode == POLY_MODE) {
-			numOutputChannels = std::min(numInputChannels, numClockChannels);
 			for (int i = 0; i < 16; i++) {
 				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
@@ -227,7 +259,6 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 			}
 		}
 		else if (inputMode == SINGLE_MODE) {
-			numOutputChannels = numClockChannels;
 			for (int i = 0; i < 16; i++) {
 				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 					logLines[i] = inputs[VAL_INPUT].getVoltage(inputChannel);
@@ -235,11 +266,11 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 			}
 		}
 		else if (inputMode == INTERNAL_MODE) {
-			numOutputChannels = numClockChannels;
 			for (int i = 0; i < 16; i++) {
 				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 					logLines[i] = min + spread * random::uniform();
 				}
+
 			}
 		}
 	}
@@ -251,8 +282,9 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 		strValue = defaultStrValue;
 	}
-	outputs[POLY_OUTPUT].setChannels(16);
-	outputs[POLY_OUTPUT].setChannels(numOutputChannels);
+
+	int numOutputChannels = setChannelCount();
+
 	stepCounter++;
 
 	if (stepCounter > 1025) {
@@ -278,8 +310,6 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 		strValue = thisVal;
 	}
-
-
 }
 struct HidableSmallSnapKnob : SmallSnapKnob {
 	bool visible = true;
