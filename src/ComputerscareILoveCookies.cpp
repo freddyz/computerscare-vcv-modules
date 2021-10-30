@@ -22,6 +22,7 @@ const int numKnobs = numKnobRows * numKnobColumns;
 const int numInputs = numInputRows * numInputColumns;
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED, COLOR_COMPUTERSCARE_YELLOW, COLOR_COMPUTERSCARE_BLUE};
 
+const std::string uppercaseLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 struct ComputerscareILoveCookies : Module {
   enum ParamIds {
@@ -100,10 +101,29 @@ struct ComputerscareILoveCookies : Module {
       setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
+
+      std::string rowi = std::to_string(i + 1);
+
+      configButton(INDIVIDUAL_RESET_PARAM + i, "Reset Row " + rowi );
+
+      configInput(CLOCK_INPUT + i, "Row " + rowi + " Clock");
+      configInput(RESET_INPUT + i, "Row " + rowi + " Reset");
+
+      configOutput(TRG_OUTPUT + i, "Row " + rowi + " CV");
+      configOutput(FIRST_STEP_OUTPUT + i, "Row " + rowi + " End of Cycle");
     }
     for (int k = 0; k < numKnobs; k++) {
       configParam( KNOB_PARAM + k, 0.f, 10.f, 0.0f, string::f("knob %c", knoblookup[k]));
+
+      configInput(SIGNAL_INPUT + k, string::f("%c", uppercaseLetters.at(k)));
     }
+
+    configButton(MANUAL_CLOCK_PARAM, "Manual Clock Advance");
+    configButton(MANUAL_RESET_PARAM, "Manual Reset");
+
+    configInput(GLOBAL_CLOCK_INPUT, "Global Clock");
+    configInput(GLOBAL_RESET_INPUT, "Global Reset");
+
   }
   json_t *dataToJson() override {
     json_t *rootJ = json_object();
@@ -298,7 +318,6 @@ struct ComputerscareILoveCookies : Module {
         inError[channel] = false;
       }
       else {
-        DEBUG("Channel %i in error", channel);
         inError[channel] = true;
       }
     }

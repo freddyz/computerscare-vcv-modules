@@ -77,6 +77,12 @@ struct ComputerscareBlankExpander : Module {
 		configParam<FrameOffsetParam>(ZERO_OFFSET, 0.f, 0.999f, 0.f, "EOC / Reset Frame #");
 		configParam(MANUAL_NEXT_FILE_BUTTON, 0.f, 1.f, 0.f, "Next File (see right click menu of mother for options)");
 
+		configInput(SYNC_INPUT, "Sync");
+		configInput(RESET_INPUT, "Reset");
+		configInput(NEXT_FILE_INPUT, "Next Slideshow File");
+		configOutput(EOC_OUTPUT, "End of Animation");
+		configOutput(EACH_FRAME_OUTPUT, "Frame Change");
+
 		frameOffsetQuantity = dynamic_cast<FrameOffsetParam*>(paramQuantities[ZERO_OFFSET]);
 
 		rightExpander.producerMessage = rightMessages[0];

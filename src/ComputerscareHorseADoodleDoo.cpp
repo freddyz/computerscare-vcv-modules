@@ -315,6 +315,16 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		getParamQuantity(STEPS_SPREAD)->randomizeEnabled = false;
 		getParamQuantity(DENSITY_SPREAD)->randomizeEnabled = false;
 
+		configInput(CLOCK_INPUT, "Clock");
+		configInput(RESET_INPUT, "Reset");
+		configInput(PATTERN_CV, "Pattern CV");
+		configInput(STEPS_CV, "Number of Steps CV");
+		configInput(DENSITY_CV, "Density CV");
+
+		configOutput(TRIGGER_OUTPUT, "Trigger Sequence");
+		configOutput(EOC_OUTPUT, "End of Cycle");
+		configOutput(CV_OUTPUT, "CV Sequence");
+
 		for (int i = 0; i < 16; i++) {
 			seq[i] = HorseSequencer(0.f, 8, 0.f, i, 0.f);
 			previousStep[i] = -1;
