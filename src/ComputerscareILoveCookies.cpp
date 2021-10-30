@@ -318,7 +318,6 @@ struct ComputerscareILoveCookies : Module {
         inError[channel] = false;
       }
       else {
-        DEBUG("Channel %i in error", channel);
         inError[channel] = true;
       }
     }
