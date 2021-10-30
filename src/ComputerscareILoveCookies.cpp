@@ -80,7 +80,7 @@ struct ComputerscareILoveCookies : Module {
   bool changeImminent[numFields] = {false};
 
   int activeKnobIndex[numFields] = {0};
-
+  int activeKnobExtra[numFields] = {0};
   int knobRangeEnum = 0;
 
   int checkCounter = 0;
@@ -383,12 +383,14 @@ void ComputerscareILoveCookies::process(const ProcessArgs &args) {
         if (currentTriggerClocked) {
           incrementInternalStep(i);
           activeKnobIndex[i] = newABS[i].peekWorkingStep();
+          activeKnobExtra[i] = newABS[i].peekWorkingStepExtra();
         }
       }
       else {
         if ((inputs[GLOBAL_CLOCK_INPUT].isConnected() && globalTriggerClocked) || globalManualClockClicked) {
           incrementInternalStep(i);
           activeKnobIndex[i] = newABS[i].peekWorkingStep();
+          activeKnobExtra[i] = newABS[i].peekWorkingStepExtra();
         }
       }
       if ((currentResetActive && currentResetTriggered) || (!currentResetActive && globalResetTriggered)) {
@@ -422,9 +424,15 @@ void ComputerscareILoveCookies::process(const ProcessArgs &args) {
         outputs[TRG_OUTPUT + i].setVoltage(mapKnobValue(knobRawValue, i));
       }
       else if (activeKnobIndex[i] < 52) {
-        outputs[TRG_OUTPUT + i].setChannels(inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].getChannels());
-        inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].readVoltages(inV);
-        outputs[TRG_OUTPUT + i].writeVoltages(inV);
+        if (activeKnobExtra[i] == 0) {
+          outputs[TRG_OUTPUT + i].setChannels(inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].getChannels());
+          inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].readVoltages(inV);
+          outputs[TRG_OUTPUT + i].writeVoltages(inV);
+        }
+        else {
+          outputs[TRG_OUTPUT + i].setChannels(1);
+          outputs[TRG_OUTPUT + i].setVoltage(inputs[SIGNAL_INPUT + activeKnobIndex[i] - 26].getVoltage(activeKnobExtra[i] - 1));
+        }
       }
       else if (activeKnobIndex[i] < 78) {
         outputs[TRG_OUTPUT + i].setChannels(1);

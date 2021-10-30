@@ -586,6 +586,9 @@ int AbsoluteSequence::peekStep() {
 int AbsoluteSequence::peekWorkingStep() {
   return (readHead >= 0) ? workingIndexSequence[readHead] : 0;
 }
+int AbsoluteSequence::peekWorkingStepExtra() {
+  return (readHead >= 0) ? tokenStack[readHead].extra : 0;
+}
 void AbsoluteSequence::incrementAndCheck() {
   if (skipAndPeek() >= 78) {
     randomizeIndex(readHead);
@@ -636,30 +639,42 @@ Token::Token(std::string t, std::string v) {
   value = v;
   index = -1;
   duration = 1;
+  extra = 0;
 }
 Token::Token(std::string t, std::string v, int dex) {
   type = t;
   value = v;
   index = dex;
   duration = 1;
+  extra = 0;
 }
 Token::Token(std::string t, std::string v, int dex, int dur) {
   type = t;
   value = v;
   index = dex;
   duration = dur;
+  extra = 0;
+}
+Token::Token(std::string t, std::string v, int dex, int dur, int ex) {
+  type = t;
+  value = v;
+  index = dex;
+  duration = dur;
+  extra = ex;
 }
 Token::Token(std::string t, int val) {
   type = t;
   value = std::to_string(static_cast<long long>(val));
   index = -1;
   duration = std::max(val, 1);
+  extra = 0;
 }
 Token::Token(const Token& source) {
   type = source.type;
   value = source.value;
   index = source.index;
   duration = source.duration;
+  extra = source.extra;
 }
 Parser::Parser(std::string expr) {
   tokens = tokenizeString(expr);
@@ -743,34 +758,39 @@ void Parser::setForCookies() {
   if (tokens.size() > 0) {
     currentIndex = 0;
     setExactValue(tokens[0]);
-
     if (!inError) {
       currentIndex = 0;
       tokens = tokenStack;
       tokenStack = {};
-      setForRandoms(peekToken());
+      setForInputChannelSelect(peekToken());
       if (!inError) {
         currentIndex = 0;
         tokens = tokenStack;
         tokenStack = {};
-        setForInterleave(peekToken(), interleaveAny);
-
+        setForRandoms(peekToken());
         if (!inError) {
           currentIndex = 0;
           tokens = tokenStack;
           tokenStack = {};
-          setForAtExpand(peekToken(), atExpandAny, false);
+          setForInterleave(peekToken(), interleaveAny);
 
           if (!inError) {
             currentIndex = 0;
             tokens = tokenStack;
             tokenStack = {};
-            setForSquareBrackets(peekToken(), cookiesSquareAny, false);
+            setForAtExpand(peekToken(), atExpandAny, false);
+
             if (!inError) {
               currentIndex = 0;
               tokens = tokenStack;
               tokenStack = {};
-              setFinal(peekToken(), cookiesFinalAny);
+              setForSquareBrackets(peekToken(), cookiesSquareAny, false);
+              if (!inError) {
+                currentIndex = 0;
+                tokens = tokenStack;
+                tokenStack = {};
+                setFinal(peekToken(), cookiesFinalAny);
+              }
             }
           }
         }
@@ -797,6 +817,15 @@ void Parser::setFinal(Token t, std::vector<std::string> whitelist) {
 void Parser::setExactValue(Token t) {
   while (t.type != "NULL") {
     ParseExactValue(t);
+    if (peekToken().type != "NULL") {
+      tokenStack.push_back(peekToken());
+    }
+    t = skipAndPeekToken();
+  }
+}
+void Parser::setForInputChannelSelect(Token t) {
+  while (t.type != "NULL") {
+    ParseInputChannelSelect(t);
     if (peekToken().type != "NULL") {
       tokenStack.push_back(peekToken());
     }
@@ -1014,6 +1043,25 @@ void Parser::ParseExactValue(Token t) {
       inError = true;
     }
   } // not a LeftAngle, dont do shit
+}
+void Parser::ParseInputChannelSelect(Token t) {
+  if (t.type == "Letter") {
+    Token next = skipAndPeekToken();
+    if (next.type == "Digit" && next.value != "0") {
+      std::string intAsString = next.value;
+      Token inTheHole = skipAndPeekToken();
+      if (next.value == "1") {
+        if (inTheHole.type == "Digit" && (inTheHole.value == "0" || inTheHole.value == "1" || inTheHole.value == "2" || inTheHole.value == "3" || inTheHole.value == "4" || inTheHole.value == "5" || inTheHole.value == "6")) {
+          skipToken();
+          intAsString += inTheHole.value;
+        }
+      }
+      tokenStack.push_back(Token("Letter", t.value, t.index, t.duration, std::stoi(intAsString)));
+    }
+    else {
+      tokenStack.push_back(t);
+    }
+  }//not a Letter
 }
 void Parser::ParseRandomSequence(Token t) {
   std::vector<Token> proposedRandomVector;
@@ -1272,7 +1320,7 @@ std::string Parser::parseFloat(Token t)
   return number;
 }
 void Token::print() {
-  printf("type: %s   value: %s   index: %i  dur:%i\n", type.c_str(), value.c_str(), index, duration);
+  printf("type: %s   value: %s   index: %i  dur:%i  extra:%i\n", type.c_str(), value.c_str(), index, duration, extra);
 }
 std::vector<Token> tokenizeString(std::string input) {
   std::vector<Token> stack;

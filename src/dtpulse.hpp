@@ -24,8 +24,10 @@ public:
 	std::string value;
 	int index;
 	int duration;
+	int extra;
 	Token(std::string t, std::string v);
 	Token(std::string t, std::string v, int dex, int dur);
+	Token(std::string t, std::string v, int dex, int dur, int extra);
 	Token(std::string t, std::string v, int dex);
 	Token(std::string t, int val);
 	Token(const Token& source);
@@ -53,6 +55,7 @@ public:
 	void setFormula(Token t, std::vector<std::string> operatorWhitelist, bool laundryMode);
 	void setForVariables(Token t);
 	void setForChanceOfIntegers(Token t);
+	void setForInputChannelSelect(Token t);
 	void setForRandoms(Token t);
 	void replaceLettersWithNumbers(Token t);
 	void setForInterleave(Token t, std::vector<std::string> whitelist);
@@ -73,6 +76,7 @@ private:
 	void ParseFormula(Token t, std::vector<std::string> operatorWhitelist, bool laundryMode);
 	void ParseVariable(Token t);
 	void ParseRandomSequence(Token t);
+	void ParseInputChannelSelect(Token t);
 	void ParseInterleave(Token t, std::vector<std::string> whitelist);
 	void ParseAtExpand(Token t, std::vector<std::string> whitelist, bool laundryMode);
 	void ParseSquareBrackets(Token t, std::vector<std::string> whitelist, bool laundryMode);
@@ -97,6 +101,7 @@ public:
 	void skipStep();
 	int peekStep();
 	int peekWorkingStep();
+	int peekWorkingStepExtra();
 	int skipAndPeek();
 	void incrementAndCheck();
 	int getReadHead();
