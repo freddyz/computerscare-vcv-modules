@@ -1235,85 +1235,66 @@ struct ComputerscareBlankWidget : ModuleWidget {
 			arrowSpeed /= 4.0;*/
 		//duplicate is ctrl-d, ignore keys if mods are pressed so duplication doesnt translate the image
 		if (e.action == RACK_HELD && !e.mods ) {
-			switch (e.key) {
-			case GLFW_KEY_A: {
+			if (e.keyName == "a") {
 				blankModule->xOffset += dPosition / blankModule->zoomX;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_S: {
+			} else if (e.keyName == "s") {
 				blankModule->yOffset -= (blankModule->invertY ? dPosition : -dPosition) / blankModule->zoomY;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_D: {
+			} else if (e.keyName == "d") {
 				blankModule->xOffset -= dPosition / blankModule->zoomX;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_W: {
+			} else if (e.keyName == "w") {
 				blankModule->yOffset += (blankModule->invertY ? dPosition : -dPosition) / blankModule->zoomY;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_Z: {
+			} else if (e.keyName == "z") {
 				blankModule->zoomX *= (1 + dZoom);
 				blankModule->zoomY *= (1 + dZoom);
 				e.consume(this);
-			} break;
-			case GLFW_KEY_X: {
+			} else if (e.keyName == "x") {
 				blankModule->zoomX *= (1 - dZoom);
 				blankModule->zoomY *= (1 - dZoom);
 				e.consume(this);
-			} break;
-			case GLFW_KEY_Q: {
+			} else if (e.keyName == "q") {
 				blankModule->rotation += 1;
 				blankModule->rotation %= 4;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_E: {
+			} else if (e.keyName == "e") {
 				blankModule->rotation -= 1;
 				blankModule->rotation += 4;
 				blankModule->rotation %= 4;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_J: {
+			} else if (e.keyName == "j") {
 				blankModule->prevFrame();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_L: {
+			} else if (e.keyName == "l") {
 				blankModule->nextFrame();
 				e.consume(this);
-			} break;
 			}
+
 		}
 		if (e.action == GLFW_RELEASE) {
-			switch (e.key) {
-			case GLFW_KEY_K: {
+			if (e.keyName == "k") {
 				blankModule->goToFrame(0);
 				e.consume(this);
-			} break;
-			case GLFW_KEY_I: {
+			} else if (e.keyName == "i") {
 				blankModule->goToRandomFrame();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_U: {
+			} else if (e.keyName == "u") {
 				blankModule->goToRandomFrame();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_P: {
+			} else if (e.keyName == "p") {
 				blankModule->toggleAnimationEnabled();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_O: {
+			} else if (e.keyName == "o") {
 				blankModule->loadRandomGif();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_LEFT_BRACKET: {
+			} else if (e.keyName == "[") {
 				blankModule->prevFileInCatalog();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_RIGHT_BRACKET: {
+			} else if (e.keyName == "]") {
 				blankModule->nextFileInCatalog();
 				e.consume(this);
-			} break;
-
 			}
 		}
 		ModuleWidget::onHoverKey(e);
