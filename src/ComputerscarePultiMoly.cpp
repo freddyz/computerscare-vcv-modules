@@ -312,12 +312,12 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
 
 
 
-    channelWidget = new PolyOutputChannelsWidget(Vec(1, 24), module, ComputerscarePultiMoly::POLY_CHANNELS);
+    channelWidget = new PolyOutputChannelsWidget(Vec(1, 1), module, ComputerscarePultiMoly::POLY_CHANNELS);
 
     addChild(channelWidget);
 
-    addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module, ComputerscarePultiMoly::GLOBAL_SCALE));
-    addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscarePultiMoly::GLOBAL_OFFSET));
+    //addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module, ComputerscarePultiMoly::GLOBAL_SCALE));
+    //addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscarePultiMoly::GLOBAL_OFFSET));
 
     //addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscarePultiMoly::EDITING_CITY));
 
@@ -329,9 +329,9 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
     float xx;
     float yy;
 
-    float inputXStart = 0;
+    float inputXStart = 4;
     float inputXSpacing = 50;
-    float inputYStart = 20;
+    float inputYStart = 50;
 
     float yInitial = 86;
     float ySpacing =  34;
@@ -341,8 +341,8 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
     float xInitial = 10 + inputXSpacing;
     float citySpacing = 60;
 
-    float outputXStart = inputXStart + inputXSpacing + numKnobBlocks * citySpacing + 20;
-    float outputYStart = 20;
+    float outputXStart = inputXStart + inputXSpacing + numKnobBlocks * citySpacing + 16;
+    float outputYStart = 50;
 
 
 
