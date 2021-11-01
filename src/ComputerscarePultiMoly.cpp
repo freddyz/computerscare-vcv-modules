@@ -341,7 +341,7 @@ struct ComputerscarePultiMolyWidget : ModuleWidget {
     float xInitial = 10 + inputXSpacing;
     float citySpacing = 60;
 
-    float outputXStart = inputXStart + inputXSpacing + numKnobBlocks * citySpacing + 16;
+    float outputXStart = inputXStart + inputXSpacing + numKnobBlocks * citySpacing + 10;
     float outputYStart = 50;
 
 
