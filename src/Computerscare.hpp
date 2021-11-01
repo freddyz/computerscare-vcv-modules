@@ -432,7 +432,7 @@ struct ComputerscareDotKnob : SmallKnob {
 };
 
 struct ComputerscareTextField : ui::TextField {
-	std::shared_ptr<Font> font;
+	std::string fontPath = "res/fonts/ShareTechMono-Regular.ttf";
 	math::Vec textOffset;
 	NVGcolor color = COLOR_COMPUTERSCARE_LIGHT_GREEN;
 	int fontSize = 16;
@@ -440,13 +440,15 @@ struct ComputerscareTextField : ui::TextField {
 	int textColorState = 0;
 	ComputerscareTextField() {
 
-		font = APP->window->loadFont(asset::system("res/fonts/ShareTechMono-Regular.ttf"));
 		color = nvgRGB(0xff, 0xd7, 0x14);
 		textOffset = math::Vec(1, 2);
 	}
 
 
 	void draw(const DrawArgs &args) override {
+
+		std::shared_ptr<Font> font = APP->window->loadFont(asset::system(fontPath));
+
 		nvgScissor(args.vg, RECT_ARGS(args.clipBox));
 
 		// Background
@@ -461,7 +463,9 @@ struct ComputerscareTextField : ui::TextField {
 		nvgFill(args.vg);
 
 		// Text
-		if (font->handle >= 0) {
+		if (font) {
+
+			nvgFontFaceId(args.vg, font->handle);
 			bndSetFont(font->handle);
 
 			NVGcolor highlightColor = color;
@@ -478,12 +482,18 @@ struct ComputerscareTextField : ui::TextField {
 		nvgResetScissor(args.vg);
 	}
 	int getTextPosition(Vec mousePos) override {
-		bndSetFont(font->handle);
-		int textPos = bndIconLabelTextPosition(APP->window->vg, textOffset.x, textOffset.y,
-		                                       box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
-		                                       -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
-		bndSetFont(APP->window->uiFont->handle);
-		return textPos;
+		std::shared_ptr<Font> font = APP->window->loadFont(asset::system(fontPath));
+		if (font) {
+			bndSetFont(font->handle);
+			int textPos = bndIconLabelTextPosition(APP->window->vg, textOffset.x, textOffset.y,
+			                                       box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
+			                                       -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
+			bndSetFont(APP->window->uiFont->handle);
+			return textPos;
+		}
+		else {
+			return bndTextFieldTextPosition(APP->window->vg, 0.0, 0.0, box.size.x, box.size.y, -1, text.c_str(), mousePos.x, mousePos.y);
+		}
 	}
 };
 ////////////////////////////////////
@@ -516,8 +526,6 @@ struct SmallLetterDisplay : Widget {
 	void draw(const DrawArgs &ctx) override
 	{
 		// Background
-
-
 		std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
 		NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
 		NVGcolor doubleblinkColor = COLOR_COMPUTERSCARE_YELLOW;
