@@ -341,11 +341,10 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 struct StringDisplayWidget3 : Widget {
 
 	std::string value;
-	std::shared_ptr<Font> font;
-	ComputerscareDebug *module;
+	std::string fontPath = "res/Oswald-Regular.ttf";
+	ComputerscareDebug * module;
 
 	StringDisplayWidget3() {
-		font = APP->window->loadFont(asset::plugin(pluginInstance, "res/Oswald-Regular.ttf"));
 	};
 
 	void draw(const DrawArgs &ctx) override
@@ -361,19 +360,24 @@ struct StringDisplayWidget3 : Widget {
 		nvgRoundedRect(ctx.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
 		nvgFillColor(ctx.vg, backgroundColor);
 		nvgFill(ctx.vg);
+	}
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1) {
 
+			std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
 
-		nvgFontSize(ctx.vg, 15);
-		nvgFontFaceId(ctx.vg, font->handle);
-		nvgTextLetterSpacing(ctx.vg, 2.5);
+			//text
+			nvgFontSize(args.vg, 15);
+			nvgFontFaceId(args.vg, font->handle);
+			nvgTextLetterSpacing(args.vg, 2.5);
 
-		std::string textToDraw = module ? module->strValue : noModuleStringValue;
-		Vec textPos = Vec(6.0f, 12.0f);
-		NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-		nvgFillColor(ctx.vg, textColor);
-
-		nvgTextBox(ctx.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
-
+			std::string textToDraw = module ? module->strValue : noModuleStringValue;
+			Vec textPos = Vec(6.0f, 12.0f);
+			NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
+			nvgFillColor(args.vg, textColor);
+			nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
+		}
+		Widget::drawLayer(args, layer);
 	}
 };
 struct ConnectedSmallLetter : SmallLetterDisplay {

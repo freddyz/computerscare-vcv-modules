@@ -40,6 +40,8 @@ struct StolyFickPigure : Module {
 	int C = 29;
 	int D = 2;
 
+	bool figureEmitsLight = true;
+
 
 	StolyFickPigure() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -285,8 +287,18 @@ struct StolyFickPigureDisplay : TransparentWidget {
 			drawStickFigure(args, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10);
 		}
 		else {
-			drawStickFigure(args, module->bufferX[0][0], module->bufferX[1][0], module->bufferX[2][0], module->bufferX[3][0], module->bufferX[4][0], module->bufferX[5][0], module->bufferX[6][0], module->bufferX[7][0], module->bufferX[8][0], module->bufferX[9][0], module->bufferX[10][0], module->bufferX[11][0], module->bufferX[12][0], module->bufferX[13][0], module->bufferX[14][0], module->bufferX[15][0]);
+			if (!module->figureEmitsLight) {
+				drawStickFigure(args, module->bufferX[0][0], module->bufferX[1][0], module->bufferX[2][0], module->bufferX[3][0], module->bufferX[4][0], module->bufferX[5][0], module->bufferX[6][0], module->bufferX[7][0], module->bufferX[8][0], module->bufferX[9][0], module->bufferX[10][0], module->bufferX[11][0], module->bufferX[12][0], module->bufferX[13][0], module->bufferX[14][0], module->bufferX[15][0]);
+			}
 		}
+	}
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1 && module) {
+			if (module->figureEmitsLight) {
+				drawStickFigure(args, module->bufferX[0][0], module->bufferX[1][0], module->bufferX[2][0], module->bufferX[3][0], module->bufferX[4][0], module->bufferX[5][0], module->bufferX[6][0], module->bufferX[7][0], module->bufferX[8][0], module->bufferX[9][0], module->bufferX[10][0], module->bufferX[11][0], module->bufferX[12][0], module->bufferX[13][0], module->bufferX[14][0], module->bufferX[15][0]);
+			}
+		}
+		Widget::drawLayer(args, layer);
 	}
 };
 
@@ -317,8 +329,6 @@ struct StolyFickPigureWidget : ModuleWidget {
 		addParam(createParam<SmoothKnob>(Vec(51, 353), module, StolyFickPigure::OFFSET));
 
 		addParam(createParam<ScrambleKnob>(Vec(81, 357), module, StolyFickPigure::SCRAMBLE));
-
-
 	}
 	void drawShadow(const DrawArgs& args)  {
 		DEBUG("my draw shadow has been called");
@@ -331,6 +341,14 @@ struct StolyFickPigureWidget : ModuleWidget {
 		NVGcolor transparentColor = nvgRGBAf(120, 0, 0, 0);
 		nvgFillPaint(args.vg, nvgBoxGradient(args.vg, b.x, b.y, box.size.x - 2 * b.x, box.size.y - 2 * b.y, c, r, shadowColor, transparentColor));
 		nvgFill(args.vg);
+	}
+
+	void appendContextMenu(Menu* menu) override {
+		StolyFickPigure* module = dynamic_cast<StolyFickPigure*>(this->module);
+
+		menu->addChild(new MenuSeparator);
+
+		menu->addChild(createBoolPtrMenuItem("Stick Figure Emits Light", "", &module->figureEmitsLight));
 	}
 };
 

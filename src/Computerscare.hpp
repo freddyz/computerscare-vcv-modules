@@ -438,6 +438,8 @@ struct ComputerscareTextField : ui::TextField {
 	int fontSize = 16;
 	bool inError = false;
 	int textColorState = 0;
+	bool dimWithRoom = false;
+
 	ComputerscareTextField() {
 
 		color = nvgRGB(0xff, 0xd7, 0x14);
@@ -446,9 +448,6 @@ struct ComputerscareTextField : ui::TextField {
 
 
 	void draw(const DrawArgs &args) override {
-
-		std::shared_ptr<Font> font = APP->window->loadFont(asset::system(fontPath));
-
 		nvgScissor(args.vg, RECT_ARGS(args.clipBox));
 
 		// Background
@@ -462,9 +461,20 @@ struct ComputerscareTextField : ui::TextField {
 		}
 		nvgFill(args.vg);
 
-		// Text
+		if (dimWithRoom) {
+			drawText(args);
+		}
+	}
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1 && !dimWithRoom) {
+			drawText(args);
+		}
+		Widget::drawLayer(args, layer);
+	}
+	void drawText(const BGPanel::DrawArgs& args) {
+		std::shared_ptr<Font> font = APP->window->loadFont(asset::system(fontPath));
 		if (font) {
-
+			// Text
 			nvgFontFaceId(args.vg, font->handle);
 			bndSetFont(font->handle);
 
@@ -477,9 +487,8 @@ struct ComputerscareTextField : ui::TextField {
 			                  -1, color, fontSize, text.c_str(), highlightColor, begin, end);
 
 			bndSetFont(APP->window->uiFont->handle);
+			nvgResetScissor(args.vg);
 		}
-
-		nvgResetScissor(args.vg);
 	}
 	int getTextPosition(Vec mousePos) override {
 		std::shared_ptr<Font> font = APP->window->loadFont(asset::system(fontPath));

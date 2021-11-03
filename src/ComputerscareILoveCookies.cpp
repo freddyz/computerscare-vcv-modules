@@ -477,12 +477,12 @@ struct CookiesKnobRangeItem : MenuItem {
 struct CookiesTF2 : ComputerscareTextField
 {
   ComputerscareILoveCookies *module;
-  //int fontSize = 16;
   int rowIndex = 0;
 
   CookiesTF2(int i)
   {
     rowIndex = i;
+    dimWithRoom = false;
     ComputerscareTextField();
   };
   void draw(const DrawArgs &args) override
