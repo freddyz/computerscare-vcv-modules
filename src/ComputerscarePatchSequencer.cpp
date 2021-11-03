@@ -237,11 +237,9 @@ struct ComputerscarePatchSequencer : Module {
 
   void dataFromJson(json_t *rootJ) override {
     // button states
-    DEBUG("dataFromJson called.  It wants its JSON back");
     json_t *button_statesJ = json_object_get(rootJ, "buttons");
     if (button_statesJ)
     {
-      DEBUG("there R buttonz");
       for (int k = 0; k < maxSteps; k++) {
 
         for (int i = 0; i < 10; i++) {
