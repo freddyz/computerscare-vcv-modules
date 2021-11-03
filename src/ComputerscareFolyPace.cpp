@@ -148,6 +148,19 @@ struct FolyPace : Module {
 		bufferIndex = 0;
 		frameIndex = 0;
 	}
+	json_t* dataToJson() override {
+		json_t* rootJ = json_object();
+
+		json_object_set_new(rootJ, "faceEmitsLight", json_boolean(faceEmitsLight));
+
+		return rootJ;
+	}
+
+	void dataFromJson(json_t* rootJ) override {
+		json_t* faceEmitsLightJ = json_object_get(rootJ, "faceEmitsLight");
+		if (faceEmitsLightJ)
+			faceEmitsLight = json_boolean_value(faceEmitsLightJ);
+	}
 };
 
 

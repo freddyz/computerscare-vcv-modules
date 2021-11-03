@@ -140,6 +140,20 @@ struct StolyFickPigure : Module {
 		bufferIndex = 0;
 		frameIndex = 0;
 	}
+
+	json_t* dataToJson() override {
+		json_t* rootJ = json_object();
+
+		json_object_set_new(rootJ, "figureEmitsLight", json_boolean(figureEmitsLight));
+
+		return rootJ;
+	}
+
+	void dataFromJson(json_t* rootJ) override {
+		json_t* figureEmitsLightJ = json_object_get(rootJ, "figureEmitsLight");
+		if (figureEmitsLightJ)
+			figureEmitsLight = json_boolean_value(figureEmitsLightJ);
+	}
 };
 
 
