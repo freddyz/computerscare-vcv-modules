@@ -406,16 +406,15 @@ struct NumberDisplayWidget3 : TransparentWidget {
 
   int *value;
   ComputerscarePatchSequencer *module;
-  std::shared_ptr<Font> font;
+  std::string fontPath = "res/digital-7.ttf";
 
   NumberDisplayWidget3() {
-    font = APP->window->loadFont(asset::plugin(pluginInstance, "res/digital-7.ttf"));
+
   };
 
   void draw(const DrawArgs &args) override
   {
     // Background
-    //if (module) {
     NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
 
     nvgBeginPath(args.vg);
@@ -423,24 +422,34 @@ struct NumberDisplayWidget3 : TransparentWidget {
     nvgFillColor(args.vg, backgroundColor);
     nvgFill(args.vg);
 
-    // text
-    nvgFontSize(args.vg, 13);
-    nvgFontFaceId(args.vg, font->handle);
-    nvgTextLetterSpacing(args.vg, 2.5);
-
-    std::stringstream to_display;
-    if (module) {
-      to_display << std::setw(3) << *value;
+  }
+  void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+    if (layer == 1) {
+      drawText(args);
     }
-    else {
-      to_display << std::setw(3) << "16";
-    }
+    Widget::drawLayer(args, layer);
+  }
+  void drawText(const BGPanel::DrawArgs& args) {
+    std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
+    if (font) {
+      // text
+      nvgFontSize(args.vg, 13);
+      nvgFontFaceId(args.vg, font->handle);
+      nvgTextLetterSpacing(args.vg, 2.5);
 
-    Vec textPos = Vec(6.0f, 17.0f);
-    NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-    nvgFillColor(args.vg, textColor);
-    nvgText(args.vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
-    //  }
+      std::stringstream to_display;
+      if (module) {
+        to_display << std::setw(3) << *value;
+      }
+      else {
+        to_display << std::setw(3) << "16";
+      }
+
+      Vec textPos = Vec(6.0f, 17.0f);
+      NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
+      nvgFillColor(args.vg, textColor);
+      nvgText(args.vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
+    }
   }
 };
 
