@@ -900,8 +900,6 @@ struct tPNGDisplay : TBase {
 		if (blankModule && blankModule->loadedJSON) {
 			std::string modulePath = blankModule->getPath();
 			if (path != modulePath) {
-				//DEBUG("path not module path");
-				//DEBUG("path: %s, modulePath:%s", path.c_str(), modulePath.c_str());
 				gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
 
 				if (gifBuddy.getImageStatus() == 3) {

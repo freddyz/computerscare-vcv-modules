@@ -39,9 +39,6 @@ struct HorseSequencer {
 	int otherPrimes[16] = {80651, 85237, 11813, 22343, 19543, 28027, 9203, 39521, 42853, 58411, 33811, 76771, 10939, 22721, 17851, 10163};
 	int channel = 0;
 
-
-	std::vector<std::vector<int>> octets = {{0, 0, 0, 0}, {0, 0, 0, 1}, {0, 0, 1, 0}, {0, 0, 1, 1}, {0, 1, 0, 0}, {0, 1, 0, 1}, {0, 1, 1, 0}, {0, 1, 1, 1}, {1, 0, 0, 0}, {1, 0, 0, 1}, {1, 0, 1, 0}, {1, 0, 1, 1}, {1, 1, 0, 0}, {1, 1, 0, 1}, {1, 1, 1, 0}, {1, 1, 1, 1}};
-	std::vector<int> somethin = {1, 0, 0, 1};
 	std::vector<int> absoluteSequence;
 	std::vector<float> cvSequence;
 
@@ -62,15 +59,6 @@ struct HorseSequencer {
 
 		newSeq.resize(0);
 		newCV.resize(0);
-		/*for (int i = 0; i < 16; i++) {
-			int dex = ((int)std::floor(pattern * primes[i]) + otherPrimes[i]) % 16;
-
-			thisOct = octets[dex];
-			//vector1.insert( vector1.end(), vector2.begin(), vector2.end() );
-			newSeq.insert(newSeq.end(), thisOct.begin(), thisOct.end());
-			//absoluteSequence.push_back(dex < 8 ? 0 : 1);
-		}*/
-
 
 		int cvRoot = 0;//std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
 		float trigConst = 2 * M_PI / ((float)numSteps);
