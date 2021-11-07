@@ -47,9 +47,18 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
 	ComputerscareSolyPequencer()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f);
-		configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f);
+		configButton(MANUAL_CLOCK_BUTTON, "Manual Clock Advance");
+		configButton(MANUAL_RESET_BUTTON, "Manual Reset");
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
+
+		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+
+		configInput(POLY_INPUT, "Main");
+		configInput(CLOCK_INPUT, "Clock");
+		configInput(RESET_INPUT, "Reset Trigger");
+
+		configOutput(POLY_OUTPUT, "Main");
+		configOutput(EOC_OUTPUT, "End of Cycle");
 	}
 	void resetAll() {
 		for (int i = 0; i < 16; i++) {
@@ -150,6 +159,9 @@ struct PequencerSmallDisplay : SmallLetterDisplay
 
 
 
+		}
+		else {
+			value = std::to_string((random::u32() % 16));
 		}
 		SmallLetterDisplay::draw(args);
 	}

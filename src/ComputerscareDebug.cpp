@@ -6,8 +6,10 @@
 #include <sstream>
 #include <iomanip>
 
-#define NUM_LINES 16
+const int NUM_LINES = 16;
+
 struct ComputerscareDebug;
+
 std::string noModuleStringValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
 
 
@@ -68,12 +70,18 @@ struct ComputerscareDebug : Module {
 
 	ComputerscareDebug() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-		configParam(MANUAL_TRIGGER, 0.0f, 1.0f, 0.0f, "Manual Trigger");
-		configParam(MANUAL_CLEAR_TRIGGER, 0.0f, 1.0f, 0.0f, "Clear");
-		configParam(SWITCH_VIEW, 0.0f, 2.0f, 2.0f, "Input Mode");
-		configParam(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode");
+		configButton(MANUAL_TRIGGER, "Manual Trigger");
+		configButton(MANUAL_CLEAR_TRIGGER, "Reset/Clear");
+		configSwitch(SWITCH_VIEW, 0.0f, 2.0f, 2.0f, "Input Mode", {"Single-Channel", "Internal", "Polyphonic"});
+		configSwitch(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode", {"Single-Channel", "Internal", "Polyphonic"});
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
+
+		configInput(VAL_INPUT, "Value");
+		configInput(TRG_INPUT, "Clock");
+		configInput(CLR_INPUT, "Reset");
+		configOutput(POLY_OUTPUT, "Main");
+
 
 
 		outputRanges[0][0] = 0.f;
@@ -95,9 +103,12 @@ struct ComputerscareDebug : Module {
 
 		stepCounter = 0;
 
-		//params[MANUAL_TRIGGER].randomizable=false;
-		//params[MANUAL_CLEAR_TRIGGER].randomizable=false;
+		getParamQuantity(SWITCH_VIEW)->randomizeEnabled = false;
+		getParamQuantity(WHICH_CLOCK)->randomizeEnabled = false;
+		getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
+		getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
 
+		randomizeStorage();
 	}
 	void process(const ProcessArgs &args) override;
 
@@ -147,11 +158,54 @@ struct ComputerscareDebug : Module {
 		}
 
 	}
-	// For more advanced Module features, read Rack's engine.hpp header file
-	// - toJson, fromJson: serialization of internal data
-	// - onSampleRateChange: event triggered by a change of sample rate
-	// - onReset, onRandomize, onCreate, onDelete: implements special behavior when user clicks these from the context menu
+	int setChannelCount() {
+		clockMode = floor(params[WHICH_CLOCK].getValue());
 
+		inputMode = floor(params[SWITCH_VIEW].getValue());
+
+
+		int numInputChannels = inputs[VAL_INPUT].getChannels();
+		int numClockChannels = inputs[TRG_INPUT].getChannels();
+
+		bool inputConnected = inputs[VAL_INPUT].isConnected();
+		bool clockConnected = inputs[TRG_INPUT].isConnected();
+
+		bool noConnection = !inputConnected && !clockConnected;
+
+		int numOutputChannels = 16;
+
+		if (!noConnection) {
+
+			if (clockMode == SINGLE_MODE) {
+				if (inputMode == POLY_MODE) {
+					numOutputChannels = numInputChannels;
+				}
+			}
+			else if (clockMode == INTERNAL_MODE) {
+				if (inputMode == POLY_MODE) {
+					numOutputChannels = numInputChannels;
+					for (int i = 0; i < 16; i++) {
+						logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+					}
+				}
+			}
+			else if (clockMode == POLY_MODE) {
+				if (inputMode == POLY_MODE) {
+					numOutputChannels = std::min(numInputChannels, numClockChannels);
+				}
+				else if (inputMode == SINGLE_MODE) {
+					numOutputChannels = numClockChannels;
+				}
+				else if (inputMode == INTERNAL_MODE) {
+					numOutputChannels = numClockChannels;
+				}
+
+			}
+		}
+		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
+
+		return numOutputChannels;
+	}
 };
 
 void ComputerscareDebug::process(const ProcessArgs &args) {
@@ -164,9 +218,12 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 	inputChannel = floor(params[INPUT_CHANNEL_FOCUS].getValue());
 	clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].getValue());
 
+	bool inputConnected = inputs[VAL_INPUT].isConnected();
+
 	float min = outputRanges[outputRangeEnum][0];
 	float max = outputRanges[outputRangeEnum][1];
 	float spread = max - min;
+
 	if (clockMode == SINGLE_MODE) {
 		if (clockTriggers[clockChannel].process(inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 			if (inputMode == POLY_MODE) {
@@ -191,15 +248,17 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 	}
 	else if (clockMode == INTERNAL_MODE) {
-		if (inputMode == POLY_MODE) {
-			for (int i = 0; i < 16; i++) {
-				logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+		if (inputConnected) {
+			if (inputMode == POLY_MODE) {
+				for (int i = 0; i < 16; i++) {
+					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+				}
+			}
+			else if (inputMode == SINGLE_MODE) {
+				logLines[inputChannel] = inputs[VAL_INPUT].getVoltage(inputChannel);
 			}
 		}
-		else if (inputMode == SINGLE_MODE) {
-			logLines[inputChannel] = inputs[VAL_INPUT].getVoltage(inputChannel);
-		}
-		else if (inputMode == INTERNAL_MODE) {
+		if (inputMode == INTERNAL_MODE) {
 			for (int i = 0; i < 16; i++) {
 				logLines[i] = min + spread * random::uniform();
 			}
@@ -225,6 +284,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
 					logLines[i] = min + spread * random::uniform();
 				}
+
 			}
 		}
 	}
@@ -236,7 +296,9 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		}
 		strValue = defaultStrValue;
 	}
-	outputs[POLY_OUTPUT].setChannels(16);
+
+	int numOutputChannels = setChannelCount();
+
 	stepCounter++;
 
 	if (stepCounter > 1025) {
@@ -246,17 +308,22 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		std::string thisLine = "";
 		for ( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
 		{
-			thisLine = logLines[a] >= 0 ? "+" : "";
-			thisLine += std::to_string(logLines[a]);
-			thisLine = thisLine.substr(0, 9);
+
+			if (a < numOutputChannels) {
+				thisLine = logLines[a] >= 0 ? "+" : "";
+				thisLine += std::to_string(logLines[a]);
+				thisLine = thisLine.substr(0, 9);
+			}
+			else {
+				thisLine = "";
+			}
+
 			thisVal += (a > 0 ? "\n" : "") + thisLine;
 
 			outputs[POLY_OUTPUT].setVoltage(logLines[a], a);
 		}
 		strValue = thisVal;
 	}
-
-
 }
 struct HidableSmallSnapKnob : SmallSnapKnob {
 	bool visible = true;
@@ -271,17 +338,15 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 			Widget::draw(args);
 		}
 	};
-	void randomize() override { return; }
 };
 ////////////////////////////////////
 struct StringDisplayWidget3 : Widget {
 
 	std::string value;
-	std::shared_ptr<Font> font;
-	ComputerscareDebug *module;
+	std::string fontPath = "res/Oswald-Regular.ttf";
+	ComputerscareDebug * module;
 
 	StringDisplayWidget3() {
-		font = APP->window->loadFont(asset::plugin(pluginInstance, "res/Oswald-Regular.ttf"));
 	};
 
 	void draw(const DrawArgs &ctx) override
@@ -297,19 +362,24 @@ struct StringDisplayWidget3 : Widget {
 		nvgRoundedRect(ctx.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
 		nvgFillColor(ctx.vg, backgroundColor);
 		nvgFill(ctx.vg);
+	}
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1) {
 
+			std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
 
-		nvgFontSize(ctx.vg, 15);
-		nvgFontFaceId(ctx.vg, font->handle);
-		nvgTextLetterSpacing(ctx.vg, 2.5);
+			//text
+			nvgFontSize(args.vg, 15);
+			nvgFontFaceId(args.vg, font->handle);
+			nvgTextLetterSpacing(args.vg, 2.5);
 
-		std::string textToDraw = module ? module->strValue : noModuleStringValue;
-		Vec textPos = Vec(6.0f, 12.0f);
-		NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-		nvgFillColor(ctx.vg, textColor);
-
-		nvgTextBox(ctx.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
-
+			std::string textToDraw = module ? module->strValue : noModuleStringValue;
+			Vec textPos = Vec(6.0f, 12.0f);
+			NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
+			nvgFillColor(args.vg, textColor);
+			nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
+		}
+		Widget::drawLayer(args, layer);
 	}
 };
 struct ConnectedSmallLetter : SmallLetterDisplay {
@@ -405,7 +475,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		json_object_set_new(rootJ, "lines", sequencesJ);
 		return rootJ;
 	}*/
-	void fromJson(json_t *rootJ) override
+	/*void fromJson(json_t *rootJ) override
 	{
 		float val;
 		ModuleWidget::fromJson(rootJ);
@@ -426,7 +496,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		}
 
 
-	}
+	}*/
 	void appendContextMenu(Menu *menu) override;
 	ComputerscareDebug *debug;
 };

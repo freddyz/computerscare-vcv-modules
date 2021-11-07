@@ -68,16 +68,39 @@ struct ComputerscareOhPeas : Module
 
     ComputerscareOhPeas()
     {
+
+        enum InputIds
+        {
+            CHANNEL_INPUT,
+            SCALE_CV = CHANNEL_INPUT + numChannels,
+            OFFSET_CV = SCALE_CV + numChannels,
+            NUM_INPUTS = OFFSET_CV + numChannels
+        };
+        enum OutputIds
+        {
+            SCALED_OUTPUT,
+            QUANTIZED_OUTPUT = SCALED_OUTPUT + numChannels,
+            NUM_OUTPUTS = QUANTIZED_OUTPUT + numChannels
+        };
+
+
         config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
         configParam(GLOBAL_TRANSPOSE, -1.f, 1.f, 0.0f, "Global Transpose");
         configParam(NUM_DIVISIONS, 1.f, 24.f, 12.0f, "Number of Divisions");
         for (int i = 0; i < numChannels; i++)
         {
-            std::string chi = "Ch. " + std::to_string(i + 1);
+            std::string chi = "Column " + std::to_string(i + 1);
             configParam( SCALE_TRIM + i, -1.f, 1.f, 0.0f, chi + " Scale CV Amount");
             configParam( SCALE_VAL + i, -2.f, 2.f, 1.0f, chi + " Scale Value");
             configParam( OFFSET_TRIM + i, -1.f, 1.f, 0.0f, chi + " Offset CV Amount");
             configParam( OFFSET_VAL + i, -5.f, 5.f, 0.0f, chi + " Offset Value");
+
+            configInput(CHANNEL_INPUT + i, chi);
+            configInput(SCALE_CV + i, chi + " Scale");
+            configInput(OFFSET_CV + i, chi + " Offset");
+
+            configOutput(SCALED_OUTPUT + i, chi + " Non-Quantized");
+            configOutput(QUANTIZED_OUTPUT + i, chi + " Quantized");
 
         }
 
@@ -220,7 +243,6 @@ struct PeasTF2 : ComputerscareTextField
         {
             if (module->manualSet) {
                 text = module->currentFormula;
-                printf("manualSet to %s\n", text.c_str());
                 module->manualSet = false;
             }
             if (text.c_str() != module->currentFormula)
@@ -264,6 +286,9 @@ struct PeasSmallDisplay : SmallLetterDisplay
                 value = numDivisionsDisplay;
             }
 
+        }
+        else {
+            value = std::to_string((random::u32() % 24) + 1);
         }
         SmallLetterDisplay::draw(args);
     }
@@ -362,7 +387,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget
         peas = module;
     }
 
-    void fromJson(json_t *rootJ) override
+    /*void fromJson(json_t *rootJ) override
     {
         std::string val;
         ModuleWidget::fromJson(rootJ);
@@ -373,7 +398,7 @@ struct ComputerscareOhPeasWidget : ModuleWidget
             peas->currentFormula = json_string_value(textJ);
             peas->manualSet = true;
         }
-    }
+    }*/
 
     ComputerscareOhPeas *peas;
     PeasTF2 *textFieldTemp;

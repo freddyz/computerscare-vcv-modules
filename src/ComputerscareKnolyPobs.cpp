@@ -41,6 +41,13 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
 		configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale");
 		configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset", " volts");
+
+		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+		getParamQuantity(GLOBAL_SCALE)->randomizeEnabled = false;
+		getParamQuantity(GLOBAL_OFFSET)->randomizeEnabled = false;
+
+		configOutput(POLY_OUTPUT, "Main");
+
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
@@ -64,9 +71,6 @@ struct NoRandomSmallKnob : SmallKnob {
 	NoRandomSmallKnob() {
 		SmallKnob();
 	};
-	void randomize() override {
-		return;
-	}
 };
 struct NoRandomMediumSmallKnob : RoundKnob {
 	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob.svg"));
@@ -75,9 +79,6 @@ struct NoRandomMediumSmallKnob : RoundKnob {
 		setSvg(enabledSvg);
 		RoundKnob();
 	};
-	void randomize() override {
-		return;
-	}
 };
 
 struct DisableableSmoothKnob : RoundKnob {
@@ -93,19 +94,19 @@ struct DisableableSmoothKnob : RoundKnob {
 		shadow->box.size = math::Vec(0, 0);
 		shadow->opacity = 0.f;
 	}
-
-	void draw(const DrawArgs& args) override {
+	void step() override {
 		if (module) {
 			bool candidate = channel > module->polyChannels - 1;
 			if (disabled != candidate) {
 				setSvg(candidate ? disabledSvg : enabledSvg);
-				dirtyValue = -20.f;
+				onChange(*(new event::Change()));
+				fb->dirty = true;
 				disabled = candidate;
 			}
 		}
 		else {
 		}
-		RoundKnob::draw(args);
+		RoundKnob::step();
 	}
 };
 

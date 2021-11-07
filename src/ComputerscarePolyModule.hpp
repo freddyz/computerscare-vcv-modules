@@ -25,32 +25,32 @@ struct ComputerscarePolyModule : Module {
 
 	virtual void checkPoly() {};
 };
-struct TinyChannelsSnapKnob: RoundBlackSnapKnob {
+struct TinyChannelsSnapKnob: RoundKnob {
 	std::shared_ptr<Svg> manualChannelsSetSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-channels-empty-knob.svg"));
 	std::shared_ptr<Svg> autoChannelsSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-channels-empty-knob-auto-mode.svg"));
 	int prevSetting = -1;
 	int paramId = -1;
-
 
 	ComputerscarePolyModule *module;
 
 	TinyChannelsSnapKnob() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-channels-empty-knob.svg")));
 		shadow->opacity = 0.f;
+		snap = true;
+		RoundKnob();
 	}
-	void randomize() override {return;}
 	void draw(const DrawArgs& args) override {
 		if (module) {
 			int currentSetting = module->params[paramId].getValue();;
 			if (currentSetting != prevSetting) {
 				setSvg(currentSetting == 0 ? autoChannelsSvg : manualChannelsSetSvg);
-				dirtyValue = -20.f;
 				prevSetting = currentSetting;
 			}
 		}
 		else {
+
 		}
-		RoundBlackSnapKnob::draw(args);
+		RoundKnob::draw(args);
 	}
 };
 
@@ -82,6 +82,9 @@ struct PolyChannelsDisplay : SmallLetterDisplay
 				prevChannels = newChannels;
 			}
 
+		}
+		else {
+			value = std::to_string((random::u32() % 16) + 1);
 		}
 		SmallLetterDisplay::draw(args);
 	}

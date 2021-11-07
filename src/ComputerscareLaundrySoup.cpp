@@ -114,12 +114,27 @@ struct ComputerscareLaundrySoup : Module {
       checkIfShouldChange(i);
       resetOneOfThem(i);
 
+      std::string rowi = std::to_string(i + 1);
+
+      configButton(INDIVIDUAL_RESET_PARAM + i, "Reset Row " + rowi );
+
+      configInput(CLOCK_INPUT + i, "Row " + rowi + " Clock");
+      configInput(RESET_INPUT + i, "Row " + rowi + " Reset");
+
+      configOutput(TRG_OUTPUT + i, "Row " + rowi + " Trigger");
+      configOutput(FIRST_STEP_OUTPUT + i, "Row " + rowi + " End of Cycle");
+
       LaundryPoly lp = LaundryPoly(currentFormula[i]);
       laundryPoly[i] = lp;
       channelCountEnum[i] = -1;
       channelCount[i] = 1;
-
     }
+
+    configButton(MANUAL_CLOCK_PARAM, "Manual Clock Advance");
+    configButton(MANUAL_RESET_PARAM, "Manual Reset");
+
+    configInput(GLOBAL_CLOCK_INPUT, "Global Clock");
+    configInput(GLOBAL_RESET_INPUT, "Global Reset");
   }
   json_t *dataToJson() override {
     json_t *rootJ = json_object();
@@ -614,33 +629,33 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
       }
     }
   }
+  /*This is a deprecated method, but since I used ModuleWidget::toJson to save the custom sequences,
+      old patches have "sequences" at the root of the JSON serialization.  Module::dataFromJSON does not provide
+      the root object, just the "data" key, so this is the only way to get the sequences from patches prior to v1.2
 
-  void fromJson(json_t *rootJ) override
-  {
-    /*This is a deprecated method, but since I used ModuleWidget::toJson to save the custom sequences,
-    old patches have "sequences" at the root of the JSON serialization.  Module::dataFromJSON does not provide
-    the root object, just the "data" key, so this is the only way to get the sequences from patches prior to v1.2
+      */
+  /* void fromJson(json_t *rootJ) override
+   {
 
-    */
-    std::string val;
-    ModuleWidget::fromJson(rootJ);
+     std::string val;
+     ModuleWidget::fromJson(rootJ);
 
-    json_t *seqJLegacy = json_object_get(rootJ, "sequences");
-    if (seqJLegacy) {
-      for (int i = 0; i < numFields; i++) {
-        json_t *sequenceJ = json_array_get(seqJLegacy, i);
-        if (sequenceJ) {
-          val = json_string_value(sequenceJ);
-          laundry->currentTextFieldValue[i] = val;
-          laundry->manualSet[i] = true;
-        }
+     json_t *seqJLegacy = json_object_get(rootJ, "sequences");
+     if (seqJLegacy) {
+       for (int i = 0; i < numFields; i++) {
+         json_t *sequenceJ = json_array_get(seqJLegacy, i);
+         if (sequenceJ) {
+           val = json_string_value(sequenceJ);
+           laundry->currentTextFieldValue[i] = val;
+           laundry->manualSet[i] = true;
+         }
 
-      }
-      laundry->jsonLoaded = true;
-    }
+       }
+       laundry->jsonLoaded = true;
+     }
 
 
-  }
+   }*/
   ComputerscareLaundrySoup *laundry;
 
   LaundryTF2 *textFieldTemp;

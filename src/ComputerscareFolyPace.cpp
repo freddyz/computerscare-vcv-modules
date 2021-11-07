@@ -39,6 +39,8 @@ struct FolyPace : Module {
 	int C = 29;
 	int D = 2;
 
+	bool faceEmitsLight = true;
+
 	FolyPace() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 		const float timeBase = (float) BUFFER_SIZE / 6;
@@ -51,6 +53,7 @@ struct FolyPace : Module {
 		configParam(OFFSET, -5.f, 5.f, 0.f, "Input Offset", " Volts");
 		configParam(SCRAMBLE, -10.f, 10.f, 0.f, "Scrambling");
 
+		configInput(X_INPUT, "Main");
 
 
 	}
@@ -144,6 +147,19 @@ struct FolyPace : Module {
 	void trigger() {
 		bufferIndex = 0;
 		frameIndex = 0;
+	}
+	json_t* dataToJson() override {
+		json_t* rootJ = json_object();
+
+		json_object_set_new(rootJ, "faceEmitsLight", json_boolean(faceEmitsLight));
+
+		return rootJ;
+	}
+
+	void dataFromJson(json_t* rootJ) override {
+		json_t* faceEmitsLightJ = json_object_get(rootJ, "faceEmitsLight");
+		if (faceEmitsLightJ)
+			faceEmitsLight = json_boolean_value(faceEmitsLightJ);
 	}
 };
 
@@ -350,8 +366,18 @@ struct FolyPaceDisplay : TransparentWidget {
 			drawFace(args, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10, random::uniform() * 10);
 		}
 		else {
-			drawFace(args, module->bufferX[0][0], module->bufferX[1][0], module->bufferX[2][0], module->bufferX[3][0], module->bufferX[4][0], module->bufferX[5][0], module->bufferX[6][0], module->bufferX[7][0], module->bufferX[8][0], module->bufferX[9][0], module->bufferX[10][0], module->bufferX[11][0], module->bufferX[12][0], module->bufferX[13][0], module->bufferX[14][0], module->bufferX[15][0]);
+			if (!module->faceEmitsLight) {
+				drawFace(args, module->bufferX[0][0], module->bufferX[1][0], module->bufferX[2][0], module->bufferX[3][0], module->bufferX[4][0], module->bufferX[5][0], module->bufferX[6][0], module->bufferX[7][0], module->bufferX[8][0], module->bufferX[9][0], module->bufferX[10][0], module->bufferX[11][0], module->bufferX[12][0], module->bufferX[13][0], module->bufferX[14][0], module->bufferX[15][0]);
+			}
 		}
+	}
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1 && module) {
+			if (module->faceEmitsLight) {
+				drawFace(args, module->bufferX[0][0], module->bufferX[1][0], module->bufferX[2][0], module->bufferX[3][0], module->bufferX[4][0], module->bufferX[5][0], module->bufferX[6][0], module->bufferX[7][0], module->bufferX[8][0], module->bufferX[9][0], module->bufferX[10][0], module->bufferX[11][0], module->bufferX[12][0], module->bufferX[13][0], module->bufferX[14][0], module->bufferX[15][0]);
+			}
+		}
+		Widget::drawLayer(args, layer);
 	}
 };
 
@@ -381,8 +407,14 @@ struct FolyPaceWidget : ModuleWidget {
 		addParam(createParam<SmallKnob>(Vec(31, 357), module, FolyPace::TRIM));
 		addParam(createParam<SmoothKnob>(Vec(51, 353), module, FolyPace::OFFSET));
 		addParam(createParam<ScrambleKnob>(Vec(81, 357), module, FolyPace::SCRAMBLE));
+	}
 
+	void appendContextMenu(Menu* menu) override {
+		FolyPace* module = dynamic_cast<FolyPace*>(this->module);
 
+		menu->addChild(new MenuSeparator);
+
+		menu->addChild(createBoolPtrMenuItem("Face Emits Light", "", &module->faceEmitsLight));
 	}
 };
 
