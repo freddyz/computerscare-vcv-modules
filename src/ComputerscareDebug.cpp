@@ -6,8 +6,10 @@
 #include <sstream>
 #include <iomanip>
 
-#define NUM_LINES 16
+const int NUM_LINES = 16;
+
 struct ComputerscareDebug;
+
 std::string noModuleStringValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
 
 

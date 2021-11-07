@@ -15,9 +15,6 @@
 #include <cctype>
 #include <algorithm>
 
-#define FONT_SIZE 13
-
-
 struct ComputerscareBlank : ComputerscareMenuParamModule {
 	bool loading = true;
 	bool loadedJSON = false;
