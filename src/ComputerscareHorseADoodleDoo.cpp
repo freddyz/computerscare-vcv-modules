@@ -60,7 +60,7 @@ struct HorseSequencer {
 		newSeq.resize(0);
 		newCV.resize(0);
 
-		int cvRoot = 0;//std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
+		int cvRoot = 0;
 		float trigConst = 2 * M_PI / ((float)numSteps);
 
 		for (int i = 0; i < numSteps; i++) {
@@ -68,9 +68,14 @@ struct HorseSequencer {
 			float cvVal = 0.f;
 			float arg = pattern + ((float) i) * trigConst;
 			for (int k = 0; k < 4; k++) {
-				val += std::sin(primes[((i + 1) * (k + 1)) % 16] * arg + otherPrimes[(otherPrimes[0] + i) % 16]);
-				cvVal += std::sin(primes[((i + 11) * (k + 1) + 201) % 16] * arg + otherPrimes[(otherPrimes[3] + i - 7) % 16] + phase);
-				//cvVal+=i/12;
+				int trgArgIndex = ((i + 1) * (k + 1)) % 16;
+				int trgThetaIndex = (otherPrimes[0] + i) % 16;
+
+				int cvArgIndex = ((i + 11) * (k + 1) + 201) % 16;
+				int cvThetaIndex = (otherPrimes[3] + i - 7) % 16;
+
+				val += std::sin(primes[trgArgIndex] * arg + otherPrimes[trgThetaIndex]);
+				cvVal += std::sin(primes[cvArgIndex] * arg + otherPrimes[cvThetaIndex] + phase);
 			}
 			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
 			newCV.push_back(cvRoot + (cvVal + 4) / .8);
