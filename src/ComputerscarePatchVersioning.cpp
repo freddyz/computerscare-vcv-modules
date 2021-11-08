@@ -11,30 +11,26 @@ const int numOutputs = 16;
 const std::string numbers = "0123456789";
 const std::string letters = "abcdefghijklmnopqrstuvwxyz";
 
-std::string generateNewPatchName() {
-	std::string currentPatchName = APP->patch->path;
-	size_t lastindex = currentPatchName.find_last_of(".");
-	std::string rawname = currentPatchName.substr(0, lastindex);
-	return rawname + "-v.vcv";
-}
+
 
 struct ComputerscarePatchVersioning : Module {
 	int counter = 0;
+	bool parentLetter = true;
+
 	ComputerscareSVGPanel* panelRef;
 	rack::dsp::SchmittTrigger saveTrigger;
+
+	std::vector<std::string> patchVersionFilenames;
+
 	enum ParamIds {
-		KNOB,
 		SAVE_BUTTON,
 		NUM_PARAMS
-
 	};
 	enum InputIds {
-		CHANNEL_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
-		POLY_OUTPUT,
-		NUM_OUTPUTS = POLY_OUTPUT + numOutputs
+		NUM_OUTPUTS
 	};
 	enum LightIds {
 		NUM_LIGHTS
@@ -44,13 +40,8 @@ struct ComputerscarePatchVersioning : Module {
 	ComputerscarePatchVersioning()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+		configButton(SAVE_BUTTON, "Manual Trigger");
 
-		/* for (int i = 0; i < numKnobs; i++) {
-				configParam(KNOB + i, 0.0f, 10.0f, 0.0f);
-				configParam(KNOB+i, 0.f, 10.f, 0.f, "Channel "+std::to_string(i+1) + " Voltage", " Volts");
-		}
-		configParam(TOGGLES, 0.0f, 1.0f, 0.0f);
-		outputs[POLY_OUTPUT].setChannels(16);*/
 	}
 	void process(const ProcessArgs &args) override {
 		bool saveClicked = saveTrigger.process(params[SAVE_BUTTON].getValue());
@@ -58,10 +49,20 @@ struct ComputerscarePatchVersioning : Module {
 			savePatch();
 		}
 	}
+	std::string generateNewPatchName() {
+		return "patch-" + std::to_string(counter);
+	}
 	json_t *dataToJson() override {
 		json_t *rootJ = json_object();
 
 		json_object_set_new(rootJ, "counter", json_integer(counter));
+
+		json_t *filenamesJ = json_array();
+		for (int i = 0; i < (int) patchVersionFilenames.size(); i++) {
+			json_t *filenameJ = json_string(patchVersionFilenames[i].c_str());
+			json_array_append_new(filenamesJ, filenameJ);
+		}
+		json_object_set_new(rootJ, "patchVersionFilenames", filenamesJ);
 
 		return rootJ;
 	}
@@ -72,17 +73,24 @@ struct ComputerscarePatchVersioning : Module {
 		json_t *counterJ = json_object_get(rootJ, "counter");
 		if (counterJ) { counter = json_integer_value(counterJ); }
 
+		json_t *filenamesJ = json_object_get(rootJ, "patchVersionFilenames");
+		if (filenamesJ) {
+			for (int i = 0; i < json_array_size(filenamesJ); i++) {
+				json_t *filenameJ = json_array_get(filenamesJ, i);
+				patchVersionFilenames.push_back(json_string_value(filenameJ));
+			}
+		}
 	}
 	void savePatch() {
-		std::string newPatchName = generateNewPatchName();
-		APP->patch->save(newPatchName);
-		APP->patch->path = newPatchName;
-		APP->history->setSaved();
+		DEBUG("not doing anything");
+	}
+
+	void selectedPatch(int index) {
+		DEBUG("selected patch %i", index);
 	}
 
 	void onAdd(const AddEvent& e) override {
 		DEBUG("onAdd callud");
-		std::string path = system::join(createPatchStorageDirectory(), "wavetable.wav");
 		// Read file...
 
 		//savePatchInStorage("lastPatch.vcv");
@@ -91,7 +99,10 @@ struct ComputerscarePatchVersioning : Module {
 	void onSave(const SaveEvent& e) override {
 		DEBUG("onSave culled");
 		counter++;
-		std::string filename = "patch-" + std::to_string(counter);
+
+		std::string filename = generateNewPatchName();
+
+		patchVersionFilenames.push_back(filename);
 		savePatchInStorage(filename);
 	}
 	void savePatchInStorage(std::string baseFileName) {
@@ -156,6 +167,37 @@ struct KeyContainer : Widget {
 	}
 
 };
+struct ssmi : MenuItem
+{
+
+	ComputerscarePatchVersioning *module;
+	int mySetVal = 1;
+	ssmi(int setVal)
+	{
+		mySetVal = setVal;
+	}
+
+	void onAction(const event::Action &e) override
+	{
+		//module->setAll(mySetVal);
+		DEBUG("PORK HORSE %i", mySetVal);
+	}
+};
+struct SetAllItem : MenuItem {
+	ComputerscarePatchVersioning *module;
+
+	Menu *createChildMenu() override {
+		Menu *menu = new Menu;
+		for (int i = 1; i < 17; i++) {
+			ssmi *menuItem = new ssmi(i);
+			menuItem->text = "Set all to ch. " + std::to_string(i);
+			menuItem->module = module;
+			menu->addChild(menuItem);
+		}
+		return menu;
+	}
+};
+
 struct ComputerscarePatchVersioningWidget : ModuleWidget {
 	KeyContainer* keyContainer = NULL;
 	ComputerscarePatchVersioningWidget(ComputerscarePatchVersioning *module) {
@@ -181,6 +223,28 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 		}
 
 		addParam(createParam<MomentaryIsoButton>(Vec(50, 100), module, ComputerscarePatchVersioning::SAVE_BUTTON));
+	}
+	void appendContextMenu(Menu *menu)
+	{
+		ComputerscarePatchVersioning *module = dynamic_cast<ComputerscarePatchVersioning *>(this->module);
+
+		MenuLabel *spacerLabel = new MenuLabel();
+		menu->addChild(spacerLabel);
+
+		menu->addChild(createSubmenuItem("Patch Versions", "",
+		[ = ](Menu * menu) {
+			menu->addChild(createMenuLabel("Load Patch:"));
+
+
+			for (int i = 0; i < (int)module->patchVersionFilenames.size(); i++) {
+				menu->addChild(createMenuItem(module->patchVersionFilenames[i], "",
+				[ = ]() {module->selectedPatch(i);}
+				                             ));
+			}
+
+
+		}
+		                                ));
 	}
 	~ComputerscarePatchVersioningWidget() {
 		if (keyContainer) {
