@@ -8,6 +8,9 @@ const int numKnobs = 16;
 const int numToggles = 16;
 const int numOutputs = 16;
 
+const std::string numbers = "0123456789";
+const std::string letters = "abcdefghijklmnopqrstuvwxyz";
+
 std::string generateNewPatchName() {
 	std::string currentPatchName = APP->patch->path;
 	size_t lastindex = currentPatchName.find_last_of(".");
@@ -55,12 +58,67 @@ struct ComputerscarePatchVersioning : Module {
 			savePatch();
 		}
 	}
-	void savePatch() {
+	json_t *dataToJson() override {
+		json_t *rootJ = json_object();
 
+		json_object_set_new(rootJ, "counter", json_integer(counter));
+
+		return rootJ;
+	}
+
+	void dataFromJson(json_t *rootJ) override {
+		float val;
+
+		json_t *counterJ = json_object_get(rootJ, "counter");
+		if (counterJ) { counter = json_integer_value(counterJ); }
+
+	}
+	void savePatch() {
 		std::string newPatchName = generateNewPatchName();
 		APP->patch->save(newPatchName);
 		APP->patch->path = newPatchName;
 		APP->history->setSaved();
+	}
+
+	void onAdd(const AddEvent& e) override {
+		DEBUG("onAdd callud");
+		std::string path = system::join(createPatchStorageDirectory(), "wavetable.wav");
+		// Read file...
+
+		//savePatchInStorage("lastPatch.vcv");
+	}
+
+	void onSave(const SaveEvent& e) override {
+		DEBUG("onSave culled");
+		counter++;
+		std::string filename = "patch-" + std::to_string(counter);
+		savePatchInStorage(filename);
+	}
+	void savePatchInStorage(std::string baseFileName) {
+		json_t* patchJson =  APP->patch->toJson();
+
+		std::string versionsFolder = system::join(createPatchStorageDirectory(), "versions");
+		system::createDirectory(versionsFolder);
+
+
+		std::string screenshotsFolder = system::join(createPatchStorageDirectory(), "screenshots");
+		system::createDirectory(screenshotsFolder);
+
+
+		//screenshots take up a lot of space but theyre cool lol
+		//APP->window->screenshot(system::join(screenshotsFolder, baseFileName + ".png"));
+
+		std::string filename = baseFileName + ".vcv";
+
+		std::string patchPath = system::join(versionsFolder, filename);
+
+		FILE* file = std::fopen(patchPath.c_str(), "w");
+		if (!file) {
+			// Fail silently
+			return;
+		}
+		json_dumpf(patchJson, file, JSON_INDENT(2));
+		std::fclose(file);
 	}
 
 };
@@ -68,7 +126,7 @@ struct KeyContainer : Widget {
 	ComputerscarePatchVersioning* module = NULL;
 
 	void onHoverKey(const event::HoverKey& e) override {
-		if (module && !module->bypass) {
+		if (module && !module->isBypassed()) {
 
 			if (e.action == GLFW_PRESS || e.action == GLFW_REPEAT) {
 				/*module->keys[idx].mods & GLFW_MOD_ALT ? 0.7f : 0.f);
@@ -103,7 +161,6 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 	ComputerscarePatchVersioningWidget(ComputerscarePatchVersioning *module) {
 
 		setModule(module);
-		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscarePatchVersioningPanel.svg")));
 
 		float outputY = 334;
 		box.size = Vec(15 * 10, 380);
@@ -111,8 +168,6 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareIsoPanel.svg")));
-
-			//module->panelRef = panel;
 
 			addChild(panel);
 
@@ -126,11 +181,6 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 		}
 
 		addParam(createParam<MomentaryIsoButton>(Vec(50, 100), module, ComputerscarePatchVersioning::SAVE_BUTTON));
-
-
-
-
-
 	}
 	~ComputerscarePatchVersioningWidget() {
 		if (keyContainer) {
@@ -141,11 +191,4 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 
 };
 
-
-// Specify the Module and ModuleWidget subclass, human-readable
-// author name for categorization per plugin, module slug (should never
-// change), human-readable module name, and any number of tags
-// (found in `include/tags.hpp`) separated by commas.
-
-//Model *modelComputerscarePatchVersioning = Model::create<ComputerscarePatchVersioning, ComputerscarePatchVersioningWidget>("computerscare", "computerscare-iso", "Isopig", UTILITY_TAG);
 Model *modelComputerscarePatchVersioning = createModel<ComputerscarePatchVersioning, ComputerscarePatchVersioningWidget>("computerscare-patch-versioning");
