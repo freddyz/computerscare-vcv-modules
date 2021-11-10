@@ -22,6 +22,8 @@ struct ComputerscarePatchVersioning : Module {
 
 	std::vector<std::string> patchVersionFilenames;
 
+	std::string globalVersionsFolder;
+
 	enum ParamIds {
 		SAVE_BUTTON,
 		NUM_PARAMS
@@ -87,6 +89,23 @@ struct ComputerscarePatchVersioning : Module {
 
 	void selectedPatch(int index) {
 		DEBUG("selected patch %i", index);
+		loadPatch(index);
+	}
+
+	void loadPatch(int index) {
+		std::string patchFilename = patchVersionFilenames[index] + ".vcv";
+		std::string versionsFolder = system::join(createPatchStorageDirectory(), "versions");
+		std::string patchPath = system::join(versionsFolder, patchFilename);
+
+		std::string dstFilename =  asset::user("pork.vcv");
+
+		DEBUG("loading patch %s", patchPath.c_str());
+
+		DEBUG("dstFilename %s", dstFilename.c_str());
+
+		system::copy(patchPath, dstFilename);
+
+		APP->patch->load(dstFilename);
 	}
 
 	void onAdd(const AddEvent& e) override {
@@ -94,7 +113,10 @@ struct ComputerscarePatchVersioning : Module {
 		// Read file...
 
 		//savePatchInStorage("lastPatch.vcv");
+
+		globalVersionsFolder = system::join(createPatchStorageDirectory(), "versions");
 	}
+
 
 	void onSave(const SaveEvent& e) override {
 		DEBUG("onSave culled");
@@ -123,13 +145,22 @@ struct ComputerscarePatchVersioning : Module {
 
 		std::string patchPath = system::join(versionsFolder, filename);
 
-		FILE* file = std::fopen(patchPath.c_str(), "w");
+		copyPatch(patchPath);
+
+		/*FILE* file = std::fopen(patchPath.c_str(), "w");
 		if (!file) {
 			// Fail silently
 			return;
 		}
 		json_dumpf(patchJson, file, JSON_INDENT(2));
-		std::fclose(file);
+		std::fclose(file);*/
+	}
+
+	void copyPatch(std::string dstPath) {
+		std::string currentPatchName = APP->patch->path;
+		DEBUG("patchName %s", currentPatchName.c_str());
+
+		system::copy(currentPatchName, dstPath);
 	}
 
 };
