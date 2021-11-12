@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           path: dist
-          name: ${{ matrix.config.name }}
+          name: computerscare-modules-2.git.${{env.GITHUB_SHA_SHORT}}-${{ matrix.config.name }}
 
   publish:
     name: Publish plugin
