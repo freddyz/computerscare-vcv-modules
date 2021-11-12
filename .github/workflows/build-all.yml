@@ -73,7 +73,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           path: dist
-          name: ${{ matrix.config.name }}
+          name: dogpork-${{ matrix.config.name }}
 
   publish:
     name: Publish plugin
