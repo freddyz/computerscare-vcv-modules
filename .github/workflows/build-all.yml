@@ -109,7 +109,7 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           path: _artifacts
-      - name: ugh huh
+      - name: Uggh Hugly
         run: |
           ls
           ls _artifacts
