@@ -76,7 +76,7 @@ jobs:
         uses: actions/upload-artifact@v2
         with:
           path: dist
-          name: computerscare-modules-2.git.${{ github.sha }}-${{ matrix.config.name }}.zip
+          name: computerscare-modules-2.git.${{ github.sha }}-${{ matrix.config.name }}
 
   publish:
     name: Publish plugin
@@ -111,7 +111,7 @@ jobs:
           path: _artifacts
       - name: Uggh Hugly
         run: |
-          ls
+          pwd
           ls _artifacts
       - name: Upload release assets
         uses: svenstaro/upload-release-action@v2
@@ -124,7 +124,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: _artifacts/*.zip
+          file: _artifacts/*
           tag: ${{ github.ref }}
           file_glob: true
 
