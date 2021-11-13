@@ -101,7 +101,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
+          release_name: Computerscare Modules ${{ github.ref }}
           body: |
             ${{ env.GITHUB_REPOSITORY_NAME }} VCV Rack Plugin ${{ env.GITHUB_REF_NAME }}
           draft: false
