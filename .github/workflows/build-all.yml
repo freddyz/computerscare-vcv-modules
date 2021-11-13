@@ -117,7 +117,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: _artifacts/**/*.zip
+          file: _artifacts/**/*
           tag: ${{ github.ref }}
           file_glob: true
       - name: Upload release builds
