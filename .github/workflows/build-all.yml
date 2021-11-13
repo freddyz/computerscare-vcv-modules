@@ -109,6 +109,10 @@ jobs:
       - uses: actions/download-artifact@v2
         with:
           path: _artifacts
+      - name: ugh huh
+        run: |
+          ls
+          ls _artifacts
       - name: Upload release assets
         uses: svenstaro/upload-release-action@v2
         with:
