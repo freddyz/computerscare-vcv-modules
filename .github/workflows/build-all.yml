@@ -104,6 +104,7 @@ jobs:
           release_name: Computerscare Modules ${{ github.ref }}
           body: |
             ${{ env.GITHUB_REPOSITORY_NAME }} VCV Rack Plugin ${{ env.GITHUB_REF_NAME }}
+            Built with Rack SDK ${{ env.rack-sdk-version }}
           draft: false
           prerelease: false
       - uses: actions/download-artifact@v2
