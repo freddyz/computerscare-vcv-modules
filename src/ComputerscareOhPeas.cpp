@@ -1,5 +1,3 @@
-
-#include "plugin.hpp"
 #include "Computerscare.hpp"
 
 #include "dtpulse.hpp"
