@@ -42,6 +42,14 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 		configParam(RANDOMIZE_ONE_TO_ONE, 0.f, 1.f, 0.f);
 
+		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+		getParamQuantity(RANDOMIZE_ONE_TO_ONE)->randomizeEnabled = false;
+
+		configInput(POLY_INPUT, "Main");
+		configInput(ROUTING_CV, "Routing CV");
+
+		configOutput(POLY_OUTPUT, "Re-Routed");
+
 	}
 	void setAll(int setVal) {
 		for (int i = 0; i < 16; i++) {
@@ -162,10 +170,14 @@ struct PouterSmallDisplay : SmallLetterDisplay
 			}
 			value = str;
 		}
+		else {
+			textColor = okayColor;
+			value = std::to_string((random::u32() % 16) + 1);
+		}
 		SmallLetterDisplay::draw(args);
 	}
 };
-struct DisableableSnapKnob : RoundBlackSnapKnob {
+struct DisableableSnapKnob : RoundKnob {
 	ComputerscarePolyModule *module;
 	int channel;
 	bool disabled = false;
@@ -174,20 +186,28 @@ struct DisableableSnapKnob : RoundBlackSnapKnob {
 	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator-disabled.svg"));
 
 	DisableableSnapKnob() {
-		RoundBlackSnapKnob();
+		snap = true;
+		shadow->opacity = 0.f;
+		RoundKnob();
 	}
 	void step() override {
 		if (module) {
 			disabled = channel > module->polyChannels - 1;
 		}
+		else {
+			disabled = false;
+			setSvg(enabledSvg);
+			onChange(*(new event::Change()));
+			fb->dirty = true;
+		}
 		if (disabled != lastDisabled) {
 			setSvg(disabled ? disabledSvg : enabledSvg);
-			dirtyValue = -20.f;
+			onChange(*(new event::Change()));
+			fb->dirty = true;
 			lastDisabled = disabled;
 		}
-		RoundBlackSnapKnob::step();
+		RoundKnob::step();
 	}
-	void randomize() override {return;}
 };
 struct ComputerscareRolyPouterWidget : ModuleWidget {
 	ComputerscareRolyPouterWidget(ComputerscareRolyPouter *module) {

@@ -60,6 +60,12 @@ struct ComputerscareTolyPools : Module {
 		configParam(ROTATE_KNOB, 0.f, 15.f, 0.f, "Rotate input", " channels");
 		configParam(NUM_CHANNELS_KNOB, 1.f, 16.f, 16.f, "Number of Output Channels");
 
+		configInput(POLY_INPUT, "Main");
+		configInput(ROTATE_CV, "Rotation CV");
+		configInput(NUM_CHANNELS_CV, "Number of Channels CV");
+
+		configOutput(POLY_OUTPUT, "Main");
+		configOutput(NUM_CHANNELS_OUTPUT, "Number of Input Channels");
 
 	}
 	void process(const ProcessArgs &args) override {
@@ -111,6 +117,9 @@ struct PoolsSmallDisplay : SmallLetterDisplay
 				value = std::to_string(module->numInputChannels);
 			}
 
+		}
+		else {
+			value = std::to_string((random::u32() % 16) + 1);
 		}
 		SmallLetterDisplay::draw(args);
 	}

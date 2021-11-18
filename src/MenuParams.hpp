@@ -107,14 +107,14 @@ struct MenuParam : MenuEntry {
 			//addChild(johnLabel);
 		}
 		else if (type == 1) {
-			pWidget = new MediumDotSnapKnob();
+			/*pWidget = new MediumDotSnapKnob();
 			pWidget->paramQuantity = param;
 			pWidget->box.pos = Vec(controlRightMargin, 0);
 
 			addChild(pWidget);
 			johnLabel = construct<MenuLabel>(&MenuLabel::text, param->getLabel());
 			johnLabel->box.pos = Vec((type == 2 ? slider->box.size.x : pWidget->box.size.x) + controlRightMargin * 2, 0);
-			addChild(johnLabel);
+			addChild(johnLabel);*/
 		}
 		else if (type == 2) {
 			slider = new SmoothSlider(param);
@@ -197,10 +197,10 @@ struct ComputerscareMenuParamModule : ComputerscarePolyModule {
 };
 
 struct MultiselectParamQuantity : ParamQuantity {
-	ComputerscareMenuParamModule* module;
 	std::string getDisplayValueString() override {
+		ComputerscareMenuParamModule* menuParamModule = reinterpret_cast<ComputerscareMenuParamModule*>(this->module);
 		int index = Quantity::getValue();
-		return module->getOptionValue(paramId, index);
+		return menuParamModule->getOptionValue(paramId, index);
 	}
 };
 struct MenuParamModuleWidget : ModuleWidget {

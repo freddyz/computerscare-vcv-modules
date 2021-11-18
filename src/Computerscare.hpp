@@ -2,16 +2,6 @@
 
 #include "rack.hpp"
 
-#include "app/common.hpp"
-#include "widget/TransparentWidget.hpp"
-#include "widget/FramebufferWidget.hpp"
-#include "widget/SvgWidget.hpp"
-#include "app/PortWidget.hpp"
-#include "app/CircularShadow.hpp"
-#include "app.hpp"
-
-
-
 using namespace rack;
 
 // Forward-declare the Plugin, defined in Template.cpp
@@ -127,7 +117,7 @@ struct IsoButton : SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-iso-button-up.svg")));
 	}
 };
-struct SmallIsoButton : app::SvgSwitch {
+struct SmallIsoButton : SvgSwitch {
 	bool disabled = true;
 	bool lastDisabled = false;
 	std::vector<std::shared_ptr<Svg>> enabledFrames;
@@ -158,7 +148,6 @@ struct SmallIsoButton : app::SvgSwitch {
 			}
 			onChange(*(new event::Change()));
 			fb->dirty = true;
-			dirtyValue = -20.f;
 			lastDisabled = disabled;
 
 		}
@@ -179,9 +168,6 @@ struct ThreeVerticalXSwitch : app::SvgSwitch {
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/vertical-x-3.svg")));
 		shadow->opacity = 0.f;
 	}
-	void randomize() override {
-		return;
-	}
 };
 struct ComputerscareDebugFour : app::SvgSwitch {
 	ComputerscareDebugFour() {
@@ -195,6 +181,7 @@ struct ComputerscareDebugFour : app::SvgSwitch {
 struct ComputerscareResetButton : app::SvgSwitch {
 	ComputerscareResetButton() {
 		momentary = true;
+		shadow->opacity = 0.f;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-rst-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-rst-text-red.svg")));
 	}
@@ -202,6 +189,8 @@ struct ComputerscareResetButton : app::SvgSwitch {
 struct ComputerscareNextButton : app::SvgSwitch {
 	ComputerscareNextButton() {
 		momentary = true;
+
+		shadow->opacity = 0.f;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-next-button.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-next-button-down.svg")));
 	}
@@ -209,6 +198,8 @@ struct ComputerscareNextButton : app::SvgSwitch {
 struct ComputerscareClearButton : app::SvgSwitch {
 	ComputerscareClearButton() {
 		momentary = true;
+
+		shadow->opacity = 0.f;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-CLEAR-BUTTON-UP.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-CLEAR-BUTTON-DOWN.svg")));
 	}
@@ -217,12 +208,16 @@ struct ComputerscareClearButton : app::SvgSwitch {
 struct ComputerscareClockButton : app::SvgSwitch {
 	ComputerscareClockButton() {
 		momentary = true;
+
+		shadow->opacity = 0.f;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-clk-text.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-clk-text-red.svg")));
 	}
 };
 struct ComputerscareInvisibleButton : app::SvgSwitch {
 	ComputerscareInvisibleButton() {
+
+		shadow->opacity = 0.f;
 		momentary = true;
 
 
@@ -346,21 +341,26 @@ struct InPort : ComputerscareSvgPort {
 // Knobs
 
 
-struct LrgKnob : RoundBlackSnapKnob {
+struct LrgKnob : RoundKnob {
 	LrgKnob() {
+		snap = true;
+		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-big-knob-effed.svg")));
 	}
-	void randomize() override { return; }
 };
 
 
-struct MediumSnapKnob : RoundBlackSnapKnob {
+struct MediumSnapKnob : RoundKnob {
 	MediumSnapKnob() {
+		snap = true;
+		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
 	}
 };
-struct MediumDotSnapKnob : RoundBlackSnapKnob {
+struct MediumDotSnapKnob : RoundKnob {
 	MediumDotSnapKnob() {
+		shadow->opacity = 0.f;
+		snap = true;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator.svg")));
 	}
 };
@@ -375,7 +375,6 @@ struct SmoothKnobNoRandom : RoundKnob {
 	SmoothKnobNoRandom() {
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-effed.svg")));
 	}
-	void randomize() override { return; }
 };
 struct SmallKnob : RoundKnob {
 	SmallKnob() {
@@ -394,7 +393,6 @@ struct ScrambleKnobNoRandom : RoundKnob {
 		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
-	void randomize() override { return; }
 };
 
 struct ScrambleSnapKnob : RoundKnob {
@@ -410,15 +408,12 @@ struct ScrambleSnapKnobNoRandom : RoundKnob {
 		shadow->opacity = 0.f;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
 	}
-	void randomize() override { return; }
 };
 
-struct SmallSnapKnob : RoundBlackSnapKnob {
-	//bool visible = true;
-
-	//CircularShadow *shadow;
+struct SmallSnapKnob : RoundKnob {
 	SmallSnapKnob() {
 
+		snap = true;
 		setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg")));
 		shadow->box.size = math::Vec(0, 0);
 		shadow->opacity = 0.f;
@@ -437,15 +432,16 @@ struct ComputerscareDotKnob : SmallKnob {
 };
 
 struct ComputerscareTextField : ui::TextField {
-	std::shared_ptr<Font> font;
+	std::string fontPath = "res/fonts/ShareTechMono-Regular.ttf";
 	math::Vec textOffset;
 	NVGcolor color = COLOR_COMPUTERSCARE_LIGHT_GREEN;
 	int fontSize = 16;
 	bool inError = false;
 	int textColorState = 0;
+	bool dimWithRoom = false;
+
 	ComputerscareTextField() {
 
-		font = APP->window->loadFont(asset::system("res/fonts/ShareTechMono-Regular.ttf"));
 		color = nvgRGB(0xff, 0xd7, 0x14);
 		textOffset = math::Vec(1, 2);
 	}
@@ -465,8 +461,21 @@ struct ComputerscareTextField : ui::TextField {
 		}
 		nvgFill(args.vg);
 
-		// Text
-		if (font->handle >= 0) {
+		if (dimWithRoom) {
+			drawText(args);
+		}
+	}
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1 && !dimWithRoom) {
+			drawText(args);
+		}
+		Widget::drawLayer(args, layer);
+	}
+	void drawText(const BGPanel::DrawArgs& args) {
+		std::shared_ptr<Font> font = APP->window->loadFont(asset::system(fontPath));
+		if (font) {
+			// Text
+			nvgFontFaceId(args.vg, font->handle);
 			bndSetFont(font->handle);
 
 			NVGcolor highlightColor = color;
@@ -478,24 +487,29 @@ struct ComputerscareTextField : ui::TextField {
 			                  -1, color, fontSize, text.c_str(), highlightColor, begin, end);
 
 			bndSetFont(APP->window->uiFont->handle);
+			nvgResetScissor(args.vg);
 		}
-
-		nvgResetScissor(args.vg);
 	}
 	int getTextPosition(Vec mousePos) override {
-		bndSetFont(font->handle);
-		int textPos = bndIconLabelTextPosition(APP->window->vg, textOffset.x, textOffset.y,
-		                                       box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
-		                                       -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
-		bndSetFont(APP->window->uiFont->handle);
-		return textPos;
+		std::shared_ptr<Font> font = APP->window->loadFont(asset::system(fontPath));
+		if (font) {
+			bndSetFont(font->handle);
+			int textPos = bndIconLabelTextPosition(APP->window->vg, textOffset.x, textOffset.y,
+			                                       box.size.x - 2 * textOffset.x, box.size.y - 2 * textOffset.y,
+			                                       -1, fontSize, text.c_str(), mousePos.x, mousePos.y);
+			bndSetFont(APP->window->uiFont->handle);
+			return textPos;
+		}
+		else {
+			return bndTextFieldTextPosition(APP->window->vg, 0.0, 0.0, box.size.x, box.size.y, -1, text.c_str(), mousePos.x, mousePos.y);
+		}
 	}
 };
 ////////////////////////////////////
 struct SmallLetterDisplay : Widget {
 
 	std::string value;
-	std::shared_ptr<Font> font;
+	std::string fontPath;
 	int fontSize = 19;
 	std::string defaultFontPath = "res/Oswald-Regular.ttf";
 	NVGcolor baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
@@ -511,16 +525,17 @@ struct SmallLetterDisplay : Widget {
 
 	SmallLetterDisplay() {
 		value = "";
-		font = APP->window->loadFont(asset::plugin(pluginInstance, defaultFontPath));
+		fontPath = asset::plugin(pluginInstance, defaultFontPath);
 	};
-	SmallLetterDisplay(std::string fontPath) {
+	SmallLetterDisplay(std::string providedFontPath) {
 		value = "";
-		font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
+		fontPath = asset::plugin(pluginInstance, providedFontPath);
 	};
 
 	void draw(const DrawArgs &ctx) override
 	{
 		// Background
+		std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
 		NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
 		NVGcolor doubleblinkColor = COLOR_COMPUTERSCARE_YELLOW;
 
@@ -540,16 +555,20 @@ struct SmallLetterDisplay : Widget {
 		nvgFill(ctx.vg);
 
 		// text
-		nvgFontSize(ctx.vg, fontSize);
-		nvgFontFaceId(ctx.vg, font->handle);
-		nvgTextLetterSpacing(ctx.vg, letterSpacing);
-		nvgTextLineHeight(ctx.vg, 0.7);
-		nvgTextAlign(ctx.vg, textAlign);
 
-		Vec textPos = Vec(6.0f, 12.0f).plus(textOffset);
-		NVGcolor color = (!blink || doubleblink) ? textColor : COLOR_COMPUTERSCARE_YELLOW;
-		nvgFillColor(ctx.vg, color);
-		nvgTextBox(ctx.vg, textPos.x, textPos.y, breakRowWidth, value.c_str(), NULL);
+		if (font) {
+			nvgFontFaceId(ctx.vg, font->handle);
+			nvgFontSize(ctx.vg, fontSize);
+
+			nvgTextLetterSpacing(ctx.vg, letterSpacing);
+			nvgTextLineHeight(ctx.vg, 0.7);
+			nvgTextAlign(ctx.vg, textAlign);
+
+			Vec textPos = Vec(6.0f, 12.0f).plus(textOffset);
+			NVGcolor color = (!blink || doubleblink) ? textColor : COLOR_COMPUTERSCARE_YELLOW;
+			nvgFillColor(ctx.vg, color);
+			nvgTextBox(ctx.vg, textPos.x, textPos.y, breakRowWidth, value.c_str(), NULL);
+		}
 
 	}
 };

@@ -49,9 +49,6 @@ struct HorseSequencer {
 	int otherPrimes[16] = {80651, 85237, 11813, 22343, 19543, 28027, 9203, 39521, 42853, 58411, 33811, 76771, 10939, 22721, 17851, 10163};
 	int channel = 0;
 
-
-	std::vector<std::vector<int>> octets = {{0, 0, 0, 0}, {0, 0, 0, 1}, {0, 0, 1, 0}, {0, 0, 1, 1}, {0, 1, 0, 0}, {0, 1, 0, 1}, {0, 1, 1, 0}, {0, 1, 1, 1}, {1, 0, 0, 0}, {1, 0, 0, 1}, {1, 0, 1, 0}, {1, 0, 1, 1}, {1, 1, 0, 0}, {1, 1, 0, 1}, {1, 1, 1, 0}, {1, 1, 1, 1}};
-	std::vector<int> somethin = {1, 0, 0, 1};
 	std::vector<int> absoluteSequence;
 	std::vector<float> cvSequence;
 	std::vector<float> cv2Sequence;
@@ -82,17 +79,9 @@ struct HorseSequencer {
 		newCV2.resize(0);
 		newGateLength.resize(0);
 
-		/*for (int i = 0; i < 16; i++) {
-			int dex = ((int)std::floor(pattern * primes[i]) + otherPrimes[i]) % 16;
-
-			thisOct = octets[dex];
-			//vector1.insert( vector1.end(), vector2.begin(), vector2.end() );
-			newSeq.insert(newSeq.end(), thisOct.begin(), thisOct.end());
-			//absoluteSequence.push_back(dex < 8 ? 0 : 1);
-		}*/
 
 
-		float cvRoot = 0.f;//std::floor(6*(1+std::sin(primes[5]*pattern-otherPrimes[2])));
+		float cvRoot = 0.f;
 		float cv2Root = 0.f;
 		float trigConst = 2 * M_PI / ((float)numSteps);
 
@@ -104,11 +93,17 @@ struct HorseSequencer {
 			int glv = 0;
 			float arg = pattern + ((float) i) * trigConst;
 			for (int k = 0; k < 4; k++) {
-				val += std::sin(primes[((i + 1) * (k + 1)) % 16] * arg + otherPrimes[(otherPrimes[0] + i) % 16]);
-				cvVal += std::sin(primes[((i + 11) * (k + 1) + 201) % 16] * arg + otherPrimes[(otherPrimes[3] + i - 7) % 16] + phase);
+				int trgArgIndex = ((i + 1) * (k + 1)) % 16;
+				int trgThetaIndex = (otherPrimes[0] + i) % 16;
+
+				int cvArgIndex = ((i + 11) * (k + 1) + 201) % 16;
+				int cvThetaIndex = (otherPrimes[3] + i - 7) % 16;
+
+				val += std::sin(primes[trgArgIndex] * arg + otherPrimes[trgThetaIndex]);
+				cvVal += std::sin(primes[cvArgIndex] * arg + otherPrimes[cvThetaIndex] + phase);
+
 				cv2Val += std::sin(primes[((i + 12) * (k + 2) + 31) % 16] * arg + otherPrimes[(otherPrimes[6] + i - 17) % 16] + phase2);
 				gateLengthVal += std::sin(primes[((i + 13) * (k + 3) + 101) % 16] * arg + otherPrimes[(otherPrimes[4] + 3 * i - 17) % 16] + gatePhase);
-				//cvVal+=i/12;
 
 			}
 			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
@@ -378,6 +373,23 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		configMenuParam(CV_OFFSET, -10.f, 10.f, 0.f, "CV Offset", 2);
 		configMenuParam(CV_PHASE, -3.14159f, 3.14159f, 0.f, "CV Phase", 2);
 
+		getParamQuantity(POLY_KNOB)->randomizeEnabled = false;
+
+		getParamQuantity(MODE_KNOB)->randomizeEnabled = false;
+
+		getParamQuantity(PATTERN_SPREAD)->randomizeEnabled = false;
+		getParamQuantity(STEPS_SPREAD)->randomizeEnabled = false;
+		getParamQuantity(DENSITY_SPREAD)->randomizeEnabled = false;
+
+		configInput(CLOCK_INPUT, "Clock");
+		configInput(RESET_INPUT, "Reset");
+		configInput(PATTERN_CV, "Pattern CV");
+		configInput(STEPS_CV, "Number of Steps CV");
+		configInput(DENSITY_CV, "Density CV");
+
+		configOutput(TRIGGER_OUTPUT, "Trigger Sequence");
+		configOutput(EOC_OUTPUT, "End of Cycle");
+		configOutput(CV_OUTPUT, "CV Sequence");
 
 		for (int i = 0; i < 16; i++) {
 			seq[i] = HorseSequencer(0.f, 8, 0.f, i, 0.f);
@@ -707,6 +719,9 @@ struct NumStepsOverKnobDisplay : SmallLetterDisplay
 				str = module->lastPolyKnob == 0 ? "A" : std::to_string(module->lastPolyKnob);
 			}
 			value = str;
+		}
+		else {
+			value = std::to_string((random::u32() % 64) + 1);
 		}
 		SmallLetterDisplay::draw(args);
 	}
