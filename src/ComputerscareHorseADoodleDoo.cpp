@@ -99,11 +99,17 @@ struct HorseSequencer {
 				int cvArgIndex = ((i + 11) * (k + 1) + 201) % 16;
 				int cvThetaIndex = (otherPrimes[3] + i - 7) % 16;
 
+				int cv2ArgIndex = ((i + 12) * (k + 2) + 31) % 16;
+				int cv2ThetaIndex = (otherPrimes[6] + i - 17) % 16;
+
+				int gateLengthArgIndex = ((i + 13) * (k + 3) + 101) % 16;
+				int gateThetaIndex = (otherPrimes[4] + 3 * i - 17) % 16;
+
 				val += std::sin(primes[trgArgIndex] * arg + otherPrimes[trgThetaIndex]);
 				cvVal += std::sin(primes[cvArgIndex] * arg + otherPrimes[cvThetaIndex] + phase);
 
-				cv2Val += std::sin(primes[((i + 12) * (k + 2) + 31) % 16] * arg + otherPrimes[(otherPrimes[6] + i - 17) % 16] + phase2);
-				gateLengthVal += std::sin(primes[((i + 13) * (k + 3) + 101) % 16] * arg + otherPrimes[(otherPrimes[4] + 3 * i - 17) % 16] + gatePhase);
+				cv2Val += std::sin(primes[cv2ArgIndex] * arg + otherPrimes[cv2ThetaIndex] + phase2);
+				gateLengthVal += std::sin(primes[gateLengthArgIndex] * arg + otherPrimes[gateThetaIndex] + gatePhase);
 
 			}
 			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
@@ -587,7 +593,8 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 			}
 			if (true && shouldOutputPulse[ch]) {
 				gatePulse[ch].reset();
-				gatePulse[ch].trigger(syncTime[0] * ttns * (len > 8 ? .7 : 0.25));
+				//	gatePulse[ch].trigger(syncTime[0] * ttns * (len > 4 ? .7 : 0.01));
+				gatePulse[ch].trigger(syncTime[0] * ttns * ((float)len) / 16);
 			}
 
 
