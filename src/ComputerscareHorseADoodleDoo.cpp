@@ -974,7 +974,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 			Menu *createChildMenu() override {
 				Menu *submenu = new Menu;
 
-				submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Dialingus Bingus.  Dialingus Bingus"));
+				submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Configuration of the 1st Control Voltage (CV) Pattern"));
 
 				MenuParam* cvScaleParamControl = new MenuParam(module->paramQuantities[ComputerscareHorseADoodleDoo::CV_SCALE], 2);
 				submenu->addChild(cvScaleParamControl);
@@ -993,7 +993,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 			Menu *createChildMenu() override {
 				Menu *submenu = new Menu;
 
-				submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Dialingus Bingus.  Dialingus Bingus"));
+				submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Configuration of the 2nd Control Voltage (CV2) Pattern"));
 
 				MenuParam* cvScaleParamControl = new MenuParam(module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_SCALE], 2);
 				submenu->addChild(cvScaleParamControl);
@@ -1012,7 +1012,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 			Menu *createChildMenu() override {
 				Menu *submenu = new Menu;
 
-				submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Dialingus Bingus.  Dialingus Bingus"));
+				submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Configuration of the Pattern of Gate Lengths"));
 				MenuParam* gateScaleParamControl = new MenuParam(module->paramQuantities[ComputerscareHorseADoodleDoo::GATE_LENGTH_SCALE], 2);
 				submenu->addChild(gateScaleParamControl);
 
@@ -1061,11 +1061,6 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 		gateMenu->rightText = RIGHT_ARROW;
 		gateMenu->module = horse;
 		menu->addChild(gateMenu);
-
-
-
-		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Gate Length Options"));
-
 
 	}
 	PolyOutputChannelsWidget* channelWidget;
