@@ -260,6 +260,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		TRIGGER_OUTPUT,
 		EOC_OUTPUT,
 		CV_OUTPUT,
+		CV2_OUTPUT,
 		NUM_OUTPUTS
 	};
 	enum LightIds {
@@ -295,6 +296,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 
 	int seqVal[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	float cvVal[16] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
+	float cv2Val[16] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
 
 	int clockChannels[16] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
 	int resetChannels[16] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
@@ -391,8 +393,8 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		configMenuParam(CV_OFFSET, -10.f, 10.f, 0.f, "CV Offset", 2);
 		configMenuParam(CV_PHASE, -3.14159f, 3.14159f, 0.f, "CV Phase", 2);
 
-		configMenuParam(GATE_LENGTH_SCALE, 0.f, 2.f, 1.f, "Gate Length Scale", 2);
-		configMenuParam(GATE_LENGTH_OFFSET, 0.f, 1.f, 0.f, "Gate Length Offset", 2);
+		configMenuParam(GATE_LENGTH_SCALE, 0.f, 2.f, 1.f, "Gate Length Scaling", 2);
+		configMenuParam(GATE_LENGTH_OFFSET, 0.f, 1.f, 0.f, "Gate Length Minimum", 2);
 		configMenuParam(GATE_LENGTH_PHASE, -3.14159f, 3.14159f, 0.f, "Gate Length Phase", 2);
 
 		getParamQuantity(POLY_KNOB)->randomizeEnabled = false;
@@ -412,6 +414,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		configOutput(TRIGGER_OUTPUT, "Trigger Sequence");
 		configOutput(EOC_OUTPUT, "End of Cycle");
 		configOutput(CV_OUTPUT, "CV Sequence");
+		configOutput(CV2_OUTPUT, "2nd CV Sequence");
 
 		for (int i = 0; i < 16; i++) {
 			seq[i] = HorseSequencer(0.f, 8, 0.f, i, 0.f, 0.f);
@@ -552,6 +555,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		outputs[TRIGGER_OUTPUT].setChannels(polyChannels);
 		outputs[EOC_OUTPUT].setChannels(polyChannels);
 		outputs[CV_OUTPUT].setChannels(polyChannels);
+		outputs[CV2_OUTPUT].setChannels(polyChannels);
 
 		for (int i = 0; i < polyChannels; i++) {
 			float patternVal = params[PATTERN_KNOB].getValue() + params[PATTERN_TRIM].getValue() * inputs[PATTERN_CV].getVoltage(fmin(i, pattNum));
@@ -579,6 +583,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 				seqVal[ch] = seq[ch].tickAndGet();
 				if (overriddenTriggerHigh) {
 					cvVal[ch] = seq[ch].getCV();
+					cv2Val[ch] = seq[ch].getCV2();
 				}
 				seqVal[ch] = overriddenTriggerHigh;
 			}
@@ -586,6 +591,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 				if (overriddenTriggerHigh) {
 					seqVal[ch] = seq[ch].tickAndGet();
 					cvVal[ch] = seq[ch].getCV();
+					cv2Val[ch] = seq[ch].getCV2();
 				}
 			}
 			else {
@@ -593,6 +599,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 				seqVal[ch] = seq[ch].tickAndGet();
 				if (seqVal[ch]) {
 					cvVal[ch] = seq[ch].getCV();
+					cv2Val[ch] = seq[ch].getCV2();
 				}
 			}
 
@@ -640,6 +647,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 			}
 			//DEBUG("before output:%f",cvVal);
 			outputs[CV_OUTPUT].setVoltage(cvScale * cvVal[ch] + cvOffset, ch);
+			outputs[CV2_OUTPUT].setVoltage(cvScale * cv2Val[ch] + cvOffset, ch);
 			//outputs[EOC_OUTPUT].setVoltage((currentTriggerIsHigh && atFirstStepPoly[ch]) ? 10.f : 0.0f, ch);
 		}
 		else {
@@ -863,25 +871,30 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 			addChild(horseDisplay);
 		}*/
 
-		int outputY = 264;
+		int inputY = 264;
+		int outputY = 260;
+
+
+
 		int dy = 30;
 
 		int outputX = 42;
 
-		addParam(createParam<ComputerscareClockButton>(Vec(2, outputY - 6), module, ComputerscareHorseADoodleDoo::MANUAL_CLOCK_BUTTON));
-		addInput(createInput<InPort>(Vec(2, outputY + 10), module, ComputerscareHorseADoodleDoo::CLOCK_INPUT));
+		addParam(createParam<ComputerscareClockButton>(Vec(2, inputY - 6), module, ComputerscareHorseADoodleDoo::MANUAL_CLOCK_BUTTON));
+		addInput(createInput<InPort>(Vec(2, inputY + 10), module, ComputerscareHorseADoodleDoo::CLOCK_INPUT));
 
-		addParam(createParam<ComputerscareResetButton>(Vec(2, outputY + dy + 16), module, ComputerscareHorseADoodleDoo::MANUAL_RESET_BUTTON));
+		addParam(createParam<ComputerscareResetButton>(Vec(2, inputY + dy + 16), module, ComputerscareHorseADoodleDoo::MANUAL_RESET_BUTTON));
 
-		addInput(createInput<InPort>(Vec(2, outputY + 2 * dy), module, ComputerscareHorseADoodleDoo::RESET_INPUT));
+		addInput(createInput<InPort>(Vec(2, inputY + 2 * dy), module, ComputerscareHorseADoodleDoo::RESET_INPUT));
 
 
-		channelWidget = new PolyOutputChannelsWidget(Vec(outputX + 18, outputY - 25), module, ComputerscareHorseADoodleDoo::POLY_KNOB);
+		channelWidget = new PolyOutputChannelsWidget(Vec(outputX + 18, inputY - 25), module, ComputerscareHorseADoodleDoo::POLY_KNOB);
 		addChild(channelWidget);
 
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY), module, ComputerscareHorseADoodleDoo::TRIGGER_OUTPUT));
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY + dy), module, ComputerscareHorseADoodleDoo::EOC_OUTPUT));
 		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY + dy * 2), module, ComputerscareHorseADoodleDoo::CV_OUTPUT));
+		addOutput(createOutput<PointingUpPentagonPort>(Vec(outputX, outputY + dy * 3), module, ComputerscareHorseADoodleDoo::CV2_OUTPUT));
 
 	}
 
