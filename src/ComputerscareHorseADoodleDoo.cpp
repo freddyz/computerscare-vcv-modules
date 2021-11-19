@@ -40,6 +40,7 @@ struct HorseSequencer {
 	int pendingNumSteps = 8;
 	float pendingDensity = 0.5f;
 	float pendingPhase = 0.f;
+	float pendingGatePhase = 0.f;
 	bool pendingChange = 0;
 	bool forceChange = 0;
 
@@ -60,12 +61,13 @@ struct HorseSequencer {
 	HorseSequencer() {
 
 	}
-	HorseSequencer(float patt, int steps, float dens, int ch, float phi) {
+	HorseSequencer(float patt, int steps, float dens, int ch, float phi, float gatePhi) {
 		numSteps = steps;
 		density = dens;
 		pattern = patt;
 		channel = ch;
 		phase = phi;
+		gatePhase = gatePhi;
 		makeAbsolute();
 	}
 	void makeAbsolute() {
@@ -115,6 +117,8 @@ struct HorseSequencer {
 			newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
 			newCV.push_back(cvRoot + (cvVal + 4) / .8);
 			newCV2.push_back(cv2Root + (cv2Val + 4) / .8);
+
+			//quantized to 16 lengths
 			newGateLength.push_back(std::floor(8 + 2 * gateLengthVal));
 		}
 		//printVector(newSeq);
@@ -125,13 +129,14 @@ struct HorseSequencer {
 
 		setTimeToNextStep();
 	}
-	void checkAndArm(float patt, int steps, float dens, float phi) {
+	void checkAndArm(float patt, int steps, float dens, float phi, float gatePhi) {
 
-		if (pattern != patt || numSteps != steps || density != dens || phase != phi) {
+		if (pattern != patt || numSteps != steps || density != dens || phase != phi || gatePhase != gatePhi) {
 			pendingPattern = patt;
 			pendingNumSteps = steps;
 			pendingDensity = dens;
 			pendingPhase = phi;
+			pendingGatePhase = gatePhi;
 			pendingChange = true;
 		}
 	}
@@ -144,12 +149,14 @@ struct HorseSequencer {
 		pendingNumSteps = numSteps;
 		pendingDensity = density;
 		pendingPhase = phase;
+		pendingGatePhase = gatePhase;
 	}
-	void change(float patt, int steps, float dens, float phi) {
+	void change(float patt, int steps, float dens, float phi, float gatePhi) {
 		numSteps = std::max(1, steps);
 		density = std::fmax(0, dens);
 		pattern = patt;
 		phase = phi;
+		gatePhase = gatePhi;
 		currentStep = 0;
 		makeAbsolute();
 
@@ -158,7 +165,7 @@ struct HorseSequencer {
 		currentStep++;
 		currentStep %= numSteps;
 		if ((currentStep == 0 && pendingChange) || forceChange) {
-			change(pendingPattern, pendingNumSteps, pendingDensity, pendingPhase);
+			change(pendingPattern, pendingNumSteps, pendingDensity, pendingPhase, pendingGatePhase);
 			pendingChange = false;
 			forceChange = false;
 			currentStep = 0;
@@ -236,6 +243,9 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		CV_OFFSET,
 		CV_PHASE,
 		GATE_MODE,
+		GATE_LENGTH_SCALE,
+		GATE_LENGTH_OFFSET,
+		GATE_LENGTH_PHASE,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -256,7 +266,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		NUM_LIGHTS
 	};
 
-
 	rack::dsp::SchmittTrigger clockInputTrigger[16];
 	rack::dsp::SchmittTrigger resetInputTrigger[16];
 
@@ -267,19 +276,22 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 
 	dsp::PulseGenerator gatePulse[16];
 
-
-
 	float lastPatternKnob = 0.f;
 	int lastStepsKnob = 2;
 	float lastDensityKnob = 0.f;
 	int lastPolyKnob = 0;
 	float lastPhaseKnob = 0.f;
+	float lastGatePhaseKnob = 0.f;
 
 	float cvOffset = 0.f;
 	float cvScale = 1.f;
 
+	float gateLengthOffset = 0.f;
+	float gateLengthScale = 1.f;
+
 	int mode = 1;
 
+	int gateMode = 1;
 
 	int seqVal[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	float cvVal[16] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
@@ -370,7 +382,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 
 		configParam<HorseModeParam>(MODE_KNOB, 0.f, 3.f, 0.f, "Mode");
 
-		configParam<HorseModeParam>(GATE_MODE, 0.f, 2.f, 0.f, "Gate Mode");
+		configParam<HorseModeParam>(GATE_MODE, 0.f, 1.f, 1.f, "Gate Mode");
 
 		configParam<HorseResetParamQ>(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f, "Reset all Sequences");
 		configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f, "Advance all Sequences");
@@ -378,6 +390,10 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		configMenuParam(CV_SCALE, -2.f, 2.f, 1.f, "CV Scale", 2);
 		configMenuParam(CV_OFFSET, -10.f, 10.f, 0.f, "CV Offset", 2);
 		configMenuParam(CV_PHASE, -3.14159f, 3.14159f, 0.f, "CV Phase", 2);
+
+		configMenuParam(GATE_LENGTH_SCALE, 0.f, 2.f, 1.f, "Gate Length Scale", 2);
+		configMenuParam(GATE_LENGTH_OFFSET, 0.f, 1.f, 0.f, "Gate Length Offset", 2);
+		configMenuParam(GATE_LENGTH_PHASE, -3.14159f, 3.14159f, 0.f, "Gate Length Phase", 2);
 
 		getParamQuantity(POLY_KNOB)->randomizeEnabled = false;
 
@@ -398,7 +414,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		configOutput(CV_OUTPUT, "CV Sequence");
 
 		for (int i = 0; i < 16; i++) {
-			seq[i] = HorseSequencer(0.f, 8, 0.f, i, 0.f);
+			seq[i] = HorseSequencer(0.f, 8, 0.f, i, 0.f, 0.f);
 			previousStep[i] = -1;
 		}
 
@@ -501,6 +517,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	}
 	void setGateMode(int newGateMode) {
 		params[GATE_MODE].setValue(newGateMode);
+		gateMode = newGateMode;
 	}
 
 	void checkKnobChanges() {
@@ -515,11 +532,15 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		cvScale = params[CV_SCALE].getValue();
 		cvOffset = params[CV_OFFSET].getValue();
 
+		gateLengthOffset = params[GATE_LENGTH_OFFSET].getValue();
+		gateLengthScale = params[GATE_LENGTH_SCALE].getValue();
+
 		mode = params[MODE_KNOB].getValue();
 		lastStepsKnob = std::floor(params[STEPS_KNOB].getValue());
 		lastPolyKnob = std::floor(params[POLY_KNOB].getValue());
 
 		lastPhaseKnob = params[CV_PHASE].getValue();
+		lastGatePhaseKnob = params[GATE_LENGTH_PHASE].getValue();
 
 		polyChannels = lastPolyKnob == 0 ? std::max(clockNum, std::max(pattNum, std::max(stepsNum, densityNum))) : lastPolyKnob;
 
@@ -544,7 +565,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 			stepsVal = std::max(2, stepsVal);
 			densityVal = std::fmax(0, std::fmin(1, densityVal));
 
-			seq[i].checkAndArm(patternVal, stepsVal, densityVal, lastPhaseKnob);
+			seq[i].checkAndArm(patternVal, stepsVal, densityVal, lastPhaseKnob, lastGatePhaseKnob);
 		}
 	}
 	void processChannel(int ch, bool clocked, bool reset, bool clockInputHigh, int overrideMode = 0, bool overriddenTriggerHigh = false) {
@@ -586,15 +607,18 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 
 			previousStep[ch] = seq[ch].currentStep;
 
-			int len = seq[ch].getGateLength();
-			int ttns = seq[ch].getTimeToNextStep();
-			if (ch == 0 || ch == 1) {
-				DEBUG("ch:%i,step:%i,len:%i,ttns:%i", ch, seq[ch].currentStep, len, ttns);
-			}
-			if (true && shouldOutputPulse[ch]) {
+			if (gateMode == 1 && shouldOutputPulse[ch]) {
+				int len = seq[ch].getGateLength();
+				int ttns = seq[ch].getTimeToNextStep();
+				float timeLeft = syncTime[0] * ttns;
+				float gateLengthFactor =  math::clamp(gateLengthOffset + gateLengthScale * ((float)len) / 16, 0.05f, 0.95f);
+				float ms =  timeLeft * gateLengthFactor;
+				if (ch == 0 || ch == 1) {
+					//DEBUG("ch:%i,step:%i,len:%i,ttns:%i,ms:%f", ch, seq[ch].currentStep, len, ttns, ms);
+				}
+
 				gatePulse[ch].reset();
-				//	gatePulse[ch].trigger(syncTime[0] * ttns * (len > 4 ? .7 : 0.01));
-				gatePulse[ch].trigger(syncTime[0] * ttns * ((float)len) / 16);
+				gatePulse[ch].trigger(ms);
 			}
 
 
@@ -602,12 +626,12 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 
 		if (true || inputs[CLOCK_INPUT].isConnected()) {
 
-			if (false) {
-				//trigger pass-through mode
+			if (gateMode == 0) {
+				//clock pass-through mode
 				outputs[TRIGGER_OUTPUT].setVoltage((clockInputHigh && shouldOutputPulse[ch]) ? 10.0f : 0.0f, ch);
 
 			}
-			else {
+			else if (gateMode == 1) {
 
 				//gate mode
 				bool gateHigh = gatePulse[ch].process(APP->engine->getSampleTime());
@@ -651,8 +675,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 				setSyncTime(i, currentSyncTime);
 			}
 		}
-
-
 
 		if (mode == 0) {
 			//each poly channel processes independent trigger and cv
@@ -936,6 +958,18 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
 		MenuParam* cvPhaseParamControl = new MenuParam(horse->paramQuantities[ComputerscareHorseADoodleDoo::CV_PHASE], 2);
 		menu->addChild(cvPhaseParamControl);
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Gate Length Options"));
+
+		MenuParam* gateScaleParamControl = new MenuParam(horse->paramQuantities[ComputerscareHorseADoodleDoo::GATE_LENGTH_SCALE], 2);
+		menu->addChild(gateScaleParamControl);
+
+		MenuParam* gateOffsetParamControl = new MenuParam(horse->paramQuantities[ComputerscareHorseADoodleDoo::GATE_LENGTH_OFFSET], 2);
+		menu->addChild(gateOffsetParamControl);
+
+		MenuParam* gatePhaseParamControl = new MenuParam(horse->paramQuantities[ComputerscareHorseADoodleDoo::GATE_LENGTH_PHASE], 2);
+		menu->addChild(gatePhaseParamControl);
 	}
 	PolyOutputChannelsWidget* channelWidget;
 	NumStepsOverKnobDisplay* numStepsKnob;
