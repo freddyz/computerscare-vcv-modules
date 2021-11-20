@@ -578,9 +578,9 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		outputs[CV2_OUTPUT].setChannels(polyChannels);
 
 		for (int i = 0; i < polyChannels; i++) {
-			float patternVal = params[PATTERN_KNOB].getValue() + params[PATTERN_TRIM].getValue() * inputs[PATTERN_CV].getVoltage(fmin(i, pattNum));
-			int stepsVal = std::floor(params[STEPS_KNOB].getValue() + params[STEPS_TRIM].getValue() * inputs[STEPS_CV].getVoltage(fmin(i, stepsNum)));
-			float densityVal = params[DENSITY_KNOB].getValue() + params[DENSITY_TRIM].getValue() * inputs[DENSITY_CV].getVoltage(fmin(i, densityNum)) / 10;
+			float patternVal = params[PATTERN_KNOB].getValue() + params[PATTERN_TRIM].getValue() * inputs[PATTERN_CV].getVoltage(pattNum == 1 ? 0 : fmin(i, pattNum));
+			int stepsVal = std::floor(params[STEPS_KNOB].getValue() + params[STEPS_TRIM].getValue() * inputs[STEPS_CV].getVoltage(stepsNum == 1 ? 0 : fmin(i, stepsNum)));
+			float densityVal = params[DENSITY_KNOB].getValue() + params[DENSITY_TRIM].getValue() * inputs[DENSITY_CV].getVoltage(densityNum == 1 ? 0 : fmin(i, densityNum)) / 10;
 
 			patternVal += i * params[PATTERN_SPREAD].getValue();
 			stepsVal += std::floor(params[STEPS_SPREAD].getValue() * i * stepsVal);
