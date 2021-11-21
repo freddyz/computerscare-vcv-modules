@@ -18,7 +18,8 @@ jobs:
         - {
             name: Linux,
             os: ubuntu-latest,
-            prepare-os: ""
+            #prepare-os: sudo apt install -y libglu-dev
+            prepare-os: sudo apt install -y libgl1-mesa-dev libglu1-mesa-dev
           }
         - {
             name: MacOS,
