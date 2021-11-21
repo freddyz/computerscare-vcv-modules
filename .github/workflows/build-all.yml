@@ -18,7 +18,7 @@ jobs:
         - {
             name: Linux,
             os: ubuntu-latest,
-            prepare-os: sudo apt install -y libglu-dev
+            prepare-os: ""
           }
         - {
             name: MacOS,
