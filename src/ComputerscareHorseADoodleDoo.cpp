@@ -304,8 +304,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 
 	int mode = 1;
 
-	int gateMode = 1;
-
 	int seqVal[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	float cvVal[16] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
 	float cv2Val[16] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
@@ -536,7 +534,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	}
 	void setGateMode(int newGateMode) {
 		params[GATE_MODE].setValue(newGateMode);
-		gateMode = newGateMode;
 	}
 
 	void checkKnobChanges() {
@@ -594,6 +591,9 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	}
 	void processChannel(int ch, bool clocked, bool reset, bool clockInputHigh, int overrideMode = 0, bool overriddenTriggerHigh = false) {
 		bool eocHigh = false;
+
+		int gateMode = params[GATE_MODE].getValue();
+
 		if (reset) {
 			seq[ch].armChange();
 		}
@@ -751,7 +751,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	}
 	void paramsFromJson(json_t* rootJ) override {
 		// There was no GATE_MODE param prior to v2, so set the value to 0 (clock passthrough)
-		params[GATE_MODE].setValue(0.f);
 		setGateMode(0);
 		Module::paramsFromJson(rootJ);
 	}
