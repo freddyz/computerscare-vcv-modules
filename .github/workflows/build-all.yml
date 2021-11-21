@@ -19,7 +19,6 @@ jobs:
             name: Linux,
             os: ubuntu-latest,
             prepare-os: sudo apt-get update;sudo apt-get install -y libglu-dev;
-            #prepare-os: sudo apt-get install -y libgl1-mesa-dev libglu1-mesa-dev
           }
         - {
             name: MacOS,
