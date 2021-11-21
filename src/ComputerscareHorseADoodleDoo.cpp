@@ -749,6 +749,12 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	void checkPoly() override {
 		checkKnobChanges();
 	}
+	void paramsFromJson(json_t* rootJ) override {
+		// There was no GATE_MODE param prior to v2, so set the value to 0 (clock passthrough)
+		params[GATE_MODE].setValue(0.f);
+		setGateMode(0);
+		Module::paramsFromJson(rootJ);
+	}
 };
 
 
