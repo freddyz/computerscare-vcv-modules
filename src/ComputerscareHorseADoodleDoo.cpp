@@ -448,15 +448,18 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	}
 	std::string getAllPatternValueDisplay(std::string sep = "\n") {
 		std::string out = "";
+
+		int channelToDisplay;
 		for (int i = 0; i < polyChannels; i++) {
 
+			channelToDisplay = (mode == 1) ? 0 : i;
 			out += "ch " + string::f("%*d", 2, i + 1) + ": ";
 			if (seq[i].pendingChange) {
-				out = out + std::to_string(seq[i].pendingPattern);
-				out = out + " (" + std::to_string(seq[i].pattern) + ")";
+				out = out + std::to_string(seq[channelToDisplay].pendingPattern);
+				out = out + " (" + std::to_string(seq[channelToDisplay].pattern) + ")";
 			}
 			else {
-				out = out + std::to_string(seq[i].pattern);
+				out = out + std::to_string(seq[channelToDisplay].pattern);
 			}
 			out += sep;
 		}
@@ -466,7 +469,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	std::string getAllStepsDisplay(std::string sep = "\n") {
 		std::string out = "";
 		for (int i = 0; i < polyChannels; i++) {
-
 			out += "ch " + string::f("%*d", 2, i + 1) + ": ";
 			if (seq[i].pendingChange) {
 				out = out + std::to_string(seq[i].pendingNumSteps);
@@ -509,17 +511,18 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 	}
 	std::string getPatternDisplay(bool showPatternValue = false, bool showTransport = true, std::string sep = "\n") {
 		std::string out = "";
+		int channelToDisplay;
 		for (int i = 0; i < polyChannels; i++) {
-
+			channelToDisplay = (mode == 1) ? 0 : i;
 			out += "ch " + string::f("%*d", 2, i + 1) + ": ";
-			int current = seq[i].currentStep;
+			int current = seq[channelToDisplay].currentStep;
 
 			if (showPatternValue) {
-				out += std::to_string(seq[i].pattern) + " ";
+				out += std::to_string(seq[channelToDisplay].pattern) + " ";
 			}
-			for (int j = 0; j < seq[i].numSteps; j++) {
+			for (int j = 0; j < seq[channelToDisplay].numSteps; j++) {
 
-				bool highStep = seq[i].absoluteSequence[j] == 1;
+				bool highStep = seq[channelToDisplay].absoluteSequence[j] == 1;
 
 				out += (showTransport && current == j) ? (highStep ? "☺" : "☹") : ( highStep ? "x" : "_");
 				out += j % 192 == 191 ? "\n" : "";
