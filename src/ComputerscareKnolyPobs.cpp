@@ -43,6 +43,7 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 		configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset", " volts");
 
 		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+		getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
 		getParamQuantity(GLOBAL_SCALE)->randomizeEnabled = false;
 		getParamQuantity(GLOBAL_OFFSET)->randomizeEnabled = false;
 

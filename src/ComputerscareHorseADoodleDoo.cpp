@@ -412,6 +412,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		configMenuParam(GATE_LENGTH_PHASE, -3.14159f, 3.14159f, 0.f, "Gate Length Variation", 2);
 
 		getParamQuantity(POLY_KNOB)->randomizeEnabled = false;
+		getParamQuantity(POLY_KNOB)->resetEnabled = false;
 
 		getParamQuantity(MODE_KNOB)->randomizeEnabled = false;
 
