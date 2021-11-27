@@ -117,7 +117,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 			for (int i = 0; i < numOutputChannels; i++) {
 
 				knobSetting = std::round(inputs[ROUTING_CV].getVoltage(cvChannels == 1 ? 0 : i) * 1.5) + 1;
-				routing[i] = (knobSetting + 16 * 4 - 1) % 16 + 1;
+				routing[i] = (knobSetting + 16 * 4 - 1) % 16;
 				if (knobSetting > inputChannels) {
 					outputs[POLY_OUTPUT].setVoltage(0, i);
 				}
@@ -130,7 +130,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 				//printf("%f \n",random::uniform());
 				counter = 0;
 				for (int i = 0; i < numKnobs; i++) {
-					routing[i] = (int)params[KNOB + i].getValue();
+					routing[i] = (int)params[KNOB + i].getValue() - 1;
 				}
 
 			}
@@ -162,7 +162,7 @@ struct PouterSmallDisplay : SmallLetterDisplay
 	{
 		if (module)
 		{
-			std::string str = std::to_string(module->routing[ch]);
+			std::string str = std::to_string(module->routing[ch] + 1);
 			if (module->numInputChannels > 0 && (module->routing[ch] > module->numInputChannels)) {
 				textColor = outOfBoundsColor;
 			}
