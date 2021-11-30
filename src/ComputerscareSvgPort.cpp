@@ -1,4 +1,3 @@
-#include "app/SvgPort.hpp"
 #include "Computerscare.hpp"
 
 namespace rack {
