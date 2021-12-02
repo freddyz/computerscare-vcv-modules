@@ -118,7 +118,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 
 				knobSetting = std::round(inputs[ROUTING_CV].getVoltage(cvChannels == 1 ? 0 : i) * 1.5) + 1;
 				routing[i] = (knobSetting + 16 * 4 - 1) % 16;
-				if (knobSetting > inputChannels) {
+				if (routing[i] > inputChannels) {
 					outputs[POLY_OUTPUT].setVoltage(0, i);
 				}
 				else {
