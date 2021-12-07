@@ -89,13 +89,48 @@ struct ComputerscarePatchVersioning : Module {
 		}
 	}
 	void selectedPatch(int index) {
-		DEBUG("jaja loaded patch %i", index);
+		DEBUG("jaja loaded patch %i %s", index, patchVersionFilenames[index].c_str());
+
+		loadPatch(index);
 	}
+
+	void mixinJSON(json_t  *prevData) {
+		DEBUG("lol  lmfao lol lol");
+	}
+
+	void loadPatch(int index) {
+
+		json_t  *prevData = dataToJson();
+		std::string patchBasename = getPatchBasename();
+		std::string patchFilename = patchVersionFilenames[index];
+		std::string versionsFolder = createPatchDirectory(patchBasename);
+		std::string patchPath = system::join(versionsFolder, patchFilename);
+
+		std::string dstFilename =  asset::user("pork.vcv");
+
+		DEBUG("loading patch %s", patchPath.c_str());
+
+		DEBUG("dstFilename %s", dstFilename.c_str());
+
+
+
+		system::copy(patchPath, dstFilename);
+
+		APP->patch->load(patchPath);
+
+
+
+
+		DEBUG("FINISHED WITH THAT ONE LOL!!!");
+
+		mixinJSON(prevData);
+	}
+
 	std::string generateNewPatchName() {
 		return getPatchBasename() + " v" + std::to_string(counter) + ".vcv";
 	}
-	std::string getPatchBasename() {
-		std::string currentPatchName = system::getFilename(APP->patch->path);
+	std::string getPatchBasename(std::string input = APP->patch->path) {
+		std::string currentPatchName = system::getFilename(input);
 
 		size_t lastindex = currentPatchName.find_last_of(".");
 		return currentPatchName.substr(0, lastindex);
