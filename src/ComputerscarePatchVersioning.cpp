@@ -8,10 +8,16 @@ const int numKnobs = 16;
 const int numToggles = 16;
 const int numOutputs = 16;
 
+const std::string numbers = "0123456789";
+const std::string letters = "abcdefghijklmnopqrstuvwxyz";
+
 struct ComputerscarePatchVersioning : Module {
 	int counter = 0;
 	ComputerscareSVGPanel* panelRef;
 	rack::dsp::SchmittTrigger saveTrigger;
+
+	std::vector<std::string> patchVersionFilenames;
+
 	enum ParamIds {
 		KNOB,
 		SAVE_BUTTON,
@@ -42,11 +48,48 @@ struct ComputerscarePatchVersioning : Module {
 		configParam(TOGGLES, 0.0f, 1.0f, 0.0f);
 		outputs[POLY_OUTPUT].setChannels(16);*/
 	}
+	json_t *dataToJson() override {
+		json_t *rootJ = json_object();
+
+		json_object_set_new(rootJ, "counter", json_integer(counter));
+
+		json_t *filenamesJ = json_array();
+		for (int i = 0; i < (int) patchVersionFilenames.size(); i++) {
+			json_t *filenameJ = json_string(patchVersionFilenames[i].c_str());
+			json_array_append_new(filenamesJ, filenameJ);
+		}
+		json_object_set_new(rootJ, "patchVersionFilenames", filenamesJ);
+
+
+
+		return rootJ;
+	}
+
+	void dataFromJson(json_t *rootJ) override {
+		float val;
+
+		json_t *counterJ = json_object_get(rootJ, "counter");
+		if (counterJ) { counter = json_integer_value(counterJ); }
+
+		json_t *filenamesJ = json_object_get(rootJ, "patchVersionFilenames");
+		if (filenamesJ) {
+			for (int i = 0; i < json_array_size(filenamesJ); i++) {
+				json_t *filenameJ = json_array_get(filenamesJ, i);
+				patchVersionFilenames.push_back(json_string_value(filenameJ));
+			}
+		}
+
+
+	}
+
 	void process(const ProcessArgs &args) override {
 		bool saveClicked = saveTrigger.process(params[SAVE_BUTTON].getValue());
 		if (saveClicked) {
 			savePatch();
 		}
+	}
+	void selectedPatch(int index) {
+		DEBUG("jaja loaded patch %i", index);
 	}
 	std::string generateNewPatchName() {
 		return getPatchBasename() + " v" + std::to_string(counter) + ".vcv";
@@ -63,6 +106,8 @@ struct ComputerscarePatchVersioning : Module {
 		std::string versionDir = createPatchDirectory(getPatchBasename());
 
 		copyPatch(system::join(versionDir, newPatchName));
+		patchVersionFilenames.push_back(newPatchName);
+
 	}
 	std::string createPatchDirectory(std::string name) {
 
@@ -145,12 +190,30 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 		}
 
 		addParam(createParam<MomentaryIsoButton>(Vec(50, 100), module, ComputerscarePatchVersioning::SAVE_BUTTON));
-
-
-
-
-
 	}
+	void appendContextMenu(Menu *menu)
+	{
+		ComputerscarePatchVersioning *module = dynamic_cast<ComputerscarePatchVersioning *>(this->module);
+
+		MenuLabel *spacerLabel = new MenuLabel();
+		menu->addChild(spacerLabel);
+
+		menu->addChild(createSubmenuItem("Patch Versions", "",
+		[ = ](Menu * menu) {
+			menu->addChild(createMenuLabel("Load Patch:"));
+
+
+			for (int i = 0; i < (int)module->patchVersionFilenames.size(); i++) {
+				menu->addChild(createMenuItem(module->patchVersionFilenames[i], "",
+				[ = ]() {module->selectedPatch(i);}
+				                             ));
+			}
+
+
+		}
+		                                ));
+	}
+
 	~ComputerscarePatchVersioningWidget() {
 		if (keyContainer) {
 			APP->scene->rack->removeChild(keyContainer);

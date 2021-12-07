@@ -158,6 +158,12 @@
 			"tags": ["Sequencer", "Clock Modulator", "Polyphonic"],
 			"manualUrl":
 				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
+		},
+		{
+			"slug": "computerscare-patch-versioning",
+			"name": "Patch Versioning",
+			"description": "Save and manage multiple versions of a patch",
+			"tags": ["Utility"]
 		}
 	]
 }
