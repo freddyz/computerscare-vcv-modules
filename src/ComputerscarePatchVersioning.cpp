@@ -8,13 +8,6 @@ const int numKnobs = 16;
 const int numToggles = 16;
 const int numOutputs = 16;
 
-std::string generateNewPatchName() {
-	std::string currentPatchName = APP->patch->path;
-	size_t lastindex = currentPatchName.find_last_of(".");
-	std::string rawname = currentPatchName.substr(0, lastindex);
-	return rawname + "-v.vcv";
-}
-
 struct ComputerscarePatchVersioning : Module {
 	int counter = 0;
 	ComputerscareSVGPanel* panelRef;
@@ -55,20 +48,46 @@ struct ComputerscarePatchVersioning : Module {
 			savePatch();
 		}
 	}
-	void savePatch() {
-
-		std::string newPatchName = generateNewPatchName();
-		APP->patch->save(newPatchName);
-		APP->patch->path = newPatchName;
-		APP->history->setSaved();
+	std::string generateNewPatchName() {
+		return getPatchBasename() + " v" + std::to_string(counter) + ".vcv";
 	}
+	std::string getPatchBasename() {
+		std::string currentPatchName = system::getFilename(APP->patch->path);
+
+		size_t lastindex = currentPatchName.find_last_of(".");
+		return currentPatchName.substr(0, lastindex);
+	}
+	void savePatch() {
+		counter++;
+		std::string newPatchName = generateNewPatchName();
+		std::string versionDir = createPatchDirectory(getPatchBasename());
+
+		copyPatch(system::join(versionDir, newPatchName));
+	}
+	std::string createPatchDirectory(std::string name) {
+
+		std::string patchesDir;
+		std::string filename;
+		patchesDir = asset::user("patches");
+		std::string versionDir = system::join(patchesDir, "versions", name);
+		system::createDirectories(versionDir);
+		return versionDir;
+	}
+	void onSave(const SaveEvent& e) override {
+		savePatch();
+	}
+	void copyPatch(std::string dstPath) {
+		std::string currentPatchName = APP->patch->path;
+		system::copy(currentPatchName, dstPath);
+	}
+
 
 };
 struct KeyContainer : Widget {
 	ComputerscarePatchVersioning* module = NULL;
 
 	void onHoverKey(const event::HoverKey& e) override {
-		if (module && !module->bypass) {
+		if (module && !module->isBypassed()) {
 
 			if (e.action == GLFW_PRESS || e.action == GLFW_REPEAT) {
 				/*module->keys[idx].mods & GLFW_MOD_ALT ? 0.7f : 0.f);
