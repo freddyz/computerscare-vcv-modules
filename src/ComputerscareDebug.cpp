@@ -1,6 +1,4 @@
 #include "Computerscare.hpp"
-#include "dsp/digital.hpp"
-#include "dsp/filter.hpp"
 
 #include <string>
 #include <sstream>

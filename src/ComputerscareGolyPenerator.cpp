@@ -68,6 +68,7 @@ struct ComputerscareGolyPenerator : ComputerscareMenuParamModule {
 		configMenuParam(COLOR, 0.f, 9.f, 0.f, "Display Color", 2);
 
 		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+		getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
 
 		configOutput(POLY_OUTPUT, "Main");
 
