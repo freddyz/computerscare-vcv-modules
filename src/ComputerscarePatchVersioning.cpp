@@ -1,5 +1,6 @@
 #include "Computerscare.hpp"
 #include <patch.hpp>
+#include <dirent.h>
 
 struct ComputerscarePatchVersioning;
 
@@ -47,6 +48,7 @@ struct ComputerscarePatchVersioning : Module {
 		}
 		configParam(TOGGLES, 0.0f, 1.0f, 0.0f);
 		outputs[POLY_OUTPUT].setChannels(16);*/
+		scanPatchVersions();
 	}
 	json_t *dataToJson() override {
 		json_t *rootJ = json_object();
@@ -68,18 +70,22 @@ struct ComputerscarePatchVersioning : Module {
 	void dataFromJson(json_t *rootJ) override {
 		float val;
 
+		DEBUG("data FROM jsoN jaja");
+
 		json_t *counterJ = json_object_get(rootJ, "counter");
 		if (counterJ) { counter = json_integer_value(counterJ); }
 
 		json_t *filenamesJ = json_object_get(rootJ, "patchVersionFilenames");
+
+
+
 		if (filenamesJ) {
+			DEBUG("jajaja okay...");
 			for (int i = 0; i < json_array_size(filenamesJ); i++) {
 				json_t *filenameJ = json_array_get(filenamesJ, i);
-				patchVersionFilenames.push_back(json_string_value(filenameJ));
+				//patchVersionFilenames.push_back(json_string_value(filenameJ));
 			}
 		}
-
-
 	}
 
 	void process(const ProcessArgs &args) override {
@@ -93,14 +99,55 @@ struct ComputerscarePatchVersioning : Module {
 
 		loadPatch(index);
 	}
+	void goBack() {
 
-	void mixinJSON(json_t  *prevData) {
-		DEBUG("lol  lmfao lol lol");
+	}
+	void goForward() {
+
+	}
+	void goUp() {
+
+	}
+	void goDown() {
+
+	}
+	void goIn() {
+
+	}
+	void goOut() {
+
+	}
+	void goLeft() {
+
+	}
+	void goRight() {
+
+	}
+
+	void mixinJSON(int mixinCounter, std::vector<std::string> mixinFilenames) {
+
+		//dataFromJson(prevData);
+		//counter = oldCounter;
+
+		//patchVersionFilenames.push_back("HOGFUCKER");
+		DEBUG("HOGFUCKER %i", mixinFilenames.size());
+		//counter = mixinCounter;
+		//patchVersionFilenames.resize(mixinFilenames.size());
+		//patchVersionFilenames = mixinFilenames;
+		DEBUG("counter%i, size:%i", counter, patchVersionFilenames.size());
 	}
 
 	void loadPatch(int index) {
 
-		json_t  *prevData = dataToJson();
+		int prevSize = patchVersionFilenames.size();
+
+		std::vector<std::string> oldFilenames = patchVersionFilenames;
+		//int masterCounter = counter;
+
+		DEBUG("previous size:%i", prevSize);
+
+
+
 		std::string patchBasename = getPatchBasename();
 		std::string patchFilename = patchVersionFilenames[index];
 		std::string versionsFolder = createPatchDirectory(patchBasename);
@@ -121,9 +168,33 @@ struct ComputerscarePatchVersioning : Module {
 
 
 
-		DEBUG("FINISHED WITH THAT ONE LOL!!!");
+		DEBUG("loaded %s", patchPath.c_str());
 
-		mixinJSON(prevData);
+		//mixinJSON(masterCounter, oldFilenames);
+	}
+	void scanPatchVersions() {
+		std::string dir = createPatchDirectory(getPatchBasename());
+		int versionIndex = 0;
+
+		struct dirent* dirp = NULL;
+		DIR* rep = NULL;
+		rep = opendir(dir.c_str());
+		patchVersionFilenames.clear();
+
+		if (rep) {
+			while ((dirp = readdir(rep)) != NULL) {
+				std::string name = dirp->d_name;
+
+				std::size_t found = name.find(".vcv", name.length() - 5);
+				if (found != std::string::npos) {
+					patchVersionFilenames.push_back(name);
+					/*if (currentImageFullpath == paths[index]) {
+						versionIndex = versionIndex;
+					}*/
+					versionIndex++;
+				}
+			}
+		}
 	}
 
 	std::string generateNewPatchName() {
@@ -142,10 +213,10 @@ struct ComputerscarePatchVersioning : Module {
 
 		copyPatch(system::join(versionDir, newPatchName));
 		patchVersionFilenames.push_back(newPatchName);
+		DEBUG("versioned %s", newPatchName.c_str());
 
 	}
 	std::string createPatchDirectory(std::string name) {
-
 		std::string patchesDir;
 		std::string filename;
 		patchesDir = asset::user("patches");
@@ -177,7 +248,7 @@ struct KeyContainer : Widget {
 
 				if (e.key == GLFW_KEY_S) {
 					if ((e.mods & RACK_MOD_MASK) == GLFW_MOD_ALT) {
-						module->savePatch();
+						module->goBack();
 						e.consume(this);
 					}
 
@@ -194,6 +265,30 @@ struct KeyContainer : Widget {
 			}*/
 		}
 		Widget::onHoverKey(e);
+	}
+
+};
+struct VersionsDisplay : SmallLetterDisplay
+{
+	ComputerscarePatchVersioning *module;
+	VersionsDisplay()
+	{
+		SmallLetterDisplay();
+	};
+	void draw(const DrawArgs &args)
+	{
+		if (module)
+		{
+
+			std::string versionString =  ("v" + std::to_string(module->counter) );
+			value = versionString;
+
+
+		}
+		else {
+			value = std::to_string((random::u32() % 24) + 1);
+		}
+		SmallLetterDisplay::draw(args);
 	}
 
 };
@@ -225,6 +320,14 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 		}
 
 		addParam(createParam<MomentaryIsoButton>(Vec(50, 100), module, ComputerscarePatchVersioning::SAVE_BUTTON));
+
+		VersionsDisplay *versDisplay = new VersionsDisplay();
+		versDisplay->module = module;
+		versDisplay->box.pos = mm2px(Vec(10, 24));
+		versDisplay->box.size = mm2px(Vec(19, 7));
+		versDisplay->value = "Z";
+		versDisplay->baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+		addChild(versDisplay);
 	}
 	void appendContextMenu(Menu *menu)
 	{
@@ -237,8 +340,9 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 		[ = ](Menu * menu) {
 			menu->addChild(createMenuLabel("Load Patch:"));
 
-
+			DEBUG("patchVersionFilenames.size %i", (int)module->patchVersionFilenames.size());
 			for (int i = 0; i < (int)module->patchVersionFilenames.size(); i++) {
+
 				menu->addChild(createMenuItem(module->patchVersionFilenames[i], "",
 				[ = ]() {module->selectedPatch(i);}
 				                             ));
@@ -248,13 +352,13 @@ struct ComputerscarePatchVersioningWidget : ModuleWidget {
 		}
 		                                ));
 	}
-
 	~ComputerscarePatchVersioningWidget() {
 		if (keyContainer) {
 			APP->scene->rack->removeChild(keyContainer);
 			delete keyContainer;
 		}
 	}
+	VersionsDisplay *versDisplay;
 
 };
 
