@@ -160,9 +160,11 @@ struct MIDICC_CV : Module {
 
 		// Remember values so users don't have to touch MIDI controller knobs when restarting Rack
 		json_t* valuesJ = json_array();
-		for (int i = 0; i < 128; i++) {
-			// Note: Only save channel 0. Since MPE mode won't be commonly used, it's pointless to save all 16 channels.
-			json_array_append_new(valuesJ, json_integer(ccValues[i][0]));
+
+		for (int midiCh = 0; midiCh < 16; midiCh++) {
+			for (int cc = 0; cc < 16; cc++) {
+				json_array_append_new(valuesJ, json_integer(ccValues[cc][midiCh]));
+			}
 		}
 		json_object_set_new(rootJ, "values", valuesJ);
 
@@ -186,10 +188,13 @@ struct MIDICC_CV : Module {
 
 		json_t* valuesJ = json_object_get(rootJ, "values");
 		if (valuesJ) {
-			for (int i = 0; i < 128; i++) {
+			for (int i = 0; i < 256; i++) {
 				json_t* valueJ = json_array_get(valuesJ, i);
 				if (valueJ) {
-					ccValues[i][0] = json_integer_value(valueJ);
+					int cc = i % 16;
+					int midiCh = (i - cc) / 16;
+
+					ccValues[cc][midiCh] = json_integer_value(valueJ);
 				}
 			}
 		}
