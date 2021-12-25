@@ -158,14 +158,6 @@
 			"tags": ["Sequencer", "Clock Modulator", "Polyphonic"],
 			"manualUrl":
 				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
-		},
-		{
-			"slug": "computerscare-moly-pidi",
-			"name": "Moly Pidi",
-			"description": "MIDI Interface",
-			"tags": ["Polyphonic"],
-			"manualUrl":
-				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/moly-pidi.md"
 		}
 	]
 }
