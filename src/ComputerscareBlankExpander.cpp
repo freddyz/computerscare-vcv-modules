@@ -109,11 +109,13 @@ struct ComputerscareBlankExpander : Module {
 				frameOffsetQuantity->setNumFrames(numFrames);
 			}
 
+
+
 			if (eocMessageReadTrigger.process(currentFrame == 0 ? 10.f : 0.f)) {
-				eocPulse.trigger(1e-3);
+				eocPulse.trigger(1e-3f);
 			}
 			if (eachFrameReadTrigger.process(lastTick != tick ? 10.f : 0.f)) {
-				eachFramePulse.trigger(1e-3);
+				eachFramePulse.trigger(1e-3f);
 			}
 
 

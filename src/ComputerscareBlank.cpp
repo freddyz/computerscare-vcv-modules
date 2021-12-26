@@ -104,6 +104,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	dsp::Timer syncTimer;
 	dsp::Timer slideshowTimer;
 
+	dsp::PulseGenerator resetTriggerPulse;
+
 
 	ComputerscareSVGPanel* panelRef;
 
@@ -234,6 +236,20 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 			updateScrubFrame();
 
+			bool resetTriggered = false;
+			bool resetTimerHigh = false;
+
+			if (resetConnected) {
+				if (resetTrigger.process(messageFromExpander[4])) {
+					resetTriggered = true;
+
+					resetTriggerPulse.trigger(1e-3f);
+				}
+			}
+
+
+			resetTimerHigh = resetTriggerPulse.process(args.sampleTime);
+
 			if (clockConnected) {
 				clockTriggered = clockTrigger.process(messageFromExpander[2]);
 				if (clockMode == CLOCK_MODE_SYNC) {
@@ -255,7 +271,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				}
 				else if (clockMode == CLOCK_MODE_FRAME) {
 					//frame advance
-					shouldAdvanceAnimation = clockTriggered;
+					//should be ignored if being reset
+					shouldAdvanceAnimation = clockTriggered && !resetTimerHigh;
 				}
 			}
 
@@ -269,10 +286,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				checkAndPerformEndAction(true);
 			}
 
-			if (resetConnected) {
-				if (resetTrigger.process(messageFromExpander[4])) {
-					goToFrame(0);
-				}
+			if (resetTriggered) {
+				goToFrame(0);
 			}
 			if (resetButtonTrigger.process(messageFromExpander[9])) {
 				goToFrame(0);
