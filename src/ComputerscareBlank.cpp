@@ -208,7 +208,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				checkAndPerformEndAction(true);
 				slideshowTimer.reset();
 			}
-
 		}
 
 		samplesDelay = frameDelay * args.sampleRate;
@@ -232,8 +231,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 			scrubbing = messageFromExpander[8];
 
-
-
 			updateScrubFrame();
 
 			bool resetTriggered = false;
@@ -246,7 +243,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					resetTriggerPulse.trigger(1e-3f);
 				}
 			}
-
 
 			resetTimerHigh = resetTriggerPulse.process(args.sampleTime);
 
