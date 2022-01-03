@@ -158,6 +158,14 @@
 			"tags": ["Sequencer", "Clock Modulator", "Polyphonic"],
 			"manualUrl":
 				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
+		},
+		{
+			"slug": "computerscare-bloly-pob",
+			"name": "Bloly Pob",
+			"description": "Voltage-Controlled Blob Generator",
+			"tags": ["Sequencer", "Clock Modulator", "Polyphonic", "Visual"],
+			"manualUrl":
+				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/bloly-pob.md"
 		}
 	]
 }
