@@ -2,7 +2,7 @@ name: Build v2
 on: [push, pull_request]
 
 env:
-  rack-sdk-version: 2.0.5
+  rack-sdk-version: 2.1.0
 
 defaults:
   run:
