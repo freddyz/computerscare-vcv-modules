@@ -20,7 +20,6 @@ extern Model *modelComputerscarePatchSequencer;
 extern Model *modelComputerscareLaundrySoup;
 extern Model *modelComputerscareILoveCookies;
 extern Model *modelComputerscareOhPeas;
-//extern Model *modelComputerscareIso;
 extern Model *modelComputerscareKnolyPobs;
 extern Model *modelComputerscareBolyPuttons;
 extern Model *modelComputerscareRolyPouter;
