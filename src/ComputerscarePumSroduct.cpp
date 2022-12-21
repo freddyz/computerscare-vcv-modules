@@ -6,6 +6,10 @@ struct ComputerscarePumSroduct;
 const int numKnobs = 16;
 const int numToggles = 16;
 
+const int numOutputs = 4;
+
+const int numSteps = 8;
+
 
 struct ComputerscarePumSroduct : ComputerscarePolyModule {
 	ComputerscareSVGPanel* panelRef;
@@ -19,25 +23,37 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 
 	};
 	enum InputIds {
-		CHANNEL_INPUT,
+		CLOCK_INPUT,
+		RESET_INPUT,
 		NUM_INPUTS
 	};
 	enum OutputIds {
-		POLY_OUTPUT,
-		NUM_OUTPUTS
+		CV_OUTPUT,
+		NUM_OUTPUTS = CV_OUTPUT + numOutputs
 	};
 	enum LightIds {
 		NUM_LIGHTS
 	};
+
+	dsp::PulseGenerator clockPulse;
+	dsp::PulseGenerator resetPulse;
+
+	dsp::SchmittTrigger clockTrigger;
+	dsp::SchmittTrigger resetTrigger;
+
+	int index = 0;
 
 
 	ComputerscarePumSroduct()  {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		for (int i = 0; i < numKnobs; i++) {
-			configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
+		for (int i = 0; i < numOutputs; i++) {
+			configOutput(CV_OUTPUT + i, "CV " + std::to_string(i + 1));
+			//configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
 		}
+
+
 		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
 		configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale");
 		configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset", " volts");
@@ -47,15 +63,50 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		getParamQuantity(GLOBAL_SCALE)->randomizeEnabled = false;
 		getParamQuantity(GLOBAL_OFFSET)->randomizeEnabled = false;
 
-		configOutput(POLY_OUTPUT, "Main");
+
+
+		configInput(CLOCK_INPUT, "Clock");
+		configInput(RESET_INPUT, "Reset");
 
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
+
+		// Reset
+		if (/*resetButtonTrigger.process(params[RESET_PARAM].getValue()) |*/ resetTrigger.process(inputs[RESET_INPUT].getVoltage(), 0.1f, 2.f)) {
+			resetPulse.trigger(1e-3f);
+			// Reset step index
+			index = 0;
+		}
+
+		bool resetGate = resetPulse.process(args.sampleTime);
+
+		bool clock = false;
+		bool clockGate = false;
+
+		if (inputs[CLOCK_INPUT].isConnected()) {
+			// External clock
+			// Ignore clock while reset pulse is high
+			if (clockTrigger.process(inputs[CLOCK_INPUT].getVoltage(), 0.1f, 2.f) && !resetGate) {
+				clock = true;
+			}
+			clockGate = clockTrigger.isHigh();
+		}
+
+		if (clock) {
+			clockPulse.trigger(1e-3f);
+			index++;
+			if (index >= numSteps) {
+				index = 0;
+			}
+		}
+
+
 		float trim = params[GLOBAL_SCALE].getValue();
 		float offset = params[GLOBAL_OFFSET].getValue();
-		for (int i = 0; i < polyChannels; i++) {
-			outputs[POLY_OUTPUT].setVoltage(params[KNOB + i].getValue()*trim + offset, i);
+		for (int i = 0; i < numOutputs; i++) {
+
+			outputs[CV_OUTPUT + i].setVoltage(index + (float)i / 10);
 		}
 	}
 	void checkPoly() override {
@@ -64,7 +115,7 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 			polyChannels = 16;
 			params[POLY_CHANNELS].setValue(16);
 		}
-		outputs[POLY_OUTPUT].setChannels(polyChannels);
+		outputs[CV_OUTPUT].setChannels(polyChannels);
 	}
 };
 
@@ -120,11 +171,19 @@ struct ComputerscarePumSroductWidget : ModuleWidget {
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
-			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareKnolyPobsPanel.svg")));
-			addChild(panel);
+			//panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareKnolyPobsPanel.svg")));
+			//addChild(panel);
 		}
 		channelWidget = new PolyOutputChannelsWidget(Vec(1, 24), module, ComputerscarePumSroduct::POLY_CHANNELS);
-		addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 22), module, ComputerscarePumSroduct::POLY_OUTPUT));
+		//addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 22), module, ComputerscarePumSroduct::POLY_OUTPUT));
+
+		//addInput()
+
+		addInput(createInput<InPort>(Vec(9, 78), module, ComputerscarePumSroduct::CLOCK_INPUT));
+		addInput(createInput<InPort>(Vec(29, 78), module, ComputerscarePumSroduct::RESET_INPUT));
+
+
+
 
 		addChild(channelWidget);
 
@@ -136,40 +195,20 @@ struct ComputerscarePumSroductWidget : ModuleWidget {
 
 		float xx;
 		float yy;
-		float yInitial = 86;
-		float ySpacing =  34;
+		float yInitial = 186;
+		float ySpacing =  44;
 		float yRightColumnOffset = 14.3 / 8;
-		for (int i = 0; i < numKnobs; i++) {
+		for (int i = 0; i < numOutputs; i++) {
 			xx = 1.4f + 24.3 * (i - i % 8) / 8;
 			yy = yInitial + ySpacing * (i % 8) +  yRightColumnOffset * (i - i % 8) ;
-			addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 3 + (i == 8 ? 5 : 0), 2);
+
+			addOutput(createOutput<PointingUpPentagonPort>(Vec(xx, yy), module, ComputerscarePumSroduct::CV_OUTPUT + i));
+
+			//addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 3 + (i == 8 ? 5 : 0), 2);
 		}
 
 	}
-	void addLabeledKnob(std::string label, int x, int y, ComputerscarePumSroduct *module, int index, float labelDx, float labelDy) {
 
-		smallLetterDisplay = new SmallLetterDisplay();
-		smallLetterDisplay->box.size = Vec(5, 10);
-		smallLetterDisplay->fontSize = 18;
-		smallLetterDisplay->value = label;
-		smallLetterDisplay->textAlign = 1;
-
-		ParamWidget* pob =  createParam<DisableableSmoothKnob>(Vec(x, y), module, ComputerscarePumSroduct::KNOB + index);
-
-		DisableableSmoothKnob* fader = dynamic_cast<DisableableSmoothKnob*>(pob);
-
-		fader->module = module;
-		fader->channel = index;
-
-		addParam(fader);
-
-
-		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
-
-
-		addChild(smallLetterDisplay);
-
-	}
 	PolyOutputChannelsWidget* channelWidget;
 	PolyChannelsDisplay* channelDisplay;
 	DisableableSmoothKnob* fader;
