@@ -10,6 +10,8 @@ const int numOutputs = 4;
 
 const int numSteps = 8;
 
+const int numDividers = 8;
+
 
 struct ComputerscarePumSroduct : ComputerscarePolyModule {
 	ComputerscareSVGPanel* panelRef;
@@ -41,7 +43,11 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 	dsp::SchmittTrigger clockTrigger;
 	dsp::SchmittTrigger resetTrigger;
 
+	dsp::ClockDivider divider[numDividers];
+
 	int index = 0;
+
+	int flips[numDividers] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 
 	ComputerscarePumSroduct()  {
@@ -68,6 +74,16 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		configInput(CLOCK_INPUT, "Clock");
 		configInput(RESET_INPUT, "Reset");
 
+		setDividers();
+
+	}
+
+	void setDividers() {
+		int p2 = 1;
+		for (int i = 0; i < numDividers; i++) {
+			divider[i].setDivision(p2);
+			p2 *= 2;
+		}
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
@@ -99,14 +115,21 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 			if (index >= numSteps) {
 				index = 0;
 			}
+
+			for (int i = 0; i < numDividers; i++) {
+
+				if (divider[i].process()) {
+					flips[i] += 1;
+					flips[i] %= 2;
+				}
+				else {
+
+				}
+			}
 		}
 
-
-		float trim = params[GLOBAL_SCALE].getValue();
-		float offset = params[GLOBAL_OFFSET].getValue();
 		for (int i = 0; i < numOutputs; i++) {
-
-			outputs[CV_OUTPUT + i].setVoltage(index + (float)i / 10);
+			outputs[CV_OUTPUT + i].setVoltage(flips[i] * 10.f);
 		}
 	}
 	void checkPoly() override {
@@ -115,7 +138,7 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 			polyChannels = 16;
 			params[POLY_CHANNELS].setValue(16);
 		}
-		outputs[CV_OUTPUT].setChannels(polyChannels);
+		outputs[CV_OUTPUT].setChannels(1);
 	}
 };
 
