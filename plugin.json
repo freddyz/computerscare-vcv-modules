@@ -158,6 +158,14 @@
 			"tags": ["Sequencer", "Clock Modulator", "Polyphonic"],
 			"manualUrl":
 				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
+		},
+		{
+			"slug": "computerscare-pum-sroduct",
+			"name": "Pums Roduct",
+			"description": "Blahher",
+			"tags": ["Sequencer", "Clock Modulator", "Polyphonic"],
+			"manualUrl":
+				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
 		}
 	]
 }
