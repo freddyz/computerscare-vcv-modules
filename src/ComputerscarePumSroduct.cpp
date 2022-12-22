@@ -6,11 +6,11 @@ struct ComputerscarePumSroduct;
 const int numKnobs = 16;
 const int numToggles = 16;
 
-const int numOutputs = 4;
+const int numOutputs = 8;
 
 const int numSteps = 8;
 
-const int numDividers = 8;
+const int numDividers = 16;
 
 
 struct ComputerscarePumSroduct : ComputerscarePolyModule {
@@ -21,7 +21,11 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		POLY_CHANNELS = TOGGLES + numToggles,
 		GLOBAL_SCALE,
 		GLOBAL_OFFSET,
-		NUM_PARAMS
+		GLOBAL_PATTERN_KNOB,
+		GLOBAL_WEIRDNESS_KNOB,
+		PATTERN_KNOB,
+		WEIRDNESS_KNOB = PATTERN_KNOB + numOutputs,
+		NUM_PARAMS = WEIRDNESS_KNOB + numOutputs
 
 	};
 	enum InputIds {
@@ -47,7 +51,9 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 
 	int index = 0;
 
-	int flips[numDividers] = {0, 0, 0, 0, 0, 0, 0, 0};
+	int flips[numDividers] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+	float coefs[numDividers * numOutputs];
 
 
 	ComputerscarePumSroduct()  {
@@ -56,7 +62,10 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 
 		for (int i = 0; i < numOutputs; i++) {
 			configOutput(CV_OUTPUT + i, "CV " + std::to_string(i + 1));
-			//configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
+			configParam(PATTERN_KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
+			for (int j = 0; j < numDividers; j++) {
+				coefs[i * numDividers + j] = i * numDividers + j;
+			}
 		}
 
 
@@ -75,15 +84,58 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		configInput(RESET_INPUT, "Reset");
 
 		setDividers();
+		identityCoefs();
 
+	}
+
+	void randomizeCoefs() {
+		for (int i = 0; i < numOutputs; i++) {
+			for (int j = 0; j < numDividers; j++) {
+				if ( random::uniform() > 0.6) {
+					coefs[i * numDividers + j] = random::uniform();
+				}
+
+			}
+		}
+	}
+	void wiggleCoefs() {
+		for (int i = 0; i < numOutputs; i++) {
+			for (int j = 0; j < numDividers; j++) {
+				if ( random::uniform() > 0.6) {
+					coefs[i * numDividers + j] += 0.25 - random::uniform() / 2;
+				}
+
+			}
+		}
+	}
+	void identityCoefs() {
+		for (int i = 0; i < numOutputs; i++) {
+			for (int j = 0; j < numDividers; j++) {
+				coefs[i * numDividers + j] = i == j ? 1.f : 0.f;
+			}
+		}
 	}
 
 	void setDividers() {
 		int p2 = 1;
 		for (int i = 0; i < numDividers; i++) {
 			divider[i].setDivision(p2);
+			//p2 += 1;
 			p2 *= 2;
 		}
+	}
+	float sumProduct(int ch) {
+		float out = 0;
+		int offset = ch * numDividers;
+		float divisor = 0.f;
+		for (int i = 0; i < numDividers; i++) {
+			int dex = offset + i;
+			if (coefs[dex] > 0.1) {
+				divisor += 1.f;
+				out += coefs[dex] * flips[i];
+			}
+		}
+		return out / (divisor > 0.f ? divisor : 1);
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
@@ -129,7 +181,7 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		}
 
 		for (int i = 0; i < numOutputs; i++) {
-			outputs[CV_OUTPUT + i].setVoltage(flips[i] * 10.f);
+			outputs[CV_OUTPUT + i].setVoltage(math::clamp(sumProduct(i) * 10.f , -10.f, 10.f));
 		}
 	}
 	void checkPoly() override {
@@ -156,34 +208,6 @@ struct NoRandomMediumSmallKnob : RoundKnob {
 	};
 };
 
-struct DisableableSmoothKnob : RoundKnob {
-	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob.svg"));
-	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob-disabled.svg"));
-
-	int channel = 0;
-	bool disabled = false;
-	ComputerscarePolyModule *module;
-
-	DisableableSmoothKnob() {
-		setSvg(enabledSvg);
-		shadow->box.size = math::Vec(0, 0);
-		shadow->opacity = 0.f;
-	}
-	void step() override {
-		if (module) {
-			bool candidate = channel > module->polyChannels - 1;
-			if (disabled != candidate) {
-				setSvg(candidate ? disabledSvg : enabledSvg);
-				onChange(*(new event::Change()));
-				fb->dirty = true;
-				disabled = candidate;
-			}
-		}
-		else {
-		}
-		RoundKnob::step();
-	}
-};
 
 struct ComputerscarePumSroductWidget : ModuleWidget {
 	ComputerscarePumSroductWidget(ComputerscarePumSroduct *module) {
@@ -218,14 +242,19 @@ struct ComputerscarePumSroductWidget : ModuleWidget {
 
 		float xx;
 		float yy;
+		float xInitial = 11.f;
 		float yInitial = 186;
-		float ySpacing =  44;
+		float ySpacing =  24;
 		float yRightColumnOffset = 14.3 / 8;
 		for (int i = 0; i < numOutputs; i++) {
-			xx = 1.4f + 24.3 * (i - i % 8) / 8;
+			xx = xInitial + 24.3 * (i - i % 8) / 8;
 			yy = yInitial + ySpacing * (i % 8) +  yRightColumnOffset * (i - i % 8) ;
+			addParam(createParam<NoRandomSmallKnob>(Vec(xx, yy), module, ComputerscarePumSroduct::PATTERN_KNOB + i));
 
-			addOutput(createOutput<PointingUpPentagonPort>(Vec(xx, yy), module, ComputerscarePumSroduct::CV_OUTPUT + i));
+			addOutput(createOutput<PointingUpPentagonPort>(Vec(xx + 20, yy), module, ComputerscarePumSroduct::CV_OUTPUT + i));
+
+
+
 
 			//addLabeledKnob(std::to_string(i + 1), xx, yy, module, i, (i - i % 8) * 1.2 - 3 + (i == 8 ? 5 : 0), 2);
 		}
@@ -234,7 +263,7 @@ struct ComputerscarePumSroductWidget : ModuleWidget {
 
 	PolyOutputChannelsWidget* channelWidget;
 	PolyChannelsDisplay* channelDisplay;
-	DisableableSmoothKnob* fader;
+	//DisableableSmoothKnob* fader;
 	SmallLetterDisplay* smallLetterDisplay;
 };
 
