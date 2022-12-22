@@ -31,7 +31,8 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		GLOBAL_WEIRDNESS_KNOB,
 		PATTERN_KNOB,
 		WEIRDNESS_KNOB = PATTERN_KNOB + numOutputs,
-		NUM_PARAMS = WEIRDNESS_KNOB + numOutputs
+		GLOBAL_THRESHHOLD_KNOB = WEIRDNESS_KNOB + numOutputs,
+		NUM_PARAMS
 
 	};
 	enum InputIds {
@@ -71,6 +72,8 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 	//state
 	float pattern = 0.f;
 
+	float threshhold = 0.5f;
+
 
 	ComputerscarePumSroduct()  {
 
@@ -85,6 +88,8 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		}
 
 		configParam(GLOBAL_PATTERN_KNOB, 0.f, 1.f, 0.f, "Pattern");
+		configParam(GLOBAL_WEIRDNESS_KNOB, 0.f, 1.f, 0.f, "Pattern");
+		configParam(GLOBAL_THRESHHOLD_KNOB, 0.f, 1.f, 0.6f, "Threshhold");
 
 		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
 		configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale");
@@ -114,25 +119,33 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 	}
 	void setPattern() {
 		float nextPattern = params[GLOBAL_PATTERN_KNOB].getValue();
-		if (pattern != nextPattern) {
+		float nextThreshhold = params[GLOBAL_THRESHHOLD_KNOB].getValue();
+		if (pattern != nextPattern || threshhold != nextThreshhold) {
 			pattern = nextPattern;
-			setCoefsPoly(pattern, 3);
+			threshhold = nextThreshhold;
+			setCoefsPoly(pattern, 3, threshhold);
 		}
 	}
-	void setCoefsPoly(float patt, int channel) {
+	void setCoefsPoly(float patt, int channel, float thresh = 0.9) {
+
 		for (int divdex = 0; divdex < numDividers; divdex++) {
 			float out = 0;
 			float arg = ((float) divdex) * trigConst;
 			for (int i = 0; i < numPoly; i++) {
-				float t0 = std::sin(p0[i] * arg + patt);
+				float t0 = std::sin(p0[i] * patt + arg);
 				float t1 = std::sin(p1[i] * arg + patt);
-				float t2 = std::sin(p2[i] * arg + patt);
+				float t2 = std::sin(p2[i] * patt );
 				float t3 = std::sin(p3[i] * arg + patt);
 				//out += std::sin(primes[trgArgIndex] * arg + otherPrimes[trgThetaIndex]);
-				if (t1 > 0.2) {
-					out += t0;
-				}
+
 			}
+
+			//manually set pattern to 0.16808
+
+			float x0 = std::sin(p0[divdex] * p1[divdex] * patt + arg);
+			out = floor(patt * numDividers);
+
+			out = out == divdex ? 1 : x0 > thresh ? x0 / 1.3 : 0;
 			//out /= numPoly;
 
 			coefs[channel * numDividers + divdex] = out;
@@ -174,8 +187,8 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		int p2 = 1;
 		for (int i = 0; i < numDividers; i++) {
 			divider[i].setDivision(p2);
-			p2 += 1;
-			//p2 *= 2;
+			//p2 += 1;
+			p2 *= 2;
 		}
 	}
 	float sumProduct(int ch) {
@@ -296,7 +309,7 @@ struct ComputerscarePumSroductWidget : ModuleWidget {
 
 		addParam(createParam<SmallKnob>(Vec(11, 54), module, ComputerscarePumSroduct::GLOBAL_WEIRDNESS_KNOB));
 		addParam(createParam<SmoothKnob>(Vec(32, 57), module, ComputerscarePumSroduct::GLOBAL_PATTERN_KNOB));
-
+		addParam(createParam<ScrambleKnob>(Vec(36, 32), module, ComputerscarePumSroduct::GLOBAL_THRESHHOLD_KNOB));
 		//addParam(createParam<SmoothKnob>(Vec(11, 114), module, ComputerscarePumSroduct::GLOBAL_PATTERN_KNOB));
 		//addParam(createParam<SmallKnob>(Vec(32, 114), module, ComputerscarePumSroduct::GLOBAL_WEIRDNESS_KNOB));
 
