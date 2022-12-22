@@ -12,6 +12,12 @@ const int numSteps = 8;
 
 const int numDividers = 16;
 
+const int numPrimes = 16;
+
+const int numPoly = 4;
+
+const float trigConst = 2 * M_PI / ((float)numDividers);
+
 
 struct ComputerscarePumSroduct : ComputerscarePolyModule {
 	ComputerscareSVGPanel* panelRef;
@@ -49,11 +55,21 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 
 	dsp::ClockDivider divider[numDividers];
 
+	dsp::ClockDivider knobChecker;
+
 	int index = 0;
+
+	int p0[numPrimes] = {331, 113, 487, 313, 241, 23, 353, 467, 37, 103, 197, 131, 179, 73, 373, 419};
+	int p1[numPrimes] = {307, 107, 227, 283, 233, 2, 461, 439, 271, 401, 157, 31, 211, 521, 373, 71};
+	int p2[numPrimes] = {2, 283, 353, 89, 83, 139, 331, 109, 79, 47, 199, 11, 211, 491, 127, 163};
+	int p3[numPrimes] = {149, 53, 61, 151, 373, 2, 461, 7, 13, 317, 199, 137, 227, 487, 383, 3};
 
 	int flips[numDividers] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 	float coefs[numDividers * numOutputs];
+
+	//state
+	float pattern = 0.f;
 
 
 	ComputerscarePumSroduct()  {
@@ -68,6 +84,7 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 			}
 		}
 
+		configParam(GLOBAL_PATTERN_KNOB, 0.f, 1.f, 0.f, "Pattern");
 
 		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
 		configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale");
@@ -83,18 +100,55 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		configInput(CLOCK_INPUT, "Clock");
 		configInput(RESET_INPUT, "Reset");
 
+		knobChecker.setDivision(96);
+
 		setDividers();
 		identityCoefs();
+//		wiggleCoefs();
+//		wiggleCoefs();
 
+
+		randomizeChannelCoefs(2);
+
+
+	}
+	void setPattern() {
+		float nextPattern = params[GLOBAL_PATTERN_KNOB].getValue();
+		if (pattern != nextPattern) {
+			pattern = nextPattern;
+			setCoefsPoly(pattern, 3);
+		}
+	}
+	void setCoefsPoly(float patt, int channel) {
+		for (int divdex = 0; divdex < numDividers; divdex++) {
+			float out = 0;
+			float arg = ((float) divdex) * trigConst;
+			for (int i = 0; i < numPoly; i++) {
+				float t0 = std::sin(p0[i] * arg + patt);
+				float t1 = std::sin(p1[i] * arg + patt);
+				float t2 = std::sin(p2[i] * arg + patt);
+				float t3 = std::sin(p3[i] * arg + patt);
+				//out += std::sin(primes[trgArgIndex] * arg + otherPrimes[trgThetaIndex]);
+				if (t1 > 0.4) {
+					out += t0;
+				}
+			}
+			out /= numPoly;
+
+			coefs[channel * numDividers + divdex] = out;
+		}
+	}
+
+	void randomizeChannelCoefs(int channel) {
+		for (int divdex = 0; divdex < numDividers; divdex++) {
+			coefs[channel * numDividers + divdex] = random::uniform() > 0.6 ? random::uniform() : 0.f;
+		}
 	}
 
 	void randomizeCoefs() {
 		for (int i = 0; i < numOutputs; i++) {
 			for (int j = 0; j < numDividers; j++) {
-				if ( random::uniform() > 0.6) {
-					coefs[i * numDividers + j] = random::uniform();
-				}
-
+				coefs[i * numDividers + j] = random::uniform() > 0.6 ? random::uniform() : 0.f;
 			}
 		}
 	}
@@ -139,6 +193,10 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
+
+		if (knobChecker.process()) {
+			setPattern();
+		}
 
 		// Reset
 		if (/*resetButtonTrigger.process(params[RESET_PARAM].getValue()) |*/ resetTrigger.process(inputs[RESET_INPUT].getVoltage(), 0.1f, 2.f)) {
@@ -238,6 +296,10 @@ struct ComputerscarePumSroductWidget : ModuleWidget {
 
 		addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module, ComputerscarePumSroduct::GLOBAL_SCALE));
 		addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscarePumSroduct::GLOBAL_OFFSET));
+
+		addParam(createParam<SmoothKnob>(Vec(11, 114), module, ComputerscarePumSroduct::GLOBAL_PATTERN_KNOB));
+		addParam(createParam<SmallKnob>(Vec(32, 114), module, ComputerscarePumSroduct::GLOBAL_WEIRDNESS_KNOB));
+
 
 
 		float xx;
