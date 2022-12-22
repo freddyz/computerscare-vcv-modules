@@ -129,11 +129,11 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 				float t2 = std::sin(p2[i] * arg + patt);
 				float t3 = std::sin(p3[i] * arg + patt);
 				//out += std::sin(primes[trgArgIndex] * arg + otherPrimes[trgThetaIndex]);
-				if (t1 > 0.4) {
+				if (t1 > 0.2) {
 					out += t0;
 				}
 			}
-			out /= numPoly;
+			//out /= numPoly;
 
 			coefs[channel * numDividers + divdex] = out;
 		}
@@ -174,8 +174,8 @@ struct ComputerscarePumSroduct : ComputerscarePolyModule {
 		int p2 = 1;
 		for (int i = 0; i < numDividers; i++) {
 			divider[i].setDivision(p2);
-			//p2 += 1;
-			p2 *= 2;
+			p2 += 1;
+			//p2 *= 2;
 		}
 	}
 	float sumProduct(int ch) {
@@ -294,11 +294,11 @@ struct ComputerscarePumSroductWidget : ModuleWidget {
 
 
 
-		addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module, ComputerscarePumSroduct::GLOBAL_SCALE));
-		addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscarePumSroduct::GLOBAL_OFFSET));
+		addParam(createParam<SmallKnob>(Vec(11, 54), module, ComputerscarePumSroduct::GLOBAL_WEIRDNESS_KNOB));
+		addParam(createParam<SmoothKnob>(Vec(32, 57), module, ComputerscarePumSroduct::GLOBAL_PATTERN_KNOB));
 
-		addParam(createParam<SmoothKnob>(Vec(11, 114), module, ComputerscarePumSroduct::GLOBAL_PATTERN_KNOB));
-		addParam(createParam<SmallKnob>(Vec(32, 114), module, ComputerscarePumSroduct::GLOBAL_WEIRDNESS_KNOB));
+		//addParam(createParam<SmoothKnob>(Vec(11, 114), module, ComputerscarePumSroduct::GLOBAL_PATTERN_KNOB));
+		//addParam(createParam<SmallKnob>(Vec(32, 114), module, ComputerscarePumSroduct::GLOBAL_WEIRDNESS_KNOB));
 
 
 
