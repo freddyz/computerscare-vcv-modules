@@ -158,6 +158,14 @@
 			"tags": ["Sequencer", "Clock Modulator", "Polyphonic"],
 			"manualUrl":
 				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
+		},
+		{
+			"slug": "computerscare-pouse-mosition",
+			"name": "Pouse Mosition",
+			"description": "Mouse Position to CV",
+			"tags": ["Utility"],
+			"manualUrl":
+				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/pouse-mosition.md"
 		}
 	]
 }
