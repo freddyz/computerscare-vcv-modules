@@ -22,6 +22,12 @@ struct ComputerscarePouseMosition : Module {
 	enum OutputIds {
 		X_MOUSE_POSITION,
 		Y_MOUSE_POSITION,
+		MOUSE_LEFT_CLICK,
+		MOUSE_RIGHT_CLICK,
+		MOUSE_WHEEL,
+		MOUSE_BACK,
+		MOUSE_FORWARD,
+		MOUSE_WHEEL_CLICK,
 		NUM_OUTPUTS
 	};
 	enum LightIds {
@@ -65,7 +71,7 @@ struct ComputerscarePouseMositionWidget : ModuleWidget {
 
 	ComputerscarePouseMositionWidget(ComputerscarePouseMosition *module) {
 		setModule(module);
-		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
+		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscarePouseMositionPanel.svg")));
 
 		addOutput(createOutput<OutPort>(Vec(10, 320), module, ComputerscarePouseMosition::X_MOUSE_POSITION));
 		addOutput(createOutput<OutPort>(Vec(50, 320), module, ComputerscarePouseMosition::Y_MOUSE_POSITION));
