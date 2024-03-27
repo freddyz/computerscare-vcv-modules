@@ -30,7 +30,7 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
     INPUT_ATTENUATION_CV,
     INPUT_OFFSET_CV,
     OUTPUT_ATTENUATION_CV,
-    OUTPUT_ATTENUATION_OFFSET,
+    OUTPUT_OFFSET_CV,
     NUM_INPUTS
   };
   enum OutputIds {
@@ -51,16 +51,35 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
     for (int i = 0; i < numRows; i++) {
       configParam(INPUT_ROW_TRIM + i, -2.f, 2.f, 1.f, "Input Channel " + std::to_string(i + 1) + " Attenuation");
       configParam(OUTPUT_COLUMN_TRIM + i, -2.f, 2.f, 1.f, "Output Channel " + std::to_string(i + 1) + " Attenuation");
+
+      getParamQuantity(INPUT_ROW_TRIM + i)->randomizeEnabled = false;
+      getParamQuantity(OUTPUT_COLUMN_TRIM + i)->randomizeEnabled = false;
+
       for (int j = 0; j < numColumns; j++) {
         configParam(KNOB + i * 16 + j, -2.f, 2.f, i == j ? 1.f : 0.f, "Input ch." + std::to_string(i + 1) + " → Output ch." + std::to_string(j + 1));
       }
-      configParam(OUTPUT_TRIM, -2.f, 2.f, 1.f, "Output Attenuation");
-      configParam(OUTPUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
-      configParam(INPUT_TRIM, -2.f, 2.f, 1.f, "Input Attenuation");
 
-      configParam(INPUT_OFFSET, -10.f, 10.f, 0.f, "Input Offset");
-      configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
     }
+    configParam(OUTPUT_TRIM, -2.f, 2.f, 1.f, "Output Attenuation");
+    configParam(OUTPUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
+    configParam(INPUT_TRIM, -2.f, 2.f, 1.f, "Input Attenuation");
+    configParam(INPUT_OFFSET, -10.f, 10.f, 0.f, "Input Offset");
+    getParamQuantity(OUTPUT_TRIM)->randomizeEnabled = false;
+    getParamQuantity(OUTPUT_OFFSET)->randomizeEnabled = false;
+    getParamQuantity(INPUT_TRIM)->randomizeEnabled = false;
+    getParamQuantity(INPUT_OFFSET)->randomizeEnabled = false;
+
+
+    configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 0.f, "Poly Channels");
+    getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+    getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
+
+    configInput(POLY_INPUT, "Main");
+
+    configInput(INPUT_ATTENUATION_CV, "Input Attenuation");
+    configInput(OUTPUT_ATTENUATION_CV, "Output Attenuation");
+
+    configOutput(POLY_OUTPUT, "Main");
 
   }
   void checkPoly() override {
@@ -139,7 +158,6 @@ struct DisableableSmallKnob : RoundKnob {
     setSvg(enabledThemes[themeIndex]);
     shadow->box.size = math::Vec(0, 0);
     shadow->opacity = 0.f;
-    dirtyValue = -21.f;
   }
 
   void draw(const DrawArgs& args) override {
@@ -147,22 +165,15 @@ struct DisableableSmallKnob : RoundKnob {
       bool candidateDisabled = (module->numInputChannels != 0 && inputChannel > module->numInputChannels - 1 || outputChannel > module->polyChannels - 1) ;
       if (disabled != candidateDisabled || !initialized) {
         setSvg(candidateDisabled ? disabledSvg : enabledThemes[themeIndex]);
-        dirtyValue = -20.f;
         disabled = candidateDisabled;
+        onChange(*(new event::Change()));
+        fb->dirty = true;
         initialized = true;
       }
     }
     else {
     }
     RoundKnob::draw(args);
-  }
-  void randomize() override {
-    if (randomizable) {
-      RoundKnob::randomize();
-    }
-    else {
-      return;
-    }
   }
 };
 

@@ -15,9 +15,6 @@
 #include <cctype>
 #include <algorithm>
 
-#define FONT_SIZE 13
-
-
 struct ComputerscareBlank : ComputerscareMenuParamModule {
 	bool loading = true;
 	bool loadedJSON = false;
@@ -107,6 +104,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	dsp::Timer syncTimer;
 	dsp::Timer slideshowTimer;
 
+	dsp::PulseGenerator resetTriggerPulse;
+
 
 	ComputerscareSVGPanel* panelRef;
 
@@ -177,7 +176,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 		configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
 		configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.200948f, "Slideshow Time", 2, " s",  400.f, 3.f);
-		configParam(LIGHT_WIDGET_MODE, 0.f, 1.f, 0.f, "Keep image fully opaque when used with ModularFungi Lights Off");
+		configParam(LIGHT_WIDGET_MODE, 0.f, 1.f, 0.f, "Keep image fully opaque when dimming room lights");
 
 		paths.push_back("empty");
 
@@ -190,13 +189,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 			sampleCounter++;
 			zoomCheckCounter++;
 			if (zoomCheckCounter > zoomCheckInterval) {
-				if (settings::zoom != lastZoom) {
+				float zoom =  APP->scene->rackScroll->getZoom();
+				if (zoom != lastZoom) {
 					pauseAnimation = true;
 				}
 				else {
 					pauseAnimation = false;
 				}
-				lastZoom = settings::zoom;
+				lastZoom = zoom;
 				zoomCheckCounter = 0;
 			}
 		}
@@ -208,7 +208,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				checkAndPerformEndAction(true);
 				slideshowTimer.reset();
 			}
-
 		}
 
 		samplesDelay = frameDelay * args.sampleRate;
@@ -232,9 +231,20 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
 			scrubbing = messageFromExpander[8];
 
-
-
 			updateScrubFrame();
+
+			bool resetTriggered = false;
+			bool resetTimerHigh = false;
+
+			if (resetConnected) {
+				if (resetTrigger.process(messageFromExpander[4])) {
+					resetTriggered = true;
+
+					resetTriggerPulse.trigger(1e-3f);
+				}
+			}
+
+			resetTimerHigh = resetTriggerPulse.process(args.sampleTime);
 
 			if (clockConnected) {
 				clockTriggered = clockTrigger.process(messageFromExpander[2]);
@@ -257,7 +267,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				}
 				else if (clockMode == CLOCK_MODE_FRAME) {
 					//frame advance
-					shouldAdvanceAnimation = clockTriggered;
+					//should be ignored if being reset
+					shouldAdvanceAnimation = clockTriggered && !resetTimerHigh;
 				}
 			}
 
@@ -271,10 +282,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 				checkAndPerformEndAction(true);
 			}
 
-			if (resetConnected) {
-				if (resetTrigger.process(messageFromExpander[4])) {
-					goToFrame(0);
-				}
+			if (resetTriggered) {
+				goToFrame(0);
 			}
 			if (resetButtonTrigger.process(messageFromExpander[9])) {
 				goToFrame(0);
@@ -333,7 +342,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		yOffset = 0;
 	}
 	void loadImageDialog(int index = 0) {
-		std::string dir = this->paths[index].empty() ?  asset::user("../") : rack::string::directory(this->paths[index]);
+		std::string dir = this->paths[index].empty() ?  asset::user("../") : asset::user(this->paths[index]);
 		char* pathC = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
 		if (!pathC) {
 			return;
@@ -346,17 +355,17 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 		jsonFlag = false;
 	}
 	void setContainingDirectory(int index = 0) {
-		std::string dir = rack::string::directory(paths[index]);
+		std::string dir = system::getDirectory(asset::user(paths[index]));
 		std::string currentImageFullpath;
 		parentDirectory = dir;
-		int imageIndex = 0;;
 
+		int imageIndex = 0;;
 
 		struct dirent* dirp = NULL;
 		DIR* rep = NULL;
 		rep = opendir(dir.c_str());
 		catalog.clear();
-		//fichier.clear();
+
 		if (rep) {
 			while ((dirp = readdir(rep)) != NULL) {
 				std::string name = dirp->d_name;
@@ -377,7 +386,6 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 					if (currentImageFullpath == paths[index]) {
 						fileIndexInCatalog = imageIndex;
 					}
-					//DEBUG("we got gif:%s", name.c_str());
 					imageIndex++;
 				}
 			}
@@ -417,15 +425,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 	}
 
 	void setPath(std::string path, int index = 0) {
-		//if (paths.size() <= index) {
-		//paths.push_back(path);
-		//}
-		//else {
 		numFrames = 0;
 		paths[index] = path;
-		//}
-		printf("setted %s\n", path.c_str());
-		//numFrames = paths.size();
 		currentFrame = 0;
 	}
 	void setFrameCount(int frameCount) {
@@ -859,6 +860,8 @@ struct tPNGDisplay : TBase {
 	bool missingOrBroken = false;
 	AnimatedGifBuddy gifBuddy;
 
+	bool lightWidgetMode = false;
+
 	tPNGDisplay() {
 	}
 
@@ -889,12 +892,22 @@ struct tPNGDisplay : TBase {
 
 	void setOffsets() {
 	}
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1 && lightWidgetMode) {
+			drawImage(args);
+		}
+		Widget::drawLayer(args, layer);
+	}
 	void draw(const rack::Widget::DrawArgs &args) override {
+		if (!lightWidgetMode) {
+			drawImage(args);
+		}
+	}
+
+	void drawImage(const BGPanel::DrawArgs& args) {
 		if (blankModule && blankModule->loadedJSON) {
 			std::string modulePath = blankModule->getPath();
 			if (path != modulePath) {
-				DEBUG("path not module path");
-				DEBUG("path: %s, modulePath:%s", path.c_str(), modulePath.c_str());
 				gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
 
 				if (gifBuddy.getImageStatus() == 3) {
@@ -984,8 +997,7 @@ struct tPNGDisplay : TBase {
 	}
 };
 
-//this is so CustomBlank can optionally stay fully opaque when ModularFungi LightOff module is used
-typedef tPNGDisplay<LightWidget> PNGDisplayLightWidget;
+
 typedef tPNGDisplay<TransparentWidget> PNGDisplayTransparentWidget;
 
 struct PNGDisplay : Widget {
@@ -994,9 +1006,6 @@ struct PNGDisplay : Widget {
 	PNGDisplay(ComputerscareBlank *blankModule) {
 		module = blankModule;
 
-		pngLight = new PNGDisplayLightWidget();
-		pngLight->blankModule = blankModule;
-
 		pngTransparent = new PNGDisplayTransparentWidget();
 		pngTransparent->blankModule = blankModule;
 
@@ -1004,7 +1013,6 @@ struct PNGDisplay : Widget {
 		Widget();
 	}
 	void resetZooms() {
-		pngLight->resetZooms();
 		pngTransparent->resetZooms();
 	}
 	void step() override {
@@ -1012,19 +1020,11 @@ struct PNGDisplay : Widget {
 			bool moduleLightWidgetMode = module->getLightWidgetMode();
 			if (moduleLightWidgetMode != lightWidgetMode) {
 				lightWidgetMode = moduleLightWidgetMode;
-				if (lightWidgetMode) {
-					removeChild(pngTransparent);
-					addChild(pngLight);
-				} else {
-					removeChild(pngLight);
-					addChild(pngTransparent);
-				}
+				pngTransparent->lightWidgetMode = lightWidgetMode;
 			}
 		}
-		//pngLight->hide();
 		Widget::step();
 	}
-	PNGDisplayLightWidget *pngLight;
 	PNGDisplayTransparentWidget *pngTransparent;
 	ComputerscareBlank *module;
 };
@@ -1171,20 +1171,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
-		/*SmoothKnob* speedParam = new SmoothKnob();
-		speedParam->paramQuantity = blankModule->paramQuantities[ComputerscareBlank::ANIMATION_SPEED];
-
-		MenuEntry* LabeledKnob = new MenuEntry();
-		MenuLabel* johnLabel = construct<MenuLabel>(&MenuLabel::text, "Animation Speed");
-		johnLabel->box.pos = Vec(speedParam->box.size.x,0);
-
-		LabeledKnob->addChild(johnLabel);
-		LabeledKnob->addChild(speedParam);
-
-		//menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Animation Speed"));
-		menu->addChild(LabeledKnob);*/
-
-		//MenuParam* animEnabled = new MenuParam(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED], 0);
 		MenuToggle* animEnabled = new MenuToggle(blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED]);
 		menu->addChild(animEnabled);
 
@@ -1218,8 +1204,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
 				bgPanel->box.size.x = blankModule->width;
 				panel->box.pos.x = blankModule->width / 2 - 60.f;
 				pngDisplay->box.size.x = blankModule->width;
-				//pngDisplay->box.pos.x = blankModule->xOffset;
-				//pngDisplay->box.pos.y = blankModule->yOffset;
+
 				rightHandle->box.pos.x = blankModule->width - rightHandle->box.size.x;
 				blankModule->loadedJSON = true;
 				blankModule->jsonFlag = true;
@@ -1256,85 +1241,66 @@ struct ComputerscareBlankWidget : ModuleWidget {
 			arrowSpeed /= 4.0;*/
 		//duplicate is ctrl-d, ignore keys if mods are pressed so duplication doesnt translate the image
 		if (e.action == RACK_HELD && !e.mods ) {
-			switch (e.key) {
-			case GLFW_KEY_A: {
+			if (e.keyName == "a") {
 				blankModule->xOffset += dPosition / blankModule->zoomX;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_S: {
+			} else if (e.keyName == "s") {
 				blankModule->yOffset -= (blankModule->invertY ? dPosition : -dPosition) / blankModule->zoomY;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_D: {
+			} else if (e.keyName == "d") {
 				blankModule->xOffset -= dPosition / blankModule->zoomX;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_W: {
+			} else if (e.keyName == "w") {
 				blankModule->yOffset += (blankModule->invertY ? dPosition : -dPosition) / blankModule->zoomY;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_Z: {
+			} else if (e.keyName == "z") {
 				blankModule->zoomX *= (1 + dZoom);
 				blankModule->zoomY *= (1 + dZoom);
 				e.consume(this);
-			} break;
-			case GLFW_KEY_X: {
+			} else if (e.keyName == "x") {
 				blankModule->zoomX *= (1 - dZoom);
 				blankModule->zoomY *= (1 - dZoom);
 				e.consume(this);
-			} break;
-			case GLFW_KEY_Q: {
+			} else if (e.keyName == "q") {
 				blankModule->rotation += 1;
 				blankModule->rotation %= 4;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_E: {
+			} else if (e.keyName == "e") {
 				blankModule->rotation -= 1;
 				blankModule->rotation += 4;
 				blankModule->rotation %= 4;
 				e.consume(this);
-			} break;
-			case GLFW_KEY_J: {
+			} else if (e.keyName == "j") {
 				blankModule->prevFrame();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_L: {
+			} else if (e.keyName == "l") {
 				blankModule->nextFrame();
 				e.consume(this);
-			} break;
 			}
+
 		}
 		if (e.action == GLFW_RELEASE) {
-			switch (e.key) {
-			case GLFW_KEY_K: {
+			if (e.keyName == "k") {
 				blankModule->goToFrame(0);
 				e.consume(this);
-			} break;
-			case GLFW_KEY_I: {
+			} else if (e.keyName == "i") {
 				blankModule->goToRandomFrame();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_U: {
+			} else if (e.keyName == "u") {
 				blankModule->goToRandomFrame();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_P: {
+			} else if (e.keyName == "p") {
 				blankModule->toggleAnimationEnabled();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_O: {
+			} else if (e.keyName == "o") {
 				blankModule->loadRandomGif();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_LEFT_BRACKET: {
+			} else if (e.keyName == "[") {
 				blankModule->prevFileInCatalog();
 				e.consume(this);
-			} break;
-			case GLFW_KEY_RIGHT_BRACKET: {
+			} else if (e.keyName == "]") {
 				blankModule->nextFileInCatalog();
 				e.consume(this);
-			} break;
-
 			}
 		}
 		ModuleWidget::onHoverKey(e);

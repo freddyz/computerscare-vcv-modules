@@ -22,7 +22,7 @@ struct GolyAlgoParamQuantity : ParamQuantity {
 	}
 };
 
-struct ComputerscareGolyPenerator : ComputerscarePolyModule {
+struct ComputerscareGolyPenerator : ComputerscareMenuParamModule {
 	int counter = 0;
 	int numChannels = 16;
 	ComputerscareSVGPanel* panelRef;
@@ -37,6 +37,7 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 		OUT_SCALE,
 		OUT_OFFSET,
 		POLY_CHANNELS,
+		COLOR,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -64,6 +65,12 @@ struct ComputerscareGolyPenerator : ComputerscarePolyModule {
 		configParam(OUT_SCALE, -20.f, 20.f, 10.f, "Output Scale");
 		configParam(OUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
+		configMenuParam(COLOR, 0.f, 9.f, 0.f, "Display Color", 2);
+
+		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+		getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
+
+		configOutput(POLY_OUTPUT, "Main");
 
 		availableAlgorithms.push_back("Linear");
 		availableAlgorithms.push_back("Sigmoid");
@@ -123,21 +130,6 @@ struct setAlgoItem : MenuItem
 	}
 };
 
-/*struct SetAllItem : MenuItem {
-	ComputerscareRolyPouter *pouter;
-
-	Menu *createChildMenu() override {
-		Menu *menu = new Menu;
-		for (int i = 1; i < 17; i++) {
-			ssmi *menuItem = new ssmi(i);
-			menuItem->text = "Set all to ch. " + std::to_string(i);
-			menuItem->pouter = pouter;
-			menu->addChild(menuItem);
-		}
-		return menu;
-	}
-
-};*/
 struct AlgorithmChildMenu : MenuItem {
 	ComputerscareGolyPenerator *penerator;
 
@@ -164,43 +156,48 @@ struct PeneratorDisplay : TransparentWidget {
 	PeneratorDisplay() {
 
 	}
-	void draw(const DrawArgs &args) override {
-		float valsToDraw[16] = {1.f};
-		int ch = 16;
-		if (module) {
-			ch = module->polyChannels;
-			for (int i = 0; i < ch; i++) {
-				valsToDraw[i] = module->goly.currentValues[i];
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1) {
+			float valsToDraw[16] = {1.f};
+			int ch = 16;
+			float colorArg;
+
+			if (module) {
+				ch = module->polyChannels;
+				colorArg = module->params[ComputerscareGolyPenerator::COLOR].getValue();
+				for (int i = 0; i < ch; i++) {
+					valsToDraw[i] = module->goly.currentValues[i];
+				}
 			}
-		}
-		else {
-			for (int i = 0; i < ch; i++) {
-				valsToDraw[i] = random::uniform() * 10;
+			else {
+				for (int i = 0; i < ch; i++) {
+					valsToDraw[i] = random::uniform() * 10;
+				}
+				colorArg = random::uniform() * 2;
 			}
+			DrawHelper draw = DrawHelper(args.vg);
+			Points pts = Points();
+
+			nvgTranslate(args.vg, box.size.x / 2, box.size.y / 2 + 5);
+			pts.linear(ch, Vec(0, -box.size.y / 2), Vec(0, 150));
+			std::vector<Vec> polyVals;
+			std::vector<NVGcolor> colors;
+			std::vector<Vec> thicknesses;
+
+			for (int i = 0; i < 16; i++) {
+				polyVals.push_back(Vec(valsToDraw[i] * 2, 0.f));
+				colors.push_back(draw.sincolor(colorArg, {1, 1, 0}));
+
+				thicknesses.push_back(Vec(160 / (1 + ch), 0));
+			}
+			draw.drawLines(pts.get(), polyVals, colors, thicknesses);
 		}
-		DrawHelper draw = DrawHelper(args.vg);
-		Points pts = Points();
-
-		nvgTranslate(args.vg, box.size.x / 2, box.size.y / 2 + 5);
-		pts.linear(ch, Vec(0, -box.size.y / 2), Vec(0, 150));
-		std::vector<Vec> polyVals;
-		std::vector<NVGcolor> colors;
-		std::vector<Vec> thicknesses;
-
-		for (int i = 0; i < 16; i++) {
-			polyVals.push_back(Vec(valsToDraw[i] * 2, 0.f));
-			colors.push_back(draw.sincolor(0, {1, 1, 0}));
-
-			thicknesses.push_back(Vec(160 / (1 + ch), 0));
-		}
-		draw.drawLines(pts.get(), polyVals, colors, thicknesses);
 	}
 };
 struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 	ComputerscareGolyPeneratorWidget(ComputerscareGolyPenerator *module) {
 
 		setModule(module);
-		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareGolyPeneratorPanel.svg")));
 		box.size = Vec(4 * 15, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
@@ -215,15 +212,11 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		display->box.size = Vec(box.size.x, 400);
 		addChild(display);
 
-		float xx;
-		float yy;
 		addLabeledKnob<ScrambleSnapKnob>("Algo", 4, 324, module, ComputerscareGolyPenerator::ALGORITHM, 0, 0, true);
 		addLabeledKnob<SmoothKnob>("center", 28, 80, module, ComputerscareGolyPenerator::IN_OFFSET, 0, 0);
 		addLabeledKnob<SmallKnob>("spread", 5, 86, module, ComputerscareGolyPenerator::IN_SCALE, 0, 0);
 		addLabeledKnob<SmallKnob>("scale", 33, 290, module, ComputerscareGolyPenerator::OUT_SCALE, 0, 0);
 		addLabeledKnob<SmoothKnob>("offset", 2, 284, module, ComputerscareGolyPenerator::OUT_OFFSET, 0, 0);
-
-		//addLabeledKnob("ch out",5,90,module,ComputerscareGolyPenerator::POLY_CHANNELS,-2,0);
 
 		channelWidget = new PolyOutputChannelsWidget(Vec(28, 309), module, ComputerscareGolyPenerator::POLY_CHANNELS);
 		addChild(channelWidget);
@@ -234,8 +227,10 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 	void appendContextMenu(Menu* menu) override {
 		ComputerscareGolyPenerator* penerator = dynamic_cast<ComputerscareGolyPenerator*>(this->module);
 
-		menu->addChild(new MenuEntry);
+		MenuParam* colorParam = new MenuParam(penerator->paramQuantities[ComputerscareGolyPenerator::COLOR], 2);
+		menu->addChild(colorParam);
 
+		menu->addChild(new MenuSeparator);
 
 		AlgorithmChildMenu *algoMenu = new AlgorithmChildMenu();
 		algoMenu->text = "Algorithm";
@@ -243,7 +238,6 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
 		algoMenu->penerator = penerator;
 		menu->addChild(algoMenu);
 	}
-
 
 	template <typename BASE>
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareGolyPenerator *module, int paramIndex, float labelDx, float labelDy, bool snap = false) {

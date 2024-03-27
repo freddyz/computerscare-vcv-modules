@@ -1,6 +1,4 @@
 #include "Computerscare.hpp"
-#include "dsp/digital.hpp"
-#include "dsp/filter.hpp"
 
 #include <string>
 #include <sstream>
@@ -73,7 +71,27 @@ struct ComputerscarePatchSequencer : Module {
     configParam(STEPS_PARAM, 1.f, 16.f, 2.0f, "Number of Steps");
     for (int i = 0; i < numOutputs; i++) {
       channelCount[i] = 0;
+      configInput(INPUT_JACKS + i, "Row " + std::to_string(i + 1));
+      configOutput(OUTPUTS + i, "Column " + std::to_string(i + 1));
     }
+
+    for (int inRow = 0; inRow < numInputs; inRow++) {
+      for (int outCol = 0; outCol < numOutputs; outCol++) {
+        configButton(SWITCHES + outCol * numInputs + inRow, "Toggle Input Row " + std::to_string(inRow + 1) + ",Output Column " + std::to_string(outCol + 1));
+      }
+    }
+    getParamQuantity(STEPS_PARAM)->randomizeEnabled = false;
+
+    configButton(MANUAL_CLOCK_PARAM, "Manual Scene Advance");
+    configButton(RESET_PARAM, "Reset To Scene 1");
+
+    configButton(EDIT_PARAM, "Edit Next Scene");
+    configButton(EDIT_PREV_PARAM, "Edit Previous Scene");
+
+    configInput(TRG_INPUT, "Clock");
+    configInput(RESET_INPUT, "Reset Trigger");
+    configInput(RANDOMIZE_INPUT, "Randomize Trigger");
+
   }
   void process(const ProcessArgs &args) override;
 
@@ -217,11 +235,9 @@ struct ComputerscarePatchSequencer : Module {
 
   void dataFromJson(json_t *rootJ) override {
     // button states
-    DEBUG("dataFromJson called.  It wants its JSON back");
     json_t *button_statesJ = json_object_get(rootJ, "buttons");
     if (button_statesJ)
     {
-      DEBUG("there R buttonz");
       for (int k = 0; k < maxSteps; k++) {
 
         for (int i = 0; i < 10; i++) {
@@ -386,16 +402,15 @@ struct NumberDisplayWidget3 : TransparentWidget {
 
   int *value;
   ComputerscarePatchSequencer *module;
-  std::shared_ptr<Font> font;
+  std::string fontPath = "res/digital-7.ttf";
 
   NumberDisplayWidget3() {
-    font = APP->window->loadFont(asset::plugin(pluginInstance, "res/digital-7.ttf"));
+
   };
 
   void draw(const DrawArgs &args) override
   {
     // Background
-    //if (module) {
     NVGcolor backgroundColor = nvgRGB(0x00, 0x00, 0x00);
 
     nvgBeginPath(args.vg);
@@ -403,24 +418,34 @@ struct NumberDisplayWidget3 : TransparentWidget {
     nvgFillColor(args.vg, backgroundColor);
     nvgFill(args.vg);
 
-    // text
-    nvgFontSize(args.vg, 13);
-    nvgFontFaceId(args.vg, font->handle);
-    nvgTextLetterSpacing(args.vg, 2.5);
-
-    std::stringstream to_display;
-    if (module) {
-      to_display << std::setw(3) << *value;
+  }
+  void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+    if (layer == 1) {
+      drawText(args);
     }
-    else {
-      to_display << std::setw(3) << "16";
-    }
+    Widget::drawLayer(args, layer);
+  }
+  void drawText(const BGPanel::DrawArgs& args) {
+    std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
+    if (font) {
+      // text
+      nvgFontSize(args.vg, 13);
+      nvgFontFaceId(args.vg, font->handle);
+      nvgTextLetterSpacing(args.vg, 2.5);
 
-    Vec textPos = Vec(6.0f, 17.0f);
-    NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-    nvgFillColor(args.vg, textColor);
-    nvgText(args.vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
-    //  }
+      std::stringstream to_display;
+      if (module) {
+        to_display << std::setw(3) << *value;
+      }
+      else {
+        to_display << std::setw(3) << "16";
+      }
+
+      Vec textPos = Vec(6.0f, 17.0f);
+      NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
+      nvgFillColor(args.vg, textColor);
+      nvgText(args.vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
+    }
   }
 };
 
@@ -535,15 +560,15 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   }
 
 
-  void fromJson(json_t *rootJ) override
-  {
-    ModuleWidget::fromJson(rootJ);
-    json_t *button_statesJ = json_object_get(rootJ, "buttons");
-    if (button_statesJ) {
-      //there be legacy JSON
-      fatherSon->dataFromJson(rootJ);
-    }
-  }
+  /* void fromJson(json_t *rootJ) override
+   {
+     ModuleWidget::fromJson(rootJ);
+     json_t *button_statesJ = json_object_get(rootJ, "buttons");
+     if (button_statesJ) {
+       //there be legacy JSON
+       fatherSon->dataFromJson(rootJ);
+     }
+   }*/
   void appendContextMenu(Menu *menu) override;
 
   ComputerscarePatchSequencer *fatherSon;

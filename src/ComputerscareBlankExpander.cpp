@@ -7,11 +7,9 @@ const std::string clockModeDescriptions[3] = {"Sync\nAnimation will synchronize 
 
 
 struct FrameOffsetParam : ParamQuantity {
-	ComputerscareBlankExpander* module;
 	int numFrames = -1;
 	void setNumFrames(int num) { numFrames = num; }
 	std::string getDisplayValueString() override {
-		//return &module->params[paramId];
 		float val = getValue();
 		return string::f("%i", 1 + mapBlankFrameOffset(val, numFrames));
 	}
@@ -79,6 +77,12 @@ struct ComputerscareBlankExpander : Module {
 		configParam<FrameOffsetParam>(ZERO_OFFSET, 0.f, 0.999f, 0.f, "EOC / Reset Frame #");
 		configParam(MANUAL_NEXT_FILE_BUTTON, 0.f, 1.f, 0.f, "Next File (see right click menu of mother for options)");
 
+		configInput(SYNC_INPUT, "Sync");
+		configInput(RESET_INPUT, "Reset");
+		configInput(NEXT_FILE_INPUT, "Next Slideshow File");
+		configOutput(EOC_OUTPUT, "End of Animation");
+		configOutput(EACH_FRAME_OUTPUT, "Frame Change");
+
 		frameOffsetQuantity = dynamic_cast<FrameOffsetParam*>(paramQuantities[ZERO_OFFSET]);
 
 		rightExpander.producerMessage = rightMessages[0];
@@ -105,11 +109,13 @@ struct ComputerscareBlankExpander : Module {
 				frameOffsetQuantity->setNumFrames(numFrames);
 			}
 
+
+
 			if (eocMessageReadTrigger.process(currentFrame == 0 ? 10.f : 0.f)) {
-				eocPulse.trigger(1e-3);
+				eocPulse.trigger(1e-3f);
 			}
 			if (eachFrameReadTrigger.process(lastTick != tick ? 10.f : 0.f)) {
-				eachFramePulse.trigger(1e-3);
+				eachFramePulse.trigger(1e-3f);
 			}
 
 
@@ -165,6 +171,7 @@ struct FrameScrubKnob : SmallKnob {
 };
 struct ClockModeButton : app::SvgSwitch {
 	ClockModeButton() {
+		shadow->opacity = 0.f;
 		//momentary = true;
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/blank-clock-mode-sync.svg")));
 		addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/blank-clock-mode-scan.svg")));

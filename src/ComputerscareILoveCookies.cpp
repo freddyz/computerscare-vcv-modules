@@ -1,7 +1,4 @@
 #include "Computerscare.hpp"
-#include "dsp/digital.hpp"
-#include "dsp/filter.hpp"
-#include "window.hpp"
 #include "dtpulse.hpp"
 
 #include <string>
@@ -23,6 +20,7 @@ const int numKnobs = numKnobRows * numKnobColumns;
 const int numInputs = numInputRows * numInputColumns;
 const std::vector<NVGcolor> outlineColorMap = {COLOR_COMPUTERSCARE_RED, COLOR_COMPUTERSCARE_YELLOW, COLOR_COMPUTERSCARE_BLUE};
 
+const std::string uppercaseLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 struct ComputerscareILoveCookies : Module {
   enum ParamIds {
@@ -101,10 +99,29 @@ struct ComputerscareILoveCookies : Module {
       setNextAbsoluteSequence(i);
       checkIfShouldChange(i);
       resetOneOfThem(i);
+
+      std::string rowi = std::to_string(i + 1);
+
+      configButton(INDIVIDUAL_RESET_PARAM + i, "Reset Row " + rowi );
+
+      configInput(CLOCK_INPUT + i, "Row " + rowi + " Clock");
+      configInput(RESET_INPUT + i, "Row " + rowi + " Reset");
+
+      configOutput(TRG_OUTPUT + i, "Row " + rowi + " CV");
+      configOutput(FIRST_STEP_OUTPUT + i, "Row " + rowi + " End of Cycle");
     }
     for (int k = 0; k < numKnobs; k++) {
       configParam( KNOB_PARAM + k, 0.f, 10.f, 0.0f, string::f("knob %c", knoblookup[k]));
+
+      configInput(SIGNAL_INPUT + k, string::f("%c", uppercaseLetters.at(k)));
     }
+
+    configButton(MANUAL_CLOCK_PARAM, "Manual Clock Advance");
+    configButton(MANUAL_RESET_PARAM, "Manual Reset");
+
+    configInput(GLOBAL_CLOCK_INPUT, "Global Clock");
+    configInput(GLOBAL_RESET_INPUT, "Global Reset");
+
   }
   json_t *dataToJson() override {
     json_t *rootJ = json_object();
@@ -299,7 +316,6 @@ struct ComputerscareILoveCookies : Module {
         inError[channel] = false;
       }
       else {
-        DEBUG("Channel %i in error", channel);
         inError[channel] = true;
       }
     }
@@ -459,12 +475,12 @@ struct CookiesKnobRangeItem : MenuItem {
 struct CookiesTF2 : ComputerscareTextField
 {
   ComputerscareILoveCookies *module;
-  //int fontSize = 16;
   int rowIndex = 0;
 
   CookiesTF2(int i)
   {
     rowIndex = i;
+    dimWithRoom = false;
     ComputerscareTextField();
   };
   void draw(const DrawArgs &args) override
@@ -666,7 +682,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   }
 
 
-  void fromJson(json_t *rootJ) override
+  /*void fromJson(json_t *rootJ) override
   { std::string val;
     ModuleWidget::fromJson(rootJ);
     json_t *sequencesJ = json_object_get(rootJ, "sequences");//legacy
@@ -681,7 +697,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
       }
       cookies->jsonLoaded = true;
     }
-    /*else {
+    else {
       json_t *textJLegacy = json_object_get(rootJ, "data");
       if (textJLegacy) {
         json_t *seqJLegacy = json_object_get(textJLegacy, "sequences");
@@ -696,8 +712,8 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
           }
         }
       }
-    }*/
-  }
+    }
+  }*/
 
 
   ComputerscareILoveCookies *cookies;

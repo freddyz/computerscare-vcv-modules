@@ -42,6 +42,15 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 		configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels");
 		configParam(RANDOMIZE_ONE_TO_ONE, 0.f, 1.f, 0.f);
 
+		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
+		getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
+		getParamQuantity(RANDOMIZE_ONE_TO_ONE)->randomizeEnabled = false;
+
+		configInput(POLY_INPUT, "Main");
+		configInput(ROUTING_CV, "Routing CV");
+
+		configOutput(POLY_OUTPUT, "Re-Routed");
+
 	}
 	void setAll(int setVal) {
 		for (int i = 0; i < 16; i++) {
@@ -108,8 +117,8 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 			for (int i = 0; i < numOutputChannels; i++) {
 
 				knobSetting = std::round(inputs[ROUTING_CV].getVoltage(cvChannels == 1 ? 0 : i) * 1.5) + 1;
-				routing[i] = (knobSetting + 16 * 4 - 1) % 16 + 1;
-				if (knobSetting > inputChannels) {
+				routing[i] = (knobSetting + 16 * 4 - 1) % 16;
+				if (routing[i] > inputChannels) {
 					outputs[POLY_OUTPUT].setVoltage(0, i);
 				}
 				else {
@@ -121,7 +130,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
 				//printf("%f \n",random::uniform());
 				counter = 0;
 				for (int i = 0; i < numKnobs; i++) {
-					routing[i] = (int)params[KNOB + i].getValue();
+					routing[i] = (int)params[KNOB + i].getValue() - 1;
 				}
 
 			}
@@ -153,7 +162,7 @@ struct PouterSmallDisplay : SmallLetterDisplay
 	{
 		if (module)
 		{
-			std::string str = std::to_string(module->routing[ch]);
+			std::string str = std::to_string(module->routing[ch] + 1);
 			if (module->numInputChannels > 0 && (module->routing[ch] > module->numInputChannels)) {
 				textColor = outOfBoundsColor;
 			}
@@ -162,10 +171,14 @@ struct PouterSmallDisplay : SmallLetterDisplay
 			}
 			value = str;
 		}
+		else {
+			textColor = okayColor;
+			value = std::to_string((random::u32() % 16) + 1);
+		}
 		SmallLetterDisplay::draw(args);
 	}
 };
-struct DisableableSnapKnob : RoundBlackSnapKnob {
+struct DisableableSnapKnob : RoundKnob {
 	ComputerscarePolyModule *module;
 	int channel;
 	bool disabled = false;
@@ -174,20 +187,28 @@ struct DisableableSnapKnob : RoundBlackSnapKnob {
 	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-knob-dot-indicator-disabled.svg"));
 
 	DisableableSnapKnob() {
-		RoundBlackSnapKnob();
+		snap = true;
+		shadow->opacity = 0.f;
+		RoundKnob();
 	}
 	void step() override {
 		if (module) {
 			disabled = channel > module->polyChannels - 1;
 		}
+		else {
+			disabled = false;
+			setSvg(enabledSvg);
+			onChange(*(new event::Change()));
+			fb->dirty = true;
+		}
 		if (disabled != lastDisabled) {
 			setSvg(disabled ? disabledSvg : enabledSvg);
-			dirtyValue = -20.f;
+			onChange(*(new event::Change()));
+			fb->dirty = true;
 			lastDisabled = disabled;
 		}
-		RoundBlackSnapKnob::step();
+		RoundKnob::step();
 	}
-	void randomize() override {return;}
 };
 struct ComputerscareRolyPouterWidget : ModuleWidget {
 	ComputerscareRolyPouterWidget(ComputerscareRolyPouter *module) {
@@ -246,84 +267,82 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
 		addChild(outputChannelLabel);
 
 	}
+	void appendContextMenu(Menu *menu) override
+	{
+		ComputerscareRolyPouter *module = dynamic_cast<ComputerscareRolyPouter *>(this->module);
+
+		struct ssmi : MenuItem
+		{
+			ComputerscareRolyPouter *pouter;
+			int mySetVal = 1;
+			ssmi(int setVal)
+			{
+				mySetVal = setVal;
+				MenuItem();
+			}
+
+			void onAction(const event::Action &e) override
+			{
+				pouter->setAll(mySetVal);
+			}
+		};
+		struct OneToOneItem: MenuItem {
+			ComputerscareRolyPouter *pouter;
+
+			OneToOneItem() {
+				MenuItem();
+			}
+			void onAction(const event::Action &e) override {
+				pouter->toggleOneToOne();
+			}
+			void step() override {
+				rightText = pouter->params[ComputerscareRolyPouter::RANDOMIZE_ONE_TO_ONE].getValue() == 1.f ? "✔" : "";
+				MenuItem::step();
+			}
+		};
+
+		struct SetAllItem : MenuItem {
+			ComputerscareRolyPouter *pouter;
+
+			Menu *createChildMenu() override {
+				Menu *menu = new Menu;
+				for (unsigned int i = 1; i < 17; i++) {
+					ssmi *menuItem = new ssmi(i);
+					menuItem->text = "Set all to ch. " + std::to_string(i);
+					menuItem->pouter = pouter;
+					menu->addChild(menuItem);
+				}
+				return menu;
+			}
+		};
+
+		MenuLabel *spacerLabel = new MenuLabel();
+		menu->addChild(spacerLabel);
+
+		OneToOneItem *oneToOne = new OneToOneItem();
+		oneToOne->text = "Randomize one-to-one (Don't re-use input channels on randomize)";
+		oneToOne->pouter = module;
+		menu->addChild(oneToOne);
+
+
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+
+		SetAllItem *setAllItem = new SetAllItem();
+		setAllItem->text = "Set All To";
+		setAllItem->rightText = RIGHT_ARROW;
+		setAllItem->pouter = module;
+		menu->addChild(setAllItem);
+
+	}
+
 	DisableableSnapKnob* knob;
 	PolyOutputChannelsWidget* channelWidget;
 	PouterSmallDisplay* pouterSmallDisplay;
 	SmallLetterDisplay* outputChannelLabel;
 
 	void addMenuItems(ComputerscareRolyPouter *pouter, Menu *menu);
-	void appendContextMenu(Menu *menu) override;
-};
-struct ssmi : MenuItem
-{
-	ComputerscareRolyPouter *pouter;
-	int mySetVal = 1;
-	ssmi(int setVal)
-	{
-		mySetVal = setVal;
-	}
-
-	void onAction(const event::Action &e) override
-	{
-		pouter->setAll(mySetVal);
-	}
-};
-struct OneToOneItem: MenuItem {
-	ComputerscareRolyPouter *pouter;
-
-	OneToOneItem() {
-
-	}
-	void onAction(const event::Action &e) override {
-		pouter->toggleOneToOne();
-	}
-	void step() override {
-		rightText = pouter->params[ComputerscareRolyPouter::RANDOMIZE_ONE_TO_ONE].getValue() == 1.f ? "✔" : "";
-		MenuItem::step();
-	}
 };
 
-struct SetAllItem : MenuItem {
-	ComputerscareRolyPouter *pouter;
-
-	Menu *createChildMenu() override {
-		Menu *menu = new Menu;
-		for (int i = 1; i < 17; i++) {
-			ssmi *menuItem = new ssmi(i);
-			menuItem->text = "Set all to ch. " + std::to_string(i);
-			menuItem->pouter = pouter;
-			menu->addChild(menuItem);
-		}
-		return menu;
-	}
-
-};
-void ComputerscareRolyPouterWidget::appendContextMenu(Menu *menu)
-{
-	ComputerscareRolyPouter *pouter = dynamic_cast<ComputerscareRolyPouter *>(this->module);
-
-	MenuLabel *spacerLabel = new MenuLabel();
-	menu->addChild(spacerLabel);
-
-	OneToOneItem *oneToOne = new OneToOneItem();
-	oneToOne->text = "Randomize one-to-one (Don't re-use input channels on randomize)";
-	oneToOne->pouter = pouter;
-	menu->addChild(oneToOne);
-
-
-	MenuLabel *modeLabel = new MenuLabel();
-	modeLabel->text = "Presets";
-	menu->addChild(modeLabel);
-
-	SetAllItem *setAllItem = new SetAllItem();
-	setAllItem->text = "Set All To";
-	setAllItem->rightText = RIGHT_ARROW;
-	setAllItem->pouter = pouter;
-	menu->addChild(setAllItem);
-
-	//addMenuItems(pouter, menu);
-
-}
 
 
 Model *modelComputerscareRolyPouter = createModel<ComputerscareRolyPouter, ComputerscareRolyPouterWidget>("computerscare-roly-pouter");

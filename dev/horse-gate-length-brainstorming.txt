@@ -1,0 +1,51 @@
+x--x--x-
+
+x__x_-x-
+
+minimum gate length: 1/4 of the input clock? 1/8? 1/16?
+maximum gate length: 99% of the full distance to the next trigger?
+
+
+could do factors of the input clock signal
+
+x--x--x-
+time to next step:
+30030020
+
+--x-
+0040
+
+xxxx
+1111
+
+xx-x
+1201
+
+-x-x
+0202
+
+
+x--x--x-
+
+minimum gate division: 1
+1: [1,2,3],
+2:[1,2,3],
+3:[1,2]
+
+
+minimum gate division: 0.5
+1:[.5,1,1.5,2,2.5,3],
+2:[.5,1,1.5,2,2.5,3],
+3:[.5,1,1.5,2]
+
+
+
+min gate: KNOB, 1/16 thru 16x
+max gate: KNOB, 1/16 thru 16x
+then its a uniform distribution
+
+what if you want just 1/4, 2
+
+with 80% bias towards the 2?
+
+can do all this with sin functions
