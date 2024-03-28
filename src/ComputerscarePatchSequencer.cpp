@@ -402,7 +402,7 @@ struct NumberDisplayWidget3 : TransparentWidget {
 
   int *value;
   ComputerscarePatchSequencer *module;
-  std::string fontPath = "res/digital-7.ttf";
+  std::string fontPath = "res/Segment7Standard.ttf";
 
   NumberDisplayWidget3() {
 
@@ -429,7 +429,7 @@ struct NumberDisplayWidget3 : TransparentWidget {
     std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
     if (font) {
       // text
-      nvgFontSize(args.vg, 13);
+      nvgFontSize(args.vg, 18);
       nvgFontFaceId(args.vg, font->handle);
       nvgTextLetterSpacing(args.vg, 2.5);
 
