@@ -166,6 +166,14 @@
 			"tags": ["Utility"],
 			"manualUrl":
 				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/pouse-mosition.md"
+		},
+		{
+			"slug": "computerscare-cold-ride",
+			"name": "It's a Cold Ride, Dear",
+			"description": "Sample Delay Sequencer",
+			"tags": ["Sequencer","Utility"],
+			"manualUrl":
+				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/cold-ride.md"
 		}
 	]
 }
