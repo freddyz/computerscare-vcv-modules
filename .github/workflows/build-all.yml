@@ -27,7 +27,7 @@ jobs:
           }
         - {
             name: MacOS-arm,
-            os: macos-latest,
+            os: macos-14,
             prepare-os: ""
           }
         - {
