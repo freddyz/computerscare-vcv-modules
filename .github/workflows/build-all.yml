@@ -131,7 +131,7 @@ jobs:
           pwd
           ls _artifacts
       - name: Upload release assets
-        uses: svenstaro/upload-release-action@v4
+        uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: _artifacts/**/*.vcvplugin
