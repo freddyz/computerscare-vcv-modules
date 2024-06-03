@@ -1,6 +1,7 @@
 # 2.1.1
 Toly Pools
 - Make a new module with new slug, Toly Pools v2 with better rotation options and behavior
+- New Toly Pools v2 has Auto output channels mode by default, and positive/negative rotation
 - Deprecate the old Toly Pools.  It will still work in old patches, but won't show up in browser
 
 # 2.1.0

@@ -102,7 +102,7 @@ struct ComputerscareTolyPoolsV2 : Module {
 		if(rotationModeEnum == 0) {
 			rotationBase = numInputChannels;
 		} else if(rotationModeEnum == 1) {
-			rotationBase = numOutputChannels;
+			rotationBase = std::max(numOutputChannels,numInputChannels);
 		} else if(rotationModeEnum == 2) {
 			rotationBase = 16;
 		}
@@ -255,8 +255,8 @@ struct PoolsModeItem : MenuItem {
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
 		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Rotation Mode"));
-		menu->addChild(construct<PoolsModeItem>(&MenuItem::text, "Rotate Through all Input Channels", &PoolsModeItem::pools, pools, &PoolsModeItem::modeEnum, 0));
-		menu->addChild(construct<PoolsModeItem>(&MenuItem::text, "Rotate Through all Output Channels", &PoolsModeItem::pools, pools, &PoolsModeItem::modeEnum, 1));
+		menu->addChild(construct<PoolsModeItem>(&MenuItem::text, "Repeat Input Channels", &PoolsModeItem::pools, pools, &PoolsModeItem::modeEnum, 0));
+		menu->addChild(construct<PoolsModeItem>(&MenuItem::text, "Rotate Through Maximum of Output, Input Channels", &PoolsModeItem::pools, pools, &PoolsModeItem::modeEnum, 1));
 		menu->addChild(construct<PoolsModeItem>(&MenuItem::text, "Rotate Through 16 Channels (Legacy)", &PoolsModeItem::pools, pools, &PoolsModeItem::modeEnum, 2));
 	
 	}
