@@ -22,7 +22,7 @@ jobs:
           }
         - {
             name: MacOS,
-            os: macos-latest,
+            os: macos-13,
             prepare-os: ""
           }
         - {
