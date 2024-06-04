@@ -24,13 +24,15 @@ rotate 4,clip 4
 */
 
 
-
-
 struct ComputerscareTolyPoolsV2 : Module {
 	int counter = 83910;
 	int numOutputChannelsControlValue = 0;
 	int numOutputChannels = 1;
 	int rotation = 0;
+
+	int knobRotation=0;
+	int numChannelsKnob = 0;
+
 	int numInputChannels = 1;
 
 	int rotationModeEnum=0;
@@ -63,9 +65,9 @@ struct ComputerscareTolyPoolsV2 : Module {
 
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		configParam(ROTATE_KNOB, -16.f, 16.f, 0.f, "Rotate", " channels");
+		configParam(ROTATE_KNOB, -16.f, 16.f, 0.f, "Rotation Offset", " channels");
 
-		configParam<AutoParamQuantity>(NUM_CHANNELS_KNOB, 0.f, 16.f, 0.f, "Number of Output Channels");
+		configParam<AutoParamQuantity>(NUM_CHANNELS_KNOB, 0.f, 16.f, 0.f, "Number of Output Channels Offset");
 
 		configInput(POLY_INPUT, "Main");
 		configInput(ROTATE_CV, "Rotation CV");
@@ -76,18 +78,27 @@ struct ComputerscareTolyPoolsV2 : Module {
 	}
 	void process(const ProcessArgs &args) override {
 		counter++;
+		
+		int cvRotation = 0;
+		int cvOutputChannels = 0;
+
 		if (counter > 982) {
 			counter = 0;
-			numOutputChannelsControlValue = params[NUM_CHANNELS_KNOB].getValue();
-			rotation = params[ROTATE_KNOB].getValue();
+			numChannelsKnob = params[NUM_CHANNELS_KNOB].getValue();
+			knobRotation = (int) round(params[ROTATE_KNOB].getValue());
 			numInputChannels = inputs[POLY_INPUT].getChannels();
 		}
 		if (inputs[NUM_CHANNELS_CV].isConnected()) {
-			numOutputChannelsControlValue = mapVoltageToChannelCount(inputs[NUM_CHANNELS_CV].getVoltage(0));
+			cvOutputChannels = (int) round(inputs[NUM_CHANNELS_CV].getVoltage(0)*1.6f);
 		}
 		if (inputs[ROTATE_CV].isConnected()) {
-			rotation = mapVoltageToChannelCount(inputs[ROTATE_CV].getVoltage(0));
+			cvRotation = (int) round(inputs[ROTATE_CV].getVoltage(0) * 1.6f);
 		}
+
+		rotation = knobRotation+cvRotation;
+
+		numOutputChannelsControlValue = math::clamp(cvOutputChannels+numChannelsKnob,0,16);
+
 
 		if(numOutputChannelsControlValue == 0) {
 			numOutputChannels = numInputChannels;
@@ -116,7 +127,6 @@ struct ComputerscareTolyPoolsV2 : Module {
 			for (int i = 0; i < numOutputChannels; i++) {
 				outputs[POLY_OUTPUT].setVoltage(0.f, i);
 			}
-		} 
 		}
 	}
 

@@ -1,3 +1,8 @@
+# 2.1.7
+- Update build to use plugin build toolchain github actions image
+- Toly Pools v2 adds CV values to knob values as is the standard
+- Fix Toly Pools v2 crash when disconnecting input cable
+
 # 2.1.1
 Toly Pools
 - Make a new module with new slug, Toly Pools v2 with better rotation options and behavior
