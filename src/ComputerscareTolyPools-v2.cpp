@@ -108,9 +108,15 @@ struct ComputerscareTolyPoolsV2 : Module {
 		}
 
 
-
-		for (int i = 0; i < numOutputChannels; i++) {
-			outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage((i + rotation + rotationBase*16) % rotationBase), i);
+		if(inputs[POLY_INPUT].isConnected() && outputs[POLY_OUTPUT].isConnected()) {
+			for (int i = 0; i < numOutputChannels; i++) {
+				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage((i + rotation + rotationBase*16) % rotationBase), i);
+			}
+		} else {
+			for (int i = 0; i < numOutputChannels; i++) {
+				outputs[POLY_OUTPUT].setVoltage(0.f, i);
+			}
+		} 
 		}
 	}
 
