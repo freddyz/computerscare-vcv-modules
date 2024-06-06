@@ -170,7 +170,16 @@ struct PoolsSmallDisplayV2 : SmallLetterDisplay
 				
 			}
 			else if (type == 1) {
-				value = std::to_string(module->rotation);
+
+				//keep the displayed knob value between -15 and +15
+				int rotationDisplay = 0;
+				if(module->rotation > 0) {
+					rotationDisplay = module->rotation % 16;
+				} else if(module->rotation < 0) {
+					rotationDisplay = -1*( (-1* module->rotation)%16);
+				}
+
+				value = std::to_string(rotationDisplay);
 			}
 			else if (type == 2) {
 				value = std::to_string(module->numInputChannels);
