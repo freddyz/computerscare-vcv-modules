@@ -36,6 +36,7 @@ struct ComputerscareTolyPoolsV2 : Module {
 	int numInputChannels = 1;
 
 	int rotationModeEnum=0;
+	int rotationBase = 16;
 
 	ComputerscareSVGPanel* panelRef;
 	enum ParamIds {
@@ -82,6 +83,8 @@ struct ComputerscareTolyPoolsV2 : Module {
 		int cvRotation = 0;
 		int cvOutputChannels = 0;
 
+		int finalPositiveRotation = 0;
+
 		if (counter > 982) {
 			counter = 0;
 			numChannelsKnob = params[NUM_CHANNELS_KNOB].getValue();
@@ -108,7 +111,7 @@ struct ComputerscareTolyPoolsV2 : Module {
 		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
 		outputs[NUM_CHANNELS_OUTPUT].setVoltage(mapChannelCountToVoltage(numInputChannels));
 
-		int rotationBase = 16;
+
 
 		if(rotationModeEnum == 0) {
 			rotationBase = numInputChannels;
@@ -118,10 +121,20 @@ struct ComputerscareTolyPoolsV2 : Module {
 			rotationBase = 16;
 		}
 
+		if(rotation > 0) {
+			finalPositiveRotation = rotation % rotationBase;
+		} else if(rotation < 0) {
+			/*
+				 eg: rotationBase=16, rotation = -21
+				 positiveRotation = 16-(21 % 16) = 16 - (5) = +11
+			*/
+			finalPositiveRotation = rotationBase - ((-rotation) % rotationBase);
+		}
+
 
 		if(inputs[POLY_INPUT].isConnected() && outputs[POLY_OUTPUT].isConnected()) {
 			for (int i = 0; i < numOutputChannels; i++) {
-				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage((i + rotation + rotationBase*16) % rotationBase), i);
+				outputs[POLY_OUTPUT].setVoltage(inputs[POLY_INPUT].getVoltage((i + finalPositiveRotation) % rotationBase), i);
 			}
 		} else {
 			for (int i = 0; i < numOutputChannels; i++) {
@@ -174,9 +187,9 @@ struct PoolsSmallDisplayV2 : SmallLetterDisplay
 				//keep the displayed knob value between -15 and +15
 				int rotationDisplay = 0;
 				if(module->rotation > 0) {
-					rotationDisplay = module->rotation % 16;
+					rotationDisplay = module->rotation % module->rotationBase;
 				} else if(module->rotation < 0) {
-					rotationDisplay = -1*( (-1* module->rotation)%16);
+					rotationDisplay = -1*( (-1* module->rotation) % module->rotationBase);
 				}
 
 				value = std::to_string(rotationDisplay);
