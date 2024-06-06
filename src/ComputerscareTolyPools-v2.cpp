@@ -85,12 +85,20 @@ struct ComputerscareTolyPoolsV2 : Module {
 
 		int finalPositiveRotation = 0;
 
+		bool inputIsConnected = inputs[POLY_INPUT].isConnected();
+
 		if (counter > 982) {
 			counter = 0;
 			numChannelsKnob = params[NUM_CHANNELS_KNOB].getValue();
 			knobRotation = (int) round(params[ROTATE_KNOB].getValue());
-			numInputChannels = inputs[POLY_INPUT].getChannels();
 		}
+		
+		if(inputIsConnected) {
+			numInputChannels = inputs[POLY_INPUT].getChannels();
+		} else {
+			numInputChannels = 0;
+		}
+
 		if (inputs[NUM_CHANNELS_CV].isConnected()) {
 			cvOutputChannels = (int) round(inputs[NUM_CHANNELS_CV].getVoltage(0)*1.6f);
 		}
@@ -104,17 +112,18 @@ struct ComputerscareTolyPoolsV2 : Module {
 
 
 		if(numOutputChannelsControlValue == 0) {
-			numOutputChannels = numInputChannels;
+			numOutputChannels = inputIsConnected ? numInputChannels : 1;
 		} else {
 			numOutputChannels = numOutputChannelsControlValue;
 		}
+
 		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
 		outputs[NUM_CHANNELS_OUTPUT].setVoltage(mapChannelCountToVoltage(numInputChannels));
 
 
 
 		if(rotationModeEnum == 0) {
-			rotationBase = numInputChannels;
+			rotationBase = inputIsConnected ? numInputChannels : 16; // so when unconnected, the rotation knob illustrates the normal range
 		} else if(rotationModeEnum == 1) {
 			rotationBase = std::max(numOutputChannels,numInputChannels);
 		} else if(rotationModeEnum == 2) {
