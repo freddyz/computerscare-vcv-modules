@@ -25,8 +25,13 @@ Sequentially output the individual channel voltages of a polyphonic signal.  Con
 
 * Display input channel count
 * CV output of the input channel count (1 - 16 channels is linearly mapped to 0 - 10 volts)
-* Knob and CV for setting output channel count (0 - 10 volts linearly mapped to 1-16 output channels)
-* Knob and CV for rotating the polyphonic signal (0 - 10 volts sets rotation of 0-15 channels.  For example: rotation of "1" will move input channel 2 -> output channel 1, input channel 3->output channel 2, ...  input channel 16 -> output channel 1)
+* Knob and CV for setting output channel count (0 - 10 volts linearly mapped to 1-16 output channels).  CV value is multiplied by 1.6 and added to knob value
+* Knob and CV for rotating the polyphonic signal (-10v thru +10v sets rotation of -16 to +16 channels.  For example: rotation of "1" will move input channel 2 -> output channel 1, input channel 3->output channel 2, ...  input channel 16 -> output channel 1).  CV value is multiplied by 1.6 and added to knob value.
+* The default output polyphony setting is "A": Automatic which will set the output polyphony equal to the input polyphony
+* Different rotation modes via context menu:
+- "Repeat Input Channels": If the output polyphony is set higher than input polyphony (channel count), the input channels will be repeated to fill the output
+- "Rotate Through Maximum of Output, Input Channels": If the output polyphony is higher than the input polyphony, all input channels will be used and the remainder will be filled with 0v
+- "Rotate Through 16 Channels (Legacy)": The input signal will be padded to 16 channels polyphony with 0v always.  This is the "old" Toly Pools behavior, and results in a lot of 0v signals.
 
 
 ### Poly Channels Knob

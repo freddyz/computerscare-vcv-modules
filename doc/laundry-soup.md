@@ -2,7 +2,7 @@
 # Laundry Soup
 Laundry Soup is a trigger sequencer that takes text as input.  If you connect a clock signal to the "clk" input, and type `1` in the top text box, the top "out" output will send a trigger each clock.  `2` sends a trigger every 2 clock signals.  `31` sends a trigger on the 1st and 4th clock signals, and then repeats this pattern forever or until reset.
 
-![Laundry Soup](./doc/laundry-soup-basic-2.png)
+![Laundry Soup](./laundry-soup-basic-2.png)
 
 
 ### Text Input:
@@ -30,7 +30,7 @@ The input and output of the 2nd row is:
 ~~~~
 
 
-In The 3rd row:`2131@8`, the "@8" means: repeat the pattern every 8 clock signals.  In this case the original pattern has length 7 (2 + 1 + 3 + 1 = 7), so normally it would repeat every 7 clock signals.
+In The 3rd row:`2131@8`, the `@8` means: repeat the pattern every 8 clock signals.  In this case the original pattern has length 7 (2 + 1 + 3 + 1 = 7), so normally it would repeat every 7 clock signals.
 
 ~~~~
 2131   ---> x-xx--x  (repeating after 7 beats)
@@ -47,7 +47,12 @@ A rest can be programmed by using the number "0".  If Laundry Soup is triggered 
 07     ---> -x------
 00004  ---> ----x---
 ~~~~
- 
+
+Another way to generate the backbeat pattern using the @ symbol:
+~~~~
+0@4,4    --->   ----x---
+~~~~
+
 
 The 5th row shows how multiple patterns can be combined.  `311@16,2@16` means: `311` for 16 beats, and then `2` for 16 beats.
 ~~~~
@@ -55,15 +60,17 @@ The 5th row shows how multiple patterns can be combined.  `311@16,2@16` means: `
   2@16      --->                 x-x-x-x-x-x-x-x-
    
 311@16,2@16 ---> x--xxx--xxx--xxxx-x-x-x-x-x-x-x-
-                                                   
+~~~~
+
+The bottom pattern could also be written like this, using square brackets:
+~~~~                                                   
 [311,2]@16  ---> x--xxx--xxx--xxxx-x-x-x-x-x-x-x-
 ~~~~
 
+Comma-separated patterns inside square brackets, and followed by an `@` will sequentially output each pattern for the specified number of beats.  For the pattern above, it will output: `311` for 16 beats, and then `2` for 16 beats.
 
-The 6th row shows a way to "skip" beats.  `@4` all by itself means: wait 4 beats with no trigger.  This is another way to generate the backbeat pattern as the 4th row example.
-~~~~
-@4,4    --->   ----x---
-~~~~
+
+
 
 ### How to program lengths longer than 9 beats:
 To program a rhythm that divides the incoming clock by 16, the proper input is NOT `16`.  Values greater than 9 steps must be enclosed in angle brackets `<16>`
@@ -77,7 +84,7 @@ To program a rhythm that divides the incoming clock by 16, the proper input is N
 
 
 ### Input Jacks:
-![ComputerscarePatchSequencer](./doc/laundry-soup-inputs-1.png)
+![ComputerscarePatchSequencer](./laundry-soup-inputs-1.png)
 
 **Global Clock (clk):** Increases each row's absoluteStep by 1.
 
@@ -90,7 +97,7 @@ To program a rhythm that divides the incoming clock by 16, the proper input is N
 
 ### Output Jacks:
 
-![ComputerscarePatchSequencer](./doc/laundry-soup-outputs-1.png)
+![ComputerscarePatchSequencer](./laundry-soup-outputs-1.png)
 
 
 **Individual Row Output (out):** The output of the row's pattern.  Outputs 10 volts if:
@@ -100,13 +107,16 @@ A) The clock signal is sent to the Global Clock or Individual Clock input jack
 B) The pattern ought to trigger on this absoluteStep
 ~~~~
 
-**Individual Row First Step Output (one):** Sends a trigger on the 1st step of the row's pattern.
+**Individual Row EOC Output (eoc):** Sends a trigger on the 1st step of the row's pattern.
 
 
 ### Displays:
 
 The display shows a few things:
 
+- Top row: Which step number the sequence is currently on, starting with 1
+- Bottom row: The total length of the pattern
+- If the display is red, that means the pattern has a pending change and will switch to the newly typed pattern when it reaches step 1.  ie: changing the pattern is sync'd to the old pattern length.  Click the display to force the pattern to reset on the next clock.
 
 *Inspired by Frank Buss's Formula, Ryan Kirkbride's FoxDot, SuperCollider*
 

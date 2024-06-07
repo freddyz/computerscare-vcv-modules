@@ -25,5 +25,6 @@ void init(Plugin *p) {
 	p->addModel(modelComputerscareGolyPenerator);
 	p->addModel(modelComputerscareMolyPatrix);
 	p->addModel(modelComputerscareHorseADoodleDoo);
-	p->addModel(modelComputerscarePouseMosition);
+
+	p->addModel(modelComputerscareTolyPoolsV2);
 }
