@@ -415,6 +415,19 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 		getParamQuantity(POLY_KNOB)->resetEnabled = false;
 
 		getParamQuantity(MODE_KNOB)->randomizeEnabled = false;
+		getParamQuantity(GATE_MODE)->randomizeEnabled = false;
+
+		getParamQuantity(CV_SCALE)->randomizeEnabled = false;
+		getParamQuantity(CV_OFFSET)->randomizeEnabled = false;
+		getParamQuantity(CV_PHASE)->randomizeEnabled = false;
+
+		getParamQuantity(CV2_SCALE)->randomizeEnabled = false;
+		getParamQuantity(CV2_OFFSET)->randomizeEnabled = false;
+		getParamQuantity(CV2_PHASE)->randomizeEnabled = false;
+
+		getParamQuantity(GATE_LENGTH_SCALE)->randomizeEnabled = false;
+		getParamQuantity(GATE_LENGTH_OFFSET)->randomizeEnabled = false;
+		getParamQuantity(GATE_LENGTH_PHASE)->randomizeEnabled = false;
 
 		getParamQuantity(PATTERN_SPREAD)->randomizeEnabled = false;
 		getParamQuantity(STEPS_SPREAD)->randomizeEnabled = false;
