@@ -33,6 +33,8 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
         NUM_LIGHTS
     };
 
+
+
     enum wrapModes {
         WRAP_NORMAL,
         WRAP_CYCLE,
@@ -95,11 +97,16 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
         for(int rectInputCh = 0; rectInputCh < maxRectInput; rectInputCh++) {
             int outputBlock = rectInputCh > 7 ? 1 : 0;
 
-            int realInputCh,imInputCh;
+            int realInputCh=1;
+            int imInputCh=1;
 
             int wrapMode = params[WRAP_MODE].getValue();
 
             if(wrapMode == WRAP_NORMAL) {
+                /*
+                    If monophonic, copy ch1 to all
+                    Otherwise use the poly channels
+                */
                 if(numRealInputChannels==1) {
                     realInputCh=0;
                 } else {
@@ -112,14 +119,17 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
                 }
 
             } else if(wrapMode == WRAP_CYCLE) {
+                // Cycle through the poly channels
                 realInputCh = rectInputCh % numRealInputChannels;
                 imInputCh = rectInputCh % numImaginaryInputChannels;
 
             } else if(wrapMode == WRAP_MINIMUM) {
+                // Do not copy channel 1 if monophonic
                 realInputCh=rectInputCh;
                 imInputCh=rectInputCh;
                 
             } else if(wrapMode == WRAP_STALL) {
+                // Go up to the maximum channel, and then use the final value for the rest
                 realInputCh=rectInputCh>=numRealInputChannels ? numRealInputChannels-1 : rectInputCh;
                 imInputCh=rectInputCh>=numImaginaryInputChannels ? numImaginaryInputChannels-1 : rectInputCh;
             }
@@ -129,6 +139,12 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
 
             outputs[RECT_IN_RECT_OUT + outputBlock].setVoltage(x,rectInputCh*2 % 16);
             outputs[RECT_IN_RECT_OUT + outputBlock].setVoltage(y,(rectInputCh*2+1) % 16);
+
+            float r = std::hypot(x,y);
+            float arg = std::atan2(y,x);
+
+            outputs[RECT_IN_POLAR_OUT + outputBlock].setVoltage(r,rectInputCh*2 % 16);
+            outputs[RECT_IN_POLAR_OUT + outputBlock].setVoltage(arg,(rectInputCh*2+1) % 16);
         }
        
     }
