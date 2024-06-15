@@ -83,6 +83,43 @@ struct MenuToggle : MenuItem
 		MenuItem::step();
 	}
 };
+struct SubMenuItem : MenuItem
+{
+	int mySetVal = 1;
+	ParamQuantity *myParamQuantity;
+	SubMenuItem(int i, ParamQuantity* pq)
+	{
+		mySetVal = i;
+		myParamQuantity = pq;
+	}
+
+	void onAction(const event::Action &e) override
+	{
+		myParamQuantity->setValue(mySetVal);
+	}
+	void step() override {
+		rightText = myParamQuantity->getValue() == mySetVal ? "✔" : "";
+		MenuItem::step();
+	}
+};
+struct ParamSelectMenu : MenuItem {
+	ParamQuantity* param;
+	std::vector<std::string> options;
+
+	Menu *createChildMenu() override {
+		Menu *menu = new Menu;
+		for (unsigned int i = 0; i < options.size(); i++) {
+			SubMenuItem *menuItem = new SubMenuItem(i, param);
+			menuItem->text = options[i];
+			menu->addChild(menuItem);
+		}
+		return menu;
+	}
+	void step() override {
+		rightText = options[param->getValue()] + " " + RIGHT_ARROW;
+		MenuItem::step();
+	}
+};
 
 struct MenuParam : MenuEntry {
 	ParamWidget* pWidget;
