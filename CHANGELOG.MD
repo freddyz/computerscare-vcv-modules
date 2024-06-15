@@ -1,3 +1,6 @@
+# 2.1.11
+- Horse a Doodle Doo don't randomize the menu params on module randomize
+
 # 2.1.7
 - Update build to use plugin build toolchain github actions image
 - Toly Pools v2 adds CV values to knob values as is the standard
