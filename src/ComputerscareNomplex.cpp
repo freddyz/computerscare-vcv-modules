@@ -1,19 +1,14 @@
 #include "Computerscare.hpp"
 
-#include "dtpulse.hpp"
+std::vector<std::string> wrapModeDescriptions;
 
 
-#include <string>
-#include <sstream>
-#include <iomanip>
 
-
-struct ComputerscareNomplexPumbers;
-
-struct ComputerscareNomplexPumbers : Module
+struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
 {
     enum ParamIds
-    {
+    {   
+        WRAP_MODE,
         NUM_PARAMS
     };
     enum InputIds
@@ -38,13 +33,26 @@ struct ComputerscareNomplexPumbers : Module
         NUM_LIGHTS
     };
 
-
+    enum wrapModes {
+        WRAP_NORMAL,
+        WRAP_CYCLE,
+        WRAP_MINIMUM,
+        WRAP_STALL
+    };
 
 
 
     ComputerscareNomplexPumbers()
     {
         config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+
+        wrapModeDescriptions.push_back("Normal (Standard Polyphonic Behavior)");
+        wrapModeDescriptions.push_back("Cycle (Repeat Channels)");
+        wrapModeDescriptions.push_back("Minimum (Pad with 0v)");
+        wrapModeDescriptions.push_back("Stall (Pad with final voltage)");
+
+        configMenuParam(WRAP_MODE, 0.f, "Polyphonic Wrapping Mode", wrapModeDescriptions);
+        getParamQuantity(WRAP_MODE)->randomizeEnabled = false;
 
         configInput(REAL_IN,"Real");
         configInput(IMAGINARY_IN,"Imaginary");
@@ -63,7 +71,67 @@ struct ComputerscareNomplexPumbers : Module
         configOutput(POLAR_IN_POLAR_OUT, "Polar Input, Polar #1-8");
         configOutput(POLAR_IN_POLAR_OUT + 1, "Polar Input, Polar #9-16");
     }
-    void process(const ProcessArgs &args) override;
+    void process(const ProcessArgs &args) override {
+        int numRealInputChannels = inputs[REAL_IN].getChannels();
+        int numImaginaryInputChannels = inputs[IMAGINARY_IN].getChannels();
+        int numModulusInputChannels = inputs[MODULUS_IN].getChannels();
+        int numArgumentInputChannels = inputs[ARGUMENT_IN].getChannels();
+
+        int maxRectInput = std::max(numRealInputChannels,numImaginaryInputChannels);
+        int maxPolarInput = std::max(numModulusInputChannels,numArgumentInputChannels);
+
+        int numRectInOutputChannels = maxRectInput * 2;
+        int numPolarInOutputChannels = maxPolarInput * 2;
+
+        int numRectInOutChannels1 = numRectInOutputChannels >= 16 ? 16 : numRectInOutputChannels;
+        int numRectInOutChannels2 = numRectInOutputChannels >= 16 ? numRectInOutputChannels-16 : 0;
+
+        outputs[RECT_IN_RECT_OUT+0].setChannels(numRectInOutChannels1);
+        outputs[RECT_IN_RECT_OUT+1].setChannels(numRectInOutChannels2);
+
+        outputs[RECT_IN_POLAR_OUT+0].setChannels(numRectInOutChannels1);
+        outputs[RECT_IN_POLAR_OUT+1].setChannels(numRectInOutChannels2);
+
+        for(int rectInputCh = 0; rectInputCh < maxRectInput; rectInputCh++) {
+            int outputBlock = rectInputCh > 7 ? 1 : 0;
+
+            int realInputCh,imInputCh;
+
+            int wrapMode = params[WRAP_MODE].getValue();
+
+            if(wrapMode == WRAP_NORMAL) {
+                if(numRealInputChannels==1) {
+                    realInputCh=0;
+                } else {
+                    realInputCh=rectInputCh;
+                }
+                if(numImaginaryInputChannels==1) {
+                    imInputCh=0;
+                } else {
+                    imInputCh=rectInputCh;
+                }
+
+            } else if(wrapMode == WRAP_CYCLE) {
+                realInputCh = rectInputCh % numRealInputChannels;
+                imInputCh = rectInputCh % numImaginaryInputChannels;
+
+            } else if(wrapMode == WRAP_MINIMUM) {
+                realInputCh=rectInputCh;
+                imInputCh=rectInputCh;
+                
+            } else if(wrapMode == WRAP_STALL) {
+                realInputCh=rectInputCh>=numRealInputChannels ? numRealInputChannels-1 : rectInputCh;
+                imInputCh=rectInputCh>=numImaginaryInputChannels ? numImaginaryInputChannels-1 : rectInputCh;
+            }
+
+            float x = inputs[REAL_IN].getVoltage(realInputCh);
+            float y = inputs[IMAGINARY_IN].getVoltage(imInputCh);
+
+            outputs[RECT_IN_RECT_OUT + outputBlock].setVoltage(x,rectInputCh*2 % 16);
+            outputs[RECT_IN_RECT_OUT + outputBlock].setVoltage(y,(rectInputCh*2+1) % 16);
+        }
+       
+    }
 
     json_t *dataToJson() override {
         json_t *rootJ = json_object();
@@ -88,28 +156,19 @@ struct ComputerscareNomplexPumbers : Module
    };
 
 
-void ComputerscareNomplexPumbers::process(const ProcessArgs &args)
-{
-   
-}
-
 
 struct ComputerscareNomplexPumbersWidget : ModuleWidget
 {
-    float randAmt = 0.f;
 
     ComputerscareNomplexPumbersWidget(ComputerscareNomplexPumbers *module)
     {
         setModule(module);
-        //setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareNomplexPumbersPanel.svg")));
         box.size = Vec(10 * 15, 380);
         {
-            //
             ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
             panel->box.size = box.size;
             panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareNomplexCumbersPanel.svg")));
 
-            //module->panelRef = panel;
             addChild(panel);
 
         }
@@ -119,7 +178,6 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
 
         const int output1X = 50;
         const int output2X = 90;
-
 
 
         addInput(createInput<InPort>(Vec(leftInputX, 50), module, ComputerscareNomplexPumbers::REAL_IN));
@@ -134,47 +192,32 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
         addInput(createInput<InPort>(Vec(leftInputX, 200), module, ComputerscareNomplexPumbers::MODULUS_IN));
         addInput(createInput<InPort>(Vec(rightInputX, 200), module, ComputerscareNomplexPumbers::ARGUMENT_IN));
 
-            addOutput(createOutput<OutPort>(Vec(output1X, 230), module, ComputerscareNomplexPumbers::POLAR_IN_RECT_OUT ));
+        addOutput(createOutput<OutPort>(Vec(output1X, 230), module, ComputerscareNomplexPumbers::POLAR_IN_RECT_OUT ));
         addOutput(createOutput<OutPort>(Vec(output2X, 230), module, ComputerscareNomplexPumbers::POLAR_IN_RECT_OUT+1 ));
 
         addOutput(createOutput<OutPort>(Vec(output1X, 270), module, ComputerscareNomplexPumbers::POLAR_IN_POLAR_OUT ));
         addOutput(createOutput<OutPort>(Vec(output2X, 270), module, ComputerscareNomplexPumbers::POLAR_IN_POLAR_OUT+1 ));
-
-        
-
-
-
-       /* for (int i = 0; i < numChannels; i++)
-        {
-
-            xx = x + dx * i + randAmt * (2 * random::uniform() - .5);
-            y += randAmt * (random::uniform() - .5);
-            addInput(createInput<InPort>(mm2px(Vec(xx, y - 0.8)), module, ComputerscareOhPeas::CHANNEL_INPUT + i));
-
-            addParam(createParam<SmallKnob>(mm2px(Vec(xx + 2, y + 34)), module, ComputerscareOhPeas::SCALE_TRIM + i));
-
-            addInput(createInput<InPort>(mm2px(Vec(xx, y + 40)),  module, ComputerscareOhPeas::SCALE_CV + i));
-
-            addParam(createParam<SmoothKnob>(mm2px(Vec(xx, y + 50)), module, ComputerscareOhPeas::SCALE_VAL + i));
-
-            addParam(createParam<ComputerscareDotKnob>(mm2px(Vec(xx + 2, y + 64)), module, ComputerscareOhPeas::OFFSET_TRIM + i));
-
-            addInput(createInput<InPort>(mm2px(Vec(xx, y + 70)),  module, ComputerscareOhPeas::OFFSET_CV + i));
-
-
-            addParam(createParam<SmoothKnob>(mm2px(Vec(xx, y + 80)), module, ComputerscareOhPeas::OFFSET_VAL + i));
-
-            addOutput(createOutput<OutPort>(mm2px(Vec(xx, y + 93)), module, ComputerscareOhPeas::SCALED_OUTPUT + i));
-
-            addOutput(createOutput<InPort>(mm2px(Vec(xx + 1, y + 108)),  module, ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
-
-        }*/
        
-        peas = module;
+        nomplex = module;
     }
 
+    void appendContextMenu(Menu* menu) override {
+        ComputerscareNomplexPumbers* pumbersModule = dynamic_cast<ComputerscareNomplexPumbers*>(this->nomplex);
 
-    ComputerscareNomplexPumbers *peas;
+
+        wrapModeMenu = new ParamSelectMenu();
+        wrapModeMenu->text = "Polyphonic Wrap Mode";
+        wrapModeMenu->rightText = RIGHT_ARROW;
+        wrapModeMenu->param = pumbersModule->paramQuantities[ComputerscareNomplexPumbers::WRAP_MODE];
+        wrapModeMenu->options = wrapModeDescriptions;
+
+        menu->addChild(new MenuEntry);
+        menu->addChild(wrapModeMenu);
+
+    }
+
+    ParamSelectMenu *wrapModeMenu;
+    ComputerscareNomplexPumbers *nomplex;
    
 
 };
