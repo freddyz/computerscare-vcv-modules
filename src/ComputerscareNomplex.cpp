@@ -38,7 +38,7 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
     enum wrapModes {
         WRAP_NORMAL,
         WRAP_CYCLE,
-        WRAP_MINIMUM,
+        WRAP_MINIMAL,
         WRAP_STALL
     };
 
@@ -50,7 +50,7 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
 
         wrapModeDescriptions.push_back("Normal (Standard Polyphonic Behavior)");
         wrapModeDescriptions.push_back("Cycle (Repeat Channels)");
-        wrapModeDescriptions.push_back("Minimum (Pad with 0v)");
+        wrapModeDescriptions.push_back("Minimal (Pad with 0v)");
         wrapModeDescriptions.push_back("Stall (Pad with final voltage)");
 
         configMenuParam(WRAP_MODE, 0.f, "Polyphonic Wrapping Mode", wrapModeDescriptions);
@@ -73,6 +73,49 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
         configOutput(POLAR_IN_POLAR_OUT, "Polar Input, Polar #1-8");
         configOutput(POLAR_IN_POLAR_OUT + 1, "Polar Input, Polar #9-16");
     }
+
+    std::array<int,2> getInputChannels(int index, int numFirst,int numSecond) {
+        int aInputCh = 1;
+        int bInputCh = 1;
+
+        int wrapMode = params[WRAP_MODE].getValue();
+
+        if(wrapMode == WRAP_NORMAL) {
+            /*
+                If monophonic, copy ch1 to all
+                Otherwise use the poly channels
+            */
+            if(numFirst==1) {
+                aInputCh=0;
+            } else {
+                aInputCh=index;
+            }
+            if(numSecond==1) {
+                bInputCh=0;
+            } else {
+                bInputCh=index;
+            }
+
+        } else if(wrapMode == WRAP_CYCLE) {
+            // Cycle through the poly channels
+            aInputCh = index % numFirst;
+            bInputCh = index % numSecond;
+
+        } else if(wrapMode == WRAP_MINIMAL) {
+            // Do not copy channel 1 if monophonic
+            aInputCh=index;
+            bInputCh=index;
+
+        } else if(wrapMode == WRAP_STALL) {
+            // Go up to the maximum channel, and then use the final value for the rest
+            aInputCh=index>=numFirst ? numFirst-1 : index;
+            bInputCh=index>=numSecond ? numSecond-1 : index;
+        }
+
+        return {aInputCh,bInputCh};
+
+    }
+
     void process(const ProcessArgs &args) override {
         int numRealInputChannels = inputs[REAL_IN].getChannels();
         int numImaginaryInputChannels = inputs[IMAGINARY_IN].getChannels();
@@ -94,45 +137,22 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
         outputs[RECT_IN_POLAR_OUT+0].setChannels(numRectInOutChannels1);
         outputs[RECT_IN_POLAR_OUT+1].setChannels(numRectInOutChannels2);
 
+        int numPolarInOutChannels1 = numPolarInOutputChannels >= 16 ? 16 : numPolarInOutputChannels;
+        int numPolarInOutChannels2 = numPolarInOutputChannels >= 16 ? numPolarInOutputChannels-16 : 0;
+
+        outputs[POLAR_IN_RECT_OUT+0].setChannels(numPolarInOutChannels1);
+        outputs[POLAR_IN_RECT_OUT+1].setChannels(numPolarInOutChannels2);
+
+        outputs[POLAR_IN_POLAR_OUT+0].setChannels(numPolarInOutChannels1);
+        outputs[POLAR_IN_POLAR_OUT+1].setChannels(numPolarInOutChannels2);
+
         for(int rectInputCh = 0; rectInputCh < maxRectInput; rectInputCh++) {
             int outputBlock = rectInputCh > 7 ? 1 : 0;
 
-            int realInputCh=1;
-            int imInputCh=1;
+            std::array<int,2> channelIndices = getInputChannels(rectInputCh,numRealInputChannels,numImaginaryInputChannels);
 
-            int wrapMode = params[WRAP_MODE].getValue();
-
-            if(wrapMode == WRAP_NORMAL) {
-                /*
-                    If monophonic, copy ch1 to all
-                    Otherwise use the poly channels
-                */
-                if(numRealInputChannels==1) {
-                    realInputCh=0;
-                } else {
-                    realInputCh=rectInputCh;
-                }
-                if(numImaginaryInputChannels==1) {
-                    imInputCh=0;
-                } else {
-                    imInputCh=rectInputCh;
-                }
-
-            } else if(wrapMode == WRAP_CYCLE) {
-                // Cycle through the poly channels
-                realInputCh = rectInputCh % numRealInputChannels;
-                imInputCh = rectInputCh % numImaginaryInputChannels;
-
-            } else if(wrapMode == WRAP_MINIMUM) {
-                // Do not copy channel 1 if monophonic
-                realInputCh=rectInputCh;
-                imInputCh=rectInputCh;
-                
-            } else if(wrapMode == WRAP_STALL) {
-                // Go up to the maximum channel, and then use the final value for the rest
-                realInputCh=rectInputCh>=numRealInputChannels ? numRealInputChannels-1 : rectInputCh;
-                imInputCh=rectInputCh>=numImaginaryInputChannels ? numImaginaryInputChannels-1 : rectInputCh;
-            }
+            int realInputCh=channelIndices[0];
+            int imInputCh=channelIndices[1];
 
             float x = inputs[REAL_IN].getVoltage(realInputCh);
             float y = inputs[IMAGINARY_IN].getVoltage(imInputCh);
@@ -145,6 +165,27 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
 
             outputs[RECT_IN_POLAR_OUT + outputBlock].setVoltage(r,rectInputCh*2 % 16);
             outputs[RECT_IN_POLAR_OUT + outputBlock].setVoltage(arg,(rectInputCh*2+1) % 16);
+        }
+
+        for(int polarInputCh = 0; polarInputCh < maxPolarInput; polarInputCh++) {
+            int outputBlock = polarInputCh > 7 ? 1 : 0;
+
+            std::array<int,2> channelIndices = getInputChannels(polarInputCh,numModulusInputChannels,numArgumentInputChannels);
+
+            int modInputChannel=channelIndices[0];
+            int argInputChannel=channelIndices[1];
+
+            float r = inputs[MODULUS_IN].getVoltage(modInputChannel);
+            float theta = inputs[ARGUMENT_IN].getVoltage(argInputChannel);
+
+            outputs[POLAR_IN_POLAR_OUT + outputBlock].setVoltage(r,polarInputCh*2 % 16);
+            outputs[POLAR_IN_POLAR_OUT + outputBlock].setVoltage(theta,(polarInputCh*2+1) % 16);
+
+            float x = r*std::cos(theta);
+            float y = r*std::sin(theta);
+
+            outputs[POLAR_IN_RECT_OUT + outputBlock].setVoltage(x,polarInputCh*2 % 16);
+            outputs[POLAR_IN_RECT_OUT + outputBlock].setVoltage(y,(polarInputCh*2+1) % 16);
         }
        
     }
