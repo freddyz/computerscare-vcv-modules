@@ -44,10 +44,6 @@ struct ComputerscareDebug : ComputerscareMenuParamModule {
 	std::vector<std::string> drawModes = {"Off","Horizontal Bars", "Dots", "Arrows", "Connected Arrows", "Horse"};
 	std::vector<std::string> textModes= {"Off","Poly List","Complex Rect","Complex Polar"};
 
-
-	std::string defaultStrValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
-	std::string strValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
-
 	float logLines[NUM_LINES] = {0.f};
 
 	int lineCounter = 0;
@@ -315,36 +311,16 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		{
 			logLines[a] = 0;
 		}
-		strValue = defaultStrValue;
 	}
 
 	numOutputChannels = setChannelCount();
 
-	stepCounter++;
 
-	if (stepCounter > 1025) {
-		stepCounter = 0;
-
-		thisVal = "";
-		std::string thisLine = "";
 		for ( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
 		{
-
-			if (a < numOutputChannels) {
-				thisLine = logLines[a] >= 0 ? "+" : "";
-				thisLine += std::to_string(logLines[a]);
-				thisLine = thisLine.substr(0, 9);
-			}
-			else {
-				thisLine = "";
-			}
-
-			thisVal += (a > 0 ? "\n" : "") + thisLine;
-
 			outputs[POLY_OUTPUT].setVoltage(logLines[a], a);
 		}
-		strValue = thisVal;
-	}
+	
 }
 struct DebugViz : TransparentWidget {
 	ComputerscareDebug *module;
@@ -452,8 +428,6 @@ struct DebugViz : TransparentWidget {
 						float scale = 2;
 						float x = clamp(5*xx[i],-30.f,30.f);
 						float y = clamp(12*yy[i]-20.f,-135.f,95.f);
-						//float x = xx[i];
-						//float y = yy[i];
 						pts.addPoint(x,y);
 					}
 					
@@ -524,7 +498,8 @@ struct VerticalListOfNumbers : Widget {
 					std::string valAsString= std::to_string(val);
 
 					thisLine = valAsString.substr(0,1)=="-" ? "" : "+";
-					thisLine += valAsString.substr(0, 9);
+					thisLine += valAsString;
+					thisLine = thisLine.substr(0, 9);
 				}
 				else {
 					thisLine = "";
