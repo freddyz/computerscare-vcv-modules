@@ -32,7 +32,7 @@ struct ComputerscareDebug : Module {
 		WHICH_CLOCK,
 		COLOR,
 		DRAW_MODE,
-
+		TEXT_MODE,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -94,6 +94,7 @@ struct ComputerscareDebug : Module {
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 		configParam(COLOR, 0.f, 15.f, 0.f, "Color");
 		configParam<DebugAlgoParamQuantity>(DRAW_MODE, 0.f, 15.f, 0.f, "Draw Mode");
+		configParam(TEXT_MODE, 0.f, 15.f, 0.f, "Text Mode");
 
 		configInput(VAL_INPUT, "Value");
 		configInput(TRG_INPUT, "Clock");
@@ -127,6 +128,7 @@ struct ComputerscareDebug : Module {
 		getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
 
 		getParamQuantity(DRAW_MODE)->randomizeEnabled = false;
+	getParamQuantity(TEXT_MODE)->randomizeEnabled = false;
 
 		
 
@@ -456,8 +458,8 @@ struct DebugViz : TransparentWidget {
 
 					for(int i = 0; i < 8; i++) {
 						float scale = 2;
-						float x = clamp(scale*xx[i],-20.f,20.f);
-						float y = clamp(scale*yy[i],-20.f,20.f);
+						float x = clamp(3*xx[i],-30.f,30.f);
+						float y = clamp(6*yy[i],-160.f,160.f);
 						pts.addPoint(x,y);
 					}
 					
@@ -521,18 +523,22 @@ struct StringDisplayWidget3 : Widget {
 	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
 		if (layer == 1) {
 
+			int textMode = module ? module->params[ComputerscareDebug::TEXT_MODE].getValue() : 0;
 			std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
 
-			//text
-			nvgFontSize(args.vg, 15);
-			nvgFontFaceId(args.vg, font->handle);
-			nvgTextLetterSpacing(args.vg, 2.5);
+			if(textMode==0) {
 
-			std::string textToDraw = module ? module->strValue : noModuleStringValue;
-			Vec textPos = Vec(6.0f, 12.0f);
-			NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-			nvgFillColor(args.vg, textColor);
-			nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
+
+				nvgFontSize(args.vg, 15);
+				nvgFontFaceId(args.vg, font->handle);
+				nvgTextLetterSpacing(args.vg, 2.5);
+
+				std::string textToDraw = module ? module->strValue : noModuleStringValue;
+				Vec textPos = Vec(6.0f, 12.0f);
+				NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
+				nvgFillColor(args.vg, textColor);
+				nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
+			}
 		}
 		Widget::drawLayer(args, layer);
 	}
@@ -573,12 +579,13 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
 struct ComputerscareDebugWidget : ModuleWidget {
 //int drawMode = 0;
 	bool showValues = true;
+	int textMode = 0;
 
 	ComputerscareDebugWidget(ComputerscareDebug *module) {
 		setModule(module);
 		if(module) {
 		//	drawMode = module->params[ComputerscareDebug::DRAW_MODE].getValue();
-			showValues=module->showValues;
+			textMode=module->params[ComputerscareDebug::TEXT_MODE].getValue();
 		}
 		
 		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
@@ -612,7 +619,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		addOutput(createOutput<OutPort>(Vec(56, 1), module, ComputerscareDebug::POLY_OUTPUT));
 
-		if(showValues) {
+		
 				for (int i = 0; i < 16; i++) {
 			ConnectedSmallLetter *sld = new ConnectedSmallLetter(i);
 			sld->fontSize = 15;
@@ -622,9 +629,9 @@ struct ComputerscareDebugWidget : ModuleWidget {
 			sld->module = module;
 			addChild(sld);
 		}
-		}
+		
 		addLabeledKnob<ScrambleSnapKnob>("Algo", 4, 324, module, ComputerscareDebug::DRAW_MODE, 0, 0, true);
-	
+	addLabeledKnob<ScrambleSnapKnob>("Text", 64, 316, module, ComputerscareDebug::TEXT_MODE, 0, 0, true);
 
 		StringDisplayWidget3 *stringDisplay = createWidget<StringDisplayWidget3>(Vec(15, 34));
 		stringDisplay->box.size = Vec(73, 245);
