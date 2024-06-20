@@ -147,6 +147,9 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
     if (checkCounter > checkPeriod) {
         checkForChange();
         checkCounter = 0;
+        int knob = floor(params[NUM_DIVISIONS].getValue());
+        DEBUG("numDivisions %i", numDivisions);
+        DEBUG("knob %i", knob);
     }
     checkCounter++;
 
