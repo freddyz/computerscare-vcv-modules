@@ -65,7 +65,7 @@ struct ComputerscareDebug : Module {
 	int clockMode = 1;
 	int inputMode = 2;
 
-	int outputRangeEnum = 0;
+	int outputRangeEnum = 5;
 
 	int numOutputChannels = 16;
 
@@ -407,7 +407,7 @@ struct DebugViz : TransparentWidget {
 					for (int i = 0; i < 16; i++) {
 						polyVals.push_back(Vec(lengthsToDraw[i], 0.f));
 
-						colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1, 1, 2}));
+						colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1.5, 1, 3.3}));
 
 						thicknesses.push_back(Vec(260 / (1 + ch), 0));
 					}
