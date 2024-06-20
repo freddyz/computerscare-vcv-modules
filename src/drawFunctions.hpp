@@ -36,27 +36,15 @@ struct DrawHelper {
     }
     nvgRestore(vg);
   }
-  void drawDots(std::vector<Vec> points, NVGcolor fillColor = BLACK, float thickness = 1.f) {
+  void drawDots(std::vector<Vec> points, std::vector<NVGcolor> fillColors, float thickness = 10.f) {
     unsigned int n = points.size();
-    //nvgSave(vg);
-    // nvgBeginPath(vg);
-    nvgBeginPath(vg);
-    //nvgStrokeColor(vg, fillColor);
-    //nvgStrokeWidth(vg, thickness);
-    nvgFillColor(vg, fillColor);
-
-    //nvgMoveTo(vg, 0,0);
     for (unsigned int i = 0; i < n; i++) {
+      nvgBeginPath(vg);
+      nvgFillColor(vg, fillColors[i]);
       nvgCircle(vg, points[i].x, points[i].y, thickness);
+      nvgClosePath(vg);
+      nvgFill(vg);
     }
-
-    nvgClosePath(vg);
-    nvgFill(vg);
-    /*if (thickness > 0) {
-      nvgStroke(vg);
-    }*/
-    //nvgStroke(vg);
-    // nvgRestore(vg);
   }
   //void drawLines(std::vector<Vec> points, float length=)
   void drawLines(std::vector<Vec> points, float length = 20, float angle = 0.f, float thickness = 5.f) {

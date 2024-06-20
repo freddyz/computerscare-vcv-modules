@@ -8,6 +8,19 @@ struct Points {
   Points() {
 
   }
+  Points(std::vector<Vec> initialPoints)
+   {
+    points.resize(initialPoints.size());
+  }
+
+  Points(std::vector<float> xx,std::vector<float> yy)
+   {
+    points.resize(xx.size());
+  }
+  void addPoint(float xx, float yy) {
+    //points.resize(points.size()+1);
+    points.push_back(Vec(xx,yy));
+  }
   void linear(int num, Vec offset, Vec slope) {
     points.resize(num);
     for (int i = 0; i < num; i++) {

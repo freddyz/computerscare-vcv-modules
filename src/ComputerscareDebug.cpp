@@ -11,6 +11,16 @@ struct ComputerscareDebug;
 
 std::string noModuleStringValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
 
+const std::string DebugAvailableAlgorithmsArr[5] = {"Lines", "Dots", "Arrows", "Connected Arrows", "Horse"};
+
+
+//template <const std::string& options>
+struct DebugAlgoParamQuantity : ParamQuantity {
+	std::string getDisplayValueString() override {
+		int val = getValue();
+		return DebugAvailableAlgorithmsArr[val];
+	}
+};
 
 struct ComputerscareDebug : Module {
 	enum ParamIds {
@@ -21,6 +31,8 @@ struct ComputerscareDebug : Module {
 		SWITCH_VIEW,
 		WHICH_CLOCK,
 		COLOR,
+		DRAW_MODE,
+
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -44,6 +56,8 @@ struct ComputerscareDebug : Module {
 	float logLines[NUM_LINES] = {0.f};
 
 	int lineCounter = 0;
+
+	bool showValues = true;
 
 	int clockChannel = 0;
 	int inputChannel = 0;
@@ -79,6 +93,7 @@ struct ComputerscareDebug : Module {
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 		configParam(COLOR, 0.f, 15.f, 0.f, "Color");
+		configParam<DebugAlgoParamQuantity>(DRAW_MODE, 0.f, 15.f, 0.f, "Draw Mode");
 
 		configInput(VAL_INPUT, "Value");
 		configInput(TRG_INPUT, "Clock");
@@ -111,10 +126,13 @@ struct ComputerscareDebug : Module {
 		getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
 		getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
 
+		getParamQuantity(DRAW_MODE)->randomizeEnabled = false;
+
 		
 
 		randomizeStorage();
 	}
+
 	void process(const ProcessArgs &args) override;
 
 	void onRandomize() override {
@@ -337,52 +355,128 @@ struct DebugViz : TransparentWidget {
 
 	}
 	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
-		if (layer == 1) {
-			float valsToDraw[16] = {1.f};
-			float colorsToDraw[16] = {1.f};
-
-			float lengthsToDraw[16] = {1.f};
-			int ch = 16;
-			float colorArg;
-			float ceilVal=35.f;
-			float floorVal = -ceilVal;
-
-
-			if (module) {
-				ch = module->numOutputChannels;
-				colorArg = module->params[ComputerscareDebug::COLOR].getValue();
+		int dm = 1;
+		if(module) {
+			dm=module->params[ComputerscareDebug::DRAW_MODE].getValue();
+		}
+	
+		
+			if (layer == 1) {
+				if(dm == 0) {
 
 
-				for (int i = 0; i < ch; i++) {
-					//valsToDraw[i] = module->goly.currentValues[i];
-					valsToDraw[i]=module->logLines[i];
-					colorsToDraw[i]=module->logLines[i]/3;
-					lengthsToDraw[i]=std::max(floorVal,std::min(5*module->logLines[i],ceilVal));
-				}
+					float valsToDraw[16] = {1.f};
+					float colorsToDraw[16] = {1.f};
+
+					float lengthsToDraw[16] = {1.f};
+					int ch = 16;
+					float colorArg;
+					float ceilVal=35.f;
+					float floorVal = -ceilVal;
+
+
+					if (module) {
+						ch = module->numOutputChannels;
+						colorArg = module->params[ComputerscareDebug::COLOR].getValue();
+
+
+						for (int i = 0; i < ch; i++) {
+							//valsToDraw[i] = module->goly.currentValues[i];
+							valsToDraw[i]=module->logLines[i];
+							colorsToDraw[i]=module->logLines[i]/3;
+							lengthsToDraw[i]=std::max(floorVal,std::min(5*module->logLines[i],ceilVal));
+						}
+					}
+					else {
+						for (int i = 0; i < ch; i++) {
+							valsToDraw[i] = random::uniform() * 10;
+						}
+						colorArg = random::uniform() * 2;
+					}
+					DrawHelper draw = DrawHelper(args.vg);
+					Points pts = Points();
+
+					nvgTranslate(args.vg, box.size.x / 2, box.size.y / 2 + 5);
+					pts.linear(ch, Vec(0, -box.size.y / 2), Vec(0, 240));
+					std::vector<Vec> polyVals;
+					std::vector<NVGcolor> colors;
+					std::vector<Vec> thicknesses;
+
+					for (int i = 0; i < 16; i++) {
+						polyVals.push_back(Vec(lengthsToDraw[i], 0.f));
+
+						colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1, 1, 2}));
+
+						thicknesses.push_back(Vec(260 / (1 + ch), 0));
+					}
+					draw.drawLines(pts.get(), polyVals, colors, thicknesses);
+			} else if(dm==1) {
+					//draw as dots, assuming [x0,y0,x1,y1,...]
+					float xx[16] = {};
+					float yy[16] = {};
+					float colorsToDraw[16] = {1.f};
+
+					int ch = 16;
+					float colorArg;
+					float ceilVal=35.f;
+					float floorVal = -ceilVal;
+
+					Points pts = Points();
+
+					if (module) {
+						ch = module->numOutputChannels;
+						colorArg = module->params[ComputerscareDebug::COLOR].getValue();
+					//	DEBUG("=====");
+
+						for (int i = 0; i < 8; i++) {
+							//float moduleChannelVal=module->logLines[i]/3;
+							
+								xx[i]=module->logLines[2*i];
+								yy[i]=module->logLines[2*i+1];
+								//DEBUG("%f,%f",xx[i],yy[i]);
+
+								colorsToDraw[i]=module->logLines[2*i]/3;
+
+						}
+					}
+					else {
+						for (int i = 0; i < 8; i++) {
+						//float moduleChannelVal=random::uniform() * 10;
+								xx[i]=-10+random::uniform() * 20;
+								yy[i]=-10+random::uniform() * 20;
+								colorsToDraw[i]=-10+random::uniform() * 20;
+						}
+						//colorArg = random::uniform() * 2;
+					}
+					DrawHelper draw = DrawHelper(args.vg);
+					
+
+					nvgTranslate(args.vg, box.size.x / 2, box.size.y / 3 + 5);
+
+
+					for(int i = 0; i < 8; i++) {
+						float scale = 2;
+						float x = clamp(scale*xx[i],-20.f,20.f);
+						float y = clamp(scale*yy[i],-20.f,20.f);
+						pts.addPoint(x,y);
+					}
+					
+
+
+					std::vector<Vec> polyVals;
+					std::vector<NVGcolor> colors;
+					std::vector<Vec> thicknesses;
+
+					for (int i = 0; i < 16; i++) {
+						//polyVals.push_back(Vec(lengthsToDraw[i], 0.f));
+
+						colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1, 1, 2}));
+
+					//	thicknesses.push_back(Vec(260 / (1 + ch), 0));
+					}
+					draw.drawDots(pts.get(),colors,5);
+				
 			}
-			else {
-				for (int i = 0; i < ch; i++) {
-					valsToDraw[i] = random::uniform() * 10;
-				}
-				colorArg = random::uniform() * 2;
-			}
-			DrawHelper draw = DrawHelper(args.vg);
-			Points pts = Points();
-
-			nvgTranslate(args.vg, box.size.x / 2, box.size.y / 2 + 5);
-			pts.linear(ch, Vec(0, -box.size.y / 2), Vec(0, 240));
-			std::vector<Vec> polyVals;
-			std::vector<NVGcolor> colors;
-			std::vector<Vec> thicknesses;
-
-			for (int i = 0; i < 16; i++) {
-				polyVals.push_back(Vec(lengthsToDraw[i], 0.f));
-
-				colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1, 1, 2}));
-
-				thicknesses.push_back(Vec(260 / (1 + ch), 0));
-			}
-			draw.drawLines(pts.get(), polyVals, colors, thicknesses);
 		}
 	}
 };
@@ -477,9 +571,16 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
 	}
 };
 struct ComputerscareDebugWidget : ModuleWidget {
+//int drawMode = 0;
+	bool showValues = true;
 
 	ComputerscareDebugWidget(ComputerscareDebug *module) {
 		setModule(module);
+		if(module) {
+		//	drawMode = module->params[ComputerscareDebug::DRAW_MODE].getValue();
+			showValues=module->showValues;
+		}
+		
 		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
 
 		DebugViz *display = new DebugViz();
@@ -511,7 +612,8 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		addOutput(createOutput<OutPort>(Vec(56, 1), module, ComputerscareDebug::POLY_OUTPUT));
 
-		for (int i = 0; i < 16; i++) {
+		if(showValues) {
+				for (int i = 0; i < 16; i++) {
 			ConnectedSmallLetter *sld = new ConnectedSmallLetter(i);
 			sld->fontSize = 15;
 			sld->textAlign = 1;
@@ -520,6 +622,9 @@ struct ComputerscareDebugWidget : ModuleWidget {
 			sld->module = module;
 			addChild(sld);
 		}
+		}
+		addLabeledKnob<ScrambleSnapKnob>("Algo", 4, 324, module, ComputerscareDebug::DRAW_MODE, 0, 0, true);
+	
 
 		StringDisplayWidget3 *stringDisplay = createWidget<StringDisplayWidget3>(Vec(15, 34));
 		stringDisplay->box.size = Vec(73, 245);
@@ -528,43 +633,30 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		debug = module;
 	}
-	/*json_t *toJson() override
-	{
-		json_t *rootJ = ModuleWidget::toJson();
-		json_object_set_new(rootJ, "outputRange", json_integer(debug->outputRangeEnum));
 
-		json_t *sequencesJ = json_array();
+	template <typename BASE>
+void addLabeledKnob(std::string label, int x, int y, ComputerscareDebug *module, int paramIndex, float labelDx, float labelDy, bool snap = false) {
 
-		for (int i = 0; i < 16; i++) {
-			json_t *sequenceJ = json_real(debug->logLines[i]);
-			json_array_append_new(sequencesJ, sequenceJ);
+		smallLetterDisplay = new SmallLetterDisplay();
+		smallLetterDisplay->box.size = Vec(5, 10);
+		smallLetterDisplay->fontSize = 14;
+		smallLetterDisplay->value = label;
+		smallLetterDisplay->textAlign = 1;
+
+		if (snap) {
+			addParam(createParam<BASE>(Vec(x, y), module, paramIndex));
 		}
-		json_object_set_new(rootJ, "lines", sequencesJ);
-		return rootJ;
-	}*/
-	/*void fromJson(json_t *rootJ) override
-	{
-		float val;
-		ModuleWidget::fromJson(rootJ);
-		// button states
+		else {
+			addParam(createParam<BASE>(Vec(x, y), module, paramIndex));
 
-		json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
-		if (outputRangeEnumJ) { debug->outputRangeEnum = json_integer_value(outputRangeEnumJ); }
-
-		json_t *sequencesJ = json_object_get(rootJ, "lines");
-
-		if (sequencesJ) {
-			for (int i = 0; i < 16; i++) {
-				json_t *sequenceJ = json_array_get(sequencesJ, i);
-				if (sequenceJ)
-					val = json_real_value(sequenceJ);
-				debug->logLines[i] = val;
-			}
 		}
+		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 
+	}
 
-	}*/
 	void appendContextMenu(Menu *menu) override;
+
+	SmallLetterDisplay* smallLetterDisplay;
 	ComputerscareDebug *debug;
 };
 struct DebugOutputRangeItem : MenuItem {
