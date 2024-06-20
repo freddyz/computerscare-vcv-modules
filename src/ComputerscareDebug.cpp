@@ -365,18 +365,18 @@ struct DebugViz : TransparentWidget {
 					float colorsToDraw[16] = {1.f};
 
 					float lengthsToDraw[16] = {1.f};
-					int ch = 16;
+					int numChannelsToDraw = 16;
 					float colorArg;
 					float ceilVal=35.f;
 					float floorVal = -ceilVal;
 
 
 					if (module) {
-						ch = module->numOutputChannels;
+						numChannelsToDraw = module->numOutputChannels;
 						colorArg = module->params[ComputerscareDebug::COLOR].getValue();
 
 
-						for (int i = 0; i < ch; i++) {
+						for (int i = 0; i < numChannelsToDraw; i++) {
 							//valsToDraw[i] = module->goly.currentValues[i];
 							valsToDraw[i]=module->logLines[i];
 							colorsToDraw[i]=module->logLines[i]/3;
@@ -384,7 +384,7 @@ struct DebugViz : TransparentWidget {
 						}
 					}
 					else {
-						for (int i = 0; i < ch; i++) {
+						for (int i = 0; i < numChannelsToDraw; i++) {
 							float rr = 10-20*random::uniform();
 							lengthsToDraw[i] = clamp(rr*5,floorVal,ceilVal);
 							colorsToDraw[i]=rr/3;
@@ -395,26 +395,26 @@ struct DebugViz : TransparentWidget {
 					Points pts = Points();
 
 					nvgTranslate(args.vg, box.size.x / 2, box.size.y / 2 + 5);
-					pts.linear(ch, Vec(0, -box.size.y / 2), Vec(0, 240));
-					std::vector<Vec> polyVals;
+					pts.linear(16, Vec(0, -box.size.y / 2), Vec(0, 240));
+					std::vector<Vec> rThetaVec;
 					std::vector<NVGcolor> colors;
 					std::vector<Vec> thicknesses;
 
 					for (int i = 0; i < 16; i++) {
-						polyVals.push_back(Vec(lengthsToDraw[i], 0.f));
+						rThetaVec.push_back(Vec(lengthsToDraw[i], 0.f));
 
-						colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1.5, 1, 3.3}));
+						colors.push_back(draw.sincolor(-colorsToDraw[i]/5, {2.2, 1.1, 1.3}));
 
-						thicknesses.push_back(Vec(260 / (1 + ch), 0));
+						thicknesses.push_back(Vec(260 / (17.f), 0));
 					}
-					draw.drawLines(pts.get(), polyVals, colors, thicknesses);
+					draw.drawLines(pts.get(), rThetaVec, colors, thicknesses);
 			} else if(drawMode==2) {
 					//draw as dots, assuming [x0,y0,x1,y1,...]
 					float xx[16] = {};
 					float yy[16] = {};
 					float colorsToDraw[16] = {1.f};
 
-					int ch = 16;
+					int numChannelsToDraw = 16;
 					float colorArg;
 					float ceilVal=35.f;
 					float floorVal = -ceilVal;
@@ -422,19 +422,13 @@ struct DebugViz : TransparentWidget {
 					Points pts = Points();
 
 					if (module) {
-						ch = module->numOutputChannels;
+						numChannelsToDraw = module->numOutputChannels;
 						colorArg = module->params[ComputerscareDebug::COLOR].getValue();
-					//	DEBUG("=====");
 
 						for (int i = 0; i < 8; i++) {
-							//float moduleChannelVal=module->logLines[i]/3;
-							
 								xx[i]=module->logLines[2*i];
 								yy[i]=module->logLines[2*i+1];
-								//DEBUG("%f,%f",xx[i],yy[i]);
-
 								colorsToDraw[i]=module->logLines[2*i]/3;
-
 						}
 					}
 					else {
@@ -496,13 +490,13 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 struct VerticalListOfNumbers : Widget {
 
 	std::string value;
-	std::string fontPath = "res/Oswald-Regular.ttf";
+	std::string fontPath = "res/fonts/RobotoMono-Regular.ttf";
 	ComputerscareDebug * module;
 
 	VerticalListOfNumbers() {
 	};
 
-	std::string makeTextList() {
+	std::string makeTextList(int textMode) {
 		std::string thisVal = "";
 		std::string thisLine = "";
 		int numOutputChannels = floor(random::uniform()*15 + 1);
@@ -511,24 +505,53 @@ struct VerticalListOfNumbers : Widget {
 			numOutputChannels = module->numOutputChannels;
 		}
 
-		for ( unsigned int ch = 0; ch < NUM_LINES; ch++ )
-		{
-			if (ch < numOutputChannels) {
-				float val = 0.f;
-				if(module) {
-					val = module->logLines[ch];
-				} else {
-					val = 10-20*random::uniform();
+		if(textMode==1) {
+			//list of 16 polyphonic floats
+			for ( unsigned int ch = 0; ch < NUM_LINES; ch++ )
+			{
+				if (ch < numOutputChannels) {
+					float val = 0.f;
+					if(module) {
+						val = module->logLines[ch];
+					} else {
+						val = 10-20*random::uniform();
+					}
+					thisLine = val >= 0 ? "+" : "";
+					thisLine += std::to_string(val);
+					thisLine = thisLine.substr(0, 9);
 				}
-				thisLine = val >= 0 ? "+" : "";
-				thisLine += std::to_string(val);
-				thisLine = thisLine.substr(0, 9);
-			}
-			else {
-				thisLine = "";
-			}
+				else {
+					thisLine = "";
+				}
 
-			thisVal += (ch > 0 ? "\n" : "") + thisLine;
+				thisVal += (ch > 0 ? "\n" : "") + thisLine;
+			}
+		}
+		else if(textMode==2) {
+			//complex rect
+			for ( unsigned int ch = 0; ch < NUM_LINES; ch+=2 )
+			{
+				if (ch < numOutputChannels) {
+					float re = 0.f;
+					float im = 0.f;
+					if(module) {
+						re = module->logLines[ch];
+						im = module->logLines[ch+1];
+					} else {
+						re = 10-20*random::uniform();
+						im = 10-20*random::uniform();
+					}
+
+					thisLine=std::to_string(re).substr(0, 4);
+					thisLine+=im >=0 ? "+" : "";
+					thisLine+=std::to_string(im).substr(0, im < 0 ? 5 : 4)+"i";
+				}
+				else {
+					thisLine = "";
+				}
+
+				thisVal += (ch > 0 ? "\n" : "") + thisLine;
+			}
 		}
 		return thisVal;
 	}
@@ -553,13 +576,15 @@ struct VerticalListOfNumbers : Widget {
 			int textMode = module ? module->params[ComputerscareDebug::TEXT_MODE].getValue() : 1;
 			std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
 
-			if(textMode==1) {
-				nvgFontSize(args.vg, 15);
+			if(textMode!=0) {
+				float fontSize = 14.f;
+				nvgFontSize(args.vg, fontSize);
 				nvgFontFaceId(args.vg, font->handle);
-				nvgTextLetterSpacing(args.vg, 2.5);
+				nvgTextLetterSpacing(args.vg, 0.8f);
+				nvgTextLineHeight(args.vg, 1.08f);
 
-				std::string textToDraw = this->makeTextList();
-				Vec textPos = Vec(6.0f, 12.0f);
+				std::string textToDraw = this->makeTextList(textMode);
+				Vec textPos = Vec(2.0f, 11.0f);
 				NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
 				nvgFillColor(args.vg, textColor);
 				nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
@@ -674,7 +699,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		debug = module;
 	}
 
-	template <typename BASE>
+template <typename BASE>
 void addLabeledKnob(std::string label, int x, int y, ComputerscareDebug *module, int paramIndex, float labelDx, float labelDy, bool snap = false) {
 
 		smallLetterDisplay = new SmallLetterDisplay();
@@ -722,13 +747,13 @@ void ComputerscareDebugWidget::appendContextMenu(Menu *menu)
 {
 	ComputerscareDebug *debug = dynamic_cast<ComputerscareDebug *>(this->module);
 
+	//spacer
+	menu->addChild(new MenuEntry);
 
   drawModeMenu = new ParamSelectMenu();
   drawModeMenu->text = "Draw Mode";
   drawModeMenu->param = debug->paramQuantities[ComputerscareDebug::DRAW_MODE];
   drawModeMenu->options = debug->drawModes;
-
-  menu->addChild(new MenuEntry);
   menu->addChild(drawModeMenu);
 
   textModeMenu = new ParamSelectMenu();
