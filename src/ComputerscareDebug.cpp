@@ -41,8 +41,8 @@ struct ComputerscareDebug : ComputerscareMenuParamModule {
 		NUM_LIGHTS
 	};
 
-	std::vector<std::string> drawModes = {"Off","Lines", "Dots", "Arrows", "Connected Arrows", "Horse"};
-	std::vector<std::string> textModes;
+	std::vector<std::string> drawModes = {"Off","Horizontal Bars", "Dots", "Arrows", "Connected Arrows", "Horse"};
+	std::vector<std::string> textModes= {"Off","Poly List","Complex Rect","Complex Polar"};
 
 
 	std::string defaultStrValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
@@ -92,7 +92,7 @@ struct ComputerscareDebug : ComputerscareMenuParamModule {
 		configParam(COLOR, 0.f, 15.f, 0.f, "Color");
 
 		configMenuParam(DRAW_MODE, 0.f, "Draw Mode", drawModes);
-		configParam(TEXT_MODE, 0.f, 15.f, 0.f, "Text Mode");
+		configMenuParam(TEXT_MODE, 1.f, "Text Mode", textModes);
 
 		configInput(VAL_INPUT, "Value");
 		configInput(TRG_INPUT, "Clock");
@@ -550,10 +550,10 @@ struct VerticalListOfNumbers : Widget {
 	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
 		if (layer == 1) {
 
-			int textMode = module ? module->params[ComputerscareDebug::TEXT_MODE].getValue() : 0;
+			int textMode = module ? module->params[ComputerscareDebug::TEXT_MODE].getValue() : 1;
 			std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
 
-			if(textMode==0) {
+			if(textMode==1) {
 				nvgFontSize(args.vg, 15);
 				nvgFontFaceId(args.vg, font->handle);
 				nvgTextLetterSpacing(args.vg, 2.5);
@@ -696,7 +696,9 @@ void addLabeledKnob(std::string label, int x, int y, ComputerscareDebug *module,
 
 	void appendContextMenu(Menu *menu) override;
 
-	ParamSelectMenu *wrapModeMenu;
+	ParamSelectMenu *drawModeMenu;
+	ParamSelectMenu *textModeMenu;
+	
 
 	ComputerscareResizeHandle *leftHandle;
 	ComputerscareResizeHandle *rightHandle;
@@ -721,14 +723,19 @@ void ComputerscareDebugWidget::appendContextMenu(Menu *menu)
 	ComputerscareDebug *debug = dynamic_cast<ComputerscareDebug *>(this->module);
 
 
-  wrapModeMenu = new ParamSelectMenu();
-  wrapModeMenu->text = "Draw Mode";
-  wrapModeMenu->rightText = RIGHT_ARROW;
-  wrapModeMenu->param = debug->paramQuantities[ComputerscareDebug::DRAW_MODE];
-  wrapModeMenu->options = debug->drawModes;
+  drawModeMenu = new ParamSelectMenu();
+  drawModeMenu->text = "Draw Mode";
+  drawModeMenu->param = debug->paramQuantities[ComputerscareDebug::DRAW_MODE];
+  drawModeMenu->options = debug->drawModes;
 
   menu->addChild(new MenuEntry);
-  menu->addChild(wrapModeMenu);
+  menu->addChild(drawModeMenu);
+
+  textModeMenu = new ParamSelectMenu();
+  textModeMenu->text = "Text Mode";
+  textModeMenu->param = debug->paramQuantities[ComputerscareDebug::TEXT_MODE];
+  textModeMenu->options = debug->textModes;
+  menu->addChild(textModeMenu);
 
 	MenuLabel *spacerLabel = new MenuLabel();
 	menu->addChild(spacerLabel);
