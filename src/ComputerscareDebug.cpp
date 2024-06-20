@@ -1,4 +1,5 @@
 #include "Computerscare.hpp"
+#include "golyFunctions.hpp"
 
 #include <string>
 #include <sstream>
@@ -19,6 +20,7 @@ struct ComputerscareDebug : Module {
 		INPUT_CHANNEL_FOCUS,
 		SWITCH_VIEW,
 		WHICH_CLOCK,
+		COLOR,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -51,6 +53,8 @@ struct ComputerscareDebug : Module {
 
 	int outputRangeEnum = 0;
 
+	int numOutputChannels = 16;
+
 
 	float outputRanges[8][2];
 
@@ -74,6 +78,7 @@ struct ComputerscareDebug : Module {
 		configSwitch(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode", {"Single-Channel", "Internal", "Polyphonic"});
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
+		configParam(COLOR, 0.f, 15.f, 0.f, "Color");
 
 		configInput(VAL_INPUT, "Value");
 		configInput(TRG_INPUT, "Clock");
@@ -105,6 +110,8 @@ struct ComputerscareDebug : Module {
 		getParamQuantity(WHICH_CLOCK)->randomizeEnabled = false;
 		getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
 		getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
+
+		
 
 		randomizeStorage();
 	}
@@ -295,7 +302,7 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		strValue = defaultStrValue;
 	}
 
-	int numOutputChannels = setChannelCount();
+	numOutputChannels = setChannelCount();
 
 	stepCounter++;
 
@@ -323,6 +330,62 @@ void ComputerscareDebug::process(const ProcessArgs &args) {
 		strValue = thisVal;
 	}
 }
+struct DebugViz : TransparentWidget {
+	ComputerscareDebug *module;
+
+	DebugViz() {
+
+	}
+	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+		if (layer == 1) {
+			float valsToDraw[16] = {1.f};
+			float colorsToDraw[16] = {1.f};
+
+			float lengthsToDraw[16] = {1.f};
+			int ch = 16;
+			float colorArg;
+			float ceilVal=35.f;
+			float floorVal = -ceilVal;
+
+
+			if (module) {
+				ch = module->numOutputChannels;
+				colorArg = module->params[ComputerscareDebug::COLOR].getValue();
+
+
+				for (int i = 0; i < ch; i++) {
+					//valsToDraw[i] = module->goly.currentValues[i];
+					valsToDraw[i]=module->logLines[i];
+					colorsToDraw[i]=module->logLines[i]/3;
+					lengthsToDraw[i]=std::max(floorVal,std::min(5*module->logLines[i],ceilVal));
+				}
+			}
+			else {
+				for (int i = 0; i < ch; i++) {
+					valsToDraw[i] = random::uniform() * 10;
+				}
+				colorArg = random::uniform() * 2;
+			}
+			DrawHelper draw = DrawHelper(args.vg);
+			Points pts = Points();
+
+			nvgTranslate(args.vg, box.size.x / 2, box.size.y / 2 + 5);
+			pts.linear(ch, Vec(0, -box.size.y / 2), Vec(0, 240));
+			std::vector<Vec> polyVals;
+			std::vector<NVGcolor> colors;
+			std::vector<Vec> thicknesses;
+
+			for (int i = 0; i < 16; i++) {
+				polyVals.push_back(Vec(lengthsToDraw[i], 0.f));
+
+				colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1, 1, 2}));
+
+				thicknesses.push_back(Vec(260 / (1 + ch), 0));
+			}
+			draw.drawLines(pts.get(), polyVals, colors, thicknesses);
+		}
+	}
+};
 struct HidableSmallSnapKnob : SmallSnapKnob {
 	bool visible = true;
 	int hackIndex = 0;
@@ -418,6 +481,12 @@ struct ComputerscareDebugWidget : ModuleWidget {
 	ComputerscareDebugWidget(ComputerscareDebug *module) {
 		setModule(module);
 		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
+
+		DebugViz *display = new DebugViz();
+		display->module = module;
+		display->box.pos = Vec(6, 36);
+		display->box.size = Vec(box.size.x, 400);
+		addChild(display);
 
 		addInput(createInput<InPort>(Vec(2, 335), module, ComputerscareDebug::TRG_INPUT));
 		addInput(createInput<InPort>(Vec(61, 335),  module, ComputerscareDebug::VAL_INPUT));
