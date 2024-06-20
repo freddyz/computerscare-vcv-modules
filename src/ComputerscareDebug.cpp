@@ -12,16 +12,6 @@ struct ComputerscareDebug;
 
 std::string noModuleStringValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
 
-const std::string DebugAvailableAlgorithmsArr[5] = {"Lines", "Dots", "Arrows", "Connected Arrows", "Horse"};
-
-
-//template <const std::string& options>
-struct DebugAlgoParamQuantity : ParamQuantity {
-	std::string getDisplayValueString() override {
-		int val = getValue();
-		return DebugAvailableAlgorithmsArr[val];
-	}
-};
 
 struct ComputerscareDebug : ComputerscareMenuParamModule {
 	enum ParamIds {
@@ -51,7 +41,7 @@ struct ComputerscareDebug : ComputerscareMenuParamModule {
 		NUM_LIGHTS
 	};
 
-	std::vector<std::string> drawModes;
+	std::vector<std::string> drawModes = {"Off","Lines", "Dots", "Arrows", "Connected Arrows", "Horse"};
 	std::vector<std::string> textModes;
 
 
@@ -92,19 +82,16 @@ struct ComputerscareDebug : ComputerscareMenuParamModule {
 	ComputerscareDebug() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-		drawModes.push_back("Bars");
-		drawModes.push_back("Dots");
-		
-
 		configButton(MANUAL_TRIGGER, "Manual Trigger");
 		configButton(MANUAL_CLEAR_TRIGGER, "Reset/Clear");
 		configSwitch(SWITCH_VIEW, 0.0f, 2.0f, 2.0f, "Input Mode", {"Single-Channel", "Internal", "Polyphonic"});
 		configSwitch(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode", {"Single-Channel", "Internal", "Polyphonic"});
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
+
 		configParam(COLOR, 0.f, 15.f, 0.f, "Color");
+
 		configMenuParam(DRAW_MODE, 0.f, "Draw Mode", drawModes);
-		//configParam<DebugAlgoParamQuantity>(DRAW_MODE, 0.f, 15.f, 0.f, "Draw Mode");
 		configParam(TEXT_MODE, 0.f, 15.f, 0.f, "Text Mode");
 
 		configInput(VAL_INPUT, "Value");
@@ -139,9 +126,7 @@ struct ComputerscareDebug : ComputerscareMenuParamModule {
 		getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
 
 		getParamQuantity(DRAW_MODE)->randomizeEnabled = false;
-	getParamQuantity(TEXT_MODE)->randomizeEnabled = false;
-
-		
+		getParamQuantity(TEXT_MODE)->randomizeEnabled = false;
 
 		randomizeStorage();
 	}
@@ -368,13 +353,13 @@ struct DebugViz : TransparentWidget {
 
 	}
 	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
-		int dm = 0;
+		int drawMode = 1;
 		if(module) {
-			dm=module->params[ComputerscareDebug::DRAW_MODE].getValue();
+			drawMode=module->params[ComputerscareDebug::DRAW_MODE].getValue();
 		}
 	
 			if (layer == 1) {
-				if(dm == 0) {
+				if(drawMode == 1) {
 
 					float valsToDraw[16] = {1.f};
 					float colorsToDraw[16] = {1.f};
@@ -423,7 +408,7 @@ struct DebugViz : TransparentWidget {
 						thicknesses.push_back(Vec(260 / (1 + ch), 0));
 					}
 					draw.drawLines(pts.get(), polyVals, colors, thicknesses);
-			} else if(dm==1) {
+			} else if(drawMode==2) {
 					//draw as dots, assuming [x0,y0,x1,y1,...]
 					float xx[16] = {};
 					float yy[16] = {};
