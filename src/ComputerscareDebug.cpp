@@ -359,6 +359,7 @@ struct DebugViz : TransparentWidget {
 		}
 	
 			if (layer == 1) {
+				//horiz lines
 				if(drawMode == 1) {
 
 					float valsToDraw[16] = {1.f};
@@ -445,11 +446,14 @@ struct DebugViz : TransparentWidget {
 
 					nvgTranslate(args.vg, box.size.x / 2, box.size.y / 3 + 5);
 
+					int numPoints = std::ceil((float)numChannelsToDraw/2);
 
-					for(int i = 0; i < 8; i++) {
+					for(int i = 0; i < numPoints; i++) {
 						float scale = 2;
-						float x = clamp(3*xx[i],-30.f,30.f);
-						float y = clamp(6*yy[i],-160.f,160.f);
+						float x = clamp(5*xx[i],-30.f,30.f);
+						float y = clamp(12*yy[i]-20.f,-135.f,95.f);
+						//float x = xx[i];
+						//float y = yy[i];
 						pts.addPoint(x,y);
 					}
 					
@@ -466,7 +470,7 @@ struct DebugViz : TransparentWidget {
 
 					//	thicknesses.push_back(Vec(260 / (1 + ch), 0));
 					}
-					draw.drawDots(pts.get(),colors,5);
+					draw.drawDots(pts.get(),colors,5.f);
 				
 			}
 		}
@@ -670,7 +674,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		DebugViz *display = new DebugViz();
 		display->module = module;
-		display->box.pos = Vec(6, 36);
+		display->box.pos = Vec(6, 38);
 		display->box.size = Vec(box.size.x, 400);
 		addChild(display);
 
