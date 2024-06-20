@@ -516,9 +516,11 @@ struct VerticalListOfNumbers : Widget {
 					} else {
 						val = 10-20*random::uniform();
 					}
-					thisLine = val >= 0 ? "+" : "";
-					thisLine += std::to_string(val);
-					thisLine = thisLine.substr(0, 9);
+					
+					std::string valAsString= std::to_string(val);
+
+					thisLine = valAsString.substr(0,1)=="-" ? "" : "+";
+					thisLine += valAsString.substr(0, 9);
 				}
 				else {
 					thisLine = "";
@@ -545,6 +547,32 @@ struct VerticalListOfNumbers : Widget {
 					thisLine=std::to_string(re).substr(0, 4);
 					thisLine+=im >=0 ? "+" : "";
 					thisLine+=std::to_string(im).substr(0, im < 0 ? 5 : 4)+"i";
+				}
+				else {
+					thisLine = "";
+				}
+
+				thisVal += (ch > 0 ? "\n" : "") + thisLine;
+			}
+		}
+		else if(textMode==3) {
+			//complex polar
+			for ( unsigned int ch = 0; ch < NUM_LINES; ch+=2 )
+			{
+				if (ch < numOutputChannels) {
+					float r = 0.f;
+					float theta = 0.f;
+					if(module) {
+						r = module->logLines[ch];
+						theta = module->logLines[ch+1];
+					} else {
+						r = 10-20*random::uniform();
+						theta = 10-20*random::uniform();
+					}
+
+					thisLine=std::to_string(r).substr(0, 4);
+					thisLine+="‹";
+					thisLine+=std::to_string(theta).substr(0, theta < 0 ? 5 : 4);
 				}
 				else {
 					thisLine = "";
@@ -580,7 +608,7 @@ struct VerticalListOfNumbers : Widget {
 				float fontSize = 14.f;
 				nvgFontSize(args.vg, fontSize);
 				nvgFontFaceId(args.vg, font->handle);
-				nvgTextLetterSpacing(args.vg, 0.8f);
+				nvgTextLetterSpacing(args.vg, textMode==1 ? 1.4f : 0.5f);
 				nvgTextLineHeight(args.vg, 1.08f);
 
 				std::string textToDraw = this->makeTextList(textMode);
@@ -680,8 +708,6 @@ struct ComputerscareDebugWidget : ModuleWidget {
 			addChild(sld);
 		}
 		
-		addLabeledKnob<ScrambleSnapKnob>("Algo", 4, 324, module, ComputerscareDebug::DRAW_MODE, 0, 0, true);
-		addLabeledKnob<ScrambleSnapKnob>("Text", 64, 316, module, ComputerscareDebug::TEXT_MODE, 0, 0, true);
 
 		VerticalListOfNumbers *stringDisplay = createWidget<VerticalListOfNumbers>(Vec(15, 34));
 		stringDisplay->box.size = Vec(73, 245);
