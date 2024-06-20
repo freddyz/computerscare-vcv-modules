@@ -1,5 +1,6 @@
 #include "Computerscare.hpp"
 #include "golyFunctions.hpp"
+#include "ComputerscareResizableHandle.hpp"
 
 #include <string>
 #include <sstream>
@@ -22,7 +23,7 @@ struct DebugAlgoParamQuantity : ParamQuantity {
 	}
 };
 
-struct ComputerscareDebug : Module {
+struct ComputerscareDebug : ComputerscareMenuParamModule {
 	enum ParamIds {
 		MANUAL_TRIGGER,
 		MANUAL_CLEAR_TRIGGER,
@@ -49,6 +50,10 @@ struct ComputerscareDebug : Module {
 		BLINK_LIGHT,
 		NUM_LIGHTS
 	};
+
+	std::vector<std::string> drawModes;
+	std::vector<std::string> textModes;
+
 
 	std::string defaultStrValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
 	std::string strValue = "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n";
@@ -86,6 +91,11 @@ struct ComputerscareDebug : Module {
 
 	ComputerscareDebug() {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+
+		drawModes.push_back("Bars");
+		drawModes.push_back("Dots");
+		
+
 		configButton(MANUAL_TRIGGER, "Manual Trigger");
 		configButton(MANUAL_CLEAR_TRIGGER, "Reset/Clear");
 		configSwitch(SWITCH_VIEW, 0.0f, 2.0f, 2.0f, "Input Mode", {"Single-Channel", "Internal", "Polyphonic"});
@@ -93,7 +103,8 @@ struct ComputerscareDebug : Module {
 		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
 		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 		configParam(COLOR, 0.f, 15.f, 0.f, "Color");
-		configParam<DebugAlgoParamQuantity>(DRAW_MODE, 0.f, 15.f, 0.f, "Draw Mode");
+		configMenuParam(DRAW_MODE, 0.f, "Draw Mode", drawModes);
+		//configParam<DebugAlgoParamQuantity>(DRAW_MODE, 0.f, 15.f, 0.f, "Draw Mode");
 		configParam(TEXT_MODE, 0.f, 15.f, 0.f, "Text Mode");
 
 		configInput(VAL_INPUT, "Value");
@@ -357,15 +368,13 @@ struct DebugViz : TransparentWidget {
 
 	}
 	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
-		int dm = 1;
+		int dm = 0;
 		if(module) {
 			dm=module->params[ComputerscareDebug::DRAW_MODE].getValue();
 		}
 	
-		
 			if (layer == 1) {
 				if(dm == 0) {
-
 
 					float valsToDraw[16] = {1.f};
 					float colorsToDraw[16] = {1.f};
@@ -391,7 +400,9 @@ struct DebugViz : TransparentWidget {
 					}
 					else {
 						for (int i = 0; i < ch; i++) {
-							valsToDraw[i] = random::uniform() * 10;
+							float rr = 10-20*random::uniform();
+							lengthsToDraw[i] = clamp(rr*5,floorVal,ceilVal);
+							colorsToDraw[i]=rr/3;
 						}
 						colorArg = random::uniform() * 2;
 					}
@@ -497,14 +508,45 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 	};
 };
 ////////////////////////////////////
-struct StringDisplayWidget3 : Widget {
+struct VerticalListOfNumbers : Widget {
 
 	std::string value;
 	std::string fontPath = "res/Oswald-Regular.ttf";
 	ComputerscareDebug * module;
 
-	StringDisplayWidget3() {
+	VerticalListOfNumbers() {
 	};
+
+	std::string makeTextList() {
+		std::string thisVal = "";
+		std::string thisLine = "";
+		int numOutputChannels = floor(random::uniform()*15 + 1);
+
+		if(module) {
+			numOutputChannels = module->numOutputChannels;
+		}
+
+		for ( unsigned int ch = 0; ch < NUM_LINES; ch++ )
+		{
+			if (ch < numOutputChannels) {
+				float val = 0.f;
+				if(module) {
+					val = module->logLines[ch];
+				} else {
+					val = 10-20*random::uniform();
+				}
+				thisLine = val >= 0 ? "+" : "";
+				thisLine += std::to_string(val);
+				thisLine = thisLine.substr(0, 9);
+			}
+			else {
+				thisLine = "";
+			}
+
+			thisVal += (ch > 0 ? "\n" : "") + thisLine;
+		}
+		return thisVal;
+	}
 
 	void draw(const DrawArgs &ctx) override
 	{
@@ -527,13 +569,11 @@ struct StringDisplayWidget3 : Widget {
 			std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
 
 			if(textMode==0) {
-
-
 				nvgFontSize(args.vg, 15);
 				nvgFontFaceId(args.vg, font->handle);
 				nvgTextLetterSpacing(args.vg, 2.5);
 
-				std::string textToDraw = module ? module->strValue : noModuleStringValue;
+				std::string textToDraw = this->makeTextList();
 				Vec textPos = Vec(6.0f, 12.0f);
 				NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
 				nvgFillColor(args.vg, textColor);
@@ -619,8 +659,8 @@ struct ComputerscareDebugWidget : ModuleWidget {
 
 		addOutput(createOutput<OutPort>(Vec(56, 1), module, ComputerscareDebug::POLY_OUTPUT));
 
-		
-				for (int i = 0; i < 16; i++) {
+		//channel number labels
+		for (int i = 0; i < 16; i++) {
 			ConnectedSmallLetter *sld = new ConnectedSmallLetter(i);
 			sld->fontSize = 15;
 			sld->textAlign = 1;
@@ -631,12 +671,20 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		}
 		
 		addLabeledKnob<ScrambleSnapKnob>("Algo", 4, 324, module, ComputerscareDebug::DRAW_MODE, 0, 0, true);
-	addLabeledKnob<ScrambleSnapKnob>("Text", 64, 316, module, ComputerscareDebug::TEXT_MODE, 0, 0, true);
+		addLabeledKnob<ScrambleSnapKnob>("Text", 64, 316, module, ComputerscareDebug::TEXT_MODE, 0, 0, true);
 
-		StringDisplayWidget3 *stringDisplay = createWidget<StringDisplayWidget3>(Vec(15, 34));
+		VerticalListOfNumbers *stringDisplay = createWidget<VerticalListOfNumbers>(Vec(15, 34));
 		stringDisplay->box.size = Vec(73, 245);
 		stringDisplay->module = module;
 		addChild(stringDisplay);
+
+		ComputerscareResizeHandle *leftHandle = new ComputerscareResizeHandle();
+
+		ComputerscareResizeHandle *rightHandle = new ComputerscareResizeHandle();
+		rightHandle->right = true;
+		this->rightHandle = rightHandle;
+		addChild(leftHandle);
+		addChild(rightHandle);
 
 		debug = module;
 	}
@@ -663,6 +711,11 @@ void addLabeledKnob(std::string label, int x, int y, ComputerscareDebug *module,
 
 	void appendContextMenu(Menu *menu) override;
 
+	ParamSelectMenu *wrapModeMenu;
+
+	ComputerscareResizeHandle *leftHandle;
+	ComputerscareResizeHandle *rightHandle;
+
 	SmallLetterDisplay* smallLetterDisplay;
 	ComputerscareDebug *debug;
 };
@@ -681,6 +734,16 @@ struct DebugOutputRangeItem : MenuItem {
 void ComputerscareDebugWidget::appendContextMenu(Menu *menu)
 {
 	ComputerscareDebug *debug = dynamic_cast<ComputerscareDebug *>(this->module);
+
+
+  wrapModeMenu = new ParamSelectMenu();
+  wrapModeMenu->text = "Draw Mode";
+  wrapModeMenu->rightText = RIGHT_ARROW;
+  wrapModeMenu->param = debug->paramQuantities[ComputerscareDebug::DRAW_MODE];
+  wrapModeMenu->options = debug->drawModes;
+
+  menu->addChild(new MenuEntry);
+  menu->addChild(wrapModeMenu);
 
 	MenuLabel *spacerLabel = new MenuLabel();
 	menu->addChild(spacerLabel);
