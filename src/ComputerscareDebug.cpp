@@ -693,13 +693,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		stringDisplay->module = module;
 		addChild(stringDisplay);
 
-		ComputerscareResizeHandle *leftHandle = new ComputerscareResizeHandle();
-
-		ComputerscareResizeHandle *rightHandle = new ComputerscareResizeHandle();
-		rightHandle->right = true;
-		this->rightHandle = rightHandle;
-		addChild(leftHandle);
-		addChild(rightHandle);
+		
 
 		debug = module;
 	}
@@ -728,10 +722,7 @@ void addLabeledKnob(std::string label, int x, int y, ComputerscareDebug *module,
 
 	ParamSelectMenu *drawModeMenu;
 	ParamSelectMenu *textModeMenu;
-	
 
-	ComputerscareResizeHandle *leftHandle;
-	ComputerscareResizeHandle *rightHandle;
 
 	SmallLetterDisplay* smallLetterDisplay;
 	ComputerscareDebug *debug;
