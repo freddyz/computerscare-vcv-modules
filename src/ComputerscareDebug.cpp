@@ -10,9 +10,6 @@ const int NUM_LINES = 16;
 
 struct ComputerscareDebug;
 
-std::string noModuleStringValue = "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n";
-
-
 struct ComputerscareDebug : ComputerscareMenuParamModule {
 	enum ParamIds {
 		MANUAL_TRIGGER,
@@ -393,9 +390,6 @@ struct DebugViz : TransparentWidget {
 
 					int numChannelsToDraw = 16;
 					float colorArg;
-					float ceilVal=35.f;
-					float floorVal = -ceilVal;
-
 					Points pts = Points();
 
 					if (module) {
@@ -403,19 +397,17 @@ struct DebugViz : TransparentWidget {
 						colorArg = module->params[ComputerscareDebug::COLOR].getValue();
 
 						for (int i = 0; i < 8; i++) {
-								xx[i]=module->logLines[2*i];
-								yy[i]=module->logLines[2*i+1];
-								colorsToDraw[i]=module->logLines[2*i]/3;
+							xx[i]=module->logLines[2*i];
+							yy[i]=module->logLines[2*i+1];
+							colorsToDraw[i]=module->logLines[2*i]/3;
 						}
 					}
 					else {
 						for (int i = 0; i < 8; i++) {
-						//float moduleChannelVal=random::uniform() * 10;
-								xx[i]=-10+random::uniform() * 20;
-								yy[i]=-10+random::uniform() * 20;
-								colorsToDraw[i]=-10+random::uniform() * 20;
+							xx[i]=-10+random::uniform() * 20;
+							yy[i]=-10+random::uniform() * 20;
+							colorsToDraw[i]=-10+random::uniform() * 20;
 						}
-						//colorArg = random::uniform() * 2;
 					}
 					DrawHelper draw = DrawHelper(args.vg);
 					
@@ -438,11 +430,7 @@ struct DebugViz : TransparentWidget {
 					std::vector<Vec> thicknesses;
 
 					for (int i = 0; i < 16; i++) {
-						//polyVals.push_back(Vec(lengthsToDraw[i], 0.f));
-
 						colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1, 1, 2}));
-
-					//	thicknesses.push_back(Vec(260 / (1 + ch), 0));
 					}
 					draw.drawDots(pts.get(),colors,5.f);
 				
@@ -485,7 +473,7 @@ struct VerticalListOfNumbers : Widget {
 
 		if(textMode==1) {
 			//list of 16 polyphonic floats
-			for ( unsigned int ch = 0; ch < NUM_LINES; ch++ )
+			for ( int ch = 0; ch < NUM_LINES; ch++ )
 			{
 				if (ch < numOutputChannels) {
 					float val = 0.f;
@@ -510,7 +498,7 @@ struct VerticalListOfNumbers : Widget {
 		}
 		else if(textMode==2) {
 			//complex rect
-			for ( unsigned int ch = 0; ch < NUM_LINES; ch+=2 )
+			for (  int ch = 0; ch < NUM_LINES; ch+=2 )
 			{
 				if (ch < numOutputChannels) {
 					float re = 0.f;
@@ -536,7 +524,7 @@ struct VerticalListOfNumbers : Widget {
 		}
 		else if(textMode==3) {
 			//complex polar
-			for ( unsigned int ch = 0; ch < NUM_LINES; ch+=2 )
+			for (  int ch = 0; ch < NUM_LINES; ch+=2 )
 			{
 				if (ch < numOutputChannels) {
 					float r = 0.f;
