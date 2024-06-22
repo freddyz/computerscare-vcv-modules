@@ -52,6 +52,9 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
         WRAP_STALL
     };
 
+    int compolyChannelsRectIn = 16;
+    int compolyChannelsPolarIn = 16;
+
 
 
 
@@ -103,25 +106,44 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
         configOutput(POLAR_IN_POLAR_OUT + 1, "Polar Input, Polar #9-16");
     }
 
+
     void checkPoly() override {
 
-        int knobSetting = params[COMPOLY_CHANNELS_RECT_IN].getValue();
-        //polyChannels = knobSetting;
+        int rectInputCompolyphonyKnobSetting = params[COMPOLY_CHANNELS_RECT_IN].getValue();
 
         int numRealInputChannels = inputs[REAL_IN].getChannels();
         int numImaginaryInputChannels = inputs[IMAGINARY_IN].getChannels();
  
         if (numRealInputChannels > 0 || numImaginaryInputChannels > 0 ) {
-            if (knobSetting == 0) {
-                polyChannels = std::max(numRealInputChannels,numImaginaryInputChannels);
+            if (rectInputCompolyphonyKnobSetting == 0) {
+                compolyChannelsRectIn = std::max(numRealInputChannels,numImaginaryInputChannels);
             }
             else {
-                polyChannels = knobSetting;
+                compolyChannelsRectIn = rectInputCompolyphonyKnobSetting;
             }
         } else {
-            polyChannels = knobSetting == 0 ? 1 : knobSetting;
+            compolyChannelsRectIn = rectInputCompolyphonyKnobSetting == 0 ? 1 : rectInputCompolyphonyKnobSetting;
         }
    
+
+
+
+        int polarInputCompolyphonyKnobSetting = params[COMPOLY_CHANNELS_POLAR_IN].getValue();
+
+        int numModulusInputChannels = inputs[MODULUS_IN].getChannels();
+        int numArgumentInputChannels = inputs[ARGUMENT_IN].getChannels();
+ 
+        if (numModulusInputChannels > 0 || numArgumentInputChannels > 0 ) {
+            if (polarInputCompolyphonyKnobSetting == 0) {
+                compolyChannelsPolarIn = std::max(numModulusInputChannels,numArgumentInputChannels);
+            }
+            else {
+                compolyChannelsPolarIn = polarInputCompolyphonyKnobSetting;
+            }
+        } else {
+            compolyChannelsPolarIn = polarInputCompolyphonyKnobSetting == 0 ? 1 : polarInputCompolyphonyKnobSetting;
+        }
+
     }
 
     std::array<int,2> getInputChannels(int index, int numFirst,int numSecond) {
@@ -177,11 +199,8 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
         int maxRectInput = std::max(numRealInputChannels,numImaginaryInputChannels);
         int maxPolarInput = std::max(numModulusInputChannels,numArgumentInputChannels);
 
-        int numRectCompoly = std::max(polyChannels,maxRectInput);
-        int numPolarCompoly = std::max(polyChannels,maxPolarInput);
-
-        int numRectInOutputChannels =  numRectCompoly * 2;
-        int numPolarInOutputChannels = maxPolarInput * 2;
+        int numRectInOutputChannels =  compolyChannelsRectIn * 2;
+        int numPolarInOutputChannels = compolyChannelsPolarIn * 2;
 
         int numRectInOutChannels1 = numRectInOutputChannels >= 16 ? 16 : numRectInOutputChannels;
         int numRectInOutChannels2 = numRectInOutputChannels >= 16 ? numRectInOutputChannels-16 : 0;
@@ -213,7 +232,7 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
         float argumentOffsetKnob = params[ARGUMENT_INPUT_OFFSET].getValue();
         float argumentTrimKnob = params[ARGUMENT_INPUT_TRIM].getValue();
 
-        for(int rectInputCh = 0; rectInputCh < numRectCompoly; rectInputCh++) {
+        for(int rectInputCh = 0; rectInputCh < numRectInOutputChannels; rectInputCh++) {
             int outputBlock = rectInputCh > 7 ? 1 : 0;
 
             std::array<int,2> channelIndices = getInputChannels(rectInputCh,numRealInputChannels,numImaginaryInputChannels);
@@ -234,7 +253,7 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
             outputs[RECT_IN_POLAR_OUT + outputBlock].setVoltage(arg,(rectInputCh*2+1) % 16);
         }
 
-        for(int polarInputCh = 0; polarInputCh < maxPolarInput; polarInputCh++) {
+        for(int polarInputCh = 0; polarInputCh < compolyChannelsPolarIn; polarInputCh++) {
             int outputBlock = polarInputCh > 7 ? 1 : 0;
 
             std::array<int,2> channelIndices = getInputChannels(polarInputCh,numModulusInputChannels,numArgumentInputChannels);
@@ -296,9 +315,7 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
 
         }
 
-        channelWidget = new PolyOutputChannelsWidget(Vec(1, 24), module, ComputerscareNomplexPumbers::COMPOLY_CHANNELS_RECT_IN);
-
-        addChild(channelWidget);
+     
 
         const int rectInSectionY = 70;
         const int polarInSectionY = 220;
@@ -311,6 +328,8 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
 
         Vec offsetRelPos = Vec(0,-25.f);
         Vec trimRelPos = Vec(-20,0.f);
+
+        Vec channelsKnobRelPos = Vec(-25.f,0);
 
 
         addInput(createInput<InPort>(Vec(leftInputX, rectInSectionY), module, ComputerscareNomplexPumbers::REAL_IN));
@@ -328,6 +347,10 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
         addOutput(createOutput<OutPort>(Vec(output1X, rectInSectionY+70), module, ComputerscareNomplexPumbers::RECT_IN_POLAR_OUT ));
         addOutput(createOutput<OutPort>(Vec(output2X, rectInSectionY+70), module, ComputerscareNomplexPumbers::RECT_IN_POLAR_OUT+1 ));
 
+        rectInChannelWidget = new PolyOutputChannelsWidget(Vec(output1X, rectInSectionY+30).plus(channelsKnobRelPos), module, ComputerscareNomplexPumbers::COMPOLY_CHANNELS_RECT_IN,&module->compolyChannelsRectIn);
+
+        addChild(rectInChannelWidget);
+
         addInput(createInput<InPort>(Vec(leftInputX, polarInSectionY), module, ComputerscareNomplexPumbers::MODULUS_IN));
         addParam(createParam<SmoothKnob>(Vec(leftInputX, polarInSectionY).plus(offsetRelPos), module, ComputerscareNomplexPumbers::MODULUS_INPUT_OFFSET));
         addParam(createParam<SmallKnob>(Vec(leftInputX, polarInSectionY).plus(trimRelPos), module, ComputerscareNomplexPumbers::MODULUS_INPUT_TRIM));
@@ -342,6 +365,10 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
 
         addOutput(createOutput<OutPort>(Vec(output1X, polarInSectionY+70), module, ComputerscareNomplexPumbers::POLAR_IN_POLAR_OUT ));
         addOutput(createOutput<OutPort>(Vec(output2X, polarInSectionY+70), module, ComputerscareNomplexPumbers::POLAR_IN_POLAR_OUT+1 ));
+
+        polarInChannelWidget = new PolyOutputChannelsWidget(Vec(output1X, polarInSectionY+30).plus(channelsKnobRelPos), module, ComputerscareNomplexPumbers::COMPOLY_CHANNELS_POLAR_IN,&module->compolyChannelsPolarIn);
+
+        addChild(polarInChannelWidget);
        
         nomplex = module;
     }
@@ -361,7 +388,9 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
 
     }
 
-    PolyOutputChannelsWidget* channelWidget;
+    PolyOutputChannelsWidget* rectInChannelWidget;
+    PolyOutputChannelsWidget* polarInChannelWidget;
+
     ParamSelectMenu *wrapModeMenu;
     ComputerscareNomplexPumbers *nomplex;
    

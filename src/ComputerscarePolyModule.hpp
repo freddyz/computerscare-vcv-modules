@@ -1,3 +1,13 @@
+/*
+	ComputerscarePolyModule
+
+	Extends Module with a polyChannels member variable,
+	and a polyphony channels widget that is "bound" to the
+	the module instance's value
+
+*/
+
+
 #pragma once
 
 using namespace rack;
@@ -60,8 +70,9 @@ struct PolyChannelsDisplay : SmallLetterDisplay
 	bool controlled = false;
 	int prevChannels = -1;
 	int paramId = -1;
+	int *ref;
 
-	PolyChannelsDisplay(math::Vec pos)
+	PolyChannelsDisplay(math::Vec pos,int *moduleVal)
 	{
 		box.pos = pos;
 		fontSize = 14;
@@ -69,13 +80,15 @@ struct PolyChannelsDisplay : SmallLetterDisplay
 		textAlign = 18;
 		textColor = BLACK;
 		breakRowWidth = 20;
+		ref=moduleVal;
+
 		SmallLetterDisplay();
 	};
 	void draw(const DrawArgs &args)
 	{
 		if (module)
 		{
-			int newChannels = module->polyChannels;
+			int newChannels = *ref;
 			if (newChannels != prevChannels) {
 				std::string str = std::to_string(newChannels);
 				value = str;
@@ -93,6 +106,7 @@ struct PolyOutputChannelsWidget : Widget {
 	ComputerscarePolyModule *module;
 	PolyChannelsDisplay *channelCountDisplay;
 	TinyChannelsSnapKnob *channelsKnob;
+
 	PolyOutputChannelsWidget(math::Vec pos, ComputerscarePolyModule *mod, int paramId) {
 		module = mod;
 
@@ -100,11 +114,28 @@ struct PolyOutputChannelsWidget : Widget {
 		channelsKnob->module = module;
 		channelsKnob->paramId = paramId;
 
-		channelCountDisplay = new PolyChannelsDisplay(pos);
+		// default "watched" module ref for this is the polyChannels member variable
+		channelCountDisplay = new PolyChannelsDisplay(pos,&module->polyChannels);
 
 		channelCountDisplay->module = module;
 
 		addChild(channelsKnob);
 		addChild(channelCountDisplay);
 	}
+
+	PolyOutputChannelsWidget(math::Vec pos, ComputerscarePolyModule *mod, int paramId,int *moduleVal) {
+		module = mod;
+
+		channelsKnob = createParam<TinyChannelsSnapKnob>(pos.plus(Vec(7, 3)), module, paramId);
+		channelsKnob->module = module;
+		channelsKnob->paramId = paramId;
+
+		channelCountDisplay = new PolyChannelsDisplay(pos,moduleVal);
+
+		channelCountDisplay->module = module;
+
+		addChild(channelsKnob);
+		addChild(channelCountDisplay);
+	}
+	
 };
