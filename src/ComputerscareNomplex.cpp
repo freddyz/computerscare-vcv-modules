@@ -1,5 +1,7 @@
 #include "Computerscare.hpp"
 
+#include <array>
+
 std::vector<std::string> wrapModeDescriptions;
 
 
@@ -54,10 +56,6 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
 
     int compolyChannelsRectIn = 16;
     int compolyChannelsPolarIn = 16;
-
-
-
-
 
     ComputerscareNomplexPumbers()
     {
