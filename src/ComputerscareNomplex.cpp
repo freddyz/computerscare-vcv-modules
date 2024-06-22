@@ -194,9 +194,6 @@ struct ComputerscareNomplexPumbers : ComputerscareMenuParamModule
         int numModulusInputChannels = inputs[MODULUS_IN].getChannels();
         int numArgumentInputChannels = inputs[ARGUMENT_IN].getChannels();
 
-        int maxRectInput = std::max(numRealInputChannels,numImaginaryInputChannels);
-        int maxPolarInput = std::max(numModulusInputChannels,numArgumentInputChannels);
-
         int numRectInOutputChannels =  compolyChannelsRectIn * 2;
         int numPolarInOutputChannels = compolyChannelsPolarIn * 2;
 
