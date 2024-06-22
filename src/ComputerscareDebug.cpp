@@ -621,7 +621,7 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
 		SmallLetterDisplay::draw(ctx);
 	}
 };
-struct ComputerscareDebugWidget : ModuleWidget {
+struct ComputerscareDebugWidget : ModuleWidget {	
 //int drawMode = 0;
 	bool showValues = true;
 	int textMode = 0;
@@ -634,6 +634,14 @@ struct ComputerscareDebugWidget : ModuleWidget {
 		}
 		
 		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
+
+		ComputerscareResizeHandle *leftHandle = new ComputerscareResizeHandle();
+
+		ComputerscareResizeHandle *rightHandle = new ComputerscareResizeHandle();
+		rightHandle->right = true;
+		this->rightHandle = rightHandle;
+		addChild(leftHandle);
+		addChild(rightHandle);
 
 		DebugViz *display = new DebugViz();
 		display->module = module;
@@ -708,8 +716,92 @@ void addLabeledKnob(std::string label, int x, int y, ComputerscareDebug *module,
 
 	void appendContextMenu(Menu *menu) override;
 
+	void onHoverKey(const event::HoverKey& e) override {
+		float dZoom = 0.05;
+		float dPosition = 10.f;
+		if (e.isConsumed())
+			return;
+
+		// Scroll with arrow keys
+		/*float arrowSpeed = 30.0;
+		if ((e.mods & RACK_MOD_MASK) == (RACK_MOD_CTRL | GLFW_MOD_SHIFT))
+			arrowSpeed /= 16.0;
+		else if ((e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL)
+			arrowSpeed *= 4.0;
+		else if ((e.mods & RACK_MOD_MASK) == GLFW_MOD_SHIFT)
+			arrowSpeed /= 4.0;*/
+		//duplicate is ctrl-d, ignore keys if mods are pressed so duplication doesnt translate the image
+		if (e.action == RACK_HELD && !e.mods ) {
+			if (e.keyName == "a") {
+				//debug->xOffset += dPosition / //debug->zoomX;
+				e.consume(this);
+			} else if (e.keyName == "s") {
+				//debug->yOffset -= (//debug->invertY ? dPosition : -dPosition) / //debug->zoomY;
+				e.consume(this);
+			} else if (e.keyName == "d") {
+				//debug->xOffset -= dPosition / //debug->zoomX;
+				e.consume(this);
+			} else if (e.keyName == "w") {
+				//debug->yOffset += (//debug->invertY ? dPosition : -dPosition) / //debug->zoomY;
+				e.consume(this);
+			} else if (e.keyName == "z") {
+				//debug->zoomX *= (1 + dZoom);
+				//debug->zoomY *= (1 + dZoom);
+				e.consume(this);
+			} else if (e.keyName == "x") {
+				//debug->zoomX *= (1 - dZoom);
+				//debug->zoomY *= (1 - dZoom);
+				e.consume(this);
+			} else if (e.keyName == "q") {
+				//debug->rotation += 1;
+				//debug->rotation %= 4;
+				e.consume(this);
+			} else if (e.keyName == "e") {
+				//debug->rotation -= 1;
+				//debug->rotation += 4;
+				//debug->rotation %= 4;
+				e.consume(this);
+			} else if (e.keyName == "j") {
+				//debug->prevFrame();
+				e.consume(this);
+			} else if (e.keyName == "l") {
+				//debug->nextFrame();
+				e.consume(this);
+			}
+
+		}
+		if (e.action == GLFW_RELEASE) {
+			if (e.keyName == "k") {
+				//debug->goToFrame(0);
+				e.consume(this);
+			} else if (e.keyName == "i") {
+				//debug->goToRandomFrame();
+				e.consume(this);
+			} else if (e.keyName == "u") {
+				//debug->goToRandomFrame();
+				e.consume(this);
+			} else if (e.keyName == "p") {
+				//debug->toggleAnimationEnabled();
+				e.consume(this);
+			} else if (e.keyName == "o") {
+				//debug->loadRandomGif();
+				e.consume(this);
+			} else if (e.keyName == "[") {
+				//debug->prevFileInCatalog();
+				e.consume(this);
+			} else if (e.keyName == "]") {
+				//debug->nextFileInCatalog();
+				e.consume(this);
+			}
+		}
+		ModuleWidget::onHoverKey(e);
+	}
+
 	ParamSelectMenu *drawModeMenu;
 	ParamSelectMenu *textModeMenu;
+
+	ComputerscareResizeHandle *leftHandle;
+	ComputerscareResizeHandle *rightHandle;
 
 
 	SmallLetterDisplay* smallLetterDisplay;
