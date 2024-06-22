@@ -38,6 +38,7 @@ extern Model *modelComputerscareDrolyPaw;
 extern Model *modelComputerscareTolyPoolsV2;
 
 extern Model *modelComputerscareNomplexPumbers;
+extern Model *modelComputerscareGlolyPitch;
 
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN = nvgRGB(0xC0, 0xE7, 0xDE);
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);

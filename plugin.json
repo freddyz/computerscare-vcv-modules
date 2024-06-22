@@ -178,7 +178,15 @@
 			"manualUrl":
 				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/nomplex-pumbers.md"
 		}
-
+,
+			{
+			"slug": "computerscare-glolypitch",
+			"name": "Goly Plitch",
+			"description": "Visual Glitch Generator that operates on the Rack nanovg and/or opengl contexts.  Graphics and things.",
+			"tags": ["Visual", "Polyphonic"],
+			"manualUrl":
+				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/glolypitch.md"
+		}
 
 		
 	]
