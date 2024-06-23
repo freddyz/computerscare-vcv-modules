@@ -75,6 +75,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
             glitchOpenGL->box.size = APP->window->getSize();
             APP->scene->addChild(glitchOpenGL);
 
+            APP->window->screenshot(system::join("/Users/adammalone/Desktop", "screenshot.png"));
 
         }
        /* addChild(display);
