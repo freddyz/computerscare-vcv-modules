@@ -1,44 +1,40 @@
 #include "rack.hpp"
-//#include <GL/gl.h>
+#include <GL/glew.h> 
+#include <vector>
+#include <ctime>
+#include <cstdlib>
 
 using namespace rack;
+struct GlitchOpenGLWidget : OpenGlWidget {
 
-struct GlitchOpenGLModuleWidget : ModuleWidget {
-    GlitchOpenGLModuleWidget() {
-        // Constructor code here
-    }
-
-    void draw(const DrawArgs &args) override {
-        // Call the parent class's draw method
-        ModuleWidget::draw(args);
-
-        // Get the framebuffer
-        GLuint fbo;
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint *)&fbo);
-
-        // Read the current framebuffer
-        GLint viewport[4];
-        glGetIntegerv(GL_VIEWPORT, viewport);
-        int width = viewport[2];
-        int height = viewport[3];
-
-        std::vector<GLubyte> pixels(width * height * 4);
-        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-
-        // Apply a simple glitch effect by altering pixel data
-        for (int i = 0; i < pixels.size(); i += 4) {
-            // Introduce some random noise
-            pixels[i] = (pixels[i] + rand() % 50) % 256;      // Red
-            pixels[i + 1] = (pixels[i + 1] + rand() % 50) % 256;  // Green
-            pixels[i + 2] = (pixels[i + 2] + rand() % 50) % 256;  // Blue
+    void step() {
+    // Render every frame
+        if(random::uniform() < 0.1) {
+             dirty = true;
+            FramebufferWidget::step(); 
         }
+  
+}
 
-        // Write the altered pixels back to the framebuffer
-        glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
 
-        // Reset the framebuffer
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-    }
+void drawFramebuffer() {
+    math::Vec fbSize = getFramebufferSize();
+    glViewport(0.0, 0.0, fbSize.x, fbSize.y);
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+   // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0.0, fbSize.x, 0.0, fbSize.y, -1.0, 1.0);
+
+    glBegin(GL_TRIANGLES);
+    glColor4f(random::uniform(), 0, 0,0.1);
+    glVertex3f(0, 0, 0);
+    glColor3f(0, random::uniform(), 0);
+    glVertex3f(fbSize.x, 0, 0);
+    glColor3f(0, 0, random::uniform());
+    glVertex3f(0, fbSize.y, 0);
+    glEnd();
+}
+
 };
-
-//Model *modelGlitchModule = createModel<Module, GlitchModuleWidget>("GlitchModule");

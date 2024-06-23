@@ -198,6 +198,9 @@ void ComputerscareOhPeas::process(const ProcessArgs &args)
 
                 Q = quant.quantizeEven(D, iTranspose);
 
+                // (a + b*B)*A + (d + c*C) = D
+                // Q = quand(d)
+                
                 outputs[SCALED_OUTPUT + i].setVoltage(D, ch);
                 outputs[QUANTIZED_OUTPUT + i].setVoltage(Q, ch);
             }
