@@ -72,7 +72,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
             APP->scene->addChild(glitchNanoVG);
 
             glitchOpenGL= new GlitchOpenGLWidget();
-            glitchOpenGL->box.size = APP->window->getSize()/2;
+            glitchOpenGL->box.size = APP->window->getSize();
             APP->scene->addChild(glitchOpenGL);
 
 
@@ -123,6 +123,6 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     }*/
 
     GlitchNanoVGWidget* glitchNanoVG;
-   GlitchOpenGLWidget* glitchOpenGL;
+    GlitchOpenGLWidget* glitchOpenGL;
 };
 Model *modelComputerscareGlolyPitch = createModel<ComputerscareGlolyPitch, ComputerscareGlolyPitchWidget>("computerscare-glolypitch");
