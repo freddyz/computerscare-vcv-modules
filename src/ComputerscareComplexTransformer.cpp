@@ -105,31 +105,84 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 
 		math::Vec scaleRect = Vec(scaleX,scaleY);
 
+		float zx[16] = {};
+		float zy[16] = {};
 
-		std::vector<float> complexQuadRep;
+		readInputToRect(MAIN_INPUT,mainInputMode,zx,zy);
 
-		for (int complexOutputChannel = 0; complexOutputChannel < compolyChannelsMainOutput; complexOutputChannel++) {
-			 complexQuadRep = getComplexVoltage(complexOutputChannel, MAIN_INPUT,mainInputMode, wrapMode, inputCompolyphony);
+		writeOutputFromRect(COMPOLY_MAIN_OUT_A,mainOutputMode,zx,zy);
+	}
 
-			 float x = complexQuadRep[0];
-			 float y = complexQuadRep[1];
-			 float r = complexQuadRep[2];
-			 float theta = complexQuadRep[3];
+	int chMap1[16]  = {0,2,4,6,8,10,12,14,0,2,4,6,8,10,12,14};
+	int chMap2[16]  = {1,3,5,7,9,11,13,15,1,3,5,7,9,11,13,15};
 
-			 setOutputVoltages(COMPOLY_MAIN_OUT_A,mainOutputMode,complexOutputChannel,x,y,r,theta);
+	void writeOutputFromRect(int firstPortIndex, int outputMode, float* x, float* y) {
+		float a[16] = {};
+		float b[16] = {};
+
+		float r,theta;
+
+		bool polar = outputMode==POLAR_SEPARATED || outputMode==POLAR_INTERLEAVED;
+		bool interleaved = outputMode==RECT_INTERLEAVED || outputMode==POLAR_INTERLEAVED;
+
+		for (uint8_t c = 0; c < 16; c++) {
+			if(polar) {
+				r = std::hypot(x[c],y[c]);
+      	theta = std::atan2(y[c],x[c]);
+			}
+
+			if(interleaved) {
+				if(c < 8) {
+					a[2*c] = polar ? r : x[c];
+					a[2*c + 1] = polar ? theta : y[c];
+				}
+				else {
+					b[(2*c)%16] = polar ? r : x[c];
+					b[(2*c)%16 + 1] = polar ? theta : y[c];
+				}
+			} else {
+				a[c] = polar ? r : x[c];
+				b[c] = polar ? theta : y[c];
+			}
+		
 		}
 
-
+		outputs[firstPortIndex].writeVoltages(a);
+		outputs[firstPortIndex+1].writeVoltages(b);
 	}
-	void checkPoly() override {
-		polyChannels = params[COMPOLY_CHANNELS].getValue();
-		if (polyChannels == 0) {
-			//polyChannels = 16;
-		//	params[POLY_CHANNELS].setValue(16);
+
+	void readInputToRect(int firstPortIndex, int inputMode, float* x, float* y) {
+		float a[16] = {};
+		float b[16] = {};
+
+		inputs[firstPortIndex].readVoltages(a);
+		inputs[firstPortIndex+1].readVoltages(b);
+
+		float r,theta;
+
+		for (uint8_t c = 0; c < 16; c++) {
+			if(inputMode == RECT_SEPARATED) {
+				x[c] = a[c];
+				y[c] = b[c];
+			} else if(inputMode == RECT_INTERLEAVED) {
+				x[c] = c < 8 ? a[2*c] : b[(2*c) % 16];
+				y[c] = c < 8 ? a[2*c+1] : b[(2*c+1) % 16];
+			} else if(inputMode == POLAR_INTERLEAVED) {
+				r = c < 8 ? a[2*c] : b[(2*c) % 16];
+				theta = c < 8 ? a[2*c+1] : b[(2*c+1) % 16];
+
+				x[c] = r*std::cos(theta);
+      	y[c] = r*std::sin(theta);
+			} else if(inputMode == POLAR_SEPARATED) {
+				r = a[c];
+				theta = b[c];
+
+				x[c] = r*std::cos(theta);
+      	y[c] = r*std::sin(theta);
+			}
 		}
-
-		//outputs[COMPOLY_MAIN_OUT_A].setChannels(polyChannels);
 	}
+
 	json_t *dataToJson() override {
     json_t *rootJ = json_object();
     return rootJ;

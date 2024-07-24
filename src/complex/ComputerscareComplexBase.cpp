@@ -196,7 +196,7 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
 	   return output;
 	}
 
-	std::vector<float> getQuad(std::vector<float> ab,int type) {
+	std::vector<float> getQuad(std::vector<float>& ab,int type) {
 		float x,y,r,theta;
 		if(type==RECT_INTERLEAVED || type == RECT_SEPARATED) {
 			x = ab[0];
@@ -217,6 +217,7 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
 
 
 	std::vector<float>  getComplexVoltage(int outputIndex, int firstPortID, int inputMode,int wrapMode,std::vector<std::vector <int>>& inputCompolyphony) {
+		//7% -> 3%
 		//return {0.f,1.f,2.f,3.f};
 		std::vector<float> mainInputVoltages;
 		if(inputMode==RECT_INTERLEAVED || inputMode == POLAR_INTERLEAVED) { 
