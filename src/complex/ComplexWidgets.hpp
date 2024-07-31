@@ -291,6 +291,15 @@ namespace cpx {
 		}
 	};
 
+	struct CompolySingleLabelSwitch : app::SvgSwitch {
+		widget::TransformWidget* tw;
+		//SvgWidget* svg;
+		CompolySingleLabelSwitch(std::string svgLabelFilename="z") {
+			shadow->opacity = 0.f;
+			addFrame(APP->window->loadSvg(asset::plugin(pluginInstance, "res/complex-labels/"+svgLabelFilename+".svg")));
+		}
+	};
+
 	struct ScaledSvgWidget : TransformWidget {
 		SvgWidget* svg;
 		ScaledSvgWidget(float scale) {
@@ -386,11 +395,18 @@ struct CompolyInOrOutWidget : Widget {
 	struct CompolyPortsWidget : CompolyInOrOutWidget<ComplexOutport> {
 		ComplexOutport* port;
 		
-		CompolyPortsWidget(math::Vec pos,ComputerscareComplexBase *cModule, int firstPortID,int compolyTypeParamID,float scale=1.0,bool isOutput=true) : CompolyInOrOutWidget(pos) {
+		CompolyPortsWidget(math::Vec pos,ComputerscareComplexBase *cModule, int firstPortID,int compolyTypeParamID,float scale=1.0,bool isOutput=true,std::string labelSvgFilename="z") : CompolyInOrOutWidget(pos) {
 
 			module=cModule;
 			paramID = compolyTypeParamID;
-			CompolyTypeLabelSwitch* compolyLabel = createParam<CompolyTypeLabelSwitch>(Vec(0,0),cModule,compolyTypeParamID);
+
+			//CompolySingleLabelSwitch* compolyLabel = createParam<CompolySingleLabelSwitch>(Vec(0,0),cModule,compolyTypeParamID);
+			CompolySingleLabelSwitch* compolyLabel = new CompolySingleLabelSwitch(labelSvgFilename);
+			compolyLabel->box.pos = Vec(0,0);
+			compolyLabel->app::ParamWidget::module = cModule;
+			compolyLabel->app::ParamWidget::paramId = compolyTypeParamID;
+			compolyLabel->initParamQuantity();
+
 
 			TransformWidget* tw = new TransformWidget();
 			tw->box.pos = pos.minus(Vec(40,0));

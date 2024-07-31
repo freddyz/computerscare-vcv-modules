@@ -269,13 +269,13 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
     addChild(scaleValAB);
 
 
-    cpx::CompolyPortsWidget* mainInput = new cpx::CompolyPortsWidget(Vec(50, 120),module,ComputerscareComplexTransformer::MAIN_INPUT,ComputerscareComplexTransformer::MAIN_INPUT_MODE,1.f,false);
+    cpx::CompolyPortsWidget* mainInput = new cpx::CompolyPortsWidget(Vec(50, 120),module,ComputerscareComplexTransformer::MAIN_INPUT,ComputerscareComplexTransformer::MAIN_INPUT_MODE,1.f,false,"z");
     addChild(mainInput);
 
 		//addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module, ComputerscareComplexTransformer::GLOBAL_SCALE));
 		//addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscareComplexTransformer::GLOBAL_OFFSET));
 
-    cpx::CompolyPortsWidget* mainOutput = new cpx::CompolyPortsWidget(Vec(50, 320),module,ComputerscareComplexTransformer::COMPOLY_MAIN_OUT_A,ComputerscareComplexTransformer::MAIN_OUTPUT_MODE);
+    cpx::CompolyPortsWidget* mainOutput = new cpx::CompolyPortsWidget(Vec(50, 320),module,ComputerscareComplexTransformer::COMPOLY_MAIN_OUT_A,ComputerscareComplexTransformer::MAIN_OUTPUT_MODE,0.6f,true,"zplusw");
     addChild(mainOutput);
 
 
