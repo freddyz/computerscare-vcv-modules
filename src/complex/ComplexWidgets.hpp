@@ -394,15 +394,16 @@ struct CompolyInOrOutWidget : Widget {
 	
 	struct CompolyPortsWidget : CompolyInOrOutWidget<ComplexOutport> {
 		ComplexOutport* port;
+		CompolySingleLabelSwitch* compolyLabel;
+		Vec labelOffset;
 		
 		CompolyPortsWidget(math::Vec pos,ComputerscareComplexBase *cModule, int firstPortID,int compolyTypeParamID,float scale=1.0,bool isOutput=true,std::string labelSvgFilename="z") : CompolyInOrOutWidget(pos) {
 
 			module=cModule;
 			paramID = compolyTypeParamID;
 
-			//CompolySingleLabelSwitch* compolyLabel = createParam<CompolySingleLabelSwitch>(Vec(0,0),cModule,compolyTypeParamID);
-			CompolySingleLabelSwitch* compolyLabel = new CompolySingleLabelSwitch(labelSvgFilename);
-			compolyLabel->box.pos = Vec(0,0);
+			compolyLabel = new CompolySingleLabelSwitch(labelSvgFilename);
+
 			compolyLabel->app::ParamWidget::module = cModule;
 			compolyLabel->app::ParamWidget::paramId = compolyTypeParamID;
 			compolyLabel->initParamQuantity();
