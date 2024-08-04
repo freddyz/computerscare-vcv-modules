@@ -27,6 +27,12 @@ struct Points {
       points[i] = Vec(offset.x + slope.x * i / num, offset.y + slope.y * i / num);
     }
   }
+  void samePoint(int num, Vec point) {
+    points.resize(num);
+    for (int i = 0; i < num; i++) {
+      points[i] = point;
+    }
+  }
   void grid(int numx, int numy, Vec size) {
     int N = numx * numy;
     points.resize(N);

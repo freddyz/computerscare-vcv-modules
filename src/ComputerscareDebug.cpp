@@ -431,14 +431,14 @@ struct DebugViz : TransparentWidget {
 					DrawHelper draw = DrawHelper(args.vg);
 					
 
-					nvgTranslate(args.vg, box.size.x / 2, box.size.y / 3 + 5);
+					nvgTranslate(args.vg, box.size.x / 2, box.size.y / 3 -15.f);
 
 					int numPoints = std::ceil((float)numChannelsToDraw/2);
 
 					for(int i = 0; i < numPoints; i++) {
 						float scale = 2;
 						float x = clamp(5*xx[i],-30.f,30.f);
-						float y = clamp(12*yy[i]-20.f,-135.f,95.f);
+						float y = clamp(12*yy[i],-135.f,95.f);
 						pts.addPoint(x,y);
 					}
 					
@@ -451,7 +451,8 @@ struct DebugViz : TransparentWidget {
 			
 					std::vector<Vec> pointsVec = pts.get();
 					Points allOrigin = Points();
-					allOrigin.linear(numPoints,Vec(0,0),Vec(0,0));
+					//allOrigin.linear(numPoints,Vec(0,0),Vec(0,0));
+					allOrigin.samePoint(numPoints,Vec(0,0));
 
 					for (int i = 0; i < 16; i++) {
 						colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1, 1, 2}));
