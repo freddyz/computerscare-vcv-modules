@@ -28,6 +28,7 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		B_INPUT_MODE,
 		C_INPUT_MODE,
 		MAIN_OUTPUT_MODE,
+		PRODUCT_OUTPUT_MODE,
 		NUM_PARAMS
 	};
 	enum InputIds {
@@ -41,6 +42,8 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 	enum OutputIds {
 		COMPOLY_MAIN_OUT_A,
 		COMPOLY_MAIN_OUT_B,
+		COMPOLY_PRODUCT_OUT_A,
+		COMPOLY_PRODUCT_OUT_B,
 		NUM_OUTPUTS
 	};
 	enum LightIds {
@@ -71,6 +74,7 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		getParamQuantity(COMPOLY_CHANNELS)->resetEnabled = false;
 
 		configParam<cpx::CompolyModeParam>(MAIN_OUTPUT_MODE,0.f,3.f,0.f,"Main Output Mode");
+		configParam<cpx::CompolyModeParam>(PRODUCT_OUTPUT_MODE,0.f,3.f,0.f,"Product Output Mode");
 		
 		configParam<cpx::CompolyModeParam>(Z_INPUT_MODE,0.f,3.f,0.f,"z Input Mode");
 		configParam<cpx::CompolyModeParam>(W_INPUT_MODE,0.f,3.f,0.f,"w Input Mode");
@@ -85,9 +89,15 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     configInput<cpx::CompolyPortInfo<W_INPUT_MODE,0>>(W_INPUT, "w");
     configInput<cpx::CompolyPortInfo<W_INPUT_MODE,1>>(W_INPUT + 1, "w");
 
+    configInput<cpx::CompolyPortInfo<A_INPUT_MODE,0>>(A_INPUT, "a");
+    configInput<cpx::CompolyPortInfo<A_INPUT_MODE,1>>(A_INPUT + 1, "a");
 
-		configOutput<cpx::CompolyPortInfo<MAIN_OUTPUT_MODE,0>>(COMPOLY_MAIN_OUT_A, "f(z)");
-    configOutput<cpx::CompolyPortInfo<MAIN_OUTPUT_MODE,1>>(COMPOLY_MAIN_OUT_B, "f(z)");
+
+		configOutput<cpx::CompolyPortInfo<MAIN_OUTPUT_MODE,0>>(COMPOLY_MAIN_OUT_A, "z+w");
+    configOutput<cpx::CompolyPortInfo<MAIN_OUTPUT_MODE,1>>(COMPOLY_MAIN_OUT_B, "z+w");
+
+    configOutput<cpx::CompolyPortInfo<PRODUCT_OUTPUT_MODE,0>>(COMPOLY_PRODUCT_OUT_A, "z*w");
+    configOutput<cpx::CompolyPortInfo<PRODUCT_OUTPUT_MODE,1>>(COMPOLY_PRODUCT_OUT_B, "z*w");
 
 	}
 
@@ -101,14 +111,17 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		int wInputMode = params[W_INPUT_MODE].getValue();
 
 		// + 1%
-		//std::vector<std::vector <int>> inputCompolyphony = getInputCompolyphony({Z_INPUT_MODE},{Z_INPUT});
+		std::vector<std::vector <int>> inputCompolyphony = getInputCompolyphony({Z_INPUT_MODE},{Z_INPUT});
 
-		std::vector<std::vector <int>> inputCompolyphony = getInputCompolyphony({Z_INPUT_MODE,W_INPUT_MODE},{Z_INPUT,W_INPUT});
+	//	std::vector<std::vector <int>> inputCompolyphony = getInputCompolyphony({Z_INPUT_MODE,W_INPUT_MODE,A_INPUT_MODE},{Z_INPUT,W_INPUT,A_INPUT});
 
 
 		compolyChannelsMainOutput = calcOutputCompolyphony(compolyphonyKnobSetting,inputCompolyphony);
 		int mainOutputMode = params[MAIN_OUTPUT_MODE].getValue();
 		setOutputChannels(COMPOLY_MAIN_OUT_A,mainOutputMode,compolyChannelsMainOutput);
+
+		int productOutputMode=params[PRODUCT_OUTPUT_MODE].getValue();
+		setOutputChannels(COMPOLY_PRODUCT_OUT_A,productOutputMode,compolyChannelsMainOutput);
 
 		
 		float offsetX = params[OFFSET_VAL_AB].getValue();
@@ -128,15 +141,22 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		float sumx[16] = {};
 		float sumy[16] = {};
 
+		float prodx[16] = {};
+		float prody[16] = {};
+
 		readInputToRect(Z_INPUT,zInputMode,zx,zy);
 		readInputToRect(W_INPUT,wInputMode,wx,wy);
 
 		for (uint8_t c = 0; c < 16; c++) { 
 			sumx[c] = zx[c]+wx[c];
 			sumy[c] = zy[c]+wy[c];
+
+			prodx[c] = zx[c]*wx[c]-zy[c]*wy[c];
+			prody[c] = zx[c]*wy[c]+zy[c]*wx[c];
 		}
 
 		writeOutputFromRect(COMPOLY_MAIN_OUT_A,mainOutputMode,sumx,sumy);
+		writeOutputFromRect(COMPOLY_PRODUCT_OUT_A,productOutputMode,prodx,prody);
 	}
 
 	int chMap1[16]  = {0,2,4,6,8,10,12,14,0,2,4,6,8,10,12,14};
@@ -306,9 +326,13 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
 		//addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module, ComputerscareComplexTransformer::GLOBAL_SCALE));
 		//addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscareComplexTransformer::GLOBAL_OFFSET));
 
-    cpx::CompolyPortsWidget* mainOutput = new cpx::CompolyPortsWidget(Vec(50, 320),module,ComputerscareComplexTransformer::COMPOLY_MAIN_OUT_A,ComputerscareComplexTransformer::MAIN_OUTPUT_MODE,0.7f,true,"zplusw");
+    cpx::CompolyPortsWidget* mainOutput = new cpx::CompolyPortsWidget(Vec(50, 260),module,ComputerscareComplexTransformer::COMPOLY_MAIN_OUT_A,ComputerscareComplexTransformer::MAIN_OUTPUT_MODE,0.7f,true,"zplusw");
     mainOutput->compolyLabel->box.pos = Vec(0,10);
     addChild(mainOutput);
+
+    cpx::CompolyPortsWidget* productOutput = new cpx::CompolyPortsWidget(Vec(50, 320),module,ComputerscareComplexTransformer::COMPOLY_PRODUCT_OUT_A,ComputerscareComplexTransformer::PRODUCT_OUTPUT_MODE,0.7f,true,"ztimesw");
+    productOutput->compolyLabel->box.pos = Vec(0,10);
+    addChild(productOutput);
 
 
 	}
