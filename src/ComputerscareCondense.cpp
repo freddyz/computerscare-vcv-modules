@@ -87,7 +87,7 @@ Vec* widgetSize = nullptr; // Pointer to the widget's position
                     int moduleId = widget->module->id;
                     widget->box.pos.x = condenseX;
                     widget->box.pos.y = condenseY;
-                    widget->box.size.x = 22.f;
+                    widget->box.size.x = widgetSize->x;
                 }
             }
 
@@ -132,7 +132,7 @@ void moveModuleJacks(Vec basePosition) {
         if (widget && widget->module) {
 
 
-            
+
             inputOffsetY = 0.f;
             Module* mod = widget->module;
             int inputCount = mod->inputs.size();
