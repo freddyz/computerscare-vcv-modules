@@ -1,8 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="75mm" height="128.5mm" viewBox="0 0 75 128.5">
+<svg xmlns="http://www.w3.org/2000/svg" width="25mm" height="128.5mm" viewBox="0 0 25 128.5">
   <rect width="75" height="128.5" fill="#222222"/>
   <text x="37.5" y="10" fill="#ffffff" font-family="sans-serif" font-size="6" text-anchor="middle">CondenseModule</text>
-  <circle cx="15" cy="30" r="5" fill="#cccccc" stroke="#000000" stroke-width="0.5"/>
-  <text x="25" y="33" fill="#ffffff" font-family="sans-serif" font-size="4">Condense</text>
-  <circle cx="15" cy="50" r="5" fill="#cccccc" stroke="#000000" stroke-width="0.5"/>
-  <text x="25" y="53" fill="#ffffff" font-family="sans-serif" font-size="4">Toggle 2</text>
+  <circle cx="15" cy="120" r="3" fill="#cccccc" stroke="#000000" stroke-width="0.5"/>
+  
+  <circle cx="20" cy="121" r="2" fill="#cccccc" stroke="#000000" stroke-width="0.5"/>
 </svg>
