@@ -87,9 +87,11 @@ Vec* widgetSize = nullptr; // Pointer to the widget's position
                     int moduleId = widget->module->id;
                     widget->box.pos.x = condenseX;
                     widget->box.pos.y = condenseY;
-                    widget->box.size.x = 2.f;
+                    widget->box.size.x = 22.f;
                 }
             }
+
+            moveModuleJacks(Vec(widgetPosition->x, widgetPosition->y));
 
             // Reset trigger button state
     params[1].setValue(0.f);
@@ -110,6 +112,62 @@ void process(const ProcessArgs& args) override {
     }
     counter++;
 }   
+
+void moveModuleJacks(Vec basePosition) {
+    float baseX = basePosition.x;
+    float baseY = basePosition.y;
+    float inputX = 0.f; // Position input jacks to the left of base
+    float dInputX = 34.f;
+    float outputX = 100.f; // Position output jacks to the right of base
+    float dOutputX = 4.f;
+    float inputY = 0.f;
+    float dInputY = 20.f;
+
+    int inputOffsetY = 0;  // Vertical spacing for inputs (stacked)
+    int outputOffsetY = 0; // Vertical spacing for outputs (stacked)
+
+    // Iterate over the selected modules and move input/output jacks
+    int column = 0; // Tracks which column we are placing jacks in (1st, 2nd, etc.)
+    for (auto widget : APP->scene->rack->getSelected()) {
+        if (widget && widget->module) {
+
+
+            
+            inputOffsetY = 0.f;
+            Module* mod = widget->module;
+            int inputCount = mod->inputs.size();
+            int outputCount = mod->outputs.size();
+
+            // Move input jacks of the module
+            for (int i = 0; i < inputCount; i++) {
+                PortWidget* inputWidget = widget->getInput(i);
+                bool isConnected = mod->inputs[i].isConnected();
+                 if (inputWidget && isConnected) {
+
+                    DEBUG("Module %d Input %d: %s ", mod->id, i, "tird");
+                     //inputWidget->setPosition(Vec(inputX,inputOffsetY)); // Move widget
+                     inputWidget->setPosition(Vec(inputX,inputOffsetY));
+                     inputOffsetY += dInputY; // Space between input jacks
+                 } else {
+                    DEBUG("no input jack");
+                 }
+            }
+
+            // Move output jacks of the module
+            // for (int i = 0; i < outputCount; i++) {
+            //     auto& output = mod->outputs[i];
+            //     output.module->outputs[i].setPosition(Vec(outputX, baseY + outputOffsetY));
+            //     outputOffsetY += 20; // Space between each output jack
+            //     DEBUG("Module %d Output %d moved to: (%f, %f)", mod->id, i, outputX, baseY + outputOffsetY);
+            // }
+
+            // Move to the next column for subsequent modules
+            inputX += dInputX; // Space between input columns
+            outputX += dOutputX; // Space between output columns
+            
+        }
+    }
+}
 
  void logSelected() {
      bool condenseEnabled =params[ENABLED].getValue();
@@ -134,12 +192,13 @@ struct CondenseModuleWidget : ModuleWidget {
           box.size = Vec(3 * 15, 380);
         setPanel(createPanel(asset::plugin(pluginInstance, "res/ComputerscareCondensePanel.svg")));
 
+        float toggleY = 5.f;
         // Add "Condense" toggle button
-        addParam(createParam<CKSS>(mm2px(Vec(5, 20)), module, CondenseModule::ENABLED));
+        addParam(createParam<CKSS>(mm2px(Vec(5, toggleY)), module, CondenseModule::ENABLED));
 
 
-        addParam(createParam<CKSS>(mm2px(Vec(10, 20)), module, 1));
-        addParam(createParam<CKSS>(mm2px(Vec(15, 20)), module, 2));
+        addParam(createParam<CKSS>(mm2px(Vec(10, toggleY)), module, 1));
+        addParam(createParam<CKSS>(mm2px(Vec(15, toggleY)), module, 2));
 
           // Add trigger button
         //addParam(createParam<LEDButton>(mm2px(Vec(5, 40)), module, 0));
