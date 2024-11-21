@@ -32,4 +32,6 @@ void init(Plugin *p) {
 	p->addModel(modelComputerscareComplexGenerator);
 
 	p->addModel(modelComputerscareComplexTransformer);
+
+	p->addModel(modelComputerscareCondense);
 }

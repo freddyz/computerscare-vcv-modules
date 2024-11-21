@@ -193,7 +193,16 @@
 		"tags": ["Utility",  "Polyphonic"],
 		"manualUrl":
 			"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/complex-transformer.md"
+		},
+	{
+		"slug": "computerscare-condense",
+		"name": "Module Condenser",
+		"description": "Collapse multiple modules into one",
+		"tags": ["Utility"],
+		"manualUrl":
+			"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/condense.md"
 		}
+
 
 
 		
