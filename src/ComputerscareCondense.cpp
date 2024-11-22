@@ -51,8 +51,9 @@ struct CondenseModule : ComputerscareMenuParamModule {
                 return;
             }
 
-            float condenseX = widgetPosition->x; // Right edge of the CondenseModule
-            float condenseY = widgetPosition->y + 30.f; // Y position of the CondenseModule
+            float condenseX = widgetPosition->x + widgetSize->x; // Right edge of the CondenseModule
+            // float condenseX = widgetPosition->x; // Left edge of the CondenseModule
+            float condenseY = widgetPosition->y; // Y position of the CondenseModule
 
             //gather info
             for (auto widget : APP->scene->rack->getSelected()) {
@@ -71,23 +72,22 @@ struct CondenseModule : ComputerscareMenuParamModule {
                     upmostY =  std::max(upmostY, widget->box.pos.y);
 
 
-                    // widget->setVisible(!currentState);
+                    //widget->setVisible(false);
                     visibilityMap[moduleId] = !currentState;
-
-
-
-
                 }
             }
 
             // Toggle positions
             DEBUG("allAligned: %i", allAligned);
+            float modX = 0.f;
             for (auto widget : APP->scene->rack->getSelected()) {
                 if (widget && widget->module) {
                     int moduleId = widget->module->id;
-                    widget->box.pos.x = condenseX;
+                    widget->box.pos.x = condenseX+modX;
                     widget->box.pos.y = condenseY;
-                    widget->box.size.x = 0.f;
+                    widget->box.size.x = 34.f;
+                    modX += 34.f;
+                    //widget->setVisible(false);
                 }
             }
 
@@ -146,7 +146,7 @@ struct CondenseModule : ComputerscareMenuParamModule {
 
                         DEBUG("Module %d Input %d: %s ", mod->id, i, "tird");
                         //inputWidget->setPosition(Vec(inputX,inputOffsetY)); // Move widget
-                        inputWidget->setPosition(Vec(inputX, inputOffsetY));
+                        inputWidget->setPosition(Vec(0, inputOffsetY));
                         inputOffsetY += dInputY; // Space between input jacks
                     } else {
                         DEBUG("no input jack");
