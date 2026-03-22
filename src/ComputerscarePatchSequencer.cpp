@@ -389,7 +389,7 @@ void ComputerscarePatchSequencer::process(const ProcessArgs& args) {
 struct NumberDisplayWidget3 : TransparentWidget {
   int* value;
   ComputerscarePatchSequencer* module;
-  std::string fontPath = "res/Segment7Standard.ttf";
+  std::string fontPath = "res/fonts/Segment7Standard.ttf";
 
   NumberDisplayWidget3() {
 
@@ -438,7 +438,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
   ComputerscarePatchSequencerWidget(ComputerscarePatchSequencer* module) {
     setModule(module);
     setPanel(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/ComputerscarePatchSequencerPanel.svg")));
+        pluginInstance, "res/panels/ComputerscarePatchSequencerPanel.svg")));
 
     int top_row = 70;
     int row_spacing = 26;

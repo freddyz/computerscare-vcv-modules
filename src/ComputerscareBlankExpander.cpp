@@ -91,8 +91,8 @@ struct ComputerscareBlankExpander : Module {
 
       float currentFrame = messageFromMother[0];
       int newNumFrames = messageFromMother[1];
-      int mappedFrame = messageFromMother[2];
-      int scrubFrame = messageFromMother[3];
+      (void)messageFromMother[2];
+      (void)messageFromMother[3];
       int tick = messageFromMother[4];
 
       if (newNumFrames != numFrames) {
@@ -162,11 +162,11 @@ struct ClockModeButton : app::SvgSwitch {
     shadow->opacity = 0.f;
     // momentary = true;
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/blank-clock-mode-sync.svg")));
+        asset::plugin(pluginInstance, "res/components/blank-clock-mode-sync.svg")));
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/blank-clock-mode-scan.svg")));
+        asset::plugin(pluginInstance, "res/components/blank-clock-mode-scan.svg")));
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/blank-clock-mode-frame.svg")));
+        asset::plugin(pluginInstance, "res/components/blank-clock-mode-frame.svg")));
   }
 };
 struct LogoWidget : SvgWidget {
@@ -174,7 +174,7 @@ struct LogoWidget : SvgWidget {
   int motherConnected = -1;
   LogoWidget() {
     setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-logo-normal.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-logo-normal.svg")));
     SvgWidget();
   }
   void step() override {
@@ -182,10 +182,10 @@ struct LogoWidget : SvgWidget {
       if (module->motherConnected != motherConnected) {
         if (module->motherConnected) {
           setSvg(APP->window->loadSvg(asset::plugin(
-              pluginInstance, "res/computerscare-logo-normal.svg")));
+              pluginInstance, "res/components/computerscare-logo-normal.svg")));
         } else {
           setSvg(APP->window->loadSvg(
-              asset::plugin(pluginInstance, "res/computerscare-logo-sad.svg")));
+              asset::plugin(pluginInstance, "res/components/computerscare-logo-sad.svg")));
         }
       }
       motherConnected = module->motherConnected;
@@ -200,7 +200,7 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareCustomBlankExpanderPanel.svg")));
+          pluginInstance, "res/panels/ComputerscareCustomBlankExpanderPanel.svg")));
       addChild(panel);
     }
 
@@ -210,8 +210,6 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
 
     float inStartY = 20;
     float dY = 40;
-
-    float outStartY = 250;
 
     addParam(
         createParam<ClockModeButton>(Vec(0.5, inStartY + .25 * dY), module,

@@ -315,7 +315,7 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 ////////////////////////////////////
 struct StringDisplayWidget3 : Widget {
   std::string value;
-  std::string fontPath = "res/Oswald-Regular.ttf";
+  std::string fontPath = "res/fonts/Oswald-Regular.ttf";
   ComputerscareDebug* module;
 
   StringDisplayWidget3() {};
@@ -388,7 +388,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
   ComputerscareDebugWidget(ComputerscareDebug* module) {
     setModule(module);
     setPanel(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
+        asset::plugin(pluginInstance, "res/panels/ComputerscareDebugPanel.svg")));
 
     addInput(createInput<InPort>(Vec(2, 335), module,
                                  ComputerscareDebug::TRG_INPUT));

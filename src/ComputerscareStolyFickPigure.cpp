@@ -329,7 +329,7 @@ struct StolyFickPigureWidget : ModuleWidget {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareStolyFickPigurePanel.svg")));
+          pluginInstance, "res/panels/ComputerscareStolyFickPigurePanel.svg")));
       addChild(panel);
     }
 

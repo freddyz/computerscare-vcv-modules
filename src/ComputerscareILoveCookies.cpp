@@ -554,7 +554,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
   ComputerscareILoveCookiesWidget(ComputerscareILoveCookies* module) {
     setModule(module);
     setPanel(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/ComputerscareILoveCookiesPanel.svg")));
+        pluginInstance, "res/panels/ComputerscareILoveCookiesPanel.svg")));
 
     for (int i = 0; i < numKnobRows; i++) {
       for (int j = 0; j < numKnobColumns; j++) {

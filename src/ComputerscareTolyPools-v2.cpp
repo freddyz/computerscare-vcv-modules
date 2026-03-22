@@ -208,7 +208,7 @@ struct ComputerscareTolyPoolsWidgetV2 : ModuleWidget {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareTolyPoolsPanel.svg")));
+          pluginInstance, "res/panels/ComputerscareTolyPoolsPanel.svg")));
 
       addChild(panel);
     }

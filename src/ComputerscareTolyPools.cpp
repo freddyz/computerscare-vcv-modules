@@ -109,13 +109,13 @@ struct ComputerscareTolyPoolsWidget : ModuleWidget {
   ComputerscareTolyPoolsWidget(ComputerscareTolyPools* module) {
     setModule(module);
     // setPanel(APP->window->loadSvg(asset::plugin(pluginInstance,
-    // "res/ComputerscareTolyPoolsPanel.svg")));
+    // "res/panels/ComputerscareTolyPoolsPanel.svg")));
     box.size = Vec(4 * 15, 380);
     {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareTolyPoolsPanel.svg")));
+          pluginInstance, "res/panels/ComputerscareTolyPoolsPanel.svg")));
 
       // module->panelRef = panel;
 

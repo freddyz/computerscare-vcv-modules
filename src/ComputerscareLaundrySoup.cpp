@@ -534,7 +534,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
   ComputerscareLaundrySoupWidget(ComputerscareLaundrySoup* module) {
     setModule(module);
     setPanel(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/ComputerscareLaundrySoupPanel.svg")));
+        pluginInstance, "res/panels/ComputerscareLaundrySoupPanel.svg")));
 
     // global clock input
     addInput(createInput<InPort>(mm2px(Vec(2, 0)), module,

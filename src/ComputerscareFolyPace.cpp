@@ -403,7 +403,7 @@ struct FolyPaceWidget : ModuleWidget {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(
-          asset::plugin(pluginInstance, "res/ComputerscareFolyPacePanel.svg")));
+          asset::plugin(pluginInstance, "res/panels/ComputerscareFolyPacePanel.svg")));
       addChild(panel);
     }
 

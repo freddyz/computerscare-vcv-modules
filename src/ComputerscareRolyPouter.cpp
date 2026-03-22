@@ -166,10 +166,10 @@ struct DisableableSnapKnob : RoundKnob {
   bool disabled = false;
   int lastDisabled = -1;
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
-      pluginInstance, "res/computerscare-medium-knob-dot-indicator.svg"));
+      pluginInstance, "res/components/computerscare-medium-knob-dot-indicator.svg"));
   std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance,
-      "res/computerscare-medium-knob-dot-indicator-disabled.svg"));
+      "res/components/computerscare-medium-knob-dot-indicator-disabled.svg"));
 
   DisableableSnapKnob() {
     snap = true;
@@ -202,7 +202,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareRolyPouterPanel.svg")));
+          pluginInstance, "res/panels/ComputerscareRolyPouterPanel.svg")));
       addChild(panel);
     }
     channelWidget = new PolyOutputChannelsWidget(

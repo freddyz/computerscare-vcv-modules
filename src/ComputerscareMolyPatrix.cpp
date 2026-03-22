@@ -144,14 +144,14 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
 struct DisableableSmallKnob : RoundKnob {
   std::vector<std::shared_ptr<Svg>> enabledThemes = {
       APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/computerscare-small-knob-effed.svg")),
+          pluginInstance, "res/components/computerscare-small-knob-effed.svg")),
       APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/computerscare-small-knob-effed-dark.svg"))};
+          pluginInstance, "res/components/computerscare-small-knob-effed-dark.svg"))};
 
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(
-      asset::plugin(pluginInstance, "res/computerscare-small-knob-effed.svg"));
+      asset::plugin(pluginInstance, "res/components/computerscare-small-knob-effed.svg"));
   std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(
-      pluginInstance, "res/computerscare-small-knob-effed-disabled.svg"));
+      pluginInstance, "res/components/computerscare-small-knob-effed-disabled.svg"));
 
   int inputChannel = 0;
   int outputChannel = 0;
@@ -191,13 +191,13 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
     setModule(module);
 
     // setPanel(APP->window->loadSvg(asset::plugin(pluginInstance,
-    // "res/ComputerscareMolyPatrixPanel.svg")));
+    // "res/panels/ComputerscareMolyPatrixPanel.svg")));
     box.size = Vec(28 * 15, 380);
     {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareMolyPatrixPanel.svg")));
+          pluginInstance, "res/panels/ComputerscareMolyPatrixPanel.svg")));
 
       // module->panelRef = panel;
 

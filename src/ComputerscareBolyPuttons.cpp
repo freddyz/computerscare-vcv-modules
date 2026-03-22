@@ -219,7 +219,7 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareBolyPuttonsPanel.svg")));
+          pluginInstance, "res/panels/ComputerscareBolyPuttonsPanel.svg")));
       addChild(panel);
     }
 

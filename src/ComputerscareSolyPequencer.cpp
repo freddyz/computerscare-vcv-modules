@@ -156,13 +156,13 @@ struct ComputerscareSolyPequencerWidget : ModuleWidget {
   ComputerscareSolyPequencerWidget(ComputerscareSolyPequencer* module) {
     setModule(module);
     // setPanel(APP->window->loadSvg(asset::plugin(pluginInstance,
-    // "res/ComputerscareSolyPequencerPanel.svg")));
+    // "res/panels/ComputerscareSolyPequencerPanel.svg")));
     box.size = Vec(4 * 15, 380);
     {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareSolyPequencerPanel.svg")));
+          pluginInstance, "res/panels/ComputerscareSolyPequencerPanel.svg")));
       addChild(panel);
     }
 

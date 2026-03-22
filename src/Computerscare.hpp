@@ -101,9 +101,9 @@ struct InputBlockBackground : TransparentWidget {
 struct IsoButton : SvgSwitch {
   IsoButton() {
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-iso-button-down.svg")));
+        pluginInstance, "res/components/computerscare-iso-button-down.svg")));
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-iso-button-up.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-iso-button-up.svg")));
   }
 };
 struct SmallIsoButton : SvgSwitch {
@@ -114,14 +114,14 @@ struct SmallIsoButton : SvgSwitch {
 
   SmallIsoButton() {
     enabledFrames.push_back(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-iso-button-small-up.svg")));
+        pluginInstance, "res/components/computerscare-iso-button-small-up.svg")));
     enabledFrames.push_back(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-iso-button-small-down.svg")));
+        pluginInstance, "res/components/computerscare-iso-button-small-down.svg")));
 
     disabledFrames.push_back(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-iso-button-small-up-grey.svg")));
+        pluginInstance, "res/components/computerscare-iso-button-small-up-grey.svg")));
     disabledFrames.push_back(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-iso-button-small-down-grey.svg")));
+        pluginInstance, "res/components/computerscare-iso-button-small-down-grey.svg")));
 
     addFrame(enabledFrames[0]);
     addFrame(enabledFrames[1]);
@@ -147,35 +147,35 @@ struct SmallIsoButton : SvgSwitch {
 struct ComputerscareIsoThree : app::SvgSwitch {
   ComputerscareIsoThree() {
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/iso-3way-1.svg")));
+        asset::plugin(pluginInstance, "res/components/iso-3way-1.svg")));
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/iso-3way-2.svg")));
+        asset::plugin(pluginInstance, "res/components/iso-3way-2.svg")));
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/iso-3way-3.svg")));
+        asset::plugin(pluginInstance, "res/components/iso-3way-3.svg")));
   }
 };
 struct ThreeVerticalXSwitch : app::SvgSwitch {
   ThreeVerticalXSwitch() {
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/vertical-x-1.svg")));
+        asset::plugin(pluginInstance, "res/components/vertical-x-1.svg")));
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/vertical-x-2.svg")));
+        asset::plugin(pluginInstance, "res/components/vertical-x-2.svg")));
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/vertical-x-3.svg")));
+        asset::plugin(pluginInstance, "res/components/vertical-x-3.svg")));
     shadow->opacity = 0.f;
   }
 };
 struct ComputerscareDebugFour : app::SvgSwitch {
   ComputerscareDebugFour() {
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/debug-clock-selector-4way-template.svg")));
+        pluginInstance, "res/components/debug-clock-selector-4way-template.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/debug-clock-selector-4way-template.svg")));
+        pluginInstance, "res/components/debug-clock-selector-4way-template.svg")));
 
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/debug-clock-selector-4way-template.svg")));
+        pluginInstance, "res/components/debug-clock-selector-4way-template.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/debug-clock-selector-4way-template.svg")));
+        pluginInstance, "res/components/debug-clock-selector-4way-template.svg")));
   }
 };
 struct ComputerscareResetButton : app::SvgSwitch {
@@ -183,9 +183,9 @@ struct ComputerscareResetButton : app::SvgSwitch {
     momentary = true;
     shadow->opacity = 0.f;
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-rst-text.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-rst-text.svg")));
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-rst-text-red.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-rst-text-red.svg")));
   }
 };
 struct ComputerscareNextButton : app::SvgSwitch {
@@ -194,9 +194,9 @@ struct ComputerscareNextButton : app::SvgSwitch {
 
     shadow->opacity = 0.f;
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-next-button.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-next-button.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-next-button-down.svg")));
+        pluginInstance, "res/components/computerscare-next-button-down.svg")));
   }
 };
 struct ComputerscareClearButton : app::SvgSwitch {
@@ -205,9 +205,9 @@ struct ComputerscareClearButton : app::SvgSwitch {
 
     shadow->opacity = 0.f;
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-CLEAR-BUTTON-UP.svg")));
+        pluginInstance, "res/components/computerscare-CLEAR-BUTTON-UP.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-CLEAR-BUTTON-DOWN.svg")));
+        pluginInstance, "res/components/computerscare-CLEAR-BUTTON-DOWN.svg")));
   }
 };
 
@@ -217,9 +217,9 @@ struct ComputerscareClockButton : app::SvgSwitch {
 
     shadow->opacity = 0.f;
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-clk-text.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-clk-text.svg")));
     addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-clk-text-red.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-clk-text-red.svg")));
   }
 };
 struct ComputerscareInvisibleButton : app::SvgSwitch {
@@ -231,9 +231,9 @@ struct ComputerscareInvisibleButton : app::SvgSwitch {
     addChild(fb);
 
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-invisible-button.svg")));
+        pluginInstance, "res/components/computerscare-invisible-button.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-invisible-button-frame2.svg")));
+        pluginInstance, "res/components/computerscare-invisible-button-frame2.svg")));
 
     sw = new widget::SvgWidget;
     fb->addChild(sw);
@@ -304,7 +304,7 @@ struct OutPort : ComputerscareSvgPort {
   OutPort() {
     setSvg(APP->window->loadSvg(asset::plugin(
         pluginInstance,
-        "res/computerscare-pentagon-jack-1-outline-flipped.svg")));
+        "res/components/computerscare-pentagon-jack-1-outline-flipped.svg")));
     // background->wrap();
   }
 };
@@ -312,7 +312,7 @@ struct OutPort : ComputerscareSvgPort {
 struct TinyJack : ComputerscareSvgPort {
   TinyJack() {
     setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/tiny-jack.svg")));
+        asset::plugin(pluginInstance, "res/components/tiny-jack.svg")));
     // background->wrap();
   }
 };
@@ -320,7 +320,7 @@ struct TinyJack : ComputerscareSvgPort {
 struct PointingUpPentagonPort : ComputerscareSvgPort {
   PointingUpPentagonPort() {
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-pentagon-jack-pointing-up.svg")));
+        pluginInstance, "res/components/computerscare-pentagon-jack-pointing-up.svg")));
     // background->wrap();
     // box.size = background->box.size;
   }
@@ -329,7 +329,7 @@ struct PointingUpPentagonPort : ComputerscareSvgPort {
 struct InPort : ComputerscareSvgPort {
   InPort() {
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-pentagon-jack-1-outline.svg")));
+        pluginInstance, "res/components/computerscare-pentagon-jack-1-outline.svg")));
     // background->wrap();
     // box.size = background->box.size;
   }
@@ -342,7 +342,7 @@ struct LrgKnob : RoundKnob {
     snap = true;
     shadow->opacity = 0.f;
     setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-big-knob-effed.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-big-knob-effed.svg")));
   }
 };
 
@@ -351,7 +351,7 @@ struct MediumSnapKnob : RoundKnob {
     snap = true;
     shadow->opacity = 0.f;
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-medium-knob-effed.svg")));
+        pluginInstance, "res/components/computerscare-medium-knob-effed.svg")));
   }
 };
 struct MediumDotSnapKnob : RoundKnob {
@@ -359,26 +359,26 @@ struct MediumDotSnapKnob : RoundKnob {
     shadow->opacity = 0.f;
     snap = true;
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-medium-knob-dot-indicator.svg")));
+        pluginInstance, "res/components/computerscare-medium-knob-dot-indicator.svg")));
   }
 };
 
 struct SmoothKnob : RoundKnob {
   SmoothKnob() {
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-medium-knob-effed.svg")));
+        pluginInstance, "res/components/computerscare-medium-knob-effed.svg")));
   }
 };
 struct SmoothKnobNoRandom : RoundKnob {
   SmoothKnobNoRandom() {
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-medium-knob-effed.svg")));
+        pluginInstance, "res/components/computerscare-medium-knob-effed.svg")));
   }
 };
 struct SmallKnob : RoundKnob {
   SmallKnob() {
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-small-knob-effed.svg")));
+        pluginInstance, "res/components/computerscare-small-knob-effed.svg")));
   }
 };
 
@@ -386,14 +386,14 @@ struct ScrambleKnob : RoundKnob {
   ScrambleKnob() {
     shadow->opacity = 0.f;
     setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-scramble-knob.svg")));
   }
 };
 struct ScrambleKnobNoRandom : RoundKnob {
   ScrambleKnobNoRandom() {
     shadow->opacity = 0.f;
     setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-scramble-knob.svg")));
   }
 };
 
@@ -402,7 +402,7 @@ struct ScrambleSnapKnob : RoundKnob {
     snap = true;
     shadow->opacity = 0.f;
     setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-scramble-knob.svg")));
   }
 };
 struct ScrambleSnapKnobNoRandom : RoundKnob {
@@ -410,7 +410,7 @@ struct ScrambleSnapKnobNoRandom : RoundKnob {
     snap = true;
     shadow->opacity = 0.f;
     setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-scramble-knob.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-scramble-knob.svg")));
   }
 };
 
@@ -418,7 +418,7 @@ struct SmallSnapKnob : RoundKnob {
   SmallSnapKnob() {
     snap = true;
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/computerscare-small-knob-effed.svg")));
+        pluginInstance, "res/components/computerscare-small-knob-effed.svg")));
     shadow->box.size = math::Vec(0, 0);
     shadow->opacity = 0.f;
   }
@@ -426,7 +426,7 @@ struct SmallSnapKnob : RoundKnob {
 struct BigSmoothKnob : RoundKnob {
   BigSmoothKnob() {
     setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/computerscare-big-knob-effed.svg")));
+        asset::plugin(pluginInstance, "res/components/computerscare-big-knob-effed.svg")));
   }
 };
 struct ComputerscareDotKnob : SmallKnob {
@@ -514,7 +514,7 @@ struct SmallLetterDisplay : Widget {
   std::string value;
   std::string fontPath;
   int fontSize = 19;
-  std::string defaultFontPath = "res/Oswald-Regular.ttf";
+  std::string defaultFontPath = "res/fonts/Oswald-Regular.ttf";
   NVGcolor baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
   NVGcolor textColor = nvgRGB(0x10, 0x10, 0x00);
   Vec textOffset = Vec(0, 0);

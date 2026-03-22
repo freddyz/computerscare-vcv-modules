@@ -1,3 +1,5 @@
+#include "Computerscare.hpp"
+
 #include <dirent.h>
 #include <osdialog.h>
 
@@ -9,8 +11,6 @@
 #include <settings.hpp>
 #include <sstream>
 #include <thread>
-
-#include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
 #include "CustomBlankFunctions.hpp"
 #include "animatedGif.hpp"
@@ -891,7 +891,7 @@ struct tPNGDisplay : TBase {
 
         if (gifBuddy.getImageStatus() == 3) {
           std::string badGifPath =
-              asset::plugin(pluginInstance, "res/broken-file.gif");
+              asset::plugin(pluginInstance, "res/img/broken-file.gif");
           gifBuddy = AnimatedGifBuddy(args.vg, badGifPath.c_str());
           missingOrBroken = true;
         } else {
@@ -1068,7 +1068,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareCustomBlankPanel.svg")));
+          pluginInstance, "res/panels/ComputerscareCustomBlankPanel.svg")));
       this->panel = panel;
       addChild(panel);
     }

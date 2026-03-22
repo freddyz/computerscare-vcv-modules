@@ -886,13 +886,13 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
   ComputerscareHorseADoodleDooWidget(ComputerscareHorseADoodleDoo* module) {
     setModule(module);
     // setPanel(APP->window->loadSvg(asset::plugin(pluginInstance,
-    // "res/ComputerscareHorseADoodleDooPanel.svg")));
+    // "res/panels/ComputerscareHorseADoodleDooPanel.svg")));
     box.size = Vec(6 * 15, 380);
     {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/ComputerscareHorseADoodleDooPanel.svg")));
+          pluginInstance, "res/panels/ComputerscareHorseADoodleDooPanel.svg")));
       addChild(panel);
     }
 
