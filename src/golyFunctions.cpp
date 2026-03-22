@@ -71,6 +71,6 @@ void Goly::invoke(int algorithm, std::vector<float> gp, int num = 16) {
       }
 
     default:
-      int k = 0;
+      break;
   }
 }

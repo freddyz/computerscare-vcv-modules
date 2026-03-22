@@ -30,6 +30,7 @@ class Token {
   Token(std::string t, std::string v, int dex);
   Token(std::string t, int val);
   Token(const Token& source);
+  Token& operator=(const Token&) = default;
   void print();
 };
 class Parser {

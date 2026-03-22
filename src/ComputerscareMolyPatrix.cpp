@@ -170,8 +170,8 @@ struct DisableableSmallKnob : RoundKnob {
   void draw(const DrawArgs& args) override {
     if (module) {
       bool candidateDisabled =
-          (module->numInputChannels != 0 &&
-               inputChannel > module->numInputChannels - 1 ||
+          ((module->numInputChannels != 0 &&
+            inputChannel > module->numInputChannels - 1) ||
            outputChannel > module->polyChannels - 1);
       if (disabled != candidateDisabled || !initialized) {
         setSvg(candidateDisabled ? disabledSvg : enabledThemes[themeIndex]);

@@ -161,8 +161,6 @@ struct StolyFickPigureDisplay : TransparentWidget {
     nvgFillColor(args.vg, faceColor);
     nvgStrokeWidth(args.vg, 3.2);
 
-    float size = 1 + sin(O - 29) / 4;
-
     // crotch
     float cx = 62 * (1 + (sin(E + F) - sin(P + O / 2 + 50)) / 40000);
     float cy = 210 * (1 + (sin(A + G - 12) - sin(P + H / 2)) / 11000);
@@ -263,8 +261,6 @@ struct StolyFickPigureDisplay : TransparentWidget {
         torsoLength * (0.5 + sin(H - E - I - D) / 9 - sin(F + B - C + E) / 7);
     float headWidth =
         headHeight * (0.6 + sin(I + D - M / 2) / 7 + sin(G / 2 + J - 10) / 6);
-    float headAngle = M_PI / 2 + (sin(C + A) / 6 + sin(D + G) / 9);
-
     float headRotation = sin(C + A) / 2 + sin(M / 2) / 3;
 
     nvgBeginPath(args.vg);

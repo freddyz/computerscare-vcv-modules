@@ -22,9 +22,17 @@ lint() {
   echo "    OK."
 }
 
+cppcheck_run() {
+  echo "==> cppcheck..."
+  cppcheck --enable=unusedFunction --suppress=missingIncludeSystem \
+    -I./src -I${RACK_DIR:-../../Rack}/include \
+    --error-exitcode=1 src/
+  echo "    OK."
+}
+
 build() {
   echo "==> Building..."
-  make
+  make FLAGS="-Wall"
 }
 
 run_tests() {
@@ -34,19 +42,21 @@ run_tests() {
 }
 
 case $CMD in
-  fmt)   fmt ;;
-  lint)  lint ;;
-  check) fmt_check && lint && build ;;
-  test)  build && run_tests ;;
-  all)   fmt && lint && build && run_tests ;;
+  fmt)      fmt ;;
+  lint)     lint ;;
+  cppcheck) cppcheck_run ;;
+  check)    fmt_check && lint && cppcheck_run && build ;;
+  test)     build && run_tests ;;
+  all)      fmt && lint && cppcheck_run && build && run_tests ;;
   *)
     echo "Usage: $0 [fmt|lint|check|test|all]"
     echo ""
-    echo "  fmt    Auto-format all src files in place"
-    echo "  lint   Run clang-tidy static analysis"
-    echo "  check  Dry-run format check + lint + build"
-    echo "  test   Build + run test binary"
-    echo "  all    fmt + lint + build + test (default)"
+    echo "  fmt      Auto-format all src files in place"
+    echo "  lint     Run clang-tidy static analysis"
+    echo "  cppcheck Run cppcheck unused-function analysis"
+    echo "  check    Dry-run format check + lint + cppcheck + build"
+    echo "  test     Build + run test binary"
+    echo "  all      fmt + lint + cppcheck + build + test (default)"
     exit 1
     ;;
 esac

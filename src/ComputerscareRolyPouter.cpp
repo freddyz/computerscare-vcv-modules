@@ -77,7 +77,6 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
   }
   void checkPoly() override {
     numInputChannels = inputs[POLY_INPUT].getChannels();
-    int cvChannels = inputs[ROUTING_CV].getChannels();
     int knobSetting = params[POLY_CHANNELS].getValue();
     if (numInputChannels > 0) {
       if (knobSetting == 0) {
