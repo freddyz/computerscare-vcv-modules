@@ -105,15 +105,21 @@ jobs:
       - name: Create universal plugin
         run: |
           mkdir x64-unpacked arm64-unpacked
-          unzip "mac-x64/"*.vcvplugin -d x64-unpacked
-          unzip "mac-arm64/"*.vcvplugin -d arm64-unpacked
+          X64_PLUGIN=$(ls mac-x64/*.vcvplugin)
+          ARM64_PLUGIN=$(ls mac-arm64/*.vcvplugin)
+          zstd -d "$X64_PLUGIN" -o x64.tar
+          zstd -d "$ARM64_PLUGIN" -o arm64.tar
+          tar -xf x64.tar -C x64-unpacked
+          tar -xf arm64.tar -C arm64-unpacked
+          PLUGIN_DIR=$(tar -tf x64.tar | head -1 | cut -d/ -f1)
           lipo -create \
-            -output x64-unpacked/plugin.dylib \
-            x64-unpacked/plugin.dylib \
-            arm64-unpacked/plugin.dylib
-          lipo -info x64-unpacked/plugin.dylib
-          OUTNAME=$(ls mac-x64/*.vcvplugin | xargs basename | sed 's/-mac-x64/-mac-universal/')
-          cd x64-unpacked && zip -r "../$OUTNAME" .
+            -output "x64-unpacked/$PLUGIN_DIR/plugin.dylib" \
+            "x64-unpacked/$PLUGIN_DIR/plugin.dylib" \
+            "arm64-unpacked/$PLUGIN_DIR/plugin.dylib"
+          lipo -info "x64-unpacked/$PLUGIN_DIR/plugin.dylib"
+          OUTNAME=$(basename "$X64_PLUGIN" | sed 's/-mac-x64/-mac-universal/')
+          tar -cf universal.tar -C x64-unpacked .
+          zstd -19 universal.tar -o "$OUTNAME"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
