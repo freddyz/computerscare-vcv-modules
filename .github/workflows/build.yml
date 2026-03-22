@@ -71,17 +71,23 @@ jobs:
           unzip Rack-SDK-x64.zip -d Rack-SDK-x64
           unzip Rack-SDK-arm64.zip -d Rack-SDK-arm64
           popd
+
+          # Build x64 — force arch explicitly since runner is arm64
           export RACK_DIR=$HOME/Rack-SDK-x64/Rack-SDK
           make -j dep
-          make -j
+          make -j BUILDDIR=build-x64 CC="clang -arch x86_64" CXX="clang++ -arch x86_64"
           cp plugin.dylib plugin-x64.dylib
-          make clean
+
+          # Build arm64
           export RACK_DIR=$HOME/Rack-SDK-arm64/Rack-SDK
           make -j dep
-          make -j
+          make -j BUILDDIR=build-arm64
           cp plugin.dylib plugin-arm64.dylib
+
+          # Combine into universal binary
           lipo -create -output plugin.dylib plugin-x64.dylib plugin-arm64.dylib
-          export RACK_DIR=$HOME/Rack-SDK-arm64/Rack-SDK
+          lipo -info plugin.dylib
+
           make dist
 
       - name: Build plugin
