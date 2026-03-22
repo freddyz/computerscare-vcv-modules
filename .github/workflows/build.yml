@@ -80,7 +80,7 @@ jobs:
           make -j dist
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           path: dist/*.vcvplugin
           name: ${{ matrix.config.name }}
@@ -91,13 +91,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Download mac-x64
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: mac-x64
           path: mac-x64
 
       - name: Download mac-arm64
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: mac-arm64
           path: mac-arm64
@@ -122,7 +122,7 @@ jobs:
           zstd -19 universal.tar -o "$OUTNAME"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           path: "*.vcvplugin"
           name: mac-universal
@@ -145,23 +145,23 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: lin-x64
           path: _artifacts
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: win-x64
           path: _artifacts
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: mac-universal
           path: _artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2.6.1
         with:
           name: Computerscare Modules ${{ github.ref_name }}
           body: |
