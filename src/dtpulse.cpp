@@ -1,30 +1,29 @@
 #include "dtpulse.hpp"
 
-std::string b64lookup = "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
+std::string b64lookup =
+    "123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ&$0";
 std::string integerlookup = "0123456789";
 std::string knoblookup = "abcdefghijklmnopqrstuvwxyz";
 std::string inputlookup = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-std::string knobandinputlookup = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+std::string knobandinputlookup =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 int MAX_LENGTH = 1048576;
 bool matchesAny(std::string val, std::vector<std::string> whitelist) {
   bool result = false;
   std::vector<std::string>::iterator it;
-  for (it = whitelist.begin(); it != whitelist.end(); it++ )    {
+  for (it = whitelist.begin(); it != whitelist.end(); it++) {
     result = result || (*it == val);
   }
   return result;
 }
-bool is_digits(const std::string &str)
-{
+bool is_digits(const std::string& str) {
   return str.find_first_not_of(integerlookup) == std::string::npos;
 }
-void padTo(std::string &str, const size_t num, const char paddingChar = ' ')
-{
-  if (num > str.size())
-    str.insert(0, num - str.size(), paddingChar);
+void padTo(std::string& str, const size_t num, const char paddingChar = ' ') {
+  if (num > str.size()) str.insert(0, num - str.size(), paddingChar);
 }
 std::vector<int> parseStringAsTimes(std::string input, std::string lookup) {
-// "113" -> {1,1,1,0,0}
+  // "113" -> {1,1,1,0,0}
   return parseEntireString(input, lookup, 0);
 }
 
@@ -33,7 +32,8 @@ std::vector<int> parseStringAsValues(std::string input, std::string lookup) {
   return parseEntireString(input, lookup, 1);
 }
 
-std::vector<int> parseEntireString(std::string input, std::string lookup, int type) {
+std::vector<int> parseEntireString(std::string input, std::string lookup,
+                                   int type) {
   std::vector<int> absoluteSequence;
   absoluteSequence.resize(0);
   bool noNumbers = true;
@@ -63,27 +63,24 @@ std::vector<int> parseEntireString(std::string input, std::string lookup, int ty
   std::stringstream offsetstream(input);
   while (std::getline(inputstream, commaseg, ',')) {
     if (commaseg.empty()) {
-      //absoluteSequence.push_back(0);
-    }
-    else {
+      // absoluteSequence.push_back(0);
+    } else {
       std::stringstream atstream(commaseg);
       atVec.resize(0);
       while (std::getline(atstream, atseg, '@')) {
         atVec.push_back(atseg);
       }
-      atnum  = (atVec.size() > 1 && is_digits(atVec[1]) ) ? std::stoi(atVec[1]) : -1;
+      atnum =
+          (atVec.size() > 1 && is_digits(atVec[1])) ? std::stoi(atVec[1]) : -1;
       if (atVec[0].empty() && atnum > 0) {
         for (int i = 0; i < atnum; i++) {
           absoluteSequence.push_back(0);
         }
-      }
-      else if (atVec[0].empty() && atnum == -1) {
+      } else if (atVec[0].empty() && atnum == -1) {
         absoluteSequence.push_back(0);
-      }
-      else if (atnum == 0) {
+      } else if (atnum == 0) {
         absoluteSequence.push_back(0);
-      }
-      else {
+      } else {
         std::stringstream offsetstream(atVec[0]);
         offsetVec.resize(0);
         while (std::getline(offsetstream, offsetseg, '-')) {
@@ -91,27 +88,31 @@ std::vector<int> parseEntireString(std::string input, std::string lookup, int ty
         }
         if (offsetVec[0].empty()) {
           absoluteSequence.push_back(0);
-        }
-        else {
-          offsetnum  = (offsetVec.size() > 1  && is_digits(offsetVec[1])) ? std::stoi(offsetVec[1]) : 0;
+        } else {
+          offsetnum = (offsetVec.size() > 1 && is_digits(offsetVec[1]))
+                          ? std::stoi(offsetVec[1])
+                          : 0;
           commaVec.resize(0);
           interleaved = splitRecur(offsetVec[0]);
           // below may be the only line that has to change for a by value parse
           if (type == 0) {
-            commaVec = parseDt(atExpand(interleaved, atnum, lookup), offsetnum, lookup);
-          }
-          else {
-            commaVec = parseLookup(countExpand(interleaved, atnum), offsetnum, lookup);
+            commaVec = parseDt(atExpand(interleaved, atnum, lookup), offsetnum,
+                               lookup);
+          } else {
+            commaVec =
+                parseLookup(countExpand(interleaved, atnum), offsetnum, lookup);
           }
 
-          absoluteSequence.insert(absoluteSequence.end(), commaVec.begin(), commaVec.end());
+          absoluteSequence.insert(absoluteSequence.end(), commaVec.begin(),
+                                  commaVec.end());
         }
       }
     }
   }
   return absoluteSequence;
 }
-std::vector<int> parseLookup(std::string input, int offset, std::string lookup) {
+std::vector<int> parseLookup(std::string input, int offset,
+                             std::string lookup) {
   std::vector<int> absoluteSequence;
   int currentVal;
   int mappedIndex = 0;
@@ -126,9 +127,9 @@ std::vector<int> parseLookup(std::string input, int offset, std::string lookup) 
   return absoluteSequence;
 }
 std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
-  std::vector <int> absoluteSequence;
+  std::vector<int> absoluteSequence;
 
-  std::vector <int> sequenceSums;
+  std::vector<int> sequenceSums;
   absoluteSequence.resize(0);
   sequenceSums.push_back(0);
   int numSteps = 0;
@@ -145,7 +146,7 @@ std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
 
   absoluteSequence.resize(numSteps);
   for (unsigned i = 0; i < sequenceSums.size() - 1; i++) {
-    mappedIndex = (sequenceSums[i] + offset ) % numSteps;
+    mappedIndex = (sequenceSums[i] + offset) % numSteps;
     absoluteSequence[mappedIndex] = 1;
   }
   return absoluteSequence;
@@ -160,21 +161,18 @@ std::string splitRecur(std::string input) {
     c = input[i];
     if (c == "(") {
       stackVec.push_back({});
-    }
-    else if (c == ")") {
-      //evaluate top of stack
+    } else if (c == ")") {
+      // evaluate top of stack
       tempString = interleaveExpand(stackVec.back());
-      //pop top of stack
+      // pop top of stack
       stackVec.pop_back();
       if (stackVec.size() > 0) {
-        //push this evaluated string to new top
+        // push this evaluated string to new top
         stackVec.back().push_back(tempString);
-      }
-      else {
+      } else {
         return "";
       }
-    }
-    else {
+    } else {
       stackVec.back().push_back(c);
     }
   }
@@ -199,7 +197,7 @@ std::string interleaveExpand(std::vector<std::string> blocks) {
     indices.push_back(0);
     lengths.push_back(blocks[i].length());
   }
-  while (outerLength && ((!allAtZero && steps < 6000 ) || steps == 0)) {
+  while (outerLength && ((!allAtZero && steps < 6000) || steps == 0)) {
     if (lengths[outerIndex]) {
       output += blocks[outerIndex][indices[outerIndex]];
       indices[outerIndex]++;
@@ -232,7 +230,7 @@ std::vector<Token> interleaveExpand(std::vector<std::vector<Token>> blocks) {
     indices.push_back(0);
     lengths.push_back(blocks[i].size());
   }
-  while (outerLength && ((!allAtZero && steps < 6000 ) || steps == 0)) {
+  while (outerLength && ((!allAtZero && steps < 6000) || steps == 0)) {
     if (lengths[outerIndex]) {
       output.push_back(blocks[outerIndex][indices[outerIndex]]);
       indices[outerIndex]++;
@@ -258,8 +256,7 @@ std::string atExpand(std::string input, int atnum, std::string lookup) {
   int lookupVal;
   if (atnum == -1) {
     return input;
-  }
-  else if (atnum == 0) {
+  } else if (atnum == 0) {
     return "";
   }
   while (total < atnum) {
@@ -268,8 +265,7 @@ std::string atExpand(std::string input, int atnum, std::string lookup) {
     if (total + lookupVal <= atnum) {
       output += lookup[lookupVal - 1];
       total += lookupVal;
-    }
-    else {
+    } else {
       output += b64lookup[atnum - total - 1];
       total = atnum;
     }
@@ -285,8 +281,7 @@ std::string countExpand(std::string input, int atnum) {
   int index = 0;
   if (atnum == -1) {
     return input;
-  }
-  else if (atnum == 0) {
+  } else if (atnum == 0) {
     return "";
   }
   for (index = 0; index < atnum; index++) {
@@ -306,7 +301,8 @@ std::string hashExpand(std::string input, int hashnum) {
   return output;
 }
 
-std::string concatVectorFromLookup(std::vector<int> vector, std::string lookup) {
+std::string concatVectorFromLookup(std::vector<int> vector,
+                                   std::string lookup) {
   std::string output = "";
   for (unsigned int i = 0; i < vector.size(); i++) {
     output += lookup[vector[i]];
@@ -325,7 +321,6 @@ void printTokenVector(std::vector<std::vector<Token>> tokenVector) {
       printf("%i ", tokenVector[i][j].index);
     }
     printf("\n");
-
   }
 }
 
@@ -340,41 +335,38 @@ bool matchParens(std::string value) {
     c = value[i];
     if (c == "(") {
       parensCount += 1;
-    }
-    else if (c == ")") {
+    } else if (c == ")") {
       parensCount -= 1;
     }
     if (c == "[") {
       squareCount += 1;
-    }
-    else if (c == "]") {
+    } else if (c == "]") {
       squareCount -= 1;
     }
     if (c == "{") {
       curlyCount += 1;
-    }
-    else if (c == "}") {
+    } else if (c == "}") {
       curlyCount -= 1;
     }
     if (c == "<") {
       angleCount += 1;
-    }
-    else if (c == ">") {
+    } else if (c == ">") {
       angleCount -= 1;
     }
   }
-  theyMatch = (parensCount == 0) && (squareCount == 0) && (curlyCount == 0) && (angleCount == 0);
+  theyMatch = (parensCount == 0) && (squareCount == 0) && (curlyCount == 0) &&
+              (angleCount == 0);
   return theyMatch;
 }
-void printVector(std::vector <int> intVector) {
-  //printf("int vector of size %i\n",intVector.size());
+void printVector(std::vector<int> intVector) {
+  // printf("int vector of size %i\n",intVector.size());
   for (unsigned int i = 0; i < intVector.size(); i++) {
     printf("%i ", intVector[i]);
   }
   printf("\n");
 }
 void whoKnows(std::string input) {
-  //AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
+  // AbsoluteSequence abs = AbsoluteSequence(input,knobandinputlookup);
   /*abs.print();
   printf("  indexSequence:\n");
   printVector(abs.indexSequence);
@@ -398,10 +390,11 @@ LaundryPoly::LaundryPoly(std::string formula) {
   int ns;
   std::vector<std::string> semisep = split(formula, ';');
   int semilen = semisep.size();
-  for (int i = 0; i < 16; i++ ) {
-    //newFormula = formula;
-    newFormula = semilen == 0 ? formula : semisep[i % semilen]; //i%semilen];
-    replaceAll(newFormula, "#", "<" + std::to_string(static_cast<long long>(i + 1)) + ">");
+  for (int i = 0; i < 16; i++) {
+    // newFormula = formula;
+    newFormula = semilen == 0 ? formula : semisep[i % semilen];  // i%semilen];
+    replaceAll(newFormula, "#",
+               "<" + std::to_string(static_cast<long long>(i + 1)) + ">");
     lss[i] = LaundrySoupSequence(newFormula);
     ns = lss[i].numSteps;
     if (ns > maxSteps) {
@@ -412,9 +405,7 @@ LaundryPoly::LaundryPoly(std::string formula) {
   }
   inError = myInError;
 }
-LaundryPoly::LaundryPoly() {
-  LaundryPoly("");
-}
+LaundryPoly::LaundryPoly() { LaundryPoly(""); }
 void LaundryPoly::print() {
   printf("   LaundryPoly:\n");
   for (int i = 0; i < 16; i++) {
@@ -422,9 +413,7 @@ void LaundryPoly::print() {
     lss[i].print();
   }
 }
-bool LaundryPoly::maxChannelAtLastStep() {
-  return lss[maxIndex].atLastStep();
-}
+bool LaundryPoly::maxChannelAtLastStep() { return lss[maxIndex].atLastStep(); }
 void whoKnowsLaundry(std::string input) {
   LaundrySoupSequence laundry = LaundrySoupSequence(input);
 
@@ -434,14 +423,9 @@ void whoKnowsLaundry(std::string input) {
     laundry.incrementAndCheck();
     printVector(laundry.workingPulseSequence);
   }
-
 }
-LaundrySoupSequence::LaundrySoupSequence() {
-  LaundrySoupSequence("");
-}
-LaundrySoupSequence::LaundrySoupSequence(std::string expr) {
-  Tokenize(expr);
-}
+LaundrySoupSequence::LaundrySoupSequence() { LaundrySoupSequence(""); }
+LaundrySoupSequence::LaundrySoupSequence(std::string expr) { Tokenize(expr); }
 LaundrySoupSequence::LaundrySoupSequence(const std::vector<Token>& tokens) {
   Setup(tokens);
 }
@@ -455,13 +439,11 @@ void LaundrySoupSequence::Tokenize(std::string expr) {
     if (p.inError || !p.tokenStack.size()) {
       calculatedTokens = defaultStack;
       inError = true;
-    }
-    else {
+    } else {
       calculatedTokens = p.tokenStack;
       inError = false;
     }
-  }
-  else {
+  } else {
     calculatedTokens = defaultStack;
     inError = false;
   }
@@ -471,17 +453,18 @@ void LaundrySoupSequence::Setup(std::vector<Token> tokens) {
   tokenStack = tokens;
   pulseSequence = makePulseSequence(tokenStack);
   workingPulseSequence = duplicateIntVector(pulseSequence);
-  numSteps = (int) pulseSequence.size();
+  numSteps = (int)pulseSequence.size();
   readHead = -1;
   inError = false;
 }
 void LaundrySoupSequence::print() {
   printf("  LaundrySoupSequence inError:%d, tokenStack:\n", inError);
-  //printTokenVector(tokenStack);
-  //printf("  Laundry pulseSequence:\n");
-  //printVector(pulseSequence);
+  // printTokenVector(tokenStack);
+  // printf("  Laundry pulseSequence:\n");
+  // printVector(pulseSequence);
 }
-std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> tokens) {
+std::vector<int> LaundrySoupSequence::makePulseSequence(
+    std::vector<Token> tokens) {
   std::vector<int> output = {};
   int length = 0;
   int thisVal;
@@ -489,17 +472,18 @@ std::vector<int> LaundrySoupSequence::makePulseSequence(std::vector<Token> token
   for (unsigned int i = 0; i < tokens.size(); i++) {
     thisVal = tokens[i].duration;
 
-    //horrible hacky way to not crash Rack via entering a ridiculously long sequence
-    //mostly to protect the higher channels of 4^#.  Laundry soup can still break Rack
-    //with something like this 1@999999999999
+    // horrible hacky way to not crash Rack via entering a ridiculously long
+    // sequence mostly to protect the higher channels of 4^#.  Laundry soup can
+    // still break Rack with something like this 1@999999999999
     thisVal = std::min(std::max(1, MAX_LENGTH - length), thisVal);
-    thisGate = (tokens[i].type == "ChanceOfInteger" ? 2 : (tokens[i].value == "0" ? 0 : 1));
+    thisGate = (tokens[i].type == "ChanceOfInteger"
+                    ? 2
+                    : (tokens[i].value == "0" ? 0 : 1));
     output.push_back(thisGate);
     length += thisVal;
     for (int j = 1; j < thisVal; j++) {
       output.push_back(0);
     }
-
   }
   return output;
 }
@@ -511,9 +495,7 @@ int LaundrySoupSequence::skipAndPeek() {
   skipStep();
   return peekStep();
 }
-int LaundrySoupSequence::peekStep() {
-  return pulseSequence[readHead];
-}
+int LaundrySoupSequence::peekStep() { return pulseSequence[readHead]; }
 int LaundrySoupSequence::peekWorkingStep() {
   return (readHead >= 0) ? workingPulseSequence[readHead] : 0;
 }
@@ -522,9 +504,7 @@ void LaundrySoupSequence::incrementAndCheck() {
     randomizePulseValue(readHead);
   }
 }
-bool LaundrySoupSequence::atLastStep() {
-  return (readHead == (numSteps - 1 ));
-}
+bool LaundrySoupSequence::atLastStep() { return (readHead == (numSteps - 1)); }
 void LaundrySoupSequence::randomizePulseValue(int index) {
   workingPulseSequence[index] = (rand() % 2);
 }
@@ -534,8 +514,8 @@ AbsoluteSequence::AbsoluteSequence() {
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
   std::vector<Token> defaultStack;
   defaultStack.push_back(Token("Error", "error", -1));
-  srand (time(NULL));
-  //expr = expr=="" ? "a" : expr;
+  srand(time(NULL));
+  // expr = expr=="" ? "a" : expr;
   if (expr != "") {
     Parser p = Parser(expr);
     p.setForCookies();
@@ -544,31 +524,30 @@ AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
     if (p.inError || !p.tokenStack.size()) {
       tokenStack = defaultStack;
       inError = true;
-    }
-    else {
+    } else {
       tokenStack = p.tokenStack;
       inError = false;
     }
-  }
-  else {
+  } else {
     tokenStack = defaultStack;
     inError = false;
   }
   numTokens = tokenStack.size();
   indexSequence = getIndicesFromTokenStack(tokenStack);
   workingIndexSequence = duplicateIntVector(indexSequence);
-  readHead = -1;//((int)indexSequence.size())-1 ;
+  readHead = -1;  //((int)indexSequence.size())-1 ;
 }
 void AbsoluteSequence::randomizeIndex(int index) {
   int randomTokenIndex = indexSequence[index] - 78;
-  std::vector<int> myRandomTokens = getIndicesFromTokenStack(randomTokens[randomTokenIndex]);
+  std::vector<int> myRandomTokens =
+      getIndicesFromTokenStack(randomTokens[randomTokenIndex]);
   int size = myRandomTokens.size();
   if (size) {
-    //random one from those enclosed by the {}
-    workingIndexSequence[index] = myRandomTokens[rand() % (myRandomTokens.size())];
-  }
-  else {
-    //random address ie: a-z,A-Z
+    // random one from those enclosed by the {}
+    workingIndexSequence[index] =
+        myRandomTokens[rand() % (myRandomTokens.size())];
+  } else {
+    // random address ie: a-z,A-Z
     workingIndexSequence[index] = rand() % 26;
   }
 }
@@ -580,9 +559,7 @@ int AbsoluteSequence::skipAndPeek() {
   skipStep();
   return peekStep();
 }
-int AbsoluteSequence::peekStep() {
-  return indexSequence[readHead];
-}
+int AbsoluteSequence::peekStep() { return indexSequence[readHead]; }
 int AbsoluteSequence::peekWorkingStep() {
   return (readHead >= 0) ? workingIndexSequence[readHead] : 0;
 }
@@ -595,13 +572,12 @@ std::string AbsoluteSequence::getWorkingStepDisplay() {
   int stepIndex = peekWorkingStep();
   if (stepIndex < 0) {
     return "?";
-  }
-  else if (stepIndex < 52) {
+  } else if (stepIndex < 52) {
     std::string str(1, knobandinputlookup[stepIndex]);
     return str;
-  }
-  else {
-    return std::to_string((long double) exactFloats[stepIndex - 52]).substr(0, 4);
+  } else {
+    return std::to_string((long double)exactFloats[stepIndex - 52])
+        .substr(0, 4);
   }
 }
 
@@ -620,7 +596,6 @@ std::vector<int> duplicateIntVector(std::vector<int> input) {
   return output;
 }
 void printTokenVector(std::vector<Token> tokenVector) {
-
   for (unsigned int i = 0; i < tokenVector.size(); i++) {
     tokenVector[i].print();
   }
@@ -666,24 +641,28 @@ Parser::Parser(std::string expr) {
   expression = expr;
   inError = false;
 }
-Parser::Parser() {
-  Parser("");
-}
+Parser::Parser() { Parser(""); }
 void Parser::setForLaundryPoly() {
   Token t = tokens[0];
   while (t.type != "NULL") {
-    tokenStack.push_back(Token(t.type, t.value, t.index, t.duration ));
+    tokenStack.push_back(Token(t.type, t.value, t.index, t.duration));
     t = skipAndPeekToken();
   }
   printf("setForLaundryPoly\n");
   printTokenVector(tokenStack);
 }
 void Parser::setForLaundry() {
-  std::vector<std::string> laundryBinaryOp = {"Plus", "Minus", "Asterix", "Backslash", "Caret", "Ampersand"};
-  std::vector<std::string> laundryInterleaveAny = {"Letter", "Integer", "ChanceOfInteger", "Digit", "LeftParen", "RightParen", "Channel"};
-  std::vector<std::string> laundryAtExpandAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Channel"};
-  std::vector<std::string> laundrySquareAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Comma", "Channel"};
-  std::vector<std::string> laundryFinalAny = {"Letter", "Digit", "ChanceOfInteger", "Integer", "Channel"};
+  std::vector<std::string> laundryBinaryOp = {
+      "Plus", "Minus", "Asterix", "Backslash", "Caret", "Ampersand"};
+  std::vector<std::string> laundryInterleaveAny = {
+      "Letter",    "Integer",    "ChanceOfInteger", "Digit",
+      "LeftParen", "RightParen", "Channel"};
+  std::vector<std::string> laundryAtExpandAny = {
+      "Letter", "Digit", "ChanceOfInteger", "Integer", "Channel"};
+  std::vector<std::string> laundrySquareAny = {
+      "Letter", "Digit", "ChanceOfInteger", "Integer", "Comma", "Channel"};
+  std::vector<std::string> laundryFinalAny = {
+      "Letter", "Digit", "ChanceOfInteger", "Integer", "Channel"};
 
   if (tokens.size() > 0) {
     currentIndex = 0;
@@ -734,11 +713,14 @@ void Parser::setForLaundry() {
   }
 }
 void Parser::setForCookies() {
-
-  std::vector<std::string> interleaveAny = {"Letter", "ExactValue", "RandomSequence", "LeftParen", "RightParen"};
-  std::vector<std::string> atExpandAny = {"Letter" , "RandomSequence", "ExactValue"};
-  std::vector<std::string> cookiesSquareAny = {"ExactValue", "Letter", "RandomSequence", "Comma"};
-  std::vector<std::string> cookiesFinalAny = {"Letter", "ExactValue", "RandomSequence", "Zero"};
+  std::vector<std::string> interleaveAny = {
+      "Letter", "ExactValue", "RandomSequence", "LeftParen", "RightParen"};
+  std::vector<std::string> atExpandAny = {"Letter", "RandomSequence",
+                                          "ExactValue"};
+  std::vector<std::string> cookiesSquareAny = {"ExactValue", "Letter",
+                                               "RandomSequence", "Comma"};
+  std::vector<std::string> cookiesFinalAny = {"Letter", "ExactValue",
+                                              "RandomSequence", "Zero"};
 
   if (tokens.size() > 0) {
     currentIndex = 0;
@@ -782,11 +764,8 @@ void Parser::setFinal(Token t, std::vector<std::string> whitelist) {
   while (t.type != "NULL") {
     if (matchesAny(t.type, whitelist)) {
       tokenStack.push_back(t);
-    }
-    else if (t.type == "Comma") {
-
-    }
-    else {
+    } else if (t.type == "Comma") {
+    } else {
       inError = true;
       break;
     }
@@ -821,7 +800,8 @@ void Parser::setForInterleave(Token t, std::vector<std::string> whitelist) {
     t = skipAndPeekToken();
   }
 }
-void Parser::setForAtExpand(Token t, std::vector<std::string> whitelist, bool laundryMode) {
+void Parser::setForAtExpand(Token t, std::vector<std::string> whitelist,
+                            bool laundryMode) {
   while (t.type != "NULL") {
     ParseAtExpand(t, whitelist, laundryMode);
     if (peekToken().type != "NULL") {
@@ -830,7 +810,8 @@ void Parser::setForAtExpand(Token t, std::vector<std::string> whitelist, bool la
     t = skipAndPeekToken();
   }
 }
-void Parser::setForSquareBrackets(Token t, std::vector<std::string> whitelist, bool laundryMode) {
+void Parser::setForSquareBrackets(Token t, std::vector<std::string> whitelist,
+                                  bool laundryMode) {
   while (t.type != "NULL") {
     ParseSquareBrackets(t, whitelist, laundryMode);
     if (peekToken().type != "NULL") {
@@ -857,7 +838,8 @@ void Parser::setForExactIntegers(Token t) {
     t = skipAndPeekToken();
   }
 }
-void Parser::setFormula(Token t, std::vector<std::string> operatorWhitelist, bool laundryMode) {
+void Parser::setFormula(Token t, std::vector<std::string> operatorWhitelist,
+                        bool laundryMode) {
   while (t.type != "NULL") {
     ParseFormula(t, operatorWhitelist, laundryMode);
     if (peekToken().type != "NULL") {
@@ -875,11 +857,10 @@ void Parser::replaceLettersWithNumbers(Token t) {
       intVal = b64lookup.find(t.value) + 1;
       letterVal = std::to_string(static_cast<long long>(intVal));
       tokenStack.push_back(Token("Integer", letterVal, -1, intVal));
-    }
-    else if (t.type == "Digit") {
-      tokenStack.push_back(Token("Digit", t.value, -1, t.value == "0" ? 1 : std::stoi(t.value)));
-    }
-    else {
+    } else if (t.type == "Digit") {
+      tokenStack.push_back(
+          Token("Digit", t.value, -1, t.value == "0" ? 1 : std::stoi(t.value)));
+    } else {
       tokenStack.push_back(t);
     }
     t = skipAndPeekToken();
@@ -902,10 +883,10 @@ void Parser::ParseChanceOfInteger(Token t) {
     last = t;
     t = skipAndPeekToken();
     if (t.type == "Question") {
-      tokenStack.push_back(Token("ChanceOfInteger", last.value, -1, std::stoi(last.value)));
+      tokenStack.push_back(
+          Token("ChanceOfInteger", last.value, -1, std::stoi(last.value)));
       t = skipAndPeekToken();
-    }
-    else {
+    } else {
       tokenStack.push_back(last);
     }
     setForChanceOfIntegers(t);
@@ -917,7 +898,8 @@ void Parser::ParseVariable(Token t) {
     tokenStack.push_back(Token("ChannelVariable", "1", -1, std::stoi("5")));
   }
 }
-void Parser::ParseFormula(Token t, std::vector<std::string> operatorWhitelist, bool laundryMode) {
+void Parser::ParseFormula(Token t, std::vector<std::string> operatorWhitelist,
+                          bool laundryMode) {
   std::vector<Token> terminalStack;
   std::vector<Token> operatorStack;
   std::vector<std::string> whitelist = operatorWhitelist;
@@ -927,7 +909,7 @@ void Parser::ParseFormula(Token t, std::vector<std::string> operatorWhitelist, b
     if (t.type == "Integer" || t.type == "Digit") {
       if (operatorStack.size() > 0) {
         if (terminalStack.size() > 0) {
-          //apply them
+          // apply them
           std::string op = operatorStack.back().type;
           operatorStack.pop_back();
           int lhs = terminalStack.back().duration;
@@ -940,32 +922,27 @@ void Parser::ParseFormula(Token t, std::vector<std::string> operatorWhitelist, b
             result = lhs % rhs;
           } else if (op == "Plus") {
             result = lhs + rhs;
-          }
-          else if (op == "Minus") {
+          } else if (op == "Minus") {
             result = lhs - rhs;
-          }
-          else if (op == "Backslash") {
+          } else if (op == "Backslash") {
             result = lhs / rhs;
-          }
-          else if (op == "Caret") {
+          } else if (op == "Caret") {
             result = myPow(lhs, rhs);
           }
           terminalStack.push_back(Token("Integer", result));
-        }
-        else {
+        } else {
           inError = true;
         }
-      }
-      else {
+      } else {
         terminalStack.push_back(t);
       }
-    }
-    else { //operator
+    } else {  // operator
       operatorStack.push_back(t);
     }
     t = skipAndPeekToken();
   }
-  tokenStack.insert(tokenStack.end(), terminalStack.begin(), terminalStack.end());
+  tokenStack.insert(tokenStack.end(), terminalStack.begin(),
+                    terminalStack.end());
 }
 void Parser::ParseExactInteger(Token t) {
   if (t.type == "LeftAngle") {
@@ -980,11 +957,10 @@ void Parser::ParseExactInteger(Token t) {
       t = skipAndPeekToken();
       tokenStack.push_back(Token("Integer", num, -1, std::stoi(num)));
       setForExactIntegers(t);
-    }
-    else {
+    } else {
       inError = true;
     }
-  } // not a LeftAngle, dont do shit
+  }  // not a LeftAngle, dont do shit
 }
 
 void Parser::ParseExactValue(Token t) {
@@ -1005,15 +981,13 @@ void Parser::ParseExactValue(Token t) {
         tokenStack.push_back(Token("ExactValue", num, sizeInt + 52));
         exactFloats.push_back(std::stof(num));
         setExactValue(peekToken());
-      }
-      else {
+      } else {
         inError = true;
       }
-    }
-    else {
+    } else {
       inError = true;
     }
-  } // not a LeftAngle, dont do shit
+  }  // not a LeftAngle, dont do shit
 }
 void Parser::ParseRandomSequence(Token t) {
   std::vector<Token> proposedRandomVector;
@@ -1022,7 +996,8 @@ void Parser::ParseRandomSequence(Token t) {
     std::string num = "";
     while (t.type == "Letter" || t.type == "ExactValue") {
       if (t.type == "Letter") {
-        proposedRandomVector.push_back(Token(t.type, t.value, knobandinputlookup.find(t.value)));
+        proposedRandomVector.push_back(
+            Token(t.type, t.value, knobandinputlookup.find(t.value)));
         t = skipAndPeekToken();
       }
       if (t.type == "ExactValue") {
@@ -1038,12 +1013,11 @@ void Parser::ParseRandomSequence(Token t) {
       int myIndex = 52 + 26 + sizeInt - 1;
       std::string stringDex = std::to_string(static_cast<long long>(myIndex));
       tokenStack.push_back(Token("RandomSequence", stringDex, myIndex));
-    }
-    else {
+    } else {
       inError = true;
     }
     ParseRandomSequence(peekToken());
-  } // not a LeftCurly, dont do shit
+  }  // not a LeftCurly, dont do shit
 }
 void Parser::ParseInterleave(Token t, std::vector<std::string> whitelist) {
   std::vector<std::vector<std::vector<Token>>> stackVec;
@@ -1056,28 +1030,25 @@ void Parser::ParseInterleave(Token t, std::vector<std::string> whitelist) {
     if (t.type == "LeftParen") {
       stackVec.push_back({});
       parenCount++;
-    }
-    else if (t.type == "RightParen") {
-      //evaluate top of stack
+    } else if (t.type == "RightParen") {
+      // evaluate top of stack
 
       if (parenCount > 0) {
         parenCount--;
         tempStack = interleaveExpand(stackVec.back());
-        //pop top of stack
+        // pop top of stack
         stackVec.pop_back();
         if (stackVec.size() > 0) {
-          //push this evaluated vector<Token> to new top
+          // push this evaluated vector<Token> to new top
           stackVec.back().push_back(tempStack);
-        }
-        else {
+        } else {
           inError = true;
         }
-      }
-      else {
+      } else {
         inError = true;
       }
     }
-    //Letter, ExactValue, or RandomSequence
+    // Letter, ExactValue, or RandomSequence
     else {
       stackVec.back().push_back({t});
     }
@@ -1088,7 +1059,8 @@ void Parser::ParseInterleave(Token t, std::vector<std::string> whitelist) {
     tokenStack.insert(tokenStack.end(), output.begin(), output.end());
   }
 }
-void Parser::ParseAtExpand(Token t, std::vector<std::string> whitelist, bool laundryMode) {
+void Parser::ParseAtExpand(Token t, std::vector<std::string> whitelist,
+                           bool laundryMode) {
   // for letter,{},<> followed by an optional "@" and an integer
   // ab@3  da@2  cad
   std::vector<std::vector<Token>> tokenVec;
@@ -1104,14 +1076,15 @@ void Parser::ParseAtExpand(Token t, std::vector<std::string> whitelist, bool lau
     atNum = std::min(atNum, MAX_LENGTH);
     if (laundryMode) {
       proposedTokens = atExpandTokens(tokenVec, atNum);
-    }
-    else {
+    } else {
       proposedTokens = countExpandTokens(tokenVec, atNum);
     }
-    tokenStack.insert(tokenStack.end(), proposedTokens.begin(), proposedTokens.end());
+    tokenStack.insert(tokenStack.end(), proposedTokens.begin(),
+                      proposedTokens.end());
   }
 }
-void Parser::ParseSquareBrackets(Token t, std::vector<std::string> whitelist, bool laundryMode) {
+void Parser::ParseSquareBrackets(Token t, std::vector<std::string> whitelist,
+                                 bool laundryMode) {
   std::vector<Token> proposedTokens;
   std::vector<std::vector<Token>> insideOfBrackets;
   int atNum;
@@ -1121,8 +1094,7 @@ void Parser::ParseSquareBrackets(Token t, std::vector<std::string> whitelist, bo
     while (matchesAny(t.type, whitelist)) {
       if (t.type == "Comma") {
         insideOfBrackets.push_back({});
-      }
-      else {
+      } else {
         insideOfBrackets.back().push_back(t);
       }
       t = skipAndPeekToken();
@@ -1132,18 +1104,18 @@ void Parser::ParseSquareBrackets(Token t, std::vector<std::string> whitelist, bo
       atNum = ParseAtPart(t);
       if (laundryMode) {
         proposedTokens = atExpandTokens(insideOfBrackets, atNum);
-      }
-      else {
+      } else {
         proposedTokens = countExpandTokens(insideOfBrackets, atNum);
       }
-      tokenStack.insert(tokenStack.end(), proposedTokens.begin(), proposedTokens.end());
-    }
-    else {
+      tokenStack.insert(tokenStack.end(), proposedTokens.begin(),
+                        proposedTokens.end());
+    } else {
       inError = true;
     }
   }
 }
-std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
+std::vector<Token> Parser::atExpandTokens(
+    std::vector<std::vector<Token>> tokenVecVec, int atNum) {
   std::vector<Token> output = {};
   Token thisToken = Token("error", "error");
   int sum = 0;
@@ -1152,21 +1124,21 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
   std::string newType;
   std::string thisVal;
   for (unsigned int i = 0; i < tokenVecVec.size(); i++) {
-
     if (atNum == -1) {
-      output.insert( output.end(), tokenVecVec[i].begin(), tokenVecVec[i].end() );
-    }
-    else {
-      int sectionSize = (int) tokenVecVec[i].size();
+      output.insert(output.end(), tokenVecVec[i].begin(), tokenVecVec[i].end());
+    } else {
+      int sectionSize = (int)tokenVecVec[i].size();
       innerDex = 0;
       sum = 0;
       while (sum < atNum) {
-        thisToken = tokenVecVec[i].size() ? tokenVecVec[i][innerDex % sectionSize] : Token("Integer", "0", -1, 1);
-        if ( thisToken.type == "Letter") {
+        thisToken = tokenVecVec[i].size()
+                        ? tokenVecVec[i][innerDex % sectionSize]
+                        : Token("Integer", "0", -1, 1);
+        if (thisToken.type == "Letter") {
           thisLength = b64lookup.find(thisToken.value) + 1;
           newType = "Integer";
-        }
-        else if (thisToken.type == "Digit" || thisToken.type == "Integer" || thisToken.type == "ChanceOfInteger") {
+        } else if (thisToken.type == "Digit" || thisToken.type == "Integer" ||
+                   thisToken.type == "ChanceOfInteger") {
           newType = thisToken.type;
           thisLength = thisToken.duration;
         }
@@ -1174,7 +1146,9 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
         if ((atNum - sum) < thisLength) {
           thisLength = (atNum - sum);
         }
-        thisVal = (thisToken.value == "0") ? "0" : std::to_string(static_cast<long long>(thisLength));
+        thisVal = (thisToken.value == "0")
+                      ? "0"
+                      : std::to_string(static_cast<long long>(thisLength));
         sum += thisLength;
         output.push_back(Token(newType, thisVal, -1, thisLength));
         innerDex++;
@@ -1183,28 +1157,26 @@ std::vector<Token> Parser::atExpandTokens(std::vector<std::vector<Token>> tokenV
   }
   return output;
 }
-std::vector<Token> Parser::countExpandTokens(std::vector<std::vector<Token>> tokenVecVec, int atNum) {
+std::vector<Token> Parser::countExpandTokens(
+    std::vector<std::vector<Token>> tokenVecVec, int atNum) {
   std::vector<Token> output;
   for (unsigned int i = 0; i < tokenVecVec.size(); i++) {
     if (atNum > -1) {
-      int sizeMod = (int) tokenVecVec[i].size();
+      int sizeMod = (int)tokenVecVec[i].size();
       atNum = atNum == -1 ? sizeMod : atNum;
-      if (sizeMod > 0 ) {
+      if (sizeMod > 0) {
         for (int j = 0; j < atNum; j++) {
           if (tokenVecVec[i].size()) {
             output.push_back(tokenVecVec[i][j % sizeMod]);
-          }
-          else { //tokenVecVec[i].size()==0
-            //output.push_back(Token("Zero",""));
+          } else {  // tokenVecVec[i].size()==0
+            // output.push_back(Token("Zero",""));
           }
         }
-      }
-      else { //sizeMod <= 0
+      } else {  // sizeMod <= 0
         output.push_back(Token("Zero", ""));
       }
-    }
-    else {
-      output.insert( output.end(), tokenVecVec[i].begin(), tokenVecVec[i].end() );
+    } else {
+      output.insert(output.end(), tokenVecVec[i].begin(), tokenVecVec[i].end());
     }
   }
   return output;
@@ -1218,24 +1190,20 @@ int Parser::ParseAtPart(Token t) {
       atString += t.value;
       t = skipAndPeekToken();
     }
-    atNum  = atString != "" ? std::stoi(atString) : -1;
+    atNum = atString != "" ? std::stoi(atString) : -1;
   }
   return atNum;
 }
 char Parser::peekChar() {
-  if (currentIndex < (int) expression.size()) return expression[currentIndex];
+  if (currentIndex < (int)expression.size()) return expression[currentIndex];
   return 0;
 }
 Token Parser::peekToken() {
-  if (currentIndex < (int) tokens.size()) return tokens[currentIndex];
+  if (currentIndex < (int)tokens.size()) return tokens[currentIndex];
   return Token("NULL", "NULL");
 }
-void Parser::skipToken() {
-  currentIndex++;
-}
-void Parser::skipChar() {
-  currentIndex++;
-}
+void Parser::skipToken() { currentIndex++; }
+void Parser::skipChar() { currentIndex++; }
 char Parser::skipAndPeekChar() {
   skipChar();
   return peekChar();
@@ -1244,24 +1212,21 @@ Token Parser::skipAndPeekToken() {
   skipToken();
   return peekToken();
 }
-std::string Parser::parseFloat(Token t)
-{
+std::string Parser::parseFloat(Token t) {
   std::string number = "";
-  if (t.type != "Period")
-  {
+  if (t.type != "Period") {
     // parse before '.'
-    while (t.type != "NULL" && t.type == "Digit" && t.type != "Period" ) {
+    while (t.type != "NULL" && t.type == "Digit" && t.type != "Period") {
       number += t.value;
       t = skipAndPeekToken();
     }
   }
-  if (t.type == "Period")
-  {
+  if (t.type == "Period") {
     // parse after '.'
     number += t.value;
     t = skipAndPeekToken();
     if (t.type != "NULL" && t.type == "Digit") {
-      while (t.type != "NULL" && t.type == "Digit" ) {
+      while (t.type != "NULL" && t.type == "Digit") {
         number += t.value;
         t = skipAndPeekToken();
       }
@@ -1272,71 +1237,93 @@ std::string Parser::parseFloat(Token t)
   return number;
 }
 void Token::print() {
-  printf("type: %s   value: %s   index: %i  dur:%i\n", type.c_str(), value.c_str(), index, duration);
+  printf("type: %s   value: %s   index: %i  dur:%i\n", type.c_str(),
+         value.c_str(), index, duration);
 }
 std::vector<Token> tokenizeString(std::string input) {
   std::vector<Token> stack;
   for (unsigned int i = 0; i < input.length(); i++) {
     std::string token(1, input[i]);
-    if (token == "(") stack.push_back(Token("LeftParen", token));
-    else if (token == ")") stack.push_back(Token("RightParen", token));
-    else if (token == "[") stack.push_back(Token("LeftSquare", token));
-    else if (token == "]") stack.push_back(Token("RightSquare", token));
-    else if (token == "{") stack.push_back(Token("LeftCurly", token));
-    else if (token == "}") stack.push_back(Token("RightCurly", token));
-    else if (token == "<") stack.push_back(Token("LeftAngle", token));
-    else if (token == ">") stack.push_back(Token("RightAngle", token));
-    else if (token == "@") stack.push_back(Token("At", token));
-    else if (token == ",") stack.push_back(Token("Comma", token));
-    else if (token == "+") stack.push_back(Token("Plus", token));
-    else if (token == "-") stack.push_back(Token("Minus", token));
-    else if (token == "*") stack.push_back(Token("Asterix", token));
-    else if (token == "/") stack.push_back(Token("Backslash", token));
-    else if (token == " ") stack.push_back(Token("Whitespace", token));
-    else if (token == ".") stack.push_back(Token("Period", token));
-    else if (token == "!") stack.push_back(Token("Bang", token));
-    else if (token == "?") stack.push_back(Token("Question", token));
-    else if (token == "#") stack.push_back(Token("Hash", token));
-    else if (token == "^") stack.push_back(Token("Caret", token));
-    else if (token == ":") stack.push_back(Token("Colon", token));
-    else if (token == ";") stack.push_back(Token("Semicolon", token));
-    else if (token == "|") stack.push_back(Token("Pipe", token));
-    else if (token == "%") stack.push_back(Token("Ampersand", token));
+    if (token == "(")
+      stack.push_back(Token("LeftParen", token));
+    else if (token == ")")
+      stack.push_back(Token("RightParen", token));
+    else if (token == "[")
+      stack.push_back(Token("LeftSquare", token));
+    else if (token == "]")
+      stack.push_back(Token("RightSquare", token));
+    else if (token == "{")
+      stack.push_back(Token("LeftCurly", token));
+    else if (token == "}")
+      stack.push_back(Token("RightCurly", token));
+    else if (token == "<")
+      stack.push_back(Token("LeftAngle", token));
+    else if (token == ">")
+      stack.push_back(Token("RightAngle", token));
+    else if (token == "@")
+      stack.push_back(Token("At", token));
+    else if (token == ",")
+      stack.push_back(Token("Comma", token));
+    else if (token == "+")
+      stack.push_back(Token("Plus", token));
+    else if (token == "-")
+      stack.push_back(Token("Minus", token));
+    else if (token == "*")
+      stack.push_back(Token("Asterix", token));
+    else if (token == "/")
+      stack.push_back(Token("Backslash", token));
+    else if (token == " ")
+      stack.push_back(Token("Whitespace", token));
+    else if (token == ".")
+      stack.push_back(Token("Period", token));
+    else if (token == "!")
+      stack.push_back(Token("Bang", token));
+    else if (token == "?")
+      stack.push_back(Token("Question", token));
+    else if (token == "#")
+      stack.push_back(Token("Hash", token));
+    else if (token == "^")
+      stack.push_back(Token("Caret", token));
+    else if (token == ":")
+      stack.push_back(Token("Colon", token));
+    else if (token == ";")
+      stack.push_back(Token("Semicolon", token));
+    else if (token == "|")
+      stack.push_back(Token("Pipe", token));
+    else if (token == "%")
+      stack.push_back(Token("Ampersand", token));
     else if (knobandinputlookup.find(token) != std::string::npos) {
       stack.push_back(Token("Letter", token, knobandinputlookup.find(token)));
-    }
-    else if (integerlookup.find(token) != std::string::npos) {
+    } else if (integerlookup.find(token) != std::string::npos) {
       stack.push_back(Token("Digit", token));
-    }
-    else stack.push_back(Token("Unknown", token));
+    } else
+      stack.push_back(Token("Unknown", token));
   }
   return stack;
 }
 void whoKnowsQuantize(std::string input) {
-  //Quantizer q = Quantizer("2212221",12,0);
-  //float in = std::stof(input);
-  //printf("closest: %f\n",q.quantize(in));
-  //printf("even   : %f\n",q.quantizeEven(in));
+  // Quantizer q = Quantizer("2212221",12,0);
+  // float in = std::stof(input);
+  // printf("closest: %f\n",q.quantize(in));
+  // printf("even   : %f\n",q.quantizeEven(in));
   Quantizer q = Quantizer(input, 12, 0);
   q.print();
-  //float in = std::stof(input);
-  //printf("closest: %f\n",q.quantize(in));
-  //printf("even   : %f\n",q.quantizeEven(in));
+  // float in = std::stof(input);
+  // printf("closest: %f\n",q.quantize(in));
+  // printf("even   : %f\n",q.quantizeEven(in));
 }
-Quantizer::Quantizer() {
-  Quantizer("2212221", 12, 0);
-}
+Quantizer::Quantizer() { Quantizer("2212221", 12, 0); }
 Quantizer::Quantizer(std::string intervals, int divisions, int trans) {
   scaleParser = Parser(intervals);
-  //printTokenVector(scaleParser.tokens);
+  // printTokenVector(scaleParser.tokens);
   numDivisions = divisions;
   transpose = trans;
   fNumDivisions = (float)numDivisions;
   fTranspose = (float)transpose / (float)numDivisions;
   mappedValues = generateMappedValues();
-  numSteps = (int) mappedValues.size();
-// printf("  mappedValues:\n");
-  //printFloatVector(mappedValues);
+  numSteps = (int)mappedValues.size();
+  // printf("  mappedValues:\n");
+  // printFloatVector(mappedValues);
 }
 std::vector<float> Quantizer::generateMappedValues() {
   std::vector<float> output;
@@ -1353,13 +1340,15 @@ std::vector<float> Quantizer::generateMappedValues() {
   }
   return output;
 }
-float Quantizer::findEvenSpacingValue(float input, std::vector<float> allowedValues) {
+float Quantizer::findEvenSpacingValue(float input,
+                                      std::vector<float> allowedValues) {
   return allowedValues[floor(input * allowedValues.size())];
 }
 float Quantizer::findEvenSpacingImpure(float input) {
   return mappedValues[floor(input * numSteps)];
 }
-float Quantizer::findClosestValue(float input, std::vector<float> allowedValues) {
+float Quantizer::findClosestValue(float input,
+                                  std::vector<float> allowedValues) {
   float closestValue = 10.f;
   float smallestDiff = 10.f;
   float thisDiff = 0.f;
@@ -1386,67 +1375,60 @@ float Quantizer::quantizeEven(float input, int iTranspose) {
   float fractionalPart = input - octavePart;
   float quantizedFractional = findEvenSpacingImpure(fractionalPart);
   float quantizedPreTranspose = octavePart + quantizedFractional;
-  float quantizedVal = quantizedPreTranspose + ((float)iTranspose) / fNumDivisions;
+  float quantizedVal =
+      quantizedPreTranspose + ((float)iTranspose) / fNumDivisions;
   return quantizedVal;
 }
-float Quantizer::quantizeEven(float input) {
-  return quantizeEven(input, 0);
-}
+float Quantizer::quantizeEven(float input) { return quantizeEven(input, 0); }
 
-void Quantizer::print() {
-  printFloatVector(mappedValues);
-}
+void Quantizer::print() { printFloatVector(mappedValues); }
 std::string getByteString(float f) {
-  unsigned char const * p = reinterpret_cast<unsigned char const *>(&f);
+  unsigned char const* p = reinterpret_cast<unsigned char const*>(&f);
 
-  for (std::size_t i = 0; i != sizeof(float); ++i)
-  {
+  for (std::size_t i = 0; i != sizeof(float); ++i) {
     std::printf("The byte #%zu is 0x%02X\n", i, p[i]);
   }
   return "horse";
 }
-void replaceAll(std::string& str, const std::string& from, const std::string& to) {
-  if (from.empty())
-    return;
+void replaceAll(std::string& str, const std::string& from,
+                const std::string& to) {
+  if (from.empty()) return;
   size_t start_pos = 0;
   while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
     str.replace(start_pos, from.length(), to);
-    start_pos += to.length(); // In case 'to' contains 'from', like replacing 'x' with 'yx'
+    start_pos += to.length();  // In case 'to' contains 'from', like replacing
+                               // 'x' with 'yx'
   }
 }
-float mapChannelCountToVoltage(int ch) {
-  return ( (float) ch ) / 1.6f;
-}
+float mapChannelCountToVoltage(int ch) { return ((float)ch) / 1.6f; }
 int mapVoltageToChannelCount(float vv) {
   float v = vv;
 
   if (v < 0) {
     v = v + 10.f;
   }
-  return (int) round(v * 1.6f);
+  return (int)round(v * 1.6f);
 }
-int myPow(int x, int p)
-{
+int myPow(int x, int p) {
   if (p == 0) return 1;
   if (p == 1) return x;
 
   int tmp = myPow(x, p / 2);
-  if (p % 2 == 0) return tmp * tmp;
-  else return x * tmp * tmp;
+  if (p % 2 == 0)
+    return tmp * tmp;
+  else
+    return x * tmp * tmp;
 }
-std::vector<std::string> split(std::string strToSplit, char delimeter)
-{
+std::vector<std::string> split(std::string strToSplit, char delimeter) {
   std::stringstream ss(strToSplit);
   std::string item;
   std::vector<std::string> splittedStrings;
-  while (std::getline(ss, item, delimeter))
-  {
+  while (std::getline(ss, item, delimeter)) {
     splittedStrings.push_back(item);
   }
   return splittedStrings;
 }
-void swap (int *a, int *b)
-{
+void swap(int* a, int* b) {
   int temp = *a;
   *a = *b;
   *b = temp;
