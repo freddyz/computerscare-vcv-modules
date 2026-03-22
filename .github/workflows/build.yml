@@ -76,6 +76,14 @@ jobs:
           make -j dep
           make -j dist
 
+      - name: Fix mac-x64 artifact name
+        if: matrix.config.name == 'mac-x64'
+        run: |
+          cd dist
+          for f in *-mac-arm64.vcvplugin; do
+            [ -f "$f" ] && mv "$f" "${f/-mac-arm64/-mac-x64}"
+          done
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
