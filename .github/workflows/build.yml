@@ -78,10 +78,10 @@ jobs:
           make -j BUILDDIR=build-x64 CC="clang -arch x86_64" CXX="clang++ -arch x86_64"
           cp plugin.dylib plugin-x64.dylib
 
-          # Build arm64
+          # Build arm64 — force arch explicitly
           export RACK_DIR=$HOME/Rack-SDK-arm64/Rack-SDK
           make -j dep
-          make -j BUILDDIR=build-arm64
+          make -j BUILDDIR=build-arm64 CC="clang -arch arm64" CXX="clang++ -arch arm64"
           cp plugin.dylib plugin-arm64.dylib
 
           # Combine into universal binary
