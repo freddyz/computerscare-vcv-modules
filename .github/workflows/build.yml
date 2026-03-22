@@ -30,8 +30,8 @@ jobs:
         config:
           - { name: lin-x64, os: ubuntu-latest }
           - { name: win-x64, os: windows-latest }
-          - { name: mac-x64, os: macos-latest, sdk: x64 }
-          - { name: mac-arm64, os: macos-latest, sdk: arm64 }
+          - { name: mac-x64, os: macos-latest, arch: x64 }
+          - { name: mac-arm64, os: macos-latest, arch: arm64 }
     steps:
       - uses: actions/checkout@v6
         with:
@@ -67,25 +67,20 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           pushd $HOME
-          curl -Lo Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-mac-${{ matrix.config.sdk }}.zip
+          curl -Lo Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-mac-x64+arm64.zip
           unzip Rack-SDK.zip
 
       - name: Build plugin
         run: |
+          CROSS_COMPILE_TARGET_x64=x86_64-apple-darwin
+          CROSS_COMPILE_TARGET_arm64=arm64-apple-darwin
           export RACK_DIR=$HOME/Rack-SDK
+          export CROSS_COMPILE=$CROSS_COMPILE_TARGET_${{ matrix.config.arch }}
           make -j dep
           make -j dist
 
-      - name: Fix mac-x64 artifact name
-        if: matrix.config.name == 'mac-x64'
-        run: |
-          cd dist
-          for f in *-mac-arm64.vcvplugin; do
-            [ -f "$f" ] && mv "$f" "${f/-mac-arm64/-mac-x64}"
-          done
-
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           path: dist/*.vcvplugin
           name: ${{ matrix.config.name }}
@@ -96,13 +91,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Download mac-x64
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: mac-x64
           path: mac-x64
 
       - name: Download mac-arm64
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           name: mac-arm64
           path: mac-arm64
@@ -121,7 +116,7 @@ jobs:
           cd x64-unpacked && zip -r "../$OUTNAME" .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           path: "*.vcvplugin"
           name: mac-universal
@@ -144,17 +139,17 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: lin-x64
           path: _artifacts
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: win-x64
           path: _artifacts
 
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v4
         with:
           name: mac-universal
           path: _artifacts
