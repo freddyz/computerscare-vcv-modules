@@ -558,7 +558,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
       int animationMode = params[ANIMATION_MODE].getValue();
 
       bool onFinalFrame =
-          currentFrame == frameScripts[animationMode].size() - 1;
+          currentFrame == (int)(frameScripts[animationMode].size() - 1);
 
       if (animationMode == ANIMATION_RANDOM) {
         onFinalFrame = false;

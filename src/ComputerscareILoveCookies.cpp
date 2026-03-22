@@ -142,7 +142,6 @@ struct ComputerscareILoveCookies : Module {
 
   void dataFromJson(json_t* rootJ) override {
     std::string val;
-    int count;
     json_t* sequencesJ = json_object_get(rootJ, "sequences");
     if (sequencesJ) {
       for (int i = 0; i < numFields; i++) {
@@ -322,7 +321,6 @@ struct ComputerscareILoveCookies : Module {
 
 void ComputerscareILoveCookies::process(const ProcessArgs& args) {
   bool globalGateIn = globalClockTrigger.isHigh();
-  bool activeStep = 0;
   bool atFirstStep = false;
   bool globalTriggerClocked =
       globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].getVoltage());
@@ -363,7 +361,6 @@ void ComputerscareILoveCookies::process(const ProcessArgs& args) {
   checkCounter++;
 
   for (int i = 0; i < numFields; i++) {
-    activeStep = false;
     currentResetActive = inputs[RESET_INPUT + i].isConnected();
     outputConnected = outputs[TRG_OUTPUT + i].isConnected();
 

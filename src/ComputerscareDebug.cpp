@@ -283,7 +283,7 @@ void ComputerscareDebug::process(const ProcessArgs& args) {
     thisVal = "";
     std::string thisLine = "";
     for (unsigned int a = 0; a < NUM_LINES; a = a + 1) {
-      if (a < numOutputChannels) {
+      if (a < (unsigned int)numOutputChannels) {
         thisLine = logLines[a] >= 0 ? "+" : "";
         thisLine += std::to_string(logLines[a]);
         thisLine = thisLine.substr(0, 9);

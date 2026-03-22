@@ -29,7 +29,7 @@ build() {
 
 run_tests() {
   echo "==> Tests..."
-  g++ -std=c++17 -o /tmp/cs_test src/test.cpp && /tmp/cs_test
+  g++ -std=c++17 -o /tmp/cs_test src/test.cpp src/dtpulse.cpp && /tmp/cs_test
   echo "    OK."
 }
 

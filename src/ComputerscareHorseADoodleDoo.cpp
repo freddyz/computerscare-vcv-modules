@@ -94,7 +94,6 @@ struct HorseSequencer {
       float cvVal = 0.f;
       float cv2Val = 0.f;
       float gateLengthVal = 0.f;
-      int glv = 0;
       float arg = pattern + ((float)i) * trigConst;
       for (int k = 0; k < 4; k++) {
         int trgArgIndex = ((i + 1) * (k + 1)) % 16;
@@ -183,7 +182,7 @@ struct HorseSequencer {
     timeToNextStep.resize(numSteps);
     int counter = 0;
     int timeIndex = 0;
-    for (unsigned int i = 0; i < numSteps * 2; i++) {
+    for (unsigned int i = 0; i < (unsigned int)numSteps * 2; i++) {
       if (absoluteSequence[i % numSteps]) {
         timeToNextStep[timeIndex % numSteps] = counter;
         timeIndex = i;
@@ -614,8 +613,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
   void processChannel(int ch, bool clocked, bool reset, bool clockInputHigh,
                       int overrideMode = 0,
                       bool overriddenTriggerHigh = false) {
-    bool eocHigh = false;
-
     int gateMode = params[GATE_MODE].getValue();
 
     if (reset) {
