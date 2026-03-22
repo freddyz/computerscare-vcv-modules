@@ -30,8 +30,7 @@ jobs:
         config:
           - { name: lin-x64, os: ubuntu-latest }
           - { name: win-x64, os: windows-latest }
-          - { name: mac-x64, os: macos-13, sdk: x64 }
-          - { name: mac-arm64, os: macos-latest, sdk: arm64 }
+          - { name: mac-universal, os: macos-latest }
     steps:
       - uses: actions/checkout@v6
         with:
@@ -63,14 +62,30 @@ jobs:
           unzip Rack-SDK.zip
           sed -i 's/zip -q -9 -r/7z a -tzip -mx=9/' $HOME/Rack-SDK/plugin.mk
 
-      - name: Get Mac SDK
+      - name: Get Mac SDKs and build universal
         if: runner.os == 'macOS'
         run: |
           pushd $HOME
-          curl -Lo Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-mac-${{ matrix.config.sdk }}.zip
-          unzip Rack-SDK.zip
+          curl -Lo Rack-SDK-x64.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-mac-x64.zip
+          curl -Lo Rack-SDK-arm64.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-mac-arm64.zip
+          unzip Rack-SDK-x64.zip -d Rack-SDK-x64
+          unzip Rack-SDK-arm64.zip -d Rack-SDK-arm64
+          popd
+          export RACK_DIR=$HOME/Rack-SDK-x64/Rack-SDK
+          make -j dep
+          make -j
+          cp plugin.dylib plugin-x64.dylib
+          make clean
+          export RACK_DIR=$HOME/Rack-SDK-arm64/Rack-SDK
+          make -j dep
+          make -j
+          cp plugin.dylib plugin-arm64.dylib
+          lipo -create -output plugin.dylib plugin-x64.dylib plugin-arm64.dylib
+          export RACK_DIR=$HOME/Rack-SDK-arm64/Rack-SDK
+          make dist
 
       - name: Build plugin
+        if: runner.os != 'macOS'
         run: |
           export RACK_DIR=$HOME/Rack-SDK
           make -j dep
