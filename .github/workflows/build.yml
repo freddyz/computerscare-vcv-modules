@@ -67,7 +67,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           pushd $HOME
-          curl -Lo Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-mac-x64+arm64.zip
+          curl -Lo Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-mac-${{ matrix.config.arch }}.zip
           unzip Rack-SDK.zip
 
       - name: Build plugin
