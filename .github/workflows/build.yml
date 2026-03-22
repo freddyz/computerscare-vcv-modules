@@ -15,7 +15,6 @@ on:
 env:
   # Rack SDK version to build against. Update this when a new SDK is released.
   rack-sdk-version: 2.6.6
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 defaults:
   run:
@@ -34,7 +33,7 @@ jobs:
           - { name: mac-x64, os: macos-latest, sdk: x64 }
           - { name: mac-arm64, os: macos-latest, sdk: arm64 }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -78,7 +77,7 @@ jobs:
           make -j dist
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           path: dist/*.vcvplugin
           name: ${{ matrix.config.name }}
@@ -89,13 +88,13 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Download mac-x64
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: mac-x64
           path: mac-x64
 
       - name: Download mac-arm64
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: mac-arm64
           path: mac-arm64
@@ -114,7 +113,7 @@ jobs:
           cd x64-unpacked && zip -r "../$OUTNAME" .
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           path: "*.vcvplugin"
           name: mac-universal
@@ -127,7 +126,7 @@ jobs:
     needs: [build, mac-universal]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Check plugin version matches tag
         run: |
@@ -137,17 +136,17 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: lin-x64
           path: _artifacts
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: win-x64
           path: _artifacts
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: mac-universal
           path: _artifacts
