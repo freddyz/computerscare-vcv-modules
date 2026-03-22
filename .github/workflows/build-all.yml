@@ -2,7 +2,7 @@ name: Build v2
 on: [workflow_dispatch]
 
 env:
-  rack-sdk-version: 2.5.2
+  rack-sdk-version: 2.6.6
 
 defaults:
   run:
@@ -15,26 +15,14 @@ jobs:
     strategy:
       matrix:
         config:
-        - {
-            name: Linux,
-            os: ubuntu-latest,
-            prepare-os: sudo apt-get update;sudo apt-get install -y libglu-dev;
-          }
-        - {
-            name: MacOS,
-            os: macos-13,
-            prepare-os: ""
-          }
-        - {
-            name: MacOS-arm,
-            os: macos-14,
-            prepare-os: ""
-          }
-        - {
-            name: Windows,
-            os: windows-latest,
-            prepare-os: export CC=gcc
-          }
+          - {
+              name: Linux,
+              os: ubuntu-latest,
+              prepare-os: sudo apt-get update;sudo apt-get install -y libglu-dev;,
+            }
+          - { name: MacOS, os: macos-13, prepare-os: "" }
+          - { name: MacOS-arm, os: macos-14, prepare-os: "" }
+          - { name: Windows, os: windows-latest, prepare-os: export CC=gcc }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,7 +30,7 @@ jobs:
 
       - name: Add SHORT_SHA env property with commit short sha
         run: echo "SHORT_SHA=`echo ${GITHUB_SHA} | cut -c1-8`" >> $GITHUB_ENV
-      
+
       - name: Patch plugin.mk, use 7zip on Windows
         if: runner.os == 'Windows'
         run: |
@@ -50,28 +38,21 @@ jobs:
           curl -o Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-win-x64.zip
           unzip Rack-SDK.zip
           sed -i 's/zip -q -9 -r/7z a -tzip -mx=9/' $HOME/Rack-SDK/plugin.mk
-      
+
       - name: Get Mac SDK
         if: runner.os == 'MacOS'
         run: |
           pushd $HOME
           curl -o Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-mac-x64+arm64.zip
           unzip Rack-SDK.zip
-      
-      - name: Get Mac arm SDK
-        if: runner.os == 'MacOS-arm'
-        run: |
-          pushd $HOME
-          curl -o Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-mac-x64+arm64.zip
-          unzip Rack-SDK.zip
-      
+
       - name: Get Linux SDK
         if: runner.os == 'Linux'
         run: |
           pushd $HOME
           curl -o Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-lin-x64.zip
           unzip Rack-SDK.zip
-      
+
       - name: Modify plugin version
         # only modify plugin version if no tag was created
         if: "! startsWith(github.ref, 'refs/tags/v')"
@@ -80,14 +61,14 @@ jobs:
           pluginversion=`jq -r '.version' plugin.json`
           echo "Set plugin version from $pluginversion to $pluginversion-$gitrev"
           cat <<< `jq --arg VERSION "$pluginversion-$gitrev" '.version=$VERSION' plugin.json` > plugin.json
-      
+
       - name: Build plugin
         run: |
           ${{ matrix.config.prepare-os }}
           export RACK_DIR=$HOME/Rack-SDK
           make -j dep
           make -j dist
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -103,37 +84,23 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v4
-      - uses: FranzDiebold/github-env-vars-action@v1.2.1
       - name: Check if plugin version matches tag
         run: |
           pluginversion=`jq -r '.version' plugin.json`
-          if [ "v$pluginversion" != "${{ env.GITHUB_REF_NAME }}" ]; then
-            echo "Plugin version from plugin.json 'v$pluginversion' doesn't match with tag version '${{ env.GITHUB_REF_NAME }}'"
+          if [ "v$pluginversion" != "${{ github.ref_name }}" ]; then
+            echo "Plugin version from plugin.json 'v$pluginversion' doesn't match with tag version '${{ github.ref_name }}'"
             exit 1
           fi
-      - name: Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Computerscare Modules ${{ github.ref }}
-          body: |
-            ${{ env.GITHUB_REPOSITORY_NAME }} VCV Rack Plugin ${{ env.GITHUB_REF_NAME }}
-            Built against Rack SDK version:${{ env.rack-sdk-version }}
-          draft: false
-          prerelease: false
       - uses: actions/download-artifact@v4
         with:
           path: _artifacts
-      - name: Uggh Hugly
-        run: |
-          pwd
-          ls _artifacts
-      - name: Upload release assets
-        uses: svenstaro/upload-release-action@v2
+      - name: Create Release and upload assets
+        uses: softprops/action-gh-release@v2
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: _artifacts/**/*.vcvplugin
-          tag: ${{ github.ref }}
-          file_glob: true
+          name: Computerscare Modules ${{ github.ref_name }}
+          body: |
+            ${{ github.event.repository.name }} VCV Rack Plugin ${{ github.ref_name }}
+            Built against Rack SDK version: ${{ env.rack-sdk-version }}
+          draft: false
+          prerelease: false
+          files: _artifacts/**/*.vcvplugin
