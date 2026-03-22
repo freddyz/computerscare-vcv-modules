@@ -15,6 +15,7 @@ on:
 env:
   # Rack SDK version to build against. Update this when a new SDK is released.
   rack-sdk-version: 2.6.6
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 defaults:
   run:
@@ -30,7 +31,7 @@ jobs:
         config:
           - { name: lin-x64, os: ubuntu-latest }
           - { name: win-x64, os: windows-latest }
-          - { name: mac-x64, os: macos-13, sdk: x64 }
+          - { name: mac-x64, os: macos-latest, sdk: x64 }
           - { name: mac-arm64, os: macos-latest, sdk: arm64 }
     steps:
       - uses: actions/checkout@v4
