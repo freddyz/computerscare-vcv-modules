@@ -161,20 +161,20 @@ struct ClockModeButton : app::SvgSwitch {
   ClockModeButton() {
     shadow->opacity = 0.f;
     // momentary = true;
-    addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/components/blank-clock-mode-sync.svg")));
-    addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/components/blank-clock-mode-scan.svg")));
-    addFrame(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/components/blank-clock-mode-frame.svg")));
+    addFrame(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/blank-clock-mode-sync.svg")));
+    addFrame(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/blank-clock-mode-scan.svg")));
+    addFrame(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/blank-clock-mode-frame.svg")));
   }
 };
 struct LogoWidget : SvgWidget {
   ComputerscareBlankExpander* module;
   int motherConnected = -1;
   LogoWidget() {
-    setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/components/computerscare-logo-normal.svg")));
+    setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/computerscare-logo-normal.svg")));
     SvgWidget();
   }
   void step() override {
@@ -184,8 +184,8 @@ struct LogoWidget : SvgWidget {
           setSvg(APP->window->loadSvg(asset::plugin(
               pluginInstance, "res/components/computerscare-logo-normal.svg")));
         } else {
-          setSvg(APP->window->loadSvg(
-              asset::plugin(pluginInstance, "res/components/computerscare-logo-sad.svg")));
+          setSvg(APP->window->loadSvg(asset::plugin(
+              pluginInstance, "res/components/computerscare-logo-sad.svg")));
         }
       }
       motherConnected = module->motherConnected;
@@ -200,7 +200,8 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
       ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
       panel->box.size = box.size;
       panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/panels/ComputerscareCustomBlankExpanderPanel.svg")));
+          pluginInstance,
+          "res/panels/ComputerscareCustomBlankExpanderPanel.svg")));
       addChild(panel);
     }
 

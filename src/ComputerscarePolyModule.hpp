@@ -26,19 +26,21 @@ struct ComputerscarePolyModule : Module {
   virtual void checkPoly() {};
 };
 struct TinyChannelsSnapKnob : RoundKnob {
-  std::shared_ptr<Svg> manualChannelsSetSvg =
-      APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/components/computerscare-channels-empty-knob.svg"));
+  std::shared_ptr<Svg> manualChannelsSetSvg = APP->window->loadSvg(
+      asset::plugin(pluginInstance,
+                    "res/components/computerscare-channels-empty-knob.svg"));
   std::shared_ptr<Svg> autoChannelsSvg = APP->window->loadSvg(asset::plugin(
-      pluginInstance, "res/components/computerscare-channels-empty-knob-auto-mode.svg"));
+      pluginInstance,
+      "res/components/computerscare-channels-empty-knob-auto-mode.svg"));
   int prevSetting = -1;
   int paramId = -1;
 
   ComputerscarePolyModule* module;
 
   TinyChannelsSnapKnob() {
-    setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-channels-empty-knob.svg")));
+    setSvg(APP->window->loadSvg(
+        asset::plugin(pluginInstance,
+                      "res/components/computerscare-channels-empty-knob.svg")));
     shadow->opacity = 0.f;
     snap = true;
     RoundKnob();

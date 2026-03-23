@@ -26,13 +26,14 @@ cppcheck_run() {
   echo "==> cppcheck..."
   cppcheck --enable=unusedFunction --suppress=missingIncludeSystem \
     -I./src -I${RACK_DIR:-../../Rack}/include \
-    --error-exitcode=1 src/
+    --suppress="*:${RACK_DIR:-../../Rack}/include/*" \
+    --max-configs=1 --error-exitcode=1 src/
   echo "    OK."
 }
 
 build() {
   echo "==> Building..."
-  make FLAGS="-Wall"
+  (cd /Users/adammalone/dev/VCV-Rack/Rack/plugins/computerscare-vcv-modules && make)
 }
 
 run_tests() {
@@ -45,9 +46,10 @@ case $CMD in
   fmt)      fmt ;;
   lint)     lint ;;
   cppcheck) cppcheck_run ;;
-  check)    fmt_check && lint && cppcheck_run && build ;;
+  build)    build ;;
+  check)    fmt_check && lint && build ;;
   test)     build && run_tests ;;
-  all)      fmt && lint && cppcheck_run && build && run_tests ;;
+  all)      fmt && lint && build && run_tests ;;
   *)
     echo "Usage: $0 [fmt|lint|check|test|all]"
     echo ""

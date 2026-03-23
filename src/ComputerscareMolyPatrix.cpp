@@ -146,12 +146,14 @@ struct DisableableSmallKnob : RoundKnob {
       APP->window->loadSvg(asset::plugin(
           pluginInstance, "res/components/computerscare-small-knob-effed.svg")),
       APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/components/computerscare-small-knob-effed-dark.svg"))};
+          pluginInstance,
+          "res/components/computerscare-small-knob-effed-dark.svg"))};
 
-  std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(
-      asset::plugin(pluginInstance, "res/components/computerscare-small-knob-effed.svg"));
+  std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
+      pluginInstance, "res/components/computerscare-small-knob-effed.svg"));
   std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(
-      pluginInstance, "res/components/computerscare-small-knob-effed-disabled.svg"));
+      pluginInstance,
+      "res/components/computerscare-small-knob-effed-disabled.svg"));
 
   int inputChannel = 0;
   int outputChannel = 0;
@@ -169,10 +171,9 @@ struct DisableableSmallKnob : RoundKnob {
 
   void draw(const DrawArgs& args) override {
     if (module) {
-      bool candidateDisabled =
-          ((module->numInputChannels != 0 &&
-            inputChannel > module->numInputChannels - 1) ||
-           outputChannel > module->polyChannels - 1);
+      bool candidateDisabled = ((module->numInputChannels != 0 &&
+                                 inputChannel > module->numInputChannels - 1) ||
+                                outputChannel > module->polyChannels - 1);
       if (disabled != candidateDisabled || !initialized) {
         setSvg(candidateDisabled ? disabledSvg : enabledThemes[themeIndex]);
         disabled = candidateDisabled;

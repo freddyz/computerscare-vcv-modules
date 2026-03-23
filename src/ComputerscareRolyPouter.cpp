@@ -165,7 +165,8 @@ struct DisableableSnapKnob : RoundKnob {
   bool disabled = false;
   int lastDisabled = -1;
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
-      pluginInstance, "res/components/computerscare-medium-knob-dot-indicator.svg"));
+      pluginInstance,
+      "res/components/computerscare-medium-knob-dot-indicator.svg"));
   std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance,
       "res/components/computerscare-medium-knob-dot-indicator-disabled.svg"));

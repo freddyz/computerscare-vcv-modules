@@ -387,8 +387,8 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
 struct ComputerscareDebugWidget : ModuleWidget {
   ComputerscareDebugWidget(ComputerscareDebug* module) {
     setModule(module);
-    setPanel(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/panels/ComputerscareDebugPanel.svg")));
+    setPanel(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/panels/ComputerscareDebugPanel.svg")));
 
     addInput(createInput<InPort>(Vec(2, 335), module,
                                  ComputerscareDebug::TRG_INPUT));

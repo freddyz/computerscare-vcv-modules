@@ -1,5 +1,3 @@
-#include "Computerscare.hpp"
-
 #include <dirent.h>
 #include <osdialog.h>
 
@@ -11,6 +9,8 @@
 #include <settings.hpp>
 #include <sstream>
 #include <thread>
+
+#include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
 #include "CustomBlankFunctions.hpp"
 #include "animatedGif.hpp"

@@ -80,7 +80,8 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
     ComputerscarePolyModule::checkCounter();
     int numInputChannels = inputs[POLY_INPUT].getChannels();
     int numReset = inputs[RESET_INPUT].getChannels();
-    // int numOutputChannels = inputs[CLOCK_INPUT].getChannels() > 0 ? inputs[CLOCK_INPUT].getChannels() : 1;
+    // int numOutputChannels = inputs[CLOCK_INPUT].getChannels() > 0 ?
+    // inputs[CLOCK_INPUT].getChannels() : 1;
     bool globalClocked = globalManualClockTrigger.process(
         params[MANUAL_CLOCK_BUTTON].getValue());
     bool manualReset = globalManualResetTrigger.process(
