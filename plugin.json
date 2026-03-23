@@ -169,6 +169,12 @@
 			"tags": ["Sequencer", "Clock Modulator", "Polyphonic"],
 			"manualUrl":
 				"https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
+		},
+		{
+			"slug": "computerscare-metarbo",
+			"name": "Metarbo",
+			"description": "Flexible-width polyphonic signal processor with multiple view modes",
+			"tags": ["Polyphonic", "Utility"]
 		}
 	]
 }
