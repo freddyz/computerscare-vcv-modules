@@ -18,7 +18,7 @@ static const char* metarboViewModeNames[] = {
     "I/O Only", "Controls + I/O", "Full"};
 
 // Width in HP for each view mode
-static const int metarboViewWidths[] = {4, 8, 20};
+static const int metarboViewWidths[] = {6, 8, 20};
 
 struct ComputerscareMetarbo : ComputerscarePolyModule {
   enum ParamIds {
