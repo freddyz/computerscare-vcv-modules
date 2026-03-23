@@ -45,22 +45,19 @@ struct ComputerscareMetarboWidget : ModuleWidget {
 
   void clearAllPortsAndParams() {
     // Remove all inputs
-    for (auto it = inputs.begin(); it != inputs.end();) {
-      removeChild(*it);
-      delete *it;
-      it = inputs.erase(it);
+    for (PortWidget* w : getInputs()) {
+      removeChild(w);
+      delete w;
     }
     // Remove all outputs
-    for (auto it = outputs.begin(); it != outputs.end();) {
-      removeChild(*it);
-      delete *it;
-      it = outputs.erase(it);
+    for (PortWidget* w : getOutputs()) {
+      removeChild(w);
+      delete w;
     }
     // Remove all params
-    for (auto it = params.begin(); it != params.end();) {
-      removeChild(*it);
-      delete *it;
-      it = params.erase(it);
+    for (ParamWidget* w : getParams()) {
+      removeChild(w);
+      delete w;
     }
     // Remove square display if present
     if (squareDisplay) {
@@ -91,7 +88,7 @@ struct ComputerscareMetarboWidget : ModuleWidget {
         MetarboControlsIOView::addPorts(this, metarboModule);
         break;
 
-      case VIEW_FULL:
+      case VIEW_FULL: {
         newWidth = MetarboFullView::getWidth();
         MetarboFullView::addControls(this, metarboModule);
         MetarboFullView::addPorts(this, metarboModule);
@@ -103,6 +100,7 @@ struct ComputerscareMetarboWidget : ModuleWidget {
         squareDisplay->box.pos = Vec(squareX, squareY);
         addChild(squareDisplay);
         break;
+      }
 
       default:
         newWidth = MetarboIOView::getWidth();
