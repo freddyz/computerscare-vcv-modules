@@ -27,6 +27,4 @@ void init(Plugin* p) {
   p->addModel(modelComputerscareHorseADoodleDoo);
 
   p->addModel(modelComputerscareTolyPoolsV2);
-
-  p->addModel(modelComputerscareMetarbo);
 }

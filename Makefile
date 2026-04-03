@@ -12,7 +12,6 @@ LDFLAGS +=
 
 # Add .cpp and .c files to the build
 SOURCES += $(wildcard src/*.cpp)
-SOURCES += $(wildcard src/Metarbo/*.cpp)
 # SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
 # SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
 
