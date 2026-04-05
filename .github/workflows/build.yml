@@ -39,6 +39,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Mark workspace safe for git
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+
       - name: Append git sha to version
         if: "! startsWith(github.ref, 'refs/tags/v')"
         run: |
