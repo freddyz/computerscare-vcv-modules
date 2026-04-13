@@ -142,6 +142,12 @@
       "description": "Rhythm generator",
       "tags": ["Sequencer", "Clock Modulator", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
+    },
+    {
+      "slug": "computerscare-gloly-pitch",
+      "name": "Gloly Pitch",
+      "description": "Visual glitch module",
+      "tags": ["Visual"]
     }
   ]
 }
