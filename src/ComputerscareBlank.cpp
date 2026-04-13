@@ -1295,6 +1295,20 @@ struct ComputerscareBlankWidget : ModuleWidget {
     }
     ModuleWidget::onHoverKey(e);
   }
+
+  void onPathDrop(const PathDropEvent& e) override {
+    if (!blankModule) return;
+    if (e.paths.empty()) return;
+    std::string path = e.paths[0];
+    std::string ext = system::getExtension(path);
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    if (ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".bmp" &&
+        ext != ".gif")
+      return;
+    blankModule->setPath(path);
+    e.consume(this);
+  }
+
   ComputerscareBlank* blankModule;
   PNGDisplay* pngDisplay;
   ComputerscareSVGPanel* panel;
