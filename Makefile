@@ -10,12 +10,6 @@ CXXFLAGS +=
 # Static libraries are fine.
 LDFLAGS +=
 
-# GlolyPitch uses raw OpenGL calls (glBindTexture, glCopyTexSubImage2D, etc.)
-# which must be explicitly linked on Windows.
-ifdef ARCH_WIN
-LDFLAGS += -lopengl32
-endif
-
 # Add .cpp and .c files to the build
 SOURCES += $(filter-out src/test.cpp, $(wildcard src/*.cpp))
 SOURCES += $(wildcard GlolyPitch/modules/*.cpp)
@@ -50,3 +44,9 @@ DISTRIBUTABLES += $(wildcard LICENSE*) res presets
 
 # Include the VCV Rack plugin Makefile framework
 include $(RACK_DIR)/plugin.mk
+
+# GlolyPitch uses raw OpenGL calls (glBindTexture, glCopyTexSubImage2D, etc.)
+# ARCH_WIN is defined by plugin.mk, so this must come after the include.
+ifdef ARCH_WIN
+LDFLAGS += -lopengl32
+endif
