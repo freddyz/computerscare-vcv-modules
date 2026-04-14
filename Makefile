@@ -10,6 +10,12 @@ CXXFLAGS +=
 # Static libraries are fine.
 LDFLAGS +=
 
+# GlolyPitch uses raw OpenGL calls (glBindTexture, glCopyTexSubImage2D, etc.)
+# which must be explicitly linked on Windows.
+ifdef ARCH_WIN
+LDFLAGS += -lopengl32
+endif
+
 # Add .cpp and .c files to the build
 SOURCES += $(filter-out src/test.cpp, $(wildcard src/*.cpp))
 SOURCES += $(wildcard GlolyPitch/modules/*.cpp)
