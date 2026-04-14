@@ -29,6 +29,7 @@ struct ComputerscareGlolyPitch : Module {
 
   float width = 12 * RACK_GRID_WIDTH;
   bool loadedJSON = false;
+  bool tileEmptySpace = false;
 
   ComputerscareGlolyPitch() {
     config(NUM_PARAMS, 0, 0, 0);
@@ -57,12 +58,15 @@ struct ComputerscareGlolyPitch : Module {
   json_t* dataToJson() override {
     json_t* rootJ = json_object();
     json_object_set_new(rootJ, "width", json_real(width));
+    json_object_set_new(rootJ, "tileEmptySpace", json_boolean(tileEmptySpace));
     return rootJ;
   }
 
   void dataFromJson(json_t* rootJ) override {
     json_t* widthJ = json_object_get(rootJ, "width");
     if (widthJ) width = json_number_value(widthJ);
+    json_t* tileJ = json_object_get(rootJ, "tileEmptySpace");
+    if (tileJ) tileEmptySpace = json_boolean_value(tileJ);
     loadedJSON = false;
   }
 };
@@ -235,6 +239,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         // Scale only here — rotation/flip are applied differently for kaleido vs. plain.
         if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
 
+        bool tileOn = m->tileEmptySpace;
         int img = screenCap.nvgImg;
 
         if (kaliOn) {
@@ -261,18 +266,54 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
           float rHW  = (mirrorW * cosA + box.size.y * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
           float rHH  = (mirrorW * sinA + box.size.y * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
 
-          NVGpaint p = nvgImagePattern(args.vg, -hw, -hh, mirrorW, mirrorH,
-                                       0.f, img, alpha);
-          nvgBeginPath(args.vg);
-          nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
-          nvgFillPaint(args.vg, p);
-          nvgFill(args.vg);
+          if (tileOn) {
+            // Tile the image by drawing multiple copies at (i*mirrorW, j*mirrorH)
+            // offsets to fill the rotated/scaled panel without empty space.
+            // The panel center in NVG space shifts opposite to translation.
+            float pcx = -(txOn ? txV / std::max(sx, 0.01f) : 0.f);
+            float pcy = -(tyOn ? tyV / std::max(sy, 0.01f) : 0.f);
+            int iMin = (int)ceilf((pcx - rHW - hw) / mirrorW);
+            int iMax = (int)floorf((pcx + rHW + hw) / mirrorW);
+            int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH);
+            int jMax = (int)floorf((pcy + rHH + hh) / mirrorH);
+            iMin = std::max(iMin, -20); iMax = std::min(iMax, 20);
+            jMin = std::max(jMin, -20); jMax = std::min(jMax, 20);
+            for (int j = jMin; j <= jMax; j++) {
+              for (int i = iMin; i <= iMax; i++) {
+                float ox = -hw + i * mirrorW;
+                float oy = -hh + j * mirrorH;
+                NVGpaint p = nvgImagePattern(args.vg, ox, oy, mirrorW, mirrorH,
+                                             0.f, img, alpha);
+                nvgBeginPath(args.vg);
+                nvgRect(args.vg, ox, oy, mirrorW, mirrorH);
+                nvgFillPaint(args.vg, p);
+                nvgFill(args.vg);
+              }
+            }
+          } else {
+            NVGpaint p = nvgImagePattern(args.vg, -hw, -hh, mirrorW, mirrorH,
+                                         0.f, img, alpha);
+            nvgBeginPath(args.vg);
+            nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
+            nvgFillPaint(args.vg, p);
+            nvgFill(args.vg);
+          }
         }
 
         nvgRestore(args.vg);
       }
     }
     ModuleWidget::drawLayer(args, layer);
+  }
+
+  void appendContextMenu(Menu* menu) override {
+    ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
+    if (!m) return;
+
+    menu->addChild(new MenuSeparator());
+    menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {
+      menu->addChild(createBoolPtrMenuItem("Tile empty space", "", &m->tileEmptySpace));
+    }));
   }
 
   void step() override {
