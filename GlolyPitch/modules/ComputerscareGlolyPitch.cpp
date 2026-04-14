@@ -9,19 +9,29 @@
 #include "MirrorTranslation.hpp"
 #include "MirrorKaleidoscope.hpp"
 
+// ─── Local button: corrected frame order (up=off=0, down=on=1) ───────────────
+
+struct GlolyPitchOnOffButton : SvgSwitch {
+  GlolyPitchOnOffButton() {
+    addFrame(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/computerscare-iso-button-up.svg")));
+    addFrame(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/computerscare-iso-button-down.svg")));
+    shadow->opacity = 0.f;
+  }
+};
+
 // ─── Module ──────────────────────────────────────────────────────────────────
 
 struct ComputerscareGlolyPitch : Module {
   enum ParamId {
-    OPACITY_KNOB,
     GLOBAL_TOGGLE,
     // Effects (toggle + knob pairs)
     SCALE_TOGGLE,    SCALE_KNOB,     // uniform scale
     SCALE_X_TOGGLE,  SCALE_X_KNOB,   // horizontal stretch
     SCALE_Y_TOGGLE,  SCALE_Y_KNOB,   // vertical stretch
     ROT_TOGGLE,      ROT_KNOB,       // rotation degrees
-    MIRROR_TOGGLE,   MIRROR_KNOB,    // reflection axis angle (0=H, 90=V, etc.)
-    KALEIDO_TOGGLE,  KALEIDO_KNOB,   // mode 1-4
+    KALEIDO_TOGGLE,  KALEIDO_KNOB,   // mode 1-12
     TRANS_X_TOGGLE,  TRANS_X_KNOB,   // horizontal pan
     TRANS_Y_TOGGLE,  TRANS_Y_KNOB,   // vertical pan
     NUM_PARAMS
@@ -33,8 +43,7 @@ struct ComputerscareGlolyPitch : Module {
 
   ComputerscareGlolyPitch() {
     config(NUM_PARAMS, 0, 0, 0);
-    configParam(OPACITY_KNOB,   0.f,   1.f,   0.85f, "Mirror Opacity");
-    configSwitch(GLOBAL_TOGGLE, 0.f,   1.f,   0.f,   "Mirror Enable",  {"Off", "On"});
+    configSwitch(GLOBAL_TOGGLE, 0.f,   1.f,   1.f,   "On/Off",  {"Off", "On"});
 
     configSwitch(SCALE_TOGGLE,   0.f, 1.f, 0.f, "Scale",      {"Off", "On"});
     configParam (SCALE_KNOB,     0.1f, 4.f, 1.f, "Scale");
@@ -44,8 +53,6 @@ struct ComputerscareGlolyPitch : Module {
     configParam (SCALE_Y_KNOB,   0.1f, 4.f, 1.f, "Scale Y");
     configSwitch(ROT_TOGGLE,     0.f, 1.f, 0.f, "Rotation",   {"Off", "On"});
     configParam (ROT_KNOB,     -180.f, 180.f, 0.f, "Rotation", "\u00b0");
-    configSwitch(MIRROR_TOGGLE,  0.f, 1.f, 0.f, "Mirror",     {"Off", "On"});
-    configParam (MIRROR_KNOB,    0.f, 180.f, 0.f, "Mirror Axis", "\u00b0");
     configSwitch(KALEIDO_TOGGLE, 0.f, 1.f, 0.f, "Kaleidoscope", {"Off", "On"});
     configSwitch(KALEIDO_KNOB,   0.f, 11.f, 0.f, "Kaleido Mode",
       {"1","2","3","4","5","6","7","8","9","10","11","12"});
@@ -90,6 +97,16 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     bgPanel->box.size = box.size;
     addChild(bgPanel);
 
+    // ── Resize handles — added early so they are lower z-order than params ────
+    // VCV Rack hit-tests children in reverse order (last = top). By adding
+    // handles before params, params always win the hit-test over the handle.
+    ComputerscareResizeHandle* leftHandle = new ComputerscareResizeHandle();
+    rightHandle = new ComputerscareResizeHandle();
+    rightHandle->right = true;
+    rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
+    addChild(leftHandle);
+    addChild(rightHandle);
+
     bottomLogo = new SvgWidget();
     bottomLogo->setSvg(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/computerscare-logo-light.svg")));
@@ -108,31 +125,17 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     hdr->breakRowWidth = 54.f;
     addChild(hdr);
 
-    // Opacity knob (no toggle — always active)
-    SmallLetterDisplay* opLbl = new SmallLetterDisplay();
-    opLbl->box.pos  = Vec(3.f, 16.f);
-    opLbl->box.size = Vec(54.f, 9.f);
-    opLbl->fontSize = 7;
-    opLbl->value    = "OPAC";
-    opLbl->textColor  = nvgRGBf(0.55f, 0.75f, 0.7f);
-    opLbl->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
-    opLbl->breakRowWidth = 54.f;
-    addChild(opLbl);
-    addParam(createParam<SmallKnob>(Vec(19.f, 26.f), module,
-                                    ComputerscareGlolyPitch::OPACITY_KNOB));
-
-    // ── 8 effect rows ─────────────────────────────────────────────────────────
-    const int N = 8;
-    // Row center Y values — start at 62, 30px spacing
-    float rowY[N] = {62.f, 92.f, 122.f, 152.f, 182.f, 212.f, 242.f, 272.f};
+    // ── 7 effect rows ─────────────────────────────────────────────────────────
+    const int N = 7;
+    // Row center Y values — start at 42, 35px spacing
+    float rowY[N] = {42.f, 77.f, 112.f, 147.f, 182.f, 217.f, 252.f};
     const char* rowLabels[N] = {"SCALE", "SCL X", "SCL Y",
-                                 "ROT", "MIRR", "KALI", "TRN X", "TRN Y"};
+                                 "ROT", "KALI", "TRN X", "TRN Y"};
     int toggleIds[N] = {
         ComputerscareGlolyPitch::SCALE_TOGGLE,
         ComputerscareGlolyPitch::SCALE_X_TOGGLE,
         ComputerscareGlolyPitch::SCALE_Y_TOGGLE,
         ComputerscareGlolyPitch::ROT_TOGGLE,
-        ComputerscareGlolyPitch::MIRROR_TOGGLE,
         ComputerscareGlolyPitch::KALEIDO_TOGGLE,
         ComputerscareGlolyPitch::TRANS_X_TOGGLE,
         ComputerscareGlolyPitch::TRANS_Y_TOGGLE,
@@ -142,7 +145,6 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         ComputerscareGlolyPitch::SCALE_X_KNOB,
         ComputerscareGlolyPitch::SCALE_Y_KNOB,
         ComputerscareGlolyPitch::ROT_KNOB,
-        ComputerscareGlolyPitch::MIRROR_KNOB,
         ComputerscareGlolyPitch::KALEIDO_KNOB,
         ComputerscareGlolyPitch::TRANS_X_KNOB,
         ComputerscareGlolyPitch::TRANS_Y_KNOB,
@@ -152,30 +154,24 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
       float y = rowY[i];
 
       SmallLetterDisplay* lbl = new SmallLetterDisplay();
-      lbl->box.pos  = Vec(2.f, y - 11.f);
-      lbl->box.size = Vec(56.f, 9.f);
+      lbl->box.pos  = Vec(0.f, y - 11.f);
+      lbl->box.size = Vec(60.f, 9.f);
       lbl->fontSize = 7;
       lbl->value    = rowLabels[i];
       lbl->textColor  = nvgRGBf(0.6f, 0.82f, 0.78f);
       lbl->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
-      lbl->breakRowWidth = 56.f;
+      lbl->breakRowWidth = 60.f;
       addChild(lbl);
 
-      addParam(createParam<SmallIsoButton>(Vec(2.f, y - 6.f), module, toggleIds[i]));
-      addParam(createParam<SmallKnob>(Vec(32.f, y - 8.f), module, knobIds[i]));
+      addParam(createParam<SmallIsoButton>(Vec(0.f, y - 6.f), module, toggleIds[i]));
+      addParam(createParam<SmoothKnob>(Vec(33.f, y - 10.f), module, knobIds[i]));
     }
 
     // Global on/off — left-aligned, above logo
-    addParam(createParam<IsoButton>(Vec(2.f, RACK_GRID_HEIGHT - 68.f), module,
-                                    ComputerscareGlolyPitch::GLOBAL_TOGGLE));
+    addParam(createParam<GlolyPitchOnOffButton>(
+        Vec(2.f, RACK_GRID_HEIGHT - 68.f), module,
+        ComputerscareGlolyPitch::GLOBAL_TOGGLE));
 
-    // ── Resize handles ────────────────────────────────────────────────────────
-    ComputerscareResizeHandle* leftHandle = new ComputerscareResizeHandle();
-    rightHandle = new ComputerscareResizeHandle();
-    rightHandle->right = true;
-    rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
-    addChild(leftHandle);
-    addChild(rightHandle);
   }
 
   void drawLayer(const DrawArgs& args, int layer) override {
@@ -183,13 +179,12 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
       ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
 
       if (m && m->params[ComputerscareGlolyPitch::GLOBAL_TOGGLE].getValue() > 0.5f) {
-        float alpha   = m->params[ComputerscareGlolyPitch::OPACITY_KNOB].getValue();
+        float alpha   = 0.85f;
 
         bool  scaleOn  = m->params[ComputerscareGlolyPitch::SCALE_TOGGLE].getValue()   > 0.5f;
         bool  scaleXOn = m->params[ComputerscareGlolyPitch::SCALE_X_TOGGLE].getValue() > 0.5f;
         bool  scaleYOn = m->params[ComputerscareGlolyPitch::SCALE_Y_TOGGLE].getValue() > 0.5f;
         bool  rotOn    = m->params[ComputerscareGlolyPitch::ROT_TOGGLE].getValue()      > 0.5f;
-        bool  mirrOn   = m->params[ComputerscareGlolyPitch::MIRROR_TOGGLE].getValue()  > 0.5f;
         bool  kaliOn   = m->params[ComputerscareGlolyPitch::KALEIDO_TOGGLE].getValue() > 0.5f;
         bool  txOn     = m->params[ComputerscareGlolyPitch::TRANS_X_TOGGLE].getValue() > 0.5f;
         bool  tyOn     = m->params[ComputerscareGlolyPitch::TRANS_Y_TOGGLE].getValue() > 0.5f;
@@ -198,7 +193,6 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         float scaleXV  = m->params[ComputerscareGlolyPitch::SCALE_X_KNOB].getValue();
         float scaleYV  = m->params[ComputerscareGlolyPitch::SCALE_Y_KNOB].getValue();
         float rotV     = m->params[ComputerscareGlolyPitch::ROT_KNOB].getValue();
-        float mirrV    = m->params[ComputerscareGlolyPitch::MIRROR_KNOB].getValue();
         float kaliV    = m->params[ComputerscareGlolyPitch::KALEIDO_KNOB].getValue();
         float txV      = m->params[ComputerscareGlolyPitch::TRANS_X_KNOB].getValue();
         float tyV      = m->params[ComputerscareGlolyPitch::TRANS_Y_KNOB].getValue();
@@ -236,7 +230,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         // Translate to mirror panel center + pan offset (still in local space)
         nvgTranslate(args.vg, CONTROLS_WIDTH + hw + tx, hh + ty);
 
-        // Scale only here — rotation/flip are applied differently for kaleido vs. plain.
+        // Scale only here — rotation is applied differently for kaleido vs. plain.
         if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
 
         bool tileOn = m->tileEmptySpace;
@@ -244,32 +238,21 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
 
         if (kaliOn) {
           int mode = (int)kaliV + 1;
-          // Rotation/flip are NOT applied to the outer NVG transform here.
-          // They are applied inside each kSector() call, AFTER nvgIntersectScissor.
-          // This avoids NanoVG's broken scissor-intersection behaviour under rotation,
-          // which was causing the rendered image to bleed outside the module frame.
           float cosA = rotOn ? cosf(fabsf(rotV) * (float)M_PI / 180.f) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
           float rHW  = (mirrorW * cosA + box.size.y * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
           float rHH  = (mirrorW * sinA + box.size.y * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
           drawKaleidoscope(args.vg, img, hw, hh, mirrorW, mirrorH, rHW, rHH, mode, alpha,
-                           rotOn, rotV, mirrOn, mirrV);
+                           rotOn, rotV, false, 0.f);
         } else {
-          // Non-kaleido: apply rotation/flip to the outer transform as before
-          if (rotOn)  applyRotation(args.vg, rotV);
-          if (mirrOn) applyFlip(args.vg, mirrV);
-          // Compute the half-extents of the rect that, in the ROTATED+SCALED
-          // coordinate space, exactly covers the screen-aligned panel rectangle.
-          // The scissor clips everything back to the panel bounds.
+          // Non-kaleido: apply rotation to the outer transform
+          if (rotOn) applyRotation(args.vg, rotV);
           float cosA = rotOn ? cosf(fabsf(rotV) * (float)M_PI / 180.f) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
           float rHW  = (mirrorW * cosA + box.size.y * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
           float rHH  = (mirrorW * sinA + box.size.y * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
 
           if (tileOn) {
-            // Tile the image by drawing multiple copies at (i*mirrorW, j*mirrorH)
-            // offsets to fill the rotated/scaled panel without empty space.
-            // The panel center in NVG space shifts opposite to translation.
             float pcx = -(txOn ? txV / std::max(sx, 0.01f) : 0.f);
             float pcy = -(tyOn ? tyV / std::max(sy, 0.01f) : 0.f);
             int iMin = (int)ceilf((pcx - rHW - hw) / mirrorW);
