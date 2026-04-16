@@ -350,9 +350,10 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         // Scale values (compose uniform + per-axis)
         float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
         float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
-        // Translation: rowValue is a proportion of screen (-1..+1), convert to pixels
-        float tx = txOn ? txV * mirrorW : 0.f;
-        float ty = tyOn ? tyV * mirrorH : 0.f;
+        // Translation: scaled by sx/sy so one full CV sweep = one image tile width,
+        // keeping the scroll seamless regardless of zoom level.
+        float tx = txOn ? txV * mirrorW * sx : 0.f;
+        float ty = tyOn ? tyV * mirrorH * sy : 0.f;
 
         nvgSave(args.vg);
 
@@ -364,20 +365,24 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         bool tileOn = m->tileEmptySpace;
         int img = screenCap.nvgImg;
 
+        // Extra extent needed so the fill rect covers the full panel when translated
+        float txAbs = txOn ? fabsf(tx) : 0.f;
+        float tyAbs = tyOn ? fabsf(ty) : 0.f;
+
         if (kaliOn) {
           int mode = (int)kaliV + 1;
           float cosA = rotOn ? cosf(fabsf(rotV) * (float)M_PI / 180.f) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-          float rHW  = (mirrorW * cosA + box.size.y * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
-          float rHH  = (mirrorW * sinA + box.size.y * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
+          float rHW  = ((mirrorW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
+          float rHH  = ((mirrorW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
           drawKaleidoscope(args.vg, img, hw, hh, mirrorW, mirrorH, rHW, rHH, mode, alpha,
                            rotOn, rotV, false, 0.f);
         } else {
           if (rotOn) applyRotation(args.vg, rotV);
           float cosA = rotOn ? cosf(fabsf(rotV) * (float)M_PI / 180.f) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-          float rHW  = (mirrorW * cosA + box.size.y * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
-          float rHH  = (mirrorW * sinA + box.size.y * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
+          float rHW  = ((mirrorW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
+          float rHH  = ((mirrorW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
 
           if (tileOn) {
             float pcx = -(txOn ? tx / std::max(sx, 0.01f) : 0.f);
