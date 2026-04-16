@@ -26,40 +26,130 @@ struct GlolyPitchOnOffButton : SvgSwitch {
 struct ComputerscareGlolyPitch : Module {
   enum ParamId {
     GLOBAL_TOGGLE,
-    // Effects (toggle + knob pairs)
-    SCALE_TOGGLE,    SCALE_KNOB,     // uniform scale
-    SCALE_X_TOGGLE,  SCALE_X_KNOB,   // horizontal stretch
-    SCALE_Y_TOGGLE,  SCALE_Y_KNOB,   // vertical stretch
-    ROT_TOGGLE,      ROT_KNOB,       // rotation degrees
-    KALEIDO_TOGGLE,  KALEIDO_KNOB,   // mode 1-12
-    TRANS_X_TOGGLE,  TRANS_X_KNOB,   // horizontal pan
-    TRANS_Y_TOGGLE,  TRANS_Y_KNOB,   // vertical pan
+    // Effects: toggle + knob (offset) + attenuverter triples
+    SCALE_TOGGLE,    SCALE_KNOB,    SCALE_ATTEN,
+    SCALE_X_TOGGLE,  SCALE_X_KNOB,  SCALE_X_ATTEN,
+    SCALE_Y_TOGGLE,  SCALE_Y_KNOB,  SCALE_Y_ATTEN,
+    ROT_TOGGLE,      ROT_KNOB,      ROT_ATTEN,
+    KALEIDO_TOGGLE,  KALEIDO_KNOB,  KALEIDO_ATTEN,
+    TRANS_X_TOGGLE,  TRANS_X_KNOB,  TRANS_X_ATTEN,
+    TRANS_Y_TOGGLE,  TRANS_Y_KNOB,  TRANS_Y_ATTEN,
     NUM_PARAMS
   };
 
-  float width = 12 * RACK_GRID_WIDTH;
+  enum InputId {
+    // Gate inputs (override toggle when connected)
+    SCALE_GATE_INPUT,
+    SCALE_X_GATE_INPUT,
+    SCALE_Y_GATE_INPUT,
+    ROT_GATE_INPUT,
+    KALEIDO_GATE_INPUT,
+    TRANS_X_GATE_INPUT,
+    TRANS_Y_GATE_INPUT,
+    // CV inputs (modulate knob value via attenuverter)
+    SCALE_CV_INPUT,
+    SCALE_X_CV_INPUT,
+    SCALE_Y_CV_INPUT,
+    ROT_CV_INPUT,
+    KALEIDO_CV_INPUT,
+    TRANS_X_CV_INPUT,
+    TRANS_Y_CV_INPUT,
+    // Global gate (overrides global toggle when connected)
+    GLOBAL_GATE_INPUT,
+    NUM_INPUTS
+  };
+
+  float width = 20 * RACK_GRID_WIDTH;
   bool loadedJSON = false;
   bool tileEmptySpace = false;
 
-  ComputerscareGlolyPitch() {
-    config(NUM_PARAMS, 0, 0, 0);
-    configSwitch(GLOBAL_TOGGLE, 0.f,   1.f,   1.f,   "On/Off",  {"Off", "On"});
+  // Effective row state — computed in process(), read in drawLayer()
+  bool  globalEnabled = true;
+  bool  rowEnabled[7] = {};
+  float rowValue[7]   = {1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.f};
 
-    configSwitch(SCALE_TOGGLE,   0.f, 1.f, 0.f, "Scale",      {"Off", "On"});
+  ComputerscareGlolyPitch() {
+    config(NUM_PARAMS, NUM_INPUTS, 0, 0);
+    configSwitch(GLOBAL_TOGGLE,  0.f, 1.f, 1.f, "On/Off", {"Off", "On"});
+
+    configSwitch(SCALE_TOGGLE,   0.f, 1.f, 1.f, "Scale",       {"Off", "On"});
     configParam (SCALE_KNOB,     0.1f, 4.f, 1.f, "Scale");
-    configSwitch(SCALE_X_TOGGLE, 0.f, 1.f, 0.f, "Scale X",    {"Off", "On"});
+    configParam (SCALE_ATTEN,   -1.f,  1.f, 0.f, "Scale CV Atten");
+    configSwitch(SCALE_X_TOGGLE, 0.f, 1.f, 1.f, "Scale X",     {"Off", "On"});
     configParam (SCALE_X_KNOB,   0.1f, 4.f, 1.f, "Scale X");
-    configSwitch(SCALE_Y_TOGGLE, 0.f, 1.f, 0.f, "Scale Y",    {"Off", "On"});
+    configParam (SCALE_X_ATTEN, -1.f,  1.f, 0.f, "Scale X CV Atten");
+    configSwitch(SCALE_Y_TOGGLE, 0.f, 1.f, 1.f, "Scale Y",     {"Off", "On"});
     configParam (SCALE_Y_KNOB,   0.1f, 4.f, 1.f, "Scale Y");
-    configSwitch(ROT_TOGGLE,     0.f, 1.f, 0.f, "Rotation",   {"Off", "On"});
+    configParam (SCALE_Y_ATTEN, -1.f,  1.f, 0.f, "Scale Y CV Atten");
+    configSwitch(ROT_TOGGLE,     0.f, 1.f, 1.f, "Rotation",    {"Off", "On"});
     configParam (ROT_KNOB,     -180.f, 180.f, 0.f, "Rotation", "\u00b0");
-    configSwitch(KALEIDO_TOGGLE, 0.f, 1.f, 0.f, "Kaleidoscope", {"Off", "On"});
+    configParam (ROT_ATTEN,     -1.f,  1.f, 0.f, "Rotation CV Atten");
+    configSwitch(KALEIDO_TOGGLE, 0.f, 1.f, 1.f, "Kaleidoscope", {"Off", "On"});
     configSwitch(KALEIDO_KNOB,   0.f, 11.f, 0.f, "Kaleido Mode",
       {"1","2","3","4","5","6","7","8","9","10","11","12"});
-    configSwitch(TRANS_X_TOGGLE, 0.f, 1.f, 0.f, "Translate X", {"Off", "On"});
-    configParam (TRANS_X_KNOB, -300.f, 300.f, 0.f, "Translate X", " px");
-    configSwitch(TRANS_Y_TOGGLE, 0.f, 1.f, 0.f, "Translate Y", {"Off", "On"});
-    configParam (TRANS_Y_KNOB, -300.f, 300.f, 0.f, "Translate Y", " px");
+    configParam (KALEIDO_ATTEN, -1.f,  1.f, 0.f, "Kaleido CV Atten");
+    configSwitch(TRANS_X_TOGGLE, 0.f, 1.f, 1.f, "Translate X", {"Off", "On"});
+    configParam (TRANS_X_KNOB, -1.f, 1.f, 0.f, "Translate X");
+    configParam (TRANS_X_ATTEN, -1.f,  1.f, 0.f, "Translate X CV Atten");
+    configSwitch(TRANS_Y_TOGGLE, 0.f, 1.f, 1.f, "Translate Y", {"Off", "On"});
+    configParam (TRANS_Y_KNOB, -1.f, 1.f, 0.f, "Translate Y");
+    configParam (TRANS_Y_ATTEN, -1.f,  1.f, 0.f, "Translate Y CV Atten");
+
+    configInput(SCALE_GATE_INPUT,   "Scale Gate");
+    configInput(SCALE_X_GATE_INPUT, "Scale X Gate");
+    configInput(SCALE_Y_GATE_INPUT, "Scale Y Gate");
+    configInput(ROT_GATE_INPUT,     "Rotation Gate");
+    configInput(KALEIDO_GATE_INPUT, "Kaleido Gate");
+    configInput(TRANS_X_GATE_INPUT, "Translate X Gate");
+    configInput(TRANS_Y_GATE_INPUT, "Translate Y Gate");
+    configInput(SCALE_CV_INPUT,     "Scale CV");
+    configInput(SCALE_X_CV_INPUT,   "Scale X CV");
+    configInput(SCALE_Y_CV_INPUT,   "Scale Y CV");
+    configInput(ROT_CV_INPUT,       "Rotation CV");
+    configInput(KALEIDO_CV_INPUT,   "Kaleido CV");
+    configInput(TRANS_X_CV_INPUT,   "Translate X CV");
+    configInput(TRANS_Y_CV_INPUT,   "Translate Y CV");
+    configInput(GLOBAL_GATE_INPUT,  "On/Off");
+  }
+
+  void process(const ProcessArgs& args) override {
+    static const int toggleIds[7] = {
+        SCALE_TOGGLE, SCALE_X_TOGGLE, SCALE_Y_TOGGLE,
+        ROT_TOGGLE, KALEIDO_TOGGLE, TRANS_X_TOGGLE, TRANS_Y_TOGGLE};
+    static const int knobIds[7] = {
+        SCALE_KNOB, SCALE_X_KNOB, SCALE_Y_KNOB,
+        ROT_KNOB, KALEIDO_KNOB, TRANS_X_KNOB, TRANS_Y_KNOB};
+    static const int attenIds[7] = {
+        SCALE_ATTEN, SCALE_X_ATTEN, SCALE_Y_ATTEN,
+        ROT_ATTEN, KALEIDO_ATTEN, TRANS_X_ATTEN, TRANS_Y_ATTEN};
+    static const int gateIds[7] = {
+        SCALE_GATE_INPUT, SCALE_X_GATE_INPUT, SCALE_Y_GATE_INPUT,
+        ROT_GATE_INPUT, KALEIDO_GATE_INPUT, TRANS_X_GATE_INPUT, TRANS_Y_GATE_INPUT};
+    static const int cvIds[7] = {
+        SCALE_CV_INPUT, SCALE_X_CV_INPUT, SCALE_Y_CV_INPUT,
+        ROT_CV_INPUT, KALEIDO_CV_INPUT, TRANS_X_CV_INPUT, TRANS_Y_CV_INPUT};
+    static const float mins[7]    = {0.1f, 0.1f, 0.1f, -180.f,  0.f, -1.f, -1.f};
+    static const float maxs[7]    = {4.f,  4.f,  4.f,   180.f, 11.f,  1.f,  1.f};
+    // CV scale: attenuverter=1, +10V maps to the full positive range of each param.
+    // Rotation: +10V = +180° (full rotation).  Trans: +10V = +1.0 (full screen unit).
+    static const float cvScale[7] = {0.3f, 0.3f, 0.3f, 18.f, 1.1f, 0.1f, 0.1f};
+
+    bool globalGate = inputs[GLOBAL_GATE_INPUT].isConnected();
+    globalEnabled = globalGate
+        ? (inputs[GLOBAL_GATE_INPUT].getVoltage() > 0.5f)
+        : (params[GLOBAL_TOGGLE].getValue() > 0.5f);
+
+    for (int i = 0; i < 7; i++) {
+      bool gateConnected = inputs[gateIds[i]].isConnected();
+      rowEnabled[i] = gateConnected
+          ? (inputs[gateIds[i]].getVoltage() > 0.5f)
+          : (params[toggleIds[i]].getValue() > 0.5f);
+
+      float offset = params[knobIds[i]].getValue();
+      float atten  = params[attenIds[i]].getValue();
+      float cv     = inputs[cvIds[i]].isConnected() ? inputs[cvIds[i]].getVoltage() : 0.f;
+      rowValue[i]  = clamp(offset + atten * cv * cvScale[i], mins[i], maxs[i]);
+    }
   }
 
   json_t* dataToJson() override {
@@ -80,7 +170,7 @@ struct ComputerscareGlolyPitch : Module {
 
 // ─── Widget ──────────────────────────────────────────────────────────────────
 
-static const float CONTROLS_WIDTH = 4 * RACK_GRID_WIDTH;  // 60 px / 4 HP
+static const float CONTROLS_WIDTH = 11 * RACK_GRID_WIDTH;  // 165 px / 11 HP
 
 struct ComputerscareGlolyPitchWidget : ModuleWidget {
   BGPanel*                   bgPanel;
@@ -90,7 +180,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
 
   ComputerscareGlolyPitchWidget(ComputerscareGlolyPitch* module) {
     setModule(module);
-    float initialWidth = module ? module->width : 12 * RACK_GRID_WIDTH;
+    float initialWidth = module ? module->width : 20 * RACK_GRID_WIDTH;
     box.size = Vec(initialWidth, RACK_GRID_HEIGHT);
 
     bgPanel = new BGPanel(nvgRGB(0x14, 0x14, 0x14));
@@ -98,11 +188,11 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     addChild(bgPanel);
 
     // ── Resize handles — added early so they are lower z-order than params ────
-    // VCV Rack hit-tests children in reverse order (last = top). By adding
-    // handles before params, params always win the hit-test over the handle.
     ComputerscareResizeHandle* leftHandle = new ComputerscareResizeHandle();
+    leftHandle->minWidth = CONTROLS_WIDTH;
     rightHandle = new ComputerscareResizeHandle();
     rightHandle->right = true;
+    rightHandle->minWidth = CONTROLS_WIDTH;
     rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
     addChild(leftHandle);
     addChild(rightHandle);
@@ -113,22 +203,27 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     bottomLogo->box.pos = Vec(0.f, RACK_GRID_HEIGHT - 30.f);
     addChild(bottomLogo);
 
-    // ── Controls: 4HP left strip ──────────────────────────────────────────────
-    // "SCRN" header
+    // ── Controls: 7HP left strip ──────────────────────────────────────────────
+    // Column headers
     SmallLetterDisplay* hdr = new SmallLetterDisplay();
     hdr->box.pos  = Vec(3.f, 5.f);
-    hdr->box.size = Vec(54.f, 10.f);
+    hdr->box.size = Vec(100.f, 10.f);
     hdr->fontSize = 8;
     hdr->value    = "SCRN";
     hdr->textColor  = nvgRGBf(0.7f, 0.9f, 0.85f);
     hdr->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
-    hdr->breakRowWidth = 54.f;
+    hdr->breakRowWidth = 100.f;
     addChild(hdr);
 
     // ── 7 effect rows ─────────────────────────────────────────────────────────
+    // Layout per row (top-left positions, row center at y):
+    //   x=2   Toggle (SmallIsoButton 10x10)
+    //   x=30  Gate jack (OutPort 32x34, flipped)  — overrides toggle when patched
+    //   x=68  CV jack (InPort 27x29)              — modulates offset knob via attenuverter
+    //   x=100 Attenuverter (SmallKnob 18x18)
+    //   x=122 Offset knob (SmoothKnob 25x25)
     const int N = 7;
-    // Row center Y values — start at 42, 35px spacing
-    float rowY[N] = {42.f, 77.f, 112.f, 147.f, 182.f, 217.f, 252.f};
+    float rowY[N] = {46.f, 84.f, 122.f, 160.f, 198.f, 236.f, 274.f};
     const char* rowLabels[N] = {"SCALE", "SCL X", "SCL Y",
                                  "ROT", "KALI", "TRN X", "TRN Y"};
     int toggleIds[N] = {
@@ -149,53 +244,91 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         ComputerscareGlolyPitch::TRANS_X_KNOB,
         ComputerscareGlolyPitch::TRANS_Y_KNOB,
     };
+    int attenIds[N] = {
+        ComputerscareGlolyPitch::SCALE_ATTEN,
+        ComputerscareGlolyPitch::SCALE_X_ATTEN,
+        ComputerscareGlolyPitch::SCALE_Y_ATTEN,
+        ComputerscareGlolyPitch::ROT_ATTEN,
+        ComputerscareGlolyPitch::KALEIDO_ATTEN,
+        ComputerscareGlolyPitch::TRANS_X_ATTEN,
+        ComputerscareGlolyPitch::TRANS_Y_ATTEN,
+    };
+    int gateInputIds[N] = {
+        ComputerscareGlolyPitch::SCALE_GATE_INPUT,
+        ComputerscareGlolyPitch::SCALE_X_GATE_INPUT,
+        ComputerscareGlolyPitch::SCALE_Y_GATE_INPUT,
+        ComputerscareGlolyPitch::ROT_GATE_INPUT,
+        ComputerscareGlolyPitch::KALEIDO_GATE_INPUT,
+        ComputerscareGlolyPitch::TRANS_X_GATE_INPUT,
+        ComputerscareGlolyPitch::TRANS_Y_GATE_INPUT,
+    };
+    int cvInputIds[N] = {
+        ComputerscareGlolyPitch::SCALE_CV_INPUT,
+        ComputerscareGlolyPitch::SCALE_X_CV_INPUT,
+        ComputerscareGlolyPitch::SCALE_Y_CV_INPUT,
+        ComputerscareGlolyPitch::ROT_CV_INPUT,
+        ComputerscareGlolyPitch::KALEIDO_CV_INPUT,
+        ComputerscareGlolyPitch::TRANS_X_CV_INPUT,
+        ComputerscareGlolyPitch::TRANS_Y_CV_INPUT,
+    };
 
     for (int i = 0; i < N; i++) {
       float y = rowY[i];
 
       SmallLetterDisplay* lbl = new SmallLetterDisplay();
-      lbl->box.pos  = Vec(0.f, y - 11.f);
-      lbl->box.size = Vec(60.f, 9.f);
-      lbl->fontSize = 7;
+      lbl->box.pos  = Vec(0.f, y - 22.f);
+      lbl->box.size = Vec(165.f, 14.f);
+      lbl->fontSize = 12;
       lbl->value    = rowLabels[i];
-      lbl->textColor  = nvgRGBf(0.6f, 0.82f, 0.78f);
+      lbl->textColor  = nvgRGBf(0.9f, 1.0f, 0.95f);
       lbl->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
-      lbl->breakRowWidth = 60.f;
+      lbl->breakRowWidth = 165.f;
       addChild(lbl);
 
-      addParam(createParam<SmallIsoButton>(Vec(0.f, y - 6.f), module, toggleIds[i]));
-      addParam(createParam<SmoothKnob>(Vec(33.f, y - 10.f), module, knobIds[i]));
+      // Toggle (manual on/off; bypassed when gate jack is patched)
+      addParam(createParam<SmallIsoButton>(Vec(2.f,   y - 14.f), module, toggleIds[i]));
+      // Gate jack (flipped OutPort) — overrides toggle when connected (high = on)
+      addInput(createInput<OutPort>(       Vec(30.f,  y - 17.f), module, gateInputIds[i]));
+      // CV jack — modulates offset knob value via attenuverter
+      addInput(createInput<InPort>(        Vec(68.f,  y - 14.f), module, cvInputIds[i]));
+      // Attenuverter for CV input (-1 to +1)
+      addParam(createParam<SmallKnob>(     Vec(100.f, y - 9.f),  module, attenIds[i]));
+      // Offset knob (base value)
+      addParam(createParam<SmoothKnob>(    Vec(122.f, y - 13.f), module, knobIds[i]));
     }
 
-    // Global on/off — left-aligned, above logo
+    // Global on/off — to the right of the logo
     addParam(createParam<GlolyPitchOnOffButton>(
-        Vec(2.f, RACK_GRID_HEIGHT - 68.f), module,
+        Vec(34.f, RACK_GRID_HEIGHT - 30.f), module,
         ComputerscareGlolyPitch::GLOBAL_TOGGLE));
-
+    // Global gate — overrides global toggle when patched
+    addInput(createInput<OutPort>(
+        Vec(62.f, RACK_GRID_HEIGHT - 30.f), module,
+        ComputerscareGlolyPitch::GLOBAL_GATE_INPUT));
   }
 
   void drawLayer(const DrawArgs& args, int layer) override {
     if (layer == 1 && module && APP->scene && APP->scene->rack) {
       ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
 
-      if (m && m->params[ComputerscareGlolyPitch::GLOBAL_TOGGLE].getValue() > 0.5f) {
-        float alpha   = 0.85f;
+      if (m && m->globalEnabled) {
+        float alpha = 0.85f;
 
-        bool  scaleOn  = m->params[ComputerscareGlolyPitch::SCALE_TOGGLE].getValue()   > 0.5f;
-        bool  scaleXOn = m->params[ComputerscareGlolyPitch::SCALE_X_TOGGLE].getValue() > 0.5f;
-        bool  scaleYOn = m->params[ComputerscareGlolyPitch::SCALE_Y_TOGGLE].getValue() > 0.5f;
-        bool  rotOn    = m->params[ComputerscareGlolyPitch::ROT_TOGGLE].getValue()      > 0.5f;
-        bool  kaliOn   = m->params[ComputerscareGlolyPitch::KALEIDO_TOGGLE].getValue() > 0.5f;
-        bool  txOn     = m->params[ComputerscareGlolyPitch::TRANS_X_TOGGLE].getValue() > 0.5f;
-        bool  tyOn     = m->params[ComputerscareGlolyPitch::TRANS_Y_TOGGLE].getValue() > 0.5f;
+        bool  scaleOn  = m->rowEnabled[0];
+        bool  scaleXOn = m->rowEnabled[1];
+        bool  scaleYOn = m->rowEnabled[2];
+        bool  rotOn    = m->rowEnabled[3];
+        bool  kaliOn   = m->rowEnabled[4];
+        bool  txOn     = m->rowEnabled[5];
+        bool  tyOn     = m->rowEnabled[6];
 
-        float scaleV   = m->params[ComputerscareGlolyPitch::SCALE_KNOB].getValue();
-        float scaleXV  = m->params[ComputerscareGlolyPitch::SCALE_X_KNOB].getValue();
-        float scaleYV  = m->params[ComputerscareGlolyPitch::SCALE_Y_KNOB].getValue();
-        float rotV     = m->params[ComputerscareGlolyPitch::ROT_KNOB].getValue();
-        float kaliV    = m->params[ComputerscareGlolyPitch::KALEIDO_KNOB].getValue();
-        float txV      = m->params[ComputerscareGlolyPitch::TRANS_X_KNOB].getValue();
-        float tyV      = m->params[ComputerscareGlolyPitch::TRANS_Y_KNOB].getValue();
+        float scaleV   = m->rowValue[0];
+        float scaleXV  = m->rowValue[1];
+        float scaleYV  = m->rowValue[2];
+        float rotV     = m->rowValue[3];
+        float kaliV    = m->rowValue[4];
+        float txV      = m->rowValue[5];
+        float tyV      = m->rowValue[6];
 
         float mirrorW = box.size.x - CONTROLS_WIDTH;
         float mirrorH = box.size.y;
@@ -217,20 +350,15 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         // Scale values (compose uniform + per-axis)
         float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
         float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
-        float tx = txOn ? txV : 0.f;
-        float ty = tyOn ? tyV : 0.f;
+        // Translation: rowValue is a proportion of screen (-1..+1), convert to pixels
+        float tx = txOn ? txV * mirrorW : 0.f;
+        float ty = tyOn ? tyV * mirrorH : 0.f;
 
         nvgSave(args.vg);
 
-        // ── Scissor in MODULE-LOCAL space (origin = top-left of our panel) ──
-        // drawLayer is called with NVG already translated to our box.pos,
-        // so (CONTROLS_WIDTH, 0) is exactly the mirror panel top-left in local coords.
         nvgScissor(args.vg, CONTROLS_WIDTH, 0.f, mirrorW, box.size.y);
-
-        // Translate to mirror panel center + pan offset (still in local space)
         nvgTranslate(args.vg, CONTROLS_WIDTH + hw + tx, hh + ty);
 
-        // Scale only here — rotation is applied differently for kaleido vs. plain.
         if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
 
         bool tileOn = m->tileEmptySpace;
@@ -245,7 +373,6 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
           drawKaleidoscope(args.vg, img, hw, hh, mirrorW, mirrorH, rHW, rHH, mode, alpha,
                            rotOn, rotV, false, 0.f);
         } else {
-          // Non-kaleido: apply rotation to the outer transform
           if (rotOn) applyRotation(args.vg, rotV);
           float cosA = rotOn ? cosf(fabsf(rotV) * (float)M_PI / 180.f) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
@@ -253,8 +380,8 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
           float rHH  = (mirrorW * sinA + box.size.y * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
 
           if (tileOn) {
-            float pcx = -(txOn ? txV / std::max(sx, 0.01f) : 0.f);
-            float pcy = -(tyOn ? tyV / std::max(sy, 0.01f) : 0.f);
+            float pcx = -(txOn ? tx / std::max(sx, 0.01f) : 0.f);
+            float pcy = -(tyOn ? ty / std::max(sy, 0.01f) : 0.f);
             int iMin = (int)ceilf((pcx - rHW - hw) / mirrorW);
             int iMax = (int)floorf((pcx + rHW + hw) / mirrorW);
             int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH);

@@ -40,6 +40,7 @@ using namespace rack;
 
 struct ComputerscareResizeHandle : OpaqueWidget {
   bool right = false;
+  float minWidth = 3 * RACK_GRID_WIDTH;
   Vec dragPos;
   Rect originalBox;
 
@@ -66,7 +67,6 @@ struct ComputerscareResizeHandle : OpaqueWidget {
 
     Rect newBox = originalBox;
     Rect oldBox = mw->box;
-    const float minWidth = 3 * RACK_GRID_WIDTH;
     if (right) {
       newBox.size.x += deltaX;
       newBox.size.x = std::fmax(newBox.size.x, minWidth);
