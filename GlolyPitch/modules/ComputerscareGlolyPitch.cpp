@@ -84,7 +84,7 @@ struct ComputerscareGlolyPitch : Module {
     configSwitch(ROT_TOGGLE,     0.f, 1.f, 1.f, "Rotation",    {"Off", "On"});
     configParam (ROT_KNOB,     -180.f, 180.f, 0.f, "Rotation", "\u00b0");
     configParam (ROT_ATTEN,     -1.f,  1.f, 0.f, "Rotation CV Atten");
-    configSwitch(KALEIDO_TOGGLE, 0.f, 1.f, 1.f, "Kaleidoscope", {"Off", "On"});
+    configSwitch(KALEIDO_TOGGLE, 0.f, 1.f, 0.f, "Kaleidoscope", {"Off", "On"});
     configSwitch(KALEIDO_KNOB,   0.f, 11.f, 0.f, "Kaleido Mode",
       {"1","2","3","4","5","6","7","8","9","10","11","12"});
     configParam (KALEIDO_ATTEN, -1.f,  1.f, 0.f, "Kaleido CV Atten");
@@ -112,6 +112,14 @@ struct ComputerscareGlolyPitch : Module {
     configInput(GLOBAL_GATE_INPUT,  "On/Off");
   }
 
+  void onRandomize(const RandomizeEvent& e) override {
+    // Randomize everything except the global on/off toggle
+    for (int id = 0; id < NUM_PARAMS; id++) {
+      if (id == GLOBAL_TOGGLE) continue;
+      paramQuantities[id]->randomize();
+    }
+  }
+
   void process(const ProcessArgs& args) override {
     static const int toggleIds[7] = {
         SCALE_TOGGLE, SCALE_X_TOGGLE, SCALE_Y_TOGGLE,
@@ -128,11 +136,10 @@ struct ComputerscareGlolyPitch : Module {
     static const int cvIds[7] = {
         SCALE_CV_INPUT, SCALE_X_CV_INPUT, SCALE_Y_CV_INPUT,
         ROT_CV_INPUT, KALEIDO_CV_INPUT, TRANS_X_CV_INPUT, TRANS_Y_CV_INPUT};
-    static const float mins[7]    = {0.1f, 0.1f, 0.1f, -180.f,  0.f, -1.f, -1.f};
-    static const float maxs[7]    = {4.f,  4.f,  4.f,   180.f, 11.f,  1.f,  1.f};
-    // CV scale: attenuverter=1, +10V maps to the full positive range of each param.
-    // Rotation: +10V = +180° (full rotation).  Trans: +10V = +1.0 (full screen unit).
-    static const float cvScale[7] = {0.3f, 0.3f, 0.3f, 18.f, 1.1f, 0.1f, 0.1f};
+    static const float mins[7]    = {0.1f, 0.1f, 0.1f, -360.f,  0.f, -1.f, -1.f};
+    static const float maxs[7]    = {4.f,  4.f,  4.f,   360.f, 11.f,  1.f,  1.f};
+    // CV scale: attenuverter=1, +10V = one full 360° rotation. Trans: +10V = +1.0 (full screen unit).
+    static const float cvScale[7] = {0.3f, 0.3f, 0.3f, 36.f, 1.1f, 0.1f, 0.1f};
 
     bool globalGate = inputs[GLOBAL_GATE_INPUT].isConnected();
     globalEnabled = globalGate
@@ -350,28 +357,29 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         // Scale values (compose uniform + per-axis)
         float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
         float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
-        // Translation: scaled by sx/sy so one full CV sweep = one image tile width,
-        // keeping the scroll seamless regardless of zoom level.
-        float tx = txOn ? txV * mirrorW * sx : 0.f;
-        float ty = tyOn ? tyV * mirrorH * sy : 0.f;
+        // Translation in image/local space: one full 0-10V sweep = one tile width,
+        // applied AFTER rotation so scrolling is seamless at any scale or rotation angle.
+        float txLocal = txOn ? txV * mirrorW : 0.f;
+        float tyLocal = tyOn ? tyV * mirrorH : 0.f;
+        float txAbs   = fabsf(txLocal);
+        float tyAbs   = fabsf(tyLocal);
 
         nvgSave(args.vg);
 
         nvgScissor(args.vg, CONTROLS_WIDTH, 0.f, mirrorW, box.size.y);
-        nvgTranslate(args.vg, CONTROLS_WIDTH + hw + tx, hh + ty);
+        // Translate to panel center only — tx/ty applied later in image space
+        nvgTranslate(args.vg, CONTROLS_WIDTH + hw, hh);
 
         if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
 
         bool tileOn = m->tileEmptySpace;
         int img = screenCap.nvgImg;
 
-        // Extra extent needed so the fill rect covers the full panel when translated
-        float txAbs = txOn ? fabsf(tx) : 0.f;
-        float tyAbs = tyOn ? fabsf(ty) : 0.f;
-
         if (kaliOn) {
+          // Apply local translation before kali's internal rotation (handles scale independence)
+          if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
           int mode = (int)kaliV + 1;
-          float cosA = rotOn ? cosf(fabsf(rotV) * (float)M_PI / 180.f) : 1.f;
+          float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
           float rHW  = ((mirrorW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
           float rHH  = ((mirrorW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
@@ -379,14 +387,17 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
                            rotOn, rotV, false, 0.f);
         } else {
           if (rotOn) applyRotation(args.vg, rotV);
-          float cosA = rotOn ? cosf(fabsf(rotV) * (float)M_PI / 180.f) : 1.f;
+          // Apply translation after rotation so scroll direction is in image space —
+          // this ensures one full CV sweep = one tile at any rotation angle.
+          if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
+          float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
           float rHW  = ((mirrorW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
           float rHH  = ((mirrorW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
 
           if (tileOn) {
-            float pcx = -(txOn ? tx / std::max(sx, 0.01f) : 0.f);
-            float pcy = -(tyOn ? ty / std::max(sy, 0.01f) : 0.f);
+            float pcx = -(txOn ? txLocal : 0.f);
+            float pcy = -(tyOn ? tyLocal : 0.f);
             int iMin = (int)ceilf((pcx - rHW - hw) / mirrorW);
             int iMax = (int)floorf((pcx + rHW + hw) / mirrorW);
             int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH);
