@@ -124,12 +124,12 @@ struct ComputerscareGlolyPitch : Module {
     configSwitch(HUE_TOGGLE,    0.f, 1.f, 1.f, "Hue",    {"Off", "On"});
     configParam (HUE_KNOB,    -180.f, 180.f, 0.f, "Hue", "\u00b0");
     configParam (HUE_ATTEN,    -1.f,  1.f, 0.f, "Hue CV Atten");
-    configSwitch(INVERT_TOGGLE, 0.f, 1.f, 1.f, "Invert", {"Off", "On"});
-    configParam (INVERT_KNOB,   0.f,  1.f, 0.f, "Invert");
-    configParam (INVERT_ATTEN, -1.f,  1.f, 0.f, "Invert CV Atten");
-    configSwitch(CURVES_TOGGLE, 0.f, 1.f, 1.f, "Curves", {"Off", "On"});
-    configParam (CURVES_KNOB,  -1.f,  1.f, 0.f, "Curves");
-    configParam (CURVES_ATTEN, -1.f,  1.f, 0.f, "Curves CV Atten");
+    configSwitch(INVERT_TOGGLE, 0.f, 1.f, 1.f, "Fold", {"Off", "On"});
+    configParam (INVERT_KNOB,   0.f,  1.f, 0.f, "Fold Frequency");
+    configParam (INVERT_ATTEN, -1.f,  1.f, 0.f, "Fold CV Atten");
+    configSwitch(CURVES_TOGGLE, 0.f, 1.f, 1.f, "Warp", {"Off", "On"});
+    configParam (CURVES_KNOB,  -1.f,  1.f, 0.f, "Warp");
+    configParam (CURVES_ATTEN, -1.f,  1.f, 0.f, "Warp CV Atten");
 
     configInput(HUE_GATE_INPUT,          "Hue Gate");
     configInput(INVERT_GATE_INPUT,       "Invert Gate");
@@ -307,7 +307,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     float rowY[N] = {55.f, 90.f, 125.f, 160.f, 195.f, 230.f, 265.f, 300.f, 335.f, 364.f};
     const char* rowLabels[N] = {
         "SCALE", "SCL X", "SCL Y", "ROT", "KALI", "TRN X", "TRN Y",
-        "HUE", "INVERT", "CURVES"
+        "HUE", "FOLD", "WARP"
     };
     int toggleIds[N] = {
         ComputerscareGlolyPitch::SCALE_TOGGLE,
@@ -424,9 +424,10 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         float kaliV    = rv[4];
         float txV      = rv[5];
         float tyV      = rv[6];
-        float hueV     = hueOn    ? rv[7] : 0.f;
-        float invertV  = invertOn ? rv[8] : 0.f;
-        float curvesV  = curvesOn ? rv[9] : 0.f;
+        float hueV      = hueOn    ? rv[7] : 0.f;
+        // FOLD knob (0..1) maps to foldFreq (1..4); 1.0 = no chromatic divergence
+        float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
+        float warpV     = curvesOn ? rv[9] : 0.f;
 
         float mirrorW = box.size.x - CONTROLS_WIDTH;
         float mirrorH = box.size.y;
@@ -471,7 +472,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
 
         bool tileOn = m->tileEmptySpace;
         int img = colorFBO.apply(args.vg, screenCap.texId, screenCap.nvgImg,
-                                  fbW, fbH, hueV, invertV, curvesV);
+                                  fbW, fbH, hueV, warpV, foldFreqV);
 
         int kaliMode = kaliOn ? (int)kaliV : 0;
 

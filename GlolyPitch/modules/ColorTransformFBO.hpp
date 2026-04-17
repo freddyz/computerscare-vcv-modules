@@ -2,14 +2,21 @@
 #include "rack.hpp"
 #include <nanovg_gl.h>
 
-// Applies hue-shift, invert, and S-curve contrast to a captured GL texture
-// via a custom GLSL shader + FBO.  All transforms are per-pixel; no spatial
-// changes — the NVG image handle returned is a drop-in for screenCap.nvgImg.
-// If every param is at its neutral value the FBO is bypassed and the source
-// image handle is returned unchanged (zero extra GPU work).
+// Applies hue-shift, warp (solarize→invert / posterize+crush), and fold-frequency
+// to a captured GL texture via a custom GLSL shader + FBO.
 //
+// WARP (-1..1):
+//   0        bypass
+//   0..-0.5  progressively solarize (Sabattier fold effect)
+//  -0.5..-1  solarize fades into full invert at -1
+//   0..+1    posterize + contrast crush (coarser and harder toward +1)
+//
+// FOLD_FREQ (1..4, mapped from INVERT knob 0..1):
+//   Scales fold frequency and posterize step count.
+//   Adds per-channel chromatic divergence at higher values.
+//
+// If all params are at neutral values the FBO is bypassed (zero GPU work).
 // Uses GLSL #version 120 / OpenGL 2.x to match VCV Rack's NANOVG_GL2 context.
-// No VAOs — uses plain VBOs with glVertexAttribPointer per draw call.
 
 struct ColorTransformFBO {
 
@@ -20,11 +27,11 @@ struct ColorTransformFBO {
   int    nvgImg  = -1;
   int    lastW   = 0, lastH = 0;
 
-  GLint uTex    = -1;
-  GLint uHue    = -1;
-  GLint uInvert = -1;
-  GLint uCurves = -1;
-  GLint aPos    = -1;
+  GLint uTex      = -1;
+  GLint uHue      = -1;
+  GLint uWarp     = -1;
+  GLint uFoldFreq = -1;
+  GLint aPos      = -1;
 
   bool initialized = false;
 
@@ -46,9 +53,9 @@ struct ColorTransformFBO {
       "#version 120\n"
       "varying vec2 uv;\n"
       "uniform sampler2D tex;\n"
-      "uniform float hue;\n"     // degrees  -360..360
-      "uniform float invert;\n"  // 0..1
-      "uniform float curves;\n"  // -1..1  (>0 boost contrast, <0 flatten)
+      "uniform float hue;\n"       // degrees -360..360
+      "uniform float warp;\n"      // -1..1  (negative=solarize/invert, positive=posterize/crush)
+      "uniform float foldFreq;\n"  // 1..4   (fold count / step count / chromatic divergence)
       "\n"
       // ── RGB ↔ HSL ─────────────────────────────────────────────────────
       "vec3 rgb2hsl(vec3 c) {\n"
@@ -79,12 +86,43 @@ struct ColorTransformFBO {
       "  float p = 2.0*c.z - q;\n"
       "  return vec3(h2rgb(p,q,c.x+1.0/3.0), h2rgb(p,q,c.x), h2rgb(p,q,c.x-1.0/3.0));\n"
       "}\n"
-      // ── S-curve contrast ──────────────────────────────────────────────
-      "float sCurve(float x, float t) {\n"
-      "  float xx = (x - 0.5) * 2.0;\n"
-      "  float p  = t > 0.0 ? 1.0/(1.0 + t*4.0) : (1.0 + abs(t)*4.0);\n"
-      "  float c2 = sign(xx) * pow(abs(xx) + 0.00001, p);\n"
-      "  return clamp(c2 * 0.5 + 0.5, 0.0, 1.0);\n"
+      "\n"
+      // ── Negative side: solarize → full invert ─────────────────────────
+      // t [0..1]: 0=bypass, 0..0.5=blend into solarize, 0.5..1=solarize→invert
+      // chanOffset shifts the fold phase per channel for chromatic divergence
+      "float solarizeToInvert(float v, float t, float freq, float chanOffset) {\n"
+      "  float tSol    = min(t * 2.0, 1.0);\n"
+      "  float tInv    = max((t - 0.5) * 2.0, 0.0);\n"
+      "  float phase   = (v + chanOffset * 0.08) * 3.14159265 * freq;\n"
+      "  float sol     = abs(sin(phase));\n"
+      "  float withSol = mix(v, sol, tSol);\n"
+      "  return          mix(withSol, 1.0 - v, tInv);\n"
+      "}\n"
+      "\n"
+      // ── Positive side: posterize + contrast crush ──────────────────────
+      "float posterizeCrush(float v, float t, float freq) {\n"
+      "  float steps     = 2.0 + floor(freq * 3.5);\n"
+      "  float quantized = floor(v * steps + 0.5) / steps;\n"
+      "  float sharpened = clamp((v - 0.5) * (1.0 + t * 6.0) + 0.5, 0.0, 1.0);\n"
+      "  return mix(quantized, sharpened, t * 0.4);\n"
+      "}\n"
+      "\n"
+      "vec3 warpColor(vec3 rgb, float w, float freq) {\n"
+      "  float diverge = (freq - 1.0) / 3.0;\n"  // 0..1 chromatic spread
+      "  if (w < 0.0) {\n"
+      "    float t = -w;\n"
+      "    return vec3(\n"
+      "      solarizeToInvert(rgb.r, t, freq, 0.0),\n"
+      "      solarizeToInvert(rgb.g, t, freq, diverge * 0.5),\n"
+      "      solarizeToInvert(rgb.b, t, freq, diverge * 1.0)\n"
+      "    );\n"
+      "  } else {\n"
+      "    float t = w;\n"
+      "    float r = posterizeCrush(rgb.r, t, freq);\n"
+      "    float g = posterizeCrush(rgb.g, t, freq * (1.0 + diverge * 0.15));\n"
+      "    float b = posterizeCrush(rgb.b, t, freq * (1.0 + diverge * 0.30));\n"
+      "    return mix(rgb, vec3(r, g, b), t);\n"
+      "  }\n"
       "}\n"
       "\n"
       "void main() {\n"
@@ -95,13 +133,8 @@ struct ColorTransformFBO {
       "    hsl.x = fract(hsl.x + hue / 360.0);\n"
       "    rgb = hsl2rgb(hsl);\n"
       "  }\n"
-      "  if (abs(curves) > 0.01) {\n"
-      "    rgb = vec3(sCurve(rgb.r, curves),\n"
-      "               sCurve(rgb.g, curves),\n"
-      "               sCurve(rgb.b, curves));\n"
-      "  }\n"
-      "  if (invert > 0.01) {\n"
-      "    rgb = mix(rgb, 1.0 - rgb, invert);\n"
+      "  if (abs(warp) > 0.01) {\n"
+      "    rgb = warpColor(rgb, warp, foldFreq);\n"
       "  }\n"
       "  gl_FragColor = vec4(rgb, col.a);\n"
       "}\n";
@@ -164,11 +197,11 @@ struct ColorTransformFBO {
 
     program = linkProgram(vertSrc(), fragSrc());
     if (program) {
-      uTex    = glGetUniformLocation(program, "tex");
-      uHue    = glGetUniformLocation(program, "hue");
-      uInvert = glGetUniformLocation(program, "invert");
-      uCurves = glGetUniformLocation(program, "curves");
-      aPos    = glGetAttribLocation(program, "pos");
+      uTex      = glGetUniformLocation(program, "tex");
+      uHue      = glGetUniformLocation(program, "hue");
+      uWarp     = glGetUniformLocation(program, "warp");
+      uFoldFreq = glGetUniformLocation(program, "foldFreq");
+      aPos      = glGetAttribLocation(program, "pos");
     }
   }
 
@@ -195,18 +228,19 @@ struct ColorTransformFBO {
                            GL_TEXTURE_2D, outTex, 0);
     glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
 
-    // Same flags as ScreenCapture: FLIPY corrects GL's Y-up vs NVG's Y-down
     nvgImg = nvglCreateImageFromHandleGL2(vg, outTex, w, h, NVG_IMAGE_FLIPY);
     lastW = w; lastH = h;
   }
 
   // ── Apply and return the NVG image handle to use for drawing ─────────────
+  // warpV:     -1..1  (negative = solarize→invert, positive = posterize+crush)
+  // foldFreqV: 1..4   (mapped from INVERT knob 0..1 via 1.0 + v * 3.0)
   // Returns srcImg if all params are neutral (no work done).
 
   int apply(NVGcontext* vg, GLuint srcTex, int srcImg,
             int fbW, int fbH,
-            float hueV, float invertV, float curvesV) {
-    if (fabsf(hueV) <= 0.01f && invertV <= 0.01f && fabsf(curvesV) <= 0.01f)
+            float hueV, float warpV, float foldFreqV) {
+    if (fabsf(hueV) <= 0.01f && fabsf(warpV) <= 0.01f)
       return srcImg;
 
     if (!initialized) init();
@@ -250,10 +284,10 @@ struct ColorTransformFBO {
     }
 
     glBindTexture(GL_TEXTURE_2D, srcTex);
-    glUniform1i(uTex,    0);
-    glUniform1f(uHue,    hueV);
-    glUniform1f(uInvert, invertV);
-    glUniform1f(uCurves, curvesV);
+    glUniform1i(uTex,      0);
+    glUniform1f(uHue,      hueV);
+    glUniform1f(uWarp,     warpV);
+    glUniform1f(uFoldFreq, foldFreqV);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 
     if (aPos >= 0) glDisableVertexAttribArray(aPos);
@@ -273,7 +307,5 @@ struct ColorTransformFBO {
     return nvgImg;
   }
 
-  // GPU resources are intentionally not freed here — destructor may run
-  // outside a valid GL context.  VCV Rack reclaims VRAM on exit.
   ~ColorTransformFBO() = default;
 };
