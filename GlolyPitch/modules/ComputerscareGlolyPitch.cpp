@@ -9,6 +9,7 @@
 #include "MirrorTranslation.hpp"
 #include "MirrorKaleidoscope.hpp"
 #include "ColorTransformFBO.hpp"
+#include <atomic>
 
 // ─── Local button: corrected frame order (up=off=0, down=on=1) ───────────────
 
@@ -22,11 +23,24 @@ struct GlolyPitchOnOffButton : SvgSwitch {
   }
 };
 
+// Momentary trigger button
+struct GlolyPitchTrigButton : SvgSwitch {
+  GlolyPitchTrigButton() {
+    momentary = true;
+    addFrame(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/computerscare-iso-button-up.svg")));
+    addFrame(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/computerscare-iso-button-down.svg")));
+    shadow->opacity = 0.f;
+  }
+};
+
 // ─── Module ──────────────────────────────────────────────────────────────────
 
 struct ComputerscareGlolyPitch : Module {
   enum ParamId {
-    GLOBAL_TOGGLE,
+    CONTINUOUS_TOGGLE,  // on=continuous (every frame), off=triggered
+    TRIGGER_BUTTON,     // momentary: fires one draw frame
     // Effects: toggle + knob (offset) + attenuverter triples
     SCALE_TOGGLE,    SCALE_KNOB,    SCALE_ATTEN,
     SCALE_X_TOGGLE,  SCALE_X_KNOB,  SCALE_X_ATTEN,
@@ -65,8 +79,9 @@ struct ComputerscareGlolyPitch : Module {
     HUE_CV_INPUT,
     INVERT_CV_INPUT,
     CURVES_CV_INPUT,
-    // Global gate (overrides global toggle when connected)
-    GLOBAL_GATE_INPUT,
+    // Global mode inputs
+    CONTINUOUS_GATE_INPUT,  // gate: high=continuous, low=triggered
+    TRIGGER_INPUT,          // trigger: fires one draw in triggered mode
     NUM_INPUTS
   };
 
@@ -75,13 +90,18 @@ struct ComputerscareGlolyPitch : Module {
   bool tileEmptySpace = false;
 
   // Effective row state — computed in process(), read in drawLayer()
-  bool  globalEnabled = true;
+  bool  continuousMode = true;
   bool  rowEnabled[10] = {};
   float rowValue[10]   = {1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
 
+  std::atomic<bool> triggerFired{false};
+  dsp::SchmittTrigger trigInputDetector;
+  dsp::SchmittTrigger trigButtonDetector;
+
   ComputerscareGlolyPitch() {
     config(NUM_PARAMS, NUM_INPUTS, 0, 0);
-    configSwitch(GLOBAL_TOGGLE,  0.f, 1.f, 1.f, "On/Off", {"Off", "On"});
+    configSwitch(CONTINUOUS_TOGGLE, 0.f, 1.f, 1.f, "Continuous/Triggered", {"Triggered", "Continuous"});
+    configParam (TRIGGER_BUTTON,    0.f, 1.f, 0.f, "Trigger");
 
     configSwitch(SCALE_TOGGLE,   0.f, 1.f, 1.f, "Scale",       {"Off", "On"});
     configParam (SCALE_KNOB,     0.1f, 4.f, 1.f, "Scale");
@@ -130,19 +150,20 @@ struct ComputerscareGlolyPitch : Module {
     configParam (CURVES_KNOB,  -1.f,  1.f, 0.f, "Curves");
     configParam (CURVES_ATTEN, -1.f,  1.f, 0.f, "Curves CV Atten");
 
-    configInput(HUE_GATE_INPUT,    "Hue Gate");
-    configInput(INVERT_GATE_INPUT,  "Invert Gate");
-    configInput(CURVES_GATE_INPUT,  "Curves Gate");
-    configInput(HUE_CV_INPUT,      "Hue CV");
-    configInput(INVERT_CV_INPUT,    "Invert CV");
-    configInput(CURVES_CV_INPUT,    "Curves CV");
-    configInput(GLOBAL_GATE_INPUT,  "On/Off");
+    configInput(HUE_GATE_INPUT,          "Hue Gate");
+    configInput(INVERT_GATE_INPUT,       "Invert Gate");
+    configInput(CURVES_GATE_INPUT,       "Curves Gate");
+    configInput(HUE_CV_INPUT,            "Hue CV");
+    configInput(INVERT_CV_INPUT,         "Invert CV");
+    configInput(CURVES_CV_INPUT,         "Curves CV");
+    configInput(CONTINUOUS_GATE_INPUT,   "Continuous (gate)");
+    configInput(TRIGGER_INPUT,           "Trigger");
   }
 
   void onRandomize(const RandomizeEvent& e) override {
-    // Randomize everything except the global on/off toggle
     for (int id = 0; id < NUM_PARAMS; id++) {
-      if (id == GLOBAL_TOGGLE) continue;
+      if (id == CONTINUOUS_TOGGLE) continue;
+      if (id == TRIGGER_BUTTON)    continue;
       paramQuantities[id]->randomize();
     }
   }
@@ -168,20 +189,32 @@ struct ComputerscareGlolyPitch : Module {
         SCALE_CV_INPUT, SCALE_X_CV_INPUT, SCALE_Y_CV_INPUT,
         ROT_CV_INPUT, KALEIDO_CV_INPUT, TRANS_X_CV_INPUT, TRANS_Y_CV_INPUT,
         HUE_CV_INPUT, INVERT_CV_INPUT, CURVES_CV_INPUT};
-    // mins/maxs/cvScale indexed by row (0-9)
     static const float mins[10]    = {0.1f, 0.1f, 0.1f, -360.f,  0.f, -1.f, -1.f, -360.f, 0.f, -1.f};
     static const float maxs[10]    = {4.f,  4.f,  4.f,   360.f, 12.f,  1.f,  1.f,  360.f, 1.f,  1.f};
-    // CV scale: +10V maps to full positive range. Hue: 360°. Invert/Curves: 1.0.
     static const float cvScale[10] = {0.3f, 0.3f, 0.3f, 36.f, 1.1f, 0.1f, 0.1f, 36.f, 0.1f, 0.1f};
 
-    bool globalGate = inputs[GLOBAL_GATE_INPUT].isConnected();
-    globalEnabled = globalGate
-        ? (inputs[GLOBAL_GATE_INPUT].getVoltage() > 0.5f)
-        : (params[GLOBAL_TOGGLE].getValue() > 0.5f);
+    // Continuous/triggered mode: gate jack overrides button when connected
+    bool gateConnected = inputs[CONTINUOUS_GATE_INPUT].isConnected();
+    continuousMode = gateConnected
+        ? (inputs[CONTINUOUS_GATE_INPUT].getVoltage() > 0.5f)
+        : (params[CONTINUOUS_TOGGLE].getValue() > 0.5f);
+
+    if (!continuousMode) {
+      // In triggered mode, detect rising edges on trigger jack or trigger button
+      bool fired = false;
+      if (inputs[TRIGGER_INPUT].isConnected()) {
+        fired |= trigInputDetector.process(inputs[TRIGGER_INPUT].getVoltage(), 0.1f, 2.f);
+      }
+      fired |= trigButtonDetector.process(params[TRIGGER_BUTTON].getValue(), 0.5f, 1.5f);
+      if (fired) triggerFired.store(true);
+    } else {
+      trigInputDetector.reset();
+      trigButtonDetector.reset();
+    }
 
     for (int i = 0; i < 10; i++) {
-      bool gateConnected = inputs[gateIds[i]].isConnected();
-      rowEnabled[i] = gateConnected
+      bool gateConn = inputs[gateIds[i]].isConnected();
+      rowEnabled[i] = gateConn
           ? (inputs[gateIds[i]].getVoltage() > 0.5f)
           : (params[toggleIds[i]].getValue() > 0.5f);
 
@@ -215,9 +248,14 @@ static const float CONTROLS_WIDTH = 11 * RACK_GRID_WIDTH;  // 165 px / 11 HP
 struct ComputerscareGlolyPitchWidget : ModuleWidget {
   BGPanel*                   bgPanel;
   ComputerscareResizeHandle* rightHandle;
-  SvgWidget*                 bottomLogo;
+  SvgWidget*                 topLogo;
   ScreenCapture              screenCap;
   ColorTransformFBO          colorFBO;
+
+  // Cache for triggered mode — holds the last rendered frame's params
+  bool  cachedRowEnabled[10] = {};
+  float cachedRowValue[10]   = {};
+  bool  hasValidCache        = false;
 
   ComputerscareGlolyPitchWidget(ComputerscareGlolyPitch* module) {
     setModule(module);
@@ -238,36 +276,50 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     addChild(leftHandle);
     addChild(rightHandle);
 
-    bottomLogo = new SvgWidget();
-    bottomLogo->setSvg(APP->window->loadSvg(asset::plugin(
+    // ── Logo — top left ───────────────────────────────────────────────────────
+    topLogo = new SvgWidget();
+    topLogo->setSvg(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/computerscare-logo-light.svg")));
-    bottomLogo->box.pos = Vec(0.f, RACK_GRID_HEIGHT - 30.f);
-    addChild(bottomLogo);
+    topLogo->box.pos = Vec(2.f, 3.f);
+    addChild(topLogo);
 
-    // ── Controls: 11HP left strip ─────────────────────────────────────────────
-    // Column headers
-    SmallLetterDisplay* hdr = new SmallLetterDisplay();
-    hdr->box.pos  = Vec(3.f, 5.f);
-    hdr->box.size = Vec(100.f, 10.f);
-    hdr->fontSize = 8;
-    hdr->value    = "SCRN";
-    hdr->textColor  = nvgRGBf(0.7f, 0.9f, 0.85f);
-    hdr->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
-    hdr->breakRowWidth = 100.f;
-    addChild(hdr);
+    // ── Global mode controls — all on top row ─────────────────────────────────
+    // CONT: label + toggle button + gate jack
+    SmallLetterDisplay* contLbl = new SmallLetterDisplay();
+    contLbl->box.pos  = Vec(42.f, 2.f);
+    contLbl->box.size = Vec(40.f, 9.f);
+    contLbl->fontSize = 7;
+    contLbl->value    = "CONT";
+    contLbl->textColor  = nvgRGBf(0.7f, 0.9f, 0.85f);
+    contLbl->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
+    contLbl->breakRowWidth = 40.f;
+    addChild(contLbl);
 
-    // Global on/off moved to header row (right side)
     addParam(createParam<GlolyPitchOnOffButton>(
-        Vec(120.f, 3.f), module, ComputerscareGlolyPitch::GLOBAL_TOGGLE));
+        Vec(42.f, 12.f), module, ComputerscareGlolyPitch::CONTINUOUS_TOGGLE));
     addInput(createInput<OutPort>(
-        Vec(140.f, 0.f), module, ComputerscareGlolyPitch::GLOBAL_GATE_INPUT));
+        Vec(59.f, 9.f), module, ComputerscareGlolyPitch::CONTINUOUS_GATE_INPUT));
+
+    // TRIG: label + momentary button + trigger jack
+    SmallLetterDisplay* trigLbl = new SmallLetterDisplay();
+    trigLbl->box.pos  = Vec(95.f, 2.f);
+    trigLbl->box.size = Vec(40.f, 9.f);
+    trigLbl->fontSize = 7;
+    trigLbl->value    = "TRIG";
+    trigLbl->textColor  = nvgRGBf(0.7f, 0.9f, 0.85f);
+    trigLbl->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
+    trigLbl->breakRowWidth = 40.f;
+    addChild(trigLbl);
+
+    addParam(createParam<GlolyPitchTrigButton>(
+        Vec(95.f, 12.f), module, ComputerscareGlolyPitch::TRIGGER_BUTTON));
+    addInput(createInput<InPort>(
+        Vec(112.f, 9.f), module, ComputerscareGlolyPitch::TRIGGER_INPUT));
 
     // ── 10 effect rows (7 geometry + 3 color) ────────────────────────────────
-    // 35px row pitch fits all 10 rows within module height.
-    // Layout per row (top-left positions, row center at y):
-    //   x=2   Toggle   x=30 Gate jack   x=68 CV jack   x=100 Atten   x=122 Knob
+    // Shifted down 16px from original to accommodate header controls.
     const int N = 10;
-    float rowY[N] = {46.f, 81.f, 116.f, 151.f, 186.f, 221.f, 256.f, 291.f, 326.f, 361.f};
+    float rowY[N] = {62.f, 97.f, 132.f, 167.f, 202.f, 237.f, 272.f, 307.f, 342.f, 371.f};
     const char* rowLabels[N] = {
         "SCALE", "SCL X", "SCL Y", "ROT", "KALI", "TRN X", "TRN Y",
         "HUE", "INVERT", "CURVES"
@@ -336,7 +388,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     // Small "COLOR" divider label between geometry and color rows
     if (module) {
       SmallLetterDisplay* clrHdr = new SmallLetterDisplay();
-      clrHdr->box.pos  = Vec(0.f, 272.f);
+      clrHdr->box.pos  = Vec(0.f, 288.f);
       clrHdr->box.size = Vec(165.f, 9.f);
       clrHdr->fontSize = 7;
       clrHdr->value    = "──── COLOR ────";
@@ -359,15 +411,10 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
       lbl->breakRowWidth = 165.f;
       addChild(lbl);
 
-      // Toggle (manual on/off; bypassed when gate jack is patched)
       addParam(createParam<SmallIsoButton>(Vec(2.f,   y - 14.f), module, toggleIds[i]));
-      // Gate jack (flipped OutPort) — overrides toggle when connected (high = on)
       addInput(createInput<OutPort>(       Vec(30.f,  y - 17.f), module, gateInputIds[i]));
-      // CV jack — modulates offset knob value via attenuverter
       addInput(createInput<InPort>(        Vec(68.f,  y - 14.f), module, cvInputIds[i]));
-      // Attenuverter for CV input (-1 to +1)
       addParam(createParam<SmallKnob>(     Vec(100.f, y - 9.f),  module, attenIds[i]));
-      // Offset knob (base value)
       addParam(createParam<SmoothKnob>(    Vec(122.f, y - 13.f), module, knobIds[i]));
     }
 
@@ -377,30 +424,37 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     if (layer == 1 && module && APP->scene && APP->scene->rack) {
       ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
 
-      if (m && m->globalEnabled) {
+      // In triggered mode, only re-capture when a trigger fired; otherwise hold last image
+      bool doCapture = m->continuousMode || m->triggerFired.exchange(false);
+
+      if (m && (doCapture || hasValidCache)) {
         float alpha = 0.85f;
 
-        bool  scaleOn  = m->rowEnabled[0];
-        bool  scaleXOn = m->rowEnabled[1];
-        bool  scaleYOn = m->rowEnabled[2];
-        bool  rotOn    = m->rowEnabled[3];
-        bool  kaliOn   = m->rowEnabled[4];
-        bool  txOn     = m->rowEnabled[5];
-        bool  tyOn     = m->rowEnabled[6];
-        bool  hueOn    = m->rowEnabled[7];
-        bool  invertOn = m->rowEnabled[8];
-        bool  curvesOn = m->rowEnabled[9];
+        // Choose live params on capture, cached params when holding
+        bool*  en = doCapture ? m->rowEnabled : cachedRowEnabled;
+        float* rv = doCapture ? m->rowValue   : cachedRowValue;
 
-        float scaleV   = m->rowValue[0];
-        float scaleXV  = m->rowValue[1];
-        float scaleYV  = m->rowValue[2];
-        float rotV     = m->rowValue[3];
-        float kaliV    = m->rowValue[4];
-        float txV      = m->rowValue[5];
-        float tyV      = m->rowValue[6];
-        float hueV     = hueOn    ? m->rowValue[7] : 0.f;
-        float invertV  = invertOn ? m->rowValue[8] : 0.f;
-        float curvesV  = curvesOn ? m->rowValue[9] : 0.f;
+        bool  scaleOn  = en[0];
+        bool  scaleXOn = en[1];
+        bool  scaleYOn = en[2];
+        bool  rotOn    = en[3];
+        bool  kaliOn   = en[4];
+        bool  txOn     = en[5];
+        bool  tyOn     = en[6];
+        bool  hueOn    = en[7];
+        bool  invertOn = en[8];
+        bool  curvesOn = en[9];
+
+        float scaleV   = rv[0];
+        float scaleXV  = rv[1];
+        float scaleYV  = rv[2];
+        float rotV     = rv[3];
+        float kaliV    = rv[4];
+        float txV      = rv[5];
+        float tyV      = rv[6];
+        float hueV     = hueOn    ? rv[7] : 0.f;
+        float invertV  = invertOn ? rv[8] : 0.f;
+        float curvesV  = curvesOn ? rv[9] : 0.f;
 
         float mirrorW = box.size.x - CONTROLS_WIDTH;
         float mirrorH = box.size.y;
@@ -410,24 +464,27 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
           return;
         }
 
-        screenCap.capture(args.vg);
+        if (doCapture) {
+          screenCap.capture(args.vg);
+          // Update cache with current params
+          memcpy(cachedRowEnabled, m->rowEnabled, sizeof(cachedRowEnabled));
+          memcpy(cachedRowValue,   m->rowValue,   sizeof(cachedRowValue));
+          hasValidCache = true;
+        }
+
         if (screenCap.nvgImg < 0) {
           ModuleWidget::drawLayer(args, layer);
           return;
         }
 
-        // Apply color transforms via GPU shader (skipped when all neutral)
         int fbW, fbH;
         glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
         float hw = mirrorW * 0.5f;
         float hh = mirrorH * 0.5f;
 
-        // Scale values (compose uniform + per-axis)
         float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
         float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
-        // Translation in image/local space: one full 0-10V sweep = one tile width,
-        // applied AFTER rotation so scrolling is seamless at any scale or rotation angle.
         float txLocal = txOn ? txV * mirrorW : 0.f;
         float tyLocal = tyOn ? tyV * mirrorH : 0.f;
         float txAbs   = fabsf(txLocal);
@@ -436,7 +493,6 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         nvgSave(args.vg);
 
         nvgScissor(args.vg, CONTROLS_WIDTH, 0.f, mirrorW, box.size.y);
-        // Translate to panel center only — tx/ty applied later in image space
         nvgTranslate(args.vg, CONTROLS_WIDTH + hw, hh);
 
         if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
@@ -448,7 +504,6 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         int kaliMode = kaliOn ? (int)kaliV : 0;
 
         if (kaliMode > 0) {
-          // Apply local translation before kali's internal rotation (handles scale independence)
           if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
           float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
@@ -458,8 +513,6 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
                            rotOn, rotV, false, 0.f);
         } else {
           if (rotOn) applyRotation(args.vg, rotV);
-          // Apply translation after rotation so scroll direction is in image space —
-          // this ensures one full CV sweep = one tile at any rotation angle.
           if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
           float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
