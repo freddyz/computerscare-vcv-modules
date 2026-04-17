@@ -11,28 +11,9 @@
 #include "ColorTransformFBO.hpp"
 #include <atomic>
 
-// ─── Local button: corrected frame order (up=off=0, down=on=1) ───────────────
-
-struct GlolyPitchOnOffButton : SvgSwitch {
-  GlolyPitchOnOffButton() {
-    addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-iso-button-up.svg")));
-    addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-iso-button-down.svg")));
-    shadow->opacity = 0.f;
-  }
-};
-
-// Momentary trigger button
-struct GlolyPitchTrigButton : SvgSwitch {
-  GlolyPitchTrigButton() {
-    momentary = true;
-    addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-iso-button-up.svg")));
-    addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-iso-button-down.svg")));
-    shadow->opacity = 0.f;
-  }
+// Momentary version of SmallIsoButton for the trigger
+struct GlolyPitchTrigButton : SmallIsoButton {
+  GlolyPitchTrigButton() { momentary = true; }
 };
 
 // ─── Module ──────────────────────────────────────────────────────────────────
@@ -205,7 +186,7 @@ struct ComputerscareGlolyPitch : Module {
       if (inputs[TRIGGER_INPUT].isConnected()) {
         fired |= trigInputDetector.process(inputs[TRIGGER_INPUT].getVoltage(), 0.1f, 2.f);
       }
-      fired |= trigButtonDetector.process(params[TRIGGER_BUTTON].getValue(), 0.5f, 1.5f);
+      fired |= trigButtonDetector.process(params[TRIGGER_BUTTON].getValue(), 0.1f, 0.5f);
       if (fired) triggerFired.store(true);
     } else {
       trigInputDetector.reset();
@@ -283,43 +264,47 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     topLogo->box.pos = Vec(2.f, 3.f);
     addChild(topLogo);
 
-    // ── Global mode controls — all on top row ─────────────────────────────────
-    // CONT: label + toggle button + gate jack
-    SmallLetterDisplay* contLbl = new SmallLetterDisplay();
-    contLbl->box.pos  = Vec(42.f, 2.f);
-    contLbl->box.size = Vec(40.f, 9.f);
-    contLbl->fontSize = 7;
-    contLbl->value    = "CONT";
-    contLbl->textColor  = nvgRGBf(0.7f, 0.9f, 0.85f);
-    contLbl->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
-    contLbl->breakRowWidth = 40.f;
-    addChild(contLbl);
+    // ── Global mode controls ──────────────────────────────────────────────────
+    // Both jacks share the same Y (aligned). Button is positioned relative to its jack.
+    const float HDR_JACK_Y = 9.f;
+    const float HDR_BTN_DX = -24.f;  // button x = jack x + this
+    const float HDR_BTN_DY = -2.f;   // button y = jack y + this
 
-    addParam(createParam<GlolyPitchOnOffButton>(
-        Vec(42.f, 12.f), module, ComputerscareGlolyPitch::CONTINUOUS_TOGGLE));
-    addInput(createInput<OutPort>(
-        Vec(59.f, 9.f), module, ComputerscareGlolyPitch::CONTINUOUS_GATE_INPUT));
+    const float CONT_JACK_X = 68.f;
+    const float TRIG_JACK_X = 122.f;
 
-    // TRIG: label + momentary button + trigger jack
-    SmallLetterDisplay* trigLbl = new SmallLetterDisplay();
-    trigLbl->box.pos  = Vec(95.f, 2.f);
-    trigLbl->box.size = Vec(40.f, 9.f);
-    trigLbl->fontSize = 7;
-    trigLbl->value    = "TRIG";
-    trigLbl->textColor  = nvgRGBf(0.7f, 0.9f, 0.85f);
-    trigLbl->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
-    trigLbl->breakRowWidth = 40.f;
-    addChild(trigLbl);
+    auto addHdrLabel = [&](float x, const char* text) {
+      SmallLetterDisplay* lbl = new SmallLetterDisplay();
+      lbl->box.pos       = Vec(x, HDR_JACK_Y - 8.f);  // above jack
+      lbl->box.size      = Vec(50.f, 14.f);
+      lbl->fontSize      = 12;
+      lbl->value         = text;
+      lbl->textColor     = nvgRGBf(0.9f, 1.0f, 0.95f);
+      lbl->baseColor     = COLOR_COMPUTERSCARE_TRANSPARENT;
+      lbl->breakRowWidth = 50.f;
+      addChild(lbl);
+    };
 
-    addParam(createParam<GlolyPitchTrigButton>(
-        Vec(95.f, 12.f), module, ComputerscareGlolyPitch::TRIGGER_BUTTON));
+    addHdrLabel(CONT_JACK_X + HDR_BTN_DX, "CONT");
+    addParam(createParam<SmallIsoButton>(
+        Vec(CONT_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY),
+        module, ComputerscareGlolyPitch::CONTINUOUS_TOGGLE));
     addInput(createInput<InPort>(
-        Vec(112.f, 9.f), module, ComputerscareGlolyPitch::TRIGGER_INPUT));
+        Vec(CONT_JACK_X, HDR_JACK_Y),
+        module, ComputerscareGlolyPitch::CONTINUOUS_GATE_INPUT));
+
+    addHdrLabel(TRIG_JACK_X + HDR_BTN_DX, "TRIG");
+    addParam(createParam<GlolyPitchTrigButton>(
+        Vec(TRIG_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY),
+        module, ComputerscareGlolyPitch::TRIGGER_BUTTON));
+    addInput(createInput<InPort>(
+        Vec(TRIG_JACK_X, HDR_JACK_Y),
+        module, ComputerscareGlolyPitch::TRIGGER_INPUT));
 
     // ── 10 effect rows (7 geometry + 3 color) ────────────────────────────────
     // Shifted down 16px from original to accommodate header controls.
     const int N = 10;
-    float rowY[N] = {62.f, 97.f, 132.f, 167.f, 202.f, 237.f, 272.f, 307.f, 342.f, 371.f};
+    float rowY[N] = {55.f, 90.f, 125.f, 160.f, 195.f, 230.f, 265.f, 300.f, 335.f, 364.f};
     const char* rowLabels[N] = {
         "SCALE", "SCL X", "SCL Y", "ROT", "KALI", "TRN X", "TRN Y",
         "HUE", "INVERT", "CURVES"
@@ -384,19 +369,6 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         ComputerscareGlolyPitch::INVERT_CV_INPUT,
         ComputerscareGlolyPitch::CURVES_CV_INPUT,
     };
-
-    // Small "COLOR" divider label between geometry and color rows
-    if (module) {
-      SmallLetterDisplay* clrHdr = new SmallLetterDisplay();
-      clrHdr->box.pos  = Vec(0.f, 288.f);
-      clrHdr->box.size = Vec(165.f, 9.f);
-      clrHdr->fontSize = 7;
-      clrHdr->value    = "──── COLOR ────";
-      clrHdr->textColor  = nvgRGBf(0.6f, 0.8f, 0.95f);
-      clrHdr->baseColor  = COLOR_COMPUTERSCARE_TRANSPARENT;
-      clrHdr->breakRowWidth = 165.f;
-      addChild(clrHdr);
-    }
 
     for (int i = 0; i < N; i++) {
       float y = rowY[i];
