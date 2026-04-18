@@ -17,14 +17,20 @@ static inline void kSector(NVGcontext* vg,
                             bool rotOn, float rotDeg,
                             bool mirrOn, float mirrDeg) {
   nvgSave(vg);
-  // Scissor in unrotated space — intersection with outer panel scissor is correct here
+  // Sector clip is applied BEFORE rotation so it lands in axis-aligned space (correct).
+  // Rotation is applied per-sector with a sign correction for flipped sectors:
+  // a single H or V flip reverses the visual rotation direction, so we negate rotDeg.
+  // Two flips (both H+V) cancel out, so no negation needed.
   nvgIntersectScissor(vg, clipX, clipY, clipW, clipH);
-  // Apply rotation/flip after clipping so the image is rotated inside the sector
-  if (rotOn)  applyRotation(vg, rotDeg);
+  if (rotOn) {
+    bool hFlip = (ex < 0.f);
+    bool vFlip = (ey < 0.f);
+    float effectiveRot = (hFlip != vFlip) ? -rotDeg : rotDeg;
+    applyRotation(vg, effectiveRot);
+  }
   if (mirrOn) applyFlip(vg, mirrDeg);
   NVGpaint p = nvgImagePattern(vg, ox, oy, ex, ey, 0.f, img, alpha);
   nvgBeginPath(vg);
-  // Draw a rect large enough that the sector clip does all the shaping
   nvgRect(vg, -coverHW, -coverHH, 2.f * coverHW, 2.f * coverHH);
   nvgFillPaint(vg, p);
   nvgFill(vg);

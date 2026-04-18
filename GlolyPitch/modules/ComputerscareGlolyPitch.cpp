@@ -69,6 +69,7 @@ struct ComputerscareGlolyPitch : Module {
   float width = 20 * RACK_GRID_WIDTH;
   bool loadedJSON = false;
   bool tileEmptySpace = false;
+  bool maintainAspect = false;
 
   // Effective row state — computed in process(), read in drawLayer()
   bool  continuousMode = true;
@@ -210,6 +211,7 @@ struct ComputerscareGlolyPitch : Module {
     json_t* rootJ = json_object();
     json_object_set_new(rootJ, "width", json_real(width));
     json_object_set_new(rootJ, "tileEmptySpace", json_boolean(tileEmptySpace));
+    json_object_set_new(rootJ, "maintainAspect", json_boolean(maintainAspect));
     return rootJ;
   }
 
@@ -218,6 +220,8 @@ struct ComputerscareGlolyPitch : Module {
     if (widthJ) width = json_number_value(widthJ);
     json_t* tileJ = json_object_get(rootJ, "tileEmptySpace");
     if (tileJ) tileEmptySpace = json_boolean_value(tileJ);
+    json_t* aspectJ = json_object_get(rootJ, "maintainAspect");
+    if (aspectJ) maintainAspect = json_boolean_value(aspectJ);
     loadedJSON = false;
   }
 };
@@ -453,12 +457,20 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         int fbW, fbH;
         glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
-        float hw = mirrorW * 0.5f;
+        float hw = mirrorW * 0.5f;   // display half-width (for scissor/translate)
         float hh = mirrorH * 0.5f;
+
+        // In aspect-ratio mode, size the image to the framebuffer's natural aspect.
+        // The scissor clips pillarboxes; scaleX/Y are independent NVG transforms.
+        float imgW  = m->maintainAspect
+                        ? (mirrorH * (float)fbW / (float)fbH)
+                        : mirrorW;
+        float imgHW = imgW * 0.5f;
 
         float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
         float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
-        float txLocal = txOn ? txV * mirrorW : 0.f;
+        // Translation is relative to one image width/height
+        float txLocal = txOn ? txV * imgW  : 0.f;
         float tyLocal = tyOn ? tyV * mirrorH : 0.f;
         float txAbs   = fabsf(txLocal);
         float tyAbs   = fabsf(tyLocal);
@@ -466,7 +478,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         nvgSave(args.vg);
 
         nvgScissor(args.vg, CONTROLS_WIDTH, 0.f, mirrorW, box.size.y);
-        nvgTranslate(args.vg, CONTROLS_WIDTH + hw, hh);
+        nvgTranslate(args.vg, CONTROLS_WIDTH + hw, hh);  // center of display area
 
         if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
 
@@ -477,44 +489,47 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         int kaliMode = kaliOn ? (int)kaliV : 0;
 
         if (kaliMode > 0) {
+          // No global rotation here — each sector applies its own rotation with
+          // sign correction for flipped sectors (see kSector in MirrorKaleidoscope.hpp).
+          // The outer nvgScissor (set above) clips any spillover to display bounds.
           if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
           float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-          float rHW  = ((mirrorW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
-          float rHH  = ((mirrorW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
-          drawKaleidoscope(args.vg, img, hw, hh, mirrorW, mirrorH, rHW, rHH, kaliMode, alpha,
+          float rHW  = ((imgW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
+          float rHH  = ((imgW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
+          drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH, kaliMode, alpha,
                            rotOn, rotV, false, 0.f);
         } else {
           if (rotOn) applyRotation(args.vg, rotV);
           if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
           float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-          float rHW  = ((mirrorW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
-          float rHH  = ((mirrorW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
+          float rHW  = ((imgW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
+          float rHH  = ((imgW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
 
           if (tileOn) {
             float pcx = -(txOn ? txLocal : 0.f);
             float pcy = -(tyOn ? tyLocal : 0.f);
-            int iMin = (int)ceilf((pcx - rHW - hw) / mirrorW);
-            int iMax = (int)floorf((pcx + rHW + hw) / mirrorW);
+            int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
+            int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
             int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH);
             int jMax = (int)floorf((pcy + rHH + hh) / mirrorH);
             iMin = std::max(iMin, -20); iMax = std::min(iMax, 20);
             jMin = std::max(jMin, -20); jMax = std::min(jMax, 20);
             for (int j = jMin; j <= jMax; j++) {
               for (int i = iMin; i <= iMax; i++) {
-                float ox = -hw + i * mirrorW;
+                float ox = -imgHW + i * imgW;
                 float oy = -hh + j * mirrorH;
-                NVGpaint p = nvgImagePattern(args.vg, ox, oy, mirrorW, mirrorH,
+                NVGpaint p = nvgImagePattern(args.vg, ox, oy, imgW, mirrorH,
                                              0.f, img, alpha);
                 nvgBeginPath(args.vg);
-                nvgRect(args.vg, ox, oy, mirrorW, mirrorH);
+                nvgRect(args.vg, ox, oy, imgW, mirrorH);
                 nvgFillPaint(args.vg, p);
                 nvgFill(args.vg);
               }
             }
           } else {
-            NVGpaint p = nvgImagePattern(args.vg, -hw, -hh, mirrorW, mirrorH,
+            NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
                                          0.f, img, alpha);
             nvgBeginPath(args.vg);
             nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
@@ -535,7 +550,8 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
 
     menu->addChild(new MenuSeparator());
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {
-      menu->addChild(createBoolPtrMenuItem("Tile empty space", "", &m->tileEmptySpace));
+      menu->addChild(createBoolPtrMenuItem("Tile empty space",    "", &m->tileEmptySpace));
+      menu->addChild(createBoolPtrMenuItem("Maintain aspect ratio", "", &m->maintainAspect));
     }));
   }
 
