@@ -3,13 +3,34 @@
 namespace rack {
 namespace app {
 struct Points {
+
   std::vector<Vec> points;
-  Points() {}
+  Points() {
+
+  }
+  Points(std::vector<Vec> initialPoints)
+   {
+    points.resize(initialPoints.size());
+  }
+
+  Points(std::vector<float> xx,std::vector<float> yy)
+   {
+    points.resize(xx.size());
+  }
+  void addPoint(float xx, float yy) {
+    //points.resize(points.size()+1);
+    points.push_back(Vec(xx,yy));
+  }
   void linear(int num, Vec offset, Vec slope) {
     points.resize(num);
     for (int i = 0; i < num; i++) {
-      points[i] =
-          Vec(offset.x + slope.x * i / num, offset.y + slope.y * i / num);
+      points[i] = Vec(offset.x + slope.x * i / num, offset.y + slope.y * i / num);
+    }
+  }
+  void samePoint(int num, Vec point) {
+    points.resize(num);
+    for (int i = 0; i < num; i++) {
+      points[i] = point;
     }
   }
   void grid(int numx, int numy, Vec size) {
@@ -43,14 +64,18 @@ struct Points {
       points[i] = points[i].mult(s);
     }
   }
-  void waveBlob() {}
+  void waveBlob() {
+
+  }
   void wtf(float buf[16][512]) {
     int n = buf[0][0] * (1 + buf[1][0]);
     for (int i = 0; i < n; i++) {
       points.push_back(Vec(i, i));
     }
   }
-  std::vector<Vec> get() { return points; }
+  std::vector<Vec> get() {
+    return points;
+  }
 };
-}  // namespace app
-}  // namespace rack
+}
+}
