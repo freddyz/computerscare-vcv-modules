@@ -226,6 +226,106 @@ struct ComputerscareGlolyPitch : Module {
   }
 };
 
+// ─── Backdrop Widget ─────────────────────────────────────────────────────────
+// Inserted as the bottom-most child of APP->scene->rack so it draws behind
+// all modules.  Uses the same rendering pipeline as the main widget but maps
+// the effect across the full visible viewport.
+
+struct GlolyPitchBackdropWidget : widget::Widget {
+  ComputerscareGlolyPitch* module = nullptr;
+  ScreenCapture             screenCap;
+  ColorTransformFBO         colorFBO;
+
+  GlolyPitchBackdropWidget() {
+    box.pos  = math::Vec(0.f, 0.f);
+    box.size = math::Vec(INFINITY, INFINITY);
+  }
+
+  void draw(const DrawArgs& args) override {
+    if (!module) return;
+
+    float vpW = args.clipBox.size.x;
+    float vpH = args.clipBox.size.y;
+    float vpX = args.clipBox.pos.x;
+    float vpY = args.clipBox.pos.y;
+    if (vpW <= 1.f || vpH <= 1.f) return;
+
+    bool doCapture = module->continuousMode || module->triggerFired.load();
+    if (!doCapture && screenCap.nvgImg < 0) return;
+
+    if (doCapture) screenCap.capture(args.vg);
+    if (screenCap.nvgImg < 0) return;
+
+    int fbW, fbH;
+    glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
+
+    bool*  en = module->rowEnabled;
+    float* rv = module->rowValue;
+
+    bool  scaleOn  = en[0], scaleXOn = en[1], scaleYOn = en[2];
+    bool  rotOn    = en[3], kaliOn   = en[4];
+    bool  txOn     = en[5], tyOn     = en[6];
+    bool  hueOn    = en[7], invertOn = en[8], curvesOn = en[9];
+
+    float scaleV   = rv[0], scaleXV  = rv[1], scaleYV  = rv[2];
+    float rotV     = rv[3], kaliV    = rv[4];
+    float txV      = rv[5], tyV      = rv[6];
+    float hueV     = hueOn    ? rv[7] : 0.f;
+    float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
+    float warpV    = curvesOn ? rv[9] : 0.f;
+
+    float alpha   = 0.85f;
+    float sx      = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
+    float sy      = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
+    float imgW    = vpW;
+    float imgHW   = imgW * 0.5f;
+    float hh      = vpH  * 0.5f;
+    float txLocal = txOn ? txV * imgW : 0.f;
+    float tyLocal = tyOn ? tyV * vpH  : 0.f;
+    float txAbs   = fabsf(txLocal);
+    float tyAbs   = fabsf(tyLocal);
+
+    int img = colorFBO.apply(args.vg, screenCap.texId, screenCap.nvgImg,
+                              fbW, fbH, hueV, warpV, foldFreqV);
+
+    nvgSave(args.vg);
+    nvgScissor(args.vg, vpX, vpY, vpW, vpH);
+    nvgTranslate(args.vg, vpX + imgHW, vpY + hh);
+    if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
+
+    int kaliMode = kaliOn ? (int)kaliV : 0;
+
+    if (kaliMode > 0) {
+      if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
+      float cosA  = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
+      float sinA  = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
+      float rHW   = ((imgW + 2.f*txAbs)*cosA + (vpH + 2.f*tyAbs)*sinA) / (2.f*std::max(sx, 0.01f)) + 4.f;
+      float rHH   = ((imgW + 2.f*txAbs)*sinA + (vpH + 2.f*tyAbs)*cosA) / (2.f*std::max(sy, 0.01f)) + 4.f;
+      float pcx   = -(txOn ? txLocal : 0.f);
+      float pcy   = -(tyOn ? tyLocal : 0.f);
+      float dispHW = imgHW / std::max(sx, 0.01f);
+      float dispHH = hh    / std::max(sy, 0.01f);
+      drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH, kaliMode, alpha,
+                       rotOn, rotV, false, 0.f, false,
+                       pcx - dispHW, pcy - dispHH, 2.f * dispHW, 2.f * dispHH);
+    } else {
+      if (rotOn) applyRotation(args.vg, rotV);
+      if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
+      float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
+      float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
+      float rHW  = ((imgW + 2.f*txAbs)*cosA + (vpH + 2.f*tyAbs)*sinA) / (2.f*std::max(sx, 0.01f)) + 4.f;
+      float rHH  = ((imgW + 2.f*txAbs)*sinA + (vpH + 2.f*tyAbs)*cosA) / (2.f*std::max(sy, 0.01f)) + 4.f;
+      NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f, img, alpha);
+      nvgBeginPath(args.vg);
+      nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
+      nvgFillPaint(args.vg, p);
+      nvgFill(args.vg);
+    }
+
+    nvgRestore(args.vg);
+  }
+};
+
 // ─── Widget ──────────────────────────────────────────────────────────────────
 
 static const float CONTROLS_WIDTH = 11 * RACK_GRID_WIDTH;  // 165 px / 11 HP
@@ -236,11 +336,20 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   SvgWidget*                 topLogo;
   ScreenCapture              screenCap;
   ColorTransformFBO          colorFBO;
+  GlolyPitchBackdropWidget*  backdropWidget = nullptr;
 
   // Cache for triggered mode — holds the last rendered frame's params
   bool  cachedRowEnabled[10] = {};
   float cachedRowValue[10]   = {};
   bool  hasValidCache        = false;
+
+  ~ComputerscareGlolyPitchWidget() {
+    if (backdropWidget) {
+      if (APP->scene && APP->scene->rack)
+        APP->scene->rack->removeChild(backdropWidget);
+      delete backdropWidget;
+    }
+  }
 
   ComputerscareGlolyPitchWidget(ComputerscareGlolyPitch* module) {
     setModule(module);
@@ -397,7 +506,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   }
 
   void drawLayer(const DrawArgs& args, int layer) override {
-    if (layer == 1 && module && APP->scene && APP->scene->rack) {
+    if (layer == 1 && module && APP->scene && APP->scene->rack && !backdropWidget) {
       ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
 
       // In triggered mode, only re-capture when a trigger fired; otherwise hold last image
@@ -611,6 +720,32 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     if (!m) return;
 
     menu->addChild(new MenuSeparator());
+    menu->addChild(createMenuItem(
+      backdropWidget ? "Disable rack background" : "Render as rack background",
+      "", [=]() {
+        if (backdropWidget) {
+          if (APP->scene && APP->scene->rack)
+            APP->scene->rack->removeChild(backdropWidget);
+          delete backdropWidget;
+          backdropWidget = nullptr;
+          bgPanel->box.size.x = box.size.x;
+        } else {
+          auto* w = new GlolyPitchBackdropWidget();
+          w->module = m;
+          backdropWidget = w;
+          bgPanel->box.size.x = CONTROLS_WIDTH;
+          if (APP->scene && APP->scene->rack) {
+            auto& rc = APP->scene->rack->children;
+            if (!rc.empty())
+              // Insert after the first child (RailWidget) so the effect
+              // draws on top of the rail background but beneath modules.
+              APP->scene->rack->addChildAbove(w, rc.front());
+            else
+              APP->scene->rack->addChild(w);
+          }
+        }
+      }
+    ));
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {
       menu->addChild(createBoolPtrMenuItem("Tile empty space",    "", &m->tileEmptySpace));
       menu->addChild(createBoolPtrMenuItem("Maintain aspect ratio", "", &m->maintainAspect));
@@ -622,12 +757,12 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
       ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
       if (!m->loadedJSON) {
         box.size.x = m->width;
-        bgPanel->box.size.x = m->width;
+        if (!backdropWidget) bgPanel->box.size.x = m->width;
         rightHandle->box.pos.x = m->width - rightHandle->box.size.x;
         m->loadedJSON = true;
       } else if (box.size.x != m->width) {
         m->width = box.size.x;
-        bgPanel->box.size.x = box.size.x;
+        if (!backdropWidget) bgPanel->box.size.x = box.size.x;
         rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
       }
     }
