@@ -34,6 +34,7 @@ struct ComputerscareGlolyPitch : Module {
     HUE_TOGGLE,      HUE_KNOB,      HUE_ATTEN,
     INVERT_TOGGLE,   INVERT_KNOB,   INVERT_ATTEN,
     CURVES_TOGGLE,   CURVES_KNOB,   CURVES_ATTEN,
+    BACKDROP_ALPHA,
     NUM_PARAMS
   };
 
@@ -70,6 +71,8 @@ struct ComputerscareGlolyPitch : Module {
   bool loadedJSON = false;
   bool tileEmptySpace = false;
   bool maintainAspect = false;
+  bool backdropEnabled = false;
+  bool emptyWindowInBgMode = true;
 
   // Effective row state — computed in process(), read in drawLayer()
   bool  continuousMode = true;
@@ -131,6 +134,7 @@ struct ComputerscareGlolyPitch : Module {
     configSwitch(CURVES_TOGGLE, 0.f, 1.f, 1.f, "Warp", {"Off", "On"});
     configParam (CURVES_KNOB,  -1.f,  1.f, 0.f, "Warp");
     configParam (CURVES_ATTEN, -1.f,  1.f, 0.f, "Warp CV Atten");
+    configParam (BACKDROP_ALPHA, 0.f, 1.f, 0.85f, "Backdrop Alpha");
 
     configInput(HUE_GATE_INPUT,          "Hue Gate");
     configInput(INVERT_GATE_INPUT,       "Invert Gate");
@@ -146,6 +150,7 @@ struct ComputerscareGlolyPitch : Module {
     for (int id = 0; id < NUM_PARAMS; id++) {
       if (id == CONTINUOUS_TOGGLE) continue;
       if (id == TRIGGER_BUTTON)    continue;
+      if (id == BACKDROP_ALPHA)    continue;
       paramQuantities[id]->randomize();
     }
   }
@@ -207,11 +212,18 @@ struct ComputerscareGlolyPitch : Module {
     }
   }
 
+  void onReset(const ResetEvent& e) override {
+    Module::onReset(e);
+    backdropEnabled = false;
+  }
+
   json_t* dataToJson() override {
     json_t* rootJ = json_object();
     json_object_set_new(rootJ, "width", json_real(width));
     json_object_set_new(rootJ, "tileEmptySpace", json_boolean(tileEmptySpace));
     json_object_set_new(rootJ, "maintainAspect", json_boolean(maintainAspect));
+    json_object_set_new(rootJ, "backdropEnabled", json_boolean(backdropEnabled));
+    json_object_set_new(rootJ, "emptyWindowInBgMode", json_boolean(emptyWindowInBgMode));
     return rootJ;
   }
 
@@ -222,6 +234,10 @@ struct ComputerscareGlolyPitch : Module {
     if (tileJ) tileEmptySpace = json_boolean_value(tileJ);
     json_t* aspectJ = json_object_get(rootJ, "maintainAspect");
     if (aspectJ) maintainAspect = json_boolean_value(aspectJ);
+    json_t* bdJ = json_object_get(rootJ, "backdropEnabled");
+    if (bdJ) backdropEnabled = json_boolean_value(bdJ);
+    json_t* ewJ = json_object_get(rootJ, "emptyWindowInBgMode");
+    if (ewJ) emptyWindowInBgMode = json_boolean_value(ewJ);
     loadedJSON = false;
   }
 };
@@ -274,7 +290,7 @@ struct GlolyPitchBackdropWidget : widget::Widget {
     float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
     float warpV    = curvesOn ? rv[9] : 0.f;
 
-    float alpha   = 0.85f;
+    float alpha   = module->params[ComputerscareGlolyPitch::BACKDROP_ALPHA].getValue();
     float sx      = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
     float sy      = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
     float imgW    = vpW;
@@ -293,6 +309,7 @@ struct GlolyPitchBackdropWidget : widget::Widget {
     nvgTranslate(args.vg, vpX + imgHW, vpY + hh);
     if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
 
+    bool tileOn  = module->tileEmptySpace;
     int kaliMode = kaliOn ? (int)kaliV : 0;
 
     if (kaliMode > 0) {
@@ -305,9 +322,31 @@ struct GlolyPitchBackdropWidget : widget::Widget {
       float pcy   = -(tyOn ? tyLocal : 0.f);
       float dispHW = imgHW / std::max(sx, 0.01f);
       float dispHH = hh    / std::max(sy, 0.01f);
-      drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH, kaliMode, alpha,
-                       rotOn, rotV, false, 0.f, false,
-                       pcx - dispHW, pcy - dispHH, 2.f * dispHW, 2.f * dispHH);
+
+      if (tileOn) {
+        int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
+        int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
+        int jMin = (int)ceilf((pcy - rHH - hh) / vpH);
+        int jMax = (int)floorf((pcy + rHH + hh) / vpH);
+        iMin = std::max(iMin, -20); iMax = std::min(iMax, 20);
+        jMin = std::max(jMin, -20); jMax = std::min(jMax, 20);
+        for (int j = jMin; j <= jMax; j++) {
+          for (int i = iMin; i <= iMax; i++) {
+            nvgSave(args.vg);
+            nvgTranslate(args.vg, i * imgW, j * vpH);
+            float dX = pcx - dispHW - (float)i * imgW;
+            float dY = pcy - dispHH - (float)j * vpH;
+            drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH, kaliMode, alpha,
+                             rotOn, rotV, false, 0.f, false,
+                             dX, dY, 2.f * dispHW, 2.f * dispHH);
+            nvgRestore(args.vg);
+          }
+        }
+      } else {
+        drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH, kaliMode, alpha,
+                         rotOn, rotV, false, 0.f, false,
+                         pcx - dispHW, pcy - dispHH, 2.f * dispHW, 2.f * dispHH);
+      }
     } else {
       if (rotOn) applyRotation(args.vg, rotV);
       if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
@@ -315,11 +354,35 @@ struct GlolyPitchBackdropWidget : widget::Widget {
       float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
       float rHW  = ((imgW + 2.f*txAbs)*cosA + (vpH + 2.f*tyAbs)*sinA) / (2.f*std::max(sx, 0.01f)) + 4.f;
       float rHH  = ((imgW + 2.f*txAbs)*sinA + (vpH + 2.f*tyAbs)*cosA) / (2.f*std::max(sy, 0.01f)) + 4.f;
-      NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f, img, alpha);
-      nvgBeginPath(args.vg);
-      nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
-      nvgFillPaint(args.vg, p);
-      nvgFill(args.vg);
+
+      if (tileOn) {
+        float pcx = -(txOn ? txLocal : 0.f);
+        float pcy = -(tyOn ? tyLocal : 0.f);
+        int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
+        int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
+        int jMin = (int)ceilf((pcy - rHH - hh) / vpH);
+        int jMax = (int)floorf((pcy + rHH + hh) / vpH);
+        iMin = std::max(iMin, -20); iMax = std::min(iMax, 20);
+        jMin = std::max(jMin, -20); jMax = std::min(jMax, 20);
+        for (int j = jMin; j <= jMax; j++) {
+          for (int i = iMin; i <= iMax; i++) {
+            float ox = -imgHW + i * imgW;
+            float oy = -hh    + j * vpH;
+            NVGpaint p = nvgImagePattern(args.vg, ox, oy, imgW, vpH, 0.f, img, alpha);
+            nvgBeginPath(args.vg);
+            nvgRect(args.vg, ox, oy, imgW, vpH);
+            nvgFillPaint(args.vg, p);
+            nvgFill(args.vg);
+          }
+        }
+      } else {
+        // Exact rect — no oversized fill so NVG won't tile/smear the edges.
+        NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f, img, alpha);
+        nvgBeginPath(args.vg);
+        nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
+        nvgFillPaint(args.vg, p);
+        nvgFill(args.vg);
+      }
     }
 
     nvgRestore(args.vg);
@@ -506,8 +569,10 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   }
 
   void drawLayer(const DrawArgs& args, int layer) override {
-    if (layer == 1 && module && APP->scene && APP->scene->rack && !backdropWidget) {
-      ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
+    ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
+    bool bgActive = backdropWidget != nullptr;
+    bool renderInWindow = !bgActive || (m && !m->emptyWindowInBgMode);
+    if (layer == 1 && module && APP->scene && APP->scene->rack && renderInWindow) {
 
       // In triggered mode, only re-capture when a trigger fired; otherwise hold last image
       bool doCapture = m->continuousMode || m->triggerFired.exchange(false);
@@ -720,32 +785,11 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     if (!m) return;
 
     menu->addChild(new MenuSeparator());
-    menu->addChild(createMenuItem(
-      backdropWidget ? "Disable rack background" : "Render as rack background",
-      "", [=]() {
-        if (backdropWidget) {
-          if (APP->scene && APP->scene->rack)
-            APP->scene->rack->removeChild(backdropWidget);
-          delete backdropWidget;
-          backdropWidget = nullptr;
-          bgPanel->box.size.x = box.size.x;
-        } else {
-          auto* w = new GlolyPitchBackdropWidget();
-          w->module = m;
-          backdropWidget = w;
-          bgPanel->box.size.x = CONTROLS_WIDTH;
-          if (APP->scene && APP->scene->rack) {
-            auto& rc = APP->scene->rack->children;
-            if (!rc.empty())
-              // Insert after the first child (RailWidget) so the effect
-              // draws on top of the rail background but beneath modules.
-              APP->scene->rack->addChildAbove(w, rc.front());
-            else
-              APP->scene->rack->addChild(w);
-          }
-        }
-      }
-    ));
+    menu->addChild(createSubmenuItem("Full Rack BG", "", [=](Menu* menu) {
+      menu->addChild(createBoolPtrMenuItem("Render as rack background", "", &m->backdropEnabled));
+      menu->addChild(createBoolPtrMenuItem("Empty module window",       "", &m->emptyWindowInBgMode));
+      menu->addChild(new MenuParam(m->paramQuantities[ComputerscareGlolyPitch::BACKDROP_ALPHA], 2));
+    }));
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {
       menu->addChild(createBoolPtrMenuItem("Tile empty space",    "", &m->tileEmptySpace));
       menu->addChild(createBoolPtrMenuItem("Maintain aspect ratio", "", &m->maintainAspect));
@@ -755,15 +799,43 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   void step() override {
     if (module) {
       ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
+
+      // Sync backdrop widget with module flag (handles reset / patch load)
+      if (m->backdropEnabled && !backdropWidget) {
+        auto* w = new GlolyPitchBackdropWidget();
+        w->module = m;
+        backdropWidget = w;
+        if (APP->scene && APP->scene->rack) {
+          auto& rc = APP->scene->rack->children;
+          if (!rc.empty())
+            APP->scene->rack->addChildAbove(w, rc.front());
+          else
+            APP->scene->rack->addChild(w);
+        }
+      } else if (!m->backdropEnabled && backdropWidget) {
+        if (APP->scene && APP->scene->rack)
+          APP->scene->rack->removeChild(backdropWidget);
+        delete backdropWidget;
+        backdropWidget = nullptr;
+      }
+
+      bool windowEmpty = backdropWidget && m->emptyWindowInBgMode;
+
       if (!m->loadedJSON) {
         box.size.x = m->width;
-        if (!backdropWidget) bgPanel->box.size.x = m->width;
+        if (!windowEmpty) bgPanel->box.size.x = m->width;
+        else              bgPanel->box.size.x = CONTROLS_WIDTH;
         rightHandle->box.pos.x = m->width - rightHandle->box.size.x;
         m->loadedJSON = true;
       } else if (box.size.x != m->width) {
         m->width = box.size.x;
-        if (!backdropWidget) bgPanel->box.size.x = box.size.x;
+        if (!windowEmpty) bgPanel->box.size.x = box.size.x;
         rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
+      } else {
+        // Keep panel width in sync when emptyWindowInBgMode toggles
+        float desiredPanelW = windowEmpty ? CONTROLS_WIDTH : box.size.x;
+        if (bgPanel->box.size.x != desiredPanelW)
+          bgPanel->box.size.x = desiredPanelW;
       }
     }
     ModuleWidget::step();
