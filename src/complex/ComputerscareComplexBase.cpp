@@ -262,4 +262,79 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
         return output;
     }
 
+	/*
+		Read two polyphonic input ports (firstPortIndex, firstPortIndex+1)
+		into rectangular x[16], y[16] arrays regardless of input mode.
+	*/
+	void readInputToRect(int firstPortIndex, int inputMode, float* x, float* y) {
+		float a[16] = {};
+		float b[16] = {};
+
+		inputs[firstPortIndex].readVoltages(a);
+		inputs[firstPortIndex+1].readVoltages(b);
+
+		float r,theta;
+
+		for (uint8_t c = 0; c < 16; c++) {
+			if(inputMode == RECT_SEPARATED) {
+				x[c] = a[c];
+				y[c] = b[c];
+			} else if(inputMode == RECT_INTERLEAVED) {
+				x[c] = c < 8 ? a[2*c] : b[(2*c) % 16];
+				y[c] = c < 8 ? a[2*c+1] : b[(2*c+1) % 16];
+			} else if(inputMode == POLAR_INTERLEAVED) {
+				r = c < 8 ? a[2*c] : b[(2*c) % 16];
+				theta = c < 8 ? a[2*c+1] : b[(2*c+1) % 16];
+
+				x[c] = r*std::cos(theta);
+				y[c] = r*std::sin(theta);
+			} else if(inputMode == POLAR_SEPARATED) {
+				r = a[c];
+				theta = b[c];
+
+				x[c] = r*std::cos(theta);
+				y[c] = r*std::sin(theta);
+			}
+		}
+	}
+
+	/*
+		Write rectangular x[16], y[16] arrays to two polyphonic output ports
+		(firstPortIndex, firstPortIndex+1) in the requested output mode.
+	*/
+	void writeOutputFromRect(int firstPortIndex, int outputMode, float* x, float* y) {
+		float a[16] = {};
+		float b[16] = {};
+
+		float r,theta;
+
+		bool polar = outputMode==POLAR_SEPARATED || outputMode==POLAR_INTERLEAVED;
+		bool interleaved = outputMode==RECT_INTERLEAVED || outputMode==POLAR_INTERLEAVED;
+
+		for (uint8_t c = 0; c < 16; c++) {
+			if(polar) {
+				r = std::hypot(x[c],y[c]);
+				theta = std::atan2(y[c],x[c]);
+			}
+
+			if(interleaved) {
+				if(c < 8) {
+					a[2*c] = polar ? r : x[c];
+					a[2*c + 1] = polar ? theta : y[c];
+				}
+				else {
+					b[(2*c)%16] = polar ? r : x[c];
+					b[(2*c)%16 + 1] = polar ? theta : y[c];
+				}
+			} else {
+				a[c] = polar ? r : x[c];
+				b[c] = polar ? theta : y[c];
+			}
+
+		}
+
+		outputs[firstPortIndex].writeVoltages(a);
+		outputs[firstPortIndex+1].writeVoltages(b);
+	}
+
 };

@@ -13,6 +13,7 @@ LDFLAGS +=
 # Add .cpp and .c files to the build
 SOURCES += $(filter-out src/test.cpp, $(wildcard src/*.cpp))
 SOURCES += $(wildcard src/GlolyPitch/*.cpp)
+SOURCES += $(filter-out src/complex/ComputerscareComplexBase.cpp, $(wildcard src/complex/*.cpp))
 # SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
 # SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
 

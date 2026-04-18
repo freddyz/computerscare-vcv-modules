@@ -1,5 +1,6 @@
-#include "Computerscare.hpp"
-#include "complex/ComplexWidgets.hpp"
+#include "../Computerscare.hpp"
+#include "ComplexWidgets.hpp"
+#include "ComplexKnobs.hpp"
 
 #include <array>
 
@@ -159,76 +160,6 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		writeOutputFromRect(COMPOLY_PRODUCT_OUT_A,productOutputMode,prodx,prody);
 	}
 
-	int chMap1[16]  = {0,2,4,6,8,10,12,14,0,2,4,6,8,10,12,14};
-	int chMap2[16]  = {1,3,5,7,9,11,13,15,1,3,5,7,9,11,13,15};
-
-	void writeOutputFromRect(int firstPortIndex, int outputMode, float* x, float* y) {
-		float a[16] = {};
-		float b[16] = {};
-
-		float r,theta;
-
-		bool polar = outputMode==POLAR_SEPARATED || outputMode==POLAR_INTERLEAVED;
-		bool interleaved = outputMode==RECT_INTERLEAVED || outputMode==POLAR_INTERLEAVED;
-
-		for (uint8_t c = 0; c < 16; c++) {
-			if(polar) {
-				r = std::hypot(x[c],y[c]);
-      	theta = std::atan2(y[c],x[c]);
-			}
-
-			if(interleaved) {
-				if(c < 8) {
-					a[2*c] = polar ? r : x[c];
-					a[2*c + 1] = polar ? theta : y[c];
-				}
-				else {
-					b[(2*c)%16] = polar ? r : x[c];
-					b[(2*c)%16 + 1] = polar ? theta : y[c];
-				}
-			} else {
-				a[c] = polar ? r : x[c];
-				b[c] = polar ? theta : y[c];
-			}
-		
-		}
-
-		outputs[firstPortIndex].writeVoltages(a);
-		outputs[firstPortIndex+1].writeVoltages(b);
-	}
-
-	void readInputToRect(int firstPortIndex, int inputMode, float* x, float* y) {
-		float a[16] = {};
-		float b[16] = {};
-
-		inputs[firstPortIndex].readVoltages(a);
-		inputs[firstPortIndex+1].readVoltages(b);
-
-		float r,theta;
-
-		for (uint8_t c = 0; c < 16; c++) {
-			if(inputMode == RECT_SEPARATED) {
-				x[c] = a[c];
-				y[c] = b[c];
-			} else if(inputMode == RECT_INTERLEAVED) {
-				x[c] = c < 8 ? a[2*c] : b[(2*c) % 16];
-				y[c] = c < 8 ? a[2*c+1] : b[(2*c+1) % 16];
-			} else if(inputMode == POLAR_INTERLEAVED) {
-				r = c < 8 ? a[2*c] : b[(2*c) % 16];
-				theta = c < 8 ? a[2*c+1] : b[(2*c+1) % 16];
-
-				x[c] = r*std::cos(theta);
-      	y[c] = r*std::sin(theta);
-			} else if(inputMode == POLAR_SEPARATED) {
-				r = a[c];
-				theta = b[c];
-
-				x[c] = r*std::cos(theta);
-      	y[c] = r*std::sin(theta);
-			}
-		}
-	}
-
 	json_t *dataToJson() override {
     json_t *rootJ = json_object();
     return rootJ;
@@ -236,49 +167,6 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 
     void dataFromJson(json_t *rootJ) override {
     }
-};
-
-struct NoRandomSmallKnob : SmallKnob {
-	NoRandomSmallKnob() {
-		SmallKnob();
-	};
-};
-struct NoRandomMediumSmallKnob : RoundKnob {
-	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob.svg"));
-
-	NoRandomMediumSmallKnob() {
-		setSvg(enabledSvg);
-		RoundKnob();
-	};
-};
-
-struct DisableableSmoothKnob : RoundKnob {
-	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob.svg"));
-	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob-disabled.svg"));
-
-	int channel = 0;
-	bool disabled = false;
-	ComputerscarePolyModule *module;
-
-	DisableableSmoothKnob() {
-		setSvg(enabledSvg);
-		shadow->box.size = math::Vec(0, 0);
-		shadow->opacity = 0.f;
-	}
-	void step() override {
-		if (module) {
-			bool candidate = channel > module->polyChannels - 1;
-			if (disabled != candidate) {
-				setSvg(candidate ? disabledSvg : enabledSvg);
-				onChange(*(new event::Change()));
-				fb->dirty = true;
-				disabled = candidate;
-			}
-		}
-		else {
-		}
-		RoundKnob::step();
-	}
 };
 
 struct ComputerscareComplexTransformerWidget : ModuleWidget {
@@ -339,7 +227,7 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
 
 	PolyOutputChannelsWidget* channelWidget;
 	PolyChannelsDisplay* channelDisplay;
-	DisableableSmoothKnob* fader;
+	cpx::DisableableSmoothKnob* fader;
 	SmallLetterDisplay* smallLetterDisplay;
 };
 

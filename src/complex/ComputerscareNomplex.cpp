@@ -1,5 +1,5 @@
-#include "Computerscare.hpp"
-#include "complex/ComplexWidgets.hpp"
+#include "../Computerscare.hpp"
+#include "ComplexWidgets.hpp"
 
 #include <array>
 

@@ -64,6 +64,7 @@ struct PolyChannelsDisplay : SmallLetterDisplay {
   bool controlled = false;
   int prevChannels = -1;
   int paramId = -1;
+  int* ref = nullptr;
 
   PolyChannelsDisplay(math::Vec pos) {
     box.pos = pos;
@@ -74,9 +75,12 @@ struct PolyChannelsDisplay : SmallLetterDisplay {
     breakRowWidth = 20;
     SmallLetterDisplay();
   };
+  PolyChannelsDisplay(math::Vec pos, int* moduleVal) : PolyChannelsDisplay(pos) {
+    ref = moduleVal;
+  };
   void draw(const DrawArgs& args) {
     if (module) {
-      int newChannels = module->polyChannels;
+      int newChannels = ref ? *ref : module->polyChannels;
       if (newChannels != prevChannels) {
         std::string str = std::to_string(newChannels);
         value = str;
@@ -103,6 +107,22 @@ struct PolyOutputChannelsWidget : Widget {
     channelsKnob->paramId = paramId;
 
     channelCountDisplay = new PolyChannelsDisplay(pos);
+
+    channelCountDisplay->module = module;
+
+    addChild(channelsKnob);
+    addChild(channelCountDisplay);
+  }
+  PolyOutputChannelsWidget(math::Vec pos, ComputerscarePolyModule* mod,
+                           int paramId, int* moduleVal) {
+    module = mod;
+
+    channelsKnob =
+        createParam<TinyChannelsSnapKnob>(pos.plus(Vec(7, 3)), module, paramId);
+    channelsKnob->module = module;
+    channelsKnob->paramId = paramId;
+
+    channelCountDisplay = new PolyChannelsDisplay(pos, moduleVal);
 
     channelCountDisplay->module = module;
 
