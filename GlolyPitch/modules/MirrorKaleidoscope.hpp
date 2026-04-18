@@ -5,23 +5,35 @@
 using namespace rack;
 
 // ── kSector ───────────────────────────────────────────────────────────────────
-// Intersects the current outer scissor with clipRect (in unrotated space so the
-// intersection with the panel scissor is correct), then applies rotation/flip
-// before painting the image pattern.  This avoids nvgIntersectScissor giving
-// wrong results when called in a rotated coordinate frame.
+// Clips to the intersection of the sector rect and the display bounds, then applies
+// rotation/flip before painting the image pattern.
+//
+// We compute the intersection manually and call nvgScissor (not nvgIntersectScissor).
+// nvgIntersectScissor can produce a zero/negative-extent scissor when the sector is
+// outside the display; NanoVG's GLSL shader treats scissorExt <= 0 as "no clip",
+// which bleeds outside module bounds.  Computing the intersection ourselves lets us
+// return early if it is empty, guaranteeing a non-degenerate scissor.
+//
+// dspX/Y/W/H: display bounds in the CURRENT coordinate space (same space as clipX/Y/W/H,
+// i.e. before rotation).  For a tile at offset (i,j) this is the display shifted by
+// -(i*imgW, j*mirrorH) relative to the tile origin.
 static inline void kSector(NVGcontext* vg,
                             float clipX, float clipY, float clipW, float clipH,
                             float ox,    float oy,    float ex,    float ey,
                             float coverHW, float coverHH,
                             int img, float alpha,
                             bool rotOn, float rotDeg,
-                            bool mirrOn, float mirrDeg) {
+                            bool mirrOn, float mirrDeg,
+                            bool clipToImage,
+                            float dspX, float dspY, float dspW, float dspH) {
   nvgSave(vg);
-  // Sector clip is applied BEFORE rotation so it lands in axis-aligned space (correct).
-  // Rotation is applied per-sector with a sign correction for flipped sectors:
-  // a single H or V flip reverses the visual rotation direction, so we negate rotDeg.
-  // Two flips (both H+V) cancel out, so no negation needed.
-  nvgIntersectScissor(vg, clipX, clipY, clipW, clipH);
+  // Manual intersection of sector clip with display bounds.
+  float isX = std::max(clipX, dspX);
+  float isY = std::max(clipY, dspY);
+  float isW = std::min(clipX + clipW, dspX + dspW) - isX;
+  float isH = std::min(clipY + clipH, dspY + dspH) - isY;
+  if (isW <= 0.f || isH <= 0.f) { nvgRestore(vg); return; }
+  nvgScissor(vg, isX, isY, isW, isH);
   if (rotOn) {
     bool hFlip = (ex < 0.f);
     bool vFlip = (ey < 0.f);
@@ -31,7 +43,15 @@ static inline void kSector(NVGcontext* vg,
   if (mirrOn) applyFlip(vg, mirrDeg);
   NVGpaint p = nvgImagePattern(vg, ox, oy, ex, ey, 0.f, img, alpha);
   nvgBeginPath(vg);
-  nvgRect(vg, -coverHW, -coverHH, 2.f * coverHW, 2.f * coverHH);
+  if (clipToImage) {
+    // Draw only the actual image rect to prevent the pattern from tiling into empty space.
+    float rx = ex < 0.f ? ox + ex : ox;
+    float ry = ey < 0.f ? oy + ey : oy;
+    nvgRect(vg, rx, ry, fabsf(ex), fabsf(ey));
+  } else {
+    // Large rect covers full panel even after rotation; used for tiling mode.
+    nvgRect(vg, -coverHW, -coverHH, 2.f * coverHW, 2.f * coverHH);
+  }
   nvgFillPaint(vg, p);
   nvgFill(vg);
   nvgRestore(vg);
@@ -44,16 +64,20 @@ static inline void kSector(NVGcontext* vg,
 // coverHW/HH = half-size of the circumscribed rect (covers panel at any angle).
 // mode 1-12: see below.
 // rotOn/rotDeg and mirrOn/mirrDeg are applied per-sector after sector clipping.
+// dspX/Y/W/H: display bounds in the pre-rotation coordinate space of this call.
+// For tile (i,j) this is (pcx - dispHW - i*imgW, pcy - dispHH - j*mirrorH, 2*dispHW, 2*dispHH).
 inline void drawKaleidoscope(NVGcontext* vg, int img,
                               float hw, float hh, float w, float h,
                               float coverHW, float coverHH,
                               int mode, float alpha,
                               bool rotOn, float rotDeg,
-                              bool mirrOn, float mirrDeg) {
+                              bool mirrOn, float mirrDeg,
+                              bool clipToImage,
+                              float dspX, float dspY, float dspW, float dspH) {
 
-// Convenience macro — draws a sector using the precomputed cover size
+// Convenience macro — draws a sector using the precomputed cover size and display bounds
 #define KS(cx,cy,cw,ch, ox,oy,ex,ey) \
-    kSector(vg, cx,cy,cw,ch, ox,oy,ex,ey, coverHW,coverHH, img, alpha, rotOn,rotDeg,mirrOn,mirrDeg)
+    kSector(vg, cx,cy,cw,ch, ox,oy,ex,ey, coverHW,coverHH, img, alpha, rotOn,rotDeg,mirrOn,mirrDeg, clipToImage, dspX,dspY,dspW,dspH)
 
   switch (mode) {
 

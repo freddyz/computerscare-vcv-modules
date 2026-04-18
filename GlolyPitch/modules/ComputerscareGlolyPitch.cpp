@@ -491,15 +491,19 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         if (kaliMode > 0) {
           // No global rotation here — each sector applies its own rotation with
           // sign correction for flipped sectors (see kSector in MirrorKaleidoscope.hpp).
-          // The outer nvgScissor (set above) clips any spillover to display bounds.
           if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
-          float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
-          float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-          float rHW  = ((imgW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
-          float rHH  = ((imgW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
+          float cosA  = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
+          float sinA  = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
+          float rHW   = ((imgW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
+          float rHH   = ((imgW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
+          // Display bounds in the current (post-txLocal) coordinate space.
+          // kSector uses these to guarantee a non-degenerate scissor intersection.
+          float pcx    = -(txOn ? txLocal : 0.f);
+          float pcy    = -(tyOn ? tyLocal : 0.f);
+          float dispHW = hw / std::max(sx, 0.01f);
+          float dispHH = hh / std::max(sy, 0.01f);
+
           if (tileOn) {
-            float pcx = -(txOn ? txLocal : 0.f);
-            float pcy = -(tyOn ? tyLocal : 0.f);
             int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
             int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
             int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH);
@@ -510,14 +514,24 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
               for (int i = iMin; i <= iMax; i++) {
                 nvgSave(args.vg);
                 nvgTranslate(args.vg, i * imgW, j * mirrorH);
+                // Display bounds shifted into this tile's coordinate space.
+                float dX = pcx - dispHW - (float)i * imgW;
+                float dY = pcy - dispHH - (float)j * mirrorH;
                 drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH, kaliMode, alpha,
-                                 rotOn, rotV, false, 0.f);
+                                 rotOn, rotV, false, 0.f, false,
+                                 dX, dY, 2.f * dispHW, 2.f * dispHH);
                 nvgRestore(args.vg);
               }
             }
           } else {
+            // Fill dark grey background so empty space (below scale) shows the panel color.
+            nvgBeginPath(args.vg);
+            nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
+            nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
+            nvgFill(args.vg);
             drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH, kaliMode, alpha,
-                             rotOn, rotV, false, 0.f);
+                             rotOn, rotV, false, 0.f, true,
+                             pcx - dispHW, pcy - dispHH, 2.f * dispHW, 2.f * dispHH);
           }
         } else {
           if (rotOn) applyRotation(args.vg, rotV);
