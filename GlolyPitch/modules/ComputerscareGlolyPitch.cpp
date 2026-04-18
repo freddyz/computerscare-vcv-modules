@@ -524,14 +524,36 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
               }
             }
           } else {
-            // Fill dark grey background so empty space (below scale) shows the panel color.
-            nvgBeginPath(args.vg);
-            nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
-            nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
-            nvgFill(args.vg);
+            // Draw kaleidoscope first (large coverHW rect fills each sector fully).
             drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH, kaliMode, alpha,
-                             rotOn, rotV, false, 0.f, true,
+                             rotOn, rotV, false, 0.f, false,
                              pcx - dispHW, pcy - dispHH, 2.f * dispHW, 2.f * dispHH);
+
+            // Overlay opaque grey strips covering display area outside the image bounds.
+            // Drawing grey ON TOP means its soft NVG edges blend grey-into-grey (invisible)
+            // rather than grey-into-image (smear).  A 2px overlap into the image eats any
+            // residual tiling bleed at the image boundary.
+            if (dispHW > imgHW || dispHH > hh) {
+              static const float OVR = 2.f;
+              nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
+              float imgL = pcx - imgHW, imgR = pcx + imgHW;
+              float imgT = pcy - hh,    imgB = pcy + hh;
+              float dspL = pcx - dispHW, dspR = pcx + dispHW;
+              float dspT = pcy - dispHH, dspB = pcy + dispHH;
+              auto fill = [&](float x, float y, float w, float h) {
+                if (w > 0.f && h > 0.f) {
+                  nvgBeginPath(args.vg);
+                  nvgRect(args.vg, x, y, w, h);
+                  nvgFill(args.vg);
+                }
+              };
+              // left/right full-height strips
+              fill(dspL,        dspT, imgL - dspL + OVR, dspB - dspT);
+              fill(imgR - OVR,  dspT, dspR - imgR + OVR, dspB - dspT);
+              // top/bottom strips (span only the non-left/right region)
+              fill(imgL + OVR, dspT, imgR - imgL - 2.f*OVR, imgT - dspT + OVR);
+              fill(imgL + OVR, imgB - OVR, imgR - imgL - 2.f*OVR, dspB - imgB + OVR);
+            }
           }
         } else {
           if (rotOn) applyRotation(args.vg, rotV);
@@ -563,10 +585,16 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
               }
             }
           } else {
+            // Grey background first — large rect clips to outer display scissor.
+            nvgBeginPath(args.vg);
+            nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
+            nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
+            nvgFill(args.vg);
+            // Image drawn with exact rect — no tiling, no smear at edges.
             NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
                                          0.f, img, alpha);
             nvgBeginPath(args.vg);
-            nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
+            nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
             nvgFillPaint(args.vg, p);
             nvgFill(args.vg);
           }
