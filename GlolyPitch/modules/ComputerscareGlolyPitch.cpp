@@ -497,8 +497,28 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
           float rHW  = ((imgW + 2.f * txAbs) * cosA + (box.size.y + 2.f * tyAbs) * sinA) / (2.f * std::max(sx, 0.01f)) + 4.f;
           float rHH  = ((imgW + 2.f * txAbs) * sinA + (box.size.y + 2.f * tyAbs) * cosA) / (2.f * std::max(sy, 0.01f)) + 4.f;
-          drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH, kaliMode, alpha,
-                           rotOn, rotV, false, 0.f);
+          if (tileOn) {
+            float pcx = -(txOn ? txLocal : 0.f);
+            float pcy = -(tyOn ? tyLocal : 0.f);
+            int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
+            int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
+            int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH);
+            int jMax = (int)floorf((pcy + rHH + hh) / mirrorH);
+            iMin = std::max(iMin, -20); iMax = std::min(iMax, 20);
+            jMin = std::max(jMin, -20); jMax = std::min(jMax, 20);
+            for (int j = jMin; j <= jMax; j++) {
+              for (int i = iMin; i <= iMax; i++) {
+                nvgSave(args.vg);
+                nvgTranslate(args.vg, i * imgW, j * mirrorH);
+                drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH, kaliMode, alpha,
+                                 rotOn, rotV, false, 0.f);
+                nvgRestore(args.vg);
+              }
+            }
+          } else {
+            drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH, kaliMode, alpha,
+                             rotOn, rotV, false, 0.f);
+          }
         } else {
           if (rotOn) applyRotation(args.vg, rotV);
           if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
