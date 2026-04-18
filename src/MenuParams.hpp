@@ -1,6 +1,42 @@
 #pragma once
 
 using namespace rack;
+
+struct ssmi : MenuItem {
+  int mySetVal = 1;
+  ParamQuantity* myParamQuantity;
+  ssmi(int i, ParamQuantity* pq) {
+    mySetVal = i;
+    myParamQuantity = pq;
+  }
+
+  void onAction(const event::Action& e) override {
+    myParamQuantity->setValue(mySetVal);
+  }
+  void step() override {
+    rightText = myParamQuantity->getValue() == mySetVal ? "✔" : "";
+    MenuItem::step();
+  }
+};
+struct ParamSelectMenu : MenuItem {
+  ParamQuantity* param;
+  std::vector<std::string> options;
+
+  Menu* createChildMenu() override {
+    Menu* menu = new Menu;
+    for (unsigned int i = 0; i < options.size(); i++) {
+      ssmi* menuItem = new ssmi(i, param);
+      menuItem->text = options[i];
+      menu->addChild(menuItem);
+    }
+    return menu;
+  }
+  void step() override {
+    rightText = "(" + options[param->getValue()] + ") " + RIGHT_ARROW;
+    MenuItem::step();
+  }
+};
+
 /*struct AutoParamQuantity : ParamQuantity {
         std::string getDisplayValueString() override {
                 std::string disp = Quantity::getDisplayValueString();
