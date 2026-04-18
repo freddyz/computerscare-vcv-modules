@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   id="Layer_1"
+   data-name="Layer 1"
+   viewBox="0 0 28 28"
+   version="1.1"
+   sodipodi:docname="computerscare-medium-knob-dot-indicator-disabled.svg"
+   inkscape:version="0.92.2 5c3e80d, 2017-08-06"
+   width="28"
+   height="28">
+  <metadata
+     id="metadata1289">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title>01 Big Knob</dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="1398"
+     inkscape:window-height="834"
+     id="namedview1287"
+     showgrid="false"
+     inkscape:zoom="15.733333"
+     inkscape:cx="7.5228158"
+     inkscape:cy="16.744952"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="Big_Knob" />
+  <defs
+     id="defs1279">
+    <style
+       id="style1277">.cls-1{fill:#245559;}.cls-2{fill:none;stroke:#24c9a6;stroke-miterlimit:10;stroke-width:3px;}</style>
+  </defs>
+  <title
+     id="title1281">01 Big Knob</title>
+  <g
+     id="Big_Knob"
+     data-name="Big Knob"
+     transform="translate(0,-32)">
+    <path
+       style="fill:#aab8ba;stroke:#000000;stroke-width:0.40182629;stroke-opacity:1;fill-opacity:1"
+       d="M 25.62578,46.000183 C 26.374585,54.886007 20.596733,58.72213 13.967114,58.111561 7.8708847,57.550115 -0.06927658,50.275098 1.9123265,44.034327 4.8258211,34.858699 5.0683776,37.665788 7.8677328,36.080009 10.080145,34.82672 10.946556,34.276664 13.967114,34.001984 c 3.68123,-0.334759 7.366697,-0.291907 10.540264,2.584521 1.741799,1.578715 0.910119,6.942056 1.118402,9.413678 z"
+       id="Big_Button_Circle"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="sssssss" />
+    <path
+       style="color:#000000;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:medium;line-height:normal;font-family:sans-serif;font-variant-ligatures:normal;font-variant-position:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-alternates:normal;font-feature-settings:normal;text-indent:0;text-align:start;text-decoration:none;text-decoration-line:none;text-decoration-style:solid;text-decoration-color:#000000;letter-spacing:normal;word-spacing:normal;text-transform:none;writing-mode:lr-tb;direction:ltr;text-orientation:mixed;dominant-baseline:auto;baseline-shift:baseline;text-anchor:start;white-space:normal;shape-padding:0;clip-rule:nonzero;display:inline;overflow:visible;visibility:visible;opacity:1;isolation:auto;mix-blend-mode:normal;color-interpolation:sRGB;color-interpolation-filters:linearRGB;solid-color:#000000;solid-opacity:1;vector-effect:none;fill:#6b7a77;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:0.37795276;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;color-rendering:auto;image-rendering:auto;shape-rendering:auto;text-rendering:auto;enable-background:accumulate"
+       d="m 16.862146,36.050648 c 0.117928,-0.66458 0.143572,-1.22448 -0.101176,-1.753193 0.307778,-0.299636 0.726646,-0.503303 0.602995,-0.886243 -0.274556,-0.256096 -0.848253,-0.275434 -1.252334,-0.22093 -0.552513,0.09233 -1.178468,0.03274 -1.689073,0.149938 -2.516396,0.08453 -1.133525,0.778224 -1.263805,1.416518 0.04674,0.589114 -0.213607,1.270542 -0.111272,1.865607 1.164475,1.134156 2.759399,0.548985 3.814665,-0.571697 z"
+       id="Button_Pointer"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="cccccccc" />
+  </g>
+</svg>

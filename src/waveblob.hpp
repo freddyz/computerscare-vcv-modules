@@ -3,7 +3,6 @@
 namespace rack {
 namespace app {
 struct Waveblob {
-
   std::vector<Vec> trigs;
   Points points;
   int numPoints;
@@ -19,10 +18,8 @@ struct Waveblob {
     }
   }
   Points eval(float time) {
-    //points.
+    // points.
   }
-
-
 };
-}
-}
+}  // namespace app
+}  // namespace rack
