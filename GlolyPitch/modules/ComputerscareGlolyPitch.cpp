@@ -80,6 +80,7 @@ struct ComputerscareGlolyPitch : Module {
   float rowValue[10]   = {1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
 
   std::atomic<bool> triggerFired{false};
+  std::atomic<bool> backdropTriggerFired{false};
   dsp::SchmittTrigger trigInputDetector;
   dsp::SchmittTrigger trigButtonDetector;
 
@@ -193,7 +194,7 @@ struct ComputerscareGlolyPitch : Module {
         fired |= trigInputDetector.process(inputs[TRIGGER_INPUT].getVoltage(), 0.1f, 2.f);
       }
       fired |= trigButtonDetector.process(params[TRIGGER_BUTTON].getValue(), 0.1f, 0.5f);
-      if (fired) triggerFired.store(true);
+      if (fired) { triggerFired.store(true); backdropTriggerFired.store(true); }
     } else {
       trigInputDetector.reset();
       trigButtonDetector.reset();
@@ -266,7 +267,7 @@ struct GlolyPitchBackdropWidget : widget::Widget {
     float vpY = args.clipBox.pos.y;
     if (vpW <= 1.f || vpH <= 1.f) return;
 
-    bool doCapture = module->continuousMode || module->triggerFired.load();
+    bool doCapture = module->continuousMode || module->backdropTriggerFired.exchange(false);
     if (!doCapture && screenCap.nvgImg < 0) return;
 
     if (doCapture) screenCap.capture(args.vg);
@@ -785,9 +786,9 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     if (!m) return;
 
     menu->addChild(new MenuSeparator());
+    menu->addChild(createBoolPtrMenuItem("Render as rack background", "", &m->backdropEnabled));
     menu->addChild(createSubmenuItem("Full Rack BG", "", [=](Menu* menu) {
-      menu->addChild(createBoolPtrMenuItem("Render as rack background", "", &m->backdropEnabled));
-      menu->addChild(createBoolPtrMenuItem("Empty module window",       "", &m->emptyWindowInBgMode));
+      menu->addChild(createBoolPtrMenuItem("Empty module window", "", &m->emptyWindowInBgMode));
       menu->addChild(new MenuParam(m->paramQuantities[ComputerscareGlolyPitch::BACKDROP_ALPHA], 2));
     }));
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {
