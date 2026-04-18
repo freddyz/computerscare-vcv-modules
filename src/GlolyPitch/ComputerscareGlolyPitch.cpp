@@ -1,12 +1,7 @@
-#include "../../src/Computerscare.hpp"
-#include "../../src/ComputerscareResizableHandle.hpp"
+#include "../Computerscare.hpp"
+#include "../ComputerscareResizableHandle.hpp"
 #include "ScreenCaptureEffect.hpp"
-#include "MirrorScale.hpp"
-#include "MirrorScaleX.hpp"
-#include "MirrorScaleY.hpp"
 #include "MirrorRotation.hpp"
-#include "MirrorFlip.hpp"
-#include "MirrorTranslation.hpp"
 #include "MirrorKaleidoscope.hpp"
 #include "ColorTransformFBO.hpp"
 #include <atomic>
@@ -73,6 +68,7 @@ struct ComputerscareGlolyPitch : Module {
   bool maintainAspect = false;
   bool backdropEnabled = false;
   bool emptyWindowInBgMode = true;
+  bool transformPost = true;
 
   // Effective row state — computed in process(), read in drawLayer()
   bool  continuousMode = true;
@@ -225,6 +221,7 @@ struct ComputerscareGlolyPitch : Module {
     json_object_set_new(rootJ, "maintainAspect", json_boolean(maintainAspect));
     json_object_set_new(rootJ, "backdropEnabled", json_boolean(backdropEnabled));
     json_object_set_new(rootJ, "emptyWindowInBgMode", json_boolean(emptyWindowInBgMode));
+    json_object_set_new(rootJ, "transformPost", json_boolean(transformPost));
     return rootJ;
   }
 
@@ -239,6 +236,8 @@ struct ComputerscareGlolyPitch : Module {
     if (bdJ) backdropEnabled = json_boolean_value(bdJ);
     json_t* ewJ = json_object_get(rootJ, "emptyWindowInBgMode");
     if (ewJ) emptyWindowInBgMode = json_boolean_value(ewJ);
+    json_t* tpJ = json_object_get(rootJ, "transformPost");
+    if (tpJ) transformPost = json_boolean_value(tpJ);
     loadedJSON = false;
   }
 };
@@ -252,6 +251,9 @@ struct GlolyPitchBackdropWidget : widget::Widget {
   ComputerscareGlolyPitch* module = nullptr;
   ScreenCapture             screenCap;
   ColorTransformFBO         colorFBO;
+  bool  cachedRowEnabled[10] = {};
+  float cachedRowValue[10]   = {};
+  bool  hasValidCache        = false;
 
   GlolyPitchBackdropWidget() {
     box.pos  = math::Vec(0.f, 0.f);
@@ -270,14 +272,22 @@ struct GlolyPitchBackdropWidget : widget::Widget {
     bool doCapture = module->continuousMode || module->backdropTriggerFired.exchange(false);
     if (!doCapture && screenCap.nvgImg < 0) return;
 
-    if (doCapture) screenCap.capture(args.vg);
+    if (doCapture) {
+      screenCap.capture(args.vg);
+      memcpy(cachedRowEnabled, module->rowEnabled, sizeof(cachedRowEnabled));
+      memcpy(cachedRowValue,   module->rowValue,   sizeof(cachedRowValue));
+      hasValidCache = true;
+    }
     if (screenCap.nvgImg < 0) return;
 
     int fbW, fbH;
     glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
-    bool*  en = module->rowEnabled;
-    float* rv = module->rowValue;
+    // Transform post: use live params (knobs alter frozen image).
+    // Transform pre:  use cached params (knobs only affect next snapshot).
+    bool useLive = module->continuousMode || module->transformPost;
+    bool*  en = (useLive || !hasValidCache) ? module->rowEnabled : cachedRowEnabled;
+    float* rv = (useLive || !hasValidCache) ? module->rowValue   : cachedRowValue;
 
     bool  scaleOn  = en[0], scaleXOn = en[1], scaleYOn = en[2];
     bool  rotOn    = en[3], kaliOn   = en[4];
@@ -581,9 +591,10 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
       if (m && (doCapture || hasValidCache)) {
         float alpha = 0.85f;
 
-        // Choose live params on capture, cached params when holding
-        bool*  en = doCapture ? m->rowEnabled : cachedRowEnabled;
-        float* rv = doCapture ? m->rowValue   : cachedRowValue;
+        // Choose live params on capture, or based on transform pre/post setting
+        bool useLive = doCapture || m->continuousMode || m->transformPost;
+        bool*  en = (useLive || !hasValidCache) ? m->rowEnabled : cachedRowEnabled;
+        float* rv = (useLive || !hasValidCache) ? m->rowValue   : cachedRowValue;
 
         bool  scaleOn  = en[0];
         bool  scaleXOn = en[1];
@@ -787,9 +798,21 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
 
     menu->addChild(new MenuSeparator());
     menu->addChild(createBoolPtrMenuItem("Render as rack background", "", &m->backdropEnabled));
+    menu->addChild(createBoolPtrMenuItem("Transform post",            "", &m->transformPost));
     menu->addChild(createSubmenuItem("Full Rack BG", "", [=](Menu* menu) {
       menu->addChild(createBoolPtrMenuItem("Empty module window", "", &m->emptyWindowInBgMode));
-      menu->addChild(new MenuParam(m->paramQuantities[ComputerscareGlolyPitch::BACKDROP_ALPHA], 2));
+      struct WideSlider : MenuEntry {
+        WideSlider(ParamQuantity* q) {
+          box.size.x = 280.f;
+          box.size.y = 32.f;
+          auto* s = new ui::Slider;
+          s->box.size.x = 260.f;
+          s->quantity   = q;
+          s->box.pos    = Vec(6.f, 0.f);
+          addChild(s);
+        }
+      };
+      menu->addChild(new WideSlider(m->paramQuantities[ComputerscareGlolyPitch::BACKDROP_ALPHA]));
     }));
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {
       menu->addChild(createBoolPtrMenuItem("Tile empty space",    "", &m->tileEmptySpace));
