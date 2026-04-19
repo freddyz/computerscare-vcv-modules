@@ -102,6 +102,7 @@ struct ComputerscareGlolyPitch : Module {
 
   std::atomic<bool> triggerFired{false};
   std::atomic<bool> backdropTriggerFired{false};
+  std::atomic<bool> imageGateActive{false};
   dsp::SchmittTrigger trigInputDetector;
   dsp::SchmittTrigger trigButtonDetector;
 
@@ -214,12 +215,13 @@ struct ComputerscareGlolyPitch : Module {
                          : (params[CONTINUOUS_TOGGLE].getValue() > 0.5f);
 
     if (!continuousMode) {
-      // In triggered mode, detect rising edges on trigger jack or trigger
-      // button
+      // Triggered mode: detect rising edges to fire a screen capture
       bool fired = false;
       if (inputs[TRIGGER_INPUT].isConnected()) {
         fired |= trigInputDetector.process(inputs[TRIGGER_INPUT].getVoltage(),
                                            0.1f, 2.f);
+      } else {
+        trigInputDetector.reset();
       }
       fired |= trigButtonDetector.process(params[TRIGGER_BUTTON].getValue(),
                                           0.1f, 0.5f);
@@ -227,7 +229,14 @@ struct ComputerscareGlolyPitch : Module {
         triggerFired.store(true);
         backdropTriggerFired.store(true);
       }
+      imageGateActive.store(false);
     } else {
+      // Continuous mode: gate controls image source while held
+      bool gateHigh = false;
+      if (inputs[TRIGGER_INPUT].isConnected())
+        gateHigh |= inputs[TRIGGER_INPUT].getVoltage() > 0.5f;
+      gateHigh |= params[TRIGGER_BUTTON].getValue() > 0.5f;
+      imageGateActive.store(gateHigh);
       trigInputDetector.reset();
       trigButtonDetector.reset();
     }
@@ -337,14 +346,19 @@ struct GlolyPitchBackdropWidget : widget::Widget {
       }
     }
 
+    bool gateActive = module->imageGateActive.load();
     bool doCapture =
         module->continuousMode || module->backdropTriggerFired.exchange(false);
+
+    if (gateActive && loadedNvgImg >= 0 && loadedTexId != 0)
+      pendingInject = true;
+
     bool useInjected = pendingInject && loadedNvgImg >= 0 && loadedTexId != 0;
     if (!doCapture && !useInjected && screenCap.nvgImg < 0) return;
 
     if (doCapture) {
       if (useInjected) {
-        pendingInject = false;
+        if (!gateActive) pendingInject = false;
         // Use loaded image — skip screen capture this frame
       } else {
         screenCap.capture(args.vg);
@@ -783,7 +797,13 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
 
       // In triggered mode, only re-capture when a trigger fired; otherwise hold
       // last image
-      bool doCapture = m->continuousMode || m->triggerFired.exchange(false);
+      bool trigFired = m->triggerFired.exchange(false);
+      bool gateActive = m->imageGateActive.load();
+      bool doCapture = m->continuousMode || trigFired;
+
+      // Continuous mode + gate high + loaded image → keep using the image as source
+      if (gateActive && loadedNvgImg >= 0 && loadedTexId != 0)
+        pendingInject = true;
 
       bool useInjected = pendingInject && loadedNvgImg >= 0 && loadedTexId != 0;
 
@@ -830,7 +850,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
 
         if (doCapture) {
           if (useInjected) {
-            pendingInject = false;
+            if (!gateActive) pendingInject = false;
             // Use loaded image — skip screen capture this frame
           } else {
             screenCap.capture(args.vg);
