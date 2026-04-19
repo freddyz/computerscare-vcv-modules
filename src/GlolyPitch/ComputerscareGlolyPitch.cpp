@@ -1,3 +1,4 @@
+#include <dirent.h>
 #include <osdialog.h>
 
 #include <atomic>
@@ -87,8 +88,8 @@ struct ComputerscareGlolyPitch : Module {
 
   float width = 20 * RACK_GRID_WIDTH;
   bool loadedJSON = false;
-  bool tileEmptySpace = false;
-  bool maintainAspect = false;
+  bool tileEmptySpace = true;
+  bool maintainAspect = true;
   bool backdropEnabled = false;
   bool emptyWindowInBgMode = true;
   bool transformPost = true;
@@ -497,6 +498,27 @@ struct GlolyPitchBackdropWidget : widget::Widget {
 
 static const float CONTROLS_WIDTH = 11 * RACK_GRID_WIDTH;  // 165 px / 11 HP
 
+static std::string pickRandomDocImage() {
+  std::string dir = asset::plugin(pluginInstance, "doc");
+  DIR* dp = opendir(dir.c_str());
+  if (!dp) return "";
+  std::vector<std::string> paths;
+  struct dirent* entry;
+  while ((entry = readdir(dp)) != nullptr) {
+    std::string name = entry->d_name;
+    auto endsWith = [&](const std::string& ext) {
+      return name.size() >= ext.size() &&
+             name.compare(name.size() - ext.size(), ext.size(), ext) == 0;
+    };
+    if (endsWith(".png") || endsWith(".PNG") || endsWith(".jpg") ||
+        endsWith(".JPG") || endsWith(".jpeg") || endsWith(".JPEG"))
+      paths.push_back(dir + "/" + name);
+  }
+  closedir(dp);
+  if (paths.empty()) return "";
+  return paths[random::u32() % paths.size()];
+}
+
 struct ComputerscareGlolyPitchWidget : ModuleWidget {
   BGPanel* bgPanel;
   ComputerscareResizeHandle* rightHandle;
@@ -516,12 +538,16 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   GLuint loadedTexId = 0;
   bool pendingInject = false;
 
+  // Browser preview fake module
+  ComputerscareGlolyPitch* browserModule = nullptr;
+
   ~ComputerscareGlolyPitchWidget() {
     if (backdropWidget) {
       if (APP->scene && APP->scene->rack)
         APP->scene->rack->removeChild(backdropWidget);
       delete backdropWidget;
     }
+    delete browserModule;
   }
 
   ComputerscareGlolyPitchWidget(ComputerscareGlolyPitch* module) {
@@ -679,6 +705,56 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
           createParam<SmallKnob>(Vec(100.f, y - 9.f), module, attenIds[i]));
       addParam(
           createParam<SmoothKnob>(Vec(122.f, y - 13.f), module, knobIds[i]));
+    }
+  }
+
+  void drawBrowserPreview(const DrawArgs& args) {
+    // Create the fake module once with random params + a random doc image
+    if (!browserModule) {
+      browserModule = new ComputerscareGlolyPitch();
+      browserModule->loadedImagePath = pickRandomDocImage();
+
+      // kali always on with mode >= 2
+      browserModule->rowEnabled[4] = true;
+      browserModule->rowValue[4]   = 2.f + (int)(random::uniform() * 3);
+
+      // rotation always on with a meaningful angle
+      browserModule->rowEnabled[3] = true;
+      browserModule->rowValue[3]   = 0.1f + random::uniform() * 0.9f;
+
+      // hue or warp always on (pick one or both)
+      browserModule->rowEnabled[7] = random::uniform() > 0.3f;  // hue
+      browserModule->rowValue[7]   = random::uniform();
+      browserModule->rowEnabled[9] = random::uniform() > 0.3f;  // warp/curves
+      browserModule->rowValue[9]   = random::uniform();
+
+      // other rows: random on/off and values
+      for (int i = 0; i < 10; i++) {
+        if (i == 3 || i == 4 || i == 7 || i == 9) continue;
+        browserModule->rowEnabled[i] = random::uniform() > 0.5f;
+        browserModule->rowValue[i]   = random::uniform();
+      }
+
+      browserModule->continuousMode = false;
+      browserModule->maintainAspect = true;
+      browserModule->tileEmptySpace = true;
+    }
+
+    // Swap in the fake module, run the normal drawLayer pipeline, swap back
+    module = browserModule;
+    drawLayer(args, 1);
+    module = nullptr;
+  }
+
+  void draw(const DrawArgs& args) override {
+    if (!module) {
+      // Narrow bgPanel to controls only so the display area stays transparent,
+      // letting the kaleidoscope show through when we redraw the panel on top.
+      bgPanel->box.size.x = CONTROLS_WIDTH;
+      drawBrowserPreview(args);   // kaleidoscope goes down first
+      ModuleWidget::draw(args);   // controls + narrow bg drawn on top
+    } else {
+      ModuleWidget::draw(args);
     }
   }
 
@@ -948,6 +1024,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         nvgRestore(args.vg);
       }
     }
+
     ModuleWidget::drawLayer(args, layer);
   }
 
