@@ -1,12 +1,14 @@
 #pragma once
-#include "rack.hpp"
 #include <nanovg_gl.h>
+
+#include "rack.hpp"
 using namespace rack;
 
-// ── ScreenCapture ─────────────────────────────────────────────────────────────
-// Grabs the actual OpenGL framebuffer every frame and stores it as an NVG
-// image. Calling drawInPanel() re-renders that snapshot into an arbitrary
-// rectangle — creating a one-frame-delayed feedback loop.
+// ── ScreenCapture
+// ───────────────────────────────────────────────────────────── Grabs the
+// actual OpenGL framebuffer every frame and stores it as an NVG image. Calling
+// drawInPanel() re-renders that snapshot into an arbitrary rectangle — creating
+// a one-frame-delayed feedback loop.
 //
 // The capture happens mid-frame (inside drawLayer), so it picks up all module
 // panels that have already been drawn in this pass, plus everything we drew
@@ -20,9 +22,9 @@ using namespace rack;
 
 struct ScreenCapture {
   GLuint texId = 0;
-  int    nvgImg = -1;
-  int    lastFbW = 0;
-  int    lastFbH = 0;
+  int nvgImg = -1;
+  int lastFbW = 0;
+  int lastFbH = 0;
 
   // Call once per drawLayer pass before drawing the panel image.
   // vg must be the active NVGcontext.
@@ -53,14 +55,14 @@ struct ScreenCapture {
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
       glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
       // Allocate storage (no pixel data yet)
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, fbW, fbH, 0,
-                   GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, fbW, fbH, 0, GL_RGBA,
+                   GL_UNSIGNED_BYTE, nullptr);
       glBindTexture(GL_TEXTURE_2D, prevTex);
 
       // Wrap the GL texture in an NVG image handle.
       // NVG_IMAGE_FLIPY flips Y on render, correcting GL's bottom-left origin.
-      nvgImg = nvglCreateImageFromHandleGL2(vg, texId, fbW, fbH,
-                                            NVG_IMAGE_FLIPY);
+      nvgImg =
+          nvglCreateImageFromHandleGL2(vg, texId, fbW, fbH, NVG_IMAGE_FLIPY);
       lastFbW = fbW;
       lastFbH = fbH;
     }
@@ -75,8 +77,7 @@ struct ScreenCapture {
 
   // Draw the captured frame into `rect` in the current NVG coordinate space.
   // Call after capture().  alpha 0-1.
-  void drawInPanel(NVGcontext* vg, math::Vec pos, math::Vec size,
-                   float alpha) {
+  void drawInPanel(NVGcontext* vg, math::Vec pos, math::Vec size, float alpha) {
     if (nvgImg < 0 || alpha <= 0.f) return;
     NVGpaint p =
         nvgImagePattern(vg, pos.x, pos.y, size.x, size.y, 0.f, nvgImg, alpha);

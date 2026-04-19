@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
-// Mirror effect: reflection across an axis at `axisDeg` degrees from horizontal.
+// Mirror effect: reflection across an axis at `axisDeg` degrees from
+// horizontal.
 //   axisDeg = 0   → horizontal flip (left ↔ right)
 //   axisDeg = 90  → vertical flip   (top ↔ bottom)
 //   axisDeg = 45  → diagonal flip
