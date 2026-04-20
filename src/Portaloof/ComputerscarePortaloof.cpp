@@ -533,6 +533,7 @@ struct PortaloofBackdropWidget : widget::Widget {
 // ─── Widget ──────────────────────────────────────────────────────────────────
 
 static const float CONTROLS_WIDTH = 11 * RACK_GRID_WIDTH;  // 165 px / 11 HP
+static const float DISPLAY_X = CONTROLS_WIDTH - RACK_GRID_WIDTH;  // 10 HP
 
 struct ScaledSvgWidget : widget::Widget {
   std::shared_ptr<window::Svg> svg;
@@ -607,7 +608,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     box.size = Vec(initialWidth, RACK_GRID_HEIGHT);
 
     bgPanel = new BGPanel(nvgRGB(0x14, 0x14, 0x14));
-    bgPanel->box.size = box.size;
+    bgPanel->box.pos = Vec(DISPLAY_X, 0);
+    bgPanel->box.size = Vec(box.size.x - DISPLAY_X, box.size.y);
     addChild(bgPanel);
 
     panelSvg = APP->window->loadSvg(
@@ -813,7 +815,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     if (!module) {
       // Narrow bgPanel to controls only so the display area stays transparent,
       // letting the kaleidoscope show through when we redraw the panel on top.
-      bgPanel->box.size.x = CONTROLS_WIDTH;
+      bgPanel->box.size.x = 0;
       drawBrowserPreview(args);  // kaleidoscope goes down first
       ModuleWidget::draw(args);  // controls + narrow bg drawn on top
     } else {
@@ -890,7 +892,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
         float warpV = curvesOn ? rv[9] : 0.f;
 
-        const float displayX = CONTROLS_WIDTH + RACK_GRID_WIDTH;
+        const float displayX = DISPLAY_X;
         float mirrorW = box.size.x - displayX;
         float mirrorH = box.size.y;
 
@@ -1097,6 +1099,21 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         }
 
         nvgRestore(args.vg);
+
+        // Redraw SVG panel clipped to the overlap strip (DISPLAY_X–CONTROLS_WIDTH)
+        // so the display peeks under the panel without covering the controls.
+        if (panelSvg && panelSvg->handle) {
+          float svgW = panelSvg->handle->width;
+          float svgH = panelSvg->handle->height;
+          if (svgW > 0.f && svgH > 0.f) {
+            nvgSave(args.vg);
+            nvgScissor(args.vg, DISPLAY_X - 1.f, 0.f,
+                       CONTROLS_WIDTH - DISPLAY_X + 1.f, RACK_GRID_HEIGHT);
+            nvgScale(args.vg, CONTROLS_WIDTH / svgW, RACK_GRID_HEIGHT / svgH);
+            window::svgDraw(args.vg, panelSvg->handle);
+            nvgRestore(args.vg);
+          }
+        }
       }
     }
 
@@ -1210,18 +1227,18 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       if (!m->loadedJSON) {
         box.size.x = m->width;
         if (!windowEmpty)
-          bgPanel->box.size.x = m->width;
+          bgPanel->box.size.x = m->width - DISPLAY_X;
         else
-          bgPanel->box.size.x = CONTROLS_WIDTH;
+          bgPanel->box.size.x = 0;
         rightHandle->box.pos.x = m->width - rightHandle->box.size.x;
         m->loadedJSON = true;
       } else if (box.size.x != m->width) {
         m->width = box.size.x;
-        if (!windowEmpty) bgPanel->box.size.x = box.size.x;
+        if (!windowEmpty) bgPanel->box.size.x = box.size.x - DISPLAY_X;
         rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
       } else {
         // Keep panel width in sync when emptyWindowInBgMode toggles
-        float desiredPanelW = windowEmpty ? CONTROLS_WIDTH : box.size.x;
+        float desiredPanelW = windowEmpty ? 0 : (box.size.x - DISPLAY_X);
         if (bgPanel->box.size.x != desiredPanelW)
           bgPanel->box.size.x = desiredPanelW;
       }
