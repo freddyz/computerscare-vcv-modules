@@ -1,4 +1,5 @@
 # GlolyPitch
+//Portaloof Port Aloof  Potal... Oof
 
 A real-time screen feedback and glitch effect module. Each frame, GlolyPitch captures the current VCV Rack window as a texture, applies a chain of geometric and color transforms, and draws the result back into its display area — creating a recursive feedback loop.
 
