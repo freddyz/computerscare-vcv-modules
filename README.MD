@@ -26,4 +26,4 @@
 - [Foly Pace](./doc/foly-pace.md): Draws a photorealistic face. Use polyphonic input for maximum weirdness
 - [Stoly Fick Pigure](./doc/stoly-fick-pigure.md): Dancing stick figure. Use polyphonic input for the sickest moves
 - [Custom Blank](./doc/custom-blank.md): Resizable blank module. Load your own image file (PNG, JPEG, BMP, or Animated GIF)
-- [GlolyPitch](./docs/GlolyPitch.md): Real-time screen feedback and glitch effect module. Captures the VCV Rack window each frame and applies a recursive chain of geometric, mirror, and color transforms
+- [Portaloof](./docs/Portaloof.md): Real-time screen feedback and glitch effect module. Captures the VCV Rack window each frame and applies a recursive chain of geometric, mirror, and color transforms

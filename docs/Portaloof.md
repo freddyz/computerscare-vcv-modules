@@ -1,8 +1,10 @@
-# GlolyPitch
+# Portaloof
 
-A real-time screen feedback and glitch effect module. Each frame, GlolyPitch captures the current VCV Rack window as a texture, applies a chain of geometric and color transforms, and draws the result back into its display area — creating a recursive feedback loop.
+A real-time screen feedback and glitch effect module. Each frame, Portaloof captures the current VCV Rack window as a texture, applies a chain of geometric and color transforms, and draws the result back into its display area — creating a recursive feedback loop.
 
 The module is resizable (drag the left or right edge).
+
+You can also **drop an image file** (PNG/JPG/JPEG/BMP) onto the module to use it as the source instead of the live screen capture. An image can also be loaded or cleared from the right-click menu.
 
 ---
 
@@ -13,10 +15,10 @@ The module is resizable (drag the left or right edge).
 - **Button (toggle):** On = continuous (effect updates every frame). Off = triggered (effect only updates on a trigger event).
 - **Gate jack:** High voltage (>0.5 V) forces continuous mode; low forces triggered mode. Overrides the button when connected.
 
-### TRIG — Trigger
+### TRIG — Trigger / Image Gate
 
-- **Button (momentary):** Fires one capture frame in triggered mode.
-- **Trigger jack:** Rising edge fires one capture frame in triggered mode.
+- **Triggered mode:** Button press or rising edge on the trigger jack fires one capture frame.
+- **Continuous mode (with a loaded image):** A high button or input (>0.5 V) holds the loaded image as the source while held. Releasing returns to live screen capture.
 
 ---
 
@@ -32,24 +34,28 @@ The CV jack modulates the knob value: `final = knob + (attenuverter × CV × sca
 ### SCALE — Uniform Scale
 
 Zooms the image in both X and Y equally.  
-Range: **0.1 – 4.0** (1.0 = no zoom)
+Range: **0.1 – 4.0** (default 1.0 = no zoom)
 
 ### SCL X — Scale X
 
-Independent horizontal zoom.  
-Range: **0.1 – 4.0** (1.0 = no zoom)
+Independent horizontal zoom with exponential mapping and axis-mirror support.  
+Knob range: **-5.0 – +5.0** (default 1.0 = no zoom)
+
+- `|knob| ≤ 1` → scale from 0.1 to 1.0 (quadratic, fine control near center)
+- `|knob| > 1` → scale from 1.0 to 5.0 (exponential, coarser at extremes)
+- Negative values mirror the X axis.
 
 ### SCL Y — Scale Y
 
-Independent vertical zoom.  
-Range: **0.1 – 4.0** (1.0 = no zoom)
+Independent vertical zoom. Same mapping as SCL X; negatives mirror the Y axis.  
+Knob range: **-5.0 – +5.0** (default 1.0 = no zoom)
 
 > SCALE, SCL X, and SCL Y multiply together. To zoom only one axis, disable the others.
 
 ### ROT — Rotation
 
 Rotates the image around the center of the display area.  
-Range: **-180° – +180°** (0 = no rotation)
+Range: **-180° – +180°** (default 0 = no rotation)
 
 ### KALI — Kaleidoscope
 
@@ -67,12 +73,12 @@ Range: **0 – 12** (integer steps; 0 = off)
 ### TRN X — Translate X
 
 Pans the image horizontally. Value is a fraction of the image width.  
-Range: **-1.0 – +1.0** (0 = centered)
+Range: **-1.0 – +1.0** (default 0 = centered)
 
 ### TRN Y — Translate Y
 
 Pans the image vertically. Value is a fraction of the image height.  
-Range: **-1.0 – +1.0** (0 = centered)
+Range: **-1.0 – +1.0** (default 0 = centered)
 
 ---
 
@@ -81,12 +87,7 @@ Range: **-1.0 – +1.0** (0 = centered)
 ### HUE — Hue Shift
 
 Rotates all colors around the hue wheel.  
-Range: **-360° – +360°** (0 = no shift)
-
-### FOLD — Chromatic Fold / Divergence
-
-Splits the image into RGB channels and displaces them, creating chromatic aberration and color band separation. Higher values increase divergence.  
-Knob range: **0.0 – 1.0** → maps to fold frequency **1.0 – 4.0** (1.0 = no effect)
+Range: **-180° – +180°** (default 0 = no shift)
 
 ### WARP — Solarize / Posterize
 
@@ -94,19 +95,27 @@ Applies a nonlinear tone curve to the image.
 
 - Positive values: posterize + contrast crush
 - Negative values: solarize (partial inversion)  
-  Range: **-1.0 – +1.0** (0 = no effect)
+  Range: **-1.0 – +1.0** (default 0 = no effect)
+
+> **FOLD (chromatic divergence)** is no longer on the panel — it lives in the right-click menu as a wide **Fold Frequency** slider. Knob range **0.0 – 1.0** maps internally to fold frequency **1.0 – 4.0** (1.0 = no effect). The FOLD row's toggle, gate, and CV inputs still exist and still gate/modulate the effect.
 
 ---
 
 ## Context Menu
 
+### Load image… / Clear image
+
+Load a still image (PNG/JPG/JPEG/BMP) to use as the source in place of the live screen capture. `Clear image` returns to live capture. You can also drag-and-drop an image file onto the module.
+
+### Fold Frequency _(slider)_
+
+The FOLD knob, exposed here as a wide slider. Controls chromatic-channel divergence (RGB split). Knob **0.0 – 1.0** → fold frequency **1.0 – 4.0** (1.0 = no effect).
+
 ### Render as rack background _(checkbox)_
 
-When enabled, the effect renders as a full-screen backdrop behind all modules in the rack instead of (or in addition to) the module's own display area. The backdrop uses its own independent screen capture and trigger state.
+When enabled, the effect renders as a full-screen backdrop behind all modules in the rack in addition to the module's own display area. The backdrop uses its own independent screen capture and trigger state.
 
 On **Initialize**, this is reset to off.
-
----
 
 ### Transform post _(checkbox)_
 

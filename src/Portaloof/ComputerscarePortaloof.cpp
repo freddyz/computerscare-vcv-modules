@@ -11,13 +11,13 @@
 #include "ScreenCaptureEffect.hpp"
 
 // Momentary version of SmallIsoButton for the trigger
-struct GlolyPitchTrigButton : SmallIsoButton {
-  GlolyPitchTrigButton() { momentary = true; }
+struct PortaloofTrigButton : SmallIsoButton {
+  PortaloofTrigButton() { momentary = true; }
 };
 
 // ─── Module ──────────────────────────────────────────────────────────────────
 
-struct ComputerscareGlolyPitch : Module {
+struct ComputerscarePortaloof : Module {
   enum ParamId {
     CONTINUOUS_TOGGLE,  // on=continuous (every frame), off=triggered
     TRIGGER_BUTTON,     // momentary: fires one draw frame
@@ -106,7 +106,7 @@ struct ComputerscareGlolyPitch : Module {
   dsp::SchmittTrigger trigInputDetector;
   dsp::SchmittTrigger trigButtonDetector;
 
-  ComputerscareGlolyPitch() {
+  ComputerscarePortaloof() {
     config(NUM_PARAMS, NUM_INPUTS, 0, 0);
     configSwitch(CONTINUOUS_TOGGLE, 0.f, 1.f, 1.f, "Continuous/Triggered",
                  {"Triggered", "Continuous"});
@@ -319,8 +319,8 @@ struct ComputerscareGlolyPitch : Module {
 // all modules.  Uses the same rendering pipeline as the main widget but maps
 // the effect across the full visible viewport.
 
-struct GlolyPitchBackdropWidget : widget::Widget {
-  ComputerscareGlolyPitch* module = nullptr;
+struct PortaloofBackdropWidget : widget::Widget {
+  ComputerscarePortaloof* module = nullptr;
   ScreenCapture screenCap;
   ColorTransformFBO colorFBO;
   bool cachedRowEnabled[10] = {};
@@ -333,7 +333,7 @@ struct GlolyPitchBackdropWidget : widget::Widget {
   GLuint loadedTexId = 0;
   bool pendingInject = false;
 
-  GlolyPitchBackdropWidget() {
+  PortaloofBackdropWidget() {
     box.pos = math::Vec(0.f, 0.f);
     box.size = math::Vec(INFINITY, INFINITY);
   }
@@ -413,7 +413,7 @@ struct GlolyPitchBackdropWidget : widget::Widget {
     float warpV = curvesOn ? rv[9] : 0.f;
 
     float alpha =
-        module->params[ComputerscareGlolyPitch::BACKDROP_ALPHA].getValue();
+        module->params[ComputerscarePortaloof::BACKDROP_ALPHA].getValue();
     float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
     float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
     float imgW = vpW;
@@ -555,13 +555,13 @@ static std::string pickRandomDocImage() {
   return paths[random::u32() % paths.size()];
 }
 
-struct ComputerscareGlolyPitchWidget : ModuleWidget {
+struct ComputerscarePortaloofWidget : ModuleWidget {
   BGPanel* bgPanel;
   ComputerscareResizeHandle* rightHandle;
   SvgWidget* topLogo;
   ScreenCapture screenCap;
   ColorTransformFBO colorFBO;
-  GlolyPitchBackdropWidget* backdropWidget = nullptr;
+  PortaloofBackdropWidget* backdropWidget = nullptr;
 
   // Cache for triggered mode — holds the last rendered frame's params
   bool cachedRowEnabled[10] = {};
@@ -575,9 +575,9 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   bool pendingInject = false;
 
   // Browser preview fake module
-  ComputerscareGlolyPitch* browserModule = nullptr;
+  ComputerscarePortaloof* browserModule = nullptr;
 
-  ~ComputerscareGlolyPitchWidget() {
+  ~ComputerscarePortaloofWidget() {
     if (backdropWidget) {
       if (APP->scene && APP->scene->rack)
         APP->scene->rack->removeChild(backdropWidget);
@@ -586,7 +586,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     delete browserModule;
   }
 
-  ComputerscareGlolyPitchWidget(ComputerscareGlolyPitch* module) {
+  ComputerscarePortaloofWidget(ComputerscarePortaloof* module) {
     setModule(module);
     float initialWidth = module ? module->width : 20 * RACK_GRID_WIDTH;
     box.size = Vec(initialWidth, RACK_GRID_HEIGHT);
@@ -639,17 +639,17 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     addHdrLabel(CONT_JACK_X + HDR_BTN_DX, "CONT");
     addParam(createParam<SmallIsoButton>(
         Vec(CONT_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY), module,
-        ComputerscareGlolyPitch::CONTINUOUS_TOGGLE));
+        ComputerscarePortaloof::CONTINUOUS_TOGGLE));
     addInput(
         createInput<InPort>(Vec(CONT_JACK_X, HDR_JACK_Y), module,
-                            ComputerscareGlolyPitch::CONTINUOUS_GATE_INPUT));
+                            ComputerscarePortaloof::CONTINUOUS_GATE_INPUT));
 
     addHdrLabel(TRIG_JACK_X + HDR_BTN_DX, "TRIG");
-    addParam(createParam<GlolyPitchTrigButton>(
+    addParam(createParam<PortaloofTrigButton>(
         Vec(TRIG_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY), module,
-        ComputerscareGlolyPitch::TRIGGER_BUTTON));
+        ComputerscarePortaloof::TRIGGER_BUTTON));
     addInput(createInput<InPort>(Vec(TRIG_JACK_X, HDR_JACK_Y), module,
-                                 ComputerscareGlolyPitch::TRIGGER_INPUT));
+                                 ComputerscarePortaloof::TRIGGER_INPUT));
 
     // ── 10 effect rows (7 geometry + 3 color) ────────────────────────────────
     // Shifted down 16px from original to accommodate header controls.
@@ -659,64 +659,64 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     const char* rowLabels[N] = {"SCALE", "SCL X", "SCL Y", "ROT",  "KALI",
                                 "TRN X", "TRN Y", "HUE",   "FOLD", "WARP"};
     int toggleIds[N] = {
-        ComputerscareGlolyPitch::SCALE_TOGGLE,
-        ComputerscareGlolyPitch::SCALE_X_TOGGLE,
-        ComputerscareGlolyPitch::SCALE_Y_TOGGLE,
-        ComputerscareGlolyPitch::ROT_TOGGLE,
-        ComputerscareGlolyPitch::KALEIDO_TOGGLE,
-        ComputerscareGlolyPitch::TRANS_X_TOGGLE,
-        ComputerscareGlolyPitch::TRANS_Y_TOGGLE,
-        ComputerscareGlolyPitch::HUE_TOGGLE,
-        ComputerscareGlolyPitch::INVERT_TOGGLE,
-        ComputerscareGlolyPitch::CURVES_TOGGLE,
+        ComputerscarePortaloof::SCALE_TOGGLE,
+        ComputerscarePortaloof::SCALE_X_TOGGLE,
+        ComputerscarePortaloof::SCALE_Y_TOGGLE,
+        ComputerscarePortaloof::ROT_TOGGLE,
+        ComputerscarePortaloof::KALEIDO_TOGGLE,
+        ComputerscarePortaloof::TRANS_X_TOGGLE,
+        ComputerscarePortaloof::TRANS_Y_TOGGLE,
+        ComputerscarePortaloof::HUE_TOGGLE,
+        ComputerscarePortaloof::INVERT_TOGGLE,
+        ComputerscarePortaloof::CURVES_TOGGLE,
     };
     int knobIds[N] = {
-        ComputerscareGlolyPitch::SCALE_KNOB,
-        ComputerscareGlolyPitch::SCALE_X_KNOB,
-        ComputerscareGlolyPitch::SCALE_Y_KNOB,
-        ComputerscareGlolyPitch::ROT_KNOB,
-        ComputerscareGlolyPitch::KALEIDO_KNOB,
-        ComputerscareGlolyPitch::TRANS_X_KNOB,
-        ComputerscareGlolyPitch::TRANS_Y_KNOB,
-        ComputerscareGlolyPitch::HUE_KNOB,
-        ComputerscareGlolyPitch::INVERT_KNOB,
-        ComputerscareGlolyPitch::CURVES_KNOB,
+        ComputerscarePortaloof::SCALE_KNOB,
+        ComputerscarePortaloof::SCALE_X_KNOB,
+        ComputerscarePortaloof::SCALE_Y_KNOB,
+        ComputerscarePortaloof::ROT_KNOB,
+        ComputerscarePortaloof::KALEIDO_KNOB,
+        ComputerscarePortaloof::TRANS_X_KNOB,
+        ComputerscarePortaloof::TRANS_Y_KNOB,
+        ComputerscarePortaloof::HUE_KNOB,
+        ComputerscarePortaloof::INVERT_KNOB,
+        ComputerscarePortaloof::CURVES_KNOB,
     };
     int attenIds[N] = {
-        ComputerscareGlolyPitch::SCALE_ATTEN,
-        ComputerscareGlolyPitch::SCALE_X_ATTEN,
-        ComputerscareGlolyPitch::SCALE_Y_ATTEN,
-        ComputerscareGlolyPitch::ROT_ATTEN,
-        ComputerscareGlolyPitch::KALEIDO_ATTEN,
-        ComputerscareGlolyPitch::TRANS_X_ATTEN,
-        ComputerscareGlolyPitch::TRANS_Y_ATTEN,
-        ComputerscareGlolyPitch::HUE_ATTEN,
-        ComputerscareGlolyPitch::INVERT_ATTEN,
-        ComputerscareGlolyPitch::CURVES_ATTEN,
+        ComputerscarePortaloof::SCALE_ATTEN,
+        ComputerscarePortaloof::SCALE_X_ATTEN,
+        ComputerscarePortaloof::SCALE_Y_ATTEN,
+        ComputerscarePortaloof::ROT_ATTEN,
+        ComputerscarePortaloof::KALEIDO_ATTEN,
+        ComputerscarePortaloof::TRANS_X_ATTEN,
+        ComputerscarePortaloof::TRANS_Y_ATTEN,
+        ComputerscarePortaloof::HUE_ATTEN,
+        ComputerscarePortaloof::INVERT_ATTEN,
+        ComputerscarePortaloof::CURVES_ATTEN,
     };
     int gateInputIds[N] = {
-        ComputerscareGlolyPitch::SCALE_GATE_INPUT,
-        ComputerscareGlolyPitch::SCALE_X_GATE_INPUT,
-        ComputerscareGlolyPitch::SCALE_Y_GATE_INPUT,
-        ComputerscareGlolyPitch::ROT_GATE_INPUT,
-        ComputerscareGlolyPitch::KALEIDO_GATE_INPUT,
-        ComputerscareGlolyPitch::TRANS_X_GATE_INPUT,
-        ComputerscareGlolyPitch::TRANS_Y_GATE_INPUT,
-        ComputerscareGlolyPitch::HUE_GATE_INPUT,
-        ComputerscareGlolyPitch::INVERT_GATE_INPUT,
-        ComputerscareGlolyPitch::CURVES_GATE_INPUT,
+        ComputerscarePortaloof::SCALE_GATE_INPUT,
+        ComputerscarePortaloof::SCALE_X_GATE_INPUT,
+        ComputerscarePortaloof::SCALE_Y_GATE_INPUT,
+        ComputerscarePortaloof::ROT_GATE_INPUT,
+        ComputerscarePortaloof::KALEIDO_GATE_INPUT,
+        ComputerscarePortaloof::TRANS_X_GATE_INPUT,
+        ComputerscarePortaloof::TRANS_Y_GATE_INPUT,
+        ComputerscarePortaloof::HUE_GATE_INPUT,
+        ComputerscarePortaloof::INVERT_GATE_INPUT,
+        ComputerscarePortaloof::CURVES_GATE_INPUT,
     };
     int cvInputIds[N] = {
-        ComputerscareGlolyPitch::SCALE_CV_INPUT,
-        ComputerscareGlolyPitch::SCALE_X_CV_INPUT,
-        ComputerscareGlolyPitch::SCALE_Y_CV_INPUT,
-        ComputerscareGlolyPitch::ROT_CV_INPUT,
-        ComputerscareGlolyPitch::KALEIDO_CV_INPUT,
-        ComputerscareGlolyPitch::TRANS_X_CV_INPUT,
-        ComputerscareGlolyPitch::TRANS_Y_CV_INPUT,
-        ComputerscareGlolyPitch::HUE_CV_INPUT,
-        ComputerscareGlolyPitch::INVERT_CV_INPUT,
-        ComputerscareGlolyPitch::CURVES_CV_INPUT,
+        ComputerscarePortaloof::SCALE_CV_INPUT,
+        ComputerscarePortaloof::SCALE_X_CV_INPUT,
+        ComputerscarePortaloof::SCALE_Y_CV_INPUT,
+        ComputerscarePortaloof::ROT_CV_INPUT,
+        ComputerscarePortaloof::KALEIDO_CV_INPUT,
+        ComputerscarePortaloof::TRANS_X_CV_INPUT,
+        ComputerscarePortaloof::TRANS_Y_CV_INPUT,
+        ComputerscarePortaloof::HUE_CV_INPUT,
+        ComputerscarePortaloof::INVERT_CV_INPUT,
+        ComputerscarePortaloof::CURVES_CV_INPUT,
     };
 
     for (int i = 0; i < N; i++) {
@@ -749,7 +749,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   void drawBrowserPreview(const DrawArgs& args) {
     // Create the fake module once with random params + a random doc image
     if (!browserModule) {
-      browserModule = new ComputerscareGlolyPitch();
+      browserModule = new ComputerscarePortaloof();
       browserModule->loadedImagePath = pickRandomDocImage();
 
       // kali always on with mode >= 2
@@ -797,7 +797,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   }
 
   void drawLayer(const DrawArgs& args, int layer) override {
-    ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
+    ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
     bool bgActive = backdropWidget != nullptr;
     bool renderInWindow = !bgActive || (m && !m->emptyWindowInBgMode);
     if (layer == 1 && module && APP->scene && APP->scene->rack &&
@@ -1078,7 +1078,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   }
 
   void appendContextMenu(Menu* menu) override {
-    ComputerscareGlolyPitch* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
+    ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
     if (!m) return;
 
     menu->addChild(new MenuSeparator());
@@ -1112,7 +1112,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     };
     menu->addChild(createMenuLabel("Fold Frequency"));
     menu->addChild(new WideParamSlider(
-        m->paramQuantities[ComputerscareGlolyPitch::INVERT_KNOB]));
+        m->paramQuantities[ComputerscarePortaloof::INVERT_KNOB]));
 
     menu->addChild(new MenuSeparator());
     menu->addChild(createBoolPtrMenuItem("Render as rack background", "",
@@ -1134,7 +1134,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         }
       };
       menu->addChild(new WideSlider(
-          m->paramQuantities[ComputerscareGlolyPitch::BACKDROP_ALPHA]));
+          m->paramQuantities[ComputerscarePortaloof::BACKDROP_ALPHA]));
     }));
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {
       menu->addChild(
@@ -1150,7 +1150,7 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     std::string ext = system::getExtension(path);
     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") {
-      auto* m = dynamic_cast<ComputerscareGlolyPitch*>(module);
+      auto* m = dynamic_cast<ComputerscarePortaloof*>(module);
       if (m) m->loadedImagePath = path;
       e.consume(this);
     }
@@ -1158,12 +1158,12 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
 
   void step() override {
     if (module) {
-      ComputerscareGlolyPitch* m =
-          dynamic_cast<ComputerscareGlolyPitch*>(module);
+      ComputerscarePortaloof* m =
+          dynamic_cast<ComputerscarePortaloof*>(module);
 
       // Sync backdrop widget with module flag (handles reset / patch load)
       if (m->backdropEnabled && !backdropWidget) {
-        auto* w = new GlolyPitchBackdropWidget();
+        auto* w = new PortaloofBackdropWidget();
         w->module = m;
         backdropWidget = w;
         if (APP->scene && APP->scene->rack) {
@@ -1205,6 +1205,6 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
   }
 };
 
-Model* modelComputerscareGlolyPitch =
-    createModel<ComputerscareGlolyPitch, ComputerscareGlolyPitchWidget>(
-        "computerscare-gloly-pitch");
+Model* modelComputerscarePortaloof =
+    createModel<ComputerscarePortaloof, ComputerscarePortaloofWidget>(
+        "computerscare-portaloof");
