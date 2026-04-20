@@ -40,7 +40,7 @@ SOURCES += $(wildcard src/GlolyPitch/*.cpp)
 
 # Add files to the ZIP package when running `make dist`
 # The compiled plugin is automatically added.
-DISTRIBUTABLES += $(wildcard LICENSE*) res presets
+DISTRIBUTABLES += $(wildcard LICENSE*) res presets doc/computerscare-1.4-all-modules.jpg doc/all-computerscare-modules-v1.jpg doc/all-computerscare-modules.jpg doc/computerscare-poly-utilities.jpg
 
 # Include the VCV Rack plugin Makefile framework
 include $(RACK_DIR)/plugin.mk
