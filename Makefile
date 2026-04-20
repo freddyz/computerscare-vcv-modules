@@ -11,7 +11,8 @@ CXXFLAGS +=
 LDFLAGS +=
 
 # Add .cpp and .c files to the build
-SOURCES += $(wildcard src/*.cpp)
+SOURCES += $(filter-out src/test.cpp, $(wildcard src/*.cpp))
+SOURCES += $(wildcard src/GlolyPitch/*.cpp)
 # SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
 # SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
 
@@ -43,3 +44,9 @@ DISTRIBUTABLES += $(wildcard LICENSE*) res presets
 
 # Include the VCV Rack plugin Makefile framework
 include $(RACK_DIR)/plugin.mk
+
+# GlolyPitch uses raw OpenGL calls (glBindTexture, glCopyTexSubImage2D, etc.)
+# ARCH_WIN is defined by plugin.mk, so this must come after the include.
+ifdef ARCH_WIN
+LDFLAGS += -lopengl32
+endif

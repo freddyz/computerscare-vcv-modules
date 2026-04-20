@@ -6,3 +6,5 @@ plugin.*
 a.out
 *.swp
 *.swo
+.claude/
+CLAUDE.local.md
