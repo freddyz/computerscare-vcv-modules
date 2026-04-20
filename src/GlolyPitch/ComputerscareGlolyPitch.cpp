@@ -116,10 +116,10 @@ struct ComputerscareGlolyPitch : Module {
     configParam(SCALE_KNOB, 0.1f, 4.f, 1.f, "Scale");
     configParam(SCALE_ATTEN, -1.f, 1.f, 0.f, "Scale CV Atten");
     configSwitch(SCALE_X_TOGGLE, 0.f, 1.f, 1.f, "Scale X", {"Off", "On"});
-    configParam(SCALE_X_KNOB, 0.1f, 4.f, 1.f, "Scale X");
+    configParam(SCALE_X_KNOB, -5.f, 5.f, 1.f, "Scale X");
     configParam(SCALE_X_ATTEN, -1.f, 1.f, 0.f, "Scale X CV Atten");
     configSwitch(SCALE_Y_TOGGLE, 0.f, 1.f, 1.f, "Scale Y", {"Off", "On"});
-    configParam(SCALE_Y_KNOB, 0.1f, 4.f, 1.f, "Scale Y");
+    configParam(SCALE_Y_KNOB, -5.f, 5.f, 1.f, "Scale Y");
     configParam(SCALE_Y_ATTEN, -1.f, 1.f, 0.f, "Scale Y CV Atten");
     configSwitch(ROT_TOGGLE, 0.f, 1.f, 1.f, "Rotation", {"Off", "On"});
     configParam(ROT_KNOB, -180.f, 180.f, 0.f, "Rotation", "\u00b0");
@@ -154,7 +154,7 @@ struct ComputerscareGlolyPitch : Module {
     configParam(HUE_KNOB, -180.f, 180.f, 0.f, "Hue", "\u00b0");
     configParam(HUE_ATTEN, -1.f, 1.f, 0.f, "Hue CV Atten");
     configSwitch(INVERT_TOGGLE, 0.f, 1.f, 1.f, "Fold", {"Off", "On"});
-    configParam(INVERT_KNOB, 0.f, 1.f, 0.f, "Fold Frequency");
+    configParam(INVERT_KNOB, 0.f, 1.f, 0.2f, "Fold Frequency");
     configParam(INVERT_ATTEN, -1.f, 1.f, 0.f, "Fold CV Atten");
     configSwitch(CURVES_TOGGLE, 0.f, 1.f, 1.f, "Warp", {"Off", "On"});
     configParam(CURVES_KNOB, -1.f, 1.f, 0.f, "Warp");
@@ -201,11 +201,11 @@ struct ComputerscareGlolyPitch : Module {
         SCALE_CV_INPUT,   SCALE_X_CV_INPUT, SCALE_Y_CV_INPUT, ROT_CV_INPUT,
         KALEIDO_CV_INPUT, TRANS_X_CV_INPUT, TRANS_Y_CV_INPUT, HUE_CV_INPUT,
         INVERT_CV_INPUT,  CURVES_CV_INPUT};
-    static const float mins[10] = {0.1f, 0.1f, 0.1f,   -360.f, 0.f,
+    static const float mins[10] = {0.1f, -5.f, -5.f,   -360.f, 0.f,
                                    -1.f, -1.f, -360.f, 0.f,    -1.f};
-    static const float maxs[10] = {4.f, 4.f, 4.f,   360.f, 12.f,
+    static const float maxs[10] = {4.f, 5.f, 5.f,   360.f, 12.f,
                                    1.f, 1.f, 360.f, 1.f,   1.f};
-    static const float cvScale[10] = {0.3f, 0.3f, 0.3f, 36.f, 1.1f,
+    static const float cvScale[10] = {0.3f, 0.5f, 0.5f, 36.f, 1.1f,
                                       0.1f, 0.1f, 36.f, 0.1f, 0.1f};
 
     // Continuous/triggered mode: gate jack overrides button when connected
@@ -251,6 +251,24 @@ struct ComputerscareGlolyPitch : Module {
       float cv =
           inputs[cvIds[i]].isConnected() ? inputs[cvIds[i]].getVoltage() : 0.f;
       rowValue[i] = clamp(offset + atten * cv * cvScale[i], mins[i], maxs[i]);
+    }
+
+    // Exponential scale map for Scale X (row 1) and Scale Y (row 2).
+    // Maps knob [-5, 5] → [-5, -0.1] | [0.1, 5] with two segments:
+    //   [0, 1] → [0.1, 1.0] quadratic (fine control near center)
+    //   [1, 5] → [1.0, 5.0] exponential (coarser at extremes)
+    // Default knob=1 → scale=1.0 (identity). Negative values mirror the axis.
+    for (int si = 1; si <= 2; si++) {
+      float k = rowValue[si];
+      float sign = (k >= 0.f) ? 1.f : -1.f;
+      float a = fabsf(k);
+      float result;
+      if (a <= 1.f) {
+        result = 0.1f + 0.9f * (a * a);
+      } else {
+        result = powf(5.f, (a - 1.f) / 4.f);
+      }
+      rowValue[si] = sign * result;
     }
   }
 
@@ -419,18 +437,20 @@ struct GlolyPitchBackdropWidget : widget::Widget {
 
     if (kaliMode > 0) {
       if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
+      float absSx = std::max(fabsf(sx), 0.01f);
+      float absSy = std::max(fabsf(sy), 0.01f);
       float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
       float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
       float rHW = ((imgW + 2.f * txAbs) * cosA + (vpH + 2.f * tyAbs) * sinA) /
-                      (2.f * std::max(sx, 0.01f)) +
+                      (2.f * absSx) +
                   4.f;
       float rHH = ((imgW + 2.f * txAbs) * sinA + (vpH + 2.f * tyAbs) * cosA) /
-                      (2.f * std::max(sy, 0.01f)) +
+                      (2.f * absSy) +
                   4.f;
       float pcx = -(txOn ? txLocal : 0.f);
       float pcy = -(tyOn ? tyLocal : 0.f);
-      float dispHW = imgHW / std::max(sx, 0.01f);
-      float dispHH = hh / std::max(sy, 0.01f);
+      float dispHW = imgHW / absSx;
+      float dispHH = hh / absSy;
 
       if (tileOn) {
         int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
@@ -461,13 +481,15 @@ struct GlolyPitchBackdropWidget : widget::Widget {
     } else {
       if (rotOn) applyRotation(args.vg, rotV);
       if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
+      float absSx2 = std::max(fabsf(sx), 0.01f);
+      float absSy2 = std::max(fabsf(sy), 0.01f);
       float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
       float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
       float rHW = ((imgW + 2.f * txAbs) * cosA + (vpH + 2.f * tyAbs) * sinA) /
-                      (2.f * std::max(sx, 0.01f)) +
+                      (2.f * absSx2) +
                   4.f;
       float rHH = ((imgW + 2.f * txAbs) * sinA + (vpH + 2.f * tyAbs) * cosA) /
-                      (2.f * std::max(sy, 0.01f)) +
+                      (2.f * absSy2) +
                   4.f;
 
       if (tileOn) {
@@ -698,6 +720,8 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
     };
 
     for (int i = 0; i < N; i++) {
+      if (i == 8) continue;  // FOLD row moved to right-click menu
+
       float y = rowY[i];
 
       SmallLetterDisplay* lbl = new SmallLetterDisplay();
@@ -730,23 +754,23 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
 
       // kali always on with mode >= 2
       browserModule->rowEnabled[4] = true;
-      browserModule->rowValue[4]   = 2.f + (int)(random::uniform() * 3);
+      browserModule->rowValue[4] = 2.f + (int)(random::uniform() * 3);
 
       // rotation always on with a meaningful angle
       browserModule->rowEnabled[3] = true;
-      browserModule->rowValue[3]   = 0.1f + random::uniform() * 0.9f;
+      browserModule->rowValue[3] = 0.1f + random::uniform() * 0.9f;
 
       // hue or warp always on (pick one or both)
       browserModule->rowEnabled[7] = random::uniform() > 0.3f;  // hue
-      browserModule->rowValue[7]   = random::uniform();
+      browserModule->rowValue[7] = random::uniform();
       browserModule->rowEnabled[9] = random::uniform() > 0.3f;  // warp/curves
-      browserModule->rowValue[9]   = random::uniform();
+      browserModule->rowValue[9] = random::uniform();
 
       // other rows: random on/off and values
       for (int i = 0; i < 10; i++) {
         if (i == 3 || i == 4 || i == 7 || i == 9) continue;
         browserModule->rowEnabled[i] = random::uniform() > 0.5f;
-        browserModule->rowValue[i]   = random::uniform();
+        browserModule->rowValue[i] = random::uniform();
       }
 
       browserModule->continuousMode = false;
@@ -765,8 +789,8 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
       // Narrow bgPanel to controls only so the display area stays transparent,
       // letting the kaleidoscope show through when we redraw the panel on top.
       bgPanel->box.size.x = CONTROLS_WIDTH;
-      drawBrowserPreview(args);   // kaleidoscope goes down first
-      ModuleWidget::draw(args);   // controls + narrow bg drawn on top
+      drawBrowserPreview(args);  // kaleidoscope goes down first
+      ModuleWidget::draw(args);  // controls + narrow bg drawn on top
     } else {
       ModuleWidget::draw(args);
     }
@@ -801,7 +825,8 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
       bool gateActive = m->imageGateActive.load();
       bool doCapture = m->continuousMode || trigFired;
 
-      // Continuous mode + gate high + loaded image → keep using the image as source
+      // Continuous mode + gate high + loaded image → keep using the image as
+      // source
       if (gateActive && loadedNvgImg >= 0 && loadedTexId != 0)
         pendingInject = true;
 
@@ -912,21 +937,23 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
           if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
           float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
+          float absSx = std::max(fabsf(sx), 0.01f);
+          float absSy = std::max(fabsf(sy), 0.01f);
           float rHW = ((imgW + 2.f * txAbs) * cosA +
                        (box.size.y + 2.f * tyAbs) * sinA) /
-                          (2.f * std::max(sx, 0.01f)) +
+                          (2.f * absSx) +
                       4.f;
           float rHH = ((imgW + 2.f * txAbs) * sinA +
                        (box.size.y + 2.f * tyAbs) * cosA) /
-                          (2.f * std::max(sy, 0.01f)) +
+                          (2.f * absSy) +
                       4.f;
           // Display bounds in the current (post-txLocal) coordinate space.
           // kSector uses these to guarantee a non-degenerate scissor
           // intersection.
           float pcx = -(txOn ? txLocal : 0.f);
           float pcy = -(tyOn ? tyLocal : 0.f);
-          float dispHW = hw / std::max(sx, 0.01f);
-          float dispHH = hh / std::max(sy, 0.01f);
+          float dispHW = hw / absSx;
+          float dispHH = hh / absSy;
 
           if (tileOn) {
             int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
@@ -990,15 +1017,17 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
         } else {
           if (rotOn) applyRotation(args.vg, rotV);
           if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
+          float absSx3 = std::max(fabsf(sx), 0.01f);
+          float absSy3 = std::max(fabsf(sy), 0.01f);
           float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
           float rHW = ((imgW + 2.f * txAbs) * cosA +
                        (box.size.y + 2.f * tyAbs) * sinA) /
-                          (2.f * std::max(sx, 0.01f)) +
+                          (2.f * absSx3) +
                       4.f;
           float rHH = ((imgW + 2.f * txAbs) * sinA +
                        (box.size.y + 2.f * tyAbs) * cosA) /
-                          (2.f * std::max(sy, 0.01f)) +
+                          (2.f * absSy3) +
                       4.f;
 
           if (tileOn) {
@@ -1064,6 +1093,27 @@ struct ComputerscareGlolyPitchWidget : ModuleWidget {
       menu->addChild(createMenuItem("Clear image", "",
                                     [=]() { m->loadedImagePath.clear(); }));
     }
+    menu->addChild(new MenuSeparator());
+
+    // Fold Frequency slider (replaces panel FOLD controls)
+    struct WideParamSlider : MenuEntry {
+      WideParamSlider(ParamQuantity* q) {
+        box.size.x = 280.f;
+        box.size.y = 32.f;
+        auto* lbl = new widget::Widget;
+        lbl->box.size = Vec(0.f, 0.f);
+        // Use a label via the slider's quantity name
+        auto* s = new ui::Slider;
+        s->box.size.x = 260.f;
+        s->quantity = q;
+        s->box.pos = Vec(6.f, 0.f);
+        addChild(s);
+      }
+    };
+    menu->addChild(createMenuLabel("Fold Frequency"));
+    menu->addChild(new WideParamSlider(
+        m->paramQuantities[ComputerscareGlolyPitch::INVERT_KNOB]));
+
     menu->addChild(new MenuSeparator());
     menu->addChild(createBoolPtrMenuItem("Render as rack background", "",
                                          &m->backdropEnabled));
