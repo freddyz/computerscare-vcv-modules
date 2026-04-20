@@ -573,7 +573,6 @@ static std::string pickRandomDocImage() {
 struct ComputerscarePortaloofWidget : ModuleWidget {
   BGPanel* bgPanel;
   ComputerscareResizeHandle* rightHandle;
-  SvgWidget* topLogo;
   ScreenCapture screenCap;
   ColorTransformFBO colorFBO;
   PortaloofBackdropWidget* backdropWidget = nullptr;
@@ -633,18 +632,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     addChild(leftHandle);
     addChild(rightHandle);
 
-    // ── Logo — top left
-    // ───────────────────────────────────────────────────────
-    topLogo = new SvgWidget();
-    topLogo->setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-logo-normal.svg")));
-    topLogo->box.pos = Vec(10.f, 5.f);
-    addChild(topLogo);
-
     // ── Global mode controls
     // ────────────────────────────────────────────────── Both jacks share the
     // same Y (aligned). Button is positioned relative to its jack.
-    const float HDR_JACK_Y = 9.f;
+    const float HDR_JACK_Y = 44.f;
     const float HDR_BTN_DX = -24.f;  // button x = jack x + this
     const float HDR_BTN_DY = -2.f;   // button y = jack y + this
 
@@ -681,8 +672,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     // ── 10 effect rows (7 geometry + 3 color) ────────────────────────────────
     // Shifted down 16px from original to accommodate header controls.
     const int N = 10;
-    float rowY[N] = {55.f,  90.f,  125.f, 160.f, 195.f,
-                     230.f, 265.f, 300.f, 335.f, 364.f};
+    float rowY[N] = {90.f,  123.f, 156.f, 189.f, 222.f,
+                     255.f, 288.f, 321.f, 354.f, 354.f};
     const char* rowLabels[N] = {"SCALE", "SCL X", "SCL Y", "ROT",  "KALI",
                                 "TRN X", "TRN Y", "HUE",   "FOLD", "WARP"};
     int toggleIds[N] = {
@@ -1100,8 +1091,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
         nvgRestore(args.vg);
 
-        // Redraw SVG panel clipped to the overlap strip (DISPLAY_X–CONTROLS_WIDTH)
-        // so the display peeks under the panel without covering the controls.
+        // Redraw SVG panel clipped to the overlap strip
+        // (DISPLAY_X–CONTROLS_WIDTH) so the display peeks under the panel
+        // without covering the controls.
         if (panelSvg && panelSvg->handle) {
           float svgW = panelSvg->handle->width;
           float svgH = panelSvg->handle->height;
