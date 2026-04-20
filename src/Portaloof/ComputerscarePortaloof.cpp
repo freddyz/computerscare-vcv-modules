@@ -1101,6 +1101,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             nvgSave(args.vg);
             nvgScissor(args.vg, DISPLAY_X - 1.f, 0.f,
                        CONTROLS_WIDTH - DISPLAY_X + 1.f, RACK_GRID_HEIGHT);
+            nvgGlobalAlpha(args.vg, rack::settings::rackBrightness);
             nvgScale(args.vg, CONTROLS_WIDTH / svgW, RACK_GRID_HEIGHT / svgH);
             window::svgDraw(args.vg, panelSvg->handle);
             nvgRestore(args.vg);
