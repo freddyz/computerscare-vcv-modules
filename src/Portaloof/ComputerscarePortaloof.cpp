@@ -534,6 +534,20 @@ struct PortaloofBackdropWidget : widget::Widget {
 
 static const float CONTROLS_WIDTH = 11 * RACK_GRID_WIDTH;  // 165 px / 11 HP
 
+struct ScaledSvgWidget : widget::Widget {
+  std::shared_ptr<window::Svg> svg;
+  void draw(const DrawArgs& args) override {
+    if (!svg || !svg->handle) return;
+    float svgW = svg->handle->width;
+    float svgH = svg->handle->height;
+    if (svgW <= 0 || svgH <= 0) return;
+    nvgSave(args.vg);
+    nvgScale(args.vg, box.size.x / svgW, box.size.y / svgH);
+    window::svgDraw(args.vg, svg->handle);
+    nvgRestore(args.vg);
+  }
+};
+
 static std::string pickRandomDocImage() {
   std::string dir = asset::plugin(pluginInstance, "doc");
   DIR* dp = opendir(dir.c_str());
@@ -562,6 +576,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   ScreenCapture screenCap;
   ColorTransformFBO colorFBO;
   PortaloofBackdropWidget* backdropWidget = nullptr;
+  std::shared_ptr<window::Svg> panelSvg;
 
   // Cache for triggered mode — holds the last rendered frame's params
   bool cachedRowEnabled[10] = {};
@@ -595,6 +610,16 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     bgPanel->box.size = box.size;
     addChild(bgPanel);
 
+    panelSvg = APP->window->loadSvg(
+        asset::plugin(pluginInstance, "res/panels/portaloof-panel.svg"));
+    {
+      auto* svgBg = new ScaledSvgWidget();
+      svgBg->svg = panelSvg;
+      svgBg->box.pos = Vec(0, 0);
+      svgBg->box.size = Vec(CONTROLS_WIDTH, RACK_GRID_HEIGHT);
+      addChild(svgBg);
+    }
+
     // ── Resize handles — added early so they are lower z-order than params
     // ────
     ComputerscareResizeHandle* leftHandle = new ComputerscareResizeHandle();
@@ -610,8 +635,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     // ───────────────────────────────────────────────────────
     topLogo = new SvgWidget();
     topLogo->setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-logo-light.svg")));
-    topLogo->box.pos = Vec(2.f, 3.f);
+        pluginInstance, "res/components/computerscare-logo-normal.svg")));
+    topLogo->box.pos = Vec(10.f, 5.f);
     addChild(topLogo);
 
     // ── Global mode controls
@@ -630,7 +655,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       lbl->box.size = Vec(50.f, 14.f);
       lbl->fontSize = 12;
       lbl->value = text;
-      lbl->textColor = nvgRGBf(0.9f, 1.0f, 0.95f);
+      lbl->textColor = nvgRGBf(0.1f, 0.1f, 0.1f);
       lbl->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
       lbl->breakRowWidth = 50.f;
       addChild(lbl);
@@ -729,7 +754,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       lbl->box.size = Vec(165.f, 14.f);
       lbl->fontSize = 12;
       lbl->value = rowLabels[i];
-      lbl->textColor = nvgRGBf(0.9f, 1.0f, 0.95f);
+      lbl->textColor = nvgRGBf(0.1f, 0.1f, 0.1f);
       lbl->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
       lbl->breakRowWidth = 165.f;
       addChild(lbl);
@@ -865,7 +890,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
         float warpV = curvesOn ? rv[9] : 0.f;
 
-        float mirrorW = box.size.x - CONTROLS_WIDTH;
+        const float displayX = CONTROLS_WIDTH + RACK_GRID_WIDTH;
+        float mirrorW = box.size.x - displayX;
         float mirrorH = box.size.y;
 
         if (mirrorW <= 2.f) {
@@ -918,8 +944,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
         nvgSave(args.vg);
 
-        nvgScissor(args.vg, CONTROLS_WIDTH, 0.f, mirrorW, box.size.y);
-        nvgTranslate(args.vg, CONTROLS_WIDTH + hw,
+        nvgScissor(args.vg, displayX, 0.f, mirrorW, box.size.y);
+        nvgTranslate(args.vg, displayX + hw,
                      hh);  // center of display area
 
         if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
@@ -1158,8 +1184,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
   void step() override {
     if (module) {
-      ComputerscarePortaloof* m =
-          dynamic_cast<ComputerscarePortaloof*>(module);
+      ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
 
       // Sync backdrop widget with module flag (handles reset / patch load)
       if (m->backdropEnabled && !backdropWidget) {
