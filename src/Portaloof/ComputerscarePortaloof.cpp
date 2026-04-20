@@ -878,7 +878,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         float txV = rv[5];
         float tyV = rv[6];
         float hueV = hueOn ? rv[7] : 0.f;
-        // FOLD knob (0..1) maps to foldFreq (1..4); 1.0 = no chromatic
+        // Fold Freq (0..1) maps to foldFreq (1..4); 1.0 = no chromatic
         // divergence
         float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
         float warpV = curvesOn ? rv[9] : 0.f;

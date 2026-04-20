@@ -3,14 +3,16 @@
 
 #include "rack.hpp"
 
-// Applies hue-shift, warp (solarize→invert / posterize+crush), and
+// Applies hue-shift, warp (solarize→invert / curves contrast), and
 // fold-frequency to a captured GL texture via a custom GLSL shader + FBO.
 //
 // WARP (-1..1):
 //   0        bypass
 //   0..-0.5  progressively solarize (Sabattier fold effect)
 //  -0.5..-1  solarize fades into full invert at -1
-//   0..+1    posterize + contrast crush (coarser and harder toward +1)
+//   0..+1/3  black level rises (shadows crush to black)
+//   1/3..2/3 black level holds, white level falls (maximum contrast)
+//   2/3..+1  black level returns to 0, white level stays low (highlights blown)
 //
 // FOLD_FREQ (1..4, mapped from INVERT knob 0..1):
 //   Scales fold frequency and posterize step count.
@@ -105,14 +107,28 @@ struct ColorTransformFBO {
            "  return          mix(withSol, 1.0 - v, tInv);\n"
            "}\n"
            "\n"
-           // ── Positive side: posterize + contrast crush
-           // ──────────────────────
-           "float posterizeCrush(float v, float t, float freq) {\n"
-           "  float steps     = 2.0 + floor(freq * 3.5);\n"
-           "  float quantized = floor(v * steps + 0.5) / steps;\n"
-           "  float sharpened = clamp((v - 0.5) * (1.0 + t * 6.0) + 0.5, 0.0, "
-           "1.0);\n"
-           "  return mix(quantized, sharpened, t * 0.4);\n"
+           // ── Positive side: 3-phase curves contrast
+           // ──────────────────────────────────────────
+           // Phase 1 (t 0..1/3): black level rises  → shadows crush to black
+           // Phase 2 (t 1/3..2/3): black holds, white falls → approaching max
+           // Phase 3 (t 2/3..1): both held at extremes → maximum contrast
+           // freq still drives chromatic divergence per-channel.
+           "float curvesContrast(float v, float t, float freq) {\n"
+           "  float diverge  = (freq - 1.0) / 3.0;\n"
+           "  float maxBlack = 0.45;\n"
+           "  float minWhite = 0.55;\n"
+           "  float bl, wl;\n"
+           "  if (t < 0.3333) {\n"
+           "    float s = t * 3.0;\n"
+           "    bl = s * maxBlack; wl = 1.0;\n"
+           "  } else if (t < 0.6667) {\n"
+           "    float s = (t - 0.3333) * 3.0;\n"
+           "    bl = maxBlack; wl = 1.0 - s * (1.0 - minWhite);\n"
+           "  } else {\n"
+           "    bl = maxBlack; wl = minWhite;\n"
+           "  }\n"
+           "  float range = max(wl - bl, 0.001);\n"
+           "  return clamp((v - bl) / range, 0.0, 1.0);\n"
            "}\n"
            "\n"
            "vec3 warpColor(vec3 rgb, float w, float freq) {\n"
@@ -126,12 +142,12 @@ struct ColorTransformFBO {
            "    );\n"
            "  } else {\n"
            "    float t = w;\n"
-           "    float r = posterizeCrush(rgb.r, t, freq);\n"
-           "    float g = posterizeCrush(rgb.g, t, freq * (1.0 + diverge * "
+           "    float r = curvesContrast(rgb.r, t, freq);\n"
+           "    float g = curvesContrast(rgb.g, t, freq * (1.0 + diverge * "
            "0.15));\n"
-           "    float b = posterizeCrush(rgb.b, t, freq * (1.0 + diverge * "
+           "    float b = curvesContrast(rgb.b, t, freq * (1.0 + diverge * "
            "0.30));\n"
-           "    return mix(rgb, vec3(r, g, b), t);\n"
+           "    return vec3(r, g, b);\n"
            "  }\n"
            "}\n"
            "\n"
