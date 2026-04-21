@@ -93,6 +93,8 @@ struct ComputerscarePortaloof : Module {
   bool backdropEnabled = false;
   bool emptyWindowInBgMode = true;
   bool transformPost = true;
+  bool translateFirst =
+      false;  // false = Kaleid > Translate, true = Translate > Kaleid
   std::string loadedImagePath;
 
   // Effective row state — computed in process(), read in drawLayer()
@@ -289,6 +291,7 @@ struct ComputerscarePortaloof : Module {
     json_object_set_new(rootJ, "emptyWindowInBgMode",
                         json_boolean(emptyWindowInBgMode));
     json_object_set_new(rootJ, "transformPost", json_boolean(transformPost));
+    json_object_set_new(rootJ, "translateFirst", json_boolean(translateFirst));
     if (!loadedImagePath.empty())
       json_object_set_new(rootJ, "loadedImagePath",
                           json_string(loadedImagePath.c_str()));
@@ -308,6 +311,8 @@ struct ComputerscarePortaloof : Module {
     if (ewJ) emptyWindowInBgMode = json_boolean_value(ewJ);
     json_t* tpJ = json_object_get(rootJ, "transformPost");
     if (tpJ) transformPost = json_boolean_value(tpJ);
+    json_t* tfJ = json_object_get(rootJ, "translateFirst");
+    if (tfJ) translateFirst = json_boolean_value(tfJ);
     json_t* lipJ = json_object_get(rootJ, "loadedImagePath");
     if (lipJ) loadedImagePath = json_string_value(lipJ);
     loadedJSON = false;
@@ -421,8 +426,6 @@ struct PortaloofBackdropWidget : widget::Widget {
     float hh = vpH * 0.5f;
     float txLocal = txOn ? txV * imgW : 0.f;
     float tyLocal = tyOn ? tyV * vpH : 0.f;
-    float txAbs = fabsf(txLocal);
-    float tyAbs = fabsf(tyLocal);
 
     int img = colorFBO.apply(args.vg, srcTex, srcImg, fbW, fbH, hueV, warpV,
                              foldFreqV, useInjected);
@@ -435,20 +438,38 @@ struct PortaloofBackdropWidget : widget::Widget {
     bool tileOn = module->tileEmptySpace;
     int kaliMode = kaliOn ? (int)kaliV : 0;
 
+    float absSx = std::max(fabsf(sx), 0.01f);
+    float absSy = std::max(fabsf(sy), 0.01f);
+
     if (kaliMode > 0) {
-      if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
-      float absSx = std::max(fabsf(sx), 0.01f);
-      float absSy = std::max(fabsf(sy), 0.01f);
       float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
       float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-      float rHW = ((imgW + 2.f * txAbs) * cosA + (vpH + 2.f * tyAbs) * sinA) /
-                      (2.f * absSx) +
-                  4.f;
-      float rHH = ((imgW + 2.f * txAbs) * sinA + (vpH + 2.f * tyAbs) * cosA) /
-                      (2.f * absSy) +
-                  4.f;
-      float pcx = -(txOn ? txLocal : 0.f);
-      float pcy = -(tyOn ? tyLocal : 0.f);
+
+      float kaliTxOff = 0.f, kaliTyOff = 0.f;
+      float nvgTx = 0.f, nvgTy = 0.f;
+      if (txOn || tyOn) {
+        if (module->translateFirst) {
+          kaliTxOff = txV * imgW;
+          kaliTyOff = tyV * vpH;
+        } else {
+          nvgTx = txLocal / absSx;
+          nvgTy = tyLocal / absSy;
+          nvgTranslate(args.vg, nvgTx, nvgTy);
+        }
+      }
+
+      float effTxAbs = fabsf(nvgTx);
+      float effTyAbs = fabsf(nvgTy);
+      float rHW =
+          ((imgW + 2.f * effTxAbs) * cosA + (vpH + 2.f * effTyAbs) * sinA) /
+              (2.f * absSx) +
+          4.f;
+      float rHH =
+          ((imgW + 2.f * effTxAbs) * sinA + (vpH + 2.f * effTyAbs) * cosA) /
+              (2.f * absSy) +
+          4.f;
+      float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
+      float pcy = -(tyOn && !module->translateFirst ? nvgTy : 0.f);
       float dispHW = imgHW / absSx;
       float dispHH = hh / absSy;
 
@@ -469,32 +490,38 @@ struct PortaloofBackdropWidget : widget::Widget {
             float dY = pcy - dispHH - (float)j * vpH;
             drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
                              kaliMode, alpha, rotOn, rotV, false, 0.f, false,
-                             dX, dY, 2.f * dispHW, 2.f * dispHH);
+                             dX, dY, 2.f * dispHW, 2.f * dispHH, kaliTxOff,
+                             kaliTyOff);
             nvgRestore(args.vg);
           }
         }
       } else {
         drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH, kaliMode,
                          alpha, rotOn, rotV, false, 0.f, false, pcx - dispHW,
-                         pcy - dispHH, 2.f * dispHW, 2.f * dispHH);
+                         pcy - dispHH, 2.f * dispHW, 2.f * dispHH, kaliTxOff,
+                         kaliTyOff);
       }
     } else {
-      if (rotOn) applyRotation(args.vg, rotV);
-      if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
-      float absSx2 = std::max(fabsf(sx), 0.01f);
-      float absSy2 = std::max(fabsf(sy), 0.01f);
       float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
       float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-      float rHW = ((imgW + 2.f * txAbs) * cosA + (vpH + 2.f * tyAbs) * sinA) /
-                      (2.f * absSx2) +
-                  4.f;
-      float rHH = ((imgW + 2.f * txAbs) * sinA + (vpH + 2.f * tyAbs) * cosA) /
-                      (2.f * absSy2) +
-                  4.f;
+      if (rotOn) applyRotation(args.vg, rotV);
+      float normTx = txOn ? txLocal / absSx : 0.f;
+      float normTy = tyOn ? tyLocal / absSy : 0.f;
+      if (txOn || tyOn) nvgTranslate(args.vg, normTx, normTy);
+      float normTxAbs = fabsf(normTx);
+      float normTyAbs = fabsf(normTy);
+      float rHW =
+          ((imgW + 2.f * normTxAbs) * cosA + (vpH + 2.f * normTyAbs) * sinA) /
+              (2.f * absSx) +
+          4.f;
+      float rHH =
+          ((imgW + 2.f * normTxAbs) * sinA + (vpH + 2.f * normTyAbs) * cosA) /
+              (2.f * absSy) +
+          4.f;
 
       if (tileOn) {
-        float pcx = -(txOn ? txLocal : 0.f);
-        float pcy = -(tyOn ? tyLocal : 0.f);
+        float pcx = -normTx;
+        float pcy = -normTy;
         int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
         int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
         int jMin = (int)ceilf((pcy - rHH - hh) / vpH);
@@ -933,8 +960,6 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         // Translation is relative to one image width/height
         float txLocal = txOn ? txV * imgW : 0.f;
         float tyLocal = tyOn ? tyV * mirrorH : 0.f;
-        float txAbs = fabsf(txLocal);
-        float tyAbs = fabsf(tyLocal);
 
         // Grey stage background — drawn in raw display coords, isolated from
         // any scale/rotation transforms applied to the image rendering below.
@@ -961,28 +986,54 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
         int kaliMode = kaliOn ? (int)kaliV : 0;
 
+        float absSx = std::max(fabsf(sx), 0.01f);
+        float absSy = std::max(fabsf(sy), 0.01f);
+
         if (kaliMode > 0) {
           // No global rotation here — each sector applies its own rotation with
           // sign correction for flipped sectors (see kSector in
           // MirrorKaleidoscope.hpp).
-          if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
           float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-          float absSx = std::max(fabsf(sx), 0.01f);
-          float absSy = std::max(fabsf(sy), 0.01f);
-          float rHW = ((imgW + 2.f * txAbs) * cosA +
-                       (box.size.y + 2.f * tyAbs) * sinA) /
+
+          // Algorithm mode determines whether translate shifts the kali center
+          // ("Kaleid > Translate", the default) or scrolls the image content
+          // through the fixed kali geometry ("Translate > Kaleid").
+          float kaliTxOff = 0.f, kaliTyOff = 0.f;
+          float nvgTx = 0.f, nvgTy = 0.f;
+          if (txOn || tyOn) {
+            if (m->translateFirst) {
+              // "Translate > Kaleid": offset image pattern origin so content
+              // scrolls through the fixed mirror geometry.  1 unit = 1 full
+              // image width of content scroll, scale-independent by nature.
+              kaliTxOff = txV * imgW;
+              kaliTyOff = tyV * mirrorH;
+            } else {
+              // "Kaleid > Translate": shift the kali symmetry center.
+              // Divide by scale so 10V always = imgW screen pixels regardless
+              // of the current scale setting.
+              nvgTx = txLocal / absSx;
+              nvgTy = tyLocal / absSy;
+              nvgTranslate(args.vg, nvgTx, nvgTy);
+            }
+          }
+
+          // Bounds for tile culling — use the actual NVG-space shift.
+          float effTxAbs = fabsf(nvgTx);
+          float effTyAbs = fabsf(nvgTy);
+          float rHW = ((imgW + 2.f * effTxAbs) * cosA +
+                       (box.size.y + 2.f * effTyAbs) * sinA) /
                           (2.f * absSx) +
                       4.f;
-          float rHH = ((imgW + 2.f * txAbs) * sinA +
-                       (box.size.y + 2.f * tyAbs) * cosA) /
+          float rHH = ((imgW + 2.f * effTxAbs) * sinA +
+                       (box.size.y + 2.f * effTyAbs) * cosA) /
                           (2.f * absSy) +
                       4.f;
-          // Display bounds in the current (post-txLocal) coordinate space.
+          // Display bounds in the current (post-nvgTx) coordinate space.
           // kSector uses these to guarantee a non-degenerate scissor
           // intersection.
-          float pcx = -(txOn ? txLocal : 0.f);
-          float pcy = -(tyOn ? tyLocal : 0.f);
+          float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
+          float pcy = -(tyOn && !m->translateFirst ? nvgTy : 0.f);
           float dispHW = hw / absSx;
           float dispHH = hh / absSy;
 
@@ -1004,7 +1055,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                 float dY = pcy - dispHH - (float)j * mirrorH;
                 drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW,
                                  rHH, kaliMode, alpha, rotOn, rotV, false, 0.f,
-                                 false, dX, dY, 2.f * dispHW, 2.f * dispHH);
+                                 false, dX, dY, 2.f * dispHW, 2.f * dispHH,
+                                 kaliTxOff, kaliTyOff);
                 nvgRestore(args.vg);
               }
             }
@@ -1014,7 +1066,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH,
                              kaliMode, alpha, rotOn, rotV, false, 0.f, false,
                              pcx - dispHW, pcy - dispHH, 2.f * dispHW,
-                             2.f * dispHH);
+                             2.f * dispHH, kaliTxOff, kaliTyOff);
 
             // Overlay opaque grey strips covering display area outside the
             // image bounds. Drawing grey ON TOP means its soft NVG edges blend
@@ -1046,24 +1098,28 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             }
           }
         } else {
-          if (rotOn) applyRotation(args.vg, rotV);
-          if (txOn || tyOn) nvgTranslate(args.vg, txLocal, tyLocal);
-          float absSx3 = std::max(fabsf(sx), 0.01f);
-          float absSy3 = std::max(fabsf(sy), 0.01f);
+          // No kaleidoscope — apply rotation then a scale-normalized translate
+          // so 10V always pans by imgW screen pixels regardless of scale.
           float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-          float rHW = ((imgW + 2.f * txAbs) * cosA +
-                       (box.size.y + 2.f * tyAbs) * sinA) /
-                          (2.f * absSx3) +
+          if (rotOn) applyRotation(args.vg, rotV);
+          float normTx = txOn ? txLocal / absSx : 0.f;
+          float normTy = tyOn ? tyLocal / absSy : 0.f;
+          if (txOn || tyOn) nvgTranslate(args.vg, normTx, normTy);
+          float normTxAbs = fabsf(normTx);
+          float normTyAbs = fabsf(normTy);
+          float rHW = ((imgW + 2.f * normTxAbs) * cosA +
+                       (box.size.y + 2.f * normTyAbs) * sinA) /
+                          (2.f * absSx) +
                       4.f;
-          float rHH = ((imgW + 2.f * txAbs) * sinA +
-                       (box.size.y + 2.f * tyAbs) * cosA) /
-                          (2.f * absSy3) +
+          float rHH = ((imgW + 2.f * normTxAbs) * sinA +
+                       (box.size.y + 2.f * normTyAbs) * cosA) /
+                          (2.f * absSy) +
                       4.f;
 
           if (tileOn) {
-            float pcx = -(txOn ? txLocal : 0.f);
-            float pcy = -(tyOn ? tyLocal : 0.f);
+            float pcx = -normTx;
+            float pcy = -normTy;
             int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW) - 1;
             int iMax = (int)floorf((pcx + rHW + imgHW) / imgW) + 1;
             int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH) - 1;
@@ -1196,6 +1252,14 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           createBoolPtrMenuItem("Tile empty space", "", &m->tileEmptySpace));
       menu->addChild(createBoolPtrMenuItem("Maintain aspect ratio", "",
                                            &m->maintainAspect));
+    }));
+    menu->addChild(createSubmenuItem("Algorithm", "", [=](Menu* menu) {
+      menu->addChild(createCheckMenuItem(
+          "Kaleid > Translate", "", [=]() { return !m->translateFirst; },
+          [=]() { m->translateFirst = false; }));
+      menu->addChild(createCheckMenuItem(
+          "Translate > Kaleid", "", [=]() { return m->translateFirst; },
+          [=]() { m->translateFirst = true; }));
     }));
   }
 
