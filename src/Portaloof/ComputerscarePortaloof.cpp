@@ -936,17 +936,22 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         float txAbs = fabsf(txLocal);
         float tyAbs = fabsf(tyLocal);
 
+        // Grey stage background — drawn in raw display coords, isolated from
+        // any scale/rotation transforms applied to the image rendering below.
+        {
+          nvgSave(args.vg);
+          nvgBeginPath(args.vg);
+          nvgRect(args.vg, displayX, 0.f, mirrorW, box.size.y);
+          nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
+          nvgFill(args.vg);
+          nvgRestore(args.vg);
+        }
+
         nvgSave(args.vg);
 
         nvgScissor(args.vg, displayX, 0.f, mirrorW, box.size.y);
         nvgTranslate(args.vg, displayX + hw,
                      hh);  // center of display area
-
-        // Grey stage background — drawn before any image, covers full display
-        nvgBeginPath(args.vg);
-        nvgRect(args.vg, -hw, -hh, 2.f * hw, 2.f * hh);
-        nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
-        nvgFill(args.vg);
 
         if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
 
@@ -982,10 +987,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           float dispHH = hh / absSy;
 
           if (tileOn) {
-            int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
-            int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
-            int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH);
-            int jMax = (int)floorf((pcy + rHH + hh) / mirrorH);
+            int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW) - 1;
+            int iMax = (int)floorf((pcx + rHW + imgHW) / imgW) + 1;
+            int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH) - 1;
+            int jMax = (int)floorf((pcy + rHH + hh) / mirrorH) + 1;
             iMin = std::max(iMin, -20);
             iMax = std::min(iMax, 20);
             jMin = std::max(jMin, -20);
@@ -1059,10 +1064,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           if (tileOn) {
             float pcx = -(txOn ? txLocal : 0.f);
             float pcy = -(tyOn ? tyLocal : 0.f);
-            int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
-            int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
-            int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH);
-            int jMax = (int)floorf((pcy + rHH + hh) / mirrorH);
+            int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW) - 1;
+            int iMax = (int)floorf((pcx + rHW + imgHW) / imgW) + 1;
+            int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH) - 1;
+            int jMax = (int)floorf((pcy + rHH + hh) / mirrorH) + 1;
             iMin = std::max(iMin, -20);
             iMax = std::min(iMax, 20);
             jMin = std::max(jMin, -20);
