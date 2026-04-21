@@ -449,8 +449,8 @@ struct PortaloofBackdropWidget : widget::Widget {
       float nvgTx = 0.f, nvgTy = 0.f;
       if (txOn || tyOn) {
         if (module->translateFirst) {
-          kaliTxOff = txV * imgW;
-          kaliTyOff = tyV * vpH;
+          kaliTxOff = txLocal;
+          kaliTyOff = tyLocal;
         } else {
           nvgTx = txLocal / absSx;
           nvgTy = tyLocal / absSy;
@@ -1006,8 +1006,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               // "Translate > Kaleid": offset image pattern origin so content
               // scrolls through the fixed mirror geometry.  1 unit = 1 full
               // image width of content scroll, scale-independent by nature.
-              kaliTxOff = txV * imgW;
-              kaliTyOff = tyV * mirrorH;
+              kaliTxOff = txLocal;
+              kaliTyOff = tyLocal;
             } else {
               // "Kaleid > Translate": shift the kali symmetry center.
               // Divide by scale so 10V always = imgW screen pixels regardless
