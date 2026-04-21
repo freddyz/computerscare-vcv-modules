@@ -577,6 +577,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   ColorTransformFBO colorFBO;
   PortaloofBackdropWidget* backdropWidget = nullptr;
   std::shared_ptr<window::Svg> panelSvg;
+  std::shared_ptr<window::Svg> headerSvg;
 
   // Cache for triggered mode — holds the last rendered frame's params
   bool cachedRowEnabled[10] = {};
@@ -623,13 +624,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
     // ── Resize handles — added early so they are lower z-order than params
     // ────
-    ComputerscareResizeHandle* leftHandle = new ComputerscareResizeHandle();
-    leftHandle->minWidth = CONTROLS_WIDTH;
     rightHandle = new ComputerscareResizeHandle();
     rightHandle->right = true;
     rightHandle->minWidth = CONTROLS_WIDTH;
     rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
-    addChild(leftHandle);
     addChild(rightHandle);
 
     // ── Global mode controls
@@ -762,6 +760,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       addParam(
           createParam<SmoothKnob>(Vec(122.f, y - 13.f), module, knobIds[i]));
     }
+
+    headerSvg = APP->window->loadSvg(
+        asset::plugin(pluginInstance, "res/panels/portaloof-header.svg"));
   }
 
   void drawBrowserPreview(const DrawArgs& args) {
@@ -941,6 +942,12 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         nvgTranslate(args.vg, displayX + hw,
                      hh);  // center of display area
 
+        // Grey stage background — drawn before any image, covers full display
+        nvgBeginPath(args.vg);
+        nvgRect(args.vg, -hw, -hh, 2.f * hw, 2.f * hh);
+        nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
+        nvgFill(args.vg);
+
         if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
 
         bool tileOn = m->tileEmptySpace;
@@ -1073,12 +1080,6 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               }
             }
           } else {
-            // Grey background first — large rect clips to outer display
-            // scissor.
-            nvgBeginPath(args.vg);
-            nvgRect(args.vg, -rHW, -rHH, 2.f * rHW, 2.f * rHH);
-            nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
-            nvgFill(args.vg);
             // Image drawn with exact rect — no tiling, no smear at edges.
             NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
                                          0.f, img, alpha);
@@ -1111,6 +1112,19 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     }
 
     ModuleWidget::drawLayer(args, layer);
+
+    // Header drawn last — on top of everything including kaleidoscope
+    if (layer == 1 && headerSvg && headerSvg->handle) {
+      float svgW = headerSvg->handle->width;
+      float svgH = headerSvg->handle->height;
+      const float drawW = 170.f;
+      const float drawH = drawW * (svgH / svgW);
+      nvgSave(args.vg);
+      nvgTranslate(args.vg, 3.f, 3.f);
+      nvgScale(args.vg, drawW / svgW, drawH / svgH);
+      window::svgDraw(args.vg, headerSvg->handle);
+      nvgRestore(args.vg);
+    }
   }
 
   void appendContextMenu(Menu* menu) override {
@@ -1178,6 +1192,21 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       menu->addChild(createBoolPtrMenuItem("Maintain aspect ratio", "",
                                            &m->maintainAspect));
     }));
+  }
+
+  void onHover(const HoverEvent& e) override {
+    ModuleWidget::onHover(e);
+    float hw = RACK_GRID_WIDTH;
+    bool overRightHandle = (e.pos.x >= box.size.x - hw);
+    static GLFWcursor* resizeCursor = nullptr;
+    if (!resizeCursor)
+      resizeCursor = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+    glfwSetCursor(APP->window->win, overRightHandle ? resizeCursor : nullptr);
+  }
+
+  void onLeave(const LeaveEvent& e) override {
+    ModuleWidget::onLeave(e);
+    glfwSetCursor(APP->window->win, nullptr);
   }
 
   void onPathDrop(const PathDropEvent& e) override {

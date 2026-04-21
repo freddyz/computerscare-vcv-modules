@@ -1296,6 +1296,21 @@ struct ComputerscareBlankWidget : ModuleWidget {
     ModuleWidget::onHoverKey(e);
   }
 
+  void onHover(const HoverEvent& e) override {
+    ModuleWidget::onHover(e);
+    float hw = RACK_GRID_WIDTH;
+    bool overHandle = (e.pos.x <= hw) || (e.pos.x >= box.size.x - hw);
+    static GLFWcursor* resizeCursor = nullptr;
+    if (!resizeCursor)
+      resizeCursor = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+    glfwSetCursor(APP->window->win, overHandle ? resizeCursor : nullptr);
+  }
+
+  void onLeave(const LeaveEvent& e) override {
+    ModuleWidget::onLeave(e);
+    glfwSetCursor(APP->window->win, nullptr);
+  }
+
   void onPathDrop(const PathDropEvent& e) override {
     if (!blankModule) return;
     if (e.paths.empty()) return;
