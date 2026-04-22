@@ -26,6 +26,19 @@ static inline float outerTileDisplayMin(float panelCenter, float halfExtent,
                   : (panelCenter - halfExtent - tileOffset);
 }
 
+static inline int flowerKaleidTargetDim(float panelDim, float renderScale,
+                                        int sourceDim) {
+  static constexpr float FLOWER_SSAA = 2.f;
+  static constexpr int FLOWER_MAX_DIM = 4096;
+  float baseScale = std::max(renderScale, 1.f);
+  float sourceScale =
+      (panelDim > 0.f && sourceDim > 0) ? ((float)sourceDim / panelDim) : 1.f;
+  float targetScale = std::max(baseScale, std::min(baseScale * FLOWER_SSAA,
+                                                   std::max(sourceScale, 1.f)));
+  float targetDim = std::min(panelDim * targetScale, (float)FLOWER_MAX_DIM);
+  return std::max((int)std::lround(targetDim), 1);
+}
+
 // ─── Module ──────────────────────────────────────────────────────────────────
 
 struct ComputerscarePortaloof : Module {
@@ -475,10 +488,14 @@ struct PortaloofBackdropWidget : widget::Widget {
           nvgTranslate(args.vg, nvgTx, nvgTy);
         }
       }
+      int flowerTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
+      int flowerTargetH = flowerKaleidTargetDim(vpH, renderScale, fbH);
+      float flowerScaleX = (imgW > 0.f) ? ((float)flowerTargetW / imgW) : 1.f;
+      float flowerScaleY = (vpH > 0.f) ? ((float)flowerTargetH / vpH) : 1.f;
       int flowerImg = flowerKaleidFBO.apply(
-          args.vg, effectTex, (int)std::lround(imgW * renderScale),
-          (int)std::lround(vpH * renderScale), kaliMode, rotOn ? rotV : 0.f,
-          kaliTxOff * renderScale, kaliTyOff * renderScale, useInjected);
+          args.vg, effectTex, flowerTargetW, flowerTargetH, kaliMode,
+          rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
+          kaliTyOff * flowerScaleY, useInjected);
       if (flowerImg >= 0) {
         if (tileOn) {
           float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
@@ -1098,11 +1115,17 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               nvgTranslate(args.vg, nvgTx, nvgTy);
             }
           }
+          int flowerTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
+          int flowerTargetH =
+              flowerKaleidTargetDim(mirrorH, renderScale, fbH);
+          float flowerScaleX =
+              (imgW > 0.f) ? ((float)flowerTargetW / imgW) : 1.f;
+          float flowerScaleY =
+              (mirrorH > 0.f) ? ((float)flowerTargetH / mirrorH) : 1.f;
           int flowerImg = flowerKaleidFBO.apply(
-              args.vg, effectTex, (int)std::lround(imgW * renderScale),
-              (int)std::lround(mirrorH * renderScale), kaliMode,
-              rotOn ? rotV : 0.f, kaliTxOff * renderScale,
-              kaliTyOff * renderScale, useInjected);
+              args.vg, effectTex, flowerTargetW, flowerTargetH, kaliMode,
+              rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
+              kaliTyOff * flowerScaleY, useInjected);
           if (flowerImg >= 0) {
             if (tileOn) {
               float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
