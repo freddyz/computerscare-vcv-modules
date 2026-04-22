@@ -16,6 +16,16 @@ struct PortaloofTrigButton : SmallIsoButton {
   PortaloofTrigButton() { momentary = true; }
 };
 
+static inline bool reverseOuterTile(int tileIndex) {
+  return (tileIndex & 1) != 0;
+}
+
+static inline float outerTileDisplayMin(float panelCenter, float halfExtent,
+                                        float tileOffset, bool reversed) {
+  return reversed ? (tileOffset - panelCenter - halfExtent)
+                  : (panelCenter - halfExtent - tileOffset);
+}
+
 // ─── Module ──────────────────────────────────────────────────────────────────
 
 struct ComputerscarePortaloof : Module {
@@ -485,14 +495,23 @@ struct PortaloofBackdropWidget : widget::Widget {
           jMax = std::min(jMax, 20);
           for (int j = jMin; j <= jMax; j++) {
             for (int i = iMin; i <= iMax; i++) {
-              float ox = -imgHW + i * imgW;
-              float oy = -hh + j * vpH;
-              NVGpaint p = nvgImagePattern(args.vg, ox, oy, imgW, vpH, 0.f,
-                                           flowerImg, alpha);
+              float tileX = (float)i * imgW;
+              float tileY = (float)j * vpH;
+              bool reverseX = reverseOuterTile(i);
+              bool reverseY = reverseOuterTile(j);
+              nvgSave(args.vg);
+              nvgTranslate(args.vg, tileX, tileY);
+              if (reverseX || reverseY) {
+                nvgScale(args.vg, reverseX ? -1.f : 1.f,
+                         reverseY ? -1.f : 1.f);
+              }
+              NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH,
+                                           0.f, flowerImg, alpha);
               nvgBeginPath(args.vg);
-              nvgRect(args.vg, ox, oy, imgW, vpH);
+              nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
               nvgFillPaint(args.vg, p);
               nvgFill(args.vg);
+              nvgRestore(args.vg);
             }
           }
         } else {
@@ -547,10 +566,18 @@ struct PortaloofBackdropWidget : widget::Widget {
         jMax = std::min(jMax, 20);
         for (int j = jMin; j <= jMax; j++) {
           for (int i = iMin; i <= iMax; i++) {
+            float tileX = (float)i * imgW;
+            float tileY = (float)j * vpH;
+            bool reverseX = reverseOuterTile(i);
+            bool reverseY = reverseOuterTile(j);
             nvgSave(args.vg);
-            nvgTranslate(args.vg, i * imgW, j * vpH);
-            float dX = pcx - dispHW - (float)i * imgW;
-            float dY = pcy - dispHH - (float)j * vpH;
+            nvgTranslate(args.vg, tileX, tileY);
+            if (reverseX || reverseY) {
+              nvgScale(args.vg, reverseX ? -1.f : 1.f,
+                       reverseY ? -1.f : 1.f);
+            }
+            float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
+            float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
             drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
                              kaliMode, alpha, rotOn, rotV, false, 0.f, false,
                              dX, dY, 2.f * dispHW, 2.f * dispHH, kaliTxOff,
@@ -1092,14 +1119,23 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               jMax = std::min(jMax, 20);
               for (int j = jMin; j <= jMax; j++) {
                 for (int i = iMin; i <= iMax; i++) {
-                  float ox = -imgHW + i * imgW;
-                  float oy = -hh + j * mirrorH;
-                  NVGpaint p = nvgImagePattern(args.vg, ox, oy, imgW, mirrorH,
-                                               0.f, flowerImg, alpha);
+                  float tileX = (float)i * imgW;
+                  float tileY = (float)j * mirrorH;
+                  bool reverseX = reverseOuterTile(i);
+                  bool reverseY = reverseOuterTile(j);
+                  nvgSave(args.vg);
+                  nvgTranslate(args.vg, tileX, tileY);
+                  if (reverseX || reverseY) {
+                    nvgScale(args.vg, reverseX ? -1.f : 1.f,
+                             reverseY ? -1.f : 1.f);
+                  }
+                  NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW,
+                                               mirrorH, 0.f, flowerImg, alpha);
                   nvgBeginPath(args.vg);
-                  nvgRect(args.vg, ox, oy, imgW, mirrorH);
+                  nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
                   nvgFillPaint(args.vg, p);
                   nvgFill(args.vg);
+                  nvgRestore(args.vg);
                 }
               }
             } else {
@@ -1160,10 +1196,18 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             jMax = std::min(jMax, 20);
             for (int j = jMin; j <= jMax; j++) {
               for (int i = iMin; i <= iMax; i++) {
+                float tileX = (float)i * imgW;
+                float tileY = (float)j * mirrorH;
+                bool reverseX = reverseOuterTile(i);
+                bool reverseY = reverseOuterTile(j);
                 nvgSave(args.vg);
-                nvgTranslate(args.vg, i * imgW, j * mirrorH);
-                float dX = pcx - dispHW - (float)i * imgW;
-                float dY = pcy - dispHH - (float)j * mirrorH;
+                nvgTranslate(args.vg, tileX, tileY);
+                if (reverseX || reverseY) {
+                  nvgScale(args.vg, reverseX ? -1.f : 1.f,
+                           reverseY ? -1.f : 1.f);
+                }
+                float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
+                float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
                 drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW,
                                  rHH, kaliMode, alpha, rotOn, rotV, false, 0.f,
                                  false, dX, dY, 2.f * dispHW, 2.f * dispHH,
