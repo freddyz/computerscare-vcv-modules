@@ -10,14 +10,14 @@ You can also **drop an image file** (PNG/JPG/JPEG/BMP) onto the module to use it
 
 ## Global Controls (header row)
 
-### CONT — Continuous / Triggered mode
+### FREEZE — Freeze / Continuous mode
 
-- **Button (toggle):** On = continuous (effect updates every frame). Off = triggered (effect only updates on a trigger event).
-- **Gate jack:** High voltage (>0.5 V) forces continuous mode; low forces triggered mode. Overrides the button when connected.
+- **Button (toggle):** On = freeze (effect only updates on a trigger event). Off = continuous (effect updates every frame).
+- **Gate jack:** High voltage (>0.5 V) forces freeze mode; low forces continuous mode. Overrides the button when connected.
 
 ### TRIG — Trigger / Image Gate
 
-- **Triggered mode:** Button press or rising edge on the trigger jack fires one capture frame.
+- **Freeze mode:** Button press or rising edge on the trigger jack fires one capture frame.
 - **Continuous mode (with a loaded image):** A high button or input (>0.5 V) holds the loaded image as the source while held. Releasing returns to live screen capture.
 
 ---

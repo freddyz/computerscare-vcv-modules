@@ -2,7 +2,6 @@
 #include <osdialog.h>
 
 #include <atomic>
-
 #include "../Computerscare.hpp"
 #include "../ComputerscareResizableHandle.hpp"
 #include "ColorTransformFBO.hpp"
@@ -39,11 +38,19 @@ static inline int flowerKaleidTargetDim(float panelDim, float renderScale,
   return std::max((int)std::lround(targetDim), 1);
 }
 
+static inline float wrapToRange(float value, float minValue, float maxValue) {
+  float range = maxValue - minValue;
+  if (range <= 0.f) return minValue;
+  float wrapped = fmodf(value - minValue, range);
+  if (wrapped < 0.f) wrapped += range;
+  return minValue + wrapped;
+}
+
 // ─── Module ──────────────────────────────────────────────────────────────────
 
 struct ComputerscarePortaloof : Module {
   enum ParamId {
-    CONTINUOUS_TOGGLE,  // on=continuous (every frame), off=triggered
+    FREEZE_TOGGLE,
     TRIGGER_BUTTON,     // momentary: fires one draw frame
     // Effects: toggle + knob (offset) + attenuverter triples
     SCALE_TOGGLE,
@@ -105,8 +112,8 @@ struct ComputerscarePortaloof : Module {
     INVERT_CV_INPUT,
     CURVES_CV_INPUT,
     // Global mode inputs
-    CONTINUOUS_GATE_INPUT,  // gate: high=continuous, low=triggered
-    TRIGGER_INPUT,          // trigger: fires one draw in triggered mode
+    FREEZE_GATE_INPUT,      // gate: high=freeze, low=continuous
+    TRIGGER_INPUT,          // trigger: fires one draw in freeze mode
     NUM_INPUTS
   };
 
@@ -123,7 +130,7 @@ struct ComputerscarePortaloof : Module {
   std::string loadedImagePath;
 
   // Effective row state — computed in process(), read in drawLayer()
-  bool continuousMode = true;
+  bool freezeMode = false;
   bool rowEnabled[10] = {};
   float rowValue[10] = {1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
 
@@ -135,8 +142,7 @@ struct ComputerscarePortaloof : Module {
 
   ComputerscarePortaloof() {
     config(NUM_PARAMS, NUM_INPUTS, 0, 0);
-    configSwitch(CONTINUOUS_TOGGLE, 0.f, 1.f, 1.f, "Continuous/Triggered",
-                 {"Triggered", "Continuous"});
+    configSwitch(FREEZE_TOGGLE, 0.f, 1.f, 0.f, "Freeze", {"Off", "On"});
     configParam(TRIGGER_BUTTON, 0.f, 1.f, 0.f, "Trigger");
 
     configSwitch(SCALE_TOGGLE, 0.f, 1.f, 1.f, "Scale", {"Off", "On"});
@@ -194,13 +200,13 @@ struct ComputerscarePortaloof : Module {
     configInput(HUE_CV_INPUT, "Hue CV");
     configInput(INVERT_CV_INPUT, "Invert CV");
     configInput(CURVES_CV_INPUT, "Curves CV");
-    configInput(CONTINUOUS_GATE_INPUT, "Continuous (gate)");
+    configInput(FREEZE_GATE_INPUT, "Freeze (gate)");
     configInput(TRIGGER_INPUT, "Trigger");
   }
 
   void onRandomize(const RandomizeEvent& e) override {
     for (int id = 0; id < NUM_PARAMS; id++) {
-      if (id == CONTINUOUS_TOGGLE) continue;
+      if (id == FREEZE_TOGGLE) continue;
       if (id == TRIGGER_BUTTON) continue;
       if (id == BACKDROP_ALPHA) continue;
       paramQuantities[id]->randomize();
@@ -235,14 +241,14 @@ struct ComputerscarePortaloof : Module {
     static const float cvScale[10] = {0.3f, 0.5f, 0.5f, 36.f, 1.1f,
                                       0.1f, 0.1f, 36.f, 0.1f, 0.1f};
 
-    // Continuous/triggered mode: gate jack overrides button when connected
-    bool gateConnected = inputs[CONTINUOUS_GATE_INPUT].isConnected();
-    continuousMode = gateConnected
-                         ? (inputs[CONTINUOUS_GATE_INPUT].getVoltage() > 0.5f)
-                         : (params[CONTINUOUS_TOGGLE].getValue() > 0.5f);
+    // Freeze mode: gate jack overrides button when connected
+    bool gateConnected = inputs[FREEZE_GATE_INPUT].isConnected();
+    freezeMode = gateConnected
+                     ? (inputs[FREEZE_GATE_INPUT].getVoltage() > 0.5f)
+                     : (params[FREEZE_TOGGLE].getValue() > 0.5f);
 
-    if (!continuousMode) {
-      // Triggered mode: detect rising edges to fire a screen capture
+    if (freezeMode) {
+      // Freeze mode: detect rising edges to fire a screen capture
       bool fired = false;
       if (inputs[TRIGGER_INPUT].isConnected()) {
         fired |= trigInputDetector.process(inputs[TRIGGER_INPUT].getVoltage(),
@@ -277,7 +283,11 @@ struct ComputerscarePortaloof : Module {
       float atten = params[attenIds[i]].getValue();
       float cv =
           inputs[cvIds[i]].isConnected() ? inputs[cvIds[i]].getVoltage() : 0.f;
-      rowValue[i] = clamp(offset + atten * cv * cvScale[i], mins[i], maxs[i]);
+      float combined = offset + atten * cv * cvScale[i];
+      bool wraps = (i == 3 || i == 5 || i == 6 || i == 7);
+      rowValue[i] =
+          wraps ? wrapToRange(combined, mins[i], maxs[i])
+                : clamp(combined, mins[i], maxs[i]);
     }
 
     // Exponential scale map for Scale X (row 1) and Scale Y (row 2).
@@ -300,9 +310,9 @@ struct ComputerscarePortaloof : Module {
   }
 
   void onReset(const ResetEvent& e) override {
-    float contVal = params[CONTINUOUS_TOGGLE].getValue();
+    float freezeVal = params[FREEZE_TOGGLE].getValue();
     Module::onReset(e);
-    params[CONTINUOUS_TOGGLE].setValue(contVal);
+    params[FREEZE_TOGGLE].setValue(freezeVal);
     backdropEnabled = false;
   }
 
@@ -400,7 +410,7 @@ struct PortaloofBackdropWidget : widget::Widget {
 
     bool gateActive = module->imageGateActive.load();
     bool doCapture =
-        module->continuousMode || module->backdropTriggerFired.exchange(false);
+        !module->freezeMode || module->backdropTriggerFired.exchange(false);
 
     if (gateActive && loadedNvgImg >= 0 && loadedTexId != 0)
       pendingInject = true;
@@ -429,7 +439,7 @@ struct PortaloofBackdropWidget : widget::Widget {
 
     // Transform post: use live params (knobs alter frozen image).
     // Transform pre:  use cached params (knobs only affect next snapshot).
-    bool useLive = module->continuousMode || module->transformPost;
+    bool useLive = !module->freezeMode || module->transformPost;
     bool* en =
         (useLive || !hasValidCache) ? module->rowEnabled : cachedRowEnabled;
     float* rv = (useLive || !hasValidCache) ? module->rowValue : cachedRowValue;
@@ -787,13 +797,13 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       addChild(lbl);
     };
 
-    addHdrLabel(CONT_JACK_X + HDR_BTN_DX, "CONT");
+    addHdrLabel(CONT_JACK_X + HDR_BTN_DX, "FREEZE");
     addParam(createParam<SmallIsoButton>(
         Vec(CONT_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY), module,
-        ComputerscarePortaloof::CONTINUOUS_TOGGLE));
+        ComputerscarePortaloof::FREEZE_TOGGLE));
     addInput(
         createInput<InPort>(Vec(CONT_JACK_X, HDR_JACK_Y), module,
-                            ComputerscarePortaloof::CONTINUOUS_GATE_INPUT));
+                            ComputerscarePortaloof::FREEZE_GATE_INPUT));
 
     addHdrLabel(TRIG_JACK_X + HDR_BTN_DX, "TRIG");
     addParam(createParam<PortaloofTrigButton>(
@@ -927,7 +937,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         browserModule->rowValue[i] = random::uniform();
       }
 
-      browserModule->continuousMode = false;
+      browserModule->freezeMode = false;
       browserModule->maintainAspect = true;
       browserModule->tileEmptySpace = true;
     }
@@ -977,9 +987,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       // last image
       bool trigFired = m->triggerFired.exchange(false);
       bool gateActive = m->imageGateActive.load();
-      bool doCapture = m->continuousMode || trigFired;
+      bool doCapture = !m->freezeMode || trigFired;
 
-      // Continuous mode + gate high + loaded image → keep using the image as
+      // Continuous mode + gate high + loaded image -> keep using the image as
       // source
       if (gateActive && loadedNvgImg >= 0 && loadedTexId != 0)
         pendingInject = true;
@@ -990,7 +1000,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         float alpha = 0.85f;
 
         // Choose live params on capture, or based on transform pre/post setting
-        bool useLive = doCapture || m->continuousMode || m->transformPost;
+        bool useLive = doCapture || !m->freezeMode || m->transformPost;
         bool* en =
             (useLive || !hasValidCache) ? m->rowEnabled : cachedRowEnabled;
         float* rv = (useLive || !hasValidCache) ? m->rowValue : cachedRowValue;
