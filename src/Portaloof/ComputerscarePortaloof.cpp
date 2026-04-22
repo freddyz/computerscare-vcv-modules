@@ -6,6 +6,7 @@
 #include "../Computerscare.hpp"
 #include "../ComputerscareResizableHandle.hpp"
 #include "ColorTransformFBO.hpp"
+#include "FlowerKaleid.hpp"
 #include "MirrorKaleidoscope.hpp"
 #include "MirrorRotation.hpp"
 #include "ScreenCaptureEffect.hpp"
@@ -94,7 +95,8 @@ struct ComputerscarePortaloof : Module {
   bool emptyWindowInBgMode = true;
   bool transformPost = true;
   bool translateFirst =
-      false;  // false = Kaleid > Translate, true = Translate > Kaleid
+      false;            // false = Kaleid > Translate, true = Translate > Kaleid
+  int kaleidStyle = 0;  // 0 = classic, 1 = premium (flower)
   std::string loadedImagePath;
 
   // Effective row state — computed in process(), read in drawLayer()
@@ -292,6 +294,7 @@ struct ComputerscarePortaloof : Module {
                         json_boolean(emptyWindowInBgMode));
     json_object_set_new(rootJ, "transformPost", json_boolean(transformPost));
     json_object_set_new(rootJ, "translateFirst", json_boolean(translateFirst));
+    json_object_set_new(rootJ, "kaleidStyle", json_integer(kaleidStyle));
     if (!loadedImagePath.empty())
       json_object_set_new(rootJ, "loadedImagePath",
                           json_string(loadedImagePath.c_str()));
@@ -313,6 +316,8 @@ struct ComputerscarePortaloof : Module {
     if (tpJ) transformPost = json_boolean_value(tpJ);
     json_t* tfJ = json_object_get(rootJ, "translateFirst");
     if (tfJ) translateFirst = json_boolean_value(tfJ);
+    json_t* ksJ = json_object_get(rootJ, "kaleidStyle");
+    if (ksJ) kaleidStyle = (int)json_integer_value(ksJ);
     json_t* lipJ = json_object_get(rootJ, "loadedImagePath");
     if (lipJ) loadedImagePath = json_string_value(lipJ);
     loadedJSON = false;
@@ -328,6 +333,7 @@ struct PortaloofBackdropWidget : widget::Widget {
   ComputerscarePortaloof* module = nullptr;
   ScreenCapture screenCap;
   ColorTransformFBO colorFBO;
+  FlowerKaleidFBO flowerKaleidFBO;
   bool cachedRowEnabled[10] = {};
   float cachedRowValue[10] = {};
   bool hasValidCache = false;
@@ -429,6 +435,9 @@ struct PortaloofBackdropWidget : widget::Widget {
 
     int img = colorFBO.apply(args.vg, srcTex, srcImg, fbW, fbH, hueV, warpV,
                              foldFreqV, useInjected);
+    GLuint effectTex =
+        (img == colorFBO.nvgImg && colorFBO.outTex != 0) ? colorFBO.outTex
+                                                         : srcTex;
 
     nvgSave(args.vg);
     nvgScissor(args.vg, vpX, vpY, vpW, vpH);
@@ -440,8 +449,62 @@ struct PortaloofBackdropWidget : widget::Widget {
 
     float absSx = std::max(fabsf(sx), 0.01f);
     float absSy = std::max(fabsf(sy), 0.01f);
+    float renderScale =
+        std::max(APP->window->windowRatio * getAbsoluteZoom(), 1.f);
 
-    if (kaliMode > 0) {
+    if (kaliMode > 0 && module->kaleidStyle == 1) {
+      float kaliTxOff = 0.f, kaliTyOff = 0.f;
+      float nvgTx = 0.f, nvgTy = 0.f;
+      if (txOn || tyOn) {
+        if (module->translateFirst) {
+          kaliTxOff = txLocal;
+          kaliTyOff = tyLocal;
+        } else {
+          nvgTx = txLocal / absSx;
+          nvgTy = tyLocal / absSy;
+          nvgTranslate(args.vg, nvgTx, nvgTy);
+        }
+      }
+      int flowerImg = flowerKaleidFBO.apply(
+          args.vg, effectTex, (int)std::lround(imgW * renderScale),
+          (int)std::lround(vpH * renderScale), kaliMode, rotOn ? rotV : 0.f,
+          kaliTxOff * renderScale, kaliTyOff * renderScale, useInjected);
+      if (flowerImg >= 0) {
+        if (tileOn) {
+          float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
+          float pcy = -(tyOn && !module->translateFirst ? nvgTy : 0.f);
+          float dispHW = imgHW / absSx;
+          float dispHH = hh / absSy;
+          int iMin = (int)ceilf((pcx - dispHW - imgHW) / imgW) - 1;
+          int iMax = (int)floorf((pcx + dispHW + imgHW) / imgW) + 1;
+          int jMin = (int)ceilf((pcy - dispHH - hh) / vpH) - 1;
+          int jMax = (int)floorf((pcy + dispHH + hh) / vpH) + 1;
+          iMin = std::max(iMin, -20);
+          iMax = std::min(iMax, 20);
+          jMin = std::max(jMin, -20);
+          jMax = std::min(jMax, 20);
+          for (int j = jMin; j <= jMax; j++) {
+            for (int i = iMin; i <= iMax; i++) {
+              float ox = -imgHW + i * imgW;
+              float oy = -hh + j * vpH;
+              NVGpaint p = nvgImagePattern(args.vg, ox, oy, imgW, vpH, 0.f,
+                                           flowerImg, alpha);
+              nvgBeginPath(args.vg);
+              nvgRect(args.vg, ox, oy, imgW, vpH);
+              nvgFillPaint(args.vg, p);
+              nvgFill(args.vg);
+            }
+          }
+        } else {
+          NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f,
+                                       flowerImg, alpha);
+          nvgBeginPath(args.vg);
+          nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
+          nvgFillPaint(args.vg, p);
+          nvgFill(args.vg);
+        }
+      }
+    } else if (kaliMode > 0) {
       float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
       float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
 
@@ -602,6 +665,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   ComputerscareResizeHandle* rightHandle;
   ScreenCapture screenCap;
   ColorTransformFBO colorFBO;
+  FlowerKaleidFBO flowerKaleidFBO;
   PortaloofBackdropWidget* backdropWidget = nullptr;
   std::shared_ptr<window::Svg> panelSvg;
   std::shared_ptr<window::Svg> headerSvg;
@@ -983,13 +1047,71 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         bool tileOn = m->tileEmptySpace;
         int img = colorFBO.apply(args.vg, srcTex, srcImg, fbW, fbH, hueV, warpV,
                                  foldFreqV, useInjected);
+        GLuint effectTex =
+            (img == colorFBO.nvgImg && colorFBO.outTex != 0) ? colorFBO.outTex
+                                                             : srcTex;
 
         int kaliMode = kaliOn ? (int)kaliV : 0;
 
         float absSx = std::max(fabsf(sx), 0.01f);
         float absSy = std::max(fabsf(sy), 0.01f);
+        float renderScale =
+            std::max(APP->window->windowRatio * getAbsoluteZoom(), 1.f);
 
-        if (kaliMode > 0) {
+        if (kaliMode > 0 && m->kaleidStyle == 1) {
+          float kaliTxOff = 0.f, kaliTyOff = 0.f;
+          float nvgTx = 0.f, nvgTy = 0.f;
+          if (txOn || tyOn) {
+            if (m->translateFirst) {
+              kaliTxOff = txLocal;
+              kaliTyOff = tyLocal;
+            } else {
+              nvgTx = txLocal / absSx;
+              nvgTy = tyLocal / absSy;
+              nvgTranslate(args.vg, nvgTx, nvgTy);
+            }
+          }
+          int flowerImg = flowerKaleidFBO.apply(
+              args.vg, effectTex, (int)std::lround(imgW * renderScale),
+              (int)std::lround(mirrorH * renderScale), kaliMode,
+              rotOn ? rotV : 0.f, kaliTxOff * renderScale,
+              kaliTyOff * renderScale, useInjected);
+          if (flowerImg >= 0) {
+            if (tileOn) {
+              float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
+              float pcy = -(tyOn && !m->translateFirst ? nvgTy : 0.f);
+              float dispHW = hw / absSx;
+              float dispHH = hh / absSy;
+              int iMin = (int)ceilf((pcx - dispHW - imgHW) / imgW) - 1;
+              int iMax = (int)floorf((pcx + dispHW + imgHW) / imgW) + 1;
+              int jMin = (int)ceilf((pcy - dispHH - hh) / mirrorH) - 1;
+              int jMax = (int)floorf((pcy + dispHH + hh) / mirrorH) + 1;
+              iMin = std::max(iMin, -20);
+              iMax = std::min(iMax, 20);
+              jMin = std::max(jMin, -20);
+              jMax = std::min(jMax, 20);
+              for (int j = jMin; j <= jMax; j++) {
+                for (int i = iMin; i <= iMax; i++) {
+                  float ox = -imgHW + i * imgW;
+                  float oy = -hh + j * mirrorH;
+                  NVGpaint p = nvgImagePattern(args.vg, ox, oy, imgW, mirrorH,
+                                               0.f, flowerImg, alpha);
+                  nvgBeginPath(args.vg);
+                  nvgRect(args.vg, ox, oy, imgW, mirrorH);
+                  nvgFillPaint(args.vg, p);
+                  nvgFill(args.vg);
+                }
+              }
+            } else {
+              NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
+                                           0.f, flowerImg, alpha);
+              nvgBeginPath(args.vg);
+              nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
+              nvgFillPaint(args.vg, p);
+              nvgFill(args.vg);
+            }
+          }
+        } else if (kaliMode > 0) {
           // No global rotation here — each sector applies its own rotation with
           // sign correction for flipped sectors (see kSector in
           // MirrorKaleidoscope.hpp).
@@ -1003,22 +1125,15 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           float nvgTx = 0.f, nvgTy = 0.f;
           if (txOn || tyOn) {
             if (m->translateFirst) {
-              // "Translate > Kaleid": offset image pattern origin so content
-              // scrolls through the fixed mirror geometry.  1 unit = 1 full
-              // image width of content scroll, scale-independent by nature.
               kaliTxOff = txLocal;
               kaliTyOff = tyLocal;
             } else {
-              // "Kaleid > Translate": shift the kali symmetry center.
-              // Divide by scale so 10V always = imgW screen pixels regardless
-              // of the current scale setting.
               nvgTx = txLocal / absSx;
               nvgTy = tyLocal / absSy;
               nvgTranslate(args.vg, nvgTx, nvgTy);
             }
           }
 
-          // Bounds for tile culling — use the actual NVG-space shift.
           float effTxAbs = fabsf(nvgTx);
           float effTyAbs = fabsf(nvgTy);
           float rHW = ((imgW + 2.f * effTxAbs) * cosA +
@@ -1029,9 +1144,6 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                        (box.size.y + 2.f * effTyAbs) * cosA) /
                           (2.f * absSy) +
                       4.f;
-          // Display bounds in the current (post-nvgTx) coordinate space.
-          // kSector uses these to guarantee a non-degenerate scissor
-          // intersection.
           float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
           float pcy = -(tyOn && !m->translateFirst ? nvgTy : 0.f);
           float dispHW = hw / absSx;
@@ -1050,7 +1162,6 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               for (int i = iMin; i <= iMax; i++) {
                 nvgSave(args.vg);
                 nvgTranslate(args.vg, i * imgW, j * mirrorH);
-                // Display bounds shifted into this tile's coordinate space.
                 float dX = pcx - dispHW - (float)i * imgW;
                 float dY = pcy - dispHH - (float)j * mirrorH;
                 drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW,
@@ -1061,8 +1172,6 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               }
             }
           } else {
-            // Draw kaleidoscope first (large coverHW rect fills each sector
-            // fully).
             drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH,
                              kaliMode, alpha, rotOn, rotV, false, 0.f, false,
                              pcx - dispHW, pcy - dispHH, 2.f * dispHW,
@@ -1260,6 +1369,14 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       menu->addChild(createCheckMenuItem(
           "Translate > Kaleid", "", [=]() { return m->translateFirst; },
           [=]() { m->translateFirst = true; }));
+    }));
+    menu->addChild(createSubmenuItem("Kaleid style", "", [=](Menu* menu) {
+      menu->addChild(createCheckMenuItem(
+          "Classic", "", [=]() { return m->kaleidStyle == 0; },
+          [=]() { m->kaleidStyle = 0; }));
+      menu->addChild(createCheckMenuItem(
+          "Premium", "", [=]() { return m->kaleidStyle == 1; },
+          [=]() { m->kaleidStyle = 1; }));
     }));
   }
 
