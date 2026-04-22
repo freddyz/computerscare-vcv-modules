@@ -6,7 +6,7 @@
 <img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/ohpeas-basic-1.png" width="500" alt="Oh Peas! Quad Quantenuverter" />
 
 ### Text Input:
-The scale for quantization is programmed via the text field.  Oh Peas! expects numbers that mean “how many steps to the next note”. For example, the major triad “scale” (C, E, G) is programmed by entering `43` (meaning: 4 half steps, and then 3 half steps).  The minor triad (C, E flat, G) = `34` (3 half steps, then 4 half steps). The major scale would be `221222` (whole, whole half whole whole whole). The final half step back to the root note is always “implied” so you can safely skip it. Right click to see and select some pre-programmed common scales.
+The scale for quantization is programmed via the text field.  Oh Peas! expects numbers that mean “how many steps to the next note”. For example, the major triad “scale” (C, E, G) is programmed by entering `43` (meaning: 4 half steps, and then 3 half steps).  The minor triad (C, E flat, G) = `34` (3 half steps, then 4 half steps). The major scale would be `221222` (whole, whole half whole whole whole). The final half step back to the root note is always “implied” so you can safely skip it. Right click and use `Scale Presets >` to see and select some pre-programmed common scales.
 
 ### Input Jacks:
 
@@ -29,6 +29,14 @@ The scale for quantization is programmed via the text field.  Oh Peas! expects n
 
 **Offset Knob ("offset", large knob, _d_):** Constant offset to add after "range" section is applied.  +/- 5 volts.
 
+### Right Click Menu:
+**Scale Presets:** Common preset scales are available in the `Scale Presets >` submenu.
+
+**Gain Mode:** Each column has its own setting in `Gain Mode >`.
+
+**Bipolar:** Default behavior.  The effective gain can go negative, so the input can be inverted.
+
+**VCA Mode (Unipolar Gain):** Floors the effective gain at 0 for that column.  In other words, if `range knob + RANGE CV * range attenuverter` goes negative, it is clamped to 0 instead.
 
 
 
@@ -44,6 +52,12 @@ or... a bit easier to read using the italic letters above in the input/knob desc
 
 ~~~~
 A*(a + B*b) + C*c + d
+~~~~
+
+With `Gain Mode > VCA Mode (Unipolar Gain)` enabled for a column, the gain term is clamped before it is applied:
+
+~~~~
+A*max(a + B*b, 0) + C*c + d
 ~~~~
 
 **Quantized Output (quantized):** The attenuverted and offset main input signal, quantized to the desired scale.  The quantization works a bit differently than other quantizers.  Oh Peas first figures out how many steps are in the defined scale, and then equally distributes the input signal between the allowed scale notes.  This is easiest to understand by feeding a sawtooth LFO wave into the input, and noticing that the quantized output produces the scale values each with an equal amount of time.  Most quantizers seem to map the input voltage to the closest allowed scale note which makes a sawtooth wave spend more time on the notes that are farther away from their neighbors.  One implication of this is that plugging the V/Oct of a midi keyboard into Oh Peas will mean some notes on the keyboard will not be quantized to the same output note of Oh Peas!  In fact, that's why it's called "Oh Peas!"

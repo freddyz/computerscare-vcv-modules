@@ -39,6 +39,7 @@ struct ComputerscareOhPeas : Module {
   int globalTranspose = 0;
   bool evenQuantizeMode = true;
   bool manualSet = true;
+  bool unipolarGainMode[numChannels] = {};
 
   int checkCounter = 9999;
   int checkPeriod = 1000;
@@ -88,8 +89,13 @@ struct ComputerscareOhPeas : Module {
     json_t* rootJ = json_object();
 
     json_t* sequenceJ = json_string(currentFormula.c_str());
-
     json_object_set_new(rootJ, "sequences", sequenceJ);
+    json_t* unipolarGainModeJ = json_array();
+    for (int i = 0; i < numChannels; i++) {
+      json_array_append_new(unipolarGainModeJ,
+                            json_boolean(unipolarGainMode[i]));
+    }
+    json_object_set_new(rootJ, "unipolarGainMode", unipolarGainModeJ);
 
     return rootJ;
   }
@@ -100,6 +106,16 @@ struct ComputerscareOhPeas : Module {
     if (textJ) {
       currentFormula = json_string_value(textJ);
       manualSet = true;
+    }
+
+    json_t* unipolarGainModeJ = json_object_get(rootJ, "unipolarGainMode");
+    if (unipolarGainModeJ) {
+      for (int i = 0; i < numChannels; i++) {
+        json_t* channelJ = json_array_get(unipolarGainModeJ, i);
+        if (channelJ) {
+          unipolarGainMode[i] = json_boolean_value(channelJ);
+        }
+      }
     }
   }
 
@@ -166,7 +182,12 @@ void ComputerscareOhPeas::process(const ProcessArgs& args) {
         C = inputs[OFFSET_CV + i].getVoltage(numOffsetCVChannels == 1 ? 0 : ch);
         d = params[OFFSET_VAL + i].getValue();
 
-        D = (b * B + a) * A + (c * C + d);
+        float gain = b * B + a;
+        if (unipolarGainMode[i]) {
+          gain = std::max(gain, 0.f);
+        }
+
+        D = gain * A + (c * C + d);
 
         Q = quant.quantizeEven(D, iTranspose);
 
@@ -368,8 +389,34 @@ struct SetScaleMenuItem : MenuItem {
   SetScaleMenuItem(std::string scaleInput) { scale = scaleInput; }
 
   void onAction(const event::Action& e) override {
+    peas->currentFormula = scale;
+    peas->manualSet = true;
     peasWidget->textFieldTemp->text = scale;
     peas->setQuant();
+  }
+};
+struct SetGainModeMenuItem : MenuItem {
+  ComputerscareOhPeas* peas;
+  int channel = 0;
+  bool enabled = false;
+
+  void onAction(const event::Action& e) override {
+    peas->unipolarGainMode[channel] = enabled;
+  }
+
+  void step() override {
+    rightText = CHECKMARK(peas->unipolarGainMode[channel] == enabled);
+    MenuItem::step();
+  }
+};
+struct SetAllGainModesMenuItem : MenuItem {
+  ComputerscareOhPeas* peas;
+  bool enabled = false;
+
+  void onAction(const event::Action& e) override {
+    for (int i = 0; i < numChannels; i++) {
+      peas->unipolarGainMode[i] = enabled;
+    }
   }
 };
 void ComputerscareOhPeasWidget::scaleItemAdd(ComputerscareOhPeas* peas,
@@ -383,31 +430,69 @@ void ComputerscareOhPeasWidget::scaleItemAdd(ComputerscareOhPeas* peas,
 }
 void ComputerscareOhPeasWidget::appendContextMenu(Menu* menu) {
   ComputerscareOhPeas* peas = dynamic_cast<ComputerscareOhPeas*>(this->module);
+  if (!peas) return;
 
   MenuLabel* spacerLabel = new MenuLabel();
   menu->addChild(spacerLabel);
 
-  MenuLabel* modeLabel = new MenuLabel();
-  modeLabel->text = "Scale Presets";
-  menu->addChild(modeLabel);
+  menu->addChild(createSubmenuItem("Gain Mode", "", [=](Menu* submenu) {
+    auto* allBipolarItem = new SetAllGainModesMenuItem();
+    allBipolarItem->text = "Set All To Bipolar";
+    allBipolarItem->peas = peas;
+    allBipolarItem->enabled = false;
+    submenu->addChild(allBipolarItem);
 
-  scaleItemAdd(peas, menu, "221222", "Major");
-  scaleItemAdd(peas, menu, "212212", "Natural Minor");
-  scaleItemAdd(peas, menu, "2232", "Major Pentatonic");
-  scaleItemAdd(peas, menu, "3223", "Minor Pentatonic");
-  scaleItemAdd(peas, menu, "32113", "Blues");
-  scaleItemAdd(peas, menu, "11111111111", "Chromatic");
-  scaleItemAdd(peas, menu, "212213", "Harmonic Minor");
-  scaleItemAdd(peas, menu, "22222", "Whole-Tone");
-  scaleItemAdd(peas, menu, "2121212", "Whole-Half Diminished");
+    auto* allUnipolarItem = new SetAllGainModesMenuItem();
+    allUnipolarItem->text = "Set All To Unipolar";
+    allUnipolarItem->peas = peas;
+    allUnipolarItem->enabled = true;
+    submenu->addChild(allUnipolarItem);
 
-  scaleItemAdd(peas, menu, "43", "Major Triad");
-  scaleItemAdd(peas, menu, "34", "Minor Triad");
-  scaleItemAdd(peas, menu, "33", "Diminished Triad");
-  scaleItemAdd(peas, menu, "434", "Major 7 Tetrachord");
-  scaleItemAdd(peas, menu, "433", "Dominant 7 Tetrachord");
-  scaleItemAdd(peas, menu, "343", "Minor 7 Tetrachord");
-  scaleItemAdd(peas, menu, "334", "Minor 7 b5 Tetrachord");
+    submenu->addChild(new MenuSeparator());
+
+    for (int i = 0; i < numChannels; i++) {
+      submenu->addChild(construct<MenuLabel>(
+          &MenuLabel::text, "Column " + std::to_string(i + 1)));
+
+      auto* normalItem = new SetGainModeMenuItem();
+      normalItem->text = "Bipolar";
+      normalItem->peas = peas;
+      normalItem->channel = i;
+      normalItem->enabled = false;
+      submenu->addChild(normalItem);
+
+      auto* vcaItem = new SetGainModeMenuItem();
+      vcaItem->text = "VCA Mode (Unipolar Gain)";
+      vcaItem->peas = peas;
+      vcaItem->channel = i;
+      vcaItem->enabled = true;
+      submenu->addChild(vcaItem);
+
+      if (i < numChannels - 1) {
+        submenu->addChild(new MenuSeparator());
+      }
+    }
+  }));
+
+  menu->addChild(createSubmenuItem("Scale Presets", "", [=](Menu* submenu) {
+    scaleItemAdd(peas, submenu, "221222", "Major");
+    scaleItemAdd(peas, submenu, "212212", "Natural Minor");
+    scaleItemAdd(peas, submenu, "2232", "Major Pentatonic");
+    scaleItemAdd(peas, submenu, "3223", "Minor Pentatonic");
+    scaleItemAdd(peas, submenu, "32113", "Blues");
+    scaleItemAdd(peas, submenu, "11111111111", "Chromatic");
+    scaleItemAdd(peas, submenu, "212213", "Harmonic Minor");
+    scaleItemAdd(peas, submenu, "22222", "Whole-Tone");
+    scaleItemAdd(peas, submenu, "2121212", "Whole-Half Diminished");
+    submenu->addChild(new MenuSeparator());
+    scaleItemAdd(peas, submenu, "43", "Major Triad");
+    scaleItemAdd(peas, submenu, "34", "Minor Triad");
+    scaleItemAdd(peas, submenu, "33", "Diminished Triad");
+    scaleItemAdd(peas, submenu, "434", "Major 7 Tetrachord");
+    scaleItemAdd(peas, submenu, "433", "Dominant 7 Tetrachord");
+    scaleItemAdd(peas, submenu, "343", "Minor 7 Tetrachord");
+    scaleItemAdd(peas, submenu, "334", "Minor 7 b5 Tetrachord");
+  }));
 }
 
 // Specify the Module and ModuleWidget subclass, human-readable
