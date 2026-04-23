@@ -43,6 +43,20 @@ static inline float wrapToRange(float value, float minValue, float maxValue) {
   return minValue + wrapped;
 }
 
+enum PortaloofRowIndex {
+  ROW_SCALE = 0,
+  ROW_SCALE_X,
+  ROW_SCALE_Y,
+  ROW_ROT,
+  ROW_KALEIDO,
+  ROW_TRANS_X,
+  ROW_TRANS_Y,
+  ROW_HUE,
+  ROW_INVERT,
+  ROW_CURVES,
+  ROW_COUNT
+};
+
 // ─── Module ──────────────────────────────────────────────────────────────────
 
 struct ComputerscarePortaloof : Module {
@@ -130,8 +144,9 @@ struct ComputerscarePortaloof : Module {
   bool freezeMode = false;
   bool lastFreezeMode = false;
   float inputSourceMix = 1.f;
-  bool rowEnabled[10] = {};
-  float rowValue[10] = {1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
+  bool rowEnabled[ROW_COUNT] = {};
+  float rowValue[ROW_COUNT] = {1.f, 1.f, 1.f, 0.f, 0.f,
+                               0.f, 0.f, 0.f, 0.f, 0.f};
 
   std::atomic<bool> capturePending{false};
   std::atomic<bool> backdropCapturePending{false};
@@ -210,32 +225,32 @@ struct ComputerscarePortaloof : Module {
   }
 
   void process(const ProcessArgs& args) override {
-    static const int toggleIds[10] = {
+    static const int toggleIds[ROW_COUNT] = {
         SCALE_TOGGLE,   SCALE_X_TOGGLE, SCALE_Y_TOGGLE, ROT_TOGGLE,
         KALEIDO_TOGGLE, TRANS_X_TOGGLE, TRANS_Y_TOGGLE, HUE_TOGGLE,
         INVERT_TOGGLE,  CURVES_TOGGLE};
-    static const int knobIds[10] = {
+    static const int knobIds[ROW_COUNT] = {
         SCALE_KNOB,   SCALE_X_KNOB, SCALE_Y_KNOB, ROT_KNOB,    KALEIDO_KNOB,
         TRANS_X_KNOB, TRANS_Y_KNOB, HUE_KNOB,     INVERT_KNOB, CURVES_KNOB};
-    static const int attenIds[10] = {
+    static const int attenIds[ROW_COUNT] = {
         SCALE_ATTEN,   SCALE_X_ATTEN, SCALE_Y_ATTEN, ROT_ATTEN,
         KALEIDO_ATTEN, TRANS_X_ATTEN, TRANS_Y_ATTEN, HUE_ATTEN,
         INVERT_ATTEN,  CURVES_ATTEN};
-    static const int gateIds[10] = {SCALE_GATE_INPUT,   SCALE_X_GATE_INPUT,
-                                    SCALE_Y_GATE_INPUT, ROT_GATE_INPUT,
-                                    KALEIDO_GATE_INPUT, TRANS_X_GATE_INPUT,
-                                    TRANS_Y_GATE_INPUT, HUE_GATE_INPUT,
-                                    INVERT_GATE_INPUT,  CURVES_GATE_INPUT};
-    static const int cvIds[10] = {
+    static const int gateIds[ROW_COUNT] = {
+        SCALE_GATE_INPUT,   SCALE_X_GATE_INPUT, SCALE_Y_GATE_INPUT,
+        ROT_GATE_INPUT,     KALEIDO_GATE_INPUT, TRANS_X_GATE_INPUT,
+        TRANS_Y_GATE_INPUT, HUE_GATE_INPUT,     INVERT_GATE_INPUT,
+        CURVES_GATE_INPUT};
+    static const int cvIds[ROW_COUNT] = {
         SCALE_CV_INPUT,   SCALE_X_CV_INPUT, SCALE_Y_CV_INPUT, ROT_CV_INPUT,
         KALEIDO_CV_INPUT, TRANS_X_CV_INPUT, TRANS_Y_CV_INPUT, HUE_CV_INPUT,
         INVERT_CV_INPUT,  CURVES_CV_INPUT};
-    static const float mins[10] = {0.1f, -5.f, -5.f,   -360.f, 0.f,
-                                   -1.f, -1.f, -360.f, 0.f,    -1.f};
-    static const float maxs[10] = {4.f, 5.f, 5.f,   360.f, 12.f,
-                                   1.f, 1.f, 360.f, 1.f,   1.f};
-    static const float cvScale[10] = {0.3f, 0.5f, 0.5f, 36.f, 1.1f,
-                                      0.1f, 0.1f, 36.f, 0.1f, 0.1f};
+    static const float mins[ROW_COUNT] = {0.1f, -5.f, -5.f,   -360.f, 0.f,
+                                          -1.f, -1.f, -360.f, 0.f,    -1.f};
+    static const float maxs[ROW_COUNT] = {4.f, 5.f, 5.f,   360.f, 12.f,
+                                          1.f, 1.f, 360.f, 1.f,   1.f};
+    static const float cvScale[ROW_COUNT] = {0.3f, 0.5f, 0.5f, 36.f, 1.1f,
+                                             0.1f, 0.1f, 36.f, 0.1f, 0.1f};
 
     // Freeze mode: gate jack overrides button when connected
     bool gateConnected = inputs[FREEZE_GATE_INPUT].isConnected();
@@ -253,7 +268,7 @@ struct ComputerscarePortaloof : Module {
     inputSourceMix =
         clamp(params[INPUT_SOURCE_MIX].getValue() + mixCv, -1.f, 1.f);
 
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i < ROW_COUNT; i++) {
       bool gateConn = inputs[gateIds[i]].isConnected();
       rowEnabled[i] = gateConn ? (inputs[gateIds[i]].getVoltage() > 0.5f)
                                : (params[toggleIds[i]].getValue() > 0.5f);
@@ -263,7 +278,8 @@ struct ComputerscarePortaloof : Module {
       float cv =
           inputs[cvIds[i]].isConnected() ? inputs[cvIds[i]].getVoltage() : 0.f;
       float combined = offset + atten * cv * cvScale[i];
-      bool wraps = (i == 3 || i == 5 || i == 6 || i == 7);
+      bool wraps = (i == ROW_ROT || i == ROW_TRANS_X || i == ROW_TRANS_Y ||
+                    i == ROW_HUE);
       rowValue[i] = wraps ? wrapToRange(combined, mins[i], maxs[i])
                           : clamp(combined, mins[i], maxs[i]);
     }
@@ -273,7 +289,7 @@ struct ComputerscarePortaloof : Module {
     //   [0, 1] → [0.1, 1.0] quadratic (fine control near center)
     //   [1, 5] → [1.0, 5.0] exponential (coarser at extremes)
     // Default knob=1 → scale=1.0 (identity). Negative values mirror the axis.
-    for (int si = 1; si <= 2; si++) {
+    for (int si = ROW_SCALE_X; si <= ROW_SCALE_Y; si++) {
       float k = rowValue[si];
       float sign = (k >= 0.f) ? 1.f : -1.f;
       float a = fabsf(k);
