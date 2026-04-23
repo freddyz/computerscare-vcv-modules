@@ -788,7 +788,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         createInput<InPort>(Vec(CONT_JACK_X, HDR_JACK_Y), module,
                             ComputerscarePortaloof::FREEZE_GATE_INPUT));
 
-    addHdrLabel(MIX_JACK_X + HDR_BTN_DX - 2.f, "MIX");
+    addHdrLabel(MIX_JACK_X + HDR_BTN_DX - 4.f, "MIX");
     addParam(createParam<SmallKnob>(
         Vec(MIX_JACK_X + HDR_BTN_DX + 1.f, HDR_JACK_Y + HDR_BTN_DY + 5.f),
         module, ComputerscarePortaloof::INPUT_SOURCE_MIX));
