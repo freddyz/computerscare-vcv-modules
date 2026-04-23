@@ -9,11 +9,7 @@
 #include "MirrorKaleidoscope.hpp"
 #include "MirrorRotation.hpp"
 #include "ScreenCaptureEffect.hpp"
-
-// Momentary version of SmallIsoButton for the trigger
-struct PortaloofTrigButton : SmallIsoButton {
-  PortaloofTrigButton() { momentary = true; }
-};
+#include "SourceBlendFBO.hpp"
 
 static inline bool reverseOuterTile(int tileIndex) {
   return (tileIndex & 1) != 0;
@@ -51,7 +47,7 @@ static inline float wrapToRange(float value, float minValue, float maxValue) {
 struct ComputerscarePortaloof : Module {
   enum ParamId {
     FREEZE_TOGGLE,
-    TRIGGER_BUTTON,     // momentary: fires one draw frame
+    INPUT_SOURCE_MIX,
     // Effects: toggle + knob (offset) + attenuverter triples
     SCALE_TOGGLE,
     SCALE_KNOB,
@@ -113,7 +109,7 @@ struct ComputerscarePortaloof : Module {
     CURVES_CV_INPUT,
     // Global mode inputs
     FREEZE_GATE_INPUT,      // gate: high=freeze, low=continuous
-    TRIGGER_INPUT,          // trigger: fires one draw in freeze mode
+    INPUT_SOURCE_MIX_INPUT,
     NUM_INPUTS
   };
 
@@ -131,19 +127,18 @@ struct ComputerscarePortaloof : Module {
 
   // Effective row state — computed in process(), read in drawLayer()
   bool freezeMode = false;
+  bool lastFreezeMode = false;
+  float inputSourceMix = 1.f;
   bool rowEnabled[10] = {};
   float rowValue[10] = {1.f, 1.f, 1.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f};
 
-  std::atomic<bool> triggerFired{false};
-  std::atomic<bool> backdropTriggerFired{false};
-  std::atomic<bool> imageGateActive{false};
-  dsp::SchmittTrigger trigInputDetector;
-  dsp::SchmittTrigger trigButtonDetector;
+  std::atomic<bool> capturePending{false};
+  std::atomic<bool> backdropCapturePending{false};
 
   ComputerscarePortaloof() {
     config(NUM_PARAMS, NUM_INPUTS, 0, 0);
     configSwitch(FREEZE_TOGGLE, 0.f, 1.f, 0.f, "Freeze", {"Off", "On"});
-    configParam(TRIGGER_BUTTON, 0.f, 1.f, 0.f, "Trigger");
+    configParam(INPUT_SOURCE_MIX, -1.f, 1.f, 1.f, "Input Source Mix");
 
     configSwitch(SCALE_TOGGLE, 0.f, 1.f, 1.f, "Scale", {"Off", "On"});
     configParam(SCALE_KNOB, 0.1f, 4.f, 1.f, "Scale");
@@ -201,13 +196,13 @@ struct ComputerscarePortaloof : Module {
     configInput(INVERT_CV_INPUT, "Invert CV");
     configInput(CURVES_CV_INPUT, "Curves CV");
     configInput(FREEZE_GATE_INPUT, "Freeze (gate)");
-    configInput(TRIGGER_INPUT, "Trigger");
+    configInput(INPUT_SOURCE_MIX_INPUT, "Input Source Mix CV");
   }
 
   void onRandomize(const RandomizeEvent& e) override {
     for (int id = 0; id < NUM_PARAMS; id++) {
       if (id == FREEZE_TOGGLE) continue;
-      if (id == TRIGGER_BUTTON) continue;
+      if (id == INPUT_SOURCE_MIX) continue;
       if (id == BACKDROP_ALPHA) continue;
       paramQuantities[id]->randomize();
     }
@@ -246,33 +241,17 @@ struct ComputerscarePortaloof : Module {
     freezeMode = gateConnected
                      ? (inputs[FREEZE_GATE_INPUT].getVoltage() > 0.5f)
                      : (params[FREEZE_TOGGLE].getValue() > 0.5f);
-
-    if (freezeMode) {
-      // Freeze mode: detect rising edges to fire a screen capture
-      bool fired = false;
-      if (inputs[TRIGGER_INPUT].isConnected()) {
-        fired |= trigInputDetector.process(inputs[TRIGGER_INPUT].getVoltage(),
-                                           0.1f, 2.f);
-      } else {
-        trigInputDetector.reset();
-      }
-      fired |= trigButtonDetector.process(params[TRIGGER_BUTTON].getValue(),
-                                          0.1f, 0.5f);
-      if (fired) {
-        triggerFired.store(true);
-        backdropTriggerFired.store(true);
-      }
-      imageGateActive.store(false);
-    } else {
-      // Continuous mode: gate controls image source while held
-      bool gateHigh = false;
-      if (inputs[TRIGGER_INPUT].isConnected())
-        gateHigh |= inputs[TRIGGER_INPUT].getVoltage() > 0.5f;
-      gateHigh |= params[TRIGGER_BUTTON].getValue() > 0.5f;
-      imageGateActive.store(gateHigh);
-      trigInputDetector.reset();
-      trigButtonDetector.reset();
+    if (freezeMode && !lastFreezeMode) {
+      capturePending.store(true);
+      backdropCapturePending.store(true);
     }
+    lastFreezeMode = freezeMode;
+
+    float mixCv = inputs[INPUT_SOURCE_MIX_INPUT].isConnected()
+                      ? inputs[INPUT_SOURCE_MIX_INPUT].getVoltage() / 5.f
+                      : 0.f;
+    inputSourceMix = clamp(params[INPUT_SOURCE_MIX].getValue() + mixCv, -1.f,
+                           1.f);
 
     for (int i = 0; i < 10; i++) {
       bool gateConn = inputs[gateIds[i]].isConnected();
@@ -311,9 +290,12 @@ struct ComputerscarePortaloof : Module {
 
   void onReset(const ResetEvent& e) override {
     float freezeVal = params[FREEZE_TOGGLE].getValue();
+    float mixVal = params[INPUT_SOURCE_MIX].getValue();
     Module::onReset(e);
     params[FREEZE_TOGGLE].setValue(freezeVal);
+    params[INPUT_SOURCE_MIX].setValue(mixVal);
     backdropEnabled = false;
+    lastFreezeMode = freezeMode;
   }
 
   json_t* dataToJson() override {
@@ -366,6 +348,7 @@ struct PortaloofBackdropWidget : widget::Widget {
   ComputerscarePortaloof* module = nullptr;
   ScreenCapture screenCap;
   ColorTransformFBO colorFBO;
+  SourceBlendFBO sourceBlendFBO;
   FlowerKaleidFBO flowerKaleidFBO;
   bool cachedRowEnabled[10] = {};
   float cachedRowValue[10] = {};
@@ -375,7 +358,6 @@ struct PortaloofBackdropWidget : widget::Widget {
   std::string lastImagePath;
   int loadedNvgImg = -1;
   GLuint loadedTexId = 0;
-  bool pendingInject = false;
 
   PortaloofBackdropWidget() {
     box.pos = math::Vec(0.f, 0.f);
@@ -401,41 +383,42 @@ struct PortaloofBackdropWidget : widget::Widget {
       lastImagePath = module->loadedImagePath;
       if (!lastImagePath.empty()) {
         loadedNvgImg = nvgCreateImage(args.vg, lastImagePath.c_str(), 0);
-        if (loadedNvgImg >= 0) {
+        if (loadedNvgImg >= 0)
           loadedTexId = nvglImageHandleGL2(args.vg, loadedNvgImg);
-          pendingInject = true;
-        }
       }
     }
 
-    bool gateActive = module->imageGateActive.load();
-    bool doCapture =
-        !module->freezeMode || module->backdropTriggerFired.exchange(false);
+    int fbW, fbH;
+    glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
-    if (gateActive && loadedNvgImg >= 0 && loadedTexId != 0)
-      pendingInject = true;
-
-    bool useInjected = pendingInject && loadedNvgImg >= 0 && loadedTexId != 0;
-    if (!doCapture && !useInjected && screenCap.nvgImg < 0) return;
+    bool doCapture = !module->freezeMode ||
+                     module->backdropCapturePending.exchange(false) ||
+                     !hasValidCache;
+    bool hasImage = (loadedNvgImg >= 0 && loadedTexId != 0);
+    if (!doCapture && !hasImage && screenCap.nvgImg < 0) return;
 
     if (doCapture) {
-      if (useInjected) {
-        if (!gateActive) pendingInject = false;
-        // Use loaded image — skip screen capture this frame
-      } else {
-        screenCap.capture(args.vg);
-      }
+      screenCap.capture(args.vg);
       memcpy(cachedRowEnabled, module->rowEnabled, sizeof(cachedRowEnabled));
       memcpy(cachedRowValue, module->rowValue, sizeof(cachedRowValue));
       hasValidCache = true;
     }
 
-    GLuint srcTex = useInjected ? loadedTexId : screenCap.texId;
-    int srcImg = useInjected ? loadedNvgImg : screenCap.nvgImg;
+    bool hasRack = (screenCap.nvgImg >= 0 && screenCap.texId != 0);
+    GLuint srcTex = hasRack ? screenCap.texId : loadedTexId;
+    int srcImg = hasRack ? screenCap.nvgImg : loadedNvgImg;
+    bool useInjected = !hasRack && hasImage;
+    if (hasRack && hasImage) {
+      float imageAmt = 0.5f * (1.f - module->inputSourceMix);
+      int mixedImg = sourceBlendFBO.apply(args.vg, screenCap.texId, loadedTexId,
+                                          fbW, fbH, imageAmt);
+      if (mixedImg >= 0 && sourceBlendFBO.outTex != 0) {
+        srcTex = sourceBlendFBO.outTex;
+        srcImg = mixedImg;
+        useInjected = false;
+      }
+    }
     if (srcImg < 0) return;
-
-    int fbW, fbH;
-    glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
     // Transform post: use live params (knobs alter frozen image).
     // Transform pre:  use cached params (knobs only affect next snapshot).
@@ -719,6 +702,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   ComputerscareResizeHandle* rightHandle;
   ScreenCapture screenCap;
   ColorTransformFBO colorFBO;
+  SourceBlendFBO sourceBlendFBO;
   FlowerKaleidFBO flowerKaleidFBO;
   PortaloofBackdropWidget* backdropWidget = nullptr;
   std::shared_ptr<window::Svg> panelSvg;
@@ -733,7 +717,6 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   std::string lastImagePath;
   int loadedNvgImg = -1;
   GLuint loadedTexId = 0;
-  bool pendingInject = false;
 
   // Browser preview fake module
   ComputerscarePortaloof* browserModule = nullptr;
@@ -782,8 +765,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     const float HDR_BTN_DX = -24.f;  // button x = jack x + this
     const float HDR_BTN_DY = -2.f;   // button y = jack y + this
 
-    const float CONT_JACK_X = 68.f;
-    const float TRIG_JACK_X = 122.f;
+    const float CONT_JACK_X = 64.f;
+    const float MIX_JACK_X = 122.f;
 
     auto addHdrLabel = [&](float x, const char* text) {
       SmallLetterDisplay* lbl = new SmallLetterDisplay();
@@ -805,12 +788,35 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         createInput<InPort>(Vec(CONT_JACK_X, HDR_JACK_Y), module,
                             ComputerscarePortaloof::FREEZE_GATE_INPUT));
 
-    addHdrLabel(TRIG_JACK_X + HDR_BTN_DX, "TRIG");
-    addParam(createParam<PortaloofTrigButton>(
-        Vec(TRIG_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY), module,
-        ComputerscarePortaloof::TRIGGER_BUTTON));
-    addInput(createInput<InPort>(Vec(TRIG_JACK_X, HDR_JACK_Y), module,
-                                 ComputerscarePortaloof::TRIGGER_INPUT));
+    addHdrLabel(MIX_JACK_X + HDR_BTN_DX - 2.f, "MIX");
+    addParam(createParam<SmallKnob>(
+        Vec(MIX_JACK_X + HDR_BTN_DX + 1.f, HDR_JACK_Y + HDR_BTN_DY + 5.f),
+        module, ComputerscarePortaloof::INPUT_SOURCE_MIX));
+    addInput(createInput<InPort>(Vec(MIX_JACK_X, HDR_JACK_Y), module,
+                                 ComputerscarePortaloof::INPUT_SOURCE_MIX_INPUT));
+    {
+      SmallLetterDisplay* leftLbl = new SmallLetterDisplay();
+      leftLbl->box.pos = Vec(MIX_JACK_X + HDR_BTN_DX - 14.f, HDR_JACK_Y + 18.f);
+      leftLbl->box.size = Vec(28.f, 14.f);
+      leftLbl->fontSize = 10;
+      leftLbl->letterSpacing = 1.5f;
+      leftLbl->value = "img";
+      leftLbl->textColor = nvgRGBf(0.1f, 0.1f, 0.1f);
+      leftLbl->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+      leftLbl->breakRowWidth = 28.f;
+      addChild(leftLbl);
+
+      SmallLetterDisplay* rightLbl = new SmallLetterDisplay();
+      rightLbl->box.pos = Vec(MIX_JACK_X + HDR_BTN_DX + 6.f, HDR_JACK_Y + 18.f);
+      rightLbl->box.size = Vec(40.f, 14.f);
+      rightLbl->fontSize = 10;
+      rightLbl->letterSpacing = 1.5f;
+      rightLbl->value = "Rack";
+      rightLbl->textColor = nvgRGBf(0.1f, 0.1f, 0.1f);
+      rightLbl->baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+      rightLbl->breakRowWidth = 40.f;
+      addChild(rightLbl);
+    }
 
     // ── 10 effect rows (7 geometry + 3 color) ────────────────────────────────
     // Shifted down 16px from original to accommodate header controls.
@@ -915,6 +921,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     if (!browserModule) {
       browserModule = new ComputerscarePortaloof();
       browserModule->loadedImagePath = pickRandomDocImage();
+      browserModule->inputSourceMix = -1.f;
+      browserModule->params[ComputerscarePortaloof::INPUT_SOURCE_MIX].setValue(
+          -1.f);
 
       // kali always on with mode >= 2
       browserModule->rowEnabled[4] = true;
@@ -976,27 +985,16 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         lastImagePath = m->loadedImagePath;
         if (!lastImagePath.empty()) {
           loadedNvgImg = nvgCreateImage(args.vg, lastImagePath.c_str(), 0);
-          if (loadedNvgImg >= 0) {
+          if (loadedNvgImg >= 0)
             loadedTexId = nvglImageHandleGL2(args.vg, loadedNvgImg);
-            pendingInject = true;
-          }
         }
       }
 
-      // In triggered mode, only re-capture when a trigger fired; otherwise hold
-      // last image
-      bool trigFired = m->triggerFired.exchange(false);
-      bool gateActive = m->imageGateActive.load();
-      bool doCapture = !m->freezeMode || trigFired;
+      bool doCapture =
+          !m->freezeMode || m->capturePending.exchange(false) || !hasValidCache;
+      bool hasImage = (loadedNvgImg >= 0 && loadedTexId != 0);
 
-      // Continuous mode + gate high + loaded image -> keep using the image as
-      // source
-      if (gateActive && loadedNvgImg >= 0 && loadedTexId != 0)
-        pendingInject = true;
-
-      bool useInjected = pendingInject && loadedNvgImg >= 0 && loadedTexId != 0;
-
-      if (m && (doCapture || useInjected || hasValidCache)) {
+      if (m && (doCapture || hasImage || hasValidCache)) {
         float alpha = 0.85f;
 
         // Choose live params on capture, or based on transform pre/post setting
@@ -1039,28 +1037,35 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         }
 
         if (doCapture) {
-          if (useInjected) {
-            if (!gateActive) pendingInject = false;
-            // Use loaded image — skip screen capture this frame
-          } else {
-            screenCap.capture(args.vg);
-          }
+          screenCap.capture(args.vg);
           // Update cache with current params
           memcpy(cachedRowEnabled, m->rowEnabled, sizeof(cachedRowEnabled));
           memcpy(cachedRowValue, m->rowValue, sizeof(cachedRowValue));
           hasValidCache = true;
         }
 
-        GLuint srcTex = useInjected ? loadedTexId : screenCap.texId;
-        int srcImg = useInjected ? loadedNvgImg : screenCap.nvgImg;
+        int fbW, fbH;
+        glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
+
+        bool hasRack = (screenCap.nvgImg >= 0 && screenCap.texId != 0);
+        GLuint srcTex = hasRack ? screenCap.texId : loadedTexId;
+        int srcImg = hasRack ? screenCap.nvgImg : loadedNvgImg;
+        bool useInjected = !hasRack && hasImage;
+        if (hasRack && hasImage) {
+          float imageAmt = 0.5f * (1.f - m->inputSourceMix);
+          int mixedImg = sourceBlendFBO.apply(args.vg, screenCap.texId,
+                                              loadedTexId, fbW, fbH, imageAmt);
+          if (mixedImg >= 0 && sourceBlendFBO.outTex != 0) {
+            srcTex = sourceBlendFBO.outTex;
+            srcImg = mixedImg;
+            useInjected = false;
+          }
+        }
 
         if (srcImg < 0) {
           ModuleWidget::drawLayer(args, layer);
           return;
         }
-
-        int fbW, fbH;
-        glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
         float hw =
             mirrorW * 0.5f;  // display half-width (for scissor/translate)
@@ -1495,6 +1500,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       bool windowEmpty = backdropWidget && m->emptyWindowInBgMode;
 
       if (!m->loadedJSON) {
+        if (m->loadedImagePath.empty()) m->loadedImagePath = pickRandomDocImage();
         box.size.x = m->width;
         if (!windowEmpty)
           bgPanel->box.size.x = m->width - DISPLAY_X;
