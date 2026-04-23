@@ -1457,21 +1457,6 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     }));
   }
 
-  void onHover(const HoverEvent& e) override {
-    ModuleWidget::onHover(e);
-    float hw = RACK_GRID_WIDTH;
-    bool overRightHandle = (e.pos.x >= box.size.x - hw);
-    static GLFWcursor* resizeCursor = nullptr;
-    if (!resizeCursor)
-      resizeCursor = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
-    glfwSetCursor(APP->window->win, overRightHandle ? resizeCursor : nullptr);
-  }
-
-  void onLeave(const LeaveEvent& e) override {
-    ModuleWidget::onLeave(e);
-    glfwSetCursor(APP->window->win, nullptr);
-  }
-
   void onPathDrop(const PathDropEvent& e) override {
     if (!module || e.paths.empty()) return;
     std::string path = e.paths[0];

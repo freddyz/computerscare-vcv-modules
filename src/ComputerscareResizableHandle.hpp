@@ -47,8 +47,17 @@ struct ComputerscareResizeHandle : OpaqueWidget {
   ComputerscareResizeHandle() {
     box.size = Vec(RACK_GRID_WIDTH * 1, RACK_GRID_HEIGHT);
   }
-  void onEnter(const event::Enter& e) override { OpaqueWidget::onEnter(e); }
-  void onLeave(const event::Leave& e) override { OpaqueWidget::onLeave(e); }
+  void onEnter(const event::Enter& e) override {
+    OpaqueWidget::onEnter(e);
+    static GLFWcursor* resizeCursor = nullptr;
+    if (!resizeCursor)
+      resizeCursor = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+    glfwSetCursor(APP->window->win, resizeCursor);
+  }
+  void onLeave(const event::Leave& e) override {
+    OpaqueWidget::onLeave(e);
+    glfwSetCursor(APP->window->win, nullptr);
+  }
   void onDragStart(const event::DragStart& e) override {
     if (e.button != GLFW_MOUSE_BUTTON_LEFT) return;
 
@@ -85,5 +94,10 @@ struct ComputerscareResizeHandle : OpaqueWidget {
     if (!APP->scene->rack->requestModulePos(mw, newBox.pos)) {
       mw->box = oldBox;
     }
+  }
+
+  void onDragEnd(const event::DragEnd& e) override {
+    OpaqueWidget::onDragEnd(e);
+    glfwSetCursor(APP->window->win, nullptr);
   }
 };
