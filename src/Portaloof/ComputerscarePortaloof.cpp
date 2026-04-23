@@ -2,6 +2,7 @@
 #include <osdialog.h>
 
 #include <atomic>
+
 #include "../Computerscare.hpp"
 #include "../ComputerscareResizableHandle.hpp"
 #include "ColorTransformFBO.hpp"
@@ -28,8 +29,8 @@ static inline int flowerKaleidTargetDim(float panelDim, float renderScale,
   float baseScale = std::max(renderScale, 1.f);
   float sourceScale =
       (panelDim > 0.f && sourceDim > 0) ? ((float)sourceDim / panelDim) : 1.f;
-  float targetScale = std::max(baseScale, std::min(baseScale * FLOWER_SSAA,
-                                                   std::max(sourceScale, 1.f)));
+  float targetScale = std::max(
+      baseScale, std::min(baseScale * FLOWER_SSAA, std::max(sourceScale, 1.f)));
   float targetDim = std::min(panelDim * targetScale, (float)FLOWER_MAX_DIM);
   return std::max((int)std::lround(targetDim), 1);
 }
@@ -108,7 +109,7 @@ struct ComputerscarePortaloof : Module {
     INVERT_CV_INPUT,
     CURVES_CV_INPUT,
     // Global mode inputs
-    FREEZE_GATE_INPUT,      // gate: high=freeze, low=continuous
+    FREEZE_GATE_INPUT,  // gate: high=freeze, low=continuous
     INPUT_SOURCE_MIX_INPUT,
     NUM_INPUTS
   };
@@ -238,9 +239,8 @@ struct ComputerscarePortaloof : Module {
 
     // Freeze mode: gate jack overrides button when connected
     bool gateConnected = inputs[FREEZE_GATE_INPUT].isConnected();
-    freezeMode = gateConnected
-                     ? (inputs[FREEZE_GATE_INPUT].getVoltage() > 0.5f)
-                     : (params[FREEZE_TOGGLE].getValue() > 0.5f);
+    freezeMode = gateConnected ? (inputs[FREEZE_GATE_INPUT].getVoltage() > 0.5f)
+                               : (params[FREEZE_TOGGLE].getValue() > 0.5f);
     if (freezeMode && !lastFreezeMode) {
       capturePending.store(true);
       backdropCapturePending.store(true);
@@ -250,8 +250,8 @@ struct ComputerscarePortaloof : Module {
     float mixCv = inputs[INPUT_SOURCE_MIX_INPUT].isConnected()
                       ? inputs[INPUT_SOURCE_MIX_INPUT].getVoltage() / 5.f
                       : 0.f;
-    inputSourceMix = clamp(params[INPUT_SOURCE_MIX].getValue() + mixCv, -1.f,
-                           1.f);
+    inputSourceMix =
+        clamp(params[INPUT_SOURCE_MIX].getValue() + mixCv, -1.f, 1.f);
 
     for (int i = 0; i < 10; i++) {
       bool gateConn = inputs[gateIds[i]].isConnected();
@@ -264,9 +264,8 @@ struct ComputerscarePortaloof : Module {
           inputs[cvIds[i]].isConnected() ? inputs[cvIds[i]].getVoltage() : 0.f;
       float combined = offset + atten * cv * cvScale[i];
       bool wraps = (i == 3 || i == 5 || i == 6 || i == 7);
-      rowValue[i] =
-          wraps ? wrapToRange(combined, mins[i], maxs[i])
-                : clamp(combined, mins[i], maxs[i]);
+      rowValue[i] = wraps ? wrapToRange(combined, mins[i], maxs[i])
+                          : clamp(combined, mins[i], maxs[i]);
     }
 
     // Exponential scale map for Scale X (row 1) and Scale Y (row 2).
@@ -451,9 +450,9 @@ struct PortaloofBackdropWidget : widget::Widget {
 
     int img = colorFBO.apply(args.vg, srcTex, srcImg, fbW, fbH, hueV, warpV,
                              foldFreqV, useInjected);
-    GLuint effectTex =
-        (img == colorFBO.nvgImg && colorFBO.outTex != 0) ? colorFBO.outTex
-                                                         : srcTex;
+    GLuint effectTex = (img == colorFBO.nvgImg && colorFBO.outTex != 0)
+                           ? colorFBO.outTex
+                           : srcTex;
 
     nvgSave(args.vg);
     nvgScissor(args.vg, vpX, vpY, vpW, vpH);
@@ -512,11 +511,10 @@ struct PortaloofBackdropWidget : widget::Widget {
               nvgSave(args.vg);
               nvgTranslate(args.vg, tileX, tileY);
               if (reverseX || reverseY) {
-                nvgScale(args.vg, reverseX ? -1.f : 1.f,
-                         reverseY ? -1.f : 1.f);
+                nvgScale(args.vg, reverseX ? -1.f : 1.f, reverseY ? -1.f : 1.f);
               }
-              NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH,
-                                           0.f, flowerImg, alpha);
+              NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f,
+                                           flowerImg, alpha);
               nvgBeginPath(args.vg);
               nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
               nvgFillPaint(args.vg, p);
@@ -583,8 +581,7 @@ struct PortaloofBackdropWidget : widget::Widget {
             nvgSave(args.vg);
             nvgTranslate(args.vg, tileX, tileY);
             if (reverseX || reverseY) {
-              nvgScale(args.vg, reverseX ? -1.f : 1.f,
-                       reverseY ? -1.f : 1.f);
+              nvgScale(args.vg, reverseX ? -1.f : 1.f, reverseY ? -1.f : 1.f);
             }
             float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
             float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
@@ -784,16 +781,16 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     addParam(createParam<SmallIsoButton>(
         Vec(CONT_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY), module,
         ComputerscarePortaloof::FREEZE_TOGGLE));
-    addInput(
-        createInput<InPort>(Vec(CONT_JACK_X, HDR_JACK_Y), module,
-                            ComputerscarePortaloof::FREEZE_GATE_INPUT));
+    addInput(createInput<InPort>(Vec(CONT_JACK_X, HDR_JACK_Y), module,
+                                 ComputerscarePortaloof::FREEZE_GATE_INPUT));
 
     addHdrLabel(MIX_JACK_X + HDR_BTN_DX - 4.f, "MIX");
     addParam(createParam<SmallKnob>(
         Vec(MIX_JACK_X + HDR_BTN_DX + 1.f, HDR_JACK_Y + HDR_BTN_DY + 5.f),
         module, ComputerscarePortaloof::INPUT_SOURCE_MIX));
-    addInput(createInput<InPort>(Vec(MIX_JACK_X, HDR_JACK_Y), module,
-                                 ComputerscarePortaloof::INPUT_SOURCE_MIX_INPUT));
+    addInput(
+        createInput<InPort>(Vec(MIX_JACK_X, HDR_JACK_Y), module,
+                            ComputerscarePortaloof::INPUT_SOURCE_MIX_INPUT));
     {
       SmallLetterDisplay* leftLbl = new SmallLetterDisplay();
       leftLbl->box.pos = Vec(MIX_JACK_X + HDR_BTN_DX - 14.f, HDR_JACK_Y + 18.f);
@@ -1106,9 +1103,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         bool tileOn = m->tileEmptySpace;
         int img = colorFBO.apply(args.vg, srcTex, srcImg, fbW, fbH, hueV, warpV,
                                  foldFreqV, useInjected);
-        GLuint effectTex =
-            (img == colorFBO.nvgImg && colorFBO.outTex != 0) ? colorFBO.outTex
-                                                             : srcTex;
+        GLuint effectTex = (img == colorFBO.nvgImg && colorFBO.outTex != 0)
+                               ? colorFBO.outTex
+                               : srcTex;
 
         int kaliMode = kaliOn ? (int)kaliV : 0;
 
@@ -1131,8 +1128,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             }
           }
           int flowerTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
-          int flowerTargetH =
-              flowerKaleidTargetDim(mirrorH, renderScale, fbH);
+          int flowerTargetH = flowerKaleidTargetDim(mirrorH, renderScale, fbH);
           float flowerScaleX =
               (imgW > 0.f) ? ((float)flowerTargetW / imgW) : 1.f;
           float flowerScaleY =
@@ -1500,7 +1496,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       bool windowEmpty = backdropWidget && m->emptyWindowInBgMode;
 
       if (!m->loadedJSON) {
-        if (m->loadedImagePath.empty()) m->loadedImagePath = pickRandomDocImage();
+        if (m->loadedImagePath.empty())
+          m->loadedImagePath = pickRandomDocImage();
         box.size.x = m->width;
         if (!windowEmpty)
           bgPanel->box.size.x = m->width - DISPLAY_X;
