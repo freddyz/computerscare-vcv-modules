@@ -458,10 +458,8 @@ struct PortaloofBackdropWidget : widget::Widget {
 
     float alpha =
         module->params[ComputerscarePortaloof::BACKDROP_ALPHA].getValue();
-    float sx =
-        clamp((scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f), 0.5f, 2.f);
-    float sy =
-        clamp((scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f), 0.5f, 2.f);
+    float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
+    float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
     float imgW = vpW;
     float imgHW = imgW * 0.5f;
     float hh = vpH * 0.5f;
@@ -789,7 +787,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
     auto addHdrLabel = [&](float x, const char* text) {
       SmallLetterDisplay* lbl = new SmallLetterDisplay();
-      lbl->box.pos = Vec(x, HDR_JACK_Y - 8.f);  // above jack
+      lbl->box.pos = Vec(x, HDR_JACK_Y - 11.f);  // above jack
       lbl->box.size = Vec(50.f, 14.f);
       lbl->fontSize = 12;
       lbl->value = text;
@@ -1075,10 +1073,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             m->maintainAspect ? (mirrorH * (float)fbW / (float)fbH) : mirrorW;
         float imgHW = imgW * 0.5f;
 
-        float sx = clamp((scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f),
-                         0.5f, 2.f);
-        float sy = clamp((scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f),
-                         0.5f, 2.f);
+        float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
+        float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
         // Translation is relative to one image width/height
         float txLocal = txOn ? txV * imgW : 0.f;
         float tyLocal = tyOn ? tyV * mirrorH : 0.f;
