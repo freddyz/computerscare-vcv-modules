@@ -458,8 +458,10 @@ struct PortaloofBackdropWidget : widget::Widget {
 
     float alpha =
         module->params[ComputerscarePortaloof::BACKDROP_ALPHA].getValue();
-    float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
-    float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
+    float sx =
+        clamp((scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f), 0.5f, 2.f);
+    float sy =
+        clamp((scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f), 0.5f, 2.f);
     float imgW = vpW;
     float imgHW = imgW * 0.5f;
     float hh = vpH * 0.5f;
@@ -1073,8 +1075,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             m->maintainAspect ? (mirrorH * (float)fbW / (float)fbH) : mirrorW;
         float imgHW = imgW * 0.5f;
 
-        float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
-        float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
+        float sx = clamp((scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f),
+                         0.5f, 2.f);
+        float sy = clamp((scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f),
+                         0.5f, 2.f);
         // Translation is relative to one image width/height
         float txLocal = txOn ? txV * imgW : 0.f;
         float tyLocal = tyOn ? tyV * mirrorH : 0.f;
