@@ -19,6 +19,11 @@ struct PortaloofInjectedSource {
   bool isValid() const { return texId != 0 && nvgImg >= 0; }
 };
 
+static inline bool& portaloofRenderingRackRectSource() {
+  static bool rendering = false;
+  return rendering;
+}
+
 struct PortaloofRackModuleSource {
   int64_t moduleId = -1;
 
@@ -138,6 +143,206 @@ struct PortaloofRackModuleSource {
     entry.hasFront = true;
     entry.rendering = false;
     return getFrontSource(vg, entry);
+  }
+
+ private:
+  static void deleteFramebuffer(NVGLUframebuffer*& fb) {
+    if (fb) {
+      nvgluDeleteFramebuffer(fb);
+      fb = nullptr;
+    }
+  }
+
+  static PortaloofInjectedSource getFrontSource(NVGcontext* vg,
+                                                CacheEntry& entry) {
+    PortaloofInjectedSource out;
+    if (!entry.hasFront) return out;
+    NVGLUframebuffer* frontFb = entry.fbs[entry.frontIndex];
+    if (!frontFb) return out;
+    out.nvgImg = frontFb->image;
+    out.texId = nvglImageHandleGL2(vg, out.nvgImg);
+    out.flipInputUV = false;
+    return out;
+  }
+
+  static void ensureFramebuffers(NVGcontext* vg, CacheEntry& entry,
+                                 math::Vec newFbSize) {
+    if (entry.fbs[0] && entry.fbs[1] && newFbSize.equals(entry.fbSize)) return;
+
+    deleteFramebuffer(entry.fbs[0]);
+    deleteFramebuffer(entry.fbs[1]);
+    entry.fbSize = math::Vec();
+    entry.hasFront = false;
+
+    if (!newFbSize.isFinite() || newFbSize.isZero()) return;
+
+    entry.fbs[0] =
+        nvgluCreateFramebuffer(vg, (int)newFbSize.x, (int)newFbSize.y, 0);
+    entry.fbs[1] =
+        nvgluCreateFramebuffer(vg, (int)newFbSize.x, (int)newFbSize.y, 0);
+    if (entry.fbs[0] && entry.fbs[1]) {
+      entry.fbSize = newFbSize;
+      entry.frontIndex = 0;
+    } else {
+      deleteFramebuffer(entry.fbs[0]);
+      deleteFramebuffer(entry.fbs[1]);
+    }
+  }
+};
+
+struct PortaloofRectSource {
+  math::Rect rect;
+  bool enabled = false;
+
+  struct CacheEntry {
+    NVGLUframebuffer* fbs[2] = {};
+    math::Vec fbSize;
+    int frontIndex = 0;
+    bool hasFront = false;
+    bool rendering = false;
+  };
+
+  CacheEntry cacheEntry;
+
+  bool hasSource() const {
+    return enabled && rect.size.x > 1.f && rect.size.y > 1.f &&
+           rect.pos.isFinite() && rect.size.isFinite();
+  }
+
+  void clear() {
+    enabled = false;
+    rect = math::Rect();
+  }
+
+  void setRect(math::Rect r) {
+    rect = r;
+    enabled = r.size.x > 1.f && r.size.y > 1.f && r.pos.isFinite() &&
+              r.size.isFinite();
+  }
+
+  std::string describe() const {
+    if (!hasSource()) return "None";
+    return string::f("%.0f, %.0f  %.0f x %.0f", rect.pos.x, rect.pos.y,
+                     rect.size.x, rect.size.y);
+  }
+
+  PortaloofInjectedSource render(NVGcontext* vg, int screenNvgImg,
+                                 math::Rect screenRect) {
+    PortaloofInjectedSource out;
+    if (screenNvgImg < 0 || !screenRect.pos.isFinite() ||
+        !screenRect.size.isFinite() || screenRect.size.x <= 1.f ||
+        screenRect.size.y <= 1.f)
+      return out;
+
+    int fbW = 0, fbH = 0;
+    glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
+    if (fbW <= 0 || fbH <= 0) return out;
+
+    float pixelRatio = std::max(APP->window->pixelRatio, 1.f);
+    math::Rect cropPx(screenRect.pos.mult(pixelRatio),
+                      screenRect.size.mult(pixelRatio));
+    cropPx = cropPx.clamp(math::Rect(0.f, 0.f, (float)fbW, (float)fbH));
+    math::Vec newFbSize = cropPx.size.ceil();
+    if (newFbSize.x <= 1.f || newFbSize.y <= 1.f) return out;
+
+    ensureFramebuffers(vg, cacheEntry, newFbSize);
+    if (!cacheEntry.fbs[0] || !cacheEntry.fbs[1])
+      return getFrontSource(vg, cacheEntry);
+
+    int backIndex = 1 - cacheEntry.frontIndex;
+    NVGLUframebuffer* backFb = cacheEntry.fbs[backIndex];
+    if (!backFb) return getFrontSource(vg, cacheEntry);
+
+    GLint prevDrawFBO = 0;
+    GLint prevViewport[4] = {};
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+
+    nvgluBindFramebuffer(backFb);
+    glViewport(0, 0, (GLsizei)newFbSize.x, (GLsizei)newFbSize.y);
+    glClearColor(0.f, 0.f, 0.f, 0.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    NVGcontext* fbVg = APP->window->fbVg;
+    nvgBeginFrame(fbVg, newFbSize.x, newFbSize.y, 1.f);
+    {
+      NVGpaint p =
+          nvgImagePattern(fbVg, -cropPx.pos.x, -cropPx.pos.y, (float)fbW,
+                          (float)fbH, 0.f, screenNvgImg, 1.f);
+      nvgBeginPath(fbVg);
+      nvgRect(fbVg, 0.f, 0.f, newFbSize.x, newFbSize.y);
+      nvgFillPaint(fbVg, p);
+      nvgFill(fbVg);
+    }
+    nvgEndFrame(fbVg);
+    nvgReset(fbVg);
+
+    nvgluBindFramebuffer(nullptr);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevDrawFBO);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2],
+               prevViewport[3]);
+
+    cacheEntry.frontIndex = backIndex;
+    cacheEntry.hasFront = true;
+    return getFrontSource(vg, cacheEntry);
+  }
+
+  PortaloofInjectedSource renderRack(NVGcontext* vg, math::Rect rackRect) {
+    PortaloofInjectedSource out;
+    if (!APP || !APP->scene || !APP->scene->rack || !rackRect.pos.isFinite() ||
+        !rackRect.size.isFinite() || rackRect.size.x <= 1.f ||
+        rackRect.size.y <= 1.f)
+      return out;
+
+    if (cacheEntry.rendering) return getFrontSource(vg, cacheEntry);
+
+    float pixelRatio = std::max(1.f, std::floor(APP->window->pixelRatio));
+    math::Vec newFbSize = rackRect.size.mult(pixelRatio).ceil();
+    ensureFramebuffers(vg, cacheEntry, newFbSize);
+    if (!cacheEntry.fbs[0] || !cacheEntry.fbs[1])
+      return getFrontSource(vg, cacheEntry);
+
+    int backIndex = 1 - cacheEntry.frontIndex;
+    NVGLUframebuffer* backFb = cacheEntry.fbs[backIndex];
+    if (!backFb) return getFrontSource(vg, cacheEntry);
+
+    GLint prevDrawFBO = 0;
+    GLint prevViewport[4] = {};
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+
+    cacheEntry.rendering = true;
+    bool previousRackRectRender = portaloofRenderingRackRectSource();
+    portaloofRenderingRackRectSource() = true;
+
+    nvgluBindFramebuffer(backFb);
+    glViewport(0, 0, (GLsizei)newFbSize.x, (GLsizei)newFbSize.y);
+    glClearColor(0.f, 0.f, 0.f, 0.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    NVGcontext* fbVg = APP->window->fbVg;
+    nvgBeginFrame(fbVg, rackRect.size.x, rackRect.size.y, pixelRatio);
+    {
+      widget::Widget::DrawArgs args;
+      args.vg = fbVg;
+      args.fb = backFb;
+      args.clipBox = rackRect;
+      nvgTranslate(fbVg, -rackRect.pos.x, -rackRect.pos.y);
+      APP->scene->rack->draw(args);
+    }
+    nvgEndFrame(fbVg);
+    nvgReset(fbVg);
+    portaloofRenderingRackRectSource() = previousRackRectRender;
+
+    nvgluBindFramebuffer(nullptr);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevDrawFBO);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2],
+               prevViewport[3]);
+
+    cacheEntry.frontIndex = backIndex;
+    cacheEntry.hasFront = true;
+    cacheEntry.rendering = false;
+    return getFrontSource(vg, cacheEntry);
   }
 
  private:

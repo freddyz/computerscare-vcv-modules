@@ -149,6 +149,10 @@ struct ComputerscarePortaloof : Module {
       false;  // false = Kaleid > Translate, true = Translate > Kaleid
   std::string loadedImagePath;
   int64_t rackSourceModuleId = -1;
+  bool rackRectSourceEnabled = false;
+  math::Rect rackRectSource;
+  bool screenRectSourceEnabled = false;
+  math::Rect screenRectSource;
   int legacyKaleidStyle = -1;
   bool legacyKaleidStylePending = false;
 
@@ -227,8 +231,37 @@ struct ComputerscarePortaloof : Module {
     configInput(INPUT_SOURCE_MIX_INPUT, "Input Source Mix CV");
   }
 
+  void clearRackSources() {
+    rackSourceModuleId = -1;
+    rackRectSourceEnabled = false;
+    rackRectSource = math::Rect();
+    screenRectSourceEnabled = false;
+    screenRectSource = math::Rect();
+  }
+
+  void setRackSourceModule(int64_t moduleId) {
+    clearRackSources();
+    rackSourceModuleId = moduleId;
+  }
+
+  void setRackRectSource(math::Rect r) {
+    clearRackSources();
+    rackRectSource = r;
+    rackRectSourceEnabled = r.size.x > 1.f && r.size.y > 1.f;
+  }
+
+  void setScreenRectSource(math::Rect r) {
+    clearRackSources();
+    screenRectSource = r;
+    screenRectSourceEnabled = r.size.x > 1.f && r.size.y > 1.f;
+  }
+
   void onRandomize(const RandomizeEvent& e) override {
     int64_t preservedRackSourceModuleId = rackSourceModuleId;
+    bool preservedRackRectSourceEnabled = rackRectSourceEnabled;
+    math::Rect preservedRackRectSource = rackRectSource;
+    bool preservedScreenRectSourceEnabled = screenRectSourceEnabled;
+    math::Rect preservedScreenRectSource = screenRectSource;
     for (int id = 0; id < NUM_PARAMS; id++) {
       if (id == FREEZE_TOGGLE) continue;
       if (id == INPUT_SOURCE_MIX) continue;
@@ -236,6 +269,10 @@ struct ComputerscarePortaloof : Module {
       paramQuantities[id]->randomize();
     }
     rackSourceModuleId = preservedRackSourceModuleId;
+    rackRectSourceEnabled = preservedRackRectSourceEnabled;
+    rackRectSource = preservedRackRectSource;
+    screenRectSourceEnabled = preservedScreenRectSourceEnabled;
+    screenRectSource = preservedScreenRectSource;
   }
 
   void process(const ProcessArgs& args) override {
@@ -349,6 +386,19 @@ struct ComputerscarePortaloof : Module {
     json_object_set_new(rootJ, "translateFirst", json_boolean(translateFirst));
     json_object_set_new(rootJ, "rackSourceModuleId",
                         json_integer(rackSourceModuleId));
+    json_object_set_new(rootJ, "rackRectSourceEnabled",
+                        json_boolean(rackRectSourceEnabled));
+    json_object_set_new(
+        rootJ, "rackRectSource",
+        json_pack("[f, f, f, f]", rackRectSource.pos.x, rackRectSource.pos.y,
+                  rackRectSource.size.x, rackRectSource.size.y));
+    json_object_set_new(rootJ, "screenRectSourceEnabled",
+                        json_boolean(screenRectSourceEnabled));
+    json_object_set_new(
+        rootJ, "screenRectSource",
+        json_pack("[f, f, f, f]", screenRectSource.pos.x,
+                  screenRectSource.pos.y, screenRectSource.size.x,
+                  screenRectSource.size.y));
     if (!loadedImagePath.empty())
       json_object_set_new(rootJ, "loadedImagePath",
                           json_string(loadedImagePath.c_str()));
@@ -372,6 +422,22 @@ struct ComputerscarePortaloof : Module {
     if (tfJ) translateFirst = json_boolean_value(tfJ);
     json_t* rsmJ = json_object_get(rootJ, "rackSourceModuleId");
     if (rsmJ) rackSourceModuleId = json_integer_value(rsmJ);
+    json_t* rrseJ = json_object_get(rootJ, "rackRectSourceEnabled");
+    if (rrseJ) rackRectSourceEnabled = json_boolean_value(rrseJ);
+    json_t* rrsJ = json_object_get(rootJ, "rackRectSource");
+    if (rrsJ) {
+      double x = 0.0, y = 0.0, w = 0.0, h = 0.0;
+      json_unpack(rrsJ, "[F, F, F, F]", &x, &y, &w, &h);
+      rackRectSource = math::Rect((float)x, (float)y, (float)w, (float)h);
+    }
+    json_t* srseJ = json_object_get(rootJ, "screenRectSourceEnabled");
+    if (srseJ) screenRectSourceEnabled = json_boolean_value(srseJ);
+    json_t* srsJ = json_object_get(rootJ, "screenRectSource");
+    if (srsJ) {
+      double x = 0.0, y = 0.0, w = 0.0, h = 0.0;
+      json_unpack(srsJ, "[F, F, F, F]", &x, &y, &w, &h);
+      screenRectSource = math::Rect((float)x, (float)y, (float)w, (float)h);
+    }
     json_t* ksJ = json_object_get(rootJ, "kaleidStyle");
     if (ksJ) {
       legacyKaleidStyle = (int)json_integer_value(ksJ);
@@ -395,6 +461,7 @@ struct PortaloofBackdropWidget : widget::Widget {
   SourceBlendFBO sourceBlendFBO;
   FlowerKaleidFBO flowerKaleidFBO;
   PortaloofRackModuleSource rackSource;
+  PortaloofRectSource rectSource;
   bool cachedRowEnabled[10] = {};
   float cachedRowValue[10] = {};
   bool hasValidCache = false;
@@ -410,7 +477,7 @@ struct PortaloofBackdropWidget : widget::Widget {
   }
 
   void draw(const DrawArgs& args) override {
-    if (!module) return;
+    if (!module || portaloofRenderingRackRectSource()) return;
     rackSource.setModule(module->rackSourceModuleId);
 
     float vpW = args.clipBox.size.x;
@@ -440,18 +507,18 @@ struct PortaloofBackdropWidget : widget::Widget {
     bool doCapture = !module->freezeMode ||
                      module->backdropCapturePending.exchange(false) ||
                      !hasValidCache;
-    bool hasImage = (loadedNvgImg >= 0 && loadedTexId != 0);
-    PortaloofInjectedSource injectedSource =
-        rackSource.render(args.vg, module->id);
-    bool hasInjected = injectedSource.isValid() || hasImage;
-    if (!doCapture && !hasInjected && screenCap.nvgImg < 0) return;
-
     if (doCapture) {
       screenCap.capture(args.vg);
       memcpy(cachedRowEnabled, module->rowEnabled, sizeof(cachedRowEnabled));
       memcpy(cachedRowValue, module->rowValue, sizeof(cachedRowValue));
       hasValidCache = true;
     }
+
+    bool hasImage = (loadedNvgImg >= 0 && loadedTexId != 0);
+    PortaloofInjectedSource injectedSource =
+        getInjectedSource(args.vg, screenCap.nvgImg);
+    bool hasInjected = injectedSource.isValid() || hasImage;
+    if (!doCapture && !hasInjected && screenCap.nvgImg < 0) return;
 
     bool hasRack = (screenCap.nvgImg >= 0 && screenCap.texId != 0);
     GLuint injectedTex =
@@ -709,6 +776,19 @@ struct PortaloofBackdropWidget : widget::Widget {
 
     nvgRestore(args.vg);
   }
+
+  PortaloofInjectedSource getInjectedSource(NVGcontext* vg, int screenNvgImg) {
+    if (module->rackRectSourceEnabled) {
+      rectSource.setRect(module->rackRectSource);
+      return rectSource.renderRack(vg, module->rackRectSource);
+    }
+    if (module->screenRectSourceEnabled) {
+      rectSource.setRect(module->screenRectSource);
+      return rectSource.render(vg, screenNvgImg, module->screenRectSource);
+    }
+    rackSource.setModule(module->rackSourceModuleId);
+    return rackSource.render(vg, module->id);
+  }
 };
 
 // ─── Widget ──────────────────────────────────────────────────────────────────
@@ -751,6 +831,83 @@ static std::string pickRandomDocImage() {
   return paths[random::u32() % paths.size()];
 }
 
+struct PortaloofRectSelectionOverlay : widget::OpaqueWidget {
+  enum Mode { RACK_RECT, SCREEN_RECT };
+
+  ComputerscarePortaloof* module = nullptr;
+  Mode mode = SCREEN_RECT;
+  bool selecting = false;
+  math::Vec start;
+  math::Vec end;
+
+  PortaloofRectSelectionOverlay() {
+    if (APP && APP->scene) box.size = APP->scene->box.size;
+  }
+
+  void step() override {
+    if (APP && APP->scene) box.size = APP->scene->box.size;
+    OpaqueWidget::step();
+  }
+
+  void draw(const DrawArgs& args) override {
+    if (!selecting) return;
+    math::Rect r = math::Rect::fromCorners(start, end);
+    if (r.size.x <= 0.f || r.size.y <= 0.f) return;
+    nvgBeginPath(args.vg);
+    nvgRect(args.vg, RECT_ARGS(r));
+    nvgFillColor(args.vg, nvgRGBAf(1.f, 0.f, 0.f, 0.18f));
+    nvgFill(args.vg);
+    nvgStrokeWidth(args.vg, 2.f);
+    nvgStrokeColor(args.vg, nvgRGBAf(1.f, 0.f, 0.f, 0.7f));
+    nvgStroke(args.vg);
+  }
+
+  void onButton(const ButtonEvent& e) override {
+    if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
+      start = e.pos;
+      end = e.pos;
+      selecting = true;
+      e.consume(this);
+      return;
+    }
+    if (e.button == GLFW_MOUSE_BUTTON_RIGHT && e.action == GLFW_PRESS) {
+      requestDelete();
+      e.consume(this);
+      return;
+    }
+    OpaqueWidget::onButton(e);
+  }
+
+  void onDragMove(const DragMoveEvent& e) override {
+    if (selecting) end = end.plus(e.mouseDelta);
+  }
+
+  void onDragEnd(const DragEndEvent& e) override {
+    if (!selecting || !module) {
+      requestDelete();
+      return;
+    }
+    selecting = false;
+    math::Rect sceneRect = math::Rect::fromCorners(start, end);
+    if (sceneRect.size.x > 2.f && sceneRect.size.y > 2.f) {
+      if (mode == RACK_RECT)
+        module->setRackRectSource(sceneRectToRackRect(sceneRect));
+      else
+        module->setScreenRectSource(sceneRect);
+    }
+    requestDelete();
+  }
+
+  static math::Rect sceneRectToRackRect(math::Rect sceneRect) {
+    if (!APP || !APP->scene || !APP->scene->rack) return math::Rect();
+    float z = APP->scene->rack->getAbsoluteZoom();
+    if (z <= 0.f) return math::Rect();
+    math::Vec rackOrigin = APP->scene->rack->getAbsoluteOffset(math::Vec());
+    return math::Rect(sceneRect.pos.minus(rackOrigin).div(z),
+                      sceneRect.size.div(z));
+  }
+};
+
 struct ComputerscarePortaloofWidget : ModuleWidget {
   BGPanel* bgPanel;
   ComputerscareResizeHandle* rightHandle;
@@ -759,6 +916,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   SourceBlendFBO sourceBlendFBO;
   FlowerKaleidFBO flowerKaleidFBO;
   PortaloofRackModuleSource rackSource;
+  PortaloofRectSource rectSource;
   PortaloofBackdropWidget* backdropWidget = nullptr;
   std::shared_ptr<window::Svg> panelSvg;
   std::shared_ptr<window::Svg> headerSvg;
@@ -1028,6 +1186,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
     bool bgActive = backdropWidget != nullptr;
     bool renderInWindow = !bgActive || (m && !m->emptyWindowInBgMode);
+    if (portaloofRenderingRackRectSource()) {
+      ModuleWidget::drawLayer(args, layer);
+      return;
+    }
     if (layer == 1 && module && APP->scene && APP->scene->rack &&
         renderInWindow) {
       rackSource.setModule(m->rackSourceModuleId);
@@ -1049,11 +1211,11 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       bool doCapture =
           !m->freezeMode || m->capturePending.exchange(false) || !hasValidCache;
       bool hasImage = (loadedNvgImg >= 0 && loadedTexId != 0);
-      PortaloofInjectedSource injectedSource =
-          rackSource.render(args.vg, m->id);
-      bool hasInjected = injectedSource.isValid() || hasImage;
+      bool hasConfiguredSource = hasImage || m->rackSourceModuleId >= 0 ||
+                                 m->rackRectSourceEnabled ||
+                                 m->screenRectSourceEnabled;
 
-      if (m && (doCapture || hasInjected || hasValidCache)) {
+      if (m && (doCapture || hasConfiguredSource || hasValidCache)) {
         float alpha = 0.85f;
 
         // Choose live params on capture, or based on transform pre/post setting
@@ -1106,6 +1268,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         int fbW, fbH;
         glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
+        PortaloofInjectedSource injectedSource =
+            getInjectedSource(args.vg, screenCap.nvgImg, m);
+        bool hasInjected = injectedSource.isValid() || hasImage;
         bool hasRack = (screenCap.nvgImg >= 0 && screenCap.texId != 0);
         GLuint injectedTex =
             injectedSource.isValid() ? injectedSource.texId : loadedTexId;
@@ -1445,6 +1610,20 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     }
   }
 
+  PortaloofInjectedSource getInjectedSource(NVGcontext* vg, int screenNvgImg,
+                                            ComputerscarePortaloof* m) {
+    if (m->rackRectSourceEnabled) {
+      rectSource.setRect(m->rackRectSource);
+      return rectSource.renderRack(vg, m->rackRectSource);
+    }
+    if (m->screenRectSourceEnabled) {
+      rectSource.setRect(m->screenRectSource);
+      return rectSource.render(vg, screenNvgImg, m->screenRectSource);
+    }
+    rackSource.setModule(m->rackSourceModuleId);
+    return rackSource.render(vg, m->id);
+  }
+
   void appendContextMenu(Menu* menu) override {
     ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
     if (!m) return;
@@ -1464,9 +1643,33 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     menu->addChild(createSubmenuItem("Rack source", "", [=](Menu* menu) {
       PortaloofRackModuleSource selector;
       selector.setModule(m->rackSourceModuleId);
-      menu->addChild(createMenuLabel(selector.describe(m->id)));
+      std::string currentSource = selector.describe(m->id);
+      if (m->rackRectSourceEnabled) {
+        PortaloofRectSource s;
+        s.setRect(m->rackRectSource);
+        currentSource = "Rack rect: " + s.describe();
+      } else if (m->screenRectSourceEnabled) {
+        PortaloofRectSource s;
+        s.setRect(m->screenRectSource);
+        currentSource = "Screen rect: " + s.describe();
+      }
+      menu->addChild(createMenuLabel(currentSource));
       menu->addChild(createMenuItem("Clear rack source", "",
-                                    [=]() { m->rackSourceModuleId = -1; }));
+                                    [=]() { m->clearRackSources(); }));
+      menu->addChild(createMenuItem("Select rack rectangle", "", [=]() {
+        if (!APP || !APP->scene) return;
+        auto* overlay = new PortaloofRectSelectionOverlay();
+        overlay->module = m;
+        overlay->mode = PortaloofRectSelectionOverlay::RACK_RECT;
+        APP->scene->addChild(overlay);
+      }));
+      menu->addChild(createMenuItem("Select screen rectangle", "", [=]() {
+        if (!APP || !APP->scene) return;
+        auto* overlay = new PortaloofRectSelectionOverlay();
+        overlay->module = m;
+        overlay->mode = PortaloofRectSelectionOverlay::SCREEN_RECT;
+        APP->scene->addChild(overlay);
+      }));
       menu->addChild(new MenuSeparator());
       for (app::ModuleWidget* mw : selector.getSelectableModules(m->id)) {
         std::string label = string::f(
@@ -1475,7 +1678,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         menu->addChild(createCheckMenuItem(
             label, "",
             [=]() { return m->rackSourceModuleId == mw->module->id; },
-            [=]() { m->rackSourceModuleId = mw->module->id; }));
+            [=]() { m->setRackSourceModule(mw->module->id); }));
       }
     }));
     menu->addChild(new MenuSeparator());
