@@ -139,14 +139,14 @@
     {
       "slug": "computerscare-horse-a-doodle-doo",
       "name": "Horse A Doodle Doo",
-      "description": "Rhythm generator",
+      "description": "Melody, rhythm generator.  Generate complex repeatable sequences with the turn of a single knob.  Fully Polyphonic.",
       "tags": ["Sequencer", "Clock Modulator", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
     },
     {
       "slug": "computerscare-portaloof",
       "name": "Portaloof",
-      "description": "Visual glitch module",
+      "description": "Visual experimentation module.  A video camera pointed back at your Rack.  A Kaleidoscopic mirror reflecting the patch back to the user, into and out of space and time.",
       "tags": ["Visual"]
     }
   ]

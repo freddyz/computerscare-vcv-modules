@@ -1585,7 +1585,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             nvgSave(args.vg);
             nvgScissor(args.vg, DISPLAY_X - 1.f, 0.f,
                        CONTROLS_WIDTH - DISPLAY_X + 1.f, RACK_GRID_HEIGHT);
-            nvgGlobalAlpha(args.vg, rack::settings::rackBrightness);
+            float b = math::clamp(rack::settings::rackBrightness, 0.f, 1.f);
+            nvgGlobalTint(args.vg, nvgRGBAf(b, b, b, 1.f));
             nvgScale(args.vg, CONTROLS_WIDTH / svgW, RACK_GRID_HEIGHT / svgH);
             window::svgDraw(args.vg, panelSvg->handle);
             nvgRestore(args.vg);
@@ -1602,7 +1603,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       float svgH = headerSvg->handle->height;
       const float drawW = 170.f;
       const float drawH = drawW * (svgH / svgW);
+      float b = math::clamp(rack::settings::rackBrightness, 0.f, 1.f);
       nvgSave(args.vg);
+      nvgGlobalTint(args.vg, nvgRGBAf(b, b, b, 1.f));
       nvgTranslate(args.vg, 3.f, 3.f);
       nvgScale(args.vg, drawW / svgW, drawH / svgH);
       window::svgDraw(args.vg, headerSvg->handle);
