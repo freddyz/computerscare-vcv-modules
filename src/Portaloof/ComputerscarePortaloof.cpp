@@ -144,9 +144,9 @@ struct ComputerscarePortaloof : Module {
   bool maintainAspect = true;
   bool backdropEnabled = false;
   bool emptyWindowInBgMode = true;
-  bool transformPost = true;
+  bool transformPost = false;
   bool translateFirst =
-      false;  // false = Kaleid > Translate, true = Translate > Kaleid
+      true;  // false = Kaleid > Translate, true = Translate > Kaleid
   std::string loadedImagePath;
   int64_t rackSourceModuleId = -1;
   bool rackRectSourceEnabled = false;
@@ -1706,7 +1706,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     menu->addChild(createBoolPtrMenuItem("Render as rack background", "",
                                          &m->backdropEnabled));
     menu->addChild(
-        createBoolPtrMenuItem("Transform post", "", &m->transformPost));
+        createBoolPtrMenuItem("Transform when frozen", "", &m->transformPost));
     menu->addChild(createSubmenuItem("Full Rack BG", "", [=](Menu* menu) {
       menu->addChild(createBoolPtrMenuItem("Empty module window", "",
                                            &m->emptyWindowInBgMode));
