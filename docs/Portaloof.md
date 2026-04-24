@@ -155,6 +155,10 @@ Wide slider for the Fold amount.
 
 Hides the panel art, controls, labels, and jack graphics. The module shrinks to the display width, keeps the right edge in place, and leaves the resize handle available. Cable anchors are stacked at the bottom-left so existing patch cables continue to route.
 
+### Dim visuals with room
+
+When enabled, Portaloof's visual feedback render follows Rack's room brightness setting. Lower room brightness darkens the generated visuals instead of leaving the screen at full brightness.
+
 ### Render as rack background
 
 Renders Portaloof as a rack backdrop behind modules in addition to the module display. This resets to off when the module is initialized.

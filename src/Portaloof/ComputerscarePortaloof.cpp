@@ -148,6 +148,7 @@ struct ComputerscarePortaloof : Module {
   bool translateFirst =
       true;  // false = Kaleid > Translate, true = Translate > Kaleid
   bool hideUi = false;
+  bool dimVisualsWithRoom = false;
   std::string loadedImagePath;
   int64_t rackSourceModuleId = -1;
   bool rackRectSourceEnabled = false;
@@ -386,6 +387,8 @@ struct ComputerscarePortaloof : Module {
     json_object_set_new(rootJ, "transformPost", json_boolean(transformPost));
     json_object_set_new(rootJ, "translateFirst", json_boolean(translateFirst));
     json_object_set_new(rootJ, "hideUi", json_boolean(hideUi));
+    json_object_set_new(rootJ, "dimVisualsWithRoom",
+                        json_boolean(dimVisualsWithRoom));
     json_object_set_new(rootJ, "rackSourceModuleId",
                         json_integer(rackSourceModuleId));
     json_object_set_new(rootJ, "rackRectSourceEnabled",
@@ -424,6 +427,8 @@ struct ComputerscarePortaloof : Module {
     if (tfJ) translateFirst = json_boolean_value(tfJ);
     json_t* huiJ = json_object_get(rootJ, "hideUi");
     if (huiJ) hideUi = json_boolean_value(huiJ);
+    json_t* dimJ = json_object_get(rootJ, "dimVisualsWithRoom");
+    if (dimJ) dimVisualsWithRoom = json_boolean_value(dimJ);
     json_t* rsmJ = json_object_get(rootJ, "rackSourceModuleId");
     if (rsmJ) rackSourceModuleId = json_integer_value(rsmJ);
     json_t* rrseJ = json_object_get(rootJ, "rackRectSourceEnabled");
@@ -1360,6 +1365,12 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           return;
         }
 
+        nvgSave(args.vg);
+        if (m->dimVisualsWithRoom) {
+          float b = math::clamp(rack::settings::rackBrightness, 0.f, 1.f);
+          nvgGlobalTint(args.vg, nvgRGBAf(b, b, b, 1.f));
+        }
+
         float hw =
             mirrorW * 0.5f;  // display half-width (for scissor/translate)
         float hh = mirrorH * 0.5f;
@@ -1636,6 +1647,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         }
 
         nvgRestore(args.vg);
+        nvgRestore(args.vg);
 
         // Redraw SVG panel clipped to the overlap strip
         // (DISPLAY_X–CONTROLS_WIDTH) so the display peeks under the panel
@@ -1769,6 +1781,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
     menu->addChild(new MenuSeparator());
     menu->addChild(createBoolPtrMenuItem("Hide UI", "", &m->hideUi));
+    menu->addChild(createBoolPtrMenuItem("Dim visuals with room", "",
+                                         &m->dimVisualsWithRoom));
     menu->addChild(createBoolPtrMenuItem("Render as rack background", "",
                                          &m->backdropEnabled));
     menu->addChild(
