@@ -1,158 +1,188 @@
 # Portaloof
 
-A real-time screen feedback and glitch effect module. Each frame, Portaloof captures the current VCV Rack window as a texture, applies a chain of geometric and color transforms, and draws the result back into its display area — creating a recursive feedback loop.
+Portaloof is a real-time visual feedback module. It captures the VCV Rack window, blends it with an optional image or rack source, applies geometric and color transforms, then draws the result back into the module display.
 
-The module is resizable (drag the left or right edge).
-
-You can also **drop an image file** (PNG/JPG/JPEG/BMP) onto the module to use it as the source instead of the live screen capture. An image can also be loaded or cleared from the right-click menu.
+The module is resizable by dragging its right edge. Image files (PNG/JPG/JPEG/BMP) can also be dropped directly onto the module.
 
 ---
 
-## Global Controls (header row)
+## Header Controls
 
-### FREEZE — Freeze / Continuous mode
+### FREEZE
 
-- **Button (toggle):** On = freeze (effect only updates on a trigger event). Off = continuous (effect updates every frame).
-- **Gate jack:** High voltage (>0.5 V) forces freeze mode; low forces continuous mode. Overrides the button when connected.
+- **Button:** Off = continuous capture. On = freeze the current capture.
+- **Gate input:** When connected, high voltage (`> 0.5 V`) forces Freeze on and low voltage forces continuous capture. The gate input overrides the button.
 
-### TRIG — Trigger / Image Gate
+When Freeze turns on, Portaloof captures a new frame. With **Transform when frozen** off, the transform settings are captured at that moment. With it on, the frozen frame remains fixed but the knobs and CV continue to transform it live.
 
-- **Freeze mode:** Button press or rising edge on the trigger jack fires one capture frame.
-- **Continuous mode (with a loaded image):** A high button or input (>0.5 V) holds the loaded image as the source while held. Releasing returns to live screen capture.
+### MIX
+
+Blends live Rack capture with the selected secondary source.
+
+- `+1`: live Rack capture only
+- `0`: equal blend
+- `-1`: secondary source only
+
+The Mix CV input adds `CV / 5` to the knob value, then clamps the result to `-1..+1`.
+
+Secondary sources can be a loaded image, a selected module, a selected rack rectangle, or a selected screen rectangle. If no secondary source is configured, the live Rack capture is used.
 
 ---
 
-## Effect Rows
+## Row Controls And CV
 
-Each row has: **toggle button** · **gate jack** (overrides toggle) · **CV jack** · **attenuverter knob** · **value knob**
+Each effect row has:
 
-The gate jack overrides the toggle when connected (high = on, low = off).  
-The CV jack modulates the knob value: `final = knob + (attenuverter × CV × scale)`, clamped to the row's range.
+**toggle button** · **gate input** · **CV input** · **attenuverter** · **value knob**
+
+The gate input overrides the toggle when connected:
+
+- High (`> 0.5 V`) = row on
+- Low = row off
+
+The CV input modulates the value knob:
+
+`final = knob + attenuverter * CV * CV scale`
+
+Wrapped rows wrap around their range. Other rows clamp to their range.
+
+| Row | Knob range | CV scale | Final range / behavior |
+| --- | --- | --- | --- |
+| Scale | `0.1..4.0` | `0.3` per volt | Clamped `0.1..4.0` |
+| Scale X | `-5..+5` | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors X |
+| Scale Y | `-5..+5` | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors Y |
+| Rotation | `-180..+180°` | `36°` per volt | Wrapped `-360..+360°` |
+| Kaleido | `-12..+12` | `1.1` per volt | Clamped `-12..+12`, integer steps |
+| Translate X | `-1..+1` | `0.1` per volt | Wrapped `-1..+1` |
+| Translate Y | `-1..+1` | `0.1` per volt | Wrapped `-1..+1` |
+| Hue | `-360..+360°` | `36°` per volt | Wrapped `-360..+360°` |
+| Fold Frequency | `0..1` | `0.1` per volt | Clamped `0..1`; right-click slider |
+| Warp | `-1..+1` | `0.1` per volt | Clamped `-1..+1` |
 
 ---
 
-### SCALE — Uniform Scale
+## Geometry Rows
 
-Zooms the image in both X and Y equally.  
-Range: **0.1 – 4.0** (default 1.0 = no zoom)
+### SCALE
 
-### SCL X — Scale X
+Uniformly zooms the image.
 
-Independent horizontal zoom with exponential mapping and axis-mirror support.  
-Knob range: **-5.0 – +5.0** (default 1.0 = no zoom)
+### SCL X / SCL Y
 
-- `|knob| ≤ 1` → scale from 0.1 to 1.0 (quadratic, fine control near center)
-- `|knob| > 1` → scale from 1.0 to 5.0 (exponential, coarser at extremes)
-- Negative values mirror the X axis.
+Scale an axis independently. Values near `0..1` give fine control; larger values expand exponentially up to `5x`. Negative values mirror the axis.
 
-### SCL Y — Scale Y
+Scale, Scale X, and Scale Y multiply together.
 
-Independent vertical zoom. Same mapping as SCL X; negatives mirror the Y axis.  
-Knob range: **-5.0 – +5.0** (default 1.0 = no zoom)
+### ROT
 
-> SCALE, SCL X, and SCL Y multiply together. To zoom only one axis, disable the others.
+Rotates the image around the center of the display.
 
-### ROT — Rotation
+### KALI
 
-Rotates the image around the center of the display area.  
-Range: **-180° – +180°** (default 0 = no rotation)
+Kaleidoscope mode. `0` is off. Positive values use the newer/premium kaleidoscope shader modes. Negative values use the classic mirror modes.
 
-### KALI — Kaleidoscope
+### TRN X / TRN Y
 
-Selects a mirror symmetry mode. The image is divided into sectors and mirrored to fill the display.  
-Range: **0 – 12** (integer steps; 0 = off)
+Translate the image horizontally or vertically. Values are relative to the image width or display height.
 
-| Mode | Pattern                                 |
-| ---- | --------------------------------------- |
-| 0    | Off                                     |
-| 1    | Left / right mirror                     |
-| 2    | Top / bottom mirror                     |
-| 3    | Classic quad (4-fold)                   |
-| 4–12 | Various multi-sector and strip patterns |
+The **Algorithm** right-click option chooses whether translation happens before or after the kaleidoscope:
 
-### TRN X — Translate X
-
-Pans the image horizontally. Value is a fraction of the image width.  
-Range: **-1.0 – +1.0** (default 0 = centered)
-
-### TRN Y — Translate Y
-
-Pans the image vertically. Value is a fraction of the image height.  
-Range: **-1.0 – +1.0** (default 0 = centered)
+- **Kaleid > Translate:** kaleidoscope first, then translate
+- **Translate > Kaleid:** translate first, then kaleidoscope
 
 ---
 
 ## Color Rows
 
-### HUE — Hue Shift
+### HUE
 
-Rotates all colors around the hue wheel.  
-Range: **-180° – +180°** (default 0 = no shift)
+Positive Hue rotates all colors together around the hue wheel. `0..+360°` is one complete smooth cycle and returns to no change at `+360°`.
 
-### WARP — Solarize / Posterize
+Negative Hue uses a stronger cyclic color split. It moves through hue-wheel phases, boosts saturation and color contrast, and adds a smaller chromatic split. It is also cyclic: `0°` and `-360°` are neutral, with the strongest effect around the middle of the negative range.
 
-Applies a nonlinear tone curve to the image.
+### WARP
 
-- Positive values: posterize + contrast crush
-- Negative values: solarize (partial inversion)  
-  Range: **-1.0 – +1.0** (default 0 = no effect)
+Applies a nonlinear color/tone transform.
 
-> **FOLD (chromatic divergence)** is no longer on the panel — it lives in the right-click menu as a wide **Fold Frequency** slider. Knob range **0.0 – 1.0** maps internally to fold frequency **1.0 – 4.0** (1.0 = no effect). The FOLD row's toggle, gate, and CV inputs still exist and still gate/modulate the effect.
+- Positive values: posterize/crush-style contrast shaping
+- Negative values: solarize toward inversion
 
----
+### Fold Frequency
 
-## Context Menu
+Fold Frequency lives in the right-click menu rather than on the panel. It scales the color fold frequency from `1.0..4.0` internally and increases chromatic divergence at higher values.
 
-### Load image… / Clear image
-
-Load a still image (PNG/JPG/JPEG/BMP) to use as the source in place of the live screen capture. `Clear image` returns to live capture. You can also drag-and-drop an image file onto the module.
-
-### Fold Frequency _(slider)_
-
-The FOLD knob, exposed here as a wide slider. Controls chromatic-channel divergence (RGB split). Knob **0.0 – 1.0** → fold frequency **1.0 – 4.0** (1.0 = no effect).
-
-### Render as rack background _(checkbox)_
-
-When enabled, the effect renders as a full-screen backdrop behind all modules in the rack in addition to the module's own display area. The backdrop uses its own independent screen capture and trigger state.
-
-On **Initialize**, this is reset to off.
-
-### Transform post _(checkbox)_
-
-Controls how knob changes behave in **triggered mode** (no effect in continuous mode).
-
-- **Checked (post):** After a snapshot, the transform parameters remain live — moving knobs continuously alters the frozen image in real time.
-- **Unchecked (pre):** After a snapshot, transform parameters are frozen at the moment the trigger fired. Moving knobs has no visible effect until the next trigger.
-
-Applies to both windowed and full rack background modes.
+The Fold gate and CV inputs still exist in the hidden row position and still control Fold enable/modulation.
 
 ---
 
-### Full Rack BG _(submenu)_
+## Sources
 
-Options that apply when **Render as rack background** is enabled.
+Portaloof always has access to the live Rack capture. The right-click **Rack source** menu and image loading options configure the secondary source used by Mix.
 
-#### Empty module window _(checkbox)_
+### Image Source
 
-When checked, the module's own display area is left transparent while the backdrop is active — the rack background effect shows through. When unchecked, the module window renders the effect as normal alongside the backdrop.
+- **Load image...** opens an image file.
+- **Clear image** removes the loaded image.
+- Drag-and-drop an image file onto the module to load it.
 
-Default: on.
+### Rack Source
 
-#### Backdrop Alpha _(slider)_
+The **Rack source** submenu can select:
 
-Opacity of the full-rack backdrop layer.  
-Range: **0.0 – 1.0** (default 0.85)
+- A specific module
+- A rectangle in rack coordinates
+- A rectangle in screen coordinates
 
-At 1.0 the backdrop fully covers the rail background. Lower values blend the effect with the rail/background behind it, which also affects how strongly the feedback loop builds.
+**Clear rack source** removes the selected rack/screen source.
 
 ---
 
-### Visual _(submenu)_
+## Right-Click Options
 
-#### Tile empty space _(checkbox)_
+### Load image... / Clear image
 
-When the effect image doesn't fill the entire display area (due to rotation, scale, or translation), tiling repeats the image to cover the gap instead of leaving it dark.
+Load or remove a still image source.
 
-#### Maintain aspect ratio _(checkbox)_
+### Rack source
 
-Sizes the captured image to match the screen's natural aspect ratio within the display area. Without this, the capture is stretched to fill the display width.
+Choose a module, rack rectangle, or screen rectangle as the secondary source.
+
+### Fold Frequency
+
+Wide slider for the Fold amount.
+
+### Hide UI
+
+Hides the panel art, controls, labels, and jack graphics. The module shrinks to the display width, keeps the right edge in place, and leaves the resize handle available. Cable anchors are stacked at the bottom-left so existing patch cables continue to route.
+
+### Render as rack background
+
+Renders Portaloof as a rack backdrop behind modules in addition to the module display. This resets to off when the module is initialized.
+
+### Transform when frozen
+
+Controls what happens while Freeze is on:
+
+- Off: transforms are captured when the frame is frozen.
+- On: the frozen frame stays fixed, but transform knobs and CV remain live.
+
+### Full Rack BG
+
+Options for rack-background mode.
+
+**Empty module window:** Leaves the module display transparent while the background render is active.
+
+**Backdrop Alpha:** Sets the opacity of the rack-background render.
+
+### Visual
+
+**Tile empty space:** Repeats the image to fill gaps created by rotation, scale, or translation.
+
+**Maintain aspect ratio:** Preserves the source aspect ratio instead of stretching it to the display.
+
+### Algorithm
+
+Chooses the transform order for translate and kaleidoscope:
+
+- **Kaleid > Translate**
+- **Translate > Kaleid**

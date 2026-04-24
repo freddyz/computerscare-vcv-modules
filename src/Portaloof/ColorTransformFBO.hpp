@@ -3,8 +3,13 @@
 
 #include "rack.hpp"
 
-// Applies hue-shift, warp (solarize→invert / curves contrast), and
+// Applies hue-shift/split, warp (solarize→invert / curves contrast), and
 // fold-frequency to a captured GL texture via a custom GLSL shader + FBO.
+//
+// HUE:
+//   Positive values rotate all colors together around the hue wheel.
+//   Negative values split RGB channels through separate hue offsets, with
+//   neutral points at 0 and -360 degrees.
 //
 // WARP (-1..1):
 //   0        bypass
@@ -92,6 +97,30 @@ struct ColorTransformFBO {
            "  return vec3(h2rgb(p,q,c.x+1.0/3.0), h2rgb(p,q,c.x), "
            "h2rgb(p,q,c.x-1.0/3.0));\n"
            "}\n"
+           "vec3 hueTransform(vec3 rgb, float h) {\n"
+           "  vec3 hsl = rgb2hsl(rgb);\n"
+           "  if (h >= 0.0) {\n"
+           "    hsl.x = fract(hsl.x + h / 360.0);\n"
+           "    return hsl2rgb(hsl);\n"
+           "  }\n"
+           "  float cycle = clamp(-h / 360.0, 0.0, 1.0);\n"
+           "  float amount = sin(cycle * 3.14159265);\n"
+           "  float sat = clamp(hsl.y * (1.0 + amount * 3.0) + amount * "
+           "0.25, 0.0, 1.0);\n"
+           "  float wheel = cycle + 0.08 * amount * sin(hsl.x * 18.8495559 + "
+           "cycle * 6.2831853);\n"
+           "  vec3 shifted = hsl2rgb(vec3(fract(hsl.x + wheel), sat, hsl.z));\n"
+           "  float spread = amount * 0.16;\n"
+           "  vec3 warm = hsl2rgb(vec3(fract(hsl.x + wheel + spread), sat, "
+           "hsl.z));\n"
+           "  vec3 cool = hsl2rgb(vec3(fract(hsl.x + wheel - spread), sat, "
+           "hsl.z));\n"
+           "  vec3 split = vec3(warm.r, shifted.g, cool.b);\n"
+           "  vec3 outRgb = mix(shifted, split, amount * 0.45);\n"
+           "  outRgb = clamp((outRgb - 0.5) * (1.0 + amount * 1.2) + 0.5, 0.0, "
+           "1.0);\n"
+           "  return mix(rgb, outRgb, amount);\n"
+           "}\n"
            "\n"
            // ── Negative side: solarize → full invert ─────────────────────────
            // t [0..1]: 0=bypass, 0..0.5=blend into solarize,
@@ -155,9 +184,7 @@ struct ColorTransformFBO {
            "  vec4 col = texture2D(tex, uv);\n"
            "  vec3 rgb = col.rgb;\n"
            "  if (abs(hue) > 0.01) {\n"
-           "    vec3 hsl = rgb2hsl(rgb);\n"
-           "    hsl.x = fract(hsl.x + hue / 360.0);\n"
-           "    rgb = hsl2rgb(hsl);\n"
+           "    rgb = hueTransform(rgb, hue);\n"
            "  }\n"
            "  if (abs(warp) > 0.01) {\n"
            "    rgb = warpColor(rgb, warp, foldFreq);\n"

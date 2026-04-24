@@ -212,7 +212,7 @@ struct ComputerscarePortaloof : Module {
     configInput(TRANS_X_CV_INPUT, "Translate X CV");
     configInput(TRANS_Y_CV_INPUT, "Translate Y CV");
     configSwitch(HUE_TOGGLE, 0.f, 1.f, 1.f, "Hue", {"Off", "On"});
-    configParam(HUE_KNOB, -180.f, 180.f, 0.f, "Hue", "\u00b0");
+    configParam(HUE_KNOB, -360.f, 360.f, 0.f, "Hue", "\u00b0");
     configParam(HUE_ATTEN, -1.f, 1.f, 0.f, "Hue CV Atten");
     configSwitch(INVERT_TOGGLE, 0.f, 1.f, 1.f, "Fold", {"Off", "On"});
     configParam(INVERT_KNOB, 0.f, 1.f, 0.2f, "Fold Frequency");
