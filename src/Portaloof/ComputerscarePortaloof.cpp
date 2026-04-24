@@ -491,8 +491,8 @@ struct PortaloofBackdropWidget : widget::Widget {
           kaliTxOff = txLocal;
           kaliTyOff = tyLocal;
         } else {
-          nvgTx = txLocal / absSx;
-          nvgTy = tyLocal / absSy;
+          nvgTx = txOn ? (2.f * txLocal) : 0.f;
+          nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
           nvgTranslate(args.vg, nvgTx, nvgTy);
         }
       }
@@ -558,8 +558,8 @@ struct PortaloofBackdropWidget : widget::Widget {
           kaliTxOff = txLocal;
           kaliTyOff = tyLocal;
         } else {
-          nvgTx = txLocal / absSx;
-          nvgTy = tyLocal / absSy;
+          nvgTx = txOn ? (2.f * txLocal) : 0.f;
+          nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
           nvgTranslate(args.vg, nvgTx, nvgTy);
         }
       }
@@ -618,23 +618,23 @@ struct PortaloofBackdropWidget : widget::Widget {
       float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
       float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
       if (rotOn) applyRotation(args.vg, rotV);
-      float normTx = txOn ? txLocal / absSx : 0.f;
-      float normTy = tyOn ? tyLocal / absSy : 0.f;
-      if (txOn || tyOn) nvgTranslate(args.vg, normTx, normTy);
-      float normTxAbs = fabsf(normTx);
-      float normTyAbs = fabsf(normTy);
-      float rHW =
-          ((imgW + 2.f * normTxAbs) * cosA + (vpH + 2.f * normTyAbs) * sinA) /
-              (2.f * absSx) +
-          4.f;
-      float rHH =
-          ((imgW + 2.f * normTxAbs) * sinA + (vpH + 2.f * normTyAbs) * cosA) /
-              (2.f * absSy) +
-          4.f;
+      float txOffset = txOn ? txLocal : 0.f;
+      float tyOffset = tyOn ? tyLocal : 0.f;
+      if (txOn || tyOn) nvgTranslate(args.vg, txOffset, tyOffset);
+      float txOffsetAbs = fabsf(txOffset);
+      float tyOffsetAbs = fabsf(tyOffset);
+      float rHW = ((imgW + 2.f * txOffsetAbs) * cosA +
+                   (vpH + 2.f * tyOffsetAbs) * sinA) /
+                      (2.f * absSx) +
+                  4.f;
+      float rHH = ((imgW + 2.f * txOffsetAbs) * sinA +
+                   (vpH + 2.f * tyOffsetAbs) * cosA) /
+                      (2.f * absSy) +
+                  4.f;
 
       if (tileOn) {
-        float pcx = -normTx;
-        float pcy = -normTy;
+        float pcx = -txOffset;
+        float pcy = -tyOffset;
         int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
         int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
         int jMin = (int)ceilf((pcy - rHH - hh) / vpH);
@@ -1138,8 +1138,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               kaliTxOff = txLocal;
               kaliTyOff = tyLocal;
             } else {
-              nvgTx = txLocal / absSx;
-              nvgTy = tyLocal / absSy;
+              nvgTx = txOn ? (2.f * txLocal) : 0.f;
+              nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
               nvgTranslate(args.vg, nvgTx, nvgTy);
             }
           }
@@ -1214,8 +1214,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               kaliTxOff = txLocal;
               kaliTyOff = tyLocal;
             } else {
-              nvgTx = txLocal / absSx;
-              nvgTy = tyLocal / absSy;
+              nvgTx = txOn ? (2.f * txLocal) : 0.f;
+              nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
               nvgTranslate(args.vg, nvgTx, nvgTy);
             }
           }
@@ -1301,28 +1301,28 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             }
           }
         } else {
-          // No kaleidoscope — apply rotation then a scale-normalized translate
-          // so 10V always pans by imgW screen pixels regardless of scale.
+          // No kaleidoscope — apply rotation then translate in image space so
+          // one full 0-10V sweep always traverses one wrapped image cycle.
           float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
           float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
           if (rotOn) applyRotation(args.vg, rotV);
-          float normTx = txOn ? txLocal / absSx : 0.f;
-          float normTy = tyOn ? tyLocal / absSy : 0.f;
-          if (txOn || tyOn) nvgTranslate(args.vg, normTx, normTy);
-          float normTxAbs = fabsf(normTx);
-          float normTyAbs = fabsf(normTy);
-          float rHW = ((imgW + 2.f * normTxAbs) * cosA +
-                       (box.size.y + 2.f * normTyAbs) * sinA) /
+          float txOffset = txOn ? txLocal : 0.f;
+          float tyOffset = tyOn ? tyLocal : 0.f;
+          if (txOn || tyOn) nvgTranslate(args.vg, txOffset, tyOffset);
+          float txOffsetAbs = fabsf(txOffset);
+          float tyOffsetAbs = fabsf(tyOffset);
+          float rHW = ((imgW + 2.f * txOffsetAbs) * cosA +
+                       (box.size.y + 2.f * tyOffsetAbs) * sinA) /
                           (2.f * absSx) +
                       4.f;
-          float rHH = ((imgW + 2.f * normTxAbs) * sinA +
-                       (box.size.y + 2.f * normTyAbs) * cosA) /
+          float rHH = ((imgW + 2.f * txOffsetAbs) * sinA +
+                       (box.size.y + 2.f * tyOffsetAbs) * cosA) /
                           (2.f * absSy) +
                       4.f;
 
           if (tileOn) {
-            float pcx = -normTx;
-            float pcy = -normTy;
+            float pcx = -txOffset;
+            float pcy = -tyOffset;
             int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW) - 1;
             int iMax = (int)floorf((pcx + rHW + imgHW) / imgW) + 1;
             int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH) - 1;
