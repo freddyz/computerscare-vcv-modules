@@ -9,6 +9,7 @@
 #include "FlowerKaleid.hpp"
 #include "MirrorKaleidoscope.hpp"
 #include "MirrorRotation.hpp"
+#include "RackModuleSource.hpp"
 #include "ScreenCaptureEffect.hpp"
 #include "SourceBlendFBO.hpp"
 
@@ -147,6 +148,7 @@ struct ComputerscarePortaloof : Module {
   bool translateFirst =
       false;  // false = Kaleid > Translate, true = Translate > Kaleid
   std::string loadedImagePath;
+  int64_t rackSourceModuleId = -1;
   int legacyKaleidStyle = -1;
   bool legacyKaleidStylePending = false;
 
@@ -226,12 +228,14 @@ struct ComputerscarePortaloof : Module {
   }
 
   void onRandomize(const RandomizeEvent& e) override {
+    int64_t preservedRackSourceModuleId = rackSourceModuleId;
     for (int id = 0; id < NUM_PARAMS; id++) {
       if (id == FREEZE_TOGGLE) continue;
       if (id == INPUT_SOURCE_MIX) continue;
       if (id == BACKDROP_ALPHA) continue;
       paramQuantities[id]->randomize();
     }
+    rackSourceModuleId = preservedRackSourceModuleId;
   }
 
   void process(const ProcessArgs& args) override {
@@ -343,6 +347,8 @@ struct ComputerscarePortaloof : Module {
                         json_boolean(emptyWindowInBgMode));
     json_object_set_new(rootJ, "transformPost", json_boolean(transformPost));
     json_object_set_new(rootJ, "translateFirst", json_boolean(translateFirst));
+    json_object_set_new(rootJ, "rackSourceModuleId",
+                        json_integer(rackSourceModuleId));
     if (!loadedImagePath.empty())
       json_object_set_new(rootJ, "loadedImagePath",
                           json_string(loadedImagePath.c_str()));
@@ -364,6 +370,8 @@ struct ComputerscarePortaloof : Module {
     if (tpJ) transformPost = json_boolean_value(tpJ);
     json_t* tfJ = json_object_get(rootJ, "translateFirst");
     if (tfJ) translateFirst = json_boolean_value(tfJ);
+    json_t* rsmJ = json_object_get(rootJ, "rackSourceModuleId");
+    if (rsmJ) rackSourceModuleId = json_integer_value(rsmJ);
     json_t* ksJ = json_object_get(rootJ, "kaleidStyle");
     if (ksJ) {
       legacyKaleidStyle = (int)json_integer_value(ksJ);
@@ -386,6 +394,7 @@ struct PortaloofBackdropWidget : widget::Widget {
   ColorTransformFBO colorFBO;
   SourceBlendFBO sourceBlendFBO;
   FlowerKaleidFBO flowerKaleidFBO;
+  PortaloofRackModuleSource rackSource;
   bool cachedRowEnabled[10] = {};
   float cachedRowValue[10] = {};
   bool hasValidCache = false;
@@ -402,6 +411,7 @@ struct PortaloofBackdropWidget : widget::Widget {
 
   void draw(const DrawArgs& args) override {
     if (!module) return;
+    rackSource.setModule(module->rackSourceModuleId);
 
     float vpW = args.clipBox.size.x;
     float vpH = args.clipBox.size.y;
@@ -431,7 +441,10 @@ struct PortaloofBackdropWidget : widget::Widget {
                      module->backdropCapturePending.exchange(false) ||
                      !hasValidCache;
     bool hasImage = (loadedNvgImg >= 0 && loadedTexId != 0);
-    if (!doCapture && !hasImage && screenCap.nvgImg < 0) return;
+    PortaloofInjectedSource injectedSource =
+        rackSource.render(args.vg, module->id);
+    bool hasInjected = injectedSource.isValid() || hasImage;
+    if (!doCapture && !hasInjected && screenCap.nvgImg < 0) return;
 
     if (doCapture) {
       screenCap.capture(args.vg);
@@ -441,17 +454,23 @@ struct PortaloofBackdropWidget : widget::Widget {
     }
 
     bool hasRack = (screenCap.nvgImg >= 0 && screenCap.texId != 0);
-    GLuint srcTex = hasRack ? screenCap.texId : loadedTexId;
-    int srcImg = hasRack ? screenCap.nvgImg : loadedNvgImg;
-    bool useInjected = !hasRack && hasImage;
-    if (hasRack && hasImage) {
+    GLuint injectedTex =
+        injectedSource.isValid() ? injectedSource.texId : loadedTexId;
+    int injectedImg =
+        injectedSource.isValid() ? injectedSource.nvgImg : loadedNvgImg;
+    bool injectedFlip =
+        injectedSource.isValid() ? injectedSource.flipInputUV : true;
+    GLuint srcTex = hasRack ? screenCap.texId : injectedTex;
+    int srcImg = hasRack ? screenCap.nvgImg : injectedImg;
+    bool flipInputUV = !hasRack && hasInjected && injectedFlip;
+    if (hasRack && hasInjected) {
       float imageAmt = 0.5f * (1.f - module->inputSourceMix);
-      int mixedImg = sourceBlendFBO.apply(args.vg, screenCap.texId, loadedTexId,
-                                          fbW, fbH, imageAmt);
+      int mixedImg = sourceBlendFBO.apply(args.vg, screenCap.texId, injectedTex,
+                                          fbW, fbH, imageAmt, injectedFlip);
       if (mixedImg >= 0 && sourceBlendFBO.outTex != 0) {
         srcTex = sourceBlendFBO.outTex;
         srcImg = mixedImg;
-        useInjected = false;
+        flipInputUV = false;
       }
     }
     if (srcImg < 0) return;
@@ -486,7 +505,7 @@ struct PortaloofBackdropWidget : widget::Widget {
     float tyLocal = tyOn ? tyV * vpH : 0.f;
 
     int img = colorFBO.apply(args.vg, srcTex, srcImg, fbW, fbH, hueV, warpV,
-                             foldFreqV, useInjected);
+                             foldFreqV, flipInputUV);
     GLuint effectTex = (img == colorFBO.nvgImg && colorFBO.outTex != 0)
                            ? colorFBO.outTex
                            : srcTex;
@@ -525,7 +544,7 @@ struct PortaloofBackdropWidget : widget::Widget {
       int flowerImg = flowerKaleidFBO.apply(
           args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
           rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
-          kaliTyOff * flowerScaleY, useInjected);
+          kaliTyOff * flowerScaleY, flipInputUV);
       if (flowerImg >= 0) {
         if (tileOn) {
           float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
@@ -739,6 +758,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   ColorTransformFBO colorFBO;
   SourceBlendFBO sourceBlendFBO;
   FlowerKaleidFBO flowerKaleidFBO;
+  PortaloofRackModuleSource rackSource;
   PortaloofBackdropWidget* backdropWidget = nullptr;
   std::shared_ptr<window::Svg> panelSvg;
   std::shared_ptr<window::Svg> headerSvg;
@@ -1010,6 +1030,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     bool renderInWindow = !bgActive || (m && !m->emptyWindowInBgMode);
     if (layer == 1 && module && APP->scene && APP->scene->rack &&
         renderInWindow) {
+      rackSource.setModule(m->rackSourceModuleId);
       // Load/reload image if the module's path changed
       if (m->loadedImagePath != lastImagePath) {
         if (loadedNvgImg >= 0) {
@@ -1028,8 +1049,11 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       bool doCapture =
           !m->freezeMode || m->capturePending.exchange(false) || !hasValidCache;
       bool hasImage = (loadedNvgImg >= 0 && loadedTexId != 0);
+      PortaloofInjectedSource injectedSource =
+          rackSource.render(args.vg, m->id);
+      bool hasInjected = injectedSource.isValid() || hasImage;
 
-      if (m && (doCapture || hasImage || hasValidCache)) {
+      if (m && (doCapture || hasInjected || hasValidCache)) {
         float alpha = 0.85f;
 
         // Choose live params on capture, or based on transform pre/post setting
@@ -1083,17 +1107,24 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
         bool hasRack = (screenCap.nvgImg >= 0 && screenCap.texId != 0);
-        GLuint srcTex = hasRack ? screenCap.texId : loadedTexId;
-        int srcImg = hasRack ? screenCap.nvgImg : loadedNvgImg;
-        bool useInjected = !hasRack && hasImage;
-        if (hasRack && hasImage) {
+        GLuint injectedTex =
+            injectedSource.isValid() ? injectedSource.texId : loadedTexId;
+        int injectedImg =
+            injectedSource.isValid() ? injectedSource.nvgImg : loadedNvgImg;
+        bool injectedFlip =
+            injectedSource.isValid() ? injectedSource.flipInputUV : true;
+        GLuint srcTex = hasRack ? screenCap.texId : injectedTex;
+        int srcImg = hasRack ? screenCap.nvgImg : injectedImg;
+        bool flipInputUV = !hasRack && hasInjected && injectedFlip;
+        if (hasRack && hasInjected) {
           float imageAmt = 0.5f * (1.f - m->inputSourceMix);
-          int mixedImg = sourceBlendFBO.apply(args.vg, screenCap.texId,
-                                              loadedTexId, fbW, fbH, imageAmt);
+          int mixedImg =
+              sourceBlendFBO.apply(args.vg, screenCap.texId, injectedTex, fbW,
+                                   fbH, imageAmt, injectedFlip);
           if (mixedImg >= 0 && sourceBlendFBO.outTex != 0) {
             srcTex = sourceBlendFBO.outTex;
             srcImg = mixedImg;
-            useInjected = false;
+            flipInputUV = false;
           }
         }
 
@@ -1140,7 +1171,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
         bool tileOn = m->tileEmptySpace;
         int img = colorFBO.apply(args.vg, srcTex, srcImg, fbW, fbH, hueV, warpV,
-                                 foldFreqV, useInjected);
+                                 foldFreqV, flipInputUV);
         GLuint effectTex = (img == colorFBO.nvgImg && colorFBO.outTex != 0)
                                ? colorFBO.outTex
                                : srcTex;
@@ -1175,7 +1206,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           int flowerImg = flowerKaleidFBO.apply(
               args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
               rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
-              kaliTyOff * flowerScaleY, useInjected);
+              kaliTyOff * flowerScaleY, flipInputUV);
           if (flowerImg >= 0) {
             if (tileOn) {
               float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
@@ -1430,6 +1461,23 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       menu->addChild(createMenuItem("Clear image", "",
                                     [=]() { m->loadedImagePath.clear(); }));
     }
+    menu->addChild(createSubmenuItem("Rack source", "", [=](Menu* menu) {
+      PortaloofRackModuleSource selector;
+      selector.setModule(m->rackSourceModuleId);
+      menu->addChild(createMenuLabel(selector.describe(m->id)));
+      menu->addChild(createMenuItem("Clear rack source", "",
+                                    [=]() { m->rackSourceModuleId = -1; }));
+      menu->addChild(new MenuSeparator());
+      for (app::ModuleWidget* mw : selector.getSelectableModules(m->id)) {
+        std::string label = string::f(
+            "%s (#%lld)", mw->model ? mw->model->name.c_str() : "Module",
+            (long long)mw->module->id);
+        menu->addChild(createCheckMenuItem(
+            label, "",
+            [=]() { return m->rackSourceModuleId == mw->module->id; },
+            [=]() { m->rackSourceModuleId = mw->module->id; }));
+      }
+    }));
     menu->addChild(new MenuSeparator());
 
     // Fold Frequency slider (replaces panel FOLD controls)
@@ -1527,7 +1575,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       bool windowEmpty = backdropWidget && m->emptyWindowInBgMode;
 
       if (!m->loadedJSON) {
-        if (m->loadedImagePath.empty())
+        if (m->loadedImagePath.empty() && m->rackSourceModuleId < 0)
           m->loadedImagePath = pickRandomDocImage();
         box.size.x = m->width;
         if (!windowEmpty)
