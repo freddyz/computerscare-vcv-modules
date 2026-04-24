@@ -57,6 +57,15 @@ enum PortaloofRowIndex {
   ROW_COUNT
 };
 
+struct PortaloofKaleidParamQuantity : ParamQuantity {
+  std::string getDisplayValueString() override {
+    int mode = (int)std::lround(getValue());
+    if (mode == 0) return "Off";
+    if (mode > 0) return string::f("Premium %d", mode);
+    return string::f("Classic %d", -mode);
+  }
+};
+
 // ─── Module ──────────────────────────────────────────────────────────────────
 
 struct ComputerscarePortaloof : Module {
@@ -136,9 +145,10 @@ struct ComputerscarePortaloof : Module {
   bool emptyWindowInBgMode = true;
   bool transformPost = true;
   bool translateFirst =
-      false;            // false = Kaleid > Translate, true = Translate > Kaleid
-  int kaleidStyle = 0;  // 0 = classic, 1 = premium (flower)
+      false;  // false = Kaleid > Translate, true = Translate > Kaleid
   std::string loadedImagePath;
+  int legacyKaleidStyle = -1;
+  bool legacyKaleidStylePending = false;
 
   // Effective row state — computed in process(), read in drawLayer()
   bool freezeMode = false;
@@ -169,9 +179,9 @@ struct ComputerscarePortaloof : Module {
     configParam(ROT_KNOB, -180.f, 180.f, 0.f, "Rotation", "\u00b0");
     configParam(ROT_ATTEN, -1.f, 1.f, 0.f, "Rotation CV Atten");
     configSwitch(KALEIDO_TOGGLE, 0.f, 1.f, 1.f, "Kaleidoscope", {"Off", "On"});
-    configSwitch(
-        KALEIDO_KNOB, 0.f, 12.f, 0.f, "Kaleido Mode",
-        {"Off", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"});
+    configParam<PortaloofKaleidParamQuantity>(KALEIDO_KNOB, -12.f, 12.f, 0.f,
+                                              "Kaleido Mode");
+    getParamQuantity(KALEIDO_KNOB)->snapEnabled = true;
     configParam(KALEIDO_ATTEN, -1.f, 1.f, 0.f, "Kaleido CV Atten");
     configSwitch(TRANS_X_TOGGLE, 0.f, 1.f, 1.f, "Translate X", {"Off", "On"});
     configParam(TRANS_X_KNOB, -1.f, 1.f, 0.f, "Translate X");
@@ -245,12 +255,21 @@ struct ComputerscarePortaloof : Module {
         SCALE_CV_INPUT,   SCALE_X_CV_INPUT, SCALE_Y_CV_INPUT, ROT_CV_INPUT,
         KALEIDO_CV_INPUT, TRANS_X_CV_INPUT, TRANS_Y_CV_INPUT, HUE_CV_INPUT,
         INVERT_CV_INPUT,  CURVES_CV_INPUT};
-    static const float mins[ROW_COUNT] = {0.1f, -5.f, -5.f,   -360.f, 0.f,
+    static const float mins[ROW_COUNT] = {0.1f, -5.f, -5.f,   -360.f, -12.f,
                                           -1.f, -1.f, -360.f, 0.f,    -1.f};
     static const float maxs[ROW_COUNT] = {4.f, 5.f, 5.f,   360.f, 12.f,
                                           1.f, 1.f, 360.f, 1.f,   1.f};
     static const float cvScale[ROW_COUNT] = {0.3f, 0.5f, 0.5f, 36.f, 1.1f,
                                              0.1f, 0.1f, 36.f, 0.1f, 0.1f};
+
+    if (legacyKaleidStylePending) {
+      float currentMode = params[KALEIDO_KNOB].getValue();
+      if (currentMode != 0.f) {
+        params[KALEIDO_KNOB].setValue(
+            legacyKaleidStyle == 0 ? -fabsf(currentMode) : fabsf(currentMode));
+      }
+      legacyKaleidStylePending = false;
+    }
 
     // Freeze mode: gate jack overrides button when connected
     bool gateConnected = inputs[FREEZE_GATE_INPUT].isConnected();
@@ -324,7 +343,6 @@ struct ComputerscarePortaloof : Module {
                         json_boolean(emptyWindowInBgMode));
     json_object_set_new(rootJ, "transformPost", json_boolean(transformPost));
     json_object_set_new(rootJ, "translateFirst", json_boolean(translateFirst));
-    json_object_set_new(rootJ, "kaleidStyle", json_integer(kaleidStyle));
     if (!loadedImagePath.empty())
       json_object_set_new(rootJ, "loadedImagePath",
                           json_string(loadedImagePath.c_str()));
@@ -347,7 +365,10 @@ struct ComputerscarePortaloof : Module {
     json_t* tfJ = json_object_get(rootJ, "translateFirst");
     if (tfJ) translateFirst = json_boolean_value(tfJ);
     json_t* ksJ = json_object_get(rootJ, "kaleidStyle");
-    if (ksJ) kaleidStyle = (int)json_integer_value(ksJ);
+    if (ksJ) {
+      legacyKaleidStyle = (int)json_integer_value(ksJ);
+      legacyKaleidStylePending = true;
+    }
     json_t* lipJ = json_object_get(rootJ, "loadedImagePath");
     if (lipJ) loadedImagePath = json_string_value(lipJ);
     loadedJSON = false;
@@ -477,13 +498,14 @@ struct PortaloofBackdropWidget : widget::Widget {
 
     bool tileOn = module->tileEmptySpace;
     int kaliMode = kaliOn ? (int)kaliV : 0;
+    int kaliSegments = std::abs(kaliMode);
 
     float absSx = std::max(fabsf(sx), 0.01f);
     float absSy = std::max(fabsf(sy), 0.01f);
     float renderScale =
         std::max(APP->window->windowRatio * getAbsoluteZoom(), 1.f);
 
-    if (kaliMode > 0 && module->kaleidStyle == 1) {
+    if (kaliMode > 0) {
       float kaliTxOff = 0.f, kaliTyOff = 0.f;
       float nvgTx = 0.f, nvgTy = 0.f;
       if (txOn || tyOn) {
@@ -501,7 +523,7 @@ struct PortaloofBackdropWidget : widget::Widget {
       float flowerScaleX = (imgW > 0.f) ? ((float)flowerTargetW / imgW) : 1.f;
       float flowerScaleY = (vpH > 0.f) ? ((float)flowerTargetH / vpH) : 1.f;
       int flowerImg = flowerKaleidFBO.apply(
-          args.vg, effectTex, flowerTargetW, flowerTargetH, kaliMode,
+          args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
           rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
           kaliTyOff * flowerScaleY, useInjected);
       if (flowerImg >= 0) {
@@ -547,7 +569,7 @@ struct PortaloofBackdropWidget : widget::Widget {
           nvgFill(args.vg);
         }
       }
-    } else if (kaliMode > 0) {
+    } else if (kaliMode < 0) {
       float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
       float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
 
@@ -602,17 +624,17 @@ struct PortaloofBackdropWidget : widget::Widget {
             float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
             float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
             drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
-                             kaliMode, alpha, rotOn, rotV, false, 0.f, false,
-                             dX, dY, 2.f * dispHW, 2.f * dispHH, kaliTxOff,
-                             kaliTyOff);
+                             kaliSegments, alpha, rotOn, rotV, false, 0.f,
+                             false, dX, dY, 2.f * dispHW, 2.f * dispHH,
+                             kaliTxOff, kaliTyOff);
             nvgRestore(args.vg);
           }
         }
       } else {
-        drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH, kaliMode,
-                         alpha, rotOn, rotV, false, 0.f, false, pcx - dispHW,
-                         pcy - dispHH, 2.f * dispHW, 2.f * dispHH, kaliTxOff,
-                         kaliTyOff);
+        drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
+                         kaliSegments, alpha, rotOn, rotV, false, 0.f, false,
+                         pcx - dispHW, pcy - dispHH, 2.f * dispHW, 2.f * dispHH,
+                         kaliTxOff, kaliTyOff);
       }
     } else {
       float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
@@ -1124,13 +1146,14 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                                : srcTex;
 
         int kaliMode = kaliOn ? (int)kaliV : 0;
+        int kaliSegments = std::abs(kaliMode);
 
         float absSx = std::max(fabsf(sx), 0.01f);
         float absSy = std::max(fabsf(sy), 0.01f);
         float renderScale =
             std::max(APP->window->windowRatio * getAbsoluteZoom(), 1.f);
 
-        if (kaliMode > 0 && m->kaleidStyle == 1) {
+        if (kaliMode > 0) {
           float kaliTxOff = 0.f, kaliTyOff = 0.f;
           float nvgTx = 0.f, nvgTy = 0.f;
           if (txOn || tyOn) {
@@ -1150,7 +1173,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           float flowerScaleY =
               (mirrorH > 0.f) ? ((float)flowerTargetH / mirrorH) : 1.f;
           int flowerImg = flowerKaleidFBO.apply(
-              args.vg, effectTex, flowerTargetW, flowerTargetH, kaliMode,
+              args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
               rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
               kaliTyOff * flowerScaleY, useInjected);
           if (flowerImg >= 0) {
@@ -1197,7 +1220,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               nvgFill(args.vg);
             }
           }
-        } else if (kaliMode > 0) {
+        } else if (kaliMode < 0) {
           // No global rotation here — each sector applies its own rotation with
           // sign correction for flipped sectors (see kSector in
           // MirrorKaleidoscope.hpp).
@@ -1259,16 +1282,16 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                 float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
                 float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
                 drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW,
-                                 rHH, kaliMode, alpha, rotOn, rotV, false, 0.f,
-                                 false, dX, dY, 2.f * dispHW, 2.f * dispHH,
+                                 rHH, kaliSegments, alpha, rotOn, rotV, false,
+                                 0.f, false, dX, dY, 2.f * dispHW, 2.f * dispHH,
                                  kaliTxOff, kaliTyOff);
                 nvgRestore(args.vg);
               }
             }
           } else {
             drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH,
-                             kaliMode, alpha, rotOn, rotV, false, 0.f, false,
-                             pcx - dispHW, pcy - dispHH, 2.f * dispHW,
+                             kaliSegments, alpha, rotOn, rotV, false, 0.f,
+                             false, pcx - dispHW, pcy - dispHH, 2.f * dispHW,
                              2.f * dispHH, kaliTxOff, kaliTyOff);
 
             // Overlay opaque grey strips covering display area outside the
@@ -1463,14 +1486,6 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       menu->addChild(createCheckMenuItem(
           "Translate > Kaleid", "", [=]() { return m->translateFirst; },
           [=]() { m->translateFirst = true; }));
-    }));
-    menu->addChild(createSubmenuItem("Kaleid style", "", [=](Menu* menu) {
-      menu->addChild(createCheckMenuItem(
-          "Classic", "", [=]() { return m->kaleidStyle == 0; },
-          [=]() { m->kaleidStyle = 0; }));
-      menu->addChild(createCheckMenuItem(
-          "Premium", "", [=]() { return m->kaleidStyle == 1; },
-          [=]() { m->kaleidStyle = 1; }));
     }));
   }
 
