@@ -147,6 +147,7 @@ struct ComputerscarePortaloof : Module {
   bool transformPost = false;
   bool translateFirst =
       true;  // false = Kaleid > Translate, true = Translate > Kaleid
+  bool hideUi = false;
   std::string loadedImagePath;
   int64_t rackSourceModuleId = -1;
   bool rackRectSourceEnabled = false;
@@ -384,6 +385,7 @@ struct ComputerscarePortaloof : Module {
                         json_boolean(emptyWindowInBgMode));
     json_object_set_new(rootJ, "transformPost", json_boolean(transformPost));
     json_object_set_new(rootJ, "translateFirst", json_boolean(translateFirst));
+    json_object_set_new(rootJ, "hideUi", json_boolean(hideUi));
     json_object_set_new(rootJ, "rackSourceModuleId",
                         json_integer(rackSourceModuleId));
     json_object_set_new(rootJ, "rackRectSourceEnabled",
@@ -420,6 +422,8 @@ struct ComputerscarePortaloof : Module {
     if (tpJ) transformPost = json_boolean_value(tpJ);
     json_t* tfJ = json_object_get(rootJ, "translateFirst");
     if (tfJ) translateFirst = json_boolean_value(tfJ);
+    json_t* huiJ = json_object_get(rootJ, "hideUi");
+    if (huiJ) hideUi = json_boolean_value(huiJ);
     json_t* rsmJ = json_object_get(rootJ, "rackSourceModuleId");
     if (rsmJ) rackSourceModuleId = json_integer_value(rsmJ);
     json_t* rrseJ = json_object_get(rootJ, "rackRectSourceEnabled");
@@ -909,6 +913,11 @@ struct PortaloofRectSelectionOverlay : widget::OpaqueWidget {
 };
 
 struct ComputerscarePortaloofWidget : ModuleWidget {
+  struct HiddenPortPlacement {
+    PortWidget* port = nullptr;
+    Vec visiblePos;
+  };
+
   BGPanel* bgPanel;
   ComputerscareResizeHandle* rightHandle;
   ScreenCapture screenCap;
@@ -920,6 +929,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   PortaloofBackdropWidget* backdropWidget = nullptr;
   std::shared_ptr<window::Svg> panelSvg;
   std::shared_ptr<window::Svg> headerSvg;
+  std::vector<HiddenPortPlacement> hiddenPortPlacements;
+  bool portsInHiddenLayout = false;
+  bool hiddenUiApplied = false;
+  bool lastHideUiForSizing = false;
 
   // Cache for triggered mode — holds the last rendered frame's params
   bool cachedRowEnabled[10] = {};
@@ -997,14 +1010,15 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     addParam(createParam<SmallIsoButton>(
         Vec(CONT_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY), module,
         ComputerscarePortaloof::FREEZE_TOGGLE));
-    addInput(createInput<InPort>(Vec(CONT_JACK_X, HDR_JACK_Y), module,
-                                 ComputerscarePortaloof::FREEZE_GATE_INPUT));
+    trackInputPort(
+        createInput<InPort>(Vec(CONT_JACK_X, HDR_JACK_Y), module,
+                            ComputerscarePortaloof::FREEZE_GATE_INPUT));
 
     addHdrLabel(MIX_JACK_X + HDR_BTN_DX - 4.f, "MIX");
     addParam(createParam<SmallKnob>(
         Vec(MIX_JACK_X + HDR_BTN_DX + 1.f, HDR_JACK_Y + HDR_BTN_DY + 5.f),
         module, ComputerscarePortaloof::INPUT_SOURCE_MIX));
-    addInput(
+    trackInputPort(
         createInput<InPort>(Vec(MIX_JACK_X, HDR_JACK_Y), module,
                             ComputerscarePortaloof::INPUT_SOURCE_MIX_INPUT));
     {
@@ -1116,9 +1130,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
       addParam(createParam<SmallIsoButton>(Vec(2.f, y - 14.f), module,
                                            toggleIds[i]));
-      addInput(
+      trackInputPort(
           createInput<OutPort>(Vec(30.f, y - 17.f), module, gateInputIds[i]));
-      addInput(createInput<InPort>(Vec(68.f, y - 14.f), module, cvInputIds[i]));
+      trackInputPort(
+          createInput<InPort>(Vec(68.f, y - 14.f), module, cvInputIds[i]));
       addParam(
           createParam<SmallKnob>(Vec(100.f, y - 9.f), module, attenIds[i]));
       addParam(
@@ -1127,6 +1142,46 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
     headerSvg = APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/panels/portaloof-header.svg"));
+  }
+
+  void trackInputPort(PortWidget* port) {
+    addInput(port);
+    HiddenPortPlacement placement;
+    placement.port = port;
+    placement.visiblePos = port->box.pos;
+    hiddenPortPlacements.push_back(placement);
+  }
+
+  void updateHiddenPortLayout(bool hideUi) {
+    if (portsInHiddenLayout == hideUi) return;
+
+    for (size_t i = 0; i < hiddenPortPlacements.size(); i++) {
+      HiddenPortPlacement& p = hiddenPortPlacements[i];
+      if (!p.port) continue;
+
+      if (hideUi) {
+        p.port->box.pos = Vec(0.f, RACK_GRID_HEIGHT - p.port->box.size.y);
+      } else {
+        p.port->box.pos = p.visiblePos;
+      }
+    }
+
+    portsInHiddenLayout = hideUi;
+  }
+
+  void updateHiddenUiVisibility(bool hideUi) {
+    if (hiddenUiApplied == hideUi) return;
+
+    for (Widget* child : children) {
+      child->setVisible(!hideUi || child == rightHandle);
+    }
+
+    hiddenUiApplied = hideUi;
+  }
+
+  float getHiddenWidth(ComputerscarePortaloof* m) const {
+    float fullWidth = m ? m->width : box.size.x;
+    return std::max(fullWidth - DISPLAY_X, RACK_GRID_WIDTH);
   }
 
   void drawBrowserPreview(const DrawArgs& args) {
@@ -1171,6 +1226,12 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   }
 
   void draw(const DrawArgs& args) override {
+    ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
+    if (m && m->hideUi) {
+      drawChild(rightHandle, args);
+      return;
+    }
+
     if (!module) {
       // Narrow bgPanel to controls only so the display area stays transparent,
       // letting the kaleidoscope show through when we redraw the panel on top.
@@ -1184,10 +1245,11 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
   void drawLayer(const DrawArgs& args, int layer) override {
     ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
+    bool hideUi = m && m->hideUi;
     bool bgActive = backdropWidget != nullptr;
     bool renderInWindow = !bgActive || (m && !m->emptyWindowInBgMode);
     if (portaloofRenderingRackRectSource()) {
-      ModuleWidget::drawLayer(args, layer);
+      if (!hideUi) ModuleWidget::drawLayer(args, layer);
       return;
     }
     if (layer == 1 && module && APP->scene && APP->scene->rack &&
@@ -1248,12 +1310,12 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
         float warpV = curvesOn ? rv[9] : 0.f;
 
-        const float displayX = DISPLAY_X;
+        const float displayX = hideUi ? 0.f : DISPLAY_X;
         float mirrorW = box.size.x - displayX;
         float mirrorH = box.size.y;
 
         if (mirrorW <= 2.f) {
-          ModuleWidget::drawLayer(args, layer);
+          if (!hideUi) ModuleWidget::drawLayer(args, layer);
           return;
         }
 
@@ -1294,7 +1356,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         }
 
         if (srcImg < 0) {
-          ModuleWidget::drawLayer(args, layer);
+          if (!hideUi) ModuleWidget::drawLayer(args, layer);
           return;
         }
 
@@ -1578,7 +1640,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         // Redraw SVG panel clipped to the overlap strip
         // (DISPLAY_X–CONTROLS_WIDTH) so the display peeks under the panel
         // without covering the controls.
-        if (panelSvg && panelSvg->handle) {
+        if (!hideUi && panelSvg && panelSvg->handle) {
           float svgW = panelSvg->handle->width;
           float svgH = panelSvg->handle->height;
           if (svgW > 0.f && svgH > 0.f) {
@@ -1595,10 +1657,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       }
     }
 
-    ModuleWidget::drawLayer(args, layer);
+    if (!hideUi) ModuleWidget::drawLayer(args, layer);
 
     // Header drawn last — on top of everything including kaleidoscope
-    if (layer == 1 && headerSvg && headerSvg->handle) {
+    if (!hideUi && layer == 1 && headerSvg && headerSvg->handle) {
       float svgW = headerSvg->handle->width;
       float svgH = headerSvg->handle->height;
       const float drawW = 170.f;
@@ -1706,6 +1768,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         m->paramQuantities[ComputerscarePortaloof::INVERT_KNOB]));
 
     menu->addChild(new MenuSeparator());
+    menu->addChild(createBoolPtrMenuItem("Hide UI", "", &m->hideUi));
     menu->addChild(createBoolPtrMenuItem("Render as rack background", "",
                                          &m->backdropEnabled));
     menu->addChild(
@@ -1758,6 +1821,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   void step() override {
     if (module) {
       ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
+      updateHiddenPortLayout(m->hideUi);
+      updateHiddenUiVisibility(m->hideUi);
 
       // Sync backdrop widget with module flag (handles reset / patch load)
       if (m->backdropEnabled && !backdropWidget) {
@@ -1779,27 +1844,46 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       }
 
       bool windowEmpty = backdropWidget && m->emptyWindowInBgMode;
+      bool hideUiChanged = m->hideUi != lastHideUiForSizing;
+      rightHandle->minWidth = m->hideUi ? RACK_GRID_WIDTH : CONTROLS_WIDTH;
+      float visibleWidth = m->hideUi ? getHiddenWidth(m) : m->width;
 
       if (!m->loadedJSON) {
         if (m->loadedImagePath.empty() && m->rackSourceModuleId < 0)
           m->loadedImagePath = pickRandomDocImage();
-        box.size.x = m->width;
+        box.size.x = visibleWidth;
         if (!windowEmpty)
-          bgPanel->box.size.x = m->width - DISPLAY_X;
+          bgPanel->box.size.x = m->hideUi ? 0.f : (m->width - DISPLAY_X);
         else
           bgPanel->box.size.x = 0;
-        rightHandle->box.pos.x = m->width - rightHandle->box.size.x;
+        rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;
         m->loadedJSON = true;
-      } else if (box.size.x != m->width) {
+      } else if (hideUiChanged) {
+        float rightEdge = box.pos.x + box.size.x;
+        box.size.x = visibleWidth;
+        box.pos.x = rightEdge - box.size.x;
+        if (APP->scene && APP->scene->rack)
+          APP->scene->rack->requestModulePos(this, box.pos);
+        rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;
+      } else if (m->hideUi && box.size.x != visibleWidth) {
+        m->width =
+            std::max(box.size.x + DISPLAY_X, DISPLAY_X + RACK_GRID_WIDTH);
+        visibleWidth = getHiddenWidth(m);
+        rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;
+      } else if (!m->hideUi && box.size.x != m->width) {
         m->width = box.size.x;
         if (!windowEmpty) bgPanel->box.size.x = box.size.x - DISPLAY_X;
         rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
       } else {
+        if (box.size.x != visibleWidth) box.size.x = visibleWidth;
         // Keep panel width in sync when emptyWindowInBgMode toggles
-        float desiredPanelW = windowEmpty ? 0 : (box.size.x - DISPLAY_X);
+        float desiredPanelW =
+            (windowEmpty || m->hideUi) ? 0.f : (box.size.x - DISPLAY_X);
         if (bgPanel->box.size.x != desiredPanelW)
           bgPanel->box.size.x = desiredPanelW;
+        rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;
       }
+      lastHideUiForSizing = m->hideUi;
     }
     ModuleWidget::step();
   }
