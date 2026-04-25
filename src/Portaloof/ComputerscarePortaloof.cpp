@@ -206,6 +206,8 @@ struct ComputerscarePortaloof : Module {
   bool rowEnabled[ROW_COUNT] = {};
   float rowValue[ROW_COUNT] = {1.f, 1.f, 1.f, 0.f, 0.f,
                                0.f, 0.f, 0.f, 0.f, 0.f};
+  bool sourceRowEnabled[2][ROW_COUNT] = {};
+  float sourceRowValue[2][ROW_COUNT] = {};
 
   std::atomic<bool> capturePending{false};
   std::atomic<bool> backdropCapturePending{false};
@@ -473,18 +475,31 @@ struct ComputerscarePortaloof : Module {
 
     for (int i = 0; i < ROW_COUNT; i++) {
       bool gateConn = inputs[gateIds[i]].isConnected();
-      rowEnabled[i] = gateConn ? (inputs[gateIds[i]].getVoltage() > 0.5f)
-                               : (params[toggleIds[i]].getValue() > 0.5f);
-
       float offset = params[knobIds[i]].getValue();
       float atten = params[attenIds[i]].getValue();
-      float cv =
-          inputs[cvIds[i]].isConnected() ? inputs[cvIds[i]].getVoltage() : 0.f;
-      float combined = offset + atten * cv * cvScale[i];
-      bool wraps = (i == ROW_ROT || i == ROW_TRANS_X || i == ROW_TRANS_Y ||
-                    i == ROW_HUE);
-      rowValue[i] = wraps ? wrapToRange(combined, mins[i], maxs[i])
-                          : clamp(combined, mins[i], maxs[i]);
+
+      int gateChannels = inputs[gateIds[i]].getChannels();
+      int cvChannels = inputs[cvIds[i]].getChannels();
+      bool toggleOn = params[toggleIds[i]].getValue() > 0.5f;
+      for (int s = 0; s < 2; s++) {
+        int gateChannel = gateChannels >= 2 ? s : 0;
+        int cvChannel = cvChannels >= 2 ? s : 0;
+        bool gateOn =
+            !gateConn || inputs[gateIds[i]].getVoltage(gateChannel) > 0.5f;
+        sourceRowEnabled[s][i] = toggleOn && gateOn;
+
+        float cv = inputs[cvIds[i]].isConnected()
+                       ? inputs[cvIds[i]].getVoltage(cvChannel)
+                       : 0.f;
+        float combined = offset + atten * cv * cvScale[i];
+        bool wraps = (i == ROW_ROT || i == ROW_TRANS_X || i == ROW_TRANS_Y ||
+                      i == ROW_HUE);
+        sourceRowValue[s][i] = wraps ? wrapToRange(combined, mins[i], maxs[i])
+                                     : clamp(combined, mins[i], maxs[i]);
+      }
+
+      rowEnabled[i] = sourceRowEnabled[0][i];
+      rowValue[i] = sourceRowValue[0][i];
     }
 
     // Exponential scale map for Scale X (row 1) and Scale Y (row 2).
@@ -493,16 +508,19 @@ struct ComputerscarePortaloof : Module {
     //   [1, 5] → [1.0, 5.0] exponential (coarser at extremes)
     // Default knob=1 → scale=1.0 (identity). Negative values mirror the axis.
     for (int si = ROW_SCALE_X; si <= ROW_SCALE_Y; si++) {
-      float k = rowValue[si];
-      float sign = (k >= 0.f) ? 1.f : -1.f;
-      float a = fabsf(k);
-      float result;
-      if (a <= 1.f) {
-        result = 0.1f + 0.9f * (a * a);
-      } else {
-        result = powf(5.f, (a - 1.f) / 4.f);
+      for (int s = 0; s < 2; s++) {
+        float k = sourceRowValue[s][si];
+        float sign = (k >= 0.f) ? 1.f : -1.f;
+        float a = fabsf(k);
+        float result;
+        if (a <= 1.f) {
+          result = 0.1f + 0.9f * (a * a);
+        } else {
+          result = powf(5.f, (a - 1.f) / 4.f);
+        }
+        sourceRowValue[s][si] = sign * result;
       }
-      rowValue[si] = sign * result;
+      rowValue[si] = sourceRowValue[0][si];
     }
   }
 
@@ -637,13 +655,13 @@ struct ComputerscarePortaloof : Module {
 struct PortaloofBackdropWidget : widget::Widget {
   ComputerscarePortaloof* module = nullptr;
   ScreenCapture screenCap;
-  ColorTransformFBO colorFBO;
+  ColorTransformFBO colorFBOs[2];
   SourceBlendFBO sourceBlendFBO;
-  FlowerKaleidFBO flowerKaleidFBO;
+  FlowerKaleidFBO flowerKaleidFBOs[2];
   PortaloofRackModuleSource rackSources[2];
   PortaloofRectSource rectSources[2];
-  bool cachedRowEnabled[10] = {};
-  float cachedRowValue[10] = {};
+  bool cachedRowEnabled[2][10] = {};
+  float cachedRowValue[2][10] = {};
   bool hasValidCache = false;
 
   // Loaded image injection
@@ -673,115 +691,193 @@ struct PortaloofBackdropWidget : widget::Widget {
                      !hasValidCache;
     if (doCapture) {
       screenCap.capture(args.vg);
-      memcpy(cachedRowEnabled, module->rowEnabled, sizeof(cachedRowEnabled));
-      memcpy(cachedRowValue, module->rowValue, sizeof(cachedRowValue));
+      memcpy(cachedRowEnabled, module->sourceRowEnabled,
+             sizeof(cachedRowEnabled));
+      memcpy(cachedRowValue, module->sourceRowValue, sizeof(cachedRowValue));
       hasValidCache = true;
     }
 
-    PortaloofInjectedSource source1 = getSource(args.vg, screenCap, 0);
-    PortaloofInjectedSource source2 = getSource(args.vg, screenCap, 1);
-    if (!doCapture && !source1.isValid() && !source2.isValid()) return;
-
-    GLuint srcTex = source1.texId;
-    int srcImg = source1.nvgImg;
-    bool flipInputUV = source1.flipInputUV;
-    if (source1.isValid() && source2.isValid()) {
-      float source2Amt = 0.5f * (1.f + module->inputSourceMix);
-      int mixedImg = sourceBlendFBO.apply(
-          args.vg, source1.texId, source2.texId, fbW, fbH, source2Amt,
-          source2.flipInputUV, source1.flipInputUV);
-      if (mixedImg >= 0 && sourceBlendFBO.outTex != 0) {
-        srcTex = sourceBlendFBO.outTex;
-        srcImg = mixedImg;
-        flipInputUV = false;
-      }
-    } else if (source2.isValid()) {
-      srcTex = source2.texId;
-      srcImg = source2.nvgImg;
-      flipInputUV = source2.flipInputUV;
-    }
-    if (srcImg < 0) return;
+    PortaloofInjectedSource renderSources[2] = {
+        getSource(args.vg, screenCap, 0), getSource(args.vg, screenCap, 1)};
+    bool hasSource1 = renderSources[0].isValid();
+    bool hasSource2 = renderSources[1].isValid();
+    if (!doCapture && !hasSource1 && !hasSource2) return;
+    if (!hasSource1 && !hasSource2) return;
+    float source2Amt = 0.5f * (1.f + module->inputSourceMix);
 
     // Transform post: use live params (knobs alter frozen image).
     // Transform pre:  use cached params (knobs only affect next snapshot).
     bool useLive = !module->freezeMode || module->transformPost;
-    bool* en =
-        (useLive || !hasValidCache) ? module->rowEnabled : cachedRowEnabled;
-    float* rv = (useLive || !hasValidCache) ? module->rowValue : cachedRowValue;
 
-    bool scaleOn = en[0], scaleXOn = en[1], scaleYOn = en[2];
-    bool rotOn = en[3], kaliOn = en[4];
-    bool txOn = en[5], tyOn = en[6];
-    bool hueOn = en[7], invertOn = en[8], curvesOn = en[9];
-
-    float scaleV = rv[0], scaleXV = rv[1], scaleYV = rv[2];
-    float rotV = rv[3], kaliV = rv[4];
-    float txV = rv[5], tyV = rv[6];
-    float hueV = hueOn ? rv[7] : 0.f;
-    float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
-    float warpV = curvesOn ? rv[9] : 0.f;
-
-    float alpha =
+    float baseAlpha =
         module->params[ComputerscarePortaloof::BACKDROP_ALPHA].getValue();
-    float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
-    float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
     float imgW = vpW;
     float imgHW = imgW * 0.5f;
     float hh = vpH * 0.5f;
-    float txLocal = txOn ? txV * imgW : 0.f;
-    float tyLocal = tyOn ? tyV * vpH : 0.f;
 
-    int img = colorFBO.apply(args.vg, srcTex, srcImg, fbW, fbH, hueV, warpV,
-                             foldFreqV, flipInputUV);
-    GLuint effectTex = (img == colorFBO.nvgImg && colorFBO.outTex != 0)
-                           ? colorFBO.outTex
-                           : srcTex;
+    for (int renderSourceIndex = 0; renderSourceIndex < 2;
+         renderSourceIndex++) {
+      PortaloofInjectedSource currentSource = renderSources[renderSourceIndex];
+      if (!currentSource.isValid()) continue;
+      float sourceMixAlpha = 1.f;
+      if (hasSource1 && hasSource2)
+        sourceMixAlpha =
+            renderSourceIndex == 0 ? (1.f - source2Amt) : source2Amt;
+      if (sourceMixAlpha <= 0.f) continue;
+      float alpha = baseAlpha * sourceMixAlpha;
 
-    nvgSave(args.vg);
-    nvgScissor(args.vg, vpX, vpY, vpW, vpH);
-    nvgTranslate(args.vg, vpX + imgHW, vpY + hh);
-    if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
+      bool* en = (useLive || !hasValidCache)
+                     ? module->sourceRowEnabled[renderSourceIndex]
+                     : cachedRowEnabled[renderSourceIndex];
+      float* rv = (useLive || !hasValidCache)
+                      ? module->sourceRowValue[renderSourceIndex]
+                      : cachedRowValue[renderSourceIndex];
 
-    bool tileOn = module->tileEmptySpace;
-    int kaliMode = kaliOn ? (int)kaliV : 0;
-    int kaliSegments = std::abs(kaliMode);
+      bool scaleOn = en[0], scaleXOn = en[1], scaleYOn = en[2];
+      bool rotOn = en[3], kaliOn = en[4];
+      bool txOn = en[5], tyOn = en[6];
+      bool hueOn = en[7], invertOn = en[8], curvesOn = en[9];
 
-    float absSx = std::max(fabsf(sx), 0.01f);
-    float absSy = std::max(fabsf(sy), 0.01f);
-    float renderScale =
-        std::max(APP->window->windowRatio * getAbsoluteZoom(), 1.f);
+      float scaleV = rv[0], scaleXV = rv[1], scaleYV = rv[2];
+      float rotV = rv[3], kaliV = rv[4];
+      float txV = rv[5], tyV = rv[6];
+      float hueV = hueOn ? rv[7] : 0.f;
+      float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
+      float warpV = curvesOn ? rv[9] : 0.f;
 
-    if (kaliMode > 0) {
-      float kaliTxOff = 0.f, kaliTyOff = 0.f;
-      float nvgTx = 0.f, nvgTy = 0.f;
-      if (txOn || tyOn) {
-        if (module->translateFirst) {
-          kaliTxOff = txLocal;
-          kaliTyOff = tyLocal;
-        } else {
-          nvgTx = txOn ? (2.f * txLocal) : 0.f;
-          nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
-          nvgTranslate(args.vg, nvgTx, nvgTy);
+      GLuint srcTex = currentSource.texId;
+      int srcImg = currentSource.nvgImg;
+      bool flipInputUV = currentSource.flipInputUV;
+
+      float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
+      float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
+      float txLocal = txOn ? txV * imgW : 0.f;
+      float tyLocal = tyOn ? tyV * vpH : 0.f;
+
+      int img = colorFBOs[renderSourceIndex].apply(args.vg, srcTex, srcImg, fbW,
+                                                   fbH, hueV, warpV, foldFreqV,
+                                                   flipInputUV);
+      GLuint effectTex = (img == colorFBOs[renderSourceIndex].nvgImg &&
+                          colorFBOs[renderSourceIndex].outTex != 0)
+                             ? colorFBOs[renderSourceIndex].outTex
+                             : srcTex;
+
+      nvgSave(args.vg);
+      nvgScissor(args.vg, vpX, vpY, vpW, vpH);
+      nvgTranslate(args.vg, vpX + imgHW, vpY + hh);
+      if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
+
+      bool tileOn = module->tileEmptySpace;
+      int kaliMode = kaliOn ? (int)kaliV : 0;
+      int kaliSegments = std::abs(kaliMode);
+
+      float absSx = std::max(fabsf(sx), 0.01f);
+      float absSy = std::max(fabsf(sy), 0.01f);
+      float renderScale =
+          std::max(APP->window->windowRatio * getAbsoluteZoom(), 1.f);
+
+      if (kaliMode > 0) {
+        float kaliTxOff = 0.f, kaliTyOff = 0.f;
+        float nvgTx = 0.f, nvgTy = 0.f;
+        if (txOn || tyOn) {
+          if (module->translateFirst) {
+            kaliTxOff = txLocal;
+            kaliTyOff = tyLocal;
+          } else {
+            nvgTx = txOn ? (2.f * txLocal) : 0.f;
+            nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
+            nvgTranslate(args.vg, nvgTx, nvgTy);
+          }
         }
-      }
-      int flowerTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
-      int flowerTargetH = flowerKaleidTargetDim(vpH, renderScale, fbH);
-      float flowerScaleX = (imgW > 0.f) ? ((float)flowerTargetW / imgW) : 1.f;
-      float flowerScaleY = (vpH > 0.f) ? ((float)flowerTargetH / vpH) : 1.f;
-      int flowerImg = flowerKaleidFBO.apply(
-          args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
-          rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
-          kaliTyOff * flowerScaleY, flipInputUV);
-      if (flowerImg >= 0) {
+        int flowerTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
+        int flowerTargetH = flowerKaleidTargetDim(vpH, renderScale, fbH);
+        float flowerScaleX = (imgW > 0.f) ? ((float)flowerTargetW / imgW) : 1.f;
+        float flowerScaleY = (vpH > 0.f) ? ((float)flowerTargetH / vpH) : 1.f;
+        int flowerImg = flowerKaleidFBOs[renderSourceIndex].apply(
+            args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
+            rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
+            kaliTyOff * flowerScaleY, flipInputUV);
+        if (flowerImg >= 0) {
+          if (tileOn) {
+            float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
+            float pcy = -(tyOn && !module->translateFirst ? nvgTy : 0.f);
+            float dispHW = imgHW / absSx;
+            float dispHH = hh / absSy;
+            int iMin = (int)ceilf((pcx - dispHW - imgHW) / imgW) - 1;
+            int iMax = (int)floorf((pcx + dispHW + imgHW) / imgW) + 1;
+            int jMin = (int)ceilf((pcy - dispHH - hh) / vpH) - 1;
+            int jMax = (int)floorf((pcy + dispHH + hh) / vpH) + 1;
+            iMin = std::max(iMin, -20);
+            iMax = std::min(iMax, 20);
+            jMin = std::max(jMin, -20);
+            jMax = std::min(jMax, 20);
+            for (int j = jMin; j <= jMax; j++) {
+              for (int i = iMin; i <= iMax; i++) {
+                float tileX = (float)i * imgW;
+                float tileY = (float)j * vpH;
+                bool reverseX = reverseOuterTile(i);
+                bool reverseY = reverseOuterTile(j);
+                nvgSave(args.vg);
+                nvgTranslate(args.vg, tileX, tileY);
+                if (reverseX || reverseY) {
+                  nvgScale(args.vg, reverseX ? -1.f : 1.f,
+                           reverseY ? -1.f : 1.f);
+                }
+                NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH,
+                                             0.f, flowerImg, alpha);
+                nvgBeginPath(args.vg);
+                nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
+                nvgFillPaint(args.vg, p);
+                nvgFill(args.vg);
+                nvgRestore(args.vg);
+              }
+            }
+          } else {
+            NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f,
+                                         flowerImg, alpha);
+            nvgBeginPath(args.vg);
+            nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
+            nvgFillPaint(args.vg, p);
+            nvgFill(args.vg);
+          }
+        }
+      } else if (kaliMode < 0) {
+        float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
+        float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
+
+        float kaliTxOff = 0.f, kaliTyOff = 0.f;
+        float nvgTx = 0.f, nvgTy = 0.f;
+        if (txOn || tyOn) {
+          if (module->translateFirst) {
+            kaliTxOff = txLocal;
+            kaliTyOff = tyLocal;
+          } else {
+            nvgTx = txOn ? (2.f * txLocal) : 0.f;
+            nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
+            nvgTranslate(args.vg, nvgTx, nvgTy);
+          }
+        }
+
+        float effTxAbs = fabsf(nvgTx);
+        float effTyAbs = fabsf(nvgTy);
+        float rHW =
+            ((imgW + 2.f * effTxAbs) * cosA + (vpH + 2.f * effTyAbs) * sinA) /
+                (2.f * absSx) +
+            4.f;
+        float rHH =
+            ((imgW + 2.f * effTxAbs) * sinA + (vpH + 2.f * effTyAbs) * cosA) /
+                (2.f * absSy) +
+            4.f;
+        float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
+        float pcy = -(tyOn && !module->translateFirst ? nvgTy : 0.f);
+        float dispHW = imgHW / absSx;
+        float dispHH = hh / absSy;
+
         if (tileOn) {
-          float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
-          float pcy = -(tyOn && !module->translateFirst ? nvgTy : 0.f);
-          float dispHW = imgHW / absSx;
-          float dispHH = hh / absSy;
-          int iMin = (int)ceilf((pcx - dispHW - imgHW) / imgW) - 1;
-          int iMax = (int)floorf((pcx + dispHW + imgHW) / imgW) + 1;
-          int jMin = (int)ceilf((pcy - dispHH - hh) / vpH) - 1;
-          int jMax = (int)floorf((pcy + dispHH + hh) / vpH) + 1;
+          int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
+          int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
+          int jMin = (int)ceilf((pcy - rHH - hh) / vpH);
+          int jMax = (int)floorf((pcy + rHH + hh) / vpH);
           iMin = std::max(iMin, -20);
           iMax = std::min(iMax, 20);
           jMin = std::max(jMin, -20);
@@ -797,144 +893,75 @@ struct PortaloofBackdropWidget : widget::Widget {
               if (reverseX || reverseY) {
                 nvgScale(args.vg, reverseX ? -1.f : 1.f, reverseY ? -1.f : 1.f);
               }
-              NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f,
-                                           flowerImg, alpha);
-              nvgBeginPath(args.vg);
-              nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
-              nvgFillPaint(args.vg, p);
-              nvgFill(args.vg);
+              float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
+              float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
+              drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
+                               kaliSegments, alpha, rotOn, rotV, false, 0.f,
+                               false, dX, dY, 2.f * dispHW, 2.f * dispHH,
+                               kaliTxOff, kaliTyOff);
               nvgRestore(args.vg);
             }
           }
         } else {
-          NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f,
-                                       flowerImg, alpha);
+          drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
+                           kaliSegments, alpha, rotOn, rotV, false, 0.f, false,
+                           pcx - dispHW, pcy - dispHH, 2.f * dispHW,
+                           2.f * dispHH, kaliTxOff, kaliTyOff);
+        }
+      } else {
+        float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
+        float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
+        if (rotOn) applyRotation(args.vg, rotV);
+        float txOffset = txOn ? txLocal : 0.f;
+        float tyOffset = tyOn ? tyLocal : 0.f;
+        if (txOn || tyOn) nvgTranslate(args.vg, txOffset, tyOffset);
+        float txOffsetAbs = fabsf(txOffset);
+        float tyOffsetAbs = fabsf(tyOffset);
+        float rHW = ((imgW + 2.f * txOffsetAbs) * cosA +
+                     (vpH + 2.f * tyOffsetAbs) * sinA) /
+                        (2.f * absSx) +
+                    4.f;
+        float rHH = ((imgW + 2.f * txOffsetAbs) * sinA +
+                     (vpH + 2.f * tyOffsetAbs) * cosA) /
+                        (2.f * absSy) +
+                    4.f;
+
+        if (tileOn) {
+          float pcx = -txOffset;
+          float pcy = -tyOffset;
+          int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
+          int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
+          int jMin = (int)ceilf((pcy - rHH - hh) / vpH);
+          int jMax = (int)floorf((pcy + rHH + hh) / vpH);
+          iMin = std::max(iMin, -20);
+          iMax = std::min(iMax, 20);
+          jMin = std::max(jMin, -20);
+          jMax = std::min(jMax, 20);
+          for (int j = jMin; j <= jMax; j++) {
+            for (int i = iMin; i <= iMax; i++) {
+              float ox = -imgHW + i * imgW;
+              float oy = -hh + j * vpH;
+              NVGpaint p =
+                  nvgImagePattern(args.vg, ox, oy, imgW, vpH, 0.f, img, alpha);
+              nvgBeginPath(args.vg);
+              nvgRect(args.vg, ox, oy, imgW, vpH);
+              nvgFillPaint(args.vg, p);
+              nvgFill(args.vg);
+            }
+          }
+        } else {
+          // Exact rect — no oversized fill so NVG won't tile/smear the edges.
+          NVGpaint p =
+              nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f, img, alpha);
           nvgBeginPath(args.vg);
           nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
           nvgFillPaint(args.vg, p);
           nvgFill(args.vg);
         }
       }
-    } else if (kaliMode < 0) {
-      float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
-      float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
 
-      float kaliTxOff = 0.f, kaliTyOff = 0.f;
-      float nvgTx = 0.f, nvgTy = 0.f;
-      if (txOn || tyOn) {
-        if (module->translateFirst) {
-          kaliTxOff = txLocal;
-          kaliTyOff = tyLocal;
-        } else {
-          nvgTx = txOn ? (2.f * txLocal) : 0.f;
-          nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
-          nvgTranslate(args.vg, nvgTx, nvgTy);
-        }
-      }
-
-      float effTxAbs = fabsf(nvgTx);
-      float effTyAbs = fabsf(nvgTy);
-      float rHW =
-          ((imgW + 2.f * effTxAbs) * cosA + (vpH + 2.f * effTyAbs) * sinA) /
-              (2.f * absSx) +
-          4.f;
-      float rHH =
-          ((imgW + 2.f * effTxAbs) * sinA + (vpH + 2.f * effTyAbs) * cosA) /
-              (2.f * absSy) +
-          4.f;
-      float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
-      float pcy = -(tyOn && !module->translateFirst ? nvgTy : 0.f);
-      float dispHW = imgHW / absSx;
-      float dispHH = hh / absSy;
-
-      if (tileOn) {
-        int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
-        int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
-        int jMin = (int)ceilf((pcy - rHH - hh) / vpH);
-        int jMax = (int)floorf((pcy + rHH + hh) / vpH);
-        iMin = std::max(iMin, -20);
-        iMax = std::min(iMax, 20);
-        jMin = std::max(jMin, -20);
-        jMax = std::min(jMax, 20);
-        for (int j = jMin; j <= jMax; j++) {
-          for (int i = iMin; i <= iMax; i++) {
-            float tileX = (float)i * imgW;
-            float tileY = (float)j * vpH;
-            bool reverseX = reverseOuterTile(i);
-            bool reverseY = reverseOuterTile(j);
-            nvgSave(args.vg);
-            nvgTranslate(args.vg, tileX, tileY);
-            if (reverseX || reverseY) {
-              nvgScale(args.vg, reverseX ? -1.f : 1.f, reverseY ? -1.f : 1.f);
-            }
-            float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
-            float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
-            drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
-                             kaliSegments, alpha, rotOn, rotV, false, 0.f,
-                             false, dX, dY, 2.f * dispHW, 2.f * dispHH,
-                             kaliTxOff, kaliTyOff);
-            nvgRestore(args.vg);
-          }
-        }
-      } else {
-        drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
-                         kaliSegments, alpha, rotOn, rotV, false, 0.f, false,
-                         pcx - dispHW, pcy - dispHH, 2.f * dispHW, 2.f * dispHH,
-                         kaliTxOff, kaliTyOff);
-      }
-    } else {
-      float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
-      float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-      if (rotOn) applyRotation(args.vg, rotV);
-      float txOffset = txOn ? txLocal : 0.f;
-      float tyOffset = tyOn ? tyLocal : 0.f;
-      if (txOn || tyOn) nvgTranslate(args.vg, txOffset, tyOffset);
-      float txOffsetAbs = fabsf(txOffset);
-      float tyOffsetAbs = fabsf(tyOffset);
-      float rHW = ((imgW + 2.f * txOffsetAbs) * cosA +
-                   (vpH + 2.f * tyOffsetAbs) * sinA) /
-                      (2.f * absSx) +
-                  4.f;
-      float rHH = ((imgW + 2.f * txOffsetAbs) * sinA +
-                   (vpH + 2.f * tyOffsetAbs) * cosA) /
-                      (2.f * absSy) +
-                  4.f;
-
-      if (tileOn) {
-        float pcx = -txOffset;
-        float pcy = -tyOffset;
-        int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
-        int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
-        int jMin = (int)ceilf((pcy - rHH - hh) / vpH);
-        int jMax = (int)floorf((pcy + rHH + hh) / vpH);
-        iMin = std::max(iMin, -20);
-        iMax = std::min(iMax, 20);
-        jMin = std::max(jMin, -20);
-        jMax = std::min(jMax, 20);
-        for (int j = jMin; j <= jMax; j++) {
-          for (int i = iMin; i <= iMax; i++) {
-            float ox = -imgHW + i * imgW;
-            float oy = -hh + j * vpH;
-            NVGpaint p =
-                nvgImagePattern(args.vg, ox, oy, imgW, vpH, 0.f, img, alpha);
-            nvgBeginPath(args.vg);
-            nvgRect(args.vg, ox, oy, imgW, vpH);
-            nvgFillPaint(args.vg, p);
-            nvgFill(args.vg);
-          }
-        }
-      } else {
-        // Exact rect — no oversized fill so NVG won't tile/smear the edges.
-        NVGpaint p =
-            nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f, img, alpha);
-        nvgBeginPath(args.vg);
-        nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
-        nvgFillPaint(args.vg, p);
-        nvgFill(args.vg);
-      }
+      nvgRestore(args.vg);
     }
-
-    nvgRestore(args.vg);
   }
 
   PortaloofInjectedSource getSource(NVGcontext* vg,
@@ -1109,9 +1136,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   BGPanel* bgPanel;
   ComputerscareResizeHandle* rightHandle;
   ScreenCapture screenCap;
-  ColorTransformFBO colorFBO;
+  ColorTransformFBO colorFBOs[2];
   SourceBlendFBO sourceBlendFBO;
-  FlowerKaleidFBO flowerKaleidFBO;
+  FlowerKaleidFBO flowerKaleidFBOs[2];
   PortaloofRackModuleSource rackSources[2];
   PortaloofRectSource rectSources[2];
   PortaloofBackdropWidget* backdropWidget = nullptr;
@@ -1123,8 +1150,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   bool lastHideUiForSizing = false;
 
   // Cache for triggered mode — holds the last rendered frame's params
-  bool cachedRowEnabled[10] = {};
-  float cachedRowValue[10] = {};
+  bool cachedRowEnabled[2][10] = {};
+  float cachedRowValue[2][10] = {};
   bool hasValidCache = false;
 
   // Loaded image injection
@@ -1405,6 +1432,12 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         browserModule->rowEnabled[i] = random::uniform() > 0.5f;
         browserModule->rowValue[i] = random::uniform();
       }
+      for (int s = 0; s < 2; s++) {
+        memcpy(browserModule->sourceRowEnabled[s], browserModule->rowEnabled,
+               sizeof(browserModule->rowEnabled));
+        memcpy(browserModule->sourceRowValue[s], browserModule->rowValue,
+               sizeof(browserModule->rowValue));
+      }
 
       browserModule->freezeMode = false;
       browserModule->maintainAspect = true;
@@ -1452,37 +1485,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           m->sources[0].hasSource() || m->sources[1].hasSource();
 
       if (m && (doCapture || hasConfiguredSource || hasValidCache)) {
-        float alpha = 0.85f;
+        float baseAlpha = 0.85f;
 
         // Choose live params on capture, or based on transform pre/post setting
         bool useLive = doCapture || !m->freezeMode || m->transformPost;
-        bool* en =
-            (useLive || !hasValidCache) ? m->rowEnabled : cachedRowEnabled;
-        float* rv = (useLive || !hasValidCache) ? m->rowValue : cachedRowValue;
-
-        bool scaleOn = en[0];
-        bool scaleXOn = en[1];
-        bool scaleYOn = en[2];
-        bool rotOn = en[3];
-        bool kaliOn = en[4];
-        bool txOn = en[5];
-        bool tyOn = en[6];
-        bool hueOn = en[7];
-        bool invertOn = en[8];
-        bool curvesOn = en[9];
-
-        float scaleV = rv[0];
-        float scaleXV = rv[1];
-        float scaleYV = rv[2];
-        float rotV = rv[3];
-        float kaliV = rv[4];
-        float txV = rv[5];
-        float tyV = rv[6];
-        float hueV = hueOn ? rv[7] : 0.f;
-        // Fold Freq (0..1) maps to foldFreq (1..4); 1.0 = no chromatic
-        // divergence
-        float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
-        float warpV = curvesOn ? rv[9] : 0.f;
 
         const float displayX = hideUi ? 0.f : DISPLAY_X;
         float mirrorW = box.size.x - displayX;
@@ -1496,39 +1502,25 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         if (doCapture) {
           screenCap.capture(args.vg);
           // Update cache with current params
-          memcpy(cachedRowEnabled, m->rowEnabled, sizeof(cachedRowEnabled));
-          memcpy(cachedRowValue, m->rowValue, sizeof(cachedRowValue));
+          memcpy(cachedRowEnabled, m->sourceRowEnabled,
+                 sizeof(cachedRowEnabled));
+          memcpy(cachedRowValue, m->sourceRowValue, sizeof(cachedRowValue));
           hasValidCache = true;
         }
 
         int fbW, fbH;
         glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
-        PortaloofInjectedSource source1 = getSource(args.vg, screenCap, m, 0);
-        PortaloofInjectedSource source2 = getSource(args.vg, screenCap, m, 1);
-        GLuint srcTex = source1.texId;
-        int srcImg = source1.nvgImg;
-        bool flipInputUV = source1.flipInputUV;
-        if (source1.isValid() && source2.isValid()) {
-          float source2Amt = 0.5f * (1.f + m->inputSourceMix);
-          int mixedImg = sourceBlendFBO.apply(
-              args.vg, source1.texId, source2.texId, fbW, fbH, source2Amt,
-              source2.flipInputUV, source1.flipInputUV);
-          if (mixedImg >= 0 && sourceBlendFBO.outTex != 0) {
-            srcTex = sourceBlendFBO.outTex;
-            srcImg = mixedImg;
-            flipInputUV = false;
-          }
-        } else if (source2.isValid()) {
-          srcTex = source2.texId;
-          srcImg = source2.nvgImg;
-          flipInputUV = source2.flipInputUV;
-        }
-
-        if (srcImg < 0) {
+        PortaloofInjectedSource renderSources[2] = {
+            getSource(args.vg, screenCap, m, 0),
+            getSource(args.vg, screenCap, m, 1)};
+        bool hasSource1 = renderSources[0].isValid();
+        bool hasSource2 = renderSources[1].isValid();
+        if (!hasSource1 && !hasSource2) {
           if (!hideUi) ModuleWidget::drawLayer(args, layer);
           return;
         }
+        float source2Amt = 0.5f * (1.f + m->inputSourceMix);
 
         nvgSave(args.vg);
         if (m->dimVisualsWithRoom) {
@@ -1547,79 +1539,208 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             m->maintainAspect ? (mirrorH * (float)fbW / (float)fbH) : mirrorW;
         float imgHW = imgW * 0.5f;
 
-        float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
-        float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
-        // Translation is relative to one image width/height
-        float txLocal = txOn ? txV * imgW : 0.f;
-        float tyLocal = tyOn ? tyV * mirrorH : 0.f;
+        bool drewStageBg = false;
+        for (int renderSourceIndex = 0; renderSourceIndex < 2;
+             renderSourceIndex++) {
+          PortaloofInjectedSource currentSource =
+              renderSources[renderSourceIndex];
+          if (!currentSource.isValid()) continue;
+          float sourceMixAlpha = 1.f;
+          if (hasSource1 && hasSource2)
+            sourceMixAlpha =
+                renderSourceIndex == 0 ? (1.f - source2Amt) : source2Amt;
+          if (sourceMixAlpha <= 0.f) continue;
+          float alpha = baseAlpha * sourceMixAlpha;
 
-        // Grey stage background — drawn in raw display coords, isolated from
-        // any scale/rotation transforms applied to the image rendering below.
-        {
-          nvgSave(args.vg);
-          nvgBeginPath(args.vg);
-          nvgRect(args.vg, displayX, 0.f, mirrorW, box.size.y);
-          nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
-          nvgFill(args.vg);
-          nvgRestore(args.vg);
-        }
+          bool* en = (useLive || !hasValidCache)
+                         ? m->sourceRowEnabled[renderSourceIndex]
+                         : cachedRowEnabled[renderSourceIndex];
+          float* rv = (useLive || !hasValidCache)
+                          ? m->sourceRowValue[renderSourceIndex]
+                          : cachedRowValue[renderSourceIndex];
 
-        nvgSave(args.vg);
+          bool scaleOn = en[0];
+          bool scaleXOn = en[1];
+          bool scaleYOn = en[2];
+          bool rotOn = en[3];
+          bool kaliOn = en[4];
+          bool txOn = en[5];
+          bool tyOn = en[6];
+          bool hueOn = en[7];
+          bool invertOn = en[8];
+          bool curvesOn = en[9];
 
-        nvgScissor(args.vg, displayX, 0.f, mirrorW, box.size.y);
-        nvgTranslate(args.vg, displayX + hw,
-                     hh);  // center of display area
+          float scaleV = rv[0];
+          float scaleXV = rv[1];
+          float scaleYV = rv[2];
+          float rotV = rv[3];
+          float kaliV = rv[4];
+          float txV = rv[5];
+          float tyV = rv[6];
+          float hueV = hueOn ? rv[7] : 0.f;
+          float foldFreqV = invertOn ? (1.0f + rv[8] * 3.0f) : 1.0f;
+          float warpV = curvesOn ? rv[9] : 0.f;
 
-        if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
+          GLuint srcTex = currentSource.texId;
+          int srcImg = currentSource.nvgImg;
+          bool flipInputUV = currentSource.flipInputUV;
 
-        bool tileOn = m->tileEmptySpace;
-        int img = colorFBO.apply(args.vg, srcTex, srcImg, fbW, fbH, hueV, warpV,
-                                 foldFreqV, flipInputUV);
-        GLuint effectTex = (img == colorFBO.nvgImg && colorFBO.outTex != 0)
-                               ? colorFBO.outTex
-                               : srcTex;
+          float sx = (scaleOn ? scaleV : 1.f) * (scaleXOn ? scaleXV : 1.f);
+          float sy = (scaleOn ? scaleV : 1.f) * (scaleYOn ? scaleYV : 1.f);
+          // Translation is relative to one image width/height
+          float txLocal = txOn ? txV * imgW : 0.f;
+          float tyLocal = tyOn ? tyV * mirrorH : 0.f;
 
-        int kaliMode = kaliOn ? (int)kaliV : 0;
-        int kaliSegments = std::abs(kaliMode);
-
-        float absSx = std::max(fabsf(sx), 0.01f);
-        float absSy = std::max(fabsf(sy), 0.01f);
-        float renderScale =
-            std::max(APP->window->windowRatio * getAbsoluteZoom(), 1.f);
-
-        if (kaliMode > 0) {
-          float kaliTxOff = 0.f, kaliTyOff = 0.f;
-          float nvgTx = 0.f, nvgTy = 0.f;
-          if (txOn || tyOn) {
-            if (m->translateFirst) {
-              kaliTxOff = txLocal;
-              kaliTyOff = tyLocal;
-            } else {
-              nvgTx = txOn ? (2.f * txLocal) : 0.f;
-              nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
-              nvgTranslate(args.vg, nvgTx, nvgTy);
-            }
+          // Grey stage background — drawn in raw display coords, isolated from
+          // any scale/rotation transforms applied to the image rendering below.
+          if (!drewStageBg) {
+            drewStageBg = true;
+            nvgSave(args.vg);
+            nvgBeginPath(args.vg);
+            nvgRect(args.vg, displayX, 0.f, mirrorW, box.size.y);
+            nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
+            nvgFill(args.vg);
+            nvgRestore(args.vg);
           }
-          int flowerTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
-          int flowerTargetH = flowerKaleidTargetDim(mirrorH, renderScale, fbH);
-          float flowerScaleX =
-              (imgW > 0.f) ? ((float)flowerTargetW / imgW) : 1.f;
-          float flowerScaleY =
-              (mirrorH > 0.f) ? ((float)flowerTargetH / mirrorH) : 1.f;
-          int flowerImg = flowerKaleidFBO.apply(
-              args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
-              rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
-              kaliTyOff * flowerScaleY, flipInputUV);
-          if (flowerImg >= 0) {
+
+          nvgSave(args.vg);
+
+          nvgScissor(args.vg, displayX, 0.f, mirrorW, box.size.y);
+          nvgTranslate(args.vg, displayX + hw,
+                       hh);  // center of display area
+
+          if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
+
+          bool tileOn = m->tileEmptySpace;
+          int img = colorFBOs[renderSourceIndex].apply(args.vg, srcTex, srcImg,
+                                                       fbW, fbH, hueV, warpV,
+                                                       foldFreqV, flipInputUV);
+          GLuint effectTex = (img == colorFBOs[renderSourceIndex].nvgImg &&
+                              colorFBOs[renderSourceIndex].outTex != 0)
+                                 ? colorFBOs[renderSourceIndex].outTex
+                                 : srcTex;
+
+          int kaliMode = kaliOn ? (int)kaliV : 0;
+          int kaliSegments = std::abs(kaliMode);
+
+          float absSx = std::max(fabsf(sx), 0.01f);
+          float absSy = std::max(fabsf(sy), 0.01f);
+          float renderScale =
+              std::max(APP->window->windowRatio * getAbsoluteZoom(), 1.f);
+
+          if (kaliMode > 0) {
+            float kaliTxOff = 0.f, kaliTyOff = 0.f;
+            float nvgTx = 0.f, nvgTy = 0.f;
+            if (txOn || tyOn) {
+              if (m->translateFirst) {
+                kaliTxOff = txLocal;
+                kaliTyOff = tyLocal;
+              } else {
+                nvgTx = txOn ? (2.f * txLocal) : 0.f;
+                nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
+                nvgTranslate(args.vg, nvgTx, nvgTy);
+              }
+            }
+            int flowerTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
+            int flowerTargetH =
+                flowerKaleidTargetDim(mirrorH, renderScale, fbH);
+            float flowerScaleX =
+                (imgW > 0.f) ? ((float)flowerTargetW / imgW) : 1.f;
+            float flowerScaleY =
+                (mirrorH > 0.f) ? ((float)flowerTargetH / mirrorH) : 1.f;
+            int flowerImg = flowerKaleidFBOs[renderSourceIndex].apply(
+                args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
+                rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
+                kaliTyOff * flowerScaleY, flipInputUV);
+            if (flowerImg >= 0) {
+              if (tileOn) {
+                float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
+                float pcy = -(tyOn && !m->translateFirst ? nvgTy : 0.f);
+                float dispHW = hw / absSx;
+                float dispHH = hh / absSy;
+                int iMin = (int)ceilf((pcx - dispHW - imgHW) / imgW) - 1;
+                int iMax = (int)floorf((pcx + dispHW + imgHW) / imgW) + 1;
+                int jMin = (int)ceilf((pcy - dispHH - hh) / mirrorH) - 1;
+                int jMax = (int)floorf((pcy + dispHH + hh) / mirrorH) + 1;
+                iMin = std::max(iMin, -20);
+                iMax = std::min(iMax, 20);
+                jMin = std::max(jMin, -20);
+                jMax = std::min(jMax, 20);
+                for (int j = jMin; j <= jMax; j++) {
+                  for (int i = iMin; i <= iMax; i++) {
+                    float tileX = (float)i * imgW;
+                    float tileY = (float)j * mirrorH;
+                    bool reverseX = reverseOuterTile(i);
+                    bool reverseY = reverseOuterTile(j);
+                    nvgSave(args.vg);
+                    nvgTranslate(args.vg, tileX, tileY);
+                    if (reverseX || reverseY) {
+                      nvgScale(args.vg, reverseX ? -1.f : 1.f,
+                               reverseY ? -1.f : 1.f);
+                    }
+                    NVGpaint p =
+                        nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
+                                        0.f, flowerImg, alpha);
+                    nvgBeginPath(args.vg);
+                    nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
+                    nvgFillPaint(args.vg, p);
+                    nvgFill(args.vg);
+                    nvgRestore(args.vg);
+                  }
+                }
+              } else {
+                NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW,
+                                             mirrorH, 0.f, flowerImg, alpha);
+                nvgBeginPath(args.vg);
+                nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
+                nvgFillPaint(args.vg, p);
+                nvgFill(args.vg);
+              }
+            }
+          } else if (kaliMode < 0) {
+            // No global rotation here — each sector applies its own rotation
+            // with sign correction for flipped sectors (see kSector in
+            // MirrorKaleidoscope.hpp).
+            float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
+            float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
+
+            // Algorithm mode determines whether translate shifts the kali
+            // center
+            // ("Kaleid > Translate", the default) or scrolls the image content
+            // through the fixed kali geometry ("Translate > Kaleid").
+            float kaliTxOff = 0.f, kaliTyOff = 0.f;
+            float nvgTx = 0.f, nvgTy = 0.f;
+            if (txOn || tyOn) {
+              if (m->translateFirst) {
+                kaliTxOff = txLocal;
+                kaliTyOff = tyLocal;
+              } else {
+                nvgTx = txOn ? (2.f * txLocal) : 0.f;
+                nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
+                nvgTranslate(args.vg, nvgTx, nvgTy);
+              }
+            }
+
+            float effTxAbs = fabsf(nvgTx);
+            float effTyAbs = fabsf(nvgTy);
+            float rHW = ((imgW + 2.f * effTxAbs) * cosA +
+                         (box.size.y + 2.f * effTyAbs) * sinA) /
+                            (2.f * absSx) +
+                        4.f;
+            float rHH = ((imgW + 2.f * effTxAbs) * sinA +
+                         (box.size.y + 2.f * effTyAbs) * cosA) /
+                            (2.f * absSy) +
+                        4.f;
+            float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
+            float pcy = -(tyOn && !m->translateFirst ? nvgTy : 0.f);
+            float dispHW = hw / absSx;
+            float dispHH = hh / absSy;
+
             if (tileOn) {
-              float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
-              float pcy = -(tyOn && !m->translateFirst ? nvgTy : 0.f);
-              float dispHW = hw / absSx;
-              float dispHH = hh / absSy;
-              int iMin = (int)ceilf((pcx - dispHW - imgHW) / imgW) - 1;
-              int iMax = (int)floorf((pcx + dispHW + imgHW) / imgW) + 1;
-              int jMin = (int)ceilf((pcy - dispHH - hh) / mirrorH) - 1;
-              int jMax = (int)floorf((pcy + dispHH + hh) / mirrorH) + 1;
+              int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW) - 1;
+              int iMax = (int)floorf((pcx + rHW + imgHW) / imgW) + 1;
+              int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH) - 1;
+              int jMax = (int)floorf((pcy + rHH + hh) / mirrorH) + 1;
               iMin = std::max(iMin, -20);
               iMax = std::min(iMax, 20);
               jMin = std::max(jMin, -20);
@@ -1636,182 +1757,106 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                     nvgScale(args.vg, reverseX ? -1.f : 1.f,
                              reverseY ? -1.f : 1.f);
                   }
-                  NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW,
-                                               mirrorH, 0.f, flowerImg, alpha);
-                  nvgBeginPath(args.vg);
-                  nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
-                  nvgFillPaint(args.vg, p);
-                  nvgFill(args.vg);
+                  float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
+                  float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
+                  drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW,
+                                   rHH, kaliSegments, alpha, rotOn, rotV, false,
+                                   0.f, false, dX, dY, 2.f * dispHW,
+                                   2.f * dispHH, kaliTxOff, kaliTyOff);
                   nvgRestore(args.vg);
                 }
               }
             } else {
+              drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH,
+                               kaliSegments, alpha, rotOn, rotV, false, 0.f,
+                               false, pcx - dispHW, pcy - dispHH, 2.f * dispHW,
+                               2.f * dispHH, kaliTxOff, kaliTyOff);
+
+              // Overlay opaque grey strips covering display area outside the
+              // image bounds. Drawing grey ON TOP means its soft NVG edges
+              // blend grey-into-grey (invisible) rather than grey-into-image
+              // (smear). A 2px overlap into the image eats any residual tiling
+              // bleed at the image boundary.
+              if (dispHW > imgHW || dispHH > hh) {
+                static const float OVR = 2.f;
+                nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
+                float imgL = pcx - imgHW, imgR = pcx + imgHW;
+                float imgT = pcy - hh, imgB = pcy + hh;
+                float dspL = pcx - dispHW, dspR = pcx + dispHW;
+                float dspT = pcy - dispHH, dspB = pcy + dispHH;
+                auto fill = [&](float x, float y, float w, float h) {
+                  if (w > 0.f && h > 0.f) {
+                    nvgBeginPath(args.vg);
+                    nvgRect(args.vg, x, y, w, h);
+                    nvgFill(args.vg);
+                  }
+                };
+                // left/right full-height strips
+                fill(dspL, dspT, imgL - dspL + OVR, dspB - dspT);
+                fill(imgR - OVR, dspT, dspR - imgR + OVR, dspB - dspT);
+                // top/bottom strips (span only the non-left/right region)
+                fill(imgL + OVR, dspT, imgR - imgL - 2.f * OVR,
+                     imgT - dspT + OVR);
+                fill(imgL + OVR, imgB - OVR, imgR - imgL - 2.f * OVR,
+                     dspB - imgB + OVR);
+              }
+            }
+          } else {
+            // No kaleidoscope — apply rotation then translate in image space so
+            // one full 0-10V sweep always traverses one wrapped image cycle.
+            float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
+            float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
+            if (rotOn) applyRotation(args.vg, rotV);
+            float txOffset = txOn ? txLocal : 0.f;
+            float tyOffset = tyOn ? tyLocal : 0.f;
+            if (txOn || tyOn) nvgTranslate(args.vg, txOffset, tyOffset);
+            float txOffsetAbs = fabsf(txOffset);
+            float tyOffsetAbs = fabsf(tyOffset);
+            float rHW = ((imgW + 2.f * txOffsetAbs) * cosA +
+                         (box.size.y + 2.f * tyOffsetAbs) * sinA) /
+                            (2.f * absSx) +
+                        4.f;
+            float rHH = ((imgW + 2.f * txOffsetAbs) * sinA +
+                         (box.size.y + 2.f * tyOffsetAbs) * cosA) /
+                            (2.f * absSy) +
+                        4.f;
+
+            if (tileOn) {
+              float pcx = -txOffset;
+              float pcy = -tyOffset;
+              int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW) - 1;
+              int iMax = (int)floorf((pcx + rHW + imgHW) / imgW) + 1;
+              int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH) - 1;
+              int jMax = (int)floorf((pcy + rHH + hh) / mirrorH) + 1;
+              iMin = std::max(iMin, -20);
+              iMax = std::min(iMax, 20);
+              jMin = std::max(jMin, -20);
+              jMax = std::min(jMax, 20);
+              for (int j = jMin; j <= jMax; j++) {
+                for (int i = iMin; i <= iMax; i++) {
+                  float ox = -imgHW + i * imgW;
+                  float oy = -hh + j * mirrorH;
+                  NVGpaint p = nvgImagePattern(args.vg, ox, oy, imgW, mirrorH,
+                                               0.f, img, alpha);
+                  nvgBeginPath(args.vg);
+                  nvgRect(args.vg, ox, oy, imgW, mirrorH);
+                  nvgFillPaint(args.vg, p);
+                  nvgFill(args.vg);
+                }
+              }
+            } else {
+              // Image drawn with exact rect — no tiling, no smear at edges.
               NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
-                                           0.f, flowerImg, alpha);
+                                           0.f, img, alpha);
               nvgBeginPath(args.vg);
               nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
               nvgFillPaint(args.vg, p);
               nvgFill(args.vg);
             }
           }
-        } else if (kaliMode < 0) {
-          // No global rotation here — each sector applies its own rotation with
-          // sign correction for flipped sectors (see kSector in
-          // MirrorKaleidoscope.hpp).
-          float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
-          float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
 
-          // Algorithm mode determines whether translate shifts the kali center
-          // ("Kaleid > Translate", the default) or scrolls the image content
-          // through the fixed kali geometry ("Translate > Kaleid").
-          float kaliTxOff = 0.f, kaliTyOff = 0.f;
-          float nvgTx = 0.f, nvgTy = 0.f;
-          if (txOn || tyOn) {
-            if (m->translateFirst) {
-              kaliTxOff = txLocal;
-              kaliTyOff = tyLocal;
-            } else {
-              nvgTx = txOn ? (2.f * txLocal) : 0.f;
-              nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
-              nvgTranslate(args.vg, nvgTx, nvgTy);
-            }
-          }
-
-          float effTxAbs = fabsf(nvgTx);
-          float effTyAbs = fabsf(nvgTy);
-          float rHW = ((imgW + 2.f * effTxAbs) * cosA +
-                       (box.size.y + 2.f * effTyAbs) * sinA) /
-                          (2.f * absSx) +
-                      4.f;
-          float rHH = ((imgW + 2.f * effTxAbs) * sinA +
-                       (box.size.y + 2.f * effTyAbs) * cosA) /
-                          (2.f * absSy) +
-                      4.f;
-          float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
-          float pcy = -(tyOn && !m->translateFirst ? nvgTy : 0.f);
-          float dispHW = hw / absSx;
-          float dispHH = hh / absSy;
-
-          if (tileOn) {
-            int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW) - 1;
-            int iMax = (int)floorf((pcx + rHW + imgHW) / imgW) + 1;
-            int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH) - 1;
-            int jMax = (int)floorf((pcy + rHH + hh) / mirrorH) + 1;
-            iMin = std::max(iMin, -20);
-            iMax = std::min(iMax, 20);
-            jMin = std::max(jMin, -20);
-            jMax = std::min(jMax, 20);
-            for (int j = jMin; j <= jMax; j++) {
-              for (int i = iMin; i <= iMax; i++) {
-                float tileX = (float)i * imgW;
-                float tileY = (float)j * mirrorH;
-                bool reverseX = reverseOuterTile(i);
-                bool reverseY = reverseOuterTile(j);
-                nvgSave(args.vg);
-                nvgTranslate(args.vg, tileX, tileY);
-                if (reverseX || reverseY) {
-                  nvgScale(args.vg, reverseX ? -1.f : 1.f,
-                           reverseY ? -1.f : 1.f);
-                }
-                float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
-                float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
-                drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW,
-                                 rHH, kaliSegments, alpha, rotOn, rotV, false,
-                                 0.f, false, dX, dY, 2.f * dispHW, 2.f * dispHH,
-                                 kaliTxOff, kaliTyOff);
-                nvgRestore(args.vg);
-              }
-            }
-          } else {
-            drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH,
-                             kaliSegments, alpha, rotOn, rotV, false, 0.f,
-                             false, pcx - dispHW, pcy - dispHH, 2.f * dispHW,
-                             2.f * dispHH, kaliTxOff, kaliTyOff);
-
-            // Overlay opaque grey strips covering display area outside the
-            // image bounds. Drawing grey ON TOP means its soft NVG edges blend
-            // grey-into-grey (invisible) rather than grey-into-image (smear).
-            // A 2px overlap into the image eats any residual tiling bleed at
-            // the image boundary.
-            if (dispHW > imgHW || dispHH > hh) {
-              static const float OVR = 2.f;
-              nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
-              float imgL = pcx - imgHW, imgR = pcx + imgHW;
-              float imgT = pcy - hh, imgB = pcy + hh;
-              float dspL = pcx - dispHW, dspR = pcx + dispHW;
-              float dspT = pcy - dispHH, dspB = pcy + dispHH;
-              auto fill = [&](float x, float y, float w, float h) {
-                if (w > 0.f && h > 0.f) {
-                  nvgBeginPath(args.vg);
-                  nvgRect(args.vg, x, y, w, h);
-                  nvgFill(args.vg);
-                }
-              };
-              // left/right full-height strips
-              fill(dspL, dspT, imgL - dspL + OVR, dspB - dspT);
-              fill(imgR - OVR, dspT, dspR - imgR + OVR, dspB - dspT);
-              // top/bottom strips (span only the non-left/right region)
-              fill(imgL + OVR, dspT, imgR - imgL - 2.f * OVR,
-                   imgT - dspT + OVR);
-              fill(imgL + OVR, imgB - OVR, imgR - imgL - 2.f * OVR,
-                   dspB - imgB + OVR);
-            }
-          }
-        } else {
-          // No kaleidoscope — apply rotation then translate in image space so
-          // one full 0-10V sweep always traverses one wrapped image cycle.
-          float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
-          float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-          if (rotOn) applyRotation(args.vg, rotV);
-          float txOffset = txOn ? txLocal : 0.f;
-          float tyOffset = tyOn ? tyLocal : 0.f;
-          if (txOn || tyOn) nvgTranslate(args.vg, txOffset, tyOffset);
-          float txOffsetAbs = fabsf(txOffset);
-          float tyOffsetAbs = fabsf(tyOffset);
-          float rHW = ((imgW + 2.f * txOffsetAbs) * cosA +
-                       (box.size.y + 2.f * tyOffsetAbs) * sinA) /
-                          (2.f * absSx) +
-                      4.f;
-          float rHH = ((imgW + 2.f * txOffsetAbs) * sinA +
-                       (box.size.y + 2.f * tyOffsetAbs) * cosA) /
-                          (2.f * absSy) +
-                      4.f;
-
-          if (tileOn) {
-            float pcx = -txOffset;
-            float pcy = -tyOffset;
-            int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW) - 1;
-            int iMax = (int)floorf((pcx + rHW + imgHW) / imgW) + 1;
-            int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH) - 1;
-            int jMax = (int)floorf((pcy + rHH + hh) / mirrorH) + 1;
-            iMin = std::max(iMin, -20);
-            iMax = std::min(iMax, 20);
-            jMin = std::max(jMin, -20);
-            jMax = std::min(jMax, 20);
-            for (int j = jMin; j <= jMax; j++) {
-              for (int i = iMin; i <= iMax; i++) {
-                float ox = -imgHW + i * imgW;
-                float oy = -hh + j * mirrorH;
-                NVGpaint p = nvgImagePattern(args.vg, ox, oy, imgW, mirrorH,
-                                             0.f, img, alpha);
-                nvgBeginPath(args.vg);
-                nvgRect(args.vg, ox, oy, imgW, mirrorH);
-                nvgFillPaint(args.vg, p);
-                nvgFill(args.vg);
-              }
-            }
-          } else {
-            // Image drawn with exact rect — no tiling, no smear at edges.
-            NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
-                                         0.f, img, alpha);
-            nvgBeginPath(args.vg);
-            nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
-            nvgFillPaint(args.vg, p);
-            nvgFill(args.vg);
-          }
+          nvgRestore(args.vg);
         }
-
-        nvgRestore(args.vg);
         nvgRestore(args.vg);
 
         // Redraw SVG panel clipped to the overlap strip
