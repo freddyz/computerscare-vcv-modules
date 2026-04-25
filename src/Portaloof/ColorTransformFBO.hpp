@@ -23,7 +23,8 @@
 //   Scales fold frequency and posterize step count.
 //   Adds per-channel chromatic divergence at higher values.
 //
-// If all params are at neutral values the FBO is bypassed (zero GPU work).
+// If all params are at neutral values the FBO is bypassed for sources whose
+// texture orientation already matches the FBO output path.
 // Uses GLSL #version 120 / OpenGL 2.x to match VCV Rack's NANOVG_GL2 context.
 
 struct ColorTransformFBO {
@@ -305,7 +306,8 @@ struct ColorTransformFBO {
   // ── Apply and return the NVG image handle to use for drawing ─────────────
   // warpV:     -1..1  (negative = solarize→invert, positive = posterize+crush)
   // foldFreqV: 1..4   (mapped from INVERT knob 0..1 via 1.0 + v * 3.0)
-  // Returns srcImg if all params are neutral (no work done).
+  // Returns srcImg if all params are neutral and no orientation normalization
+  // is needed.
 
   // flipInputUV: pass true when srcTex is from a file-loaded image (stb_image
   // convention: row 0 = visual top) so the FBO output matches screen-capture
@@ -313,7 +315,8 @@ struct ColorTransformFBO {
   int apply(NVGcontext* vg, GLuint srcTex, int srcImg, int fbW, int fbH,
             float hueV, float warpV, float foldFreqV,
             bool flipInputUV = false) {
-    if (fabsf(hueV) <= 0.01f && fabsf(warpV) <= 0.01f) return srcImg;
+    if (!flipInputUV && fabsf(hueV) <= 0.01f && fabsf(warpV) <= 0.01f)
+      return srcImg;
 
     if (!initialized) init();
     if (!program) return srcImg;
