@@ -7,6 +7,7 @@
 
 #include "../Computerscare.hpp"
 #include "../ComputerscareResizableHandle.hpp"
+#include "ClassicKaleid.hpp"
 #include "ColorTransformFBO.hpp"
 #include "FlowerKaleid.hpp"
 #include "MirrorKaleidoscope.hpp"

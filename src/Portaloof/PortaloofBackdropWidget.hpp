@@ -13,6 +13,7 @@ struct PortaloofBackdropWidget : widget::Widget {
   ColorTransformFBO colorFBOs[2];
   SourceBlendFBO sourceBlendFBO;
   FlowerKaleidFBO flowerKaleidFBOs[2];
+  ClassicKaleidFBO classicKaleidFBOs[2];
   PortaloofRackModuleSource rackSources[2];
   PortaloofRectSource rectSources[2];
   bool cachedRowEnabled[2][10] = {};
@@ -197,9 +198,6 @@ struct PortaloofBackdropWidget : widget::Widget {
           }
         }
       } else if (kaliMode < 0) {
-        float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
-        float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-
         float kaliTxOff = 0.f, kaliTyOff = 0.f;
         float nvgTx = 0.f, nvgTy = 0.f;
         if (txOn || tyOn) {
@@ -213,26 +211,26 @@ struct PortaloofBackdropWidget : widget::Widget {
           }
         }
 
-        float effTxAbs = fabsf(nvgTx);
-        float effTyAbs = fabsf(nvgTy);
-        float rHW =
-            ((imgW + 2.f * effTxAbs) * cosA + (vpH + 2.f * effTyAbs) * sinA) /
-                (2.f * absSx) +
-            4.f;
-        float rHH =
-            ((imgW + 2.f * effTxAbs) * sinA + (vpH + 2.f * effTyAbs) * cosA) /
-                (2.f * absSy) +
-            4.f;
+        int classicTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
+        int classicTargetH = flowerKaleidTargetDim(vpH, renderScale, fbH);
+        float classicScaleX =
+            (imgW > 0.f) ? ((float)classicTargetW / imgW) : 1.f;
+        float classicScaleY = (vpH > 0.f) ? ((float)classicTargetH / vpH) : 1.f;
+        int classicImg = classicKaleidFBOs[renderSourceIndex].apply(
+            args.vg, effectTex, classicTargetW, classicTargetH, kaliSegments,
+            rotOn ? rotV : 0.f, kaliTxOff * classicScaleX,
+            kaliTyOff * classicScaleY, flipInputUV);
+
         float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
         float pcy = -(tyOn && !module->translateFirst ? nvgTy : 0.f);
         float dispHW = imgHW / absSx;
         float dispHH = hh / absSy;
 
-        if (tileOn) {
-          int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW);
-          int iMax = (int)floorf((pcx + rHW + imgHW) / imgW);
-          int jMin = (int)ceilf((pcy - rHH - hh) / vpH);
-          int jMax = (int)floorf((pcy + rHH + hh) / vpH);
+        if (classicImg >= 0 && tileOn) {
+          int iMin = (int)ceilf((pcx - dispHW - imgHW) / imgW) - 1;
+          int iMax = (int)floorf((pcx + dispHW + imgHW) / imgW) + 1;
+          int jMin = (int)ceilf((pcy - dispHH - hh) / vpH) - 1;
+          int jMax = (int)floorf((pcy + dispHH + hh) / vpH) + 1;
           iMin = std::max(iMin, -20);
           iMax = std::min(iMax, 20);
           jMin = std::max(jMin, -20);
@@ -248,20 +246,22 @@ struct PortaloofBackdropWidget : widget::Widget {
               if (reverseX || reverseY) {
                 nvgScale(args.vg, reverseX ? -1.f : 1.f, reverseY ? -1.f : 1.f);
               }
-              float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
-              float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
-              drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
-                               kaliSegments, alpha, rotOn, rotV, false, 0.f,
-                               false, dX, dY, 2.f * dispHW, 2.f * dispHH,
-                               kaliTxOff, kaliTyOff);
+              NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f,
+                                           classicImg, alpha);
+              nvgBeginPath(args.vg);
+              nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
+              nvgFillPaint(args.vg, p);
+              nvgFill(args.vg);
               nvgRestore(args.vg);
             }
           }
-        } else {
-          drawKaleidoscope(args.vg, img, imgHW, hh, imgW, vpH, rHW, rHH,
-                           kaliSegments, alpha, rotOn, rotV, false, 0.f, false,
-                           pcx - dispHW, pcy - dispHH, 2.f * dispHW,
-                           2.f * dispHH, kaliTxOff, kaliTyOff);
+        } else if (classicImg >= 0) {
+          NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, vpH, 0.f,
+                                       classicImg, alpha);
+          nvgBeginPath(args.vg);
+          nvgRect(args.vg, -imgHW, -hh, imgW, vpH);
+          nvgFillPaint(args.vg, p);
+          nvgFill(args.vg);
         }
       } else {
         float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;

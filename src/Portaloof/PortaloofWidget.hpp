@@ -128,6 +128,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   ColorTransformFBO colorFBOs[2];
   SourceBlendFBO sourceBlendFBO;
   FlowerKaleidFBO flowerKaleidFBOs[2];
+  ClassicKaleidFBO classicKaleidFBOs[2];
   PortaloofRackModuleSource rackSources[2];
   PortaloofRectSource rectSources[2];
   PortaloofBackdropWidget* backdropWidget = nullptr;
@@ -706,16 +707,6 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               }
             }
           } else if (kaliMode < 0) {
-            // No global rotation here — each sector applies its own rotation
-            // with sign correction for flipped sectors (see kSector in
-            // MirrorKaleidoscope.hpp).
-            float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
-            float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-
-            // Algorithm mode determines whether translate shifts the kali
-            // center
-            // ("Kaleid > Translate", the default) or scrolls the image content
-            // through the fixed kali geometry ("Translate > Kaleid").
             float kaliTxOff = 0.f, kaliTyOff = 0.f;
             float nvgTx = 0.f, nvgTy = 0.f;
             if (txOn || tyOn) {
@@ -729,26 +720,28 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               }
             }
 
-            float effTxAbs = fabsf(nvgTx);
-            float effTyAbs = fabsf(nvgTy);
-            float rHW = ((imgW + 2.f * effTxAbs) * cosA +
-                         (box.size.y + 2.f * effTyAbs) * sinA) /
-                            (2.f * absSx) +
-                        4.f;
-            float rHH = ((imgW + 2.f * effTxAbs) * sinA +
-                         (box.size.y + 2.f * effTyAbs) * cosA) /
-                            (2.f * absSy) +
-                        4.f;
+            int classicTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
+            int classicTargetH =
+                flowerKaleidTargetDim(mirrorH, renderScale, fbH);
+            float classicScaleX =
+                (imgW > 0.f) ? ((float)classicTargetW / imgW) : 1.f;
+            float classicScaleY =
+                (mirrorH > 0.f) ? ((float)classicTargetH / mirrorH) : 1.f;
+            int classicImg = classicKaleidFBOs[renderSourceIndex].apply(
+                args.vg, effectTex, classicTargetW, classicTargetH,
+                kaliSegments, rotOn ? rotV : 0.f, kaliTxOff * classicScaleX,
+                kaliTyOff * classicScaleY, flipInputUV);
+
             float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
             float pcy = -(tyOn && !m->translateFirst ? nvgTy : 0.f);
             float dispHW = hw / absSx;
             float dispHH = hh / absSy;
 
-            if (tileOn) {
-              int iMin = (int)ceilf((pcx - rHW - imgHW) / imgW) - 1;
-              int iMax = (int)floorf((pcx + rHW + imgHW) / imgW) + 1;
-              int jMin = (int)ceilf((pcy - rHH - hh) / mirrorH) - 1;
-              int jMax = (int)floorf((pcy + rHH + hh) / mirrorH) + 1;
+            if (classicImg >= 0 && tileOn) {
+              int iMin = (int)ceilf((pcx - dispHW - imgHW) / imgW) - 1;
+              int iMax = (int)floorf((pcx + dispHW + imgHW) / imgW) + 1;
+              int jMin = (int)ceilf((pcy - dispHH - hh) / mirrorH) - 1;
+              int jMax = (int)floorf((pcy + dispHH + hh) / mirrorH) + 1;
               iMin = std::max(iMin, -20);
               iMax = std::min(iMax, 20);
               jMin = std::max(jMin, -20);
@@ -765,49 +758,22 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                     nvgScale(args.vg, reverseX ? -1.f : 1.f,
                              reverseY ? -1.f : 1.f);
                   }
-                  float dX = outerTileDisplayMin(pcx, dispHW, tileX, reverseX);
-                  float dY = outerTileDisplayMin(pcy, dispHH, tileY, reverseY);
-                  drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW,
-                                   rHH, kaliSegments, alpha, rotOn, rotV, false,
-                                   0.f, false, dX, dY, 2.f * dispHW,
-                                   2.f * dispHH, kaliTxOff, kaliTyOff);
+                  NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW,
+                                               mirrorH, 0.f, classicImg, alpha);
+                  nvgBeginPath(args.vg);
+                  nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
+                  nvgFillPaint(args.vg, p);
+                  nvgFill(args.vg);
                   nvgRestore(args.vg);
                 }
               }
-            } else {
-              drawKaleidoscope(args.vg, img, imgHW, hh, imgW, mirrorH, rHW, rHH,
-                               kaliSegments, alpha, rotOn, rotV, false, 0.f,
-                               false, pcx - dispHW, pcy - dispHH, 2.f * dispHW,
-                               2.f * dispHH, kaliTxOff, kaliTyOff);
-
-              // Overlay opaque grey strips covering display area outside the
-              // image bounds. Drawing grey ON TOP means its soft NVG edges
-              // blend grey-into-grey (invisible) rather than grey-into-image
-              // (smear). A 2px overlap into the image eats any residual tiling
-              // bleed at the image boundary.
-              if (dispHW > imgHW || dispHH > hh) {
-                static const float OVR = 2.f;
-                nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
-                float imgL = pcx - imgHW, imgR = pcx + imgHW;
-                float imgT = pcy - hh, imgB = pcy + hh;
-                float dspL = pcx - dispHW, dspR = pcx + dispHW;
-                float dspT = pcy - dispHH, dspB = pcy + dispHH;
-                auto fill = [&](float x, float y, float w, float h) {
-                  if (w > 0.f && h > 0.f) {
-                    nvgBeginPath(args.vg);
-                    nvgRect(args.vg, x, y, w, h);
-                    nvgFill(args.vg);
-                  }
-                };
-                // left/right full-height strips
-                fill(dspL, dspT, imgL - dspL + OVR, dspB - dspT);
-                fill(imgR - OVR, dspT, dspR - imgR + OVR, dspB - dspT);
-                // top/bottom strips (span only the non-left/right region)
-                fill(imgL + OVR, dspT, imgR - imgL - 2.f * OVR,
-                     imgT - dspT + OVR);
-                fill(imgL + OVR, imgB - OVR, imgR - imgL - 2.f * OVR,
-                     dspB - imgB + OVR);
-              }
+            } else if (classicImg >= 0) {
+              NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
+                                           0.f, classicImg, alpha);
+              nvgBeginPath(args.vg);
+              nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
+              nvgFillPaint(args.vg, p);
+              nvgFill(args.vg);
             }
           } else {
             // No kaleidoscope — apply rotation then translate in image space so
