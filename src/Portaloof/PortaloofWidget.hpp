@@ -720,9 +720,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               }
             }
 
-            int classicTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
+            int classicTargetW = classicKaleidTargetDim(imgW, renderScale, fbW);
             int classicTargetH =
-                flowerKaleidTargetDim(mirrorH, renderScale, fbH);
+                classicKaleidTargetDim(mirrorH, renderScale, fbH);
             float classicScaleX =
                 (imgW > 0.f) ? ((float)classicTargetW / imgW) : 1.f;
             float classicScaleY =

@@ -211,8 +211,8 @@ struct PortaloofBackdropWidget : widget::Widget {
           }
         }
 
-        int classicTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
-        int classicTargetH = flowerKaleidTargetDim(vpH, renderScale, fbH);
+        int classicTargetW = classicKaleidTargetDim(imgW, renderScale, fbW);
+        int classicTargetH = classicKaleidTargetDim(vpH, renderScale, fbH);
         float classicScaleX =
             (imgW > 0.f) ? ((float)classicTargetW / imgW) : 1.f;
         float classicScaleY = (vpH > 0.f) ? ((float)classicTargetH / vpH) : 1.f;

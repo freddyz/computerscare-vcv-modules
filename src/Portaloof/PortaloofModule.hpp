@@ -39,6 +39,19 @@ static inline int flowerKaleidTargetDim(float panelDim, float renderScale,
   return std::max((int)std::lround(targetDim), 1);
 }
 
+static inline int classicKaleidTargetDim(float panelDim, float renderScale,
+                                         int sourceDim) {
+  static constexpr float CLASSIC_SSAA = 3.f;
+  static constexpr int CLASSIC_MAX_DIM = 4096;
+  float baseScale = std::max(renderScale, 1.f);
+  float sourceScale =
+      (panelDim > 0.f && sourceDim > 0) ? ((float)sourceDim / panelDim) : 1.f;
+  float targetScale = std::max(baseScale, std::min(baseScale * CLASSIC_SSAA,
+                                                   std::max(sourceScale, 1.f)));
+  float targetDim = std::min(panelDim * targetScale, (float)CLASSIC_MAX_DIM);
+  return std::max((int)std::lround(targetDim), 1);
+}
+
 static inline float wrapToRange(float value, float minValue, float maxValue) {
   float range = maxValue - minValue;
   if (range <= 0.f) return minValue;
