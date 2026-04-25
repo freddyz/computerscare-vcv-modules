@@ -12,6 +12,7 @@ struct PortaloofBackdropWidget : widget::Widget {
   ScreenCapture screenCap;
   ColorTransformFBO colorFBOs[2];
   SourceBlendFBO sourceBlendFBO;
+  PortaloofTextureCopyFBO frozenSourceFBOs[2];
   FlowerKaleidFBO flowerKaleidFBOs[2];
   ClassicKaleidFBO classicKaleidFBOs[2];
   PortaloofRackModuleSource rackSources[2];
@@ -19,6 +20,8 @@ struct PortaloofBackdropWidget : widget::Widget {
   bool cachedRowEnabled[2][10] = {};
   float cachedRowValue[2][10] = {};
   bool hasValidCache = false;
+  bool hasFrozenSourceCache = false;
+  bool frozenSourceValid[2] = {};
 
   // Loaded image injection
   std::string lastImagePath[2];
@@ -42,9 +45,11 @@ struct PortaloofBackdropWidget : widget::Widget {
     int fbW, fbH;
     glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
-    bool doCapture = !module->freezeMode ||
-                     module->backdropCapturePending.exchange(false) ||
-                     !hasValidCache;
+    bool freezeCaptureRequested =
+        module->backdropCapturePending.exchange(false);
+    bool doCapture = !module->freezeMode || freezeCaptureRequested ||
+                     !hasValidCache ||
+                     (module->freezeMode && !hasFrozenSourceCache);
     if (doCapture) {
       screenCap.capture(args.vg);
       memcpy(cachedRowEnabled, module->sourceRowEnabled,
@@ -52,9 +57,35 @@ struct PortaloofBackdropWidget : widget::Widget {
       memcpy(cachedRowValue, module->sourceRowValue, sizeof(cachedRowValue));
       hasValidCache = true;
     }
+    if (!module->freezeMode) {
+      hasFrozenSourceCache = false;
+      frozenSourceValid[0] = false;
+      frozenSourceValid[1] = false;
+    }
 
-    PortaloofInjectedSource renderSources[2] = {
-        getSource(args.vg, screenCap, 0), getSource(args.vg, screenCap, 1)};
+    PortaloofInjectedSource renderSources[2];
+    if (module->freezeMode && !doCapture && hasFrozenSourceCache) {
+      for (int i = 0; i < 2; i++) {
+        if (frozenSourceValid[i])
+          renderSources[i] = frozenSourceFBOs[i].getSource();
+      }
+    } else {
+      renderSources[0] = getSource(args.vg, screenCap, 0);
+      renderSources[1] = getSource(args.vg, screenCap, 1);
+    }
+    if (module->freezeMode && doCapture) {
+      hasFrozenSourceCache = true;
+      for (int i = 0; i < 2; i++) {
+        frozenSourceValid[i] = false;
+        if (!renderSources[i].isValid()) continue;
+        int frozenImg =
+            frozenSourceFBOs[i].apply(args.vg, renderSources[i].texId, fbW, fbH,
+                                      renderSources[i].flipInputUV);
+        frozenSourceValid[i] = frozenImg >= 0;
+        if (frozenSourceValid[i])
+          renderSources[i] = frozenSourceFBOs[i].getSource();
+      }
+    }
     bool hasSource1 = renderSources[0].isValid();
     bool hasSource2 = renderSources[1].isValid();
     if (!doCapture && !hasSource1 && !hasSource2) return;

@@ -46,7 +46,7 @@ struct PortaloofKaleidModeKnob : MediumDotSnapKnob {
     nvgFontSize(args.vg, 18.f);
     nvgTextLetterSpacing(args.vg, 0.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    nvgFillColor(args.vg, nvgRGB(0xfb, 0xf7, 0xec));
+    nvgFillColor(args.vg, nvgRGB(0xff, 0xfb, 0xf2));
     float bounds[4] = {};
     nvgTextBounds(args.vg, 0.f, 0.f, label.c_str(), nullptr, bounds);
     float labelW = bounds[2] - bounds[0];
@@ -180,6 +180,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   ScreenCapture screenCap;
   ColorTransformFBO colorFBOs[2];
   SourceBlendFBO sourceBlendFBO;
+  PortaloofTextureCopyFBO frozenSourceFBOs[2];
   FlowerKaleidFBO flowerKaleidFBOs[2];
   ClassicKaleidFBO classicKaleidFBOs[2];
   PortaloofRackModuleSource rackSources[2];
@@ -196,6 +197,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   bool cachedRowEnabled[2][10] = {};
   float cachedRowValue[2][10] = {};
   bool hasValidCache = false;
+  bool hasFrozenSourceCache = false;
+  bool frozenSourceValid[2] = {};
 
   // Loaded image injection
   std::string lastImagePath[2];
@@ -448,6 +451,23 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     hiddenUiApplied = hideUi;
   }
 
+  void drawPartialModuleShadow(const DrawArgs& args, float shadowWidth) {
+    if (shadowWidth <= 1.f) return;
+
+    nvgBeginPath(args.vg);
+    float r = 20.f;
+    float c = 20.f;
+    math::Rect shadowBox =
+        math::Rect(0.f, 0.f, shadowWidth, box.size.y).grow(Vec(10.f, -30.f));
+    math::Rect shadowOutsideBox = shadowBox.grow(Vec(r, r));
+    nvgRect(args.vg, RECT_ARGS(shadowOutsideBox));
+    NVGcolor shadowColor = nvgRGBAf(0.f, 0.f, 0.f, 0.2f);
+    NVGcolor transparentColor = nvgRGBAf(0.f, 0.f, 0.f, 0.f);
+    nvgFillPaint(args.vg, nvgBoxGradient(args.vg, RECT_ARGS(shadowBox), c, r,
+                                         shadowColor, transparentColor));
+    nvgFill(args.vg);
+  }
+
   float getHiddenWidth(ComputerscarePortaloof* m) const {
     float fullWidth = m ? m->width : box.size.x;
     return std::max(fullWidth - DISPLAY_X, RACK_GRID_WIDTH);
@@ -553,14 +573,20 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     bool hideUi = m && m->hideUi;
     bool bgActive = backdropWidget != nullptr;
     bool renderInWindow = !bgActive || (m && !m->emptyWindowInBgMode);
+    if (layer == -1 && bgActive && m && m->emptyWindowInBgMode) {
+      if (!hideUi) drawPartialModuleShadow(args, DISPLAY_X);
+      return;
+    }
     if (portaloofRenderingRackRectSource()) {
       if (!hideUi) ModuleWidget::drawLayer(args, layer);
       return;
     }
     if (layer == 1 && module && APP->scene && APP->scene->rack &&
         renderInWindow) {
-      bool doCapture =
-          !m->freezeMode || m->capturePending.exchange(false) || !hasValidCache;
+      bool freezeCaptureRequested = m->capturePending.exchange(false);
+      bool doCapture = !m->freezeMode || freezeCaptureRequested ||
+                       !hasValidCache ||
+                       (m->freezeMode && !hasFrozenSourceCache);
       bool hasConfiguredSource =
           m->sources[0].hasSource() || m->sources[1].hasSource();
 
@@ -587,13 +613,40 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           memcpy(cachedRowValue, m->sourceRowValue, sizeof(cachedRowValue));
           hasValidCache = true;
         }
+        if (!m->freezeMode) {
+          hasFrozenSourceCache = false;
+          frozenSourceValid[0] = false;
+          frozenSourceValid[1] = false;
+        }
 
         int fbW, fbH;
         glfwGetFramebufferSize(APP->window->win, &fbW, &fbH);
 
-        PortaloofInjectedSource renderSources[2] = {
-            getSource(args.vg, screenCap, m, 0),
-            getSource(args.vg, screenCap, m, 1)};
+        PortaloofInjectedSource renderSources[2];
+        if (m->freezeMode && !doCapture && hasFrozenSourceCache) {
+          for (int i = 0; i < 2; i++) {
+            if (frozenSourceValid[i])
+              renderSources[i] = frozenSourceFBOs[i].getSource();
+          }
+        } else {
+          renderSources[0] = getSource(args.vg, screenCap, m, 0);
+          renderSources[1] = getSource(args.vg, screenCap, m, 1);
+        }
+        if (m->freezeMode) {
+          if (doCapture) {
+            hasFrozenSourceCache = true;
+            for (int i = 0; i < 2; i++) {
+              frozenSourceValid[i] = false;
+              if (!renderSources[i].isValid()) continue;
+              int frozenImg = frozenSourceFBOs[i].apply(
+                  args.vg, renderSources[i].texId, fbW, fbH,
+                  renderSources[i].flipInputUV);
+              frozenSourceValid[i] = frozenImg >= 0;
+              if (frozenSourceValid[i])
+                renderSources[i] = frozenSourceFBOs[i].getSource();
+            }
+          }
+        }
         bool hasSource1 = renderSources[0].isValid();
         bool hasSource2 = renderSources[1].isValid();
         if (!hasSource1 && !hasSource2) {

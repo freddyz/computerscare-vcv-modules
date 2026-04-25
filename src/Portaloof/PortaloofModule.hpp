@@ -15,6 +15,7 @@
 #include "RackModuleSource.hpp"
 #include "ScreenCaptureEffect.hpp"
 #include "SourceBlendFBO.hpp"
+#include "TextureCopyFBO.hpp"
 
 static inline bool reverseOuterTile(int tileIndex) {
   return (tileIndex & 1) != 0;
