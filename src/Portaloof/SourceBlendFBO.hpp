@@ -153,7 +153,7 @@ struct SourceBlendFBO {
   }
 
   int apply(NVGcontext* vg, GLuint rackTex, GLuint imageTex, int w, int h,
-            float imageAmt, bool imageFlipY = true) {
+            float imageAmt, bool imageFlipY = true, bool rackFlipY = false) {
     if (w <= 0 || h <= 0 || !rackTex || !imageTex) return -1;
     if (!initialized) init();
     if (!program || aPos < 0) return -1;
@@ -189,7 +189,7 @@ struct SourceBlendFBO {
     glBindTexture(GL_TEXTURE_2D, imageTex);
     glUniform1i(uImageTex, 1);
     glUniform1f(uImageAmt, clamp(imageAmt, 0.f, 1.f));
-    glUniform1f(uRackFlipY, 1.f);
+    glUniform1f(uRackFlipY, rackFlipY ? -1.f : 1.f);
     glUniform1f(uImageFlipY, imageFlipY ? -1.f : 1.f);
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
