@@ -13,6 +13,7 @@
 #include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
 #include "CustomBlankFunctions.hpp"
+#include "ImagePathHelpers.hpp"
 #include "animatedGif.hpp"
 
 struct ComputerscareBlank : ComputerscareMenuParamModule {
@@ -337,22 +338,13 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     std::string dir = this->paths[index].empty()
                           ? asset::user("../")
                           : asset::user(this->paths[index]);
-    char* pathC = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
-    if (!pathC) {
-      return;
-    }
-
-    std::string path = pathC;
-    std::free(pathC);
-
+    std::string path = computerscareOpenImageDialog(dir.c_str());
+    if (path.empty()) return;
     setPath(path);
     jsonFlag = false;
   }
   bool isSupportedImagePath(const std::string& path) {
-    std::string ext = system::getExtension(path);
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" ||
-           ext == ".gif";
+    return computerscareIsSupportedImagePath(path);
   }
   void setContainingDirectory(int index = 0) {
     std::string dir = system::getDirectory(asset::user(paths[index]));
@@ -1332,11 +1324,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
   void onPathDrop(const PathDropEvent& e) override {
     if (!blankModule) return;
     for (const std::string& path : e.paths) {
-      std::string ext = system::getExtension(path);
-      std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-      if (ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".bmp" &&
-          ext != ".gif")
-        continue;
+      if (!computerscareIsSupportedImagePath(path)) continue;
 
       blankModule->setPath(path);
       blankModule->jsonFlag = false;

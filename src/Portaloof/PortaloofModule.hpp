@@ -263,17 +263,17 @@ struct ComputerscarePortaloof : Module {
     configSwitch(INVERT_TOGGLE, 0.f, 1.f, 1.f, "Fold", {"Off", "On"});
     configParam(INVERT_KNOB, 0.f, 1.f, 0.2f, "Fold Frequency");
     configParam(INVERT_ATTEN, -1.f, 1.f, 0.f, "Fold CV Atten");
-    configSwitch(CURVES_TOGGLE, 0.f, 1.f, 1.f, "Warp", {"Off", "On"});
-    configParam(CURVES_KNOB, -1.f, 1.f, 0.f, "Warp");
-    configParam(CURVES_ATTEN, -1.f, 1.f, 0.f, "Warp CV Atten");
+    configSwitch(CURVES_TOGGLE, 0.f, 1.f, 1.f, "Color Warp", {"Off", "On"});
+    configParam(CURVES_KNOB, -1.f, 1.f, 0.f, "Color Warp");
+    configParam(CURVES_ATTEN, -1.f, 1.f, 0.f, "Color Warp CV Atten");
     configParam(BACKDROP_ALPHA, 0.f, 1.f, 0.85f, "Backdrop Alpha");
 
     configInput(HUE_GATE_INPUT, "Hue Gate");
     configInput(INVERT_GATE_INPUT, "Invert Gate");
-    configInput(CURVES_GATE_INPUT, "Curves Gate");
+    configInput(CURVES_GATE_INPUT, "Color Warp Gate");
     configInput(HUE_CV_INPUT, "Hue CV");
     configInput(INVERT_CV_INPUT, "Invert CV");
-    configInput(CURVES_CV_INPUT, "Curves CV");
+    configInput(CURVES_CV_INPUT, "Color Warp CV");
     configInput(FREEZE_GATE_INPUT, "Freeze (gate)");
     configInput(INPUT_SOURCE_MIX_INPUT, "Input Source Mix CV");
 

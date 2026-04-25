@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../ImagePathHelpers.hpp"
 #include "PortaloofBackdropWidget.hpp"
 
 // ─── Widget ──────────────────────────────────────────────────────────────────
@@ -29,13 +30,8 @@ static std::string pickRandomDocImage() {
   struct dirent* entry;
   while ((entry = readdir(dp)) != nullptr) {
     std::string name = entry->d_name;
-    auto endsWith = [&](const std::string& ext) {
-      return name.size() >= ext.size() &&
-             name.compare(name.size() - ext.size(), ext.size(), ext) == 0;
-    };
-    if (endsWith(".png") || endsWith(".PNG") || endsWith(".jpg") ||
-        endsWith(".JPG") || endsWith(".jpeg") || endsWith(".JPEG"))
-      paths.push_back(dir + "/" + name);
+    std::string path = dir + "/" + name;
+    if (computerscareIsSupportedImagePath(path)) paths.push_back(path);
   }
   closedir(dp);
   if (paths.empty()) return "";
@@ -197,12 +193,13 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     // ── Global mode controls
     // ────────────────────────────────────────────────── Both jacks share the
     // same Y (aligned). Button is positioned relative to its jack.
-    const float HDR_JACK_Y = 44.f;
+    const float HDR_JACK_Y = 41.f;
     const float HDR_BTN_DX = -24.f;  // button x = jack x + this
     const float HDR_BTN_DY = -2.f;   // button y = jack y + this
 
-    const float CONT_JACK_X = 64.f;
+    const float CONT_JACK_X = 56.f;
     const float MIX_JACK_X = 122.f;
+    const float MIX_INPUT_JACK_Y = HDR_JACK_Y - 3.f;
 
     auto addHdrLabel = [&](float x, const char* text) {
       SmallLetterDisplay* lbl = new SmallLetterDisplay();
@@ -229,7 +226,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         Vec(MIX_JACK_X + HDR_BTN_DX + 1.f, HDR_JACK_Y + HDR_BTN_DY + 5.f),
         module, ComputerscarePortaloof::INPUT_SOURCE_MIX));
     trackInputPort(
-        createInput<InPort>(Vec(MIX_JACK_X, HDR_JACK_Y), module,
+        createInput<InPort>(Vec(MIX_JACK_X, MIX_INPUT_JACK_Y), module,
                             ComputerscarePortaloof::INPUT_SOURCE_MIX_INPUT));
     {
       mixLeftLabel = new SmallLetterDisplay();
@@ -461,6 +458,23 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     }
   }
 
+  void drawHeaderLayer(const DrawArgs& args, int layer, bool hideUi) {
+    // Header drawn last — on top of everything including kaleidoscope
+    if (!hideUi && layer == 1 && headerSvg && headerSvg->handle) {
+      float svgW = headerSvg->handle->width;
+      float svgH = headerSvg->handle->height;
+      const float drawW = 170.f;
+      const float drawH = drawW * (svgH / svgW);
+      float b = math::clamp(rack::settings::rackBrightness, 0.f, 1.f);
+      nvgSave(args.vg);
+      nvgGlobalTint(args.vg, nvgRGBAf(b, b, b, 1.f));
+      nvgTranslate(args.vg, 3.f, 3.f);
+      nvgScale(args.vg, drawW / svgW, drawH / svgH);
+      window::svgDraw(args.vg, headerSvg->handle);
+      nvgRestore(args.vg);
+    }
+  }
+
   void drawLayer(const DrawArgs& args, int layer) override {
     ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
     bool hideUi = m && m->hideUi;
@@ -511,6 +525,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         bool hasSource2 = renderSources[1].isValid();
         if (!hasSource1 && !hasSource2) {
           if (!hideUi) ModuleWidget::drawLayer(args, layer);
+          drawHeaderLayer(args, layer, hideUi);
           return;
         }
         float source2Amt = 0.5f * (1.f + m->inputSourceMix);
@@ -873,21 +888,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     }
 
     if (!hideUi) ModuleWidget::drawLayer(args, layer);
-
-    // Header drawn last — on top of everything including kaleidoscope
-    if (!hideUi && layer == 1 && headerSvg && headerSvg->handle) {
-      float svgW = headerSvg->handle->width;
-      float svgH = headerSvg->handle->height;
-      const float drawW = 170.f;
-      const float drawH = drawW * (svgH / svgW);
-      float b = math::clamp(rack::settings::rackBrightness, 0.f, 1.f);
-      nvgSave(args.vg);
-      nvgGlobalTint(args.vg, nvgRGBAf(b, b, b, 1.f));
-      nvgTranslate(args.vg, 3.f, 3.f);
-      nvgScale(args.vg, drawW / svgW, drawH / svgH);
-      window::svgDraw(args.vg, headerSvg->handle);
-      nvgRestore(args.vg);
-    }
+    drawHeaderLayer(args, layer, hideUi);
   }
 
   PortaloofInjectedSource getSource(NVGcontext* vg,
@@ -954,11 +955,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           },
           [=]() { m->setSourceFullRack(sourceIndex); }));
       menu->addChild(createMenuItem("Load image...", "", [=]() {
-        char* pathC = osdialog_file(OSDIALOG_OPEN, NULL, NULL, NULL);
-        if (pathC) {
-          m->setSourceImage(sourceIndex, pathC);
-          std::free(pathC);
-        }
+        std::string path = computerscareOpenImageDialog(NULL);
+        if (!path.empty()) m->setSourceImage(sourceIndex, path);
       }));
       menu->addChild(createMenuItem("Select rack rectangle", "", [=]() {
         if (!APP || !APP->scene) return;
@@ -1066,9 +1064,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   void onPathDrop(const PathDropEvent& e) override {
     if (!module || e.paths.empty()) return;
     std::string path = e.paths[0];
-    std::string ext = system::getExtension(path);
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp") {
+    if (computerscareIsSupportedImagePath(path)) {
       auto* m = dynamic_cast<ComputerscarePortaloof*>(module);
       if (m) m->setSourceImage(1, path);
       e.consume(this);
