@@ -43,7 +43,7 @@ struct PortaloofKaleidModeKnob : MediumDotSnapKnob {
 
     nvgSave(args.vg);
     nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, 17.f);
+    nvgFontSize(args.vg, 18.f);
     nvgTextLetterSpacing(args.vg, 0.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, nvgRGB(0xfb, 0xf7, 0xec));
@@ -53,7 +53,7 @@ struct PortaloofKaleidModeKnob : MediumDotSnapKnob {
     float maxW = box.size.x - 11.f;
     float scaleX = labelW > maxW && labelW > 0.f ? maxW / labelW : 1.f;
     float cx = box.size.x * 0.5f;
-    float cy = box.size.y * 0.48f;
+    float cy = box.size.y * 0.50f;
     nvgTranslate(args.vg, cx, cy);
     nvgScale(args.vg, scaleX, 1.f);
     nvgText(args.vg, 0.f, 0.f, label.c_str(), nullptr);
@@ -457,31 +457,44 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     // Create the fake module once with random params + a random doc image
     if (!browserModule) {
       browserModule = new ComputerscarePortaloof();
+      browserModule->clearSource(0);
       browserModule->setSourceImage(1, pickRandomDocImage());
-      browserModule->inputSourceMix = -1.f;
+      browserModule->inputSourceMix = 1.f;
       browserModule->params[ComputerscarePortaloof::INPUT_SOURCE_MIX].setValue(
-          -1.f);
+          1.f);
+
+      for (int i = 0; i < ROW_COUNT; i++) {
+        browserModule->rowEnabled[i] = false;
+        browserModule->rowValue[i] = 0.f;
+      }
+
+      browserModule->rowEnabled[ROW_SCALE] = true;
+      browserModule->rowValue[ROW_SCALE] = 0.9f + random::uniform() * 0.7f;
 
       // kali always on with mode >= 2
-      browserModule->rowEnabled[4] = true;
-      browserModule->rowValue[4] = 2.f + (int)(random::uniform() * 3);
+      browserModule->rowEnabled[ROW_KALEIDO] = true;
+      browserModule->rowValue[ROW_KALEIDO] =
+          random::uniform() > 0.5f ? 2.f + (int)(random::uniform() * 4.f)
+                                   : -(2.f + (int)(random::uniform() * 4.f));
 
       // rotation always on with a meaningful angle
-      browserModule->rowEnabled[3] = true;
-      browserModule->rowValue[3] = 0.1f + random::uniform() * 0.9f;
+      browserModule->rowEnabled[ROW_ROT] = true;
+      browserModule->rowValue[ROW_ROT] = -160.f + random::uniform() * 320.f;
+
+      browserModule->rowEnabled[ROW_TRANS_X] = random::uniform() > 0.35f;
+      browserModule->rowValue[ROW_TRANS_X] = -0.35f + random::uniform() * 0.7f;
+      browserModule->rowEnabled[ROW_TRANS_Y] = random::uniform() > 0.35f;
+      browserModule->rowValue[ROW_TRANS_Y] = -0.35f + random::uniform() * 0.7f;
 
       // hue or warp always on (pick one or both)
-      browserModule->rowEnabled[7] = random::uniform() > 0.3f;  // hue
-      browserModule->rowValue[7] = random::uniform();
-      browserModule->rowEnabled[9] = random::uniform() > 0.3f;  // warp/curves
-      browserModule->rowValue[9] = random::uniform();
+      browserModule->rowEnabled[ROW_HUE] = random::uniform() > 0.3f;
+      browserModule->rowValue[ROW_HUE] = -240.f + random::uniform() * 480.f;
+      browserModule->rowEnabled[ROW_CURVES] = random::uniform() > 0.3f;
+      browserModule->rowValue[ROW_CURVES] = -0.6f + random::uniform() * 1.2f;
+      if (!browserModule->rowEnabled[ROW_HUE] &&
+          !browserModule->rowEnabled[ROW_CURVES])
+        browserModule->rowEnabled[ROW_HUE] = true;
 
-      // other rows: random on/off and values
-      for (int i = 0; i < 10; i++) {
-        if (i == 3 || i == 4 || i == 7 || i == 9) continue;
-        browserModule->rowEnabled[i] = random::uniform() > 0.5f;
-        browserModule->rowValue[i] = random::uniform();
-      }
       for (int s = 0; s < 2; s++) {
         memcpy(browserModule->sourceRowEnabled[s], browserModule->rowEnabled,
                sizeof(browserModule->rowEnabled));
