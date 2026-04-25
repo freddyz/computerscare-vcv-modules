@@ -8,6 +8,59 @@
 static const float CONTROLS_WIDTH = 11 * RACK_GRID_WIDTH;  // 165 px / 11 HP
 static const float DISPLAY_X = CONTROLS_WIDTH - RACK_GRID_WIDTH;  // 10 HP
 
+struct PortaloofKaleidModeKnob : MediumDotSnapKnob {
+  static constexpr float PAD = 6.f;
+
+  PortaloofKaleidModeKnob() {
+    if (!sw || !sw->svg) return;
+    math::Vec svgSize = sw->box.size;
+    math::Vec pad(PAD, PAD);
+    box.size = svgSize.plus(pad.mult(2.f));
+    fb->box.pos = math::Vec();
+    fb->box.size = box.size;
+    tw->box.size = box.size;
+    sw->box.pos = pad;
+    bg->box.pos = pad;
+    bg->box.size = svgSize;
+    shadow->box.pos = pad.plus(math::Vec(0.f, svgSize.y * 0.10f));
+    shadow->box.size = svgSize;
+    fb->setDirty();
+  }
+
+  void draw(const DrawArgs& args) override {
+    MediumDotSnapKnob::draw(args);
+
+    engine::ParamQuantity* pq = getParamQuantity();
+    if (!pq) return;
+    int mode = (int)std::lround(pq->getValue());
+
+    std::string label = mode == 0 ? "off"
+                                  : (mode > 0 ? string::f("p%d", mode)
+                                              : string::f("c%d", -mode));
+    std::shared_ptr<Font> font = APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    if (!font) return;
+
+    nvgSave(args.vg);
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, 17.f);
+    nvgTextLetterSpacing(args.vg, 0.f);
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgFillColor(args.vg, nvgRGB(0xfb, 0xf7, 0xec));
+    float bounds[4] = {};
+    nvgTextBounds(args.vg, 0.f, 0.f, label.c_str(), nullptr, bounds);
+    float labelW = bounds[2] - bounds[0];
+    float maxW = box.size.x - 11.f;
+    float scaleX = labelW > maxW && labelW > 0.f ? maxW / labelW : 1.f;
+    float cx = box.size.x * 0.5f;
+    float cy = box.size.y * 0.48f;
+    nvgTranslate(args.vg, cx, cy);
+    nvgScale(args.vg, scaleX, 1.f);
+    nvgText(args.vg, 0.f, 0.f, label.c_str(), nullptr);
+    nvgRestore(args.vg);
+  }
+};
+
 struct ScaledSvgWidget : widget::Widget {
   std::shared_ptr<window::Svg> svg;
   void draw(const DrawArgs& args) override {
@@ -223,7 +276,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                             ComputerscarePortaloof::FREEZE_GATE_INPUT));
 
     addHdrLabel(MIX_JACK_X + HDR_BTN_DX - 4.f, "MIX");
-    addParam(createParam<SmallKnob>(
+    addParam(createParam<DarkSmallKnob>(
         Vec(MIX_JACK_X + HDR_BTN_DX + 1.f, HDR_JACK_Y + HDR_BTN_DY + 5.f),
         module, ComputerscarePortaloof::INPUT_SOURCE_MIX));
     trackInputPort(
@@ -344,10 +397,16 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           createInput<OutPort>(Vec(30.f, y - 17.f), module, gateInputIds[i]));
       trackInputPort(
           createInput<InPort>(Vec(68.f, y - 14.f), module, cvInputIds[i]));
-      addParam(
-          createParam<SmallKnob>(Vec(100.f, y - 9.f), module, attenIds[i]));
-      addParam(
-          createParam<SmoothKnob>(Vec(122.f, y - 13.f), module, knobIds[i]));
+      addParam(createParam<SmallKnob>(Vec(98.f, y - 9.f), module, attenIds[i]));
+      if (knobIds[i] == ComputerscarePortaloof::KALEIDO_KNOB) {
+        addParam(createParam<PortaloofKaleidModeKnob>(
+            Vec(120.f - PortaloofKaleidModeKnob::PAD,
+                y - 13.f - PortaloofKaleidModeKnob::PAD),
+            module, knobIds[i]));
+      } else {
+        addParam(
+            createParam<SmoothKnob>(Vec(120.f, y - 13.f), module, knobIds[i]));
+      }
     }
 
     headerSvg = APP->window->loadSvg(

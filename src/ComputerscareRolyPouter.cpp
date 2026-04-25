@@ -159,7 +159,7 @@ struct PouterSmallDisplay : SmallLetterDisplay {
     SmallLetterDisplay::draw(args);
   }
 };
-struct DisableableSnapKnob : RoundKnob {
+struct DisableableSnapKnob : ComputerscareRoundKnob {
   ComputerscarePolyModule* module;
   int channel;
   bool disabled = false;
@@ -174,7 +174,7 @@ struct DisableableSnapKnob : RoundKnob {
   DisableableSnapKnob() {
     snap = true;
     shadow->opacity = 0.f;
-    RoundKnob();
+    ComputerscareRoundKnob();
   }
   void step() override {
     if (module) {
@@ -191,7 +191,7 @@ struct DisableableSnapKnob : RoundKnob {
       fb->dirty = true;
       lastDisabled = disabled;
     }
-    RoundKnob::step();
+    ComputerscareRoundKnob::step();
   }
 };
 struct ComputerscareRolyPouterWidget : ModuleWidget {
