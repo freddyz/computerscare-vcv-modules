@@ -61,6 +61,15 @@ static inline float wrapToRange(float value, float minValue, float maxValue) {
   return minValue + wrapped;
 }
 
+static inline float mapPortaloofAxisScale(float k) {
+  float sign = (k >= 0.f) ? 1.f : -1.f;
+  float a = fabsf(k);
+  if (a <= 1.f) {
+    return sign * (0.1f + 0.9f * (a * a));
+  }
+  return sign * powf(5.f, (a - 1.f) / 4.f);
+}
+
 enum PortaloofRowIndex {
   ROW_SCALE = 0,
   ROW_SCALE_X,
@@ -511,33 +520,14 @@ struct ComputerscarePortaloof : Module {
         float combined = offset + atten * cv * cvScale[i];
         bool wraps = (i == ROW_ROT || i == ROW_TRANS_X || i == ROW_TRANS_Y ||
                       i == ROW_HUE);
-        sourceRowValue[s][i] = wraps ? wrapToRange(combined, mins[i], maxs[i])
-                                     : clamp(combined, mins[i], maxs[i]);
+        float v = wraps ? wrapToRange(combined, mins[i], maxs[i])
+                        : clamp(combined, mins[i], maxs[i]);
+        if (i == ROW_SCALE_X || i == ROW_SCALE_Y) v = mapPortaloofAxisScale(v);
+        sourceRowValue[s][i] = v;
       }
 
       rowEnabled[i] = sourceRowEnabled[0][i];
       rowValue[i] = sourceRowValue[0][i];
-    }
-
-    // Exponential scale map for Scale X (row 1) and Scale Y (row 2).
-    // Maps knob [-5, 5] → [-5, -0.1] | [0.1, 5] with two segments:
-    //   [0, 1] → [0.1, 1.0] quadratic (fine control near center)
-    //   [1, 5] → [1.0, 5.0] exponential (coarser at extremes)
-    // Default knob=1 → scale=1.0 (identity). Negative values mirror the axis.
-    for (int si = ROW_SCALE_X; si <= ROW_SCALE_Y; si++) {
-      for (int s = 0; s < 2; s++) {
-        float k = sourceRowValue[s][si];
-        float sign = (k >= 0.f) ? 1.f : -1.f;
-        float a = fabsf(k);
-        float result;
-        if (a <= 1.f) {
-          result = 0.1f + 0.9f * (a * a);
-        } else {
-          result = powf(5.f, (a - 1.f) / 4.f);
-        }
-        sourceRowValue[s][si] = sign * result;
-      }
-      rowValue[si] = sourceRowValue[0][si];
     }
   }
 
