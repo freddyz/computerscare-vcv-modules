@@ -185,18 +185,19 @@ namespace cpx {
 		if (!prefix.empty() && prefix[prefix.size() - 1] == 'i')
 			prefix.resize(prefix.size() - 1);
 
-		float prefixBounds[4];
+		float charBounds[4];
 		float iBounds[4];
 		nvgFontSize(vg, size);
 		nvgTextLetterSpacing(vg, 0.f);
 		nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 		nvgFontFaceId(vg, monoFont->handle);
-		nvgTextBounds(vg, 0.f, pos.y, prefix.c_str(), nullptr, prefixBounds);
+		nvgTextBounds(vg, 0.f, pos.y, "0", nullptr, charBounds);
 		nvgFontFaceId(vg, iFont->handle);
 		nvgTextBounds(vg, 0.f, pos.y, "i", nullptr, iBounds);
 
-		float prefixW = prefixBounds[2] - prefixBounds[0];
+		float charW = charBounds[2] - charBounds[0];
 		float iW = iBounds[2] - iBounds[0];
+		float prefixW = charW * prefix.size();
 		float totalW = prefixW + iW;
 		float x = pos.x - totalW / 2.f;
 		constexpr float padX = 7.f;
@@ -210,7 +211,12 @@ namespace cpx {
 
 		nvgFillColor(vg, color);
 		nvgFontFaceId(vg, monoFont->handle);
-		nvgText(vg, x, pos.y, prefix.c_str(), nullptr);
+		for (int i = 0; i < (int)prefix.size(); i++) {
+			if (prefix[i] == ' ')
+				continue;
+			char buf[2] = {prefix[i], '\0'};
+			nvgText(vg, x + charW * i, pos.y, buf, nullptr);
+		}
 		nvgFontFaceId(vg, iFont->handle);
 		nvgText(vg, x + prefixW, pos.y, "i", nullptr);
 	}
@@ -693,7 +699,7 @@ struct ComplexDisplayWidget : Widget {
 		}
 
 		auto font = APP->window->loadFont(
-			asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+			asset::plugin(pluginInstance, "res/fonts/RobotoMono-Regular.ttf"));
 		if (!font) {
 			Widget::draw(args);
 			return;
@@ -724,20 +730,54 @@ struct ComplexDisplayWidget : Widget {
 
 		float fsize = box.size.y * 0.72f;
 		float midY  = box.size.y * 0.55f;
-		float cursorX = 1.f;
 		float bounds[4];
 
 		nvgFontFaceId(args.vg, font->handle);
 		nvgFontSize(args.vg, fsize);
-		nvgTextLetterSpacing(args.vg, 0.3f);
+		nvgTextLetterSpacing(args.vg, 0.f);
 		nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
 
-		auto drawToken = [&](const std::string& s, NVGcolor color) {
-			if (s.empty()) return;
+		int displayDecimals = decimals < 0 ? 2 : decimals;
+		auto fixedNumberString = [&](float value, int integerDigits,
+		                             bool showPos = false) {
+			std::ostringstream ss;
+			float absValue = std::fabs(value);
+			int width = integerDigits + 1 + displayDecimals;
+			ss << std::fixed << std::setprecision(displayDecimals)
+			   << std::setw(width) << absValue;
+			std::string numeric = ss.str();
+			if (showPos)
+				return std::string(value < 0.f ? "-" : "+") + numeric;
+			if (value < 0.f)
+				return std::string("-") + numeric;
+			return std::string(" ") + numeric;
+		};
+		auto drawCellText = [&](const std::string& s, float x, NVGcolor color) {
+			nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
 			nvgFillColor(args.vg, color);
-			nvgText(args.vg, cursorX, midY, s.c_str(), nullptr);
-			nvgTextBounds(args.vg, cursorX, midY, s.c_str(), nullptr, bounds);
-			cursorX = bounds[2] + 1.f;
+			nvgText(args.vg, x, midY, s.c_str(), nullptr);
+		};
+		auto drawFixedCells = [&](const std::string& s, float x, float charW,
+		                          NVGcolor color) {
+			for (int i = 0; i < (int)s.size(); i++) {
+				if (s[i] == ' ')
+					continue;
+				char buf[2] = {s[i], '\0'};
+				drawCellText(buf, x + charW * i, color);
+			}
+			return x + charW * s.size();
+		};
+		auto fixedOperator = [&](const std::string& s, float x, float charW,
+		                         NVGcolor color) {
+			for (int i = 0; i < (int)s.size(); i++) {
+				char buf[2] = {s[i], '\0'};
+				drawCellText(buf, x + charW * i, color);
+			}
+			return x + charW * s.size();
+		};
+		auto textWidth = [&](const std::string& s) {
+			nvgTextBounds(args.vg, 0.f, midY, s.c_str(), nullptr, bounds);
+			return bounds[2] - bounds[0];
 		};
 
 		// Glyph sizing: scale svg children to match the text cap-height.
@@ -752,34 +792,81 @@ struct ComplexDisplayWidget : Widget {
 		eGlyph->visible = false;
 
 		if (!polar) {
-			// real [sign imag] i
-			drawToken(parts.real, normalColor);
-			drawToken(" " + parts.sign + " ", dimColor);
-			drawToken(parts.imag, normalColor);
-			// place i glyph inline
+			float fieldStartX = 1.f;
+			float charW = textWidth("0");
+			float cursorX = fieldStartX;
+			float realValue = sourceMode == SourceMode::Polar ? vx * std::cos(vy) : vx;
+			float imagValue = sourceMode == SourceMode::Polar ? vx * std::sin(vy) : vy;
+			cursorX = drawFixedCells(fixedNumberString(realValue, 2), cursorX,
+			                         charW, normalColor);
+			cursorX = fixedOperator(imagValue < 0.f ? " - " : " + ", cursorX,
+			                        charW, dimColor);
+			cursorX = drawFixedCells(fixedNumberString(std::fabs(imagValue), 2),
+			                         cursorX, charW, normalColor);
+
 			iGlyph->box.pos = Vec(cursorX, midY - glyphH);
 			iGlyph->box.size = Vec(iW, glyphH);
 			iGlyph->visible = true;
 		} else if (polarStyle == cpx::complex_math::PolarDisplayStyle::Engineering) {
-			// magnitude ∠ angle
-			drawToken(parts.magnitude, normalColor);
-			drawToken(" " + parts.angleSym + " ", accentColor);
-			drawToken(parts.angle, normalColor);
+			float fieldStartX = 1.f;
+			float charW = textWidth("0");
+			float cursorX = fieldStartX;
+
+			float r = vx;
+			float theta = vy;
+			if (sourceMode == SourceMode::Rect) {
+				r = std::hypot(vx, vy);
+				theta = std::atan2(vy, vx);
+			}
+			float displayAngle = angleUnit == cpx::complex_math::AngleUnit::Degree
+			                         ? theta * 180.f / cpx::complex_math::pi
+			                         : theta;
+			std::string unitSuffix =
+				angleUnit == cpx::complex_math::AngleUnit::Degree ? "°" : " rad";
+
+			cursorX = drawFixedCells(fixedNumberString(r, 2), cursorX, charW,
+			                         normalColor);
+			cursorX = fixedOperator(" ∠ ", cursorX, charW, accentColor);
+			cursorX = drawFixedCells(fixedNumberString(displayAngle, 3, true),
+			                         cursorX, charW, normalColor);
+			drawCellText(unitSuffix, cursorX, normalColor);
 		} else {
-			// magnitude e^(i· angle)
-			drawToken(parts.magnitude, normalColor);
-			// e glyph
+			float fieldStartX = 1.f;
+			float charW = textWidth("0");
+			float cursorX = fieldStartX;
+
+			float r = vx;
+			float theta = vy;
+			if (sourceMode == SourceMode::Rect) {
+				r = std::hypot(vx, vy);
+				theta = std::atan2(vy, vx);
+			}
+			float displayAngle = angleUnit == cpx::complex_math::AngleUnit::Degree
+			                         ? theta * 180.f / cpx::complex_math::pi
+			                         : theta;
+			std::string unitSuffix =
+				angleUnit == cpx::complex_math::AngleUnit::Degree ? "°" : " rad";
+
+			cursorX = drawFixedCells(fixedNumberString(r, 2), cursorX, charW,
+			                         normalColor);
+
+			cursorX += charW;
 			eGlyph->box.pos = Vec(cursorX, midY - glyphH);
 			eGlyph->box.size = Vec(eW, glyphH);
 			eGlyph->visible = true;
-			cursorX += eW + 1.f;
-			drawToken("^(", dimColor);
-			// i glyph
+			cursorX += eW + charW;
+
+			cursorX = fixedOperator("^(", cursorX, charW, dimColor);
+
 			iGlyph->box.pos = Vec(cursorX, midY - glyphH);
 			iGlyph->box.size = Vec(iW, glyphH);
 			iGlyph->visible = true;
-			cursorX += iW + 1.f;
-			drawToken("·" + parts.angle + ")", dimColor);
+			cursorX += iW;
+
+			cursorX = fixedOperator("·", cursorX, charW, dimColor);
+			cursorX = drawFixedCells(fixedNumberString(displayAngle, 3, true),
+			                         cursorX, charW, dimColor);
+			drawCellText(unitSuffix + ")", cursorX, dimColor);
 		}
 
 		Widget::draw(args);
