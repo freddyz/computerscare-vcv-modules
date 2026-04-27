@@ -276,14 +276,20 @@ struct ComplexGeneratorModeControl : Widget {
 	int polarParamIndex = -1;
 	int modeParamId = -1;
 	int lastMode = -1;
+	cpx::ComplexXYMaxMode arrowMaxMode = cpx::ComplexXYMaxMode::Radial;
+	float arrowMaxVoltage = 10.f;
 	cpx::ComplexControl* control = nullptr;
 
 	ComplexGeneratorModeControl(ComputerscareComplexGenerator* module, int paramIndex,
-	                            int polarParamIndex, int modeParamId) {
+	                            int polarParamIndex, int modeParamId,
+	                            cpx::ComplexXYMaxMode arrowMaxMode,
+	                            float arrowMaxVoltage) {
 		this->module = module;
 		this->paramIndex = paramIndex;
 		this->polarParamIndex = polarParamIndex;
 		this->modeParamId = modeParamId;
+		this->arrowMaxMode = arrowMaxMode;
+		this->arrowMaxVoltage = arrowMaxVoltage;
 	}
 
 	int mode() const {
@@ -307,9 +313,22 @@ struct ComplexGeneratorModeControl : Widget {
 
 		int controlParamIndex = mode == 2 ? polarParamIndex : paramIndex;
 		control = new cpx::ComplexControl(module, controlParamIndex, preset);
+		if (arrowMaxMode == cpx::ComplexXYMaxMode::Radial)
+			control->setArrowRadialMax(arrowMaxVoltage);
+		else
+			control->setArrowRectangularMax(arrowMaxVoltage);
 		control->box = Rect(Vec(0.f, 0.f), box.size);
 		control->layoutChildren();
 		addChildBottom(control);
+	}
+
+	void clampPolarRadius() {
+		if (!module || polarParamIndex < 0)
+			return;
+		if (arrowMaxMode == cpx::ComplexXYMaxMode::Radial) {
+			module->params[polarParamIndex].setValue(std::max(
+				0.f, std::min(arrowMaxVoltage, module->params[polarParamIndex].getValue())));
+		}
 	}
 
 	void step() override {
@@ -322,11 +341,13 @@ struct ComplexGeneratorModeControl : Widget {
 			if (currentMode == 2) {
 				cpx::ComplexControl::syncRectParamsToPolarParams(
 					module, paramIndex, polarParamIndex);
+				clampPolarRadius();
 			}
 			lastMode = currentMode;
 			rebuildControl(currentMode);
 		}
 		else if (currentMode == 2) {
+			clampPolarRadius();
 			cpx::ComplexControl::syncPolarParamsToRectParams(
 				module, polarParamIndex, paramIndex);
 		}
@@ -343,19 +364,25 @@ struct ComplexGeneratorLaneControl : Widget {
 	int lastMode = -1;
 	bool lastFaded = false;
 	bool showDisabledOverlay = false;
+	cpx::ComplexXYMaxMode arrowMaxMode = cpx::ComplexXYMaxMode::Rectangular;
+	float arrowMaxVoltage = 10.f;
 	NVGcolor disabledOverlayColor = nvgRGBA(120, 120, 120, 135);
 	cpx::ComplexControl* control = nullptr;
 
 	ComplexGeneratorLaneControl(ComputerscareComplexGenerator* module, int laneIndex,
 	                            int paramIndex, int polarParamIndex,
 	                            int modeParamId,
-	                            bool showDisabledOverlay = false) {
+	                            bool showDisabledOverlay = false,
+	                            cpx::ComplexXYMaxMode arrowMaxMode = cpx::ComplexXYMaxMode::Rectangular,
+	                            float arrowMaxVoltage = 10.f) {
 		this->module = module;
 		this->laneIndex = laneIndex;
 		this->paramIndex = paramIndex;
 		this->polarParamIndex = polarParamIndex;
 		this->modeParamId = modeParamId;
 		this->showDisabledOverlay = showDisabledOverlay;
+		this->arrowMaxMode = arrowMaxMode;
+		this->arrowMaxVoltage = arrowMaxVoltage;
 	}
 
 	int mode() const {
@@ -379,6 +406,10 @@ struct ComplexGeneratorLaneControl : Widget {
 
 		int controlParamIndex = mode == 2 ? polarParamIndex : paramIndex;
 		control = new cpx::ComplexControl(module, controlParamIndex, preset);
+		if (arrowMaxMode == cpx::ComplexXYMaxMode::Radial)
+			control->setArrowRadialMax(arrowMaxVoltage);
+		else
+			control->setArrowRectangularMax(arrowMaxVoltage);
 		control->box = Rect(Vec(0.f, 0.f), box.size);
 		control->setStyle(isFaded() ? cpx::ComplexControlStyle::Faded
 		                            : cpx::ComplexControlStyle::Normal);
@@ -477,8 +508,8 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
 
 
-		addModeControl("scale", 5, 22, module, ComputerscareComplexGenerator::SCALE_VAL_AB, ComputerscareComplexGenerator::SCALE_POLAR, ComputerscareComplexGenerator::SCALE_VIEW_MODE);
-		addModeControl("offset", 5, 53, module, ComputerscareComplexGenerator::OFFSET_VAL_AB, ComputerscareComplexGenerator::OFFSET_POLAR, ComputerscareComplexGenerator::OFFSET_VIEW_MODE);
+		addModeControl("scale", 5, 22, module, ComputerscareComplexGenerator::SCALE_VAL_AB, ComputerscareComplexGenerator::SCALE_POLAR, ComputerscareComplexGenerator::SCALE_VIEW_MODE, cpx::ComplexXYMaxMode::Radial, 3.f);
+		addModeControl("offset", 5, 53, module, ComputerscareComplexGenerator::OFFSET_VAL_AB, ComputerscareComplexGenerator::OFFSET_POLAR, ComputerscareComplexGenerator::OFFSET_VIEW_MODE, cpx::ComplexXYMaxMode::Rectangular, 10.f);
 
 		//addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module, ComputerscareComplexGenerator::GLOBAL_SCALE));
 		//addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscareComplexGenerator::GLOBAL_OFFSET));
@@ -509,9 +540,12 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
 	void addModeControl(std::string label, int x, int y,
 	                    ComputerscareComplexGenerator *module, int paramIndex,
-	                    int polarParamIndex, int modeParamId) {
+	                    int polarParamIndex, int modeParamId,
+	                    cpx::ComplexXYMaxMode arrowMaxMode,
+	                    float arrowMaxVoltage) {
 		ComplexGeneratorModeControl* control = new ComplexGeneratorModeControl(
-			module, paramIndex, polarParamIndex, modeParamId);
+			module, paramIndex, polarParamIndex, modeParamId, arrowMaxMode,
+			arrowMaxVoltage);
 		control->box = Rect(Vec(x, y), Vec(32, 25));
 		addChild(control);
 

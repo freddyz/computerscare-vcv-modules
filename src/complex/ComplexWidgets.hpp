@@ -47,6 +47,11 @@ namespace cpx {
    // nvgRestore(vg);
 	}
 
+	enum class ComplexXYMaxMode {
+		Radial,
+		Rectangular,
+	};
+
 
 	struct ComplexXY : TransparentWidget {
 	ComputerscareComplexBase* module;
@@ -78,6 +83,8 @@ namespace cpx {
 	NVGcolor fadedArrowStrokeColor = nvgRGB(75, 75, 75);
 
 	float originalMagnituteRadiusPixels = 120.f;
+	ComplexXYMaxMode maxMode = ComplexXYMaxMode::Radial;
+	float maxVoltage = 10.f;
 
 	ComplexXY(ComputerscareComplexBase* mod,int indexParamA) {
 		module=mod;
@@ -93,6 +100,46 @@ namespace cpx {
 	std::string polarDragDisplayString(float x, float y) {
 		return cpx::complex_math::fixedWidthPolarEngineeringString(
 			std::hypot(x, y), std::atan2(y, x));
+	}
+
+	std::string voltageLabelString(float value) {
+		std::ostringstream ss;
+		ss << std::setprecision(3) << std::noshowpoint << value << "v";
+		return ss.str();
+	}
+
+	void setRadialMax(float max) {
+		maxMode = ComplexXYMaxMode::Radial;
+		maxVoltage = std::max(0.f, max);
+	}
+
+	void setRectangularMax(float max) {
+		maxMode = ComplexXYMaxMode::Rectangular;
+		maxVoltage = std::max(0.f, max);
+	}
+
+	Vec clampToMax(Vec z) {
+		if (maxVoltage <= 0.f)
+			return Vec(0.f, 0.f);
+
+		if (maxMode == ComplexXYMaxMode::Radial) {
+			float length = z.norm();
+			if (length > maxVoltage)
+				return z.mult(maxVoltage / length);
+			return z;
+		}
+
+		float absX = std::fabs(z.x);
+		float absY = std::fabs(z.y);
+		if (absX <= maxVoltage && absY <= maxVoltage)
+			return z;
+
+		float scale = 1.f;
+		if (absX > 0.f)
+			scale = std::min(scale, maxVoltage / absX);
+		if (absY > 0.f)
+			scale = std::min(scale, maxVoltage / absY);
+		return z.mult(scale);
 	}
 
 	void drawDragText(NVGcontext* vg, const std::string& text, Vec pos,
@@ -234,7 +281,9 @@ namespace cpx {
 			//in scaled pixels
 
 			pixelsDiff = thisPos.minus(pixelsOrigin);
-			newZ = pixelsDiff.div(originalMagnituteRadiusPixels).mult(origComplexLength);
+			newZ = clampToMax(
+				pixelsDiff.div(originalMagnituteRadiusPixels).mult(origComplexLength));
+			pixelsDiff = newZ.mult(originalMagnituteRadiusPixels / origComplexLength);
 
 			module->params[paramA].setValue(newZ.x);
 			module->params[paramA+1].setValue(-newZ.y);
@@ -297,7 +346,7 @@ namespace cpx {
 
 				//circle at complex radius 1
 				float r1Pixels = originalMagnituteRadiusPixels / origComplexLength;
-				float r10Pixels = 10.f * originalMagnituteRadiusPixels / origComplexLength;
+				float rMaxPixels = maxVoltage * originalMagnituteRadiusPixels / origComplexLength;
 				float labelAngleScale = 1.f / std::sqrt(2.f);
 				Vec labelOutward = Vec(labelAngleScale, -labelAngleScale).mult(10.f);
 	      nvgBeginPath(args.vg);
@@ -330,16 +379,16 @@ namespace cpx {
 
 	      
 
-	      //circle at complex radius 10
+	      //max radius guide
 	      nvgBeginPath(args.vg);
 	      nvgStrokeWidth(args.vg, 3.f);
 	      nvgStrokeColor(args.vg,  nvgRGB(240, 30, 51));
-	      nvgEllipse(args.vg, 0, 0,r10Pixels, r10Pixels);
+	      nvgEllipse(args.vg, 0, 0,rMaxPixels, rMaxPixels);
 	      nvgClosePath(args.vg);
 	      nvgStroke(args.vg);
-				Vec r10LabelPos = Vec(r10Pixels * labelAngleScale,
-				                       -r10Pixels * labelAngleScale).plus(labelOutward);
-				drawDragText(args.vg, "10v", r10LabelPos, nvgRGB(255, 120, 120),
+				Vec rMaxLabelPos = Vec(rMaxPixels * labelAngleScale,
+				                        -rMaxPixels * labelAngleScale).plus(labelOutward);
+				drawDragText(args.vg, voltageLabelString(maxVoltage), rMaxLabelPos, nvgRGB(255, 120, 120),
 				             28.f);
 
 

@@ -66,6 +66,8 @@ struct ComplexControl : Widget {
 	int firstParamIdx = 0;
 	ComplexControlPreset preset = ComplexControlPreset::ArrowXY;
 	ComplexControlStyle style = ComplexControlStyle::Normal;
+	ComplexXYMaxMode arrowMaxMode = ComplexXYMaxMode::Radial;
+	float arrowMaxVoltage = 10.f;
 
 	ComplexXY*            arrowWidget = nullptr;
 	ComplexDisplayWidget* display     = nullptr;
@@ -147,6 +149,7 @@ struct ComplexControl : Widget {
 		                 preset == ComplexControlPreset::ArrowPolar);
 		if (hasArrow) {
 			arrowWidget = new ComplexXY(m, firstIdx);
+			applyArrowMax();
 			addChild(arrowWidget);
 		}
 
@@ -188,6 +191,27 @@ struct ComplexControl : Widget {
 			knobAWidget->setFaded(shouldFade);
 		if (knobBWidget)
 			knobBWidget->setFaded(shouldFade);
+	}
+
+	void setArrowRadialMax(float maxVoltage) {
+		arrowMaxMode = ComplexXYMaxMode::Radial;
+		arrowMaxVoltage = maxVoltage;
+		applyArrowMax();
+	}
+
+	void setArrowRectangularMax(float maxVoltage) {
+		arrowMaxMode = ComplexXYMaxMode::Rectangular;
+		arrowMaxVoltage = maxVoltage;
+		applyArrowMax();
+	}
+
+	void applyArrowMax() {
+		if (!arrowWidget)
+			return;
+		if (arrowMaxMode == ComplexXYMaxMode::Radial)
+			arrowWidget->setRadialMax(arrowMaxVoltage);
+		else
+			arrowWidget->setRectangularMax(arrowMaxVoltage);
 	}
 
 	// ── Display toggle ────────────────────────────────────────────────────────
