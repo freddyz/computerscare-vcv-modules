@@ -1,8 +1,10 @@
 # Portaloof
 
-Portaloof is a real-time visual feedback module. It captures the VCV Rack window, blends it with an optional image or rack source, applies geometric and color transforms, then draws the result back into the module display.
+Portaloof is a real-time visual feedback module. It captures visual sources, blends them, applies geometric and color transforms, then draws the result back into the module display.
 
 The module is resizable by dragging its right edge. Image files (PNG/JPG/JPEG/BMP) can also be dropped directly onto the module.
+
+![Portaloof showing live Rack feedback](../doc/portaloof-images/portaloof-basic.png)
 
 ---
 
@@ -17,15 +19,15 @@ When Freeze turns on, Portaloof captures a new frame. With **Transform when froz
 
 ### MIX
 
-Blends live Rack capture with the selected secondary source.
+Blends Source 1 and Source 2.
 
-- `+1`: live Rack capture only
+- `-1`: Source 1 only
 - `0`: equal blend
-- `-1`: secondary source only
+- `+1`: Source 2 only
 
 The Mix CV input adds `CV / 5` to the knob value, then clamps the result to `-1..+1`.
 
-Secondary sources can be a loaded image, a selected module, a selected rack rectangle, or a selected screen rectangle. If no secondary source is configured, the live Rack capture is used.
+Source 1 defaults to the full Rack window. Source 2 defaults to an image slot, but is silent until an image is loaded or another source is selected. Either source can be the full Rack window, a loaded image, a selected module, a selected rack rectangle, or a selected window rectangle.
 
 ---
 
@@ -57,7 +59,7 @@ Wrapped rows wrap around their range. Other rows clamp to their range.
 | Translate Y | `-1..+1` | `0.1` per volt | Wrapped `-1..+1` |
 | Hue | `-360..+360°` | `36°` per volt | Wrapped `-360..+360°` |
 | Fold Frequency | `0..1` | `0.1` per volt | Clamped `0..1`; right-click slider |
-| Warp | `-1..+1` | `0.1` per volt | Clamped `-1..+1` |
+| Color Warp | `-1..+1` | `0.1` per volt | Clamped `-1..+1` |
 
 ---
 
@@ -79,7 +81,9 @@ Rotates the image around the center of the display.
 
 ### KALI
 
-Kaleidoscope mode. `0` is off. Positive values use the newer/premium kaleidoscope shader modes. Negative values use the classic mirror modes.
+Kaleidoscope mode. `0` is off. Positive values are Premium modes, which use flower rotational symmetry. Negative values are Classic modes, which use various 2- or 4-part kaleidoscopes.
+
+![Portaloof kaleidoscope effect](../doc/portaloof-images/portaloof-kaleid.png)
 
 ### TRN X / TRN Y
 
@@ -100,12 +104,14 @@ Positive Hue rotates all colors together around the hue wheel. `0..+360°` is on
 
 Negative Hue uses a stronger cyclic color split. It moves through hue-wheel phases, boosts saturation and color contrast, and adds a smaller chromatic split. It is also cyclic: `0°` and `-360°` are neutral, with the strongest effect around the middle of the negative range.
 
-### WARP
+### COLOR WARP
 
 Applies a nonlinear color/tone transform.
 
 - Positive values: posterize/crush-style contrast shaping
-- Negative values: solarize toward inversion
+- Negative values: solarize toward inversion; full negative is an inverted image
+
+![Portaloof color transforms](../doc/portaloof-images/portaloof-colors.png)
 
 ### Fold Frequency
 
@@ -117,35 +123,31 @@ The Fold gate and CV inputs still exist in the hidden row position and still con
 
 ## Sources
 
-Portaloof always has access to the live Rack capture. The right-click **Rack source** menu and image loading options configure the secondary source used by Mix.
+Portaloof has two mixable sources. Source 1 defaults to the full Rack window. Source 2 defaults to an image source and remains silent until an image is loaded or another source is selected.
 
-### Image Source
+Each source can be configured independently from the right-click **Sources** menu.
 
-- **Load image...** opens an image file.
-- **Clear image** removes the loaded image.
-- Drag-and-drop an image file onto the module to load it.
+### Source Options
 
-### Rack Source
+Each source submenu can select:
 
-The **Rack source** submenu can select:
-
+- Full Rack Window
+- A loaded image
 - A specific module
 - A rectangle in rack coordinates
-- A rectangle in screen coordinates
+- A rectangle in window coordinates
 
-**Clear rack source** removes the selected rack/screen source.
+**Clear source** removes that source. Drag-and-drop an image file onto the module to load it into Source 2.
+
+![Portaloof using an external image source](../doc/portaloof-images/portaloof-external-image.png)
 
 ---
 
 ## Right-Click Options
 
-### Load image... / Clear image
+### Sources
 
-Load or remove a still image source.
-
-### Rack source
-
-Choose a module, rack rectangle, or screen rectangle as the secondary source.
+Configure Source 1 and Source 2 for the Mix control. Each source can be the full Rack window, a loaded image, a selected module, a selected rack rectangle, or a selected window rectangle.
 
 ### Fold Frequency
 
@@ -162,6 +164,8 @@ When enabled, Portaloof's visual feedback render follows Rack's room brightness 
 ### Render as rack background
 
 Renders Portaloof as a rack backdrop behind modules in addition to the module display. This resets to off when the module is initialized.
+
+![Portaloof rendered as a full Rack background](../doc/portaloof-images/portaloof-full-bg.png)
 
 ### Transform when frozen
 
