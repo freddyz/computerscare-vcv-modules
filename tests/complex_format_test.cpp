@@ -63,6 +63,19 @@ int main() {
     requireStr(p.imag, "2.7183", "rectParts decimals=4: imag");
   }
 
+  // ── fixedWidthRectString ──────────────────────────────────────────────────
+
+  {
+    requireStr(cf::fixedWidthRectString(3.2f, 0.22f), "  3.20 +  0.22i",
+               "fixed rect positive values");
+    requireStr(cf::fixedWidthRectString(-3.2f, -10.f), " -3.20 - 10.00i",
+               "fixed rect negative values");
+    requireStr(cf::fixedWidthRectString(0.f, -0.f), "  0.00 +  0.00i",
+               "fixed rect negative zero");
+    requireStr(cf::fixedWidthRectString(12.345f, 6.7f, 1, 5, 4),
+               " 12.3 +  6.7i", "fixed rect custom widths");
+  }
+
   // ── polarParts: engineering ────────────────────────────────────────────────
 
   {
@@ -85,6 +98,17 @@ int main() {
         5.f, 0.f, cf::AngleUnit::Degree, cf::PolarDisplayStyle::Engineering);
     requireStr(p.magnitude, "5.00", "polar engineering zero angle: magnitude");
     requireStr(p.angle, "0.00°", "polar engineering zero angle: angle");
+  }
+
+  // ── fixedWidthPolarEngineeringString ──────────────────────────────────────
+
+  {
+    requireStr(cf::fixedWidthPolarEngineeringString(4.22f, 31.f * pi / 180.f),
+               "  4.22 ∠ +31.00°", "fixed polar positive angle");
+    requireStr(cf::fixedWidthPolarEngineeringString(4.22f, -31.f * pi / 180.f),
+               "  4.22 ∠ -31.00°", "fixed polar negative angle");
+    requireStr(cf::fixedWidthPolarEngineeringString(12.345f, pi / 2.f, 1, 5, 5),
+               " 12.3 ∠ +90.0°", "fixed polar custom widths");
   }
 
   // ── polarParts: exponential ────────────────────────────────────────────────

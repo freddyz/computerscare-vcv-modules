@@ -60,12 +60,15 @@ namespace cpx {
 
 	Vec origComplexValue;
 	float origComplexLength;
+	float origParamAValue = 0.f;
+	float origParamBValue = 0.f;
 
 	Vec newZ;
 
 	int paramA;
 
 	bool editing=false;
+	bool cancelledDrag = false;
 	bool faded = false;
 	NVGcolor normalBackgroundColor = nvgRGBA(0, 35, 25, 80);
 	NVGcolor fadedBackgroundColor = nvgRGBA(150, 150, 150, 70);
@@ -83,6 +86,98 @@ namespace cpx {
 		TransparentWidget();
 	}
 
+	std::string rectDragDisplayString(float x, float y) {
+		return cpx::complex_math::fixedWidthRectString(x, y);
+	}
+
+	std::string polarDragDisplayString(float x, float y) {
+		return cpx::complex_math::fixedWidthPolarEngineeringString(
+			std::hypot(x, y), std::atan2(y, x));
+	}
+
+	void drawDragText(NVGcontext* vg, const std::string& text, Vec pos,
+	                  NVGcolor color, float size,
+	                  int align = NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE) {
+		auto font = APP->window->loadFont(asset::plugin(
+			pluginInstance, "res/fonts/RobotoMono-Regular.ttf"));
+		if (!font)
+			return;
+
+		nvgFontFaceId(vg, font->handle);
+		nvgFontSize(vg, size);
+		nvgTextLetterSpacing(vg, 0.f);
+		nvgTextAlign(vg, align);
+
+		float bounds[4];
+		nvgTextBounds(vg, pos.x, pos.y, text.c_str(), nullptr, bounds);
+		constexpr float padX = 7.f;
+		constexpr float padY = 4.f;
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, bounds[0] - padX, bounds[1] - padY,
+		               bounds[2] - bounds[0] + 2.f * padX,
+		               bounds[3] - bounds[1] + 2.f * padY, 4.f);
+		nvgFillColor(vg, nvgRGBA(0, 0, 0, 175));
+		nvgFill(vg);
+
+		nvgFillColor(vg, color);
+		nvgText(vg, pos.x, pos.y, text.c_str(), nullptr);
+	}
+
+	void drawRectDragText(NVGcontext* vg, const std::string& text, Vec pos,
+	                      NVGcolor color, float size) {
+		auto monoFont = APP->window->loadFont(asset::plugin(
+			pluginInstance, "res/fonts/RobotoMono-Regular.ttf"));
+		auto iFont = APP->window->loadFont(asset::plugin(
+			pluginInstance, "res/fonts/LibertinusSerif-Italic.ttf"));
+		if (!monoFont || !iFont)
+			return;
+
+		std::string prefix = text;
+		if (!prefix.empty() && prefix[prefix.size() - 1] == 'i')
+			prefix.resize(prefix.size() - 1);
+
+		float prefixBounds[4];
+		float iBounds[4];
+		nvgFontSize(vg, size);
+		nvgTextLetterSpacing(vg, 0.f);
+		nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+		nvgFontFaceId(vg, monoFont->handle);
+		nvgTextBounds(vg, 0.f, pos.y, prefix.c_str(), nullptr, prefixBounds);
+		nvgFontFaceId(vg, iFont->handle);
+		nvgTextBounds(vg, 0.f, pos.y, "i", nullptr, iBounds);
+
+		float prefixW = prefixBounds[2] - prefixBounds[0];
+		float iW = iBounds[2] - iBounds[0];
+		float totalW = prefixW + iW;
+		float x = pos.x - totalW / 2.f;
+		constexpr float padX = 7.f;
+		constexpr float padY = 4.f;
+
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, x - padX, pos.y - size * 0.5f - padY,
+		               totalW + 2.f * padX, size + 2.f * padY, 4.f);
+		nvgFillColor(vg, nvgRGBA(0, 0, 0, 175));
+		nvgFill(vg);
+
+		nvgFillColor(vg, color);
+		nvgFontFaceId(vg, monoFont->handle);
+		nvgText(vg, x, pos.y, prefix.c_str(), nullptr);
+		nvgFontFaceId(vg, iFont->handle);
+		nvgText(vg, x + prefixW, pos.y, "i", nullptr);
+	}
+
+	void cancelDrag() {
+		if (!editing)
+			return;
+		if (module) {
+			module->params[paramA].setValue(origParamAValue);
+			module->params[paramA + 1].setValue(origParamBValue);
+			newZ = origComplexValue;
+		}
+		editing = false;
+		cancelledDrag = true;
+	}
+
 	void setFaded(bool shouldFade) {
 		faded = shouldFade;
 	}
@@ -93,10 +188,13 @@ namespace cpx {
 			if(e.action == GLFW_PRESS){
 				e.consume(this);
 				editing=true;
+				cancelledDrag=false;
 				clickedMousePosition = APP->scene->getMousePos();
 				if(module) {
 					float complexA = module->params[paramA].getValue();
 					float complexB = module->params[paramA+1].getValue();
+					origParamAValue = complexA;
+					origParamBValue = complexB;
 					origComplexValue = Vec(complexA,-complexB);
 					origComplexLength=origComplexValue.norm();
 					
@@ -111,17 +209,26 @@ namespace cpx {
 		}
 	}
 	void onHoverKey(const HoverKeyEvent& e) override {
-		if(e.key == GLFW_KEY_ESCAPE) {
-			DEBUG("escape");
+		if(editing && e.action == GLFW_PRESS && e.key == GLFW_KEY_ESCAPE) {
+			cancelDrag();
+			e.consume(this);
 		}
 	}
 
 	void onDragEnd(const event::DragEnd &e) override {
-		editing=false;
+		if (!cancelledDrag)
+			editing=false;
+		cancelledDrag = false;
 	}
 
 	void step() override {
 		if(editing && module) {
+			if (glfwGetKey(APP->window->win, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+				cancelDrag();
+				Widget::step();
+				return;
+			}
+
 			thisPos = APP->scene->getMousePos();
 
 			//in scaled pixels
@@ -189,12 +296,20 @@ namespace cpx {
 				nvgTranslate(args.vg,pixelsOrigin.x,pixelsOrigin.y);
 
 				//circle at complex radius 1
+				float r1Pixels = originalMagnituteRadiusPixels / origComplexLength;
+				float r10Pixels = 10.f * originalMagnituteRadiusPixels / origComplexLength;
+				float labelAngleScale = 1.f / std::sqrt(2.f);
+				Vec labelOutward = Vec(labelAngleScale, -labelAngleScale).mult(10.f);
 	      nvgBeginPath(args.vg);
 	      nvgStrokeWidth(args.vg, 3.f);
 	      nvgFillColor(args.vg,  nvgRGBA(0, 10, 30,60));
-	      nvgEllipse(args.vg, 0, 0,originalMagnituteRadiusPixels/origComplexLength, originalMagnituteRadiusPixels/origComplexLength);
+	      nvgEllipse(args.vg, 0, 0,r1Pixels, r1Pixels);
 	      nvgClosePath(args.vg);
 	      nvgFill(args.vg);
+				Vec r1LabelPos = Vec(r1Pixels * labelAngleScale,
+				                      -r1Pixels * labelAngleScale).plus(labelOutward);
+				drawDragText(args.vg, "1v", r1LabelPos, nvgRGB(120, 190, 255),
+				             28.f);
 
 				//circle at the zero point
 				nvgBeginPath(args.vg);
@@ -219,9 +334,13 @@ namespace cpx {
 	      nvgBeginPath(args.vg);
 	      nvgStrokeWidth(args.vg, 3.f);
 	      nvgStrokeColor(args.vg,  nvgRGB(240, 30, 51));
-	      nvgEllipse(args.vg, 0, 0,10.f*originalMagnituteRadiusPixels/origComplexLength, 10.f*originalMagnituteRadiusPixels/origComplexLength);
+	      nvgEllipse(args.vg, 0, 0,r10Pixels, r10Pixels);
 	      nvgClosePath(args.vg);
 	      nvgStroke(args.vg);
+				Vec r10LabelPos = Vec(r10Pixels * labelAngleScale,
+				                       -r10Pixels * labelAngleScale).plus(labelOutward);
+				drawDragText(args.vg, "10v", r10LabelPos, nvgRGB(255, 120, 120),
+				             28.f);
 
 
 	     
@@ -238,10 +357,24 @@ namespace cpx {
 
 	      //line from the zero point to the users mouse
 	      
+				nvgSave(args.vg);
 	      drawArrowTo(args.vg,pixelsDiff);
+				nvgRestore(args.vg);
 	     	
 	    
 	      nvgRestore(args.vg);
+
+				nvgSave(args.vg);
+				nvgResetTransform(args.vg);
+				nvgScale(args.vg, pxRatio, pxRatio);
+				drawRectDragText(args.vg, rectDragDisplayString(newZ.x, -newZ.y),
+				                 pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 38.f)),
+				                 nvgRGB(245, 245, 245), 34.f);
+				drawDragText(args.vg, polarDragDisplayString(newZ.x, -newZ.y),
+				             pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 78.f)),
+				             nvgRGB(245, 245, 245), 34.f,
+				             NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+				nvgRestore(args.vg);
 			} 
 		}
 		Widget::drawLayer(args,layer);
