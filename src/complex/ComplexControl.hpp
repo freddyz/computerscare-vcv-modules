@@ -158,8 +158,6 @@ struct ComplexControl : Widget {
 		                 preset == ComplexControlPreset::ArrowXY ||
 		                 preset == ComplexControlPreset::ArrowPolar);
 		if (hasKnobs) {
-			bool polar = (preset == ComplexControlPreset::RThetaKnobs ||
-			              preset == ComplexControlPreset::ArrowPolar);
 			float knobScale = hasArrow ? 0.52f : 0.78f;
 
 			knobA = new TransformWidget();

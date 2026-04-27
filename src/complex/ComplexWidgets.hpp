@@ -10,12 +10,14 @@ using namespace rack;
 
 namespace cpx {
 
-	enum portModes {
-      RECT_INTERLEAVED,
-      POLAR_INTERLEAVED,
-      RECT_SEPARATED,
-      POLAR_SEPARATED
-  };
+	constexpr int RECT_INTERLEAVED = static_cast<int>(
+		cpx::complex_math::CoordinateMode::RectInterleaved);
+	constexpr int POLAR_INTERLEAVED = static_cast<int>(
+		cpx::complex_math::CoordinateMode::PolarInterleaved);
+	constexpr int RECT_SEPARATED = static_cast<int>(
+		cpx::complex_math::CoordinateMode::RectSeparated);
+	constexpr int POLAR_SEPARATED = static_cast<int>(
+		cpx::complex_math::CoordinateMode::PolarSeparated);
 
 	inline void drawArrowTo(NVGcontext* vg,math::Vec tipPosition,float baseWidth=5.f,
 	                        NVGcolor fillColor = COLOR_COMPUTERSCARE_LIGHT_GREEN,

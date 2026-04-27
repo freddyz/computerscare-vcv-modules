@@ -20,18 +20,34 @@ struct ComputerscareComplexBase;
 
 
 struct ComputerscareComplexBase : ComputerscareMenuParamModule {
-	enum wrapModes {
-        WRAP_NORMAL,
-        WRAP_CYCLE,
-        WRAP_MINIMAL,
-        WRAP_STALL
-  };
-  enum portModes {
-      RECT_INTERLEAVED,
-      POLAR_INTERLEAVED,
-      RECT_SEPARATED,
-      POLAR_SEPARATED
-  };
+	static constexpr int WRAP_NORMAL =
+		static_cast<int>(cpx::compoly::WrapMode::Normal);
+	static constexpr int WRAP_CYCLE =
+		static_cast<int>(cpx::compoly::WrapMode::Cycle);
+	static constexpr int WRAP_MINIMAL =
+		static_cast<int>(cpx::compoly::WrapMode::Minimal);
+	static constexpr int WRAP_STALL =
+		static_cast<int>(cpx::compoly::WrapMode::Stall);
+	static constexpr int RECT_INTERLEAVED = static_cast<int>(
+		cpx::complex_math::CoordinateMode::RectInterleaved);
+	static constexpr int POLAR_INTERLEAVED = static_cast<int>(
+		cpx::complex_math::CoordinateMode::PolarInterleaved);
+	static constexpr int RECT_SEPARATED = static_cast<int>(
+		cpx::complex_math::CoordinateMode::RectSeparated);
+	static constexpr int POLAR_SEPARATED = static_cast<int>(
+		cpx::complex_math::CoordinateMode::PolarSeparated);
+
+	static cpx::complex_math::CoordinateMode coordinateModeFromParam(int mode) {
+		return static_cast<cpx::complex_math::CoordinateMode>(mode);
+	}
+
+	static bool outputModeIsPolar(int mode) {
+		return cpx::complex_math::isPolar(coordinateModeFromParam(mode));
+	}
+
+	static bool outputModeIsInterleaved(int mode) {
+		return cpx::complex_math::isInterleaved(coordinateModeFromParam(mode));
+	}
 
    std::vector<std::vector <int>> getInputCompolyphony(std::vector<int> inputModeIndices, std::vector<int> inputFirstPortIndices) {
    	std::vector<std::vector <int>> output;
@@ -46,16 +62,8 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
 
 			int portOnePolyphony = inputs[inputFirstPortIndices[i]].getChannels();
 			int portTwoPolyphony = inputs[inputFirstPortIndices[i]+1].getChannels();
-			
-			if(inputMode == RECT_INTERLEAVED || inputMode == POLAR_INTERLEAVED) {
-				int totalPolyphony = portOnePolyphony+portTwoPolyphony;
-				myStuff.push_back((int) std::ceil((float) totalPolyphony/2));
-			}
-			else {
-				//separated mode
-				myStuff.push_back(std::max(portOnePolyphony,portTwoPolyphony));
-
-			}
+			myStuff.push_back(cpx::complex_math::compolyphonyForInput(
+				coordinateModeFromParam(inputMode), portOnePolyphony, portTwoPolyphony));
 
 			myStuff.push_back(portOnePolyphony);
 			myStuff.push_back(portTwoPolyphony);
@@ -91,18 +99,11 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
     }
 
     void setOutputChannels(int outIndex,int outMode,int compolyChannels) {
-        if(outMode==RECT_INTERLEAVED || outMode ==POLAR_INTERLEAVED) {
-            //interleaved
-            int numTotalPolyChannels = compolyChannels*2;
-            int numChannels1 = numTotalPolyChannels >= 16 ? 16 : numTotalPolyChannels;
-            int numChannels2 = numTotalPolyChannels >= 16 ? numTotalPolyChannels-16 : 0;
-
-            outputs[outIndex+0].setChannels(numChannels1);
-            outputs[outIndex+1].setChannels(numChannels2);
-        } else {
-            outputs[outIndex+0].setChannels(compolyChannels);
-            outputs[outIndex+1].setChannels(compolyChannels);
-        }
+        cpx::complex_math::PortChannelCounts counts =
+            cpx::complex_math::outputPortChannelCounts(
+                coordinateModeFromParam(outMode), compolyChannels);
+        outputs[outIndex+0].setChannels(counts.a);
+        outputs[outIndex+1].setChannels(counts.b);
     }
 
 	int calcOutputCompolyphony(int knobSetting,std::vector<std::vector <int>> inputCompolyphonyChannels) {
@@ -116,18 +117,40 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
 			maxOfInputsCompolyphony= std::max(maxOfInputsCompolyphony,inputCompolyphonyChannels[i][0]);
 		}
 
-		//automatic, use max of input channels compolyphony
-		if(knobSetting == 0) {
-			if(maxOfInputsCompolyphony == 0) {
-				outputCompolyphony = 1;
-			} else {
-				outputCompolyphony = maxOfInputsCompolyphony;
-			}
-		} else {
-			outputCompolyphony = knobSetting;
-		}
+		outputCompolyphony =
+			cpx::complex_math::outputCompolyphony(knobSetting, maxOfInputsCompolyphony);
 
 		return outputCompolyphony;
+	}
+
+	void readComplexInputPairToRect(int firstPortIndex, int inputMode,
+	                                float* x, float* y) {
+		cpx::complex_math::PortChannels ports = {};
+		inputs[firstPortIndex].readVoltages(ports.a.data());
+		inputs[firstPortIndex + 1].readVoltages(ports.b.data());
+
+		cpx::complex_math::RectChannels rect =
+			cpx::complex_math::readRectFromPorts(
+				ports, coordinateModeFromParam(inputMode));
+		for (int c = 0; c < cpx::complex_math::maxChannels; c++) {
+			x[c] = rect.x[c];
+			y[c] = rect.y[c];
+		}
+	}
+
+	void writeComplexOutputPairFromRect(int firstPortIndex, int outputMode,
+	                                    const float* x, const float* y) {
+		cpx::complex_math::RectChannels rect = {};
+		for (int c = 0; c < cpx::complex_math::maxChannels; c++) {
+			rect.x[c] = x[c];
+			rect.y[c] = y[c];
+		}
+
+		cpx::complex_math::PortChannels ports =
+			cpx::complex_math::writePortsFromRect(
+				rect, coordinateModeFromParam(outputMode));
+		outputs[firstPortIndex].writeVoltages(ports.a.data());
+		outputs[firstPortIndex + 1].writeVoltages(ports.b.data());
 	}
 
 	/*

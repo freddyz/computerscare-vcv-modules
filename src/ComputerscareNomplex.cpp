@@ -4,7 +4,8 @@
 
 #include <array>
 
-std::vector<std::string> wrapModeDescriptions = {"Normal (Standard Polyphonic Behavior)","Cycle (Repeat Channels)","Minimal (Pad with 0v)","Stall (Pad with final voltage)"};
+const std::vector<std::string>& wrapModeDescriptions =
+    cpx::compoly::wrapModeDescriptions();
 
 
 struct ComputerscareNomplexPumbers : ComputerscareComplexBase
@@ -183,8 +184,6 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
 
         float rectX[16] = {};
         float rectY[16] = {};
-        float rectR[16] = {};
-        float rectTheta[16] = {};
 
         readSeparatedRectInputsToRect(REAL_IN, IMAGINARY_IN, numRealInputChannels,
                                       numImaginaryInputChannels, wrapMode,
@@ -192,19 +191,11 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
                                       xyParamX, imaginaryTrimKnob, xyParamY,
                                       rectX, rectY);
 
-        bool rectNeedsPolar = outputModeIsPolar(out1mode) || outputModeIsPolar(out2mode);
-        if (rectNeedsPolar) {
-            rectToPolar(rectX, rectY, compolyChannelsRectIn, rectR, rectTheta);
-        }
-        writeOutputVoltages(RECT_IN_RECT_OUT, out1mode, compolyChannelsRectIn,
-                            rectX, rectY, rectR, rectTheta);
-        writeOutputVoltages(RECT_IN_POLAR_OUT, out2mode, compolyChannelsRectIn,
-                            rectX, rectY, rectR, rectTheta);
+        writeComplexOutputPairFromRect(RECT_IN_RECT_OUT, out1mode, rectX, rectY);
+        writeComplexOutputPairFromRect(RECT_IN_POLAR_OUT, out2mode, rectX, rectY);
 
         float polarX[16] = {};
         float polarY[16] = {};
-        float polarR[16] = {};
-        float polarTheta[16] = {};
 
         readSeparatedPolarInputsToRect(MODULUS_IN, ARGUMENT_IN,
                                        numModulusInputChannels,
@@ -214,18 +205,8 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
                                        argumentOffsetKnob, rtParamX, rtParamY,
                                        polarX, polarY);
 
-        bool polarNeedsPolar = outputModeIsPolar(out3mode) || outputModeIsPolar(out4mode);
-        if (polarNeedsPolar) {
-            rectToPolar(polarX, polarY, compolyChannelsPolarIn, polarR, polarTheta);
-        }
-        writeOutputVoltages(POLAR_IN_RECT_OUT, out3mode, compolyChannelsPolarIn,
-                            polarX, polarY, polarR, polarTheta);
-        writeOutputVoltages(POLAR_IN_POLAR_OUT, out4mode, compolyChannelsPolarIn,
-                            polarX, polarY, polarR, polarTheta);
-    }
-
-    bool outputModeIsPolar(int mode) {
-        return mode == POLAR_INTERLEAVED || mode == POLAR_SEPARATED;
+        writeComplexOutputPairFromRect(POLAR_IN_RECT_OUT, out3mode, polarX, polarY);
+        writeComplexOutputPairFromRect(POLAR_IN_POLAR_OUT, out4mode, polarX, polarY);
     }
 
     void readSeparatedRectInputsToRect(int firstInput, int secondInput,
@@ -310,52 +291,6 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
             x[c] = radius * std::cos(theta) + xOffset;
             y[c] = radius * std::sin(theta) + yOffset;
         }
-    }
-
-    void rectToPolar(float* x, float* y, int channels, float* r, float* theta) {
-        int c = 0;
-        for (; c + 3 < channels; c += 4) {
-            simd::float_4 xv = simd::float_4::load(x + c);
-            simd::float_4 yv = simd::float_4::load(y + c);
-            simd::hypot(xv, yv).store(r + c);
-            simd::atan2(yv, xv).store(theta + c);
-        }
-
-        for (; c < channels; c++) {
-            r[c] = std::hypot(x[c], y[c]);
-            theta[c] = std::atan2(y[c], x[c]);
-        }
-    }
-
-    void writeOutputVoltages(int outIndex, int outMode, int compolyChannels,
-                             float* x, float* y, float* r, float* theta) {
-        float a[16] = {};
-        float b[16] = {};
-        bool polar = outputModeIsPolar(outMode);
-        bool interleaved = outMode == RECT_INTERLEAVED || outMode == POLAR_INTERLEAVED;
-
-        for (int c = 0; c < compolyChannels; c++) {
-            float first = polar ? r[c] : x[c];
-            float second =
-                polar ? cpx::complex_math::thetaRadiansToCableVoltage(theta[c])
-                      : y[c];
-
-            if (interleaved) {
-                if (c < 8) {
-                    a[2 * c] = first;
-                    a[2 * c + 1] = second;
-                } else {
-                    b[(2 * c) % 16] = first;
-                    b[(2 * c + 1) % 16] = second;
-                }
-            } else {
-                a[c] = first;
-                b[c] = second;
-            }
-        }
-
-        outputs[outIndex].writeVoltages(a);
-        outputs[outIndex + 1].writeVoltages(b);
     }
 
     json_t *dataToJson() override {

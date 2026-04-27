@@ -143,8 +143,8 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		float prodx[16] = {};
 		float prody[16] = {};
 
-		readInputToRect(Z_INPUT,zInputMode,zx,zy);
-		readInputToRect(W_INPUT,wInputMode,wx,wy);
+		readComplexInputPairToRect(Z_INPUT,zInputMode,zx,zy);
+		readComplexInputPairToRect(W_INPUT,wInputMode,wx,wy);
 
 		for (uint8_t c = 0; c < 16; c += 4) {
 			simd::float_4 zxv = simd::float_4::load(zx + c);
@@ -158,104 +158,8 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 			(zxv * wyv + zyv * wxv).store(prody + c);
 		}
 
-		writeOutputFromRect(COMPOLY_MAIN_OUT_A,mainOutputMode,sumx,sumy);
-		writeOutputFromRect(COMPOLY_PRODUCT_OUT_A,productOutputMode,prodx,prody);
-	}
-
-	int chMap1[16]  = {0,2,4,6,8,10,12,14,0,2,4,6,8,10,12,14};
-	int chMap2[16]  = {1,3,5,7,9,11,13,15,1,3,5,7,9,11,13,15};
-
-	void writeOutputFromRect(int firstPortIndex, int outputMode, float* x, float* y) {
-		bool polar = outputMode == POLAR_SEPARATED || outputMode == POLAR_INTERLEAVED;
-		bool interleaved = outputMode == RECT_INTERLEAVED || outputMode == POLAR_INTERLEAVED;
-
-		if (polar) {
-			float r[16] = {};
-			float theta[16] = {};
-			float thetaVoltage[16] = {};
-			for (uint8_t c = 0; c < 16; c += 4) {
-				simd::float_4 xv = simd::float_4::load(x + c);
-				simd::float_4 yv = simd::float_4::load(y + c);
-				simd::hypot(xv, yv).store(r + c);
-				simd::atan2(yv, xv).store(theta + c);
-			}
-			for (uint8_t c = 0; c < 16; c++) {
-				thetaVoltage[c] =
-					cpx::complex_math::thetaRadiansToCableVoltage(theta[c]);
-			}
-			writeOutputVoltages(firstPortIndex, interleaved, r, thetaVoltage);
-		}
-		else {
-			writeOutputVoltages(firstPortIndex, interleaved, x, y);
-		}
-	}
-
-	void writeOutputVoltages(int firstPortIndex, bool interleaved, float* x, float* y) {
-		float a[16] = {};
-		float b[16] = {};
-
-		if (interleaved) {
-			for (uint8_t c = 0; c < 8; c++) {
-				a[2 * c] = x[c];
-				a[2 * c + 1] = y[c];
-			}
-			for (uint8_t c = 8; c < 16; c++) {
-				b[(2 * c) % 16] = x[c];
-				b[(2 * c + 1) % 16] = y[c];
-			}
-		}
-		else {
-			for (uint8_t c = 0; c < 16; c++) {
-				a[c] = x[c];
-				b[c] = y[c];
-			}
-		}
-
-		outputs[firstPortIndex].writeVoltages(a);
-		outputs[firstPortIndex+1].writeVoltages(b);
-	}
-
-	void readInputToRect(int firstPortIndex, int inputMode, float* x, float* y) {
-		float a[16] = {};
-		float b[16] = {};
-		inputs[firstPortIndex].readVoltages(a);
-		inputs[firstPortIndex+1].readVoltages(b);
-
-		if (inputMode == RECT_SEPARATED) {
-			for (uint8_t c = 0; c < 16; c += 4) {
-				simd::float_4::load(a + c).store(x + c);
-				simd::float_4::load(b + c).store(y + c);
-			}
-		}
-		else if (inputMode == RECT_INTERLEAVED) {
-			for (uint8_t c = 0; c < 8; c++) {
-				x[c] = a[2 * c];
-				y[c] = a[2 * c + 1];
-			}
-			for (uint8_t c = 8; c < 16; c++) {
-				x[c] = b[(2 * c) % 16];
-				y[c] = b[(2 * c + 1) % 16];
-			}
-		}
-		else if (inputMode == POLAR_SEPARATED) {
-			for (uint8_t c = 0; c < 16; c += 4) {
-				simd::float_4 r = simd::float_4::load(a + c);
-				simd::float_4 theta =
-					simd::float_4::load(b + c) *
-					cpx::complex_math::thetaRadiansPerVolt;
-				(r * simd::cos(theta)).store(x + c);
-				(r * simd::sin(theta)).store(y + c);
-			}
-		}
-		else if (inputMode == POLAR_INTERLEAVED) {
-			for (uint8_t c = 0; c < 16; c++) {
-				float r = c < 8 ? a[2 * c] : b[(2 * c) % 16];
-				float theta = cpx::complex_math::thetaCableVoltageToRadians(
-					c < 8 ? a[2 * c + 1] : b[(2 * c + 1) % 16]);
-				x[c] = r * std::cos(theta);
-				y[c] = r * std::sin(theta);
-			}
-		}
+		writeComplexOutputPairFromRect(COMPOLY_MAIN_OUT_A,mainOutputMode,sumx,sumy);
+		writeComplexOutputPairFromRect(COMPOLY_PRODUCT_OUT_A,productOutputMode,prodx,prody);
 	}
 
 	json_t *dataToJson() override {
