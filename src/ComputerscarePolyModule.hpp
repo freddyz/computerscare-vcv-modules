@@ -25,7 +25,7 @@ struct ComputerscarePolyModule : Module {
 
   virtual void checkPoly() {};
 };
-struct TinyChannelsSnapKnob : RoundKnob {
+struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
   std::shared_ptr<Svg> manualChannelsSetSvg = APP->window->loadSvg(
       asset::plugin(pluginInstance,
                     "res/components/computerscare-channels-empty-knob.svg"));
@@ -43,7 +43,7 @@ struct TinyChannelsSnapKnob : RoundKnob {
                       "res/components/computerscare-channels-empty-knob.svg")));
     shadow->opacity = 0.f;
     snap = true;
-    RoundKnob();
+    ComputerscareRoundKnob();
   }
   void draw(const DrawArgs& args) override {
     if (module) {
@@ -55,7 +55,7 @@ struct TinyChannelsSnapKnob : RoundKnob {
       }
     } else {
     }
-    RoundKnob::draw(args);
+    ComputerscareRoundKnob::draw(args);
   }
 };
 

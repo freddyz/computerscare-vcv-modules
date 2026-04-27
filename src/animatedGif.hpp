@@ -178,7 +178,7 @@ struct AnimatedGifBuddy {
     return image;
   }
   void displayGifFrame(NVGcontext* ctx, int frameNumber) {
-    if (initialized && (frameNumber < numFrames) &&
+    if (initialized && frameNumber >= 0 && frameNumber < numFrames &&
         (imageStatus == 1 && numFrames > 0)) {
       const unsigned char* dataAtFrame = framePointers[frameNumber];
       nvgUpdateImage(ctx, imageHandle, dataAtFrame);

@@ -1,3 +1,20 @@
+# 2.2.0
+Portaloof: Visual Tranformation Module
+
+Oh Peas!
+- Add VCA mode (Unipolar Gain), configurable per-channel
+
+Custom Blank:
+- Allow drag & drop image file from filesystem
+- show resize handles at module boundaries when hovering pointer
+- fix bug when switching gif and animation enabled
+
+Foly Pace & Stoly Fick Pigure
+- Fix bug where randomizing "froze" the module
+
+# 2.1.16
+- Code re-org, update build
+
 # 2.1.11
 - Horse a Doodle Doo don't randomize the menu params on module randomize
 

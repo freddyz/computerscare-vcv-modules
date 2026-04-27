@@ -5,9 +5,10 @@ int main(int argc, char** argv) {
   std::string strResult = "";
   std::string strParens = "";
   std::vector<std::string> input;
-  if (argv[2]) {
+  if (argc >= 3 && argv[2]) {
     type = std::stoi(argv[2]);
   }
+  if (argc < 2) return 0;
   if (type == 0) {
     output = parseEntireString(argv[1], b64lookup, 0);
     printVector(output);
