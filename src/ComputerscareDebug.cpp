@@ -1,923 +1,533 @@
-#include "Computerscare.hpp"
-#include "golyFunctions.hpp"
-#include "ComputerscareResizableHandle.hpp"
-
-#include <string>
-#include <sstream>
 #include <iomanip>
+#include <sstream>
+#include <string>
+
+#include "Computerscare.hpp"
 
 const int NUM_LINES = 16;
 
 struct ComputerscareDebug;
 
-struct ComputerscareDebug : ComputerscareMenuParamModule {
-	enum ParamIds {
-		MANUAL_TRIGGER,
-		MANUAL_CLEAR_TRIGGER,
-		CLOCK_CHANNEL_FOCUS,
-		INPUT_CHANNEL_FOCUS,
-		SWITCH_VIEW,
-		WHICH_CLOCK,
-		COLOR,
+std::string noModuleStringValue =
+    "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0."
+    "000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0."
+    "000000\n+0.000000\n+0.000000\n+0.000000\n";
 
-		DRAW_MODE,
-		TEXT_MODE,
-		COMPOSITE_OP,
-		OTHER_MODES=COMPOSITE_OP+13,
-		NUM_PARAMS
-	};
-	enum InputIds {
-		VAL_INPUT,
-		TRG_INPUT,
-		CLR_INPUT,
-		NUM_INPUTS
-	};
-	enum OutputIds {
-		POLY_OUTPUT,
-		NUM_OUTPUTS
-	};
-	enum LightIds {
-		BLINK_LIGHT,
-		NUM_LIGHTS
-	};
+struct ComputerscareDebug : Module {
+  enum ParamIds {
+    MANUAL_TRIGGER,
+    MANUAL_CLEAR_TRIGGER,
+    CLOCK_CHANNEL_FOCUS,
+    INPUT_CHANNEL_FOCUS,
+    SWITCH_VIEW,
+    WHICH_CLOCK,
+    NUM_PARAMS
+  };
+  enum InputIds { VAL_INPUT, TRG_INPUT, CLR_INPUT, NUM_INPUTS };
+  enum OutputIds { POLY_OUTPUT, NUM_OUTPUTS };
+  enum LightIds { BLINK_LIGHT, NUM_LIGHTS };
 
-	std::vector<std::string> drawModes = {"Off","Horizontal Bars", "Dots", "Lines", "Lines+Dot","Connected Shape", "Connected Shape + Dots","8 Arrows"};
-	std::vector<std::string> textModes= {"Off","Poly List","Complex Rect","Complex Polar"};
-	std::vector<std::string> compOps = {"NVG_SOURCE_OVER","NVG_SOURCE_IN","NVG_SOURCE_OUT","NVG_ATOP","NVG_DESTINATION_OVER","NVG_DESTINATION_IN","NVG_DESTINATION_OUT","NVG_DESTINATION_ATOP","NVG_LIGHTER","NVG_COPY","NVG_XOR"};
+  std::string defaultStrValue =
+      "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0."
+      "000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0."
+      "000000\n+0.000000\n+0.000000\n+0.000000\n";
+  std::string strValue =
+      "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0."
+      "000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0."
+      "000000\n0.000000\n";
 
-	std::vector<std::vector<std::string>> allModes = {drawModes,textModes,compOps};
+  float logLines[NUM_LINES] = {0.f};
 
-	float logLines[NUM_LINES] = {0.f};
+  int lineCounter = 0;
 
-	int lineCounter = 0;
+  int clockChannel = 0;
+  int inputChannel = 0;
 
-	bool showValues = true;
+  int clockMode = 1;
+  int inputMode = 2;
 
-	int clockChannel = 0;
-	int inputChannel = 0;
+  int outputRangeEnum = 0;
 
-	int clockMode = 1;
-	int inputMode = 2;
+  float outputRanges[8][2];
 
-	int outputRangeEnum = 5;
+  int stepCounter;
+  dsp::SchmittTrigger clockTriggers[NUM_LINES];
+  dsp::SchmittTrigger clearTrigger;
+  dsp::SchmittTrigger manualClockTrigger;
+  dsp::SchmittTrigger manualClearTrigger;
 
-	int numOutputChannels = 16;
+  enum clockAndInputModes { SINGLE_MODE, INTERNAL_MODE, POLY_MODE };
 
+  ComputerscareDebug() {
+    config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+    configButton(MANUAL_TRIGGER, "Manual Trigger");
+    configButton(MANUAL_CLEAR_TRIGGER, "Reset/Clear");
+    configSwitch(SWITCH_VIEW, 0.0f, 2.0f, 2.0f, "Input Mode",
+                 {"Single-Channel", "Internal", "Polyphonic"});
+    configSwitch(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode",
+                 {"Single-Channel", "Internal", "Polyphonic"});
+    configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
+    configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 
-	float outputRanges[8][2];
+    configInput(VAL_INPUT, "Value");
+    configInput(TRG_INPUT, "Clock");
+    configInput(CLR_INPUT, "Reset");
+    configOutput(POLY_OUTPUT, "Main");
 
-	int stepCounter;
-	dsp::SchmittTrigger clockTriggers[NUM_LINES];
-	dsp::SchmittTrigger clearTrigger;
-	dsp::SchmittTrigger manualClockTrigger;
-	dsp::SchmittTrigger manualClearTrigger;
+    outputRanges[0][0] = 0.f;
+    outputRanges[0][1] = 10.f;
+    outputRanges[1][0] = -5.f;
+    outputRanges[1][1] = 5.f;
+    outputRanges[2][0] = 0.f;
+    outputRanges[2][1] = 5.f;
+    outputRanges[3][0] = 0.f;
+    outputRanges[3][1] = 1.f;
+    outputRanges[4][0] = -1.f;
+    outputRanges[4][1] = 1.f;
+    outputRanges[5][0] = -10.f;
+    outputRanges[5][1] = 10.f;
+    outputRanges[6][0] = -2.f;
+    outputRanges[6][1] = 2.f;
+    outputRanges[7][0] = 0.f;
+    outputRanges[7][1] = 2.f;
 
-	enum clockAndInputModes {
-		SINGLE_MODE,
-		INTERNAL_MODE,
-		POLY_MODE
-	};
+    stepCounter = 0;
 
-	ComputerscareDebug() {
-		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+    getParamQuantity(SWITCH_VIEW)->randomizeEnabled = false;
+    getParamQuantity(WHICH_CLOCK)->randomizeEnabled = false;
+    getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
+    getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
 
-		configButton(MANUAL_TRIGGER, "Manual Trigger");
-		configButton(MANUAL_CLEAR_TRIGGER, "Reset/Clear");
-		configSwitch(SWITCH_VIEW, 0.0f, 2.0f, 2.0f, "Input Mode", {"Single-Channel", "Internal", "Polyphonic"});
-		configSwitch(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode", {"Single-Channel", "Internal", "Polyphonic"});
-		configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
-		configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
+    randomizeStorage();
+  }
+  void process(const ProcessArgs& args) override;
 
-		configParam(COLOR, 0.f, 15.f, 0.f, "Color");
+  void onRandomize() override { randomizeStorage(); }
 
-		configMenuParam(DRAW_MODE, 0.f, "Draw Mode", drawModes);
-		configMenuParam(TEXT_MODE, 1.f, "Text Mode", textModes);
-		configMenuParam(COMPOSITE_OP, 0.f, "Composite Operation", compOps);
+  void randomizeStorage() {
+    float min = outputRanges[outputRangeEnum][0];
+    float max = outputRanges[outputRangeEnum][1];
+    float spread = max - min;
+    for (int i = 0; i < 16; i++) {
+      logLines[i] = min + spread * random::uniform();
+    }
+  }
 
-		configInput(VAL_INPUT, "Value");
-		configInput(TRG_INPUT, "Clock");
-		configInput(CLR_INPUT, "Reset");
-		configOutput(POLY_OUTPUT, "Main");
+  json_t* dataToJson() override {
+    json_t* rootJ = json_object();
 
+    json_object_set_new(rootJ, "outputRange", json_integer(outputRangeEnum));
 
+    json_t* sequencesJ = json_array();
 
-		outputRanges[0][0] = 0.f;
-		outputRanges[0][1] = 10.f;
-		outputRanges[1][0] = -5.f;
-		outputRanges[1][1] = 5.f;
-		outputRanges[2][0] = 0.f;
-		outputRanges[2][1] = 5.f;
-		outputRanges[3][0] = 0.f;
-		outputRanges[3][1] = 1.f;
-		outputRanges[4][0] = -1.f;
-		outputRanges[4][1] = 1.f;
-		outputRanges[5][0] = -10.f;
-		outputRanges[5][1] = 10.f;
-		outputRanges[6][0] = -2.f;
-		outputRanges[6][1] = 2.f;
-		outputRanges[7][0] = 0.f;
-		outputRanges[7][1] = 2.f;
+    for (int i = 0; i < 16; i++) {
+      json_t* sequenceJ = json_real(logLines[i]);
+      json_array_append_new(sequencesJ, sequenceJ);
+    }
+    json_object_set_new(rootJ, "lines", sequencesJ);
+    return rootJ;
+  }
 
-		stepCounter = 0;
+  void dataFromJson(json_t* rootJ) override {
+    float val;
 
-		getParamQuantity(SWITCH_VIEW)->randomizeEnabled = false;
-		getParamQuantity(WHICH_CLOCK)->randomizeEnabled = false;
-		getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
-		getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
+    json_t* outputRangeEnumJ = json_object_get(rootJ, "outputRange");
+    if (outputRangeEnumJ) {
+      outputRangeEnum = json_integer_value(outputRangeEnumJ);
+    }
 
-		getParamQuantity(DRAW_MODE)->randomizeEnabled = false;
-		getParamQuantity(TEXT_MODE)->randomizeEnabled = false;
+    json_t* sequencesJ = json_object_get(rootJ, "lines");
 
-		randomizeStorage();
-	}
+    if (sequencesJ) {
+      for (int i = 0; i < 16; i++) {
+        json_t* sequenceJ = json_array_get(sequencesJ, i);
+        if (sequenceJ) val = json_real_value(sequenceJ);
+        logLines[i] = val;
+      }
+    }
+  }
+  int setChannelCount() {
+    clockMode = floor(params[WHICH_CLOCK].getValue());
 
-	void process(const ProcessArgs &args) override;
+    inputMode = floor(params[SWITCH_VIEW].getValue());
 
-	void onRandomize() override {
-		randomizeStorage();
-	}
+    int numInputChannels = inputs[VAL_INPUT].getChannels();
+    int numClockChannels = inputs[TRG_INPUT].getChannels();
 
-	void randomizeStorage() {
-		float min = outputRanges[outputRangeEnum][0];
-		float max = outputRanges[outputRangeEnum][1];
-		float spread = max - min;
-		for (int i = 0; i < 16; i++) {
-			logLines[i] = min + spread * random::uniform();
-		}
-	}
-	void pressedChannelLabelNumber(int dex) {
-		int paramDex = (DRAW_MODE+dex)%OTHER_MODES;
-		int currentModeNumOptions = allModes[dex % allModes.size()].size();
-		int current = params[paramDex].getValue();
+    bool inputConnected = inputs[VAL_INPUT].isConnected();
+    bool clockConnected = inputs[TRG_INPUT].isConnected();
 
-		params[paramDex].setValue((current+1)%(currentModeNumOptions));
-	}
+    bool noConnection = !inputConnected && !clockConnected;
 
-	json_t *dataToJson() override {
-		json_t *rootJ = json_object();
+    int numOutputChannels = 16;
 
-		json_object_set_new(rootJ, "outputRange", json_integer(outputRangeEnum));
+    if (!noConnection) {
+      if (clockMode == SINGLE_MODE) {
+        if (inputMode == POLY_MODE) {
+          numOutputChannels = numInputChannels;
+        }
+      } else if (clockMode == INTERNAL_MODE) {
+        if (inputMode == POLY_MODE) {
+          numOutputChannels = numInputChannels;
+          for (int i = 0; i < 16; i++) {
+            logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+          }
+        }
+      } else if (clockMode == POLY_MODE) {
+        if (inputMode == POLY_MODE) {
+          numOutputChannels = std::min(numInputChannels, numClockChannels);
+        } else if (inputMode == SINGLE_MODE) {
+          numOutputChannels = numClockChannels;
+        } else if (inputMode == INTERNAL_MODE) {
+          numOutputChannels = numClockChannels;
+        }
+      }
+    }
+    outputs[POLY_OUTPUT].setChannels(numOutputChannels);
 
-		json_t *sequencesJ = json_array();
-
-		for (int i = 0; i < 16; i++) {
-			json_t *sequenceJ = json_real(logLines[i]);
-			json_array_append_new(sequencesJ, sequenceJ);
-		}
-		json_object_set_new(rootJ, "lines", sequencesJ);
-		return rootJ;
-	}
-
-	void dataFromJson(json_t *rootJ) override {
-		float val;
-
-		json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
-		if (outputRangeEnumJ) { outputRangeEnum = json_integer_value(outputRangeEnumJ); }
-
-		json_t *sequencesJ = json_object_get(rootJ, "lines");
-
-		if (sequencesJ) {
-			for (int i = 0; i < 16; i++) {
-				json_t *sequenceJ = json_array_get(sequencesJ, i);
-				if (sequenceJ)
-					val = json_real_value(sequenceJ);
-				logLines[i] = val;
-			}
-		}
-
-	}
-	int setChannelCount() {
-		clockMode = floor(params[WHICH_CLOCK].getValue());
-
-		inputMode = floor(params[SWITCH_VIEW].getValue());
-
-
-		int numInputChannels = inputs[VAL_INPUT].getChannels();
-		int numClockChannels = inputs[TRG_INPUT].getChannels();
-
-		bool inputConnected = inputs[VAL_INPUT].isConnected();
-		bool clockConnected = inputs[TRG_INPUT].isConnected();
-
-		bool noConnection = !inputConnected && !clockConnected;
-
-		int numOutputChannels = 16;
-
-		if (!noConnection) {
-
-			if (clockMode == SINGLE_MODE) {
-				if (inputMode == POLY_MODE) {
-					numOutputChannels = numInputChannels;
-				}
-			}
-			else if (clockMode == INTERNAL_MODE) {
-				if (inputMode == POLY_MODE) {
-					numOutputChannels = numInputChannels;
-					for (int i = 0; i < 16; i++) {
-						logLines[i] = inputs[VAL_INPUT].getVoltage(i);
-					}
-				}
-			}
-			else if (clockMode == POLY_MODE) {
-				if (inputMode == POLY_MODE) {
-					numOutputChannels = std::min(numInputChannels, numClockChannels);
-				}
-				else if (inputMode == SINGLE_MODE) {
-					numOutputChannels = numClockChannels;
-				}
-				else if (inputMode == INTERNAL_MODE) {
-					numOutputChannels = numClockChannels;
-				}
-
-			}
-		}
-		outputs[POLY_OUTPUT].setChannels(numOutputChannels);
-
-		return numOutputChannels;
-	}
+    return numOutputChannels;
+  }
 };
 
-void ComputerscareDebug::process(const ProcessArgs &args) {
-	std::string thisVal;
+void ComputerscareDebug::process(const ProcessArgs& args) {
+  std::string thisVal;
 
-	clockMode = floor(params[WHICH_CLOCK].getValue());
+  clockMode = floor(params[WHICH_CLOCK].getValue());
 
-	inputMode = floor(params[SWITCH_VIEW].getValue());
+  inputMode = floor(params[SWITCH_VIEW].getValue());
 
-	inputChannel = floor(params[INPUT_CHANNEL_FOCUS].getValue());
-	clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].getValue());
+  inputChannel = floor(params[INPUT_CHANNEL_FOCUS].getValue());
+  clockChannel = floor(params[CLOCK_CHANNEL_FOCUS].getValue());
 
-	bool inputConnected = inputs[VAL_INPUT].isConnected();
+  bool inputConnected = inputs[VAL_INPUT].isConnected();
 
-	float min = outputRanges[outputRangeEnum][0];
-	float max = outputRanges[outputRangeEnum][1];
-	float spread = max - min;
+  float min = outputRanges[outputRangeEnum][0];
+  float max = outputRanges[outputRangeEnum][1];
+  float spread = max - min;
 
-	if (clockMode == SINGLE_MODE) {
-		if (clockTriggers[clockChannel].process(inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
-			if (inputMode == POLY_MODE) {
-				for (int i = 0; i < 16; i++) {
-					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
-				}
-			}
-			else if (inputMode == SINGLE_MODE) {
-				for ( unsigned int a = NUM_LINES - 1; a > 0; a = a - 1 )
-				{
-					logLines[a] = logLines[a - 1];
-				}
+  if (clockMode == SINGLE_MODE) {
+    if (clockTriggers[clockChannel].process(
+            inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) ||
+        manualClockTrigger.process(params[MANUAL_TRIGGER].getValue())) {
+      if (inputMode == POLY_MODE) {
+        for (int i = 0; i < 16; i++) {
+          logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+        }
+      } else if (inputMode == SINGLE_MODE) {
+        for (unsigned int a = NUM_LINES - 1; a > 0; a = a - 1) {
+          logLines[a] = logLines[a - 1];
+        }
 
+        logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
+      } else if (inputMode == INTERNAL_MODE) {
+        for (int i = 0; i < 16; i++) {
+          logLines[i] = min + spread * random::uniform();
+        }
+      }
+    }
+  } else if (clockMode == INTERNAL_MODE) {
+    if (inputConnected) {
+      if (inputMode == POLY_MODE) {
+        for (int i = 0; i < 16; i++) {
+          logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+        }
+      } else if (inputMode == SINGLE_MODE) {
+        logLines[inputChannel] = inputs[VAL_INPUT].getVoltage(inputChannel);
+      }
+    }
+    if (inputMode == INTERNAL_MODE) {
+      for (int i = 0; i < 16; i++) {
+        logLines[i] = min + spread * random::uniform();
+      }
+    }
+  } else if (clockMode == POLY_MODE) {
+    if (inputMode == POLY_MODE) {
+      for (int i = 0; i < 16; i++) {
+        if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) ||
+            manualClockTrigger.process(params[MANUAL_TRIGGER].getValue())) {
+          logLines[i] = inputs[VAL_INPUT].getVoltage(i);
+        }
+      }
+    } else if (inputMode == SINGLE_MODE) {
+      for (int i = 0; i < 16; i++) {
+        if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) ||
+            manualClockTrigger.process(params[MANUAL_TRIGGER].getValue())) {
+          logLines[i] = inputs[VAL_INPUT].getVoltage(inputChannel);
+        }
+      }
+    } else if (inputMode == INTERNAL_MODE) {
+      for (int i = 0; i < 16; i++) {
+        if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) ||
+            manualClockTrigger.process(params[MANUAL_TRIGGER].getValue())) {
+          logLines[i] = min + spread * random::uniform();
+        }
+      }
+    }
+  }
 
-				logLines[0] = inputs[VAL_INPUT].getVoltage(inputChannel);
-			}
-			else if (inputMode == INTERNAL_MODE) {
-				for (int i = 0; i < 16; i++) {
-					logLines[i] = min + spread * random::uniform();
-				}
-			}
-		}
-	}
-	else if (clockMode == INTERNAL_MODE) {
-		if (inputConnected) {
-			if (inputMode == POLY_MODE) {
-				for (int i = 0; i < 16; i++) {
-					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
-				}
-			}
-			else if (inputMode == SINGLE_MODE) {
-				logLines[inputChannel] = inputs[VAL_INPUT].getVoltage(inputChannel);
-			}
-		}
-		if (inputMode == INTERNAL_MODE) {
-			for (int i = 0; i < 16; i++) {
-				logLines[i] = min + spread * random::uniform();
-			}
-		}
-	}
-	else if (clockMode == POLY_MODE) {
-		if (inputMode == POLY_MODE) {
-			for (int i = 0; i < 16; i++) {
-				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
-					logLines[i] = inputs[VAL_INPUT].getVoltage(i);
-				}
-			}
-		}
-		else if (inputMode == SINGLE_MODE) {
-			for (int i = 0; i < 16; i++) {
-				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
-					logLines[i] = inputs[VAL_INPUT].getVoltage(inputChannel);
-				}
-			}
-		}
-		else if (inputMode == INTERNAL_MODE) {
-			for (int i = 0; i < 16; i++) {
-				if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) || manualClockTrigger.process(params[MANUAL_TRIGGER].getValue()) ) {
-					logLines[i] = min + spread * random::uniform();
-				}
+  if (clearTrigger.process(inputs[CLR_INPUT].getVoltage() / 2.f) ||
+      manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].getValue())) {
+    for (unsigned int a = 0; a < NUM_LINES; a++) {
+      logLines[a] = 0;
+    }
+    strValue = defaultStrValue;
+  }
 
-			}
-		}
-	}
+  int numOutputChannels = setChannelCount();
 
-	if (clearTrigger.process(inputs[CLR_INPUT].getVoltage() / 2.f) || manualClearTrigger.process(params[MANUAL_CLEAR_TRIGGER].getValue())) {
-		for ( unsigned int a = 0; a < NUM_LINES; a++ )
-		{
-			logLines[a] = 0;
-		}
-	}
+  stepCounter++;
 
-	numOutputChannels = setChannelCount();
+  if (stepCounter > 1025) {
+    stepCounter = 0;
 
+    thisVal = "";
+    std::string thisLine = "";
+    for (unsigned int a = 0; a < NUM_LINES; a = a + 1) {
+      if (a < (unsigned int)numOutputChannels) {
+        thisLine = logLines[a] >= 0 ? "+" : "";
+        thisLine += std::to_string(logLines[a]);
+        thisLine = thisLine.substr(0, 9);
+      } else {
+        thisLine = "";
+      }
 
-		for ( unsigned int a = 0; a < NUM_LINES; a = a + 1 )
-		{
-			outputs[POLY_OUTPUT].setVoltage(logLines[a], a);
-		}
-	
+      thisVal += (a > 0 ? "\n" : "") + thisLine;
+
+      outputs[POLY_OUTPUT].setVoltage(logLines[a], a);
+    }
+    strValue = thisVal;
+  }
 }
-struct DebugViz : TransparentWidget {
-	ComputerscareDebug *module;
-
-	DebugViz() {
-
-	}
-	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
-		int drawMode = 1;
-		int globalCompositeOperation = 0;
-		if(module) {
-			drawMode=module->params[ComputerscareDebug::DRAW_MODE].getValue();
-			globalCompositeOperation=module->params[ComputerscareDebug::COMPOSITE_OP].getValue();
-		}
-	
-			if (layer == 1) {
-				//horiz lines
-				if(drawMode == 1) {
-
-					float valsToDraw[16] = {1.f};
-					float colorsToDraw[16] = {1.f};
-
-					float lengthsToDraw[16] = {1.f};
-					int numChannelsToDraw = 16;
-					float colorArg;
-					float ceilVal=35.f;
-					float floorVal = -ceilVal;
-
-
-					if (module) {
-						numChannelsToDraw = module->numOutputChannels;
-						colorArg = module->params[ComputerscareDebug::COLOR].getValue();
-
-
-						for (int i = 0; i < numChannelsToDraw; i++) {
-							//valsToDraw[i] = module->goly.currentValues[i];
-							valsToDraw[i]=module->logLines[i];
-							colorsToDraw[i]=module->logLines[i]/3;
-							lengthsToDraw[i]=std::max(floorVal,std::min(5*module->logLines[i],ceilVal));
-						}
-					}
-					else {
-						for (int i = 0; i < numChannelsToDraw; i++) {
-							float rr = 10-20*random::uniform();
-							lengthsToDraw[i] = clamp(rr*5,floorVal,ceilVal);
-							colorsToDraw[i]=rr/3;
-						}
-						colorArg = random::uniform() * 2;
-					}
-					DrawHelper draw = DrawHelper(args.vg);
-					Points pts = Points();
-
-					nvgTranslate(args.vg, box.size.x / 2, box.size.y / 2 + 5);
-					pts.linear(16, Vec(0, -box.size.y / 2), Vec(0, 240));
-					std::vector<Vec> rThetaVec;
-					std::vector<NVGcolor> colors;
-					std::vector<Vec> thicknesses;
-
-					for (int i = 0; i < 16; i++) {
-						rThetaVec.push_back(Vec(lengthsToDraw[i], 0.f));
-
-						colors.push_back(draw.sincolor(-colorsToDraw[i]/5, {2.2, 1.1, 1.3}));
-
-						thicknesses.push_back(Vec(260 / (17.f), 0));
-					}
-					draw.drawLines(pts.get(), rThetaVec, colors, thicknesses);
-			} else if(drawMode==2 || drawMode == 3 || drawMode == 4 || drawMode == 5|| drawMode == 6) {
-					//draw as dots, assuming [x0,y0,x1,y1,...]
-					nvgGlobalCompositeOperation(args.vg, globalCompositeOperation);
-
-
-					float xx[16] = {};
-					float yy[16] = {};
-					float colorsToDraw[16] = {1.f};
-
-					int numChannelsToDraw = 16;
-					float colorArg;
-					Points pts = Points();
-
-					if (module) {
-						numChannelsToDraw = module->numOutputChannels;
-						colorArg = module->params[ComputerscareDebug::COLOR].getValue();
-
-						for (int i = 0; i < 8; i++) {
-							xx[i]=module->logLines[2*i];
-							yy[i]=-module->logLines[2*i+1];
-							colorsToDraw[i]=module->logLines[2*i]/3;
-						}
-					}
-					else {
-						for (int i = 0; i < 8; i++) {
-							xx[i]=-10+random::uniform() * 20;
-							yy[i]=-10+random::uniform() * 20;
-							colorsToDraw[i]=-10+random::uniform() * 20;
-						}
-					}
-					DrawHelper draw = DrawHelper(args.vg);
-					
-
-					nvgTranslate(args.vg, box.size.x / 2, box.size.y / 3 -15.f);
-
-					int numPoints = std::ceil((float)numChannelsToDraw/2);
-
-					for(int i = 0; i < numPoints; i++) {
-						float scale = 2;
-						float x = clamp(5*xx[i],-30.f,30.f);
-						float y = clamp(12*yy[i],-135.f,95.f);
-						pts.addPoint(x,y);
-					}
-					
-
-
-					std::vector<Vec> polyVals;
-					std::vector<NVGcolor> colors;
-					std::vector<Vec> thicknesses;
-				
-			
-					std::vector<Vec> pointsVec = pts.get();
-					Points allOrigin = Points();
-					//allOrigin.linear(numPoints,Vec(0,0),Vec(0,0));
-					allOrigin.samePoint(numPoints,Vec(0,0));
-
-					for (int i = 0; i < 16; i++) {
-						colors.push_back(draw.sincolor(-colorsToDraw[i]/3, {1, 1, 2}));
-					}
-
-					//std::vector<Vec> rthetaVec = rthetaVec.linear(16, Vec(0, 0), Vec(0, 0));
-					Points rtheta = Points();
-					rtheta.linear(numPoints, Vec(40, 0), Vec(0, 12));
-
-					if(drawMode==2) {
-						draw.drawDots(pointsVec,colors,5.f);
-					} else if(drawMode==3) {
-						//lines from origin
-						draw.drawLinesFromTo(allOrigin.get(),pts.get(),nvgRGB(30,120,230),1.2f);
-					} else if(drawMode == 4) {
-						//thin line and dot
-						draw.drawLinesFromTo(allOrigin.get(),pts.get(),nvgRGBA(30,120,230,100),1.2f);
-						draw.drawDots(pointsVec,colors,5.f);
-					} else if(drawMode == 5) {
-						//connected shape
-						draw.drawShape(pointsVec,nvgRGBA(30,120,230,50),nvgRGB(120,0,40),1.f);
-					} else if(drawMode == 6) {
-						//connected shape and dots
-						draw.drawShape(pointsVec,nvgRGBA(30,120,230,50),nvgRGB(120,0,40),1.f);
-						draw.drawDots(pointsVec,colors,5.f);
-					}
-				
-			} else if(drawMode==7) {
-				
-			}
-		}
-	}
-};
 struct HidableSmallSnapKnob : SmallSnapKnob {
-	bool visible = true;
-	int hackIndex = 0;
-	ComputerscareDebug *module;
+  bool visible = true;
+  int hackIndex = 0;
+  ComputerscareDebug* module;
 
-	HidableSmallSnapKnob() {
-		SmallSnapKnob();
-	}
-	void draw(const DrawArgs &args) override {
-		if (module ? (hackIndex == 0 ? module->clockMode == 0 : module->inputMode == 0) : true) {
-			Widget::draw(args);
-		}
-	};
+  HidableSmallSnapKnob() { SmallSnapKnob(); }
+  void draw(const DrawArgs& args) override {
+    if (module
+            ? (hackIndex == 0 ? module->clockMode == 0 : module->inputMode == 0)
+            : true) {
+      Widget::draw(args);
+    }
+  };
 };
 ////////////////////////////////////
-struct VerticalListOfNumbers : Widget {
+struct StringDisplayWidget3 : Widget {
+  std::string value;
+  std::string fontPath = "res/fonts/Oswald-Regular.ttf";
+  ComputerscareDebug* module;
 
-	std::string value;
-	std::string fontPath = "res/fonts/RobotoMono-Regular.ttf";
-	ComputerscareDebug * module;
+  StringDisplayWidget3() {};
 
-	VerticalListOfNumbers() {
-	};
+  void draw(const DrawArgs& ctx) override {
+    // Background
+    NVGcolor backgroundColor = nvgRGB(0x10, 0x00, 0x10);
+    NVGcolor StrokeColor = nvgRGB(0xC0, 0xC7, 0xDE);
+    nvgBeginPath(ctx.vg);
+    nvgRoundedRect(ctx.vg, -1.0, -1.0, box.size.x + 2, box.size.y + 2, 4.0);
+    nvgFillColor(ctx.vg, StrokeColor);
+    nvgFill(ctx.vg);
+    nvgBeginPath(ctx.vg);
+    nvgRoundedRect(ctx.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
+    nvgFillColor(ctx.vg, backgroundColor);
+    nvgFill(ctx.vg);
+  }
+  void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
+    if (layer == 1) {
+      std::shared_ptr<Font> font =
+          APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
 
-	std::string makeTextList(int textMode) {
-		std::string thisVal = "";
-		std::string thisLine = "";
-		int numOutputChannels = floor(random::uniform()*15 + 1);
+      // text
+      nvgFontSize(args.vg, 15);
+      nvgFontFaceId(args.vg, font->handle);
+      nvgTextLetterSpacing(args.vg, 2.5);
 
-		if(module) {
-			numOutputChannels = module->numOutputChannels;
-		}
-
-		if(textMode==1) {
-			//list of 16 polyphonic floats
-			for ( int ch = 0; ch < NUM_LINES; ch++ )
-			{
-				if (ch < numOutputChannels) {
-					float val = 0.f;
-					if(module) {
-						val = module->logLines[ch];
-					} else {
-						val = 10-20*random::uniform();
-					}
-					
-					std::string valAsString= std::to_string(val);
-
-					thisLine = valAsString.substr(0,1)=="-" ? "" : "+";
-					thisLine += valAsString;
-					thisLine = thisLine.substr(0, 9);
-				}
-				else {
-					thisLine = "";
-				}
-
-				thisVal += (ch > 0 ? "\n" : "") + thisLine;
-			}
-		}
-		else if(textMode==2) {
-			//complex rect
-			for (  int ch = 0; ch < NUM_LINES; ch+=2 )
-			{
-				if (ch < numOutputChannels) {
-					float re = 0.f;
-					float im = 0.f;
-					if(module) {
-						re = module->logLines[ch];
-						im = module->logLines[ch+1];
-					} else {
-						re = 10-20*random::uniform();
-						im = 10-20*random::uniform();
-					}
-
-					thisLine=std::to_string(re).substr(0, 4);
-					thisLine+=im >=0 ? "+" : "";
-					thisLine+=std::to_string(im).substr(0, im < 0 ? 5 : 4)+"i";
-				}
-				else {
-					thisLine = "";
-				}
-
-				thisVal += (ch > 0 ? "\n" : "") + thisLine;
-			}
-		}
-		else if(textMode==3) {
-			//complex polar
-			for (  int ch = 0; ch < NUM_LINES; ch+=2 )
-			{
-				if (ch < numOutputChannels) {
-					float r = 0.f;
-					float theta = 0.f;
-					if(module) {
-						r = module->logLines[ch];
-						theta = module->logLines[ch+1];
-					} else {
-						r = 10-20*random::uniform();
-						theta = 10-20*random::uniform();
-					}
-
-					thisLine=std::to_string(r).substr(0, 4);
-					thisLine+="‹";
-					thisLine+=std::to_string(theta).substr(0, theta < 0 ? 5 : 4);
-				}
-				else {
-					thisLine = "";
-				}
-
-				thisVal += (ch > 0 ? "\n" : "") + thisLine;
-			}
-		}
-		return thisVal;
-	}
-
-	void draw(const DrawArgs &ctx) override
-	{
-		// Background
-		NVGcolor backgroundColor = nvgRGB(0x10, 0x00, 0x10);
-		NVGcolor StrokeColor = nvgRGB(0xC0, 0xC7, 0xDE);
-		nvgBeginPath(ctx.vg);
-		nvgRoundedRect(ctx.vg, -1.0, -1.0, box.size.x + 2, box.size.y + 2, 4.0);
-		nvgFillColor(ctx.vg, StrokeColor);
-		nvgFill(ctx.vg);
-		nvgBeginPath(ctx.vg);
-		nvgRoundedRect(ctx.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
-		nvgFillColor(ctx.vg, backgroundColor);
-		nvgFill(ctx.vg);
-	}
-	void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
-		if (layer == 1) {
-
-			int textMode = module ? module->params[ComputerscareDebug::TEXT_MODE].getValue() : 1;
-			std::shared_ptr<Font> font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
-
-			if(textMode!=0) {
-				float fontSize = 14.f;
-				nvgFontSize(args.vg, fontSize);
-				nvgFontFaceId(args.vg, font->handle);
-				nvgTextLetterSpacing(args.vg, textMode==1 ? 1.4f : 0.5f);
-				nvgTextLineHeight(args.vg, 1.08f);
-
-				std::string textToDraw = this->makeTextList(textMode);
-				Vec textPos = Vec(2.0f, 11.0f);
-				NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-				nvgFillColor(args.vg, textColor);
-				nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
-			}
-		}
-		Widget::drawLayer(args, layer);
-	}
+      std::string textToDraw = module ? module->strValue : noModuleStringValue;
+      Vec textPos = Vec(6.0f, 12.0f);
+      NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
+      nvgFillColor(args.vg, textColor);
+      nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
+    }
+    Widget::drawLayer(args, layer);
+  }
 };
 struct ConnectedSmallLetter : SmallLetterDisplay {
-	ComputerscareDebug *module;
-	int index;
-	ConnectedSmallLetter(int dex) {
-		index = dex;
-		value = std::to_string(dex + 1);
-	}
-	void onButton(const ButtonEvent& e) {
-			
-			if(e.action == GLFW_PRESS){
-					if(module) {
-						module->pressedChannelLabelNumber(index);
-	    				e.consume(this);
-	    			
-	    			
-					}
-				}
-					
-		}
-	void draw(const DrawArgs &ctx) override {
-		if (module) {
-			int cm = module->clockMode;
-			int im = module->inputMode;
-			int cc = module->clockChannel;
-			int ic = module->inputChannel;
+  ComputerscareDebug* module;
+  int index;
+  ConnectedSmallLetter(int dex) {
+    index = dex;
+    value = std::to_string(dex + 1);
+  }
+  void draw(const DrawArgs& ctx) override {
+    if (module) {
+      int cm = module->clockMode;
+      int im = module->inputMode;
+      int cc = module->clockChannel;
+      int ic = module->inputChannel;
 
-			// both:pink
-			// clock: green
-			// input:yellow
-			baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
-			if (cm == 0 && im == 0 && cc == index && ic == index)  {
-				baseColor = COLOR_COMPUTERSCARE_PINK;
-			}
-			else {
-				if (cm == 0 && cc == index) {
-					baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
-				}
-				if (im == 0 && ic == index) {
-					baseColor = COLOR_COMPUTERSCARE_YELLOW;
-				}
-			}
-		}
-		SmallLetterDisplay::draw(ctx);
-	}
+      // both:pink
+      // clock: green
+      // input:yellow
+      baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+      if (cm == 0 && im == 0 && cc == index && ic == index) {
+        baseColor = COLOR_COMPUTERSCARE_PINK;
+      } else {
+        if (cm == 0 && cc == index) {
+          baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+        }
+        if (im == 0 && ic == index) {
+          baseColor = COLOR_COMPUTERSCARE_YELLOW;
+        }
+      }
+    }
+    SmallLetterDisplay::draw(ctx);
+  }
 };
-struct ComputerscareDebugWidget : ModuleWidget {	
-//int drawMode = 0;
-	bool showValues = true;
-	int textMode = 0;
+struct ComputerscareDebugWidget : ModuleWidget {
+  ComputerscareDebugWidget(ComputerscareDebug* module) {
+    setModule(module);
+    setPanel(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/panels/ComputerscareDebugPanel.svg")));
 
-	ComputerscareDebugWidget(ComputerscareDebug *module) {
-		setModule(module);
-		if(module) {
-		//	drawMode = module->params[ComputerscareDebug::DRAW_MODE].getValue();
-			textMode=module->params[ComputerscareDebug::TEXT_MODE].getValue();
-		}
-		
-		setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareDebugPanel.svg")));
+    addInput(createInput<InPort>(Vec(2, 335), module,
+                                 ComputerscareDebug::TRG_INPUT));
+    addInput(createInput<InPort>(Vec(61, 335), module,
+                                 ComputerscareDebug::VAL_INPUT));
+    addInput(createInput<InPort>(Vec(31, 335), module,
+                                 ComputerscareDebug::CLR_INPUT));
 
-		ComputerscareResizeHandle *leftHandle = new ComputerscareResizeHandle();
+    addParam(createParam<ComputerscareClockButton>(
+        Vec(2, 321), module, ComputerscareDebug::MANUAL_TRIGGER));
 
-		ComputerscareResizeHandle *rightHandle = new ComputerscareResizeHandle();
-		rightHandle->right = true;
-		this->rightHandle = rightHandle;
-		addChild(leftHandle);
-		addChild(rightHandle);
+    addParam(createParam<ComputerscareResetButton>(
+        Vec(32, 320), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
 
-		DebugViz *display = new DebugViz();
-		display->module = module;
-		display->box.pos = Vec(6, 38);
-		display->box.size = Vec(box.size.x, 400);
-		addChild(display);
+    addParam(createParam<ThreeVerticalXSwitch>(
+        Vec(2, 279), module, ComputerscareDebug::WHICH_CLOCK));
+    addParam(createParam<ThreeVerticalXSwitch>(
+        Vec(66, 279), module, ComputerscareDebug::SWITCH_VIEW));
 
-		addInput(createInput<InPort>(Vec(2, 335), module, ComputerscareDebug::TRG_INPUT));
-		addInput(createInput<InPort>(Vec(61, 335),  module, ComputerscareDebug::VAL_INPUT));
-		addInput(createInput<InPort>(Vec(31, 335), module, ComputerscareDebug::CLR_INPUT));
+    HidableSmallSnapKnob* clockKnob = createParam<HidableSmallSnapKnob>(
+        Vec(6, 305), module, ComputerscareDebug::CLOCK_CHANNEL_FOCUS);
+    clockKnob->module = module;
+    clockKnob->hackIndex = 0;
+    addParam(clockKnob);
 
-		addParam(createParam<ComputerscareClockButton>(Vec(2, 321), module, ComputerscareDebug::MANUAL_TRIGGER));
+    HidableSmallSnapKnob* inputKnob = createParam<HidableSmallSnapKnob>(
+        Vec(66, 305), module, ComputerscareDebug::INPUT_CHANNEL_FOCUS);
+    inputKnob->module = module;
+    inputKnob->hackIndex = 1;
+    addParam(inputKnob);
 
-		addParam(createParam<ComputerscareResetButton>(Vec(32, 320), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
+    addOutput(createOutput<OutPort>(Vec(56, 1), module,
+                                    ComputerscareDebug::POLY_OUTPUT));
 
-		addParam(createParam<ThreeVerticalXSwitch>(Vec(2, 279), module, ComputerscareDebug::WHICH_CLOCK));
-		addParam(createParam<ThreeVerticalXSwitch>(Vec(66, 279), module, ComputerscareDebug::SWITCH_VIEW));
+    for (int i = 0; i < 16; i++) {
+      ConnectedSmallLetter* sld = new ConnectedSmallLetter(i);
+      sld->fontSize = 15;
+      sld->textAlign = 1;
+      sld->box.pos = Vec(-4, 33.8 + 15.08 * i);
+      sld->box.size = Vec(28, 20);
+      sld->module = module;
+      addChild(sld);
+    }
 
-		HidableSmallSnapKnob *clockKnob = createParam<HidableSmallSnapKnob>(Vec(6, 305), module, ComputerscareDebug::CLOCK_CHANNEL_FOCUS);
-		clockKnob->module = module;
-		clockKnob->hackIndex = 0;
-		addParam(clockKnob);
+    StringDisplayWidget3* stringDisplay =
+        createWidget<StringDisplayWidget3>(Vec(15, 34));
+    stringDisplay->box.size = Vec(73, 245);
+    stringDisplay->module = module;
+    addChild(stringDisplay);
 
-		HidableSmallSnapKnob *inputKnob = createParam<HidableSmallSnapKnob>(Vec(66, 305), module, ComputerscareDebug::INPUT_CHANNEL_FOCUS);
-		inputKnob->module = module;
-		inputKnob->hackIndex = 1;
-		addParam(inputKnob);
+    debug = module;
+  }
+  /*json_t *toJson() override
+  {
+          json_t *rootJ = ModuleWidget::toJson();
+          json_object_set_new(rootJ, "outputRange",
+  json_integer(debug->outputRangeEnum));
 
-		addOutput(createOutput<OutPort>(Vec(56, 1), module, ComputerscareDebug::POLY_OUTPUT));
+          json_t *sequencesJ = json_array();
 
-		//channel number labels
-		for (int i = 0; i < 16; i++) {
-			ConnectedSmallLetter *sld = new ConnectedSmallLetter(i);
-			sld->fontSize = 15;
-			sld->textAlign = 1;
-			sld->box.pos = Vec(-4, 33.8 + 15.08 * i);
-			sld->box.size = Vec(28, 20);
-			sld->module = module;
-			addChild(sld);
-		}
-		
+          for (int i = 0; i < 16; i++) {
+                  json_t *sequenceJ = json_real(debug->logLines[i]);
+                  json_array_append_new(sequencesJ, sequenceJ);
+          }
+          json_object_set_new(rootJ, "lines", sequencesJ);
+          return rootJ;
+  }*/
+  /*void fromJson(json_t *rootJ) override
+  {
+          float val;
+          ModuleWidget::fromJson(rootJ);
+          // button states
 
-		VerticalListOfNumbers *stringDisplay = createWidget<VerticalListOfNumbers>(Vec(15, 34));
-		stringDisplay->box.size = Vec(73, 245);
-		stringDisplay->module = module;
-		addChild(stringDisplay);
+          json_t *outputRangeEnumJ = json_object_get(rootJ, "outputRange");
+          if (outputRangeEnumJ) { debug->outputRangeEnum =
+  json_integer_value(outputRangeEnumJ); }
 
-		
+          json_t *sequencesJ = json_object_get(rootJ, "lines");
 
-		debug = module;
-	}
-
-template <typename BASE>
-void addLabeledKnob(std::string label, int x, int y, ComputerscareDebug *module, int paramIndex, float labelDx, float labelDy, bool snap = false) {
-
-		smallLetterDisplay = new SmallLetterDisplay();
-		smallLetterDisplay->box.size = Vec(5, 10);
-		smallLetterDisplay->fontSize = 14;
-		smallLetterDisplay->value = label;
-		smallLetterDisplay->textAlign = 1;
-
-		if (snap) {
-			addParam(createParam<BASE>(Vec(x, y), module, paramIndex));
-		}
-		else {
-			addParam(createParam<BASE>(Vec(x, y), module, paramIndex));
-
-		}
-		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
-
-	}
-
-	void appendContextMenu(Menu *menu) override;
-
-	void onHoverKey(const event::HoverKey& e) override {
-		float dZoom = 0.05;
-		float dPosition = 10.f;
-		if (e.isConsumed())
-			return;
-
-		// Scroll with arrow keys
-		/*float arrowSpeed = 30.0;
-		if ((e.mods & RACK_MOD_MASK) == (RACK_MOD_CTRL | GLFW_MOD_SHIFT))
-			arrowSpeed /= 16.0;
-		else if ((e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL)
-			arrowSpeed *= 4.0;
-		else if ((e.mods & RACK_MOD_MASK) == GLFW_MOD_SHIFT)
-			arrowSpeed /= 4.0;*/
-		//duplicate is ctrl-d, ignore keys if mods are pressed so duplication doesnt translate the image
-		if (e.action == RACK_HELD && !e.mods ) {
-			if (e.keyName == "a") {
-				//debug->xOffset += dPosition / //debug->zoomX;
-				e.consume(this);
-			} else if (e.keyName == "s") {
-				//debug->yOffset -= (//debug->invertY ? dPosition : -dPosition) / //debug->zoomY;
-				e.consume(this);
-			} else if (e.keyName == "d") {
-				//debug->xOffset -= dPosition / //debug->zoomX;
-				e.consume(this);
-			} else if (e.keyName == "w") {
-				//debug->yOffset += (//debug->invertY ? dPosition : -dPosition) / //debug->zoomY;
-				e.consume(this);
-			} else if (e.keyName == "z") {
-				//debug->zoomX *= (1 + dZoom);
-				//debug->zoomY *= (1 + dZoom);
-				e.consume(this);
-			} else if (e.keyName == "x") {
-				//debug->zoomX *= (1 - dZoom);
-				//debug->zoomY *= (1 - dZoom);
-				e.consume(this);
-			} else if (e.keyName == "q") {
-				//debug->rotation += 1;
-				//debug->rotation %= 4;
-				e.consume(this);
-			} else if (e.keyName == "e") {
-				//debug->rotation -= 1;
-				//debug->rotation += 4;
-				//debug->rotation %= 4;
-				e.consume(this);
-			} else if (e.keyName == "j") {
-				//debug->prevFrame();
-				e.consume(this);
-			} else if (e.keyName == "l") {
-				//debug->nextFrame();
-				e.consume(this);
-			}
-
-		}
-		if (e.action == GLFW_RELEASE) {
-			if (e.keyName == "k") {
-				//debug->goToFrame(0);
-				e.consume(this);
-			} else if (e.keyName == "i") {
-				//debug->goToRandomFrame();
-				e.consume(this);
-			} else if (e.keyName == "u") {
-				//debug->goToRandomFrame();
-				e.consume(this);
-			} else if (e.keyName == "p") {
-				//debug->toggleAnimationEnabled();
-				e.consume(this);
-			} else if (e.keyName == "o") {
-				//debug->loadRandomGif();
-				e.consume(this);
-			} else if (e.keyName == "[") {
-				//debug->prevFileInCatalog();
-				e.consume(this);
-			} else if (e.keyName == "]") {
-				//debug->nextFileInCatalog();
-				e.consume(this);
-			}
-		}
-		ModuleWidget::onHoverKey(e);
-	}
-
-	ParamSelectMenu *drawModeMenu;
-	ParamSelectMenu *textModeMenu;
-	ParamSelectMenu *compOpMenu;
-
-	ComputerscareResizeHandle *leftHandle;
-	ComputerscareResizeHandle *rightHandle;
+          if (sequencesJ) {
+                  for (int i = 0; i < 16; i++) {
+                          json_t *sequenceJ = json_array_get(sequencesJ, i);
+                          if (sequenceJ)
+                                  val = json_real_value(sequenceJ);
+                          debug->logLines[i] = val;
+                  }
+          }
 
 
-	SmallLetterDisplay* smallLetterDisplay;
-	ComputerscareDebug *debug;
+  }*/
+  void appendContextMenu(Menu* menu) override;
+  ComputerscareDebug* debug;
 };
 struct DebugOutputRangeItem : MenuItem {
-	ComputerscareDebug *debug;
-	int outputRangeEnum;
-	void onAction(const event::Action &e) override {
-		debug->outputRangeEnum = outputRangeEnum;
-		printf("outputRangeEnum %i\n", outputRangeEnum);
-	}
-	void step() override {
-		rightText = CHECKMARK(debug->outputRangeEnum == outputRangeEnum);
-		MenuItem::step();
-	}
+  ComputerscareDebug* debug;
+  int outputRangeEnum;
+  void onAction(const event::Action& e) override {
+    debug->outputRangeEnum = outputRangeEnum;
+    printf("outputRangeEnum %i\n", outputRangeEnum);
+  }
+  void step() override {
+    rightText = CHECKMARK(debug->outputRangeEnum == outputRangeEnum);
+    MenuItem::step();
+  }
 };
-void ComputerscareDebugWidget::appendContextMenu(Menu *menu)
-{
-	ComputerscareDebug *debug = dynamic_cast<ComputerscareDebug *>(this->module);
+void ComputerscareDebugWidget::appendContextMenu(Menu* menu) {
+  ComputerscareDebug* debug = dynamic_cast<ComputerscareDebug*>(this->module);
 
-	//spacer
-	menu->addChild(new MenuEntry);
+  MenuLabel* spacerLabel = new MenuLabel();
+  menu->addChild(spacerLabel);
 
-  drawModeMenu = new ParamSelectMenu();
-  drawModeMenu->text = "Draw Mode";
-  drawModeMenu->param = debug->paramQuantities[ComputerscareDebug::DRAW_MODE];
-  drawModeMenu->options = debug->drawModes;
-  menu->addChild(drawModeMenu);
-
-  textModeMenu = new ParamSelectMenu();
-  textModeMenu->text = "Text Mode";
-  textModeMenu->param = debug->paramQuantities[ComputerscareDebug::TEXT_MODE];
-  textModeMenu->options = debug->textModes;
-  menu->addChild(textModeMenu);
-
-  compOpMenu = new ParamSelectMenu();
-  compOpMenu->text = "Global Composite Operation";
-  compOpMenu->param = debug->paramQuantities[ComputerscareDebug::COMPOSITE_OP];
-  compOpMenu->options = debug->compOps;
-  menu->addChild(compOpMenu);
-
-	MenuLabel *spacerLabel = new MenuLabel();
-	menu->addChild(spacerLabel);
-
-	menu->addChild(construct<MenuLabel>());
-	menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Random Generator Range (Internal In)"));
-	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "  0v ... +10v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 0));
-	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, " -5v ...  +5v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 1));
-	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "  0v ...  +5v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 2));
-	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "  0v ...  +1v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 3));
-	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, " -1v ...  +1v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 4));
-	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "-10v ... +10v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 5));
-	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, " -2v ...  +2v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 6));
-	menu->addChild(construct<DebugOutputRangeItem>(&MenuItem::text, "  0v ...  +2v", &DebugOutputRangeItem::debug, debug, &DebugOutputRangeItem::outputRangeEnum, 7));
-
+  menu->addChild(construct<MenuLabel>());
+  menu->addChild(construct<MenuLabel>(&MenuLabel::text,
+                                      "Random Generator Range (Internal In)"));
+  menu->addChild(construct<DebugOutputRangeItem>(
+      &MenuItem::text, "  0v ... +10v", &DebugOutputRangeItem::debug, debug,
+      &DebugOutputRangeItem::outputRangeEnum, 0));
+  menu->addChild(construct<DebugOutputRangeItem>(
+      &MenuItem::text, " -5v ...  +5v", &DebugOutputRangeItem::debug, debug,
+      &DebugOutputRangeItem::outputRangeEnum, 1));
+  menu->addChild(construct<DebugOutputRangeItem>(
+      &MenuItem::text, "  0v ...  +5v", &DebugOutputRangeItem::debug, debug,
+      &DebugOutputRangeItem::outputRangeEnum, 2));
+  menu->addChild(construct<DebugOutputRangeItem>(
+      &MenuItem::text, "  0v ...  +1v", &DebugOutputRangeItem::debug, debug,
+      &DebugOutputRangeItem::outputRangeEnum, 3));
+  menu->addChild(construct<DebugOutputRangeItem>(
+      &MenuItem::text, " -1v ...  +1v", &DebugOutputRangeItem::debug, debug,
+      &DebugOutputRangeItem::outputRangeEnum, 4));
+  menu->addChild(construct<DebugOutputRangeItem>(
+      &MenuItem::text, "-10v ... +10v", &DebugOutputRangeItem::debug, debug,
+      &DebugOutputRangeItem::outputRangeEnum, 5));
+  menu->addChild(construct<DebugOutputRangeItem>(
+      &MenuItem::text, " -2v ...  +2v", &DebugOutputRangeItem::debug, debug,
+      &DebugOutputRangeItem::outputRangeEnum, 6));
+  menu->addChild(construct<DebugOutputRangeItem>(
+      &MenuItem::text, "  0v ...  +2v", &DebugOutputRangeItem::debug, debug,
+      &DebugOutputRangeItem::outputRangeEnum, 7));
 }
-Model *modelComputerscareDebug = createModel<ComputerscareDebug, ComputerscareDebugWidget>("computerscare-debug");
+Model* modelComputerscareDebug =
+    createModel<ComputerscareDebug, ComputerscareDebugWidget>(
+        "computerscare-debug");

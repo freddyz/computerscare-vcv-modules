@@ -141,7 +141,7 @@ struct NoRandomSmallKnob : SmallKnob {
 	};
 };
 struct NoRandomMediumSmallKnob : RoundKnob {
-	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob.svg"));
+	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/components/computerscare-medium-small-knob.svg"));
 
 	NoRandomMediumSmallKnob() {
 		setSvg(enabledSvg);
@@ -150,8 +150,8 @@ struct NoRandomMediumSmallKnob : RoundKnob {
 };
 
 struct DisableableSmoothKnob : RoundKnob {
-	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob.svg"));
-	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/computerscare-medium-small-knob-disabled.svg"));
+	std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/components/computerscare-medium-small-knob.svg"));
+	std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(pluginInstance, "res/components/computerscare-medium-small-knob-disabled.svg"));
 
 	int channel = 0;
 	bool disabled = false;
@@ -182,12 +182,12 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 	ComputerscareComplexGeneratorWidget(ComputerscareComplexGenerator *module) {
 
 		setModule(module);
-		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareComplexGeneratorPanel.svg")));
+		//setPanel(APP->window->loadSvg(asset::plugin(pluginInstance, "res/panels/ComputerscareComplexGeneratorPanel.svg")));
 		box.size = Vec(8 * 15, 380);
 		{
 			ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
 			panel->box.size = box.size;
-			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareComplexGeneratorPanel.svg")));
+			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/panels/ComputerscareComplexGeneratorPanel.svg")));
 			addChild(panel);
 		}
 		channelWidget = new PolyOutputChannelsWidget(Vec(92, 4), module, ComputerscareComplexGenerator::POLY_CHANNELS);

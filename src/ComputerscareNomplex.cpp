@@ -249,7 +249,7 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
         {
             ComputerscareSVGPanel *panel = new ComputerscareSVGPanel();
             panel->box.size = box.size;
-            panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/ComputerscareNomplexCumbersPanel.svg")));
+            panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/panels/ComputerscareNomplexCumbersPanel.svg")));
 
             addChild(panel);
 
