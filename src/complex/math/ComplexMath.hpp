@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "../CompolyRouting.hpp"
+
 namespace cpx {
 namespace complex_math {
 
@@ -14,13 +16,6 @@ enum class CoordinateMode {
   PolarInterleaved = 1,
   RectSeparated = 2,
   PolarSeparated = 3,
-};
-
-enum class WrapMode {
-  Normal = 0,
-  Cycle = 1,
-  Minimal = 2,
-  Stall = 3,
 };
 
 struct Rect {
@@ -143,42 +138,35 @@ inline int clampChannelCount(int channels) {
 
 inline int compolyphonyForInput(CoordinateMode mode, int portAChannels,
                                 int portBChannels) {
-  portAChannels = clampChannelCount(portAChannels);
-  portBChannels = clampChannelCount(portBChannels);
+  cpx::compoly::CablePolyChannels portA(portAChannels);
+  cpx::compoly::CablePolyChannels portB(portBChannels);
+  cpx::compoly::SeparatedCablePolyChannels cables(portA, portB);
   if (isInterleaved(mode))
-    return (portAChannels + portBChannels + 1) / 2;
-  return std::max(portAChannels, portBChannels);
+    return cpx::compoly::compolyLanesForInterleavedCables(cables);
+  return cpx::compoly::compolyLanesForSeparatedCables(cables);
 }
 
 inline int outputCompolyphony(int knobSetting, int maxInputCompolyphony) {
-  if (knobSetting != 0)
-    return clampChannelCount(knobSetting);
-  return maxInputCompolyphony == 0 ? 1 : clampChannelCount(maxInputCompolyphony);
+  return cpx::compoly::outputCompolyLanes(knobSetting, maxInputCompolyphony);
 }
 
-inline int channelIndexForOutput(int outputIndex, WrapMode wrapMode,
+inline int channelIndexForOutput(int outputIndex, cpx::compoly::WrapMode wrapMode,
                                  int channelCount) {
-  channelCount = clampChannelCount(channelCount);
-  if (channelCount <= 0)
-    return 0;
-
-  switch (wrapMode) {
-    case WrapMode::Normal:
-      return channelCount == 1 ? 0 : outputIndex;
-    case WrapMode::Cycle:
-      return outputIndex % channelCount;
-    case WrapMode::Minimal:
-      return outputIndex;
-    case WrapMode::Stall:
-      return outputIndex > channelCount - 1 ? channelCount - 1 : outputIndex;
-  }
-  return outputIndex;
+  return cpx::compoly::cableChannelForCompolyLane(
+      cpx::compoly::CompolyLane(outputIndex), wrapMode,
+      cpx::compoly::CablePolyChannels(channelCount));
 }
 
 inline std::array<int, 2> separatedInputChannelIndices(
-    int outputIndex, WrapMode wrapMode, int portAChannels, int portBChannels) {
-  return {channelIndexForOutput(outputIndex, wrapMode, portAChannels),
-          channelIndexForOutput(outputIndex, wrapMode, portBChannels)};
+    int outputIndex, cpx::compoly::WrapMode wrapMode, int portAChannels,
+    int portBChannels) {
+  cpx::compoly::SeparatedCableChannels channels =
+      cpx::compoly::separatedCableChannelsForCompolyLane(
+          cpx::compoly::CompolyLane(outputIndex), wrapMode,
+          cpx::compoly::SeparatedCablePolyChannels(
+              cpx::compoly::CablePolyChannels(portAChannels),
+              cpx::compoly::CablePolyChannels(portBChannels)));
+  return {{channels.first, channels.second}};
 }
 
 inline PortChannelCounts outputPortChannelCounts(CoordinateMode mode,

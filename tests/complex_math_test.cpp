@@ -58,13 +58,13 @@ int main() {
               3,
           "separated compolyphony uses max port channels");
 
-  require(cm::channelIndexForOutput(4, cm::WrapMode::Normal, 1) == 0,
+  require(cm::channelIndexForOutput(4, cpx::compoly::WrapMode::Normal, 1) == 0,
           "normal wrap copies mono channel");
-  require(cm::channelIndexForOutput(4, cm::WrapMode::Cycle, 3) == 1,
+  require(cm::channelIndexForOutput(4, cpx::compoly::WrapMode::Cycle, 3) == 1,
           "cycle wrap repeats channels");
-  require(cm::channelIndexForOutput(4, cm::WrapMode::Minimal, 3) == 4,
+  require(cm::channelIndexForOutput(4, cpx::compoly::WrapMode::Minimal, 3) == 4,
           "minimal wrap leaves channel index unchanged");
-  require(cm::channelIndexForOutput(4, cm::WrapMode::Stall, 3) == 2,
+  require(cm::channelIndexForOutput(4, cpx::compoly::WrapMode::Stall, 3) == 2,
           "stall wrap holds final channel");
 
   cm::PortChannelCounts interleavedCounts =

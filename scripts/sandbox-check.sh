@@ -190,6 +190,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+echo "==> SDK-free compoly routing tests..."
+if command -v g++ >/dev/null; then
+  if g++ -std=c++11 -I src tests/compoly_routing_test.cpp -o /tmp/cs_compoly_routing_test; then
+    /tmp/cs_compoly_routing_test || fail "compoly routing tests failed"
+  else
+    fail "compoly routing tests did not compile"
+  fi
+else
+  echo "  skip: g++ not installed"
+fi
+
+# ---------------------------------------------------------------------------
 # clang-format is opt-in (export CHECK_FMT=1) because much of the legacy code
 # isn't formatted yet and we don't want every loop iteration to fail on style.
 if [[ "${CHECK_FMT:-0}" == "1" ]]; then
