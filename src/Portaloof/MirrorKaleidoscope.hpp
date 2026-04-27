@@ -25,7 +25,8 @@ static inline void kSector(NVGcontext* vg, float clipX, float clipY,
                            float ex, float ey, float coverHW, float coverHH,
                            int img, float alpha, bool rotOn, float rotDeg,
                            bool mirrOn, float mirrDeg, bool clipToImage,
-                           float dspX, float dspY, float dspW, float dspH) {
+                           float dspX, float dspY, float dspW, float dspH,
+                           float txOff = 0.f, float tyOff = 0.f) {
   nvgSave(vg);
   // Manual intersection of sector clip with display bounds.
   float isX = std::max(clipX, dspX);
@@ -44,20 +45,63 @@ static inline void kSector(NVGcontext* vg, float clipX, float clipY,
     applyRotation(vg, effectiveRot);
   }
   if (mirrOn) applyFlip(vg, mirrDeg);
-  NVGpaint p = nvgImagePattern(vg, ox, oy, ex, ey, 0.f, img, alpha);
-  nvgBeginPath(vg);
-  if (clipToImage) {
-    // Draw only the actual image rect to prevent the pattern from tiling into
-    // empty space.
-    float rx = ex < 0.f ? ox + ex : ox;
-    float ry = ey < 0.f ? oy + ey : oy;
-    nvgRect(vg, rx, ry, fabsf(ex), fabsf(ey));
+  // Apply image-content offset with sign correction for flipped sectors so the
+  // mirror boundary stays seamless: a flipped sector must shift in the opposite
+  // NVG direction to show the same image content at the shared edge.
+  float patOx = ox + (ex < 0.f ? -txOff : txOff);
+  float patOy = oy + (ey < 0.f ? -tyOff : tyOff);
+  float absEx = fabsf(ex);
+  float absEy = fabsf(ey);
+
+  if (!clipToImage && (txOff != 0.f || tyOff != 0.f)) {
+    // Explicit tiling: draw enough image tiles to cover the full cover rect
+    // without UV going outside [0,1].  This prevents GL_CLAMP_TO_EDGE smearing
+    // when the pattern origin is shifted by txOff/tyOff (Translate > Kaleid
+    // mode).  The scissor (already set above) clips each tile to the sector.
+    //
+    // For either sign of ex/ey we compute the UV range of the cover rect and
+    // iterate over integer UV tiles that span it.  When ex < 0 the UV axis is
+    // reversed so min/max are swapped — fabsf(uvMaxX - uvMinX) handles both.
+    float uvMinX = std::min(((-coverHW) - patOx) / ex, (coverHW - patOx) / ex);
+    float uvMaxX = std::max(((-coverHW) - patOx) / ex, (coverHW - patOx) / ex);
+    float uvMinY = std::min(((-coverHH) - patOy) / ey, (coverHH - patOy) / ey);
+    float uvMaxY = std::max(((-coverHH) - patOy) / ey, (coverHH - patOy) / ey);
+    int k0 = (int)floorf(uvMinX);
+    int numK = (int)ceilf(uvMaxX - uvMinX) + 2;
+    int j0 = (int)floorf(uvMinY);
+    int numJ = (int)ceilf(uvMaxY - uvMinY) + 2;
+    numK = std::min(numK, 20);
+    numJ = std::min(numJ, 20);
+    for (int jt = 0; jt < numJ; jt++) {
+      for (int it = 0; it < numK; it++) {
+        float tileOx = patOx + (float)(k0 + it) * ex;
+        float tileOy = patOy + (float)(j0 + jt) * ey;
+        NVGpaint p =
+            nvgImagePattern(vg, tileOx, tileOy, ex, ey, 0.f, img, alpha);
+        nvgBeginPath(vg);
+        float rx = ex < 0.f ? tileOx + ex : tileOx;
+        float ry = ey < 0.f ? tileOy + ey : tileOy;
+        nvgRect(vg, rx, ry, absEx, absEy);
+        nvgFillPaint(vg, p);
+        nvgFill(vg);
+      }
+    }
   } else {
-    // Large rect covers full panel even after rotation; used for tiling mode.
-    nvgRect(vg, -coverHW, -coverHH, 2.f * coverHW, 2.f * coverHH);
+    NVGpaint p = nvgImagePattern(vg, patOx, patOy, ex, ey, 0.f, img, alpha);
+    nvgBeginPath(vg);
+    if (clipToImage) {
+      // Draw only the actual image rect to prevent the pattern from tiling into
+      // empty space.
+      float rx = ex < 0.f ? patOx + ex : patOx;
+      float ry = ey < 0.f ? patOy + ey : patOy;
+      nvgRect(vg, rx, ry, absEx, absEy);
+    } else {
+      // Large rect covers full panel even after rotation; used for tiling mode.
+      nvgRect(vg, -coverHW, -coverHH, 2.f * coverHW, 2.f * coverHH);
+    }
+    nvgFillPaint(vg, p);
+    nvgFill(vg);
   }
-  nvgFillPaint(vg, p);
-  nvgFill(vg);
   nvgRestore(vg);
 }
 
@@ -74,12 +118,15 @@ inline void drawKaleidoscope(NVGcontext* vg, int img, float hw, float hh,
                              float w, float h, float coverHW, float coverHH,
                              int mode, float alpha, bool rotOn, float rotDeg,
                              bool mirrOn, float mirrDeg, bool clipToImage,
-                             float dspX, float dspY, float dspW, float dspH) {
+                             float dspX, float dspY, float dspW, float dspH,
+                             float txOff = 0.f, float tyOff = 0.f) {
 // Convenience macro — draws a sector using the precomputed cover size and
-// display bounds
-#define KS(cx, cy, cw, ch, ox, oy, ex, ey)                                  \
-  kSector(vg, cx, cy, cw, ch, ox, oy, ex, ey, coverHW, coverHH, img, alpha, \
-          rotOn, rotDeg, mirrOn, mirrDeg, clipToImage, dspX, dspY, dspW, dspH)
+// display bounds.  txOff/tyOff are forwarded to kSector, which applies them
+// with sign correction per flip axis so the mirror boundary stays seamless.
+#define KS(cx, cy, cw, ch, ox, oy, ex, ey)                                     \
+  kSector(vg, cx, cy, cw, ch, ox, oy, ex, ey, coverHW, coverHH, img, alpha,    \
+          rotOn, rotDeg, mirrOn, mirrDeg, clipToImage, dspX, dspY, dspW, dspH, \
+          txOff, tyOff)
 
   switch (mode) {
     // ── 2-fold

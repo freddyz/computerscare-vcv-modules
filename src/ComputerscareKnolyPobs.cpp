@@ -60,17 +60,17 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 struct NoRandomSmallKnob : SmallKnob {
   NoRandomSmallKnob() { SmallKnob(); };
 };
-struct NoRandomMediumSmallKnob : RoundKnob {
+struct NoRandomMediumSmallKnob : ComputerscareRoundKnob {
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance, "res/components/computerscare-medium-small-knob.svg"));
 
   NoRandomMediumSmallKnob() {
     setSvg(enabledSvg);
-    RoundKnob();
+    ComputerscareRoundKnob();
   };
 };
 
-struct DisableableSmoothKnob : RoundKnob {
+struct DisableableSmoothKnob : ComputerscareRoundKnob {
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance, "res/components/computerscare-medium-small-knob.svg"));
   std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(
@@ -97,7 +97,7 @@ struct DisableableSmoothKnob : RoundKnob {
       }
     } else {
     }
-    RoundKnob::step();
+    ComputerscareRoundKnob::step();
   }
 };
 

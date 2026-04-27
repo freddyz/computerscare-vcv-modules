@@ -197,7 +197,7 @@
 		{
 			"slug": "computerscare-horse-a-doodle-doo",
 			"name": "Horse A Doodle Doo",
-			"description": "Rhythm generator",
+			"description": "Melody, rhythm generator.  Generate complex repeatable sequences with the turn of a single knob.  Fully Polyphonic.",
 			"tags": [
 				"Sequencer",
 				"Clock Modulator",
@@ -206,9 +206,9 @@
 			"manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/horse-a-doodle-do.md"
 		},
 		{
-			"slug": "computerscare-gloly-pitch",
-			"name": "Gloly Pitch",
-			"description": "Visual glitch module",
+			"slug": "computerscare-portaloof",
+			"name": "Portaloof",
+			"description": "Visual experimentation.  A Kaleidoscopic mirror pointed back at your Rack, and yourself.",
 			"tags": [
 				"Visual"
 			]

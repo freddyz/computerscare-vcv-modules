@@ -13,6 +13,7 @@
 #include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
 #include "CustomBlankFunctions.hpp"
+#include "ImagePathHelpers.hpp"
 #include "animatedGif.hpp"
 
 struct ComputerscareBlank : ComputerscareMenuParamModule {
@@ -26,7 +27,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
   std::vector<std::string> paths;
   std::vector<std::string> catalog;
-  int fileIndexInCatalog;
+  int fileIndexInCatalog = 0;
   unsigned int numFilesInCatalog = 0;
 
   float width = 120;
@@ -337,16 +338,13 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     std::string dir = this->paths[index].empty()
                           ? asset::user("../")
                           : asset::user(this->paths[index]);
-    char* pathC = osdialog_file(OSDIALOG_OPEN, dir.c_str(), NULL, NULL);
-    if (!pathC) {
-      return;
-    }
-
-    std::string path = pathC;
-    std::free(pathC);
-
+    std::string path = computerscareOpenImageDialog(dir.c_str());
+    if (path.empty()) return;
     setPath(path);
     jsonFlag = false;
+  }
+  bool isSupportedImagePath(const std::string& path) {
+    return computerscareIsSupportedImagePath(path);
   }
   void setContainingDirectory(int index = 0) {
     std::string dir = system::getDirectory(asset::user(paths[index]));
@@ -365,27 +363,9 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
       while ((dirp = readdir(rep)) != NULL) {
         std::string name = dirp->d_name;
 
-        std::size_t found = name.find(".gif", name.length() - 5);
-        if (found == std::string::npos)
-          found = name.find(".GIF", name.length() - 5);
-        if (found == std::string::npos)
-          found = name.find(".png", name.length() - 5);
-        if (found == std::string::npos)
-          found = name.find(".PNG", name.length() - 5);
-        if (found == std::string::npos)
-          found = name.find(".jpg", name.length() - 5);
-        if (found == std::string::npos)
-          found = name.find(".JPG", name.length() - 5);
-        if (found == std::string::npos)
-          found = name.find(".jpeg", name.length() - 5);
-        if (found == std::string::npos)
-          found = name.find(".JPEG", name.length() - 5);
-        if (found == std::string::npos)
-          found = name.find(".bmp", name.length() - 5);
-        if (found == std::string::npos)
-          found = name.find(".BMP", name.length() - 5);
-        if (found != std::string::npos) {
-          currentImageFullpath = parentDirectory + "/" + name;
+        currentImageFullpath = parentDirectory + "/" + name;
+        if (isSupportedImagePath(currentImageFullpath) &&
+            system::isFile(currentImageFullpath)) {
           catalog.push_back(currentImageFullpath);
           if (currentImageFullpath == paths[index]) {
             fileIndexInCatalog = imageIndex;
@@ -393,21 +373,28 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
           imageIndex++;
         }
       }
+      closedir(rep);
     }
     numFilesInCatalog = catalog.size();
   }
 
   void loadRandomGif() {
-    fileIndexInCatalog = floor(random::uniform() * numFilesInCatalog);
-    loadNewFileByIndex();
+    setContainingDirectory();
+    if (numFilesInCatalog > 0) {
+      fileIndexInCatalog = floor(random::uniform() * numFilesInCatalog);
+      loadNewFileByIndex();
+    }
   }
 
   void loadNewFileByIndex() {
-    if (numFilesInCatalog > 0) {
+    if (numFilesInCatalog > 0 && fileIndexInCatalog >= 0 &&
+        fileIndexInCatalog < (int)numFilesInCatalog &&
+        system::isFile(catalog[fileIndexInCatalog])) {
       setPath(catalog[fileIndexInCatalog]);
     }
   }
   void nextFileInCatalog() {
+    setContainingDirectory();
     if (numFilesInCatalog > 0) {
       fileIndexInCatalog++;
       fileIndexInCatalog %= numFilesInCatalog;
@@ -415,6 +402,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     }
   }
   void prevFileInCatalog() {
+    setContainingDirectory();
     if (numFilesInCatalog > 0) {
       fileIndexInCatalog--;
       fileIndexInCatalog += numFilesInCatalog;
@@ -423,6 +411,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     }
   }
   void goToFileInCatelog(int index) {
+    setContainingDirectory();
+    if (numFilesInCatalog == 0) return;
     fileIndexInCatalog = index;
     fileIndexInCatalog %= numFilesInCatalog;
     loadNewFileByIndex();
@@ -431,7 +421,11 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
   void setPath(std::string path, int index = 0) {
     numFrames = 0;
     paths[index] = path;
+    this->path = path;
     currentFrame = 0;
+    mappedFrame = 0;
+    ready = false;
+    imageStatus = 0;
   }
   void setFrameCount(int frameCount) { numFrames = frameCount; }
   void setImageStatus(int status) { imageStatus = status; }
@@ -887,17 +881,26 @@ struct tPNGDisplay : TBase {
     if (blankModule && blankModule->loadedJSON) {
       std::string modulePath = blankModule->getPath();
       if (path != modulePath) {
+        currentFrame = 0;
+        INFO("Custom Blank loading image: %s", modulePath.c_str());
         gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
 
         if (gifBuddy.getImageStatus() == 3) {
           std::string badGifPath =
               asset::plugin(pluginInstance, "res/img/broken-file.gif");
+          INFO("Custom Blank loading fallback image: %s", badGifPath.c_str());
           gifBuddy = AnimatedGifBuddy(args.vg, badGifPath.c_str());
           missingOrBroken = true;
         } else {
           missingOrBroken = false;
         }
         img = gifBuddy.getHandle();
+        if (img <= 0) {
+          blankModule->setImageStatus(3);
+          blankModule->setReady(false);
+          path = modulePath;
+          return;
+        }
         int numImageFrames = gifBuddy.getFrameCount();
 
         blankModule->setFrameCount(numImageFrames);
@@ -921,6 +924,12 @@ struct tPNGDisplay : TBase {
         blankModule->setReady(true);
 
         nvgImageSize(args.vg, img, &imgWidth, &imgHeight);
+        if (imgWidth <= 0 || imgHeight <= 0) {
+          blankModule->setImageStatus(3);
+          blankModule->setReady(false);
+          path = modulePath;
+          return;
+        }
         imgRatio = ((float)imgWidth / (float)imgHeight);
 
         /*
@@ -995,6 +1004,7 @@ struct PNGDisplay : Widget {
   void resetZooms() { pngTransparent->resetZooms(); }
   void step() override {
     if (module) {
+      pngTransparent->box.size = box.size;
       bool moduleLightWidgetMode = module->getLightWidgetMode();
       if (moduleLightWidgetMode != lightWidgetMode) {
         lightWidgetMode = moduleLightWidgetMode;
@@ -1296,17 +1306,35 @@ struct ComputerscareBlankWidget : ModuleWidget {
     ModuleWidget::onHoverKey(e);
   }
 
+  void onHover(const HoverEvent& e) override {
+    ModuleWidget::onHover(e);
+    float hw = RACK_GRID_WIDTH;
+    bool overHandle = (e.pos.x <= hw) || (e.pos.x >= box.size.x - hw);
+    static GLFWcursor* resizeCursor = nullptr;
+    if (!resizeCursor)
+      resizeCursor = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+    glfwSetCursor(APP->window->win, overHandle ? resizeCursor : nullptr);
+  }
+
+  void onLeave(const LeaveEvent& e) override {
+    ModuleWidget::onLeave(e);
+    glfwSetCursor(APP->window->win, nullptr);
+  }
+
   void onPathDrop(const PathDropEvent& e) override {
     if (!blankModule) return;
-    if (e.paths.empty()) return;
-    std::string path = e.paths[0];
-    std::string ext = system::getExtension(path);
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-    if (ext != ".png" && ext != ".jpg" && ext != ".jpeg" && ext != ".bmp" &&
-        ext != ".gif")
+    for (const std::string& path : e.paths) {
+      if (!computerscareIsSupportedImagePath(path)) continue;
+
+      blankModule->setPath(path);
+      blankModule->jsonFlag = false;
+      if (pngDisplay) {
+        pngDisplay->pngTransparent->path = "empty";
+      }
+      e.consume(this);
       return;
-    blankModule->setPath(path);
-    e.consume(this);
+    }
+    ModuleWidget::onPathDrop(e);
   }
 
   ComputerscareBlank* blankModule;

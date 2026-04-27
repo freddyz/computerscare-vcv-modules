@@ -141,7 +141,7 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
   }
 };
 
-struct DisableableSmallKnob : RoundKnob {
+struct DisableableSmallKnob : ComputerscareRoundKnob {
   std::vector<std::shared_ptr<Svg>> enabledThemes = {
       APP->window->loadSvg(asset::plugin(
           pluginInstance, "res/components/computerscare-small-knob-effed.svg")),
@@ -183,7 +183,7 @@ struct DisableableSmallKnob : RoundKnob {
       }
     } else {
     }
-    RoundKnob::draw(args);
+    ComputerscareRoundKnob::draw(args);
   }
 };
 

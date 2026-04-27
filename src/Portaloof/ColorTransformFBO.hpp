@@ -3,20 +3,28 @@
 
 #include "rack.hpp"
 
-// Applies hue-shift, warp (solarize→invert / posterize+crush), and
+// Applies hue-shift/split, warp (solarize→invert / curves contrast), and
 // fold-frequency to a captured GL texture via a custom GLSL shader + FBO.
+//
+// HUE:
+//   Positive values rotate all colors together around the hue wheel.
+//   Negative values split RGB channels through separate hue offsets, with
+//   neutral points at 0 and -360 degrees.
 //
 // WARP (-1..1):
 //   0        bypass
 //   0..-0.5  progressively solarize (Sabattier fold effect)
 //  -0.5..-1  solarize fades into full invert at -1
-//   0..+1    posterize + contrast crush (coarser and harder toward +1)
+//   0..+1/3  black level rises (shadows crush to black)
+//   1/3..2/3 black level holds, white level falls (maximum contrast)
+//   2/3..+1  black level returns to 0, white level stays low (highlights blown)
 //
 // FOLD_FREQ (1..4, mapped from INVERT knob 0..1):
 //   Scales fold frequency and posterize step count.
 //   Adds per-channel chromatic divergence at higher values.
 //
-// If all params are at neutral values the FBO is bypassed (zero GPU work).
+// If all params are at neutral values the FBO is bypassed for sources whose
+// texture orientation already matches the FBO output path.
 // Uses GLSL #version 120 / OpenGL 2.x to match VCV Rack's NANOVG_GL2 context.
 
 struct ColorTransformFBO {
@@ -90,6 +98,30 @@ struct ColorTransformFBO {
            "  return vec3(h2rgb(p,q,c.x+1.0/3.0), h2rgb(p,q,c.x), "
            "h2rgb(p,q,c.x-1.0/3.0));\n"
            "}\n"
+           "vec3 hueTransform(vec3 rgb, float h) {\n"
+           "  vec3 hsl = rgb2hsl(rgb);\n"
+           "  if (h >= 0.0) {\n"
+           "    hsl.x = fract(hsl.x + h / 360.0);\n"
+           "    return hsl2rgb(hsl);\n"
+           "  }\n"
+           "  float cycle = clamp(-h / 360.0, 0.0, 1.0);\n"
+           "  float amount = sin(cycle * 3.14159265);\n"
+           "  float sat = clamp(hsl.y * (1.0 + amount * 3.0) + amount * "
+           "0.25, 0.0, 1.0);\n"
+           "  float wheel = cycle + 0.08 * amount * sin(hsl.x * 18.8495559 + "
+           "cycle * 6.2831853);\n"
+           "  vec3 shifted = hsl2rgb(vec3(fract(hsl.x + wheel), sat, hsl.z));\n"
+           "  float spread = amount * 0.16;\n"
+           "  vec3 warm = hsl2rgb(vec3(fract(hsl.x + wheel + spread), sat, "
+           "hsl.z));\n"
+           "  vec3 cool = hsl2rgb(vec3(fract(hsl.x + wheel - spread), sat, "
+           "hsl.z));\n"
+           "  vec3 split = vec3(warm.r, shifted.g, cool.b);\n"
+           "  vec3 outRgb = mix(shifted, split, amount * 0.45);\n"
+           "  outRgb = clamp((outRgb - 0.5) * (1.0 + amount * 1.2) + 0.5, 0.0, "
+           "1.0);\n"
+           "  return mix(rgb, outRgb, amount);\n"
+           "}\n"
            "\n"
            // ── Negative side: solarize → full invert ─────────────────────────
            // t [0..1]: 0=bypass, 0..0.5=blend into solarize,
@@ -105,14 +137,28 @@ struct ColorTransformFBO {
            "  return          mix(withSol, 1.0 - v, tInv);\n"
            "}\n"
            "\n"
-           // ── Positive side: posterize + contrast crush
-           // ──────────────────────
-           "float posterizeCrush(float v, float t, float freq) {\n"
-           "  float steps     = 2.0 + floor(freq * 3.5);\n"
-           "  float quantized = floor(v * steps + 0.5) / steps;\n"
-           "  float sharpened = clamp((v - 0.5) * (1.0 + t * 6.0) + 0.5, 0.0, "
-           "1.0);\n"
-           "  return mix(quantized, sharpened, t * 0.4);\n"
+           // ── Positive side: 3-phase curves contrast
+           // ──────────────────────────────────────────
+           // Phase 1 (t 0..1/3): black level rises  → shadows crush to black
+           // Phase 2 (t 1/3..2/3): black holds, white falls → approaching max
+           // Phase 3 (t 2/3..1): both held at extremes → maximum contrast
+           // freq still drives chromatic divergence per-channel.
+           "float curvesContrast(float v, float t, float freq) {\n"
+           "  float diverge  = (freq - 1.0) / 3.0;\n"
+           "  float maxBlack = 0.45;\n"
+           "  float minWhite = 0.55;\n"
+           "  float bl, wl;\n"
+           "  if (t < 0.3333) {\n"
+           "    float s = t * 3.0;\n"
+           "    bl = s * maxBlack; wl = 1.0;\n"
+           "  } else if (t < 0.6667) {\n"
+           "    float s = (t - 0.3333) * 3.0;\n"
+           "    bl = maxBlack; wl = 1.0 - s * (1.0 - minWhite);\n"
+           "  } else {\n"
+           "    bl = maxBlack; wl = minWhite;\n"
+           "  }\n"
+           "  float range = max(wl - bl, 0.001);\n"
+           "  return clamp((v - bl) / range, 0.0, 1.0);\n"
            "}\n"
            "\n"
            "vec3 warpColor(vec3 rgb, float w, float freq) {\n"
@@ -126,12 +172,12 @@ struct ColorTransformFBO {
            "    );\n"
            "  } else {\n"
            "    float t = w;\n"
-           "    float r = posterizeCrush(rgb.r, t, freq);\n"
-           "    float g = posterizeCrush(rgb.g, t, freq * (1.0 + diverge * "
+           "    float r = curvesContrast(rgb.r, t, freq);\n"
+           "    float g = curvesContrast(rgb.g, t, freq * (1.0 + diverge * "
            "0.15));\n"
-           "    float b = posterizeCrush(rgb.b, t, freq * (1.0 + diverge * "
+           "    float b = curvesContrast(rgb.b, t, freq * (1.0 + diverge * "
            "0.30));\n"
-           "    return mix(rgb, vec3(r, g, b), t);\n"
+           "    return vec3(r, g, b);\n"
            "  }\n"
            "}\n"
            "\n"
@@ -139,9 +185,7 @@ struct ColorTransformFBO {
            "  vec4 col = texture2D(tex, uv);\n"
            "  vec3 rgb = col.rgb;\n"
            "  if (abs(hue) > 0.01) {\n"
-           "    vec3 hsl = rgb2hsl(rgb);\n"
-           "    hsl.x = fract(hsl.x + hue / 360.0);\n"
-           "    rgb = hsl2rgb(hsl);\n"
+           "    rgb = hueTransform(rgb, hue);\n"
            "  }\n"
            "  if (abs(warp) > 0.01) {\n"
            "    rgb = warpColor(rgb, warp, foldFreq);\n"
@@ -262,7 +306,8 @@ struct ColorTransformFBO {
   // ── Apply and return the NVG image handle to use for drawing ─────────────
   // warpV:     -1..1  (negative = solarize→invert, positive = posterize+crush)
   // foldFreqV: 1..4   (mapped from INVERT knob 0..1 via 1.0 + v * 3.0)
-  // Returns srcImg if all params are neutral (no work done).
+  // Returns srcImg if all params are neutral and no orientation normalization
+  // is needed.
 
   // flipInputUV: pass true when srcTex is from a file-loaded image (stb_image
   // convention: row 0 = visual top) so the FBO output matches screen-capture
@@ -270,7 +315,8 @@ struct ColorTransformFBO {
   int apply(NVGcontext* vg, GLuint srcTex, int srcImg, int fbW, int fbH,
             float hueV, float warpV, float foldFreqV,
             bool flipInputUV = false) {
-    if (fabsf(hueV) <= 0.01f && fabsf(warpV) <= 0.01f) return srcImg;
+    if (!flipInputUV && fabsf(hueV) <= 0.01f && fabsf(warpV) <= 0.01f)
+      return srcImg;
 
     if (!initialized) init();
     if (!program) return srcImg;

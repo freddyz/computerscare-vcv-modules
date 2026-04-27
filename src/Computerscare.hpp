@@ -34,7 +34,7 @@ extern Model* modelComputerscareHorseADoodleDoo;
 extern Model* modelComputerscareDrolyPaw;
 
 extern Model* modelComputerscareTolyPoolsV2;
-extern Model* modelComputerscareGlolyPitch;
+extern Model* modelComputerscarePortaloof;
 
 extern Model* modelComputerscareNomplexPumbers;
 extern Model* modelComputerscareComplexGenerator;
@@ -353,7 +353,63 @@ struct InPort : ComputerscareSvgPort {
 
 // Knobs
 
-struct LrgKnob : RoundKnob {
+struct ComputerscareRoundKnob : RoundKnob {
+  float drawPadding = 4.f;
+
+  void layoutSvg() {
+    if (!sw || !sw->svg) return;
+    math::Vec svgSize = sw->box.size;
+    math::Vec pad(drawPadding, drawPadding);
+
+    box.size = svgSize;
+    fb->box.pos = pad.neg();
+    fb->box.size = svgSize.plus(pad.mult(2.f));
+    tw->box.size = fb->box.size;
+    sw->box.pos = pad;
+
+    bg->box.pos = pad;
+    bg->box.size = svgSize;
+    shadow->box.pos = pad.plus(math::Vec(0.f, svgSize.y * 0.10f));
+    shadow->box.size = svgSize;
+
+    fb->setDirty();
+  }
+
+  void setSvg(std::shared_ptr<window::Svg> svg) {
+    if (svg == sw->svg) return;
+
+    sw->setSvg(svg);
+    layoutSvg();
+  }
+
+  void onChange(const ChangeEvent& e) override {
+    float angle = 0.f;
+    engine::ParamQuantity* pq = getParamQuantity();
+    if (pq) {
+      float value = pq->getValue();
+      if (!pq->isBounded()) {
+        angle = value * (2.f * (float)M_PI);
+      } else if (pq->getRange() == 0.f) {
+        angle = (minAngle + maxAngle) * 0.5f;
+      } else {
+        angle = math::rescale(value, pq->getMinValue(), pq->getMaxValue(),
+                              minAngle, maxAngle);
+      }
+      angle = std::fmod(angle, 2.f * (float)M_PI);
+    }
+
+    tw->identity();
+    math::Vec center = sw->box.getCenter();
+    tw->translate(center);
+    tw->rotate(angle);
+    tw->translate(center.neg());
+    fb->setDirty();
+
+    Knob::onChange(e);
+  }
+};
+
+struct LrgKnob : ComputerscareRoundKnob {
   LrgKnob() {
     snap = true;
     shadow->opacity = 0.f;
@@ -362,7 +418,7 @@ struct LrgKnob : RoundKnob {
   }
 };
 
-struct MediumSnapKnob : RoundKnob {
+struct MediumSnapKnob : ComputerscareRoundKnob {
   MediumSnapKnob() {
     snap = true;
     shadow->opacity = 0.f;
@@ -370,7 +426,7 @@ struct MediumSnapKnob : RoundKnob {
         pluginInstance, "res/components/computerscare-medium-knob-effed.svg")));
   }
 };
-struct MediumDotSnapKnob : RoundKnob {
+struct MediumDotSnapKnob : ComputerscareRoundKnob {
   MediumDotSnapKnob() {
     shadow->opacity = 0.f;
     snap = true;
@@ -380,33 +436,41 @@ struct MediumDotSnapKnob : RoundKnob {
   }
 };
 
-struct SmoothKnob : RoundKnob {
+struct SmoothKnob : ComputerscareRoundKnob {
   SmoothKnob() {
     setSvg(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/computerscare-medium-knob-effed.svg")));
   }
 };
-struct SmoothKnobNoRandom : RoundKnob {
+struct SmoothKnobNoRandom : ComputerscareRoundKnob {
   SmoothKnobNoRandom() {
     setSvg(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/computerscare-medium-knob-effed.svg")));
   }
 };
-struct SmallKnob : RoundKnob {
+struct SmallKnob : ComputerscareRoundKnob {
   SmallKnob() {
     setSvg(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/computerscare-small-knob-effed.svg")));
   }
 };
 
-struct ScrambleKnob : RoundKnob {
+struct DarkSmallKnob : ComputerscareRoundKnob {
+  DarkSmallKnob() {
+    setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance,
+        "res/components/computerscare-small-knob-effed-dark.svg")));
+  }
+};
+
+struct ScrambleKnob : ComputerscareRoundKnob {
   ScrambleKnob() {
     shadow->opacity = 0.f;
     setSvg(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/computerscare-scramble-knob.svg")));
   }
 };
-struct ScrambleKnobNoRandom : RoundKnob {
+struct ScrambleKnobNoRandom : ComputerscareRoundKnob {
   ScrambleKnobNoRandom() {
     shadow->opacity = 0.f;
     setSvg(APP->window->loadSvg(asset::plugin(
@@ -414,7 +478,7 @@ struct ScrambleKnobNoRandom : RoundKnob {
   }
 };
 
-struct ScrambleSnapKnob : RoundKnob {
+struct ScrambleSnapKnob : ComputerscareRoundKnob {
   ScrambleSnapKnob() {
     snap = true;
     shadow->opacity = 0.f;
@@ -422,7 +486,7 @@ struct ScrambleSnapKnob : RoundKnob {
         pluginInstance, "res/components/computerscare-scramble-knob.svg")));
   }
 };
-struct ScrambleSnapKnobNoRandom : RoundKnob {
+struct ScrambleSnapKnobNoRandom : ComputerscareRoundKnob {
   ScrambleSnapKnobNoRandom() {
     snap = true;
     shadow->opacity = 0.f;
@@ -431,7 +495,7 @@ struct ScrambleSnapKnobNoRandom : RoundKnob {
   }
 };
 
-struct SmallSnapKnob : RoundKnob {
+struct SmallSnapKnob : ComputerscareRoundKnob {
   SmallSnapKnob() {
     snap = true;
     setSvg(APP->window->loadSvg(asset::plugin(
@@ -440,7 +504,7 @@ struct SmallSnapKnob : RoundKnob {
     shadow->opacity = 0.f;
   }
 };
-struct BigSmoothKnob : RoundKnob {
+struct BigSmoothKnob : ComputerscareRoundKnob {
   BigSmoothKnob() {
     setSvg(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/computerscare-big-knob-effed.svg")));

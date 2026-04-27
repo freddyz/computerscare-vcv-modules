@@ -12,7 +12,7 @@ LDFLAGS +=
 
 # Add .cpp and .c files to the build
 SOURCES += $(filter-out src/test.cpp, $(wildcard src/*.cpp))
-SOURCES += $(wildcard src/GlolyPitch/*.cpp)
+SOURCES += $(wildcard src/Portaloof/*.cpp)
 SOURCES += $(wildcard src/complex/*.cpp)
 # SOURCES += $(wildcard src/ComputerscareSVGPanel.cpp)
 # SOURCES += $(wildcard src/ComputerscareSvgPort.cpp)
@@ -41,12 +41,12 @@ SOURCES += $(wildcard src/complex/*.cpp)
 
 # Add files to the ZIP package when running `make dist`
 # The compiled plugin is automatically added.
-DISTRIBUTABLES += $(wildcard LICENSE*) res presets
+DISTRIBUTABLES += $(wildcard LICENSE*) res presets doc/computerscare-1.4-all-modules.jpg doc/all-computerscare-modules-v1.jpg doc/all-computerscare-modules.jpg doc/computerscare-poly-utilities.jpg
 
 # Include the VCV Rack plugin Makefile framework
 include $(RACK_DIR)/plugin.mk
 
-# GlolyPitch uses raw OpenGL calls (glBindTexture, glCopyTexSubImage2D, etc.)
+# Portaloof uses raw OpenGL calls (glBindTexture, glCopyTexSubImage2D, etc.)
 # ARCH_WIN is defined by plugin.mk, so this must come after the include.
 ifdef ARCH_WIN
 LDFLAGS += -lopengl32
