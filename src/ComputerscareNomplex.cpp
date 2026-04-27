@@ -1,5 +1,6 @@
 #include "Computerscare.hpp"
 #include "complex/ComplexWidgets.hpp"
+#include "complex/math/ComplexMath.hpp"
 
 #include <array>
 
@@ -164,10 +165,8 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
         float rtParamX = params[COMPLEX_CONSTANT_U].getValue();
         float rtParamY = params[COMPLEX_CONSTANT_U+1].getValue();
 
-        float realOffsetKnob = params[REAL_INPUT_OFFSET].getValue();
         float realTrimKnob = params[REAL_INPUT_TRIM].getValue();
 
-        float imaginaryOffsetKnob = params[IMAGINARY_INPUT_OFFSET].getValue();
         float imaginaryTrimKnob = params[IMAGINARY_INPUT_TRIM].getValue();
 
         float modulusOffsetKnob = params[MODULUS_INPUT_OFFSET].getValue();
@@ -178,41 +177,174 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
 
         int wrapMode = params[WRAP_MODE].getValue();
 
-        for(int rectInputCh = 0; rectInputCh < compolyChannelsRectIn; rectInputCh++) {
-            std::vector<int> inputChannelIndices = getChannelIndicesFromSeparatedInput(rectInputCh,wrapMode,{numRealInputChannels,numImaginaryInputChannels});
+        float rectX[16] = {};
+        float rectY[16] = {};
+        float rectR[16] = {};
+        float rectTheta[16] = {};
 
-            int realInputCh=inputChannelIndices[0];
-            int imInputCh=inputChannelIndices[1];
+        readSeparatedRectInputsToRect(REAL_IN, IMAGINARY_IN, numRealInputChannels,
+                                      numImaginaryInputChannels, wrapMode,
+                                      compolyChannelsRectIn, realTrimKnob,
+                                      xyParamX, imaginaryTrimKnob, xyParamY,
+                                      rectX, rectY);
 
-            float x = inputs[REAL_IN].getVoltage(realInputCh)*realTrimKnob  + xyParamX;
-            float y = inputs[IMAGINARY_IN].getVoltage(imInputCh)*imaginaryTrimKnob  + xyParamY;
+        bool rectNeedsPolar = outputModeIsPolar(out1mode) || outputModeIsPolar(out2mode);
+        if (rectNeedsPolar) {
+            rectToPolar(rectX, rectY, compolyChannelsRectIn, rectR, rectTheta);
+        }
+        writeOutputVoltages(RECT_IN_RECT_OUT, out1mode, compolyChannelsRectIn,
+                            rectX, rectY, rectR, rectTheta);
+        writeOutputVoltages(RECT_IN_POLAR_OUT, out2mode, compolyChannelsRectIn,
+                            rectX, rectY, rectR, rectTheta);
 
-            float r = std::hypot(x,y);
-            float arg = std::atan2(y,x);
+        float polarX[16] = {};
+        float polarY[16] = {};
+        float polarR[16] = {};
+        float polarTheta[16] = {};
 
-            setOutputVoltages(RECT_IN_RECT_OUT,out1mode,rectInputCh,x,y,r,arg);
-            setOutputVoltages(RECT_IN_POLAR_OUT,out2mode,rectInputCh,x,y,r,arg);
+        readSeparatedPolarInputsToRect(MODULUS_IN, ARGUMENT_IN,
+                                       numModulusInputChannels,
+                                       numArgumentInputChannels, wrapMode,
+                                       compolyChannelsPolarIn, modulusTrimKnob,
+                                       modulusOffsetKnob, argumentTrimKnob,
+                                       argumentOffsetKnob, rtParamX, rtParamY,
+                                       polarX, polarY);
+
+        bool polarNeedsPolar = outputModeIsPolar(out3mode) || outputModeIsPolar(out4mode);
+        if (polarNeedsPolar) {
+            rectToPolar(polarX, polarY, compolyChannelsPolarIn, polarR, polarTheta);
+        }
+        writeOutputVoltages(POLAR_IN_RECT_OUT, out3mode, compolyChannelsPolarIn,
+                            polarX, polarY, polarR, polarTheta);
+        writeOutputVoltages(POLAR_IN_POLAR_OUT, out4mode, compolyChannelsPolarIn,
+                            polarX, polarY, polarR, polarTheta);
+    }
+
+    bool outputModeIsPolar(int mode) {
+        return mode == POLAR_INTERLEAVED || mode == POLAR_SEPARATED;
+    }
+
+    void readSeparatedRectInputsToRect(int firstInput, int secondInput,
+                                       int firstChannels, int secondChannels,
+                                       int wrapMode, int compolyChannels,
+                                       float firstTrim, float firstOffset,
+                                       float secondTrim, float secondOffset,
+                                       float* x, float* y) {
+        float a[16] = {};
+        float b[16] = {};
+        inputs[firstInput].readVoltages(a);
+        inputs[secondInput].readVoltages(b);
+
+        bool direct = wrapMode == WRAP_NORMAL && firstChannels > 1 &&
+                      secondChannels > 1 && compolyChannels <= firstChannels &&
+                      compolyChannels <= secondChannels;
+
+        int c = 0;
+        if (direct) {
+            for (; c + 3 < compolyChannels; c += 4) {
+                simd::float_4 av = simd::float_4::load(a + c);
+                simd::float_4 bv = simd::float_4::load(b + c);
+                (av * firstTrim + firstOffset).store(x + c);
+                (bv * secondTrim + secondOffset).store(y + c);
+            }
         }
 
-        for(int polarInputCh = 0; polarInputCh < compolyChannelsPolarIn; polarInputCh++) {
-            std::vector<int> inputChannelIndices = getChannelIndicesFromSeparatedInput(polarInputCh,wrapMode,{numModulusInputChannels,numArgumentInputChannels});
+        for (; c < compolyChannels; c++) {
+            int firstCh = cpx::complex_math::channelIndexForOutput(
+                c, static_cast<cpx::complex_math::WrapMode>(wrapMode),
+                firstChannels);
+            int secondCh = cpx::complex_math::channelIndexForOutput(
+                c, static_cast<cpx::complex_math::WrapMode>(wrapMode),
+                secondChannels);
+            x[c] = a[firstCh] * firstTrim + firstOffset;
+            y[c] = b[secondCh] * secondTrim + secondOffset;
+        }
+    }
 
-            int modInputChannel=inputChannelIndices[0];
-            int argInputChannel=inputChannelIndices[1];
+    void readSeparatedPolarInputsToRect(int firstInput, int secondInput,
+                                        int firstChannels, int secondChannels,
+                                        int wrapMode, int compolyChannels,
+                                        float radiusTrim, float radiusOffset,
+                                        float thetaTrim, float thetaOffset,
+                                        float xOffset, float yOffset,
+                                        float* x, float* y) {
+        float radiusIn[16] = {};
+        float thetaIn[16] = {};
+        inputs[firstInput].readVoltages(radiusIn);
+        inputs[secondInput].readVoltages(thetaIn);
 
-            float r0 = inputs[MODULUS_IN].getVoltage(modInputChannel)*modulusTrimKnob + modulusOffsetKnob;
-            float theta0 = inputs[ARGUMENT_IN].getVoltage(argInputChannel)*argumentTrimKnob + argumentOffsetKnob;
+        bool direct = wrapMode == WRAP_NORMAL && firstChannels > 1 &&
+                      secondChannels > 1 && compolyChannels <= firstChannels &&
+                      compolyChannels <= secondChannels;
 
-            float x = r0*std::cos(theta0)+rtParamX;
-            float y = r0*std::sin(theta0)+rtParamY;
+        int c = 0;
+        if (direct) {
+            for (; c + 3 < compolyChannels; c += 4) {
+                simd::float_4 radius = simd::float_4::load(radiusIn + c) *
+                                       radiusTrim + radiusOffset;
+                simd::float_4 theta = simd::float_4::load(thetaIn + c) *
+                                      thetaTrim + thetaOffset;
+                (radius * simd::cos(theta) + xOffset).store(x + c);
+                (radius * simd::sin(theta) + yOffset).store(y + c);
+            }
+        }
 
-            float r = std::hypot(x,y);
-            float theta = std::atan2(y,x);
+        for (; c < compolyChannels; c++) {
+            int radiusCh = cpx::complex_math::channelIndexForOutput(
+                c, static_cast<cpx::complex_math::WrapMode>(wrapMode),
+                firstChannels);
+            int thetaCh = cpx::complex_math::channelIndexForOutput(
+                c, static_cast<cpx::complex_math::WrapMode>(wrapMode),
+                secondChannels);
+            float radius = radiusIn[radiusCh] * radiusTrim + radiusOffset;
+            float theta = thetaIn[thetaCh] * thetaTrim + thetaOffset;
+            x[c] = radius * std::cos(theta) + xOffset;
+            y[c] = radius * std::sin(theta) + yOffset;
+        }
+    }
 
-            setOutputVoltages(POLAR_IN_RECT_OUT,out3mode,polarInputCh,x,y,r,theta);
-            setOutputVoltages(POLAR_IN_POLAR_OUT,out4mode,polarInputCh,x,y,r,theta);
+    void rectToPolar(float* x, float* y, int channels, float* r, float* theta) {
+        int c = 0;
+        for (; c + 3 < channels; c += 4) {
+            simd::float_4 xv = simd::float_4::load(x + c);
+            simd::float_4 yv = simd::float_4::load(y + c);
+            simd::hypot(xv, yv).store(r + c);
+            simd::atan2(yv, xv).store(theta + c);
+        }
 
-        }  
+        for (; c < channels; c++) {
+            r[c] = std::hypot(x[c], y[c]);
+            theta[c] = std::atan2(y[c], x[c]);
+        }
+    }
+
+    void writeOutputVoltages(int outIndex, int outMode, int compolyChannels,
+                             float* x, float* y, float* r, float* theta) {
+        float a[16] = {};
+        float b[16] = {};
+        bool polar = outputModeIsPolar(outMode);
+        bool interleaved = outMode == RECT_INTERLEAVED || outMode == POLAR_INTERLEAVED;
+
+        for (int c = 0; c < compolyChannels; c++) {
+            float first = polar ? r[c] : x[c];
+            float second = polar ? theta[c] : y[c];
+
+            if (interleaved) {
+                if (c < 8) {
+                    a[2 * c] = first;
+                    a[2 * c + 1] = second;
+                } else {
+                    b[(2 * c) % 16] = first;
+                    b[(2 * c + 1) % 16] = second;
+                }
+            } else {
+                a[c] = first;
+                b[c] = second;
+            }
+        }
+
+        outputs[outIndex].writeVoltages(a);
+        outputs[outIndex + 1].writeVoltages(b);
     }
 
     json_t *dataToJson() override {

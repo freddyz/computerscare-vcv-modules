@@ -105,7 +105,6 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
-		int wrapMode = 0;
 
 		int compolyphonyKnobSetting = params[COMPOLY_CHANNELS].getValue();
 		int zInputMode = params[Z_INPUT_MODE].getValue();
@@ -124,15 +123,6 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		int productOutputMode=params[PRODUCT_OUTPUT_MODE].getValue();
 		setOutputChannels(COMPOLY_PRODUCT_OUT_A,productOutputMode,compolyChannelsMainOutput);
 
-		
-		float offsetX = params[OFFSET_VAL_AB].getValue();
-		float offsetY = params[OFFSET_VAL_AB+1].getValue();
-
-		float scaleX = params[SCALE_VAL_AB].getValue();
-		float scaleY = params[SCALE_VAL_AB+1].getValue();
-
-		math::Vec scaleRect = Vec(scaleX,scaleY);
-
 		float zx[16] = {};
 		float zy[16] = {};
 
@@ -148,16 +138,16 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		readInputToRect(Z_INPUT,zInputMode,zx,zy);
 		readInputToRect(W_INPUT,wInputMode,wx,wy);
 
-		for (uint8_t c = 0; c < 16; c++) { 
-			cpx::complex_math::Rect z(zx[c], zy[c]);
-			cpx::complex_math::Rect w(wx[c], wy[c]);
-			cpx::complex_math::Rect sum = cpx::complex_math::add(z, w);
-			sumx[c] = sum.x;
-			sumy[c] = sum.y;
+		for (uint8_t c = 0; c < 16; c += 4) {
+			simd::float_4 zxv = simd::float_4::load(zx + c);
+			simd::float_4 zyv = simd::float_4::load(zy + c);
+			simd::float_4 wxv = simd::float_4::load(wx + c);
+			simd::float_4 wyv = simd::float_4::load(wy + c);
 
-			cpx::complex_math::Rect product = cpx::complex_math::multiply(z, w);
-			prodx[c] = product.x;
-			prody[c] = product.y;
+			(zxv + wxv).store(sumx + c);
+			(zyv + wyv).store(sumy + c);
+			(zxv * wxv - zyv * wyv).store(prodx + c);
+			(zxv * wyv + zyv * wxv).store(prody + c);
 		}
 
 		writeOutputFromRect(COMPOLY_MAIN_OUT_A,mainOutputMode,sumx,sumy);
@@ -168,28 +158,87 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 	int chMap2[16]  = {1,3,5,7,9,11,13,15,1,3,5,7,9,11,13,15};
 
 	void writeOutputFromRect(int firstPortIndex, int outputMode, float* x, float* y) {
-		cpx::complex_math::RectChannels rect = {};
-		for (uint8_t c = 0; c < 16; c++) {
-			rect.x[c] = x[c];
-			rect.y[c] = y[c];
+		bool polar = outputMode == POLAR_SEPARATED || outputMode == POLAR_INTERLEAVED;
+		bool interleaved = outputMode == RECT_INTERLEAVED || outputMode == POLAR_INTERLEAVED;
+
+		if (polar) {
+			float r[16] = {};
+			float theta[16] = {};
+			for (uint8_t c = 0; c < 16; c += 4) {
+				simd::float_4 xv = simd::float_4::load(x + c);
+				simd::float_4 yv = simd::float_4::load(y + c);
+				simd::hypot(xv, yv).store(r + c);
+				simd::atan2(yv, xv).store(theta + c);
+			}
+			writeOutputVoltages(firstPortIndex, interleaved, r, theta);
+		}
+		else {
+			writeOutputVoltages(firstPortIndex, interleaved, x, y);
+		}
+	}
+
+	void writeOutputVoltages(int firstPortIndex, bool interleaved, float* x, float* y) {
+		float a[16] = {};
+		float b[16] = {};
+
+		if (interleaved) {
+			for (uint8_t c = 0; c < 8; c++) {
+				a[2 * c] = x[c];
+				a[2 * c + 1] = y[c];
+			}
+			for (uint8_t c = 8; c < 16; c++) {
+				b[(2 * c) % 16] = x[c];
+				b[(2 * c + 1) % 16] = y[c];
+			}
+		}
+		else {
+			for (uint8_t c = 0; c < 16; c++) {
+				a[c] = x[c];
+				b[c] = y[c];
+			}
 		}
 
-		cpx::complex_math::PortChannels ports = cpx::complex_math::writePortsFromRect(
-			rect, static_cast<cpx::complex_math::CoordinateMode>(outputMode));
-		outputs[firstPortIndex].writeVoltages(ports.a.data());
-		outputs[firstPortIndex+1].writeVoltages(ports.b.data());
+		outputs[firstPortIndex].writeVoltages(a);
+		outputs[firstPortIndex+1].writeVoltages(b);
 	}
 
 	void readInputToRect(int firstPortIndex, int inputMode, float* x, float* y) {
-		cpx::complex_math::PortChannels ports = {};
-		inputs[firstPortIndex].readVoltages(ports.a.data());
-		inputs[firstPortIndex+1].readVoltages(ports.b.data());
-		cpx::complex_math::RectChannels rect = cpx::complex_math::readRectFromPorts(
-			ports, static_cast<cpx::complex_math::CoordinateMode>(inputMode));
+		float a[16] = {};
+		float b[16] = {};
+		inputs[firstPortIndex].readVoltages(a);
+		inputs[firstPortIndex+1].readVoltages(b);
 
-		for (uint8_t c = 0; c < 16; c++) {
-			x[c] = rect.x[c];
-			y[c] = rect.y[c];
+		if (inputMode == RECT_SEPARATED) {
+			for (uint8_t c = 0; c < 16; c += 4) {
+				simd::float_4::load(a + c).store(x + c);
+				simd::float_4::load(b + c).store(y + c);
+			}
+		}
+		else if (inputMode == RECT_INTERLEAVED) {
+			for (uint8_t c = 0; c < 8; c++) {
+				x[c] = a[2 * c];
+				y[c] = a[2 * c + 1];
+			}
+			for (uint8_t c = 8; c < 16; c++) {
+				x[c] = b[(2 * c) % 16];
+				y[c] = b[(2 * c + 1) % 16];
+			}
+		}
+		else if (inputMode == POLAR_SEPARATED) {
+			for (uint8_t c = 0; c < 16; c += 4) {
+				simd::float_4 r = simd::float_4::load(a + c);
+				simd::float_4 theta = simd::float_4::load(b + c);
+				(r * simd::cos(theta)).store(x + c);
+				(r * simd::sin(theta)).store(y + c);
+			}
+		}
+		else if (inputMode == POLAR_INTERLEAVED) {
+			for (uint8_t c = 0; c < 16; c++) {
+				float r = c < 8 ? a[2 * c] : b[(2 * c) % 16];
+				float theta = c < 8 ? a[2 * c + 1] : b[(2 * c + 1) % 16];
+				x[c] = r * std::cos(theta);
+				y[c] = r * std::sin(theta);
+			}
 		}
 	}
 
