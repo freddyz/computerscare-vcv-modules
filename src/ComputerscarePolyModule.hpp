@@ -149,22 +149,27 @@ struct CompolyLaneCountWidget : Widget {
   ComputerscarePolyModule* module;
   PolyChannelsDisplay* laneCountDisplay;
   TinyCompolyLanesSnapKnob* lanesKnob;
+  TransformWidget* lanesKnobTransform;
   CompolyLaneCountWidget(math::Vec pos, ComputerscarePolyModule* mod,
                          int paramId, int* laneCount = NULL,
                          bool allowAuto = true) {
     module = mod;
 
-    lanesKnob = createParam<TinyCompolyLanesSnapKnob>(pos.plus(Vec(7, 3)),
-                                                      module, paramId);
+    lanesKnobTransform = new TransformWidget();
+    lanesKnobTransform->box.pos = pos.plus(Vec(5, 1));
+    lanesKnobTransform->scale(1.2f);
+
+    lanesKnob = createParam<TinyCompolyLanesSnapKnob>(Vec(0, 0), module, paramId);
     lanesKnob->module = module;
     lanesKnob->paramId = paramId;
     lanesKnob->allowAuto = allowAuto;
+    lanesKnobTransform->addChild(lanesKnob);
 
     laneCountDisplay = new PolyChannelsDisplay(pos);
     laneCountDisplay->module = module;
     laneCountDisplay->channelCount = laneCount;
 
-    addChild(lanesKnob);
+    addChild(lanesKnobTransform);
     addChild(laneCountDisplay);
   }
 };

@@ -14,6 +14,26 @@ enum class ComplexControlPreset {
 	ArrowPolar,   // 2 params (r, θ) — arrow; user may also place polar knobs
 };
 
+enum class ComplexControlStyle {
+	Normal,
+	Faded,
+};
+
+struct ComplexControlSmallKnob : SmallKnob {
+	std::shared_ptr<Svg> normalSvg = APP->window->loadSvg(asset::plugin(
+		pluginInstance, "res/components/computerscare-small-knob-effed.svg"));
+	std::shared_ptr<Svg> fadedSvg = APP->window->loadSvg(asset::plugin(
+		pluginInstance, "res/components/computerscare-small-knob-effed-disabled.svg"));
+	bool faded = false;
+
+	void setFaded(bool shouldFade) {
+		if (faded == shouldFade)
+			return;
+		faded = shouldFade;
+		setSvg(faded ? fadedSvg : normalSvg);
+	}
+};
+
 // ─── ComplexControl ──────────────────────────────────────────────────────────
 // Composite widget: optional arrow drag + optional display.
 //
@@ -35,9 +55,16 @@ struct ComplexControl : Widget {
 	ComputerscareComplexBase* module = nullptr;
 	int firstParamIdx = 0;
 	ComplexControlPreset preset = ComplexControlPreset::ArrowXY;
+	ComplexControlStyle style = ComplexControlStyle::Normal;
 
 	ComplexXY*            arrowWidget = nullptr;
 	ComplexDisplayWidget* display     = nullptr;
+	TransformWidget*      knobA       = nullptr;
+	TransformWidget*      knobB       = nullptr;
+	ComplexControlSmallKnob* knobAWidget = nullptr;
+	ComplexControlSmallKnob* knobBWidget = nullptr;
+	ScaledSvgWidget*      labelA      = nullptr;
+	ScaledSvgWidget*      labelB      = nullptr;
 
 	// ── Param registration ────────────────────────────────────────────────────
 	// Call once from the module constructor.  Always registers exactly 2 params.
@@ -87,6 +114,43 @@ struct ComplexControl : Widget {
 			arrowWidget = new ComplexXY(m, firstIdx);
 			addChild(arrowWidget);
 		}
+
+		bool hasKnobs = (preset == ComplexControlPreset::XYKnobs ||
+		                 preset == ComplexControlPreset::RThetaKnobs ||
+		                 preset == ComplexControlPreset::ArrowXY ||
+		                 preset == ComplexControlPreset::ArrowPolar);
+		if (hasKnobs) {
+			float knobScale = hasArrow ? 0.52f : 0.78f;
+
+			knobA = new TransformWidget();
+			knobA->scale(knobScale);
+			knobAWidget = createParam<ComplexControlSmallKnob>(Vec(0.f, 0.f), m, firstIdx);
+			knobA->addChild(knobAWidget);
+			addChild(knobA);
+
+			knobB = new TransformWidget();
+			knobB->scale(knobScale);
+			knobBWidget = createParam<ComplexControlSmallKnob>(Vec(0.f, 0.f), m, firstIdx + 1);
+			knobB->addChild(knobBWidget);
+			addChild(knobB);
+
+			auto labels = presetLabels(preset, Vec(0.f, 0.f), Vec(0.f, 0.f), hasArrow ? 0.26f : 0.34f);
+			labelA = labels.first;
+			labelB = labels.second;
+			addChild(labelA);
+			addChild(labelB);
+		}
+	}
+
+	void setStyle(ComplexControlStyle newStyle) {
+		style = newStyle;
+		bool shouldFade = style == ComplexControlStyle::Faded;
+		if (arrowWidget)
+			arrowWidget->setFaded(shouldFade);
+		if (knobAWidget)
+			knobAWidget->setFaded(shouldFade);
+		if (knobBWidget)
+			knobBWidget->setFaded(shouldFade);
 	}
 
 	// ── Display toggle ────────────────────────────────────────────────────────
@@ -119,6 +183,24 @@ struct ComplexControl : Widget {
 
 		if (arrowWidget) {
 			arrowWidget->box = Rect(Vec(0, 0), Vec(box.size.x, arrowH));
+		}
+		if (knobA && knobB) {
+			if (arrowWidget) {
+				knobA->box.pos = Vec(1.f, 8.f);
+				knobB->box.pos = Vec(box.size.x - 10.f, 8.f);
+			} else {
+				knobA->box.pos = Vec(1.f, 8.f);
+				knobB->box.pos = Vec(box.size.x - 15.f, 8.f);
+			}
+		}
+		if (labelA && labelB) {
+			if (arrowWidget) {
+				labelA->box.pos = Vec(2.f, 3.f);
+				labelB->box.pos = Vec(box.size.x - 9.f, 3.f);
+			} else {
+				labelA->box.pos = Vec(4.f, 1.f);
+				labelB->box.pos = Vec(box.size.x - 12.f, 1.f);
+			}
 		}
 		if (display) {
 			display->box = Rect(Vec(0, arrowH), Vec(box.size.x, displayH));

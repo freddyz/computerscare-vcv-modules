@@ -17,15 +17,18 @@ namespace cpx {
       POLAR_SEPARATED
   };
 
-	inline void drawArrowTo(NVGcontext* vg,math::Vec tipPosition,float baseWidth=5.f) {
+	inline void drawArrowTo(NVGcontext* vg,math::Vec tipPosition,float baseWidth=5.f,
+	                        NVGcolor fillColor = COLOR_COMPUTERSCARE_LIGHT_GREEN,
+	                        NVGcolor strokeColor = COLOR_COMPUTERSCARE_DARK_GREEN,
+	                        float strokeWidth = 1.f) {
 		float angle = tipPosition.arg();
 		float len = tipPosition.norm();
 
 		//nvgSave(vg);
     nvgBeginPath(vg);
-    nvgStrokeWidth(vg, 1.f);
-    nvgStrokeColor(vg,  COLOR_COMPUTERSCARE_DARK_GREEN);
-    nvgFillColor(vg,  COLOR_COMPUTERSCARE_LIGHT_GREEN);
+    nvgStrokeWidth(vg, strokeWidth);
+    nvgStrokeColor(vg, strokeColor);
+    nvgFillColor(vg, fillColor);
    
 		nvgRotate(vg,angle);
 		nvgMoveTo(vg,0,-baseWidth);
@@ -63,6 +66,13 @@ namespace cpx {
 	int paramA;
 
 	bool editing=false;
+	bool faded = false;
+	NVGcolor normalBackgroundColor = nvgRGBA(0, 35, 25, 80);
+	NVGcolor fadedBackgroundColor = nvgRGBA(150, 150, 150, 70);
+	NVGcolor normalArrowFillColor = nvgRGB(70, 170, 120);
+	NVGcolor normalArrowStrokeColor = nvgRGB(8, 48, 32);
+	NVGcolor fadedArrowFillColor = nvgRGB(125, 125, 125);
+	NVGcolor fadedArrowStrokeColor = nvgRGB(75, 75, 75);
 
 	float originalMagnituteRadiusPixels = 120.f;
 
@@ -71,6 +81,10 @@ namespace cpx {
 		paramA = indexParamA;
 		//box.size = Vec(30,30);
 		TransparentWidget();
+	}
+
+	void setFaded(bool shouldFade) {
+		faded = shouldFade;
 	}
 
 	void onButton(const event::Button &e) override {
@@ -137,22 +151,25 @@ namespace cpx {
 			nvgTranslate(args.vg,fullR,fullR);
 	      nvgBeginPath(args.vg);
 	      nvgStrokeWidth(args.vg, 2.f);
-	      nvgFillColor(args.vg,  nvgRGBA(0, 10, 30,50));
+	      nvgFillColor(args.vg, faded ? fadedBackgroundColor : normalBackgroundColor);
 	      //nvgMoveTo(args.vg,box.size.x/2,box.size.y/2);
 	      nvgEllipse(args.vg, 0,0,fullR,fullR);
 	      nvgClosePath(args.vg);
 	      nvgFill(args.vg);
 
    			nvgBeginPath(args.vg);
-	      nvgStrokeWidth(args.vg, 2.f);
-	      nvgStrokeColor(args.vg,  nvgRGB(40, 110, 80));
+	      nvgStrokeWidth(args.vg, faded ? 1.3f : 2.4f);
+	      nvgStrokeColor(args.vg, faded ? fadedArrowStrokeColor : normalArrowStrokeColor);
 	      nvgMoveTo(args.vg, 0,0);
 
 
 	      float length=newZ.norm();
 	      Vec tip = newZ.normalize().mult(2*fullR/M_PI*std::atan(length));
 
-	      drawArrowTo(args.vg,tip,box.size.x/7);
+	      drawArrowTo(args.vg, tip, box.size.x / 6.4f,
+	                  faded ? fadedArrowFillColor : normalArrowFillColor,
+	                  faded ? fadedArrowStrokeColor : normalArrowStrokeColor,
+	                  faded ? 1.f : 1.5f);
 	      nvgRestore(args.vg);
 
 	}
@@ -231,7 +248,17 @@ namespace cpx {
 	}
 };
 
-	struct CompolyModeParam : ParamQuantity {
+	struct CompolyModeParam : SwitchQuantity {
+		CompolyModeParam() {
+			snapEnabled = true;
+			labels = {
+				"Rectangular Interleaved",
+				"Polar Interleaved",
+				"Rectangular Separated",
+				"Polar Separated",
+			};
+		}
+
 		std::string getDisplayValueString() override {
 			int mode = getValue();
 			if(mode == RECT_INTERLEAVED) {
@@ -391,6 +418,7 @@ struct CompolyInOrOutWidget : Widget {
 	struct CompolyPortsWidget : CompolyInOrOutWidget<ComplexOutport> {
 		ComplexOutport* port;
 		CompolySingleLabelSwitch* compolyLabel;
+		TransformWidget* compolyLabelTransform;
 		Vec labelOffset;
 		
 		CompolyPortsWidget(math::Vec pos,ComputerscareComplexBase *cModule, int firstPortID,int compolyTypeParamID,float scale=1.0,bool isOutput=true,std::string labelSvgFilename="z") : CompolyInOrOutWidget(pos) {
@@ -405,12 +433,12 @@ struct CompolyInOrOutWidget : Widget {
 			compolyLabel->initParamQuantity();
 
 
-			TransformWidget* tw = new TransformWidget();
-			tw->box.pos = pos.minus(Vec(40,0));
-			tw->scale(scale);
+			compolyLabelTransform = new TransformWidget();
+			compolyLabelTransform->box.pos = pos.minus(Vec(40,0));
+			compolyLabelTransform->scale(scale);
 
-			tw->addChild(compolyLabel);
-			addChild(tw);
+			compolyLabelTransform->addChild(compolyLabel);
+			addChild(compolyLabelTransform);
 
 			ports.resize(numPorts);
 
