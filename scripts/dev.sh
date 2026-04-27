@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Dev helper. Most tasks need RACK_DIR pointing at a VCV Rack SDK; the
-# `sandbox` task does not, and is the one to use in agent loops or sandboxed
-# CI environments where the SDK isn't installed.
+# `sandbox` task does not, and is an alias for agent loops or sandboxed cloud
+# environments where the SDK isn't installed.
 
 set -e
 
@@ -60,8 +60,8 @@ usage() {
   cat <<EOF
 Usage: $0 <command>
 
-Sandbox-friendly (no SDK):
-  sandbox    Run scripts/sandbox-check.sh  (use this in agent loops)
+Agent fallback (no SDK):
+  sandbox    Run scripts/sandbox-check.sh  (alias for sandboxed/cloud agents)
   fmt        Format src/ in place with clang-format
   fmt-check  Verify formatting without modifying
 
