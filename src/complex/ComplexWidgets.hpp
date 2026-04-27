@@ -1,5 +1,7 @@
 #pragma once
 
+#include "math/ComplexFormat.hpp"
+
 using namespace rack;
 
 
@@ -81,8 +83,6 @@ namespace cpx {
 				if(module) {
 					float complexA = module->params[paramA].getValue();
 					float complexB = module->params[paramA+1].getValue();
-					int complexMode = module->params[paramA+2].getValue();
-
 					origComplexValue = Vec(complexA,-complexB);
 					origComplexLength=origComplexValue.norm();
 					
@@ -106,7 +106,7 @@ namespace cpx {
 		editing=false;
 	}
 
-	void step() {
+	void step() override {
 		if(editing && module) {
 			thisPos = APP->scene->getMousePos();
 
@@ -129,9 +129,6 @@ namespace cpx {
 
 
 	void draw(const DrawArgs &args) override {
-		float pxRatio = APP->window->pixelRatio;
-		//background
-
 		float fullR = box.size.x/2;
 
 		//circle at complex radius 1
@@ -246,8 +243,7 @@ namespace cpx {
 			}else if(mode == POLAR_SEPARATED) {
 				return "Polar Separated";
 			}
-			
-			//return disp == "0" ? "Auto" : disp;
+			return "";
 		}
 	};
 
@@ -312,7 +308,7 @@ namespace cpx {
 			addChild(tw);
 		}
 		void setSVG(std::string path) {
-			svg->setSVG(APP->window->loadSvg(asset::plugin(pluginInstance, path)));
+			svg->setSvg(APP->window->loadSvg(asset::plugin(pluginInstance, path)));
 		}
 	};
 
@@ -430,6 +426,136 @@ struct CompolyInOrOutWidget : Widget {
 				addChild(port);
 			}
 		}
-		
+
 	};
-}
+
+// ─── ComplexDisplayWidget ────────────────────────────────────────────────────
+// Renders a complex number as styled text.  Number tokens are drawn in
+// normalColor, operator tokens in dimColor, and the imaginary unit / angle
+// symbol token in accentColor.  The SVG glyphs for "i" and "e" (from
+// res/complex-labels/) are composed as scaled child widgets positioned each
+// frame to sit inline with the surrounding text.
+
+struct ComplexDisplayWidget : Widget {
+	Module* module = nullptr;
+	int paramX = 0;
+	int paramY = 0;
+
+	enum class DisplayMode { Rect, Polar };
+	DisplayMode displayMode = DisplayMode::Rect;
+	cpx::complex_math::AngleUnit angleUnit = cpx::complex_math::AngleUnit::Degree;
+	cpx::complex_math::PolarDisplayStyle polarStyle =
+		cpx::complex_math::PolarDisplayStyle::Engineering;
+	int decimals = -1;
+
+	NVGcolor normalColor = nvgRGB(0xe0, 0xe0, 0xe0);
+	NVGcolor dimColor    = nvgRGB(0x78, 0x78, 0x78);
+	NVGcolor accentColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+
+	// SVG glyph children — positioned each frame in draw()
+	ScaledSvgWidget* iGlyph = nullptr;
+	ScaledSvgWidget* eGlyph = nullptr;
+
+	ComplexDisplayWidget() {
+		iGlyph = new ScaledSvgWidget(0.5f);
+		iGlyph->setSVG("res/complex-labels/i.svg");
+		iGlyph->visible = false;
+		addChild(iGlyph);
+
+		eGlyph = new ScaledSvgWidget(0.5f);
+		eGlyph->setSVG("res/complex-labels/e.svg");
+		eGlyph->visible = false;
+		addChild(eGlyph);
+	}
+
+	void draw(const DrawArgs& args) override {
+		if (!module) {
+			iGlyph->visible = false;
+			eGlyph->visible = false;
+			Widget::draw(args);
+			return;
+		}
+
+		auto font = APP->window->loadFont(
+			asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+		if (!font) {
+			Widget::draw(args);
+			return;
+		}
+
+		float vx = module->params[paramX].getValue();
+		float vy = module->params[paramY].getValue();
+
+		cpx::complex_math::ComplexRenderParts parts;
+		bool polar = (displayMode == DisplayMode::Polar);
+		if (polar) {
+			parts = cpx::complex_math::polarParts(vx, vy, angleUnit, polarStyle, decimals);
+		} else {
+			parts = cpx::complex_math::rectParts(vx, vy, decimals);
+		}
+
+		float fsize = box.size.y * 0.72f;
+		float midY  = box.size.y * 0.55f;
+		float cursorX = 1.f;
+		float bounds[4];
+
+		nvgFontFaceId(args.vg, font->handle);
+		nvgFontSize(args.vg, fsize);
+		nvgTextLetterSpacing(args.vg, 0.3f);
+		nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+
+		auto drawToken = [&](const std::string& s, NVGcolor color) {
+			if (s.empty()) return;
+			nvgFillColor(args.vg, color);
+			nvgText(args.vg, cursorX, midY, s.c_str(), nullptr);
+			nvgTextBounds(args.vg, cursorX, midY, s.c_str(), nullptr, bounds);
+			cursorX = bounds[2] + 1.f;
+		};
+
+		// Glyph sizing: scale svg children to match the text cap-height.
+		// i.svg viewBox height is 9.2, e.svg viewBox height is 7.0.
+		// At scale 0.5 the natural mm->px mapping gives ~17px for i, ~13px for e
+		// at typical rack DPI.  We just position them; ScaledSvgWidget handles scale.
+		float glyphH = fsize * 0.85f;
+		float iW = glyphH * 0.35f;  // i is narrow
+		float eW = glyphH * 0.80f;
+
+		iGlyph->visible = false;
+		eGlyph->visible = false;
+
+		if (!polar) {
+			// real [sign imag] i
+			drawToken(parts.real, normalColor);
+			drawToken(" " + parts.sign + " ", dimColor);
+			drawToken(parts.imag, normalColor);
+			// place i glyph inline
+			iGlyph->box.pos = Vec(cursorX, midY - glyphH);
+			iGlyph->box.size = Vec(iW, glyphH);
+			iGlyph->visible = true;
+		} else if (polarStyle == cpx::complex_math::PolarDisplayStyle::Engineering) {
+			// magnitude ∠ angle
+			drawToken(parts.magnitude, normalColor);
+			drawToken(" " + parts.angleSym + " ", accentColor);
+			drawToken(parts.angle, normalColor);
+		} else {
+			// magnitude e^(i· angle)
+			drawToken(parts.magnitude, normalColor);
+			// e glyph
+			eGlyph->box.pos = Vec(cursorX, midY - glyphH);
+			eGlyph->box.size = Vec(eW, glyphH);
+			eGlyph->visible = true;
+			cursorX += eW + 1.f;
+			drawToken("^(", dimColor);
+			// i glyph
+			iGlyph->box.pos = Vec(cursorX, midY - glyphH);
+			iGlyph->box.size = Vec(iW, glyphH);
+			iGlyph->visible = true;
+			cursorX += iW + 1.f;
+			drawToken("·" + parts.angle + ")", dimColor);
+		}
+
+		Widget::draw(args);
+	}
+};
+
+} // namespace cpx

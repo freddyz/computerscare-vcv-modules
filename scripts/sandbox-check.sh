@@ -202,6 +202,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+echo "==> SDK-free complex format tests..."
+if command -v g++ >/dev/null; then
+  if g++ -std=c++11 -I src tests/complex_format_test.cpp -o /tmp/cs_complex_format_test; then
+    /tmp/cs_complex_format_test || fail "complex format tests failed"
+  else
+    fail "complex format tests did not compile"
+  fi
+else
+  echo "  skip: g++ not installed"
+fi
+
+# ---------------------------------------------------------------------------
 # clang-format is opt-in (export CHECK_FMT=1) because much of the legacy code
 # isn't formatted yet and we don't want every loop iteration to fail on style.
 if [[ "${CHECK_FMT:-0}" == "1" ]]; then

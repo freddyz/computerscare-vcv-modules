@@ -222,7 +222,7 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
 
 	std::vector<int> getChannelIndicesFromSeparatedInput(int outputIndex, int wrapMode, std::vector<int> channelCounts) {
         std::vector<int> output;
-        for(int i = 0; i < channelCounts.size(); i++) {
+        for(int i = 0; i < (int)channelCounts.size(); i++) {
         	int myInputChannelIndex=0;;
         	int myNumChannels = channelCounts[i];
     	    if(wrapMode == WRAP_NORMAL) {
