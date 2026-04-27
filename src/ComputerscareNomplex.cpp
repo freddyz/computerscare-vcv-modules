@@ -251,10 +251,10 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
 
         for (; c < compolyChannels; c++) {
             int firstCh = cpx::complex_math::channelIndexForOutput(
-                c, static_cast<cpx::complex_math::WrapMode>(wrapMode),
+                c, static_cast<cpx::compoly::WrapMode>(wrapMode),
                 firstChannels);
             int secondCh = cpx::complex_math::channelIndexForOutput(
-                c, static_cast<cpx::complex_math::WrapMode>(wrapMode),
+                c, static_cast<cpx::compoly::WrapMode>(wrapMode),
                 secondChannels);
             x[c] = a[firstCh] * firstTrim + firstOffset;
             y[c] = b[secondCh] * secondTrim + secondOffset;
@@ -291,10 +291,10 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
 
         for (; c < compolyChannels; c++) {
             int radiusCh = cpx::complex_math::channelIndexForOutput(
-                c, static_cast<cpx::complex_math::WrapMode>(wrapMode),
+                c, static_cast<cpx::compoly::WrapMode>(wrapMode),
                 firstChannels);
             int thetaCh = cpx::complex_math::channelIndexForOutput(
-                c, static_cast<cpx::complex_math::WrapMode>(wrapMode),
+                c, static_cast<cpx::compoly::WrapMode>(wrapMode),
                 secondChannels);
             float radius = radiusIn[radiusCh] * radiusTrim + radiusOffset;
             float theta = thetaIn[thetaCh] * thetaTrim + thetaOffset;
