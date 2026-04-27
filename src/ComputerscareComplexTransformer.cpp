@@ -83,6 +83,14 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		configParam<cpx::CompolyModeParam>(B_INPUT_MODE,0.f,3.f,0.f,"b Input Mode");
 		configParam<cpx::CompolyModeParam>(C_INPUT_MODE,0.f,3.f,0.f,"c Input Mode");
 
+		getParamQuantity(MAIN_OUTPUT_MODE)->randomizeEnabled = false;
+		getParamQuantity(PRODUCT_OUTPUT_MODE)->randomizeEnabled = false;
+		getParamQuantity(Z_INPUT_MODE)->randomizeEnabled = false;
+		getParamQuantity(W_INPUT_MODE)->randomizeEnabled = false;
+		getParamQuantity(A_INPUT_MODE)->randomizeEnabled = false;
+		getParamQuantity(B_INPUT_MODE)->randomizeEnabled = false;
+		getParamQuantity(C_INPUT_MODE)->randomizeEnabled = false;
+
 
 		configInput<cpx::CompolyPortInfo<Z_INPUT_MODE,0>>(Z_INPUT, "z");
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE,1>>(Z_INPUT + 1, "z");
@@ -306,7 +314,7 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/panels/ComputerscareComplexTransformerPanel.svg")));
 			addChild(panel);
 		}
-		channelWidget = new PolyOutputChannelsWidget(Vec(92, 4), module, ComputerscareComplexTransformer::COMPOLY_CHANNELS,&module->compolyChannelsMainOutput);
+		channelWidget = new CompolyLaneCountWidget(Vec(92, 4), module, ComputerscareComplexTransformer::COMPOLY_CHANNELS,&module->compolyChannelsMainOutput);
 	
 
 		//addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 22), module, ComputerscareComplexTransformer::POLY_OUTPUT));
@@ -350,7 +358,7 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
 
 	}
 
-	PolyOutputChannelsWidget* channelWidget;
+	CompolyLaneCountWidget* channelWidget;
 	PolyChannelsDisplay* channelDisplay;
 	DisableableSmoothKnob* fader;
 	SmallLetterDisplay* smallLetterDisplay;

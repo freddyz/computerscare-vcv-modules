@@ -125,9 +125,9 @@ struct ComplexControl : Widget {
 		}
 	}
 
-	void onResize() override {
+	void onResize(const ResizeEvent& e) override {
 		layoutChildren();
-		Widget::onResize();
+		Widget::onResize(e);
 	}
 };
 

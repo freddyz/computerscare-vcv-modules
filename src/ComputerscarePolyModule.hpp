@@ -59,6 +59,38 @@ struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
   }
 };
 
+struct TinyCompolyLanesSnapKnob : ComputerscareRoundKnob {
+  std::shared_ptr<Svg> manualChannelsSetSvg = APP->window->loadSvg(
+      asset::plugin(pluginInstance,
+                    "res/components/compoly-lane-count-empty.svg"));
+  std::shared_ptr<Svg> autoChannelsSvg = APP->window->loadSvg(asset::plugin(
+      pluginInstance, "res/components/compoly-lane-count-auto.svg"));
+  int prevSetting = -1;
+  int paramId = -1;
+  bool allowAuto = true;
+
+  ComputerscarePolyModule* module;
+
+  TinyCompolyLanesSnapKnob() {
+    setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/compoly-lane-count-empty.svg")));
+    shadow->opacity = 0.f;
+    snap = true;
+    ComputerscareRoundKnob();
+  }
+  void draw(const DrawArgs& args) override {
+    if (module) {
+      int currentSetting = module->params[paramId].getValue();
+      if (currentSetting != prevSetting) {
+        setSvg(allowAuto && currentSetting == 0 ? autoChannelsSvg
+                                                : manualChannelsSetSvg);
+        prevSetting = currentSetting;
+      }
+    }
+    ComputerscareRoundKnob::draw(args);
+  }
+};
+
 struct PolyChannelsDisplay : SmallLetterDisplay {
   ComputerscarePolyModule* module;
   int* channelCount = NULL;
@@ -110,5 +142,29 @@ struct PolyOutputChannelsWidget : Widget {
 
     addChild(channelsKnob);
     addChild(channelCountDisplay);
+  }
+};
+
+struct CompolyLaneCountWidget : Widget {
+  ComputerscarePolyModule* module;
+  PolyChannelsDisplay* laneCountDisplay;
+  TinyCompolyLanesSnapKnob* lanesKnob;
+  CompolyLaneCountWidget(math::Vec pos, ComputerscarePolyModule* mod,
+                         int paramId, int* laneCount = NULL,
+                         bool allowAuto = true) {
+    module = mod;
+
+    lanesKnob = createParam<TinyCompolyLanesSnapKnob>(pos.plus(Vec(7, 3)),
+                                                      module, paramId);
+    lanesKnob->module = module;
+    lanesKnob->paramId = paramId;
+    lanesKnob->allowAuto = allowAuto;
+
+    laneCountDisplay = new PolyChannelsDisplay(pos);
+    laneCountDisplay->module = module;
+    laneCountDisplay->channelCount = laneCount;
+
+    addChild(lanesKnob);
+    addChild(laneCountDisplay);
   }
 };

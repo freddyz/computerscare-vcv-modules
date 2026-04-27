@@ -97,6 +97,10 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
         configParam<cpx::CompolyModeParam>(RECT_IN_POLAR_OUT_MODE,0.f,3.f,0.f,"Rect Output 2 Mode");
         configParam<cpx::CompolyModeParam>(POLAR_IN_RECT_OUT_MODE,0.f,3.f,0.f,"Polar Output 1 Mode");
         configParam<cpx::CompolyModeParam>(POLAR_IN_POLAR_OUT_MODE,0.f,3.f,0.f,"Polar Output 2 Mode");
+        getParamQuantity(RECT_IN_RECT_OUT_MODE)->randomizeEnabled = false;
+        getParamQuantity(RECT_IN_POLAR_OUT_MODE)->randomizeEnabled = false;
+        getParamQuantity(POLAR_IN_RECT_OUT_MODE)->randomizeEnabled = false;
+        getParamQuantity(POLAR_IN_POLAR_OUT_MODE)->randomizeEnabled = false;
 
         configParam(COMPLEX_CONSTANT_A,-10.f,10.f,0.f,"X Input Offset");
         configParam(COMPLEX_CONSTANT_B,-10.f,10.f,0.f,"Y Input Offset");
@@ -446,7 +450,7 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
          cpx::CompolyPortsWidget* outRect2 = new cpx::CompolyPortsWidget(Vec(output1X, rectInSectionY+90),module,ComputerscareNomplexPumbers::RECT_IN_POLAR_OUT,ComputerscareNomplexPumbers::RECT_IN_RECT_OUT_MODE+1);
         addChild(outRect2);
 
-        rectInChannelWidget = new PolyOutputChannelsWidget(Vec(output2X+64, rectInSectionY+26).plus(channelsKnobRelPos), module, ComputerscareNomplexPumbers::COMPOLY_CHANNELS_RECT_IN,&module->compolyChannelsRectIn);
+        rectInChannelWidget = new CompolyLaneCountWidget(Vec(output2X+64, rectInSectionY+26).plus(channelsKnobRelPos), module, ComputerscareNomplexPumbers::COMPOLY_CHANNELS_RECT_IN,&module->compolyChannelsRectIn);
 
         addChild(rectInChannelWidget);
 
@@ -471,7 +475,7 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
           cpx::CompolyPortsWidget* outPolar2 = new cpx::CompolyPortsWidget(Vec(output1X, polarInSectionY+90),module,ComputerscareNomplexPumbers::POLAR_IN_POLAR_OUT,ComputerscareNomplexPumbers::POLAR_IN_RECT_OUT_MODE+1);
         addChild(outPolar2);
 
-        polarInChannelWidget = new PolyOutputChannelsWidget(Vec(output2X+64, polarInSectionY+30).plus(channelsKnobRelPos), module, ComputerscareNomplexPumbers::COMPOLY_CHANNELS_POLAR_IN,&module->compolyChannelsPolarIn);
+        polarInChannelWidget = new CompolyLaneCountWidget(Vec(output2X+64, polarInSectionY+30).plus(channelsKnobRelPos), module, ComputerscareNomplexPumbers::COMPOLY_CHANNELS_POLAR_IN,&module->compolyChannelsPolarIn);
 
         addChild(polarInChannelWidget);
        
@@ -493,8 +497,8 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
 
     }
 
-    PolyOutputChannelsWidget* rectInChannelWidget;
-    PolyOutputChannelsWidget* polarInChannelWidget;
+    CompolyLaneCountWidget* rectInChannelWidget;
+    CompolyLaneCountWidget* polarInChannelWidget;
 
     NomplexWrapModeMenu *wrapModeMenu;
     ComputerscareNomplexPumbers *nomplex;

@@ -1,5 +1,5 @@
 #include "Computerscare.hpp"
-#include "complex/ComplexWidgets.hpp"
+#include "complex/ComplexControl.hpp"
 
 #include <array>
 
@@ -10,10 +10,11 @@ struct ComputerscareComplexGenerator;
 
 struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 	ComputerscareSVGPanel* panelRef;
+	int laneControlModes[numComplexGeneratorKnobs] = {};
 	enum ParamIds {
 		COMPLEX_XY,
 
-		POLY_CHANNELS=COMPLEX_XY + 2*numComplexGeneratorKnobs,
+		COMPOLY_CHANNELS=COMPLEX_XY + 2*numComplexGeneratorKnobs,
 		
 		SCALE_VAL_AB,
 		SCALE_TRIM_AB = SCALE_VAL_AB+2,
@@ -58,7 +59,7 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 			configParam(COMPLEX_XY + 2*i+1, -10.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
 		}
 
-		configParam(SCALE_VAL_AB    , -10.f, 10.f, 0.f, "Channel " );
+		configParam(SCALE_VAL_AB    , -10.f, 10.f, 1.f, "Channel " );
 		configParam(SCALE_VAL_AB + 1, -10.f, 10.f, 0.f, "Channel ");
 		getParamQuantity(SCALE_VAL_AB)->randomizeEnabled = false;
 		getParamQuantity(SCALE_VAL_AB+1)->randomizeEnabled = false;
@@ -73,23 +74,23 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 		configParam(DELTA_OFFSET_AB + 1, -10.f, 10.f, 0.f, "Channel ");
 
 
-		configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
+		configParam(COMPOLY_CHANNELS, 1.f, 16.f, 16.f, "Compoly Lanes");
 		configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale");
 		configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset", " volts");
-		configParam(MAIN_OUTPUT_MODE,0.f,3.f,0.f);
+		configParam<cpx::CompolyModeParam>(MAIN_OUTPUT_MODE,0.f,3.f,0.f,"Main Output Mode");
 
-		getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
-		getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
+		getParamQuantity(COMPOLY_CHANNELS)->randomizeEnabled = false;
+		getParamQuantity(COMPOLY_CHANNELS)->resetEnabled = false;
 		getParamQuantity(GLOBAL_SCALE)->randomizeEnabled = false;
 		getParamQuantity(GLOBAL_OFFSET)->randomizeEnabled = false;
+		getParamQuantity(MAIN_OUTPUT_MODE)->randomizeEnabled = false;
 
-		configOutput(COMPOLY_MAIN_OUT_A, "Main A");
-		configOutput(COMPOLY_MAIN_OUT_B, "Main B");
+		configOutput<cpx::CompolyPortInfo<MAIN_OUTPUT_MODE,0>>(COMPOLY_MAIN_OUT_A, "Main");
+		configOutput<cpx::CompolyPortInfo<MAIN_OUTPUT_MODE,1>>(COMPOLY_MAIN_OUT_B, "Main");
 
 	}
 	void process(const ProcessArgs &args) override {
 		ComputerscarePolyModule::checkCounter();
-		float trim = params[GLOBAL_SCALE].getValue();
 		
 		float offsetX = params[OFFSET_VAL_AB].getValue();
 		float offsetY = params[OFFSET_VAL_AB+1].getValue();
@@ -102,8 +103,9 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 
 
 
+		int mainOutputMode = params[MAIN_OUTPUT_MODE].getValue();
 		for (int i = 0; i < polyChannels; i++) {
-			if(i < 8) {
+			if(i < numComplexGeneratorKnobs) {
 
 				float x0 = params[COMPLEX_XY + 2*i].getValue();
 				float y0 = params[COMPLEX_XY + 2*i+1].getValue();
@@ -111,27 +113,47 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 				float x1 = x0*scaleRect.x - y0*scaleRect.y;
 				float y1 = x0*scaleRect.y + y0*scaleRect.x;
 
-				outputs[COMPOLY_MAIN_OUT_A].setVoltage(x1 + offsetX, 2*i);
-				outputs[COMPOLY_MAIN_OUT_A].setVoltage(y1 + offsetY, 2*i+1);
+				float outX = x1 + offsetX;
+				float outY = y1 + offsetY;
+				float outR = std::hypot(outX, outY);
+				float outTheta = std::atan2(outY, outX);
+
+				setOutputVoltages(COMPOLY_MAIN_OUT_A, mainOutputMode, i, outX, outY, outR, outTheta);
 			} 
 			
 			//outputs[POLY_OUTPUT].setVoltage(params[KNOB + i].getValue()*trim + offset, i);
 		}
 	}
 	void checkPoly() override {
-		polyChannels = params[POLY_CHANNELS].getValue();
+		polyChannels = params[COMPOLY_CHANNELS].getValue();
 		if (polyChannels == 0) {
 			polyChannels = 16;
-			params[POLY_CHANNELS].setValue(16);
+			params[COMPOLY_CHANNELS].setValue(16);
 		}
-		outputs[COMPOLY_MAIN_OUT_A].setChannels(polyChannels);
+		int mainOutputMode = params[MAIN_OUTPUT_MODE].getValue();
+		setOutputChannels(COMPOLY_MAIN_OUT_A, mainOutputMode, polyChannels);
 	}
 	json_t *dataToJson() override {
     json_t *rootJ = json_object();
+		json_t *laneControlModesJ = json_array();
+		for (int i = 0; i < numComplexGeneratorKnobs; i++) {
+			json_array_append_new(laneControlModesJ, json_integer(laneControlModes[i]));
+		}
+		json_object_set_new(rootJ, "laneControlModes", laneControlModesJ);
     return rootJ;
   }
 
     void dataFromJson(json_t *rootJ) override {
+		json_t *laneControlModesJ = json_object_get(rootJ, "laneControlModes");
+		if (laneControlModesJ && json_is_array(laneControlModesJ)) {
+			for (int i = 0; i < numComplexGeneratorKnobs; i++) {
+				json_t *modeJ = json_array_get(laneControlModesJ, i);
+				if (modeJ) {
+					int mode = json_integer_value(modeJ);
+					laneControlModes[i] = std::max(0, std::min(3, mode));
+				}
+			}
+		}
     }
 };
 
@@ -178,6 +200,131 @@ struct DisableableSmoothKnob : RoundKnob {
 	}
 };
 
+struct ComplexGeneratorLaneControl;
+
+struct ComplexGeneratorLaneModeButton : TransparentWidget {
+	ComplexGeneratorLaneControl* laneControl = nullptr;
+
+	void onButton(const event::Button &e) override;
+	void draw(const DrawArgs &args) override;
+};
+
+struct ComplexGeneratorLaneControl : Widget {
+	ComputerscareComplexGenerator* module = nullptr;
+	int paramIndex = 0;
+	int laneIndex = 0;
+	int localMode = 0;
+	int lastMode = -1;
+	cpx::ComplexControl* control = nullptr;
+
+	ComplexGeneratorLaneControl(ComputerscareComplexGenerator* module, int laneIndex,
+	                            int paramIndex) {
+		this->module = module;
+		this->laneIndex = laneIndex;
+		this->paramIndex = paramIndex;
+	}
+
+	int mode() const {
+		if (module)
+			return module->laneControlModes[laneIndex];
+		return localMode;
+	}
+
+	void setMode(int mode) {
+		mode = std::max(0, std::min(3, mode));
+		if (module)
+			module->laneControlModes[laneIndex] = mode;
+		else
+			localMode = mode;
+	}
+
+	void nextMode() {
+		setMode((mode() + 1) % 4);
+	}
+
+	void rebuildControl(int mode) {
+		if (control) {
+			removeChild(control);
+			delete control;
+			control = nullptr;
+		}
+
+		cpx::ComplexControlPreset preset = cpx::ComplexControlPreset::Arrow;
+		if (mode == 1 || mode == 2)
+			preset = cpx::ComplexControlPreset::XYKnobs;
+		else if (mode == 3)
+			preset = cpx::ComplexControlPreset::ArrowXY;
+
+		control = new cpx::ComplexControl(module, paramIndex, preset);
+		control->box = Rect(Vec(0.f, 0.f), box.size);
+		control->layoutChildren();
+		addChildBottom(control);
+
+		if (mode == 1 || mode == 2 || mode == 3) {
+			control->setShowDisplay(true);
+			if (control->display) {
+				control->display->sourceMode = cpx::ComplexDisplayWidget::SourceMode::Rect;
+				control->display->displayMode = mode == 2
+					? cpx::ComplexDisplayWidget::DisplayMode::Polar
+					: cpx::ComplexDisplayWidget::DisplayMode::Rect;
+			}
+		}
+	}
+
+	void step() override {
+		int currentMode = mode();
+		if (currentMode != lastMode) {
+			lastMode = currentMode;
+			rebuildControl(currentMode);
+		}
+		Widget::step();
+	}
+
+	void draw(const DrawArgs &args) override {
+		Widget::draw(args);
+		if (module && laneIndex >= module->polyChannels) {
+			nvgBeginPath(args.vg);
+			nvgEllipse(args.vg, box.size.x * 0.5f, box.size.y * 0.5f,
+			           box.size.x * 0.5f, box.size.y * 0.5f);
+			nvgFillColor(args.vg, nvgRGBA(120, 120, 120, 135));
+			nvgFill(args.vg);
+		}
+	}
+};
+
+void ComplexGeneratorLaneModeButton::onButton(const event::Button &e) {
+	if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
+		e.consume(this);
+		if (laneControl)
+			laneControl->nextMode();
+	}
+}
+
+void ComplexGeneratorLaneModeButton::draw(const DrawArgs &args) {
+	int mode = laneControl ? laneControl->mode() : 0;
+	NVGcolor fill = nvgRGB(18, 37, 47);
+	if (mode == 1)
+		fill = nvgRGB(32, 78, 58);
+	else if (mode == 2)
+		fill = nvgRGB(76, 52, 92);
+	else if (mode == 3)
+		fill = nvgRGB(84, 72, 32);
+
+	nvgBeginPath(args.vg);
+	nvgRoundedRect(args.vg, 0.f, 0.f, box.size.x, box.size.y, 1.5f);
+	nvgFillColor(args.vg, fill);
+	nvgFill(args.vg);
+	nvgStrokeWidth(args.vg, 0.8f);
+	nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_LIGHT_GREEN);
+	nvgStroke(args.vg);
+
+	nvgFontSize(args.vg, 4.5f);
+	nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+	nvgFillColor(args.vg, nvgRGB(230, 230, 220));
+	const char* label = mode == 0 ? "A" : mode == 1 ? "XY" : mode == 2 ? "P" : "D";
+	nvgText(args.vg, box.size.x * 0.5f, box.size.y * 0.58f, label, nullptr);
+}
+
 struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 	ComputerscareComplexGeneratorWidget(ComputerscareComplexGenerator *module) {
 
@@ -190,7 +337,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 			panel->setBackground(APP->window->loadSvg(asset::plugin(pluginInstance, "res/panels/ComputerscareComplexGeneratorPanel.svg")));
 			addChild(panel);
 		}
-		channelWidget = new PolyOutputChannelsWidget(Vec(92, 4), module, ComputerscareComplexGenerator::POLY_CHANNELS);
+		channelWidget = new CompolyLaneCountWidget(Vec(92, 4), module, ComputerscareComplexGenerator::COMPOLY_CHANNELS,&module->polyChannels,false);
 	
 
 		//addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 22), module, ComputerscareComplexGenerator::POLY_OUTPUT));
@@ -204,13 +351,16 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
     cpx::ComplexXY* offsetValAB = new cpx::ComplexXY(module,ComputerscareComplexGenerator::OFFSET_VAL_AB);
     offsetValAB->box.size=Vec(25,25);
-    offsetValAB->box.pos=Vec(32, 27);
+    offsetValAB->box.pos=Vec(38, 27);
     addChild(offsetValAB);
 
     cpx::ComplexXY* scaleValAB = new cpx::ComplexXY(module,ComputerscareComplexGenerator::SCALE_VAL_AB);
     scaleValAB->box.size=Vec(25,25);
     scaleValAB->box.pos=Vec(5, 27);
     addChild(scaleValAB);
+
+		addSmallLabel("scale", 3, 17, 12);
+		addSmallLabel("offset", 36, 17, 12);
 
 		//addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module, ComputerscareComplexGenerator::GLOBAL_SCALE));
 		//addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscareComplexGenerator::GLOBAL_OFFSET));
@@ -228,6 +378,17 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 		}
 
 	}
+	void addSmallLabel(std::string label, int x, int y, float fontSize) {
+		SmallLetterDisplay* labelDisplay = new SmallLetterDisplay();
+		labelDisplay->box.size = Vec(25, 10);
+		labelDisplay->box.pos = Vec(x, y);
+		labelDisplay->fontSize = fontSize;
+		labelDisplay->value = label;
+		labelDisplay->letterSpacing = 0.2f;
+		labelDisplay->textAlign = 1;
+		addChild(labelDisplay);
+	}
+
 	void addLabeledKnob(std::string label, int x, int y, ComputerscareComplexGenerator *module, int index, float labelDx, float labelDy) {
 
 		smallLetterDisplay = new SmallLetterDisplay();
@@ -245,11 +406,15 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
 		addParam(fader);*/
 
-		 cpx::ComplexXY* xy = new cpx::ComplexXY(module,ComputerscareComplexGenerator::COMPLEX_XY+index);
-     xy->box.size=Vec(25,25);
-     xy->box.pos=Vec(x,y);
-     addChild(xy);
+		ComplexGeneratorLaneControl* control = new ComplexGeneratorLaneControl(
+			module, index / 2, ComputerscareComplexGenerator::COMPLEX_XY + index);
+		control->box = Rect(Vec(x, y), Vec(25, 25));
+		addChild(control);
 
+		ComplexGeneratorLaneModeButton* modeButton = new ComplexGeneratorLaneModeButton();
+		modeButton->box = Rect(Vec(x + labelDx, y - 3 + labelDy), Vec(7.f, 7.f));
+		modeButton->laneControl = control;
+		addChild(modeButton);
 
 		smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
 
@@ -257,7 +422,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 		addChild(smallLetterDisplay);
 
 	}
-	PolyOutputChannelsWidget* channelWidget;
+	CompolyLaneCountWidget* channelWidget;
 	PolyChannelsDisplay* channelDisplay;
 	DisableableSmoothKnob* fader;
 	SmallLetterDisplay* smallLetterDisplay;

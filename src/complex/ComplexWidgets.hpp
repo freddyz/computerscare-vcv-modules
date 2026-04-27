@@ -442,7 +442,9 @@ struct ComplexDisplayWidget : Widget {
 	int paramY = 0;
 
 	enum class DisplayMode { Rect, Polar };
+	enum class SourceMode { Rect, Polar };
 	DisplayMode displayMode = DisplayMode::Rect;
+	SourceMode sourceMode = SourceMode::Rect;
 	cpx::complex_math::AngleUnit angleUnit = cpx::complex_math::AngleUnit::Degree;
 	cpx::complex_math::PolarDisplayStyle polarStyle =
 		cpx::complex_math::PolarDisplayStyle::Engineering;
@@ -489,9 +491,21 @@ struct ComplexDisplayWidget : Widget {
 		cpx::complex_math::ComplexRenderParts parts;
 		bool polar = (displayMode == DisplayMode::Polar);
 		if (polar) {
-			parts = cpx::complex_math::polarParts(vx, vy, angleUnit, polarStyle, decimals);
+			float r = vx;
+			float theta = vy;
+			if (sourceMode == SourceMode::Rect) {
+				r = std::hypot(vx, vy);
+				theta = std::atan2(vy, vx);
+			}
+			parts = cpx::complex_math::polarParts(r, theta, angleUnit, polarStyle, decimals);
 		} else {
-			parts = cpx::complex_math::rectParts(vx, vy, decimals);
+			float x = vx;
+			float y = vy;
+			if (sourceMode == SourceMode::Polar) {
+				x = vx * std::cos(vy);
+				y = vx * std::sin(vy);
+			}
+			parts = cpx::complex_math::rectParts(x, y, decimals);
 		}
 
 		float fsize = box.size.y * 0.72f;
