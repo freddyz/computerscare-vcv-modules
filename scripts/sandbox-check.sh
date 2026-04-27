@@ -101,6 +101,57 @@ PY
 [[ $FAIL -eq 0 ]] && pass "asset references"
 
 # ---------------------------------------------------------------------------
+echo "==> Computerscare color constants are defined..."
+python3 - <<'PY' || FAIL=1
+import pathlib, re, sys
+
+all_src = "\n".join(
+    p.read_text()
+    for p in pathlib.Path("src").rglob("*")
+    if p.suffix in {".cpp", ".hpp"}
+)
+
+defined = set(re.findall(r'\bCOLOR_COMPUTERSCARE_[A-Za-z0-9_]+\b\s*=', all_src))
+defined = {d[:-1].strip() for d in defined}
+used = set(re.findall(r'\bCOLOR_COMPUTERSCARE_[A-Za-z0-9_]+\b', all_src))
+missing = sorted(used - defined)
+
+if missing:
+    print("Undefined Computerscare color constants:", file=sys.stderr)
+    for name in missing:
+        print(f"  {name}", file=sys.stderr)
+    sys.exit(1)
+PY
+[[ $FAIL -eq 0 ]] && pass "color constants"
+
+# ---------------------------------------------------------------------------
+echo "==> implementation headers are not compiled standalone..."
+python3 - <<'PY' || FAIL=1
+import pathlib, re, sys
+
+makefile = pathlib.Path("Makefile").read_text()
+all_src = "\n".join(
+    p.read_text()
+    for p in pathlib.Path("src").rglob("*")
+    if p.suffix in {".cpp", ".hpp"}
+)
+
+included_cpp = sorted(set(re.findall(r'#include\s+"([^"]+\.cpp)"', all_src)))
+problems = []
+for include in included_cpp:
+    path = pathlib.PurePosixPath("src") / include
+    if "$(wildcard src/complex/*.cpp)" in makefile and f"filter-out {path}" not in makefile:
+        problems.append(str(path))
+
+if problems:
+    print("Included .cpp files must be filtered out of Makefile SOURCES:", file=sys.stderr)
+    for path in problems:
+        print(f"  {path}", file=sys.stderr)
+    sys.exit(1)
+PY
+[[ $FAIL -eq 0 ]] && pass "implementation-header sources"
+
+# ---------------------------------------------------------------------------
 echo "==> SVG files parse as XML..."
 BAD_SVGS=$(find res -name "*.svg" -print0 \
   | xargs -0 -I{} python3 -c "

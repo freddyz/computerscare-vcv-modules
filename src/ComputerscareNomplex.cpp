@@ -234,8 +234,29 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
         }*/
 
     }
+   
+};
 
-   };
+struct NomplexWrapModeMenu : MenuItem {
+    ParamQuantity* param;
+    std::vector<std::string> options;
+
+    Menu* createChildMenu() override {
+        Menu* menu = new Menu;
+        for (int i = 0; i < (int) options.size(); i++) {
+            ParamSettingItem* item = new ParamSettingItem(i, &param->module->params[param->paramId]);
+            item->text = options[i];
+            menu->addChild(item);
+        }
+        return menu;
+    }
+
+    void step() override {
+        int index = clamp((int) param->getValue(), 0, (int) options.size() - 1);
+        rightText = "(" + options[index] + ") " + RIGHT_ARROW;
+        MenuItem::step();
+    }
+};
 
 
 
@@ -329,7 +350,7 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
         ComputerscareNomplexPumbers* pumbersModule = dynamic_cast<ComputerscareNomplexPumbers*>(this->nomplex);
 
 
-        wrapModeMenu = new ParamSelectMenu();
+        wrapModeMenu = new NomplexWrapModeMenu();
         wrapModeMenu->text = "Polyphonic Wrap Mode";
         wrapModeMenu->rightText = RIGHT_ARROW;
         wrapModeMenu->param = pumbersModule->paramQuantities[ComputerscareNomplexPumbers::WRAP_MODE];
@@ -343,7 +364,7 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget
     PolyOutputChannelsWidget* rectInChannelWidget;
     PolyOutputChannelsWidget* polarInChannelWidget;
 
-    ParamSelectMenu *wrapModeMenu;
+    NomplexWrapModeMenu *wrapModeMenu;
     ComputerscareNomplexPumbers *nomplex;
    
 

@@ -61,6 +61,7 @@ struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
 
 struct PolyChannelsDisplay : SmallLetterDisplay {
   ComputerscarePolyModule* module;
+  int* channelCount = NULL;
   bool controlled = false;
   int prevChannels = -1;
   int paramId = -1;
@@ -76,7 +77,7 @@ struct PolyChannelsDisplay : SmallLetterDisplay {
   };
   void draw(const DrawArgs& args) {
     if (module) {
-      int newChannels = module->polyChannels;
+      int newChannels = channelCount ? *channelCount : module->polyChannels;
       if (newChannels != prevChannels) {
         std::string str = std::to_string(newChannels);
         value = str;
@@ -94,7 +95,7 @@ struct PolyOutputChannelsWidget : Widget {
   PolyChannelsDisplay* channelCountDisplay;
   TinyChannelsSnapKnob* channelsKnob;
   PolyOutputChannelsWidget(math::Vec pos, ComputerscarePolyModule* mod,
-                           int paramId) {
+                           int paramId, int* channelCount = NULL) {
     module = mod;
 
     channelsKnob =
@@ -105,6 +106,7 @@ struct PolyOutputChannelsWidget : Widget {
     channelCountDisplay = new PolyChannelsDisplay(pos);
 
     channelCountDisplay->module = module;
+    channelCountDisplay->channelCount = channelCount;
 
     addChild(channelsKnob);
     addChild(channelCountDisplay);
