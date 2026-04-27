@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include "math/ComplexMath.hpp"
+
 using namespace rack;
 
 struct ComputerscareComplexBase;
@@ -197,19 +199,9 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
 	}
 
 	std::vector<float> getQuad(std::vector<float>& ab,int type) {
-		float x,y,r,theta;
-		if(type==RECT_INTERLEAVED || type == RECT_SEPARATED) {
-			x = ab[0];
-			y = ab[1];
-			r = std::hypot(x,y);
-      theta = std::atan2(y,x);
-		} else {
-			r = ab[0];
-			theta = ab[1];
-			x = r*std::cos(theta);
-      y = r*std::sin(theta);
-		}
-		return {x,y,r,theta};
+		cpx::complex_math::Quad z = cpx::complex_math::quadFromPair(
+			ab[0], ab[1], static_cast<cpx::complex_math::CoordinateMode>(type));
+		return {z.x,z.y,z.r,z.theta};
 	}
 			
 

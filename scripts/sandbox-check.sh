@@ -178,6 +178,18 @@ fi
 pass "presets"
 
 # ---------------------------------------------------------------------------
+echo "==> SDK-free complex math tests..."
+if command -v g++ >/dev/null; then
+  if g++ -std=c++11 -I src tests/complex_math_test.cpp -o /tmp/cs_complex_math_test; then
+    /tmp/cs_complex_math_test || fail "complex math tests failed"
+  else
+    fail "complex math tests did not compile"
+  fi
+else
+  echo "  skip: g++ not installed"
+fi
+
+# ---------------------------------------------------------------------------
 # clang-format is opt-in (export CHECK_FMT=1) because much of the legacy code
 # isn't formatted yet and we don't want every loop iteration to fail on style.
 if [[ "${CHECK_FMT:-0}" == "1" ]]; then
