@@ -40,6 +40,12 @@ int main() {
   cm::Rect fromPolar = cm::polarToRect(cm::Polar(2.f, pi / 6.f));
   requireNear(fromPolar.x, std::sqrt(3.f), "polarToRect x");
   requireNear(fromPolar.y, 1.f, "polarToRect y");
+  requireNear(cm::thetaRadiansToCableVoltage(pi), 5.f,
+              "theta pi radians to 5 volts");
+  requireNear(cm::thetaRadiansToCableVoltage(2.f * pi), 10.f,
+              "theta tau radians to 10 volts");
+  requireNear(cm::thetaCableVoltageToRadians(5.f), pi,
+              "theta 5 volts to pi radians");
 
   cm::Rect product = cm::multiply(cm::Rect(1.f, 2.f), cm::Rect(3.f, 4.f));
   requireNear(product.x, -5.f, "complex multiply x");
@@ -103,6 +109,22 @@ int main() {
     requireNear(a[index + 1], static_cast<float>(20 + c),
                 "writePortsFromRect interleaved y");
   }
+
+  cm::RectChannels polarSource = {};
+  polarSource.x[0] = 0.f;
+  polarSource.y[0] = 1.f;
+  cm::PortChannels polarPacked =
+      cm::writePortsFromRect(polarSource, cm::CoordinateMode::PolarSeparated);
+  requireNear(polarPacked.a[0], 1.f, "polar output radius");
+  requireNear(polarPacked.b[0], 2.5f, "polar output theta volts");
+
+  cm::PortChannels polarInput = {};
+  polarInput.a[0] = 1.f;
+  polarInput.b[0] = 2.5f;
+  cm::RectChannels polarRect =
+      cm::readRectFromPorts(polarInput, cm::CoordinateMode::PolarSeparated);
+  requireNear(polarRect.x[0], 0.f, "polar input x");
+  requireNear(polarRect.y[0], 1.f, "polar input y");
 
   cm::RectChannels z = {};
   cm::RectChannels w = {};

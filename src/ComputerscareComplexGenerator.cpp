@@ -7,13 +7,6 @@ struct ComputerscareComplexGenerator;
 
 	const int numComplexGeneratorKnobs = 16;
 
-struct ComplexGeneratorViewModeParam : SwitchQuantity {
-	ComplexGeneratorViewModeParam() {
-		snapEnabled = true;
-		labels = {"arrow", "xy", "rθ"};
-	}
-};
-
 struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 	ComputerscareSVGPanel* panelRef;
 	void setAllControlModes(int mode) {
@@ -23,6 +16,22 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 		}
 		params[SCALE_VIEW_MODE].setValue(mode);
 		params[OFFSET_VIEW_MODE].setValue(mode);
+	}
+	void syncPolarViewsFromRect() {
+		for (int i = 0; i < numComplexGeneratorKnobs; i++) {
+			if ((int)params[LANE_VIEW_MODE + i].getValue() == 2) {
+				cpx::ComplexControl::syncRectParamsToPolarParams(
+					this, COMPLEX_XY + 2*i, LANE_POLAR + 2*i);
+			}
+		}
+		if ((int)params[SCALE_VIEW_MODE].getValue() == 2) {
+			cpx::ComplexControl::syncRectParamsToPolarParams(
+				this, SCALE_VAL_AB, SCALE_POLAR);
+		}
+		if ((int)params[OFFSET_VIEW_MODE].getValue() == 2) {
+			cpx::ComplexControl::syncRectParamsToPolarParams(
+				this, OFFSET_VAL_AB, OFFSET_POLAR);
+		}
 	}
 	enum ParamIds {
 		COMPLEX_XY,
@@ -47,7 +56,10 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 		LANE_VIEW_MODE,
 		SCALE_VIEW_MODE = LANE_VIEW_MODE + numComplexGeneratorKnobs,
 		OFFSET_VIEW_MODE,
-		NUM_PARAMS
+		LANE_POLAR = OFFSET_VIEW_MODE + 1,
+		SCALE_POLAR = LANE_POLAR + 2*numComplexGeneratorKnobs,
+		OFFSET_POLAR = SCALE_POLAR + 2,
+		NUM_PARAMS = OFFSET_POLAR + 2
 
 	};
 	enum InputIds {
@@ -71,19 +83,41 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 		config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
 		for (int i = 0; i < numComplexGeneratorKnobs; i++) {
-			configParam(COMPLEX_XY + 2*i, -10.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
-			configParam(COMPLEX_XY + 2*i+1, -10.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
+			configParam(COMPLEX_XY + 2*i, -10.f, 10.f, 0.f, "Lane " + std::to_string(i + 1) + " Real");
+			configParam(COMPLEX_XY + 2*i+1, -10.f, 10.f, 0.f, "Lane " + std::to_string(i + 1) + " Imaginary");
+			cpx::ComplexControl::configParams(this, LANE_POLAR + 2*i,
+			                                  cpx::ComplexControlPreset::RThetaKnobs);
+			getParamQuantity(LANE_POLAR + 2*i)->name =
+				"Lane " + std::to_string(i + 1) + " Radius";
+			getParamQuantity(LANE_POLAR + 2*i + 1)->name =
+				"Lane " + std::to_string(i + 1) + " Theta";
+			getParamQuantity(LANE_POLAR + 2*i)->randomizeEnabled = false;
+			getParamQuantity(LANE_POLAR + 2*i + 1)->randomizeEnabled = false;
 		}
 
-		configParam(SCALE_VAL_AB    , -10.f, 10.f, 1.f, "Channel " );
-		configParam(SCALE_VAL_AB + 1, -10.f, 10.f, 0.f, "Channel ");
+		configParam(SCALE_VAL_AB    , -3.f, 3.f, 1.f, "Scale Real");
+		configParam(SCALE_VAL_AB + 1, -3.f, 3.f, 0.f, "Scale Imaginary");
 		getParamQuantity(SCALE_VAL_AB)->randomizeEnabled = false;
 		getParamQuantity(SCALE_VAL_AB+1)->randomizeEnabled = false;
 
-		configParam(OFFSET_VAL_AB    , -10.f, 10.f, 0.f, "Channel " );
-		configParam(OFFSET_VAL_AB + 1, -10.f, 10.f, 0.f, "Channel ");
+		configParam(OFFSET_VAL_AB    , -10.f, 10.f, 0.f, "Offset Real");
+		configParam(OFFSET_VAL_AB + 1, -10.f, 10.f, 0.f, "Offset Imaginary");
 		getParamQuantity(OFFSET_VAL_AB)->randomizeEnabled = false;
 		getParamQuantity(OFFSET_VAL_AB+1)->randomizeEnabled = false;
+
+		cpx::ComplexControl::configParams(this, SCALE_POLAR,
+		                                  cpx::ComplexControlPreset::RThetaKnobs);
+		cpx::ComplexControl::configParams(this, OFFSET_POLAR,
+		                                  cpx::ComplexControlPreset::RThetaKnobs);
+		getParamQuantity(SCALE_POLAR)->name = "Scale Radius";
+		getParamQuantity(SCALE_POLAR + 1)->name = "Scale Theta";
+		getParamQuantity(OFFSET_POLAR)->name = "Offset Radius";
+		getParamQuantity(OFFSET_POLAR + 1)->name = "Offset Theta";
+		getParamQuantity(SCALE_POLAR)->maxValue = 3.f;
+		getParamQuantity(SCALE_POLAR)->randomizeEnabled = false;
+		getParamQuantity(SCALE_POLAR + 1)->randomizeEnabled = false;
+		getParamQuantity(OFFSET_POLAR)->randomizeEnabled = false;
+		getParamQuantity(OFFSET_POLAR + 1)->randomizeEnabled = false;
 
 
 		configParam(DELTA_OFFSET_AB    , -10.f, 10.f, 0.f, "Channel " );
@@ -95,19 +129,15 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 		configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset", " volts");
 		configParam<cpx::CompolyModeParam>(MAIN_OUTPUT_MODE,0.f,3.f,0.f,"Main Output Mode");
 		for (int i = 0; i < numComplexGeneratorKnobs; i++) {
-			configParam<ComplexGeneratorViewModeParam>(LANE_VIEW_MODE + i, 0.f, 2.f, 0.f, "Channel " + std::to_string(i + 1) + " View");
-			getParamQuantity(LANE_VIEW_MODE + i)->randomizeEnabled = false;
+			configParam<cpx::ComplexControlViewModeParam>(LANE_VIEW_MODE + i, 0.f, 2.f, 0.f, "Lane " + std::to_string(i + 1) + " View");
 		}
-		configParam<ComplexGeneratorViewModeParam>(SCALE_VIEW_MODE, 0.f, 2.f, 0.f, "Scale View");
-		configParam<ComplexGeneratorViewModeParam>(OFFSET_VIEW_MODE, 0.f, 2.f, 0.f, "Offset View");
+		configParam<cpx::ComplexControlViewModeParam>(SCALE_VIEW_MODE, 0.f, 2.f, 0.f, "Scale View");
+		configParam<cpx::ComplexControlViewModeParam>(OFFSET_VIEW_MODE, 0.f, 2.f, 0.f, "Offset View");
 
 		getParamQuantity(COMPOLY_CHANNELS)->randomizeEnabled = false;
 		getParamQuantity(COMPOLY_CHANNELS)->resetEnabled = false;
 		getParamQuantity(GLOBAL_SCALE)->randomizeEnabled = false;
 		getParamQuantity(GLOBAL_OFFSET)->randomizeEnabled = false;
-		getParamQuantity(MAIN_OUTPUT_MODE)->randomizeEnabled = false;
-		getParamQuantity(SCALE_VIEW_MODE)->randomizeEnabled = false;
-		getParamQuantity(OFFSET_VIEW_MODE)->randomizeEnabled = false;
 
 		configOutput<cpx::CompolyPortInfo<MAIN_OUTPUT_MODE,0>>(COMPOLY_MAIN_OUT_A, "Main");
 		configOutput<cpx::CompolyPortInfo<MAIN_OUTPUT_MODE,1>>(COMPOLY_MAIN_OUT_B, "Main");
@@ -147,6 +177,12 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
 			
 			//outputs[POLY_OUTPUT].setVoltage(params[KNOB + i].getValue()*trim + offset, i);
 		}
+	}
+	void onRandomize() override {
+		syncPolarViewsFromRect();
+	}
+	void onReset() override {
+		syncPolarViewsFromRect();
 	}
 	void checkPoly() override {
 		polyChannels = params[COMPOLY_CHANNELS].getValue();
@@ -237,14 +273,16 @@ struct ComplexGeneratorViewModeSwitch : app::Switch {
 struct ComplexGeneratorModeControl : Widget {
 	ComputerscareComplexGenerator* module = nullptr;
 	int paramIndex = 0;
+	int polarParamIndex = -1;
 	int modeParamId = -1;
 	int lastMode = -1;
 	cpx::ComplexControl* control = nullptr;
 
 	ComplexGeneratorModeControl(ComputerscareComplexGenerator* module, int paramIndex,
-	                            int modeParamId) {
+	                            int polarParamIndex, int modeParamId) {
 		this->module = module;
 		this->paramIndex = paramIndex;
+		this->polarParamIndex = polarParamIndex;
 		this->modeParamId = modeParamId;
 	}
 
@@ -267,7 +305,8 @@ struct ComplexGeneratorModeControl : Widget {
 		else if (mode == 2)
 			preset = cpx::ComplexControlPreset::RThetaKnobs;
 
-		control = new cpx::ComplexControl(module, paramIndex, preset);
+		int controlParamIndex = mode == 2 ? polarParamIndex : paramIndex;
+		control = new cpx::ComplexControl(module, controlParamIndex, preset);
 		control->box = Rect(Vec(0.f, 0.f), box.size);
 		control->layoutChildren();
 		addChildBottom(control);
@@ -276,8 +315,20 @@ struct ComplexGeneratorModeControl : Widget {
 	void step() override {
 		int currentMode = mode();
 		if (currentMode != lastMode) {
+			if (lastMode == 2) {
+				cpx::ComplexControl::syncPolarParamsToRectParams(
+					module, polarParamIndex, paramIndex);
+			}
+			if (currentMode == 2) {
+				cpx::ComplexControl::syncRectParamsToPolarParams(
+					module, paramIndex, polarParamIndex);
+			}
 			lastMode = currentMode;
 			rebuildControl(currentMode);
+		}
+		else if (currentMode == 2) {
+			cpx::ComplexControl::syncPolarParamsToRectParams(
+				module, polarParamIndex, paramIndex);
 		}
 		Widget::step();
 	}
@@ -286,6 +337,7 @@ struct ComplexGeneratorModeControl : Widget {
 struct ComplexGeneratorLaneControl : Widget {
 	ComputerscareComplexGenerator* module = nullptr;
 	int paramIndex = 0;
+	int polarParamIndex = -1;
 	int modeParamId = -1;
 	int laneIndex = 0;
 	int lastMode = -1;
@@ -295,11 +347,13 @@ struct ComplexGeneratorLaneControl : Widget {
 	cpx::ComplexControl* control = nullptr;
 
 	ComplexGeneratorLaneControl(ComputerscareComplexGenerator* module, int laneIndex,
-	                            int paramIndex, int modeParamId,
+	                            int paramIndex, int polarParamIndex,
+	                            int modeParamId,
 	                            bool showDisabledOverlay = false) {
 		this->module = module;
 		this->laneIndex = laneIndex;
 		this->paramIndex = paramIndex;
+		this->polarParamIndex = polarParamIndex;
 		this->modeParamId = modeParamId;
 		this->showDisabledOverlay = showDisabledOverlay;
 	}
@@ -323,7 +377,8 @@ struct ComplexGeneratorLaneControl : Widget {
 		else if (mode == 2)
 			preset = cpx::ComplexControlPreset::RThetaKnobs;
 
-		control = new cpx::ComplexControl(module, paramIndex, preset);
+		int controlParamIndex = mode == 2 ? polarParamIndex : paramIndex;
+		control = new cpx::ComplexControl(module, controlParamIndex, preset);
 		control->box = Rect(Vec(0.f, 0.f), box.size);
 		control->setStyle(isFaded() ? cpx::ComplexControlStyle::Faded
 		                            : cpx::ComplexControlStyle::Normal);
@@ -339,8 +394,20 @@ struct ComplexGeneratorLaneControl : Widget {
 	void step() override {
 		int currentMode = mode();
 		if (currentMode != lastMode) {
+			if (lastMode == 2) {
+				cpx::ComplexControl::syncPolarParamsToRectParams(
+					module, polarParamIndex, paramIndex);
+			}
+			if (currentMode == 2) {
+				cpx::ComplexControl::syncRectParamsToPolarParams(
+					module, paramIndex, polarParamIndex);
+			}
 			lastMode = currentMode;
 			rebuildControl(currentMode);
+		}
+		else if (currentMode == 2) {
+			cpx::ComplexControl::syncPolarParamsToRectParams(
+				module, polarParamIndex, paramIndex);
 		}
 		bool currentFaded = isFaded();
 		if (control && currentFaded != lastFaded) {
@@ -385,27 +452,6 @@ struct ComplexGeneratorSetAllViewModeItem : MenuItem {
 	}
 };
 
-struct ComplexGeneratorViewMenuItem : MenuItem {
-	ComputerscareComplexGenerator* module = nullptr;
-
-	Menu* createChildMenu() override {
-		Menu* menu = new Menu;
-		menu->addChild(construct<ComplexGeneratorSetAllViewModeItem>(
-			&MenuItem::text, "set all to arrow",
-			&ComplexGeneratorSetAllViewModeItem::module, module,
-			&ComplexGeneratorSetAllViewModeItem::mode, 0));
-		menu->addChild(construct<ComplexGeneratorSetAllViewModeItem>(
-			&MenuItem::text, "set all to xy",
-			&ComplexGeneratorSetAllViewModeItem::module, module,
-			&ComplexGeneratorSetAllViewModeItem::mode, 1));
-		menu->addChild(construct<ComplexGeneratorSetAllViewModeItem>(
-			&MenuItem::text, "set all to rθ",
-			&ComplexGeneratorSetAllViewModeItem::module, module,
-			&ComplexGeneratorSetAllViewModeItem::mode, 2));
-		return menu;
-	}
-};
-
 struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 	ComputerscareComplexGeneratorWidget(ComputerscareComplexGenerator *module) {
 
@@ -431,8 +477,8 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
 
 
-		addModeControl("scale", 5, 22, module, ComputerscareComplexGenerator::SCALE_VAL_AB, ComputerscareComplexGenerator::SCALE_VIEW_MODE);
-		addModeControl("offset", 5, 53, module, ComputerscareComplexGenerator::OFFSET_VAL_AB, ComputerscareComplexGenerator::OFFSET_VIEW_MODE);
+		addModeControl("scale", 5, 22, module, ComputerscareComplexGenerator::SCALE_VAL_AB, ComputerscareComplexGenerator::SCALE_POLAR, ComputerscareComplexGenerator::SCALE_VIEW_MODE);
+		addModeControl("offset", 5, 53, module, ComputerscareComplexGenerator::OFFSET_VAL_AB, ComputerscareComplexGenerator::OFFSET_POLAR, ComputerscareComplexGenerator::OFFSET_VIEW_MODE);
 
 		//addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module, ComputerscareComplexGenerator::GLOBAL_SCALE));
 		//addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module, ComputerscareComplexGenerator::GLOBAL_OFFSET));
@@ -463,9 +509,9 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
 	void addModeControl(std::string label, int x, int y,
 	                    ComputerscareComplexGenerator *module, int paramIndex,
-	                    int modeParamId) {
+	                    int polarParamIndex, int modeParamId) {
 		ComplexGeneratorModeControl* control = new ComplexGeneratorModeControl(
-			module, paramIndex, modeParamId);
+			module, paramIndex, polarParamIndex, modeParamId);
 		control->box = Rect(Vec(x, y), Vec(32, 25));
 		addChild(control);
 
@@ -489,6 +535,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
 		ComplexGeneratorLaneControl* control = new ComplexGeneratorLaneControl(
 			module, index / 2, ComputerscareComplexGenerator::COMPLEX_XY + index,
+			ComputerscareComplexGenerator::LANE_POLAR + index,
 			ComputerscareComplexGenerator::LANE_VIEW_MODE + index / 2);
 		control->box = Rect(Vec(x, y), Vec(32, 25));
 		addChild(control);
@@ -508,11 +555,19 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 			dynamic_cast<ComputerscareComplexGenerator*>(module);
 
 		menu->addChild(new MenuSeparator);
-		ComplexGeneratorViewMenuItem* viewMenu = new ComplexGeneratorViewMenuItem();
-		viewMenu->text = "View";
-		viewMenu->rightText = RIGHT_ARROW;
-		viewMenu->module = generator;
-		menu->addChild(viewMenu);
+		menu->addChild(construct<MenuLabel>(&MenuLabel::text, "View"));
+		menu->addChild(construct<ComplexGeneratorSetAllViewModeItem>(
+			&MenuItem::text, "set all to arrow",
+			&ComplexGeneratorSetAllViewModeItem::module, generator,
+			&ComplexGeneratorSetAllViewModeItem::mode, 0));
+		menu->addChild(construct<ComplexGeneratorSetAllViewModeItem>(
+			&MenuItem::text, "set all to xy",
+			&ComplexGeneratorSetAllViewModeItem::module, generator,
+			&ComplexGeneratorSetAllViewModeItem::mode, 1));
+		menu->addChild(construct<ComplexGeneratorSetAllViewModeItem>(
+			&MenuItem::text, "set all to rθ",
+			&ComplexGeneratorSetAllViewModeItem::module, generator,
+			&ComplexGeneratorSetAllViewModeItem::mode, 2));
 	}
 
 	CompolyLaneCountWidget* channelWidget;

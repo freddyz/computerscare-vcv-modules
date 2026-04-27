@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ComplexWidgets.hpp"
+#include "math/ComplexMath.hpp"
 
 namespace cpx {
 
@@ -17,6 +18,15 @@ enum class ComplexControlPreset {
 enum class ComplexControlStyle {
 	Normal,
 	Faded,
+};
+
+struct ComplexControlViewModeParam : SwitchQuantity {
+	ComplexControlViewModeParam() {
+		snapEnabled = true;
+		randomizeEnabled = false;
+		resetEnabled = false;
+		labels = {"arrow", "xy", "radius / theta"};
+	}
 };
 
 struct ComplexControlSmallKnob : SmallKnob {
@@ -72,12 +82,37 @@ struct ComplexControl : Widget {
 		bool polar = (p == ComplexControlPreset::RThetaKnobs ||
 		              p == ComplexControlPreset::ArrowPolar);
 		if (polar) {
-			m->configParam(firstIdx,     0.f,          10.f,          1.f, "r");
-			m->configParam(firstIdx + 1, -(float)M_PI, (float)M_PI,   0.f, "θ");
+			m->configParam(firstIdx,     0.f,          10.f,          0.f, "r");
+			m->configParam(firstIdx + 1, -180.f,       180.f,         0.f, "θ", "°");
 		} else {
 			m->configParam(firstIdx,     -10.f, 10.f, 0.f, "x");
 			m->configParam(firstIdx + 1, -10.f, 10.f, 0.f, "y");
 		}
+	}
+
+	static void syncRectParamsToPolarParams(Module* m, int rectFirstIdx,
+	                                        int polarFirstIdx) {
+		if (!m)
+			return;
+		float x = m->params[rectFirstIdx].getValue();
+		float y = m->params[rectFirstIdx + 1].getValue();
+		float r = std::hypot(x, y);
+		float thetaDegrees = std::atan2(y, x) * 180.f / cpx::complex_math::pi;
+		m->params[polarFirstIdx].setValue(std::max(0.f, std::min(10.f, r)));
+		m->params[polarFirstIdx + 1].setValue(
+			std::max(-180.f, std::min(180.f, thetaDegrees)));
+	}
+
+	static void syncPolarParamsToRectParams(Module* m, int polarFirstIdx,
+	                                        int rectFirstIdx) {
+		if (!m)
+			return;
+		float r = std::max(0.f, std::min(10.f, m->params[polarFirstIdx].getValue()));
+		float thetaDegrees = std::max(
+			-180.f, std::min(180.f, m->params[polarFirstIdx + 1].getValue()));
+		float thetaRadians = thetaDegrees * cpx::complex_math::pi / 180.f;
+		m->params[rectFirstIdx].setValue(r * std::cos(thetaRadians));
+		m->params[rectFirstIdx + 1].setValue(r * std::sin(thetaRadians));
 	}
 
 	static constexpr int paramCount() { return 2; }
@@ -120,6 +155,8 @@ struct ComplexControl : Widget {
 		                 preset == ComplexControlPreset::ArrowXY ||
 		                 preset == ComplexControlPreset::ArrowPolar);
 		if (hasKnobs) {
+			bool polar = (preset == ComplexControlPreset::RThetaKnobs ||
+			              preset == ComplexControlPreset::ArrowPolar);
 			float knobScale = hasArrow ? 0.52f : 0.78f;
 
 			knobA = new TransformWidget();

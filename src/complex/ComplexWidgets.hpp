@@ -251,6 +251,8 @@ namespace cpx {
 	struct CompolyModeParam : SwitchQuantity {
 		CompolyModeParam() {
 			snapEnabled = true;
+			randomizeEnabled = false;
+			resetEnabled = false;
 			labels = {
 				"Rectangular Interleaved",
 				"Polar Interleaved",

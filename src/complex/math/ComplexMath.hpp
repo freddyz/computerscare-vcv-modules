@@ -10,6 +10,9 @@ namespace cpx {
 namespace complex_math {
 
 constexpr int maxChannels = 16;
+constexpr float pi = 3.14159265358979323846f;
+constexpr float thetaVoltsPerRadian = 5.f / pi;
+constexpr float thetaRadiansPerVolt = pi / 5.f;
 
 enum class CoordinateMode {
   RectInterleaved = 0,
@@ -105,6 +108,14 @@ inline Rect polarToRect(Polar z) {
   return Rect(z.r * std::cos(z.theta), z.r * std::sin(z.theta));
 }
 
+inline float thetaRadiansToCableVoltage(float thetaRadians) {
+  return thetaRadians * thetaVoltsPerRadian;
+}
+
+inline float thetaCableVoltageToRadians(float thetaVoltage) {
+  return thetaVoltage * thetaRadiansPerVolt;
+}
+
 inline Quad quadFromRect(Rect z) {
   Polar polar = rectToPolar(z);
   return Quad(z.x, z.y, polar.r, polar.theta);
@@ -116,7 +127,8 @@ inline Quad quadFromPolar(Polar z) {
 }
 
 inline Quad quadFromPair(float a, float b, CoordinateMode mode) {
-  return isRect(mode) ? quadFromRect(Rect(a, b)) : quadFromPolar(Polar(a, b));
+  return isRect(mode) ? quadFromRect(Rect(a, b))
+                      : quadFromPolar(Polar(a, thetaCableVoltageToRadians(b)));
 }
 
 inline Rect add(Rect z, Rect w) {
@@ -193,14 +205,15 @@ inline RectChannels readRectFromPorts(const PortChannels& ports,
       rect.y[c] =
           c < 8 ? ports.a[2 * c + 1] : ports.b[(2 * c + 1) % maxChannels];
     } else if (mode == CoordinateMode::PolarSeparated) {
-      Rect z = polarToRect(Polar(ports.a[c], ports.b[c]));
+      Rect z = polarToRect(
+          Polar(ports.a[c], thetaCableVoltageToRadians(ports.b[c])));
       rect.x[c] = z.x;
       rect.y[c] = z.y;
     } else if (mode == CoordinateMode::PolarInterleaved) {
       float r = c < 8 ? ports.a[2 * c] : ports.b[(2 * c) % maxChannels];
       float theta =
           c < 8 ? ports.a[2 * c + 1] : ports.b[(2 * c + 1) % maxChannels];
-      Rect z = polarToRect(Polar(r, theta));
+      Rect z = polarToRect(Polar(r, thetaCableVoltageToRadians(theta)));
       rect.x[c] = z.x;
       rect.y[c] = z.y;
     }
@@ -216,7 +229,7 @@ inline PortChannels writePortsFromRect(const RectChannels& rect,
   for (int c = 0; c < maxChannels; ++c) {
     Quad z = quadFromRect(Rect(rect.x[c], rect.y[c]));
     float a = isPolar(mode) ? z.r : z.x;
-    float b = isPolar(mode) ? z.theta : z.y;
+    float b = isPolar(mode) ? thetaRadiansToCableVoltage(z.theta) : z.y;
 
     if (isInterleaved(mode)) {
       if (c < 8) {

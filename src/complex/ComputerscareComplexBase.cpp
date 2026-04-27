@@ -74,7 +74,9 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
         } else if(outMode==POLAR_INTERLEAVED) {
             //interleaved polar
             outputs[outIndex+outputBlock].setVoltage(r,(compChannelIndex*2) % 16);
-            outputs[outIndex+outputBlock].setVoltage(theta,(compChannelIndex*2+1) % 16);
+            outputs[outIndex+outputBlock].setVoltage(
+                cpx::complex_math::thetaRadiansToCableVoltage(theta),
+                (compChannelIndex*2+1) % 16);
         } else if(outMode==RECT_SEPARATED) {
             //separated rectangular
             outputs[outIndex].setVoltage(x,compChannelIndex);
@@ -82,7 +84,9 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
         } else if(outMode==POLAR_SEPARATED) {
             //separated polar
             outputs[outIndex].setVoltage(r,compChannelIndex);
-            outputs[outIndex+1].setVoltage(theta,compChannelIndex);
+            outputs[outIndex+1].setVoltage(
+                cpx::complex_math::thetaRadiansToCableVoltage(theta),
+                compChannelIndex);
         }
     }
 

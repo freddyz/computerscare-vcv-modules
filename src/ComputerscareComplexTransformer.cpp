@@ -172,13 +172,18 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		if (polar) {
 			float r[16] = {};
 			float theta[16] = {};
+			float thetaVoltage[16] = {};
 			for (uint8_t c = 0; c < 16; c += 4) {
 				simd::float_4 xv = simd::float_4::load(x + c);
 				simd::float_4 yv = simd::float_4::load(y + c);
 				simd::hypot(xv, yv).store(r + c);
 				simd::atan2(yv, xv).store(theta + c);
 			}
-			writeOutputVoltages(firstPortIndex, interleaved, r, theta);
+			for (uint8_t c = 0; c < 16; c++) {
+				thetaVoltage[c] =
+					cpx::complex_math::thetaRadiansToCableVoltage(theta[c]);
+			}
+			writeOutputVoltages(firstPortIndex, interleaved, r, thetaVoltage);
 		}
 		else {
 			writeOutputVoltages(firstPortIndex, interleaved, x, y);
@@ -235,7 +240,9 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		else if (inputMode == POLAR_SEPARATED) {
 			for (uint8_t c = 0; c < 16; c += 4) {
 				simd::float_4 r = simd::float_4::load(a + c);
-				simd::float_4 theta = simd::float_4::load(b + c);
+				simd::float_4 theta =
+					simd::float_4::load(b + c) *
+					cpx::complex_math::thetaRadiansPerVolt;
 				(r * simd::cos(theta)).store(x + c);
 				(r * simd::sin(theta)).store(y + c);
 			}
@@ -243,7 +250,8 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 		else if (inputMode == POLAR_INTERLEAVED) {
 			for (uint8_t c = 0; c < 16; c++) {
 				float r = c < 8 ? a[2 * c] : b[(2 * c) % 16];
-				float theta = c < 8 ? a[2 * c + 1] : b[(2 * c + 1) % 16];
+				float theta = cpx::complex_math::thetaCableVoltageToRadians(
+					c < 8 ? a[2 * c + 1] : b[(2 * c + 1) % 16]);
 				x[c] = r * std::cos(theta);
 				y[c] = r * std::sin(theta);
 			}

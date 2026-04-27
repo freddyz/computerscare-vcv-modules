@@ -286,8 +286,10 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
             for (; c + 3 < compolyChannels; c += 4) {
                 simd::float_4 radius = simd::float_4::load(radiusIn + c) *
                                        radiusTrim + radiusOffset;
-                simd::float_4 theta = simd::float_4::load(thetaIn + c) *
-                                      thetaTrim + thetaOffset;
+                simd::float_4 theta =
+                    simd::float_4::load(thetaIn + c) *
+                        cpx::complex_math::thetaRadiansPerVolt * thetaTrim +
+                    thetaOffset;
                 (radius * simd::cos(theta) + xOffset).store(x + c);
                 (radius * simd::sin(theta) + yOffset).store(y + c);
             }
@@ -301,7 +303,10 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
                 c, static_cast<cpx::compoly::WrapMode>(wrapMode),
                 secondChannels);
             float radius = radiusIn[radiusCh] * radiusTrim + radiusOffset;
-            float theta = thetaIn[thetaCh] * thetaTrim + thetaOffset;
+            float theta = cpx::complex_math::thetaCableVoltageToRadians(
+                              thetaIn[thetaCh]) *
+                              thetaTrim +
+                          thetaOffset;
             x[c] = radius * std::cos(theta) + xOffset;
             y[c] = radius * std::sin(theta) + yOffset;
         }
@@ -331,7 +336,9 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase
 
         for (int c = 0; c < compolyChannels; c++) {
             float first = polar ? r[c] : x[c];
-            float second = polar ? theta[c] : y[c];
+            float second =
+                polar ? cpx::complex_math::thetaRadiansToCableVoltage(theta[c])
+                      : y[c];
 
             if (interleaved) {
                 if (c < 8) {
