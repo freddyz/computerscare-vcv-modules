@@ -51,6 +51,15 @@ enum class ComplexXYMaxMode {
   Rectangular,
 };
 
+struct ComplexXY;
+
+struct ComplexXYDragOverlay : TransparentWidget {
+  ComplexXY* source = nullptr;
+
+  void step() override;
+  void draw(const DrawArgs& args) override;
+};
+
 struct ComplexXY : TransparentWidget {
   ComputerscareComplexBase* module;
 
@@ -83,12 +92,21 @@ struct ComplexXY : TransparentWidget {
   float originalMagnituteRadiusPixels = 120.f;
   ComplexXYMaxMode maxMode = ComplexXYMaxMode::Radial;
   float maxVoltage = 10.f;
+  ComplexXYDragOverlay* dragOverlay = nullptr;
 
   ComplexXY(ComputerscareComplexBase* mod, int indexParamA) {
     module = mod;
     paramA = indexParamA;
     // box.size = Vec(30,30);
     TransparentWidget();
+  }
+
+  ~ComplexXY() override {
+    if (dragOverlay) {
+      if (dragOverlay->parent) dragOverlay->parent->removeChild(dragOverlay);
+      delete dragOverlay;
+      dragOverlay = nullptr;
+    }
   }
 
   std::string rectDragDisplayString(float x, float y) {
@@ -262,6 +280,18 @@ struct ComplexXY : TransparentWidget {
 
   void step() override {
     if (editing && module) {
+      if (!dragOverlay && APP && APP->scene) {
+        dragOverlay = new ComplexXYDragOverlay();
+        dragOverlay->source = this;
+        dragOverlay->box.pos = Vec(0.f, 0.f);
+        dragOverlay->box.size = APP->scene->box.size;
+        APP->scene->addChild(dragOverlay);
+      }
+      if (dragOverlay && APP && APP->scene) {
+        dragOverlay->box.pos = Vec(0.f, 0.f);
+        dragOverlay->box.size = APP->scene->box.size;
+      }
+
       if (glfwGetKey(APP->window->win, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         cancelDrag();
         Widget::step();
@@ -280,6 +310,12 @@ struct ComplexXY : TransparentWidget {
       module->params[paramA].setValue(newZ.x);
       module->params[paramA + 1].setValue(-newZ.y);
     } else {
+      if (dragOverlay) {
+        if (dragOverlay->parent) dragOverlay->parent->removeChild(dragOverlay);
+        delete dragOverlay;
+        dragOverlay = nullptr;
+      }
+
       if (module) {
         newZ = Vec(module->params[paramA].getValue(),
                    -module->params[paramA + 1].getValue());
@@ -319,9 +355,8 @@ struct ComplexXY : TransparentWidget {
                 faded ? 1.f : 1.5f);
     nvgRestore(args.vg);
   }
-  void drawLayer(const DrawArgs& args, int layer) override {
-    if (layer == 1) {
-      if (editing) {
+  void drawEditingOverlay(const DrawArgs& args) {
+    if (editing) {
         float pxRatio = APP->window->pixelRatio;
 
         nvgSave(args.vg);
@@ -343,6 +378,12 @@ struct ComplexXY : TransparentWidget {
         nvgEllipse(args.vg, 0, 0, r1Pixels, r1Pixels);
         nvgClosePath(args.vg);
         nvgFill(args.vg);
+        nvgBeginPath(args.vg);
+        nvgStrokeWidth(args.vg, 3.f);
+        nvgStrokeColor(args.vg, nvgRGB(0, 100, 200));
+        nvgEllipse(args.vg, 0, 0, r1Pixels, r1Pixels);
+        nvgClosePath(args.vg);
+        nvgStroke(args.vg);
         Vec r1LabelOutward =
             Vec(labelAngleScale, -labelAngleScale).mult(3.f);
         Vec r1LabelPos =
@@ -358,14 +399,20 @@ struct ComplexXY : TransparentWidget {
         nvgClosePath(args.vg);
         nvgFill(args.vg);
 
-        // circle at the current complex value
+        // circle at the original complex value magnitude
         nvgBeginPath(args.vg);
         nvgStrokeWidth(args.vg, 3.f);
-        nvgStrokeColor(args.vg, nvgRGB(0, 100, 200));
+        nvgStrokeColor(args.vg, nvgRGB(140, 120, 80));
         nvgEllipse(args.vg, 0, 0, originalMagnituteRadiusPixels,
                    originalMagnituteRadiusPixels);
         nvgClosePath(args.vg);
         nvgStroke(args.vg);
+        Vec originalMagnitudeLabelPos =
+            Vec(originalMagnituteRadiusPixels * labelAngleScale,
+                -originalMagnituteRadiusPixels * labelAngleScale)
+                .plus(labelOutward);
+        drawDragText(args.vg, voltageLabelString(origComplexLength),
+                     originalMagnitudeLabelPos, nvgRGB(230, 205, 150), 28.f);
 
         // max radius guide
         nvgBeginPath(args.vg);
@@ -390,7 +437,6 @@ struct ComplexXY : TransparentWidget {
         nvgLineTo(args.vg, originalComplexPixels.x, originalComplexPixels.y);
         nvgClosePath(args.vg);
         nvgStroke(args.vg);
-
         // line from the zero point to the users mouse
 
         nvgSave(args.vg);
@@ -406,16 +452,36 @@ struct ComplexXY : TransparentWidget {
             args.vg, rectDragDisplayString(newZ.x, -newZ.y),
             pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 38.f)),
             nvgRGB(245, 245, 245), 34.f);
+        drawRectDragText(
+            args.vg, rectDragDisplayString(origComplexValue.x, -origComplexValue.y),
+            pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 78.f)),
+            nvgRGB(230, 205, 150), 28.f);
         drawDragText(
             args.vg, polarDragDisplayString(newZ.x, -newZ.y),
-            pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 78.f)),
+            pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 116.f)),
             nvgRGB(245, 245, 245), 34.f, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
         nvgRestore(args.vg);
-      }
     }
+  }
+  void drawLayer(const DrawArgs& args, int layer) override {
     Widget::drawLayer(args, layer);
   }
 };
+
+inline void ComplexXYDragOverlay::step() {
+  if (!source || !source->editing) {
+    return;
+  }
+  if (APP && APP->scene) {
+    box.pos = Vec(0.f, 0.f);
+    box.size = APP->scene->box.size;
+  }
+  Widget::step();
+}
+
+inline void ComplexXYDragOverlay::draw(const DrawArgs& args) {
+  if (source) source->drawEditingOverlay(args);
+}
 
 struct CompolyModeParam : SwitchQuantity {
   CompolyModeParam() {
@@ -655,6 +721,9 @@ struct ComplexDisplayWidget : Widget {
   // SVG glyph children — positioned each frame in draw()
   ScaledSvgWidget* iGlyph = nullptr;
   ScaledSvgWidget* eGlyph = nullptr;
+  ComplexDisplayWidget* overlayWidget = nullptr;
+  ComplexDisplayWidget* sourceWidget = nullptr;
+  bool sceneOverlay = false;
 
   ComplexDisplayWidget() {
     iGlyph = new ScaledSvgWidget(0.5f);
@@ -668,18 +737,65 @@ struct ComplexDisplayWidget : Widget {
     addChild(eGlyph);
   }
 
+  ~ComplexDisplayWidget() override {
+    if (overlayWidget) {
+      if (overlayWidget->parent) overlayWidget->parent->removeChild(overlayWidget);
+      delete overlayWidget;
+      overlayWidget = nullptr;
+    }
+  }
+
+  void syncFromSource(ComplexDisplayWidget* source) {
+    module = source->module;
+    paramX = source->paramX;
+    paramY = source->paramY;
+    displayMode = source->displayMode;
+    sourceMode = source->sourceMode;
+    angleUnit = source->angleUnit;
+    polarStyle = source->polarStyle;
+    decimals = source->decimals;
+    normalColor = source->normalColor;
+    dimColor = source->dimColor;
+    accentColor = source->accentColor;
+
+    Vec topLeft = source->getAbsoluteOffset(Vec(0.f, 0.f));
+    Vec bottomRight = source->getAbsoluteOffset(source->box.size);
+    box.pos = topLeft;
+    box.size = bottomRight.minus(topLeft);
+  }
+
+  void step() override {
+    if (!sceneOverlay) {
+      if (!overlayWidget && APP && APP->scene) {
+        overlayWidget = new ComplexDisplayWidget();
+        overlayWidget->sceneOverlay = true;
+        overlayWidget->sourceWidget = this;
+        APP->scene->addChild(overlayWidget);
+      }
+      if (overlayWidget) overlayWidget->syncFromSource(this);
+    } else if (sourceWidget) {
+      syncFromSource(sourceWidget);
+    }
+
+    Widget::step();
+  }
+
   void draw(const DrawArgs& args) override {
+    if (!sceneOverlay) {
+      iGlyph->visible = false;
+      eGlyph->visible = false;
+      return;
+    }
+
     if (!module) {
       iGlyph->visible = false;
       eGlyph->visible = false;
-      Widget::draw(args);
       return;
     }
 
     auto font = APP->window->loadFont(
         asset::plugin(pluginInstance, "res/fonts/RobotoMono-Regular.ttf"));
     if (!font) {
-      Widget::draw(args);
       return;
     }
 
