@@ -343,9 +343,11 @@ struct ComplexXY : TransparentWidget {
         nvgEllipse(args.vg, 0, 0, r1Pixels, r1Pixels);
         nvgClosePath(args.vg);
         nvgFill(args.vg);
+        Vec r1LabelOutward =
+            Vec(labelAngleScale, -labelAngleScale).mult(3.f);
         Vec r1LabelPos =
             Vec(r1Pixels * labelAngleScale, -r1Pixels * labelAngleScale)
-                .plus(labelOutward);
+                .plus(r1LabelOutward);
         drawDragText(args.vg, "1v", r1LabelPos, nvgRGB(120, 190, 255), 28.f);
 
         // circle at the zero point
@@ -727,6 +729,14 @@ struct ComplexDisplayWidget : Widget {
       if (value < 0.f) return std::string("-") + numeric;
       return std::string(" ") + numeric;
     };
+    auto fixedSignedNumberString = [&](float value, int integerDigits) {
+      std::ostringstream ss;
+      float absValue = std::fabs(value);
+      int width = integerDigits + 1 + displayDecimals;
+      ss << std::fixed << std::setprecision(displayDecimals) << std::setw(width)
+         << absValue;
+      return std::string(value < 0.f ? "-" : " ") + ss.str();
+    };
     auto drawCellText = [&](const std::string& s, float x, NVGcolor color) {
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
       nvgFillColor(args.vg, color);
@@ -804,9 +814,9 @@ struct ComplexDisplayWidget : Widget {
 
       cursorX =
           drawFixedCells(fixedNumberString(r, 2), cursorX, charW, normalColor);
-      cursorX = fixedOperator(" ∠ ", cursorX, charW, accentColor);
-      cursorX = drawFixedCells(fixedNumberString(displayAngle, 3, true),
-                               cursorX, charW, normalColor);
+      cursorX = fixedOperator(" ∠", cursorX, charW, accentColor);
+      cursorX = drawFixedCells(fixedSignedNumberString(displayAngle, 3), cursorX,
+                               charW, normalColor);
       drawCellText(unitSuffix, cursorX, normalColor);
     } else {
       float fieldStartX = 1.f;

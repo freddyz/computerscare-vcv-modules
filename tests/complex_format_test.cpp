@@ -104,11 +104,13 @@ int main() {
 
   {
     requireStr(cf::fixedWidthPolarEngineeringString(4.22f, 31.f * pi / 180.f),
-               "  4.22 ∠ +31.00°", "fixed polar positive angle");
+               "  4.22 ∠  31.00°", "fixed polar positive angle");
     requireStr(cf::fixedWidthPolarEngineeringString(4.22f, -31.f * pi / 180.f),
-               "  4.22 ∠ -31.00°", "fixed polar negative angle");
+               "  4.22 ∠- 31.00°", "fixed polar negative angle");
     requireStr(cf::fixedWidthPolarEngineeringString(12.345f, pi / 2.f, 1, 5, 5),
-               " 12.3 ∠ +90.0°", "fixed polar custom widths");
+               " 12.3 ∠  90.0°", "fixed polar custom widths");
+    requireStr(cf::fixedWidthPolarEngineeringString(4.22f, -102.f * pi / 180.f),
+               "  4.22 ∠-102.00°", "fixed polar negative wide angle");
   }
 
   // ── polarParts: exponential ────────────────────────────────────────────────

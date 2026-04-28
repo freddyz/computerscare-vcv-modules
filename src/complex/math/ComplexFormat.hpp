@@ -64,8 +64,9 @@ inline std::string fixedWidthPolarEngineeringString(float r, float thetaRadians,
   int d = decimals < 0 ? 2 : decimals;
   float thetaDegrees = thetaRadians * 180.f / pi;
   std::ostringstream ss;
-  ss << std::fixed << std::setprecision(d) << std::setw(rWidth) << r << " ∠ "
-     << std::showpos << std::setw(thetaWidth) << thetaDegrees << "°";
+  std::string angleSign = thetaDegrees < 0.f ? "-" : " ";
+  ss << std::fixed << std::setprecision(d) << std::setw(rWidth) << r << " ∠"
+     << angleSign << std::setw(thetaWidth) << std::fabs(thetaDegrees) << "°";
   return ss.str();
 }
 
