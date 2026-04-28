@@ -68,9 +68,12 @@ struct ComputerscareSvgPort : PortWidget {
   widget::FramebufferWidget* fb;
   widget::SvgWidget* sw;
   CircularShadow* shadow;
+  float svgScale = 1.f;
 
   ComputerscareSvgPort();
+  void draw(const DrawArgs& args) override;
   void setSvg(std::shared_ptr<Svg> svg);
+  void setSvgScale(float scale);
   DEPRECATED void setSVG(std::shared_ptr<Svg> svg) { setSvg(svg); }
 };
 

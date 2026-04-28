@@ -70,6 +70,9 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
   bool tick = false;
   float lastShuffle = 2.f;
+  bool crossfadeActive = false;
+  bool crossfadePending = false;
+  float crossfadeElapsed = 0.f;
 
   float lastZoom = -100;
   int zoomCheckInterval = 5000;
@@ -130,6 +133,8 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     SLIDESHOW_ACTIVE,
     SLIDESHOW_TIME,
     LIGHT_WIDGET_MODE,
+    CROSSFADE_ENABLED,
+    CROSSFADE_TIME,
     NUM_PARAMS
   };
   enum InputIds { NUM_INPUTS };
@@ -171,6 +176,9 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
     configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.200948f, "Slideshow Time", 2,
                     " s", 400.f, 3.f);
+    configParam(CROSSFADE_ENABLED, 0.f, 1.f, 0.f, "Crossfade");
+    configMenuParam(CROSSFADE_TIME, 0.f, 1.f, 0.1f, "Crossfade Time", 2, " s",
+                    0.f, 5.f);
     configParam(LIGHT_WIDGET_MODE, 0.f, 1.f, 0.f,
                 "Keep image fully opaque when dimming room lights");
 
@@ -201,6 +209,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
       if (slideshowTimer.process(args.sampleTime) > dTime) {
         checkAndPerformEndAction(true);
         slideshowTimer.reset();
+      }
+    }
+
+    if (crossfadeActive) {
+      crossfadeElapsed += args.sampleTime;
+      if (crossfadeElapsed >= getCrossfadeTime()) {
+        crossfadeActive = false;
+        crossfadePending = false;
       }
     }
 
@@ -322,6 +338,21 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
   }
 
   bool getLightWidgetMode() { return params[LIGHT_WIDGET_MODE].getValue(); }
+  bool getCrossfadeEnabled() {
+    return params[CROSSFADE_ENABLED].getValue() > 0.f;
+  }
+  float getCrossfadeTime() { return 5.f * params[CROSSFADE_TIME].getValue(); }
+  float getCrossfadeAlpha() {
+    float crossfadeTime = getCrossfadeTime();
+    if (!crossfadeActive || crossfadeTime <= 0.f) return 1.f;
+    return clamp(crossfadeElapsed / crossfadeTime, 0.f, 1.f);
+  }
+  void startCrossfade() {
+    float crossfadeTime = getCrossfadeTime();
+    crossfadeActive = getCrossfadeEnabled() && crossfadeTime > 0.f;
+    crossfadePending = crossfadeActive;
+    crossfadeElapsed = 0.f;
+  }
   void updateScrubFrame() {
     if (ready) {
       scrubFrame = mapBlankFrameOffset(zeroOffset, numFrames);
@@ -390,7 +421,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     if (numFilesInCatalog > 0 && fileIndexInCatalog >= 0 &&
         fileIndexInCatalog < (int)numFilesInCatalog &&
         system::isFile(catalog[fileIndexInCatalog])) {
-      setPath(catalog[fileIndexInCatalog]);
+      setPath(catalog[fileIndexInCatalog], 0, true);
     }
   }
   void nextFileInCatalog() {
@@ -418,7 +449,10 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     loadNewFileByIndex();
   }
 
-  void setPath(std::string path, int index = 0) {
+  void setPath(std::string path, int index = 0, bool crossfade = false) {
+    if (crossfade && index == 0 && path != paths[index]) {
+      startCrossfade();
+    }
     numFrames = 0;
     paths[index] = path;
     this->path = path;
@@ -837,6 +871,14 @@ struct tPNGDisplay : TBase {
   int currentFrame = -1;
   bool missingOrBroken = false;
   AnimatedGifBuddy gifBuddy;
+  int previousImg = 0;
+  int previousImgWidth = 0;
+  int previousImgHeight = 0;
+  float previousZoomX = 1.f;
+  float previousZoomY = 1.f;
+  float previousXOffset = 0.f;
+  float previousYOffset = 0.f;
+  bool hasPreviousImage = false;
 
   bool lightWidgetMode = false;
 
@@ -877,10 +919,44 @@ struct tPNGDisplay : TBase {
     }
   }
 
+  void drawImageHandle(const BGPanel::DrawArgs& args, int imageHandle,
+                       int imageWidth, int imageHeight, float zoomX,
+                       float zoomY, float xOffset, float yOffset, float alpha) {
+    if (imageHandle <= 0 || imageWidth <= 0 || imageHeight <= 0 ||
+        alpha <= 0.f) {
+      return;
+    }
+    nvgSave(args.vg);
+    nvgBeginPath(args.vg);
+    nvgScale(args.vg, zoomX, zoomY);
+    NVGpaint imgPaint = nvgImagePattern(args.vg, xOffset, yOffset, imageWidth,
+                                        imageHeight, 0, imageHandle, alpha);
+    nvgRect(args.vg, xOffset, yOffset, imageWidth, imageHeight);
+    nvgFillPaint(args.vg, imgPaint);
+    nvgFill(args.vg);
+    nvgClosePath(args.vg);
+    nvgRestore(args.vg);
+  }
+
   void drawImage(const BGPanel::DrawArgs& args) {
     if (blankModule && blankModule->loadedJSON) {
       std::string modulePath = blankModule->getPath();
       if (path != modulePath) {
+        if (blankModule->crossfadePending && img > 0 && imgWidth > 0 &&
+            imgHeight > 0) {
+          previousImg = img;
+          previousImgWidth = imgWidth;
+          previousImgHeight = imgHeight;
+          previousZoomX = blankModule->zoomX;
+          previousZoomY = blankModule->zoomY;
+          previousXOffset = blankModule->xOffset;
+          previousYOffset = blankModule->yOffset;
+          hasPreviousImage = true;
+          blankModule->crossfadePending = false;
+        } else {
+          hasPreviousImage = false;
+        }
+
         currentFrame = 0;
         INFO("Custom Blank loading image: %s", modulePath.c_str());
         gifBuddy = AnimatedGifBuddy(args.vg, modulePath.c_str());
@@ -957,17 +1033,19 @@ struct tPNGDisplay : TBase {
       }
       lastEnum = blankModule->imageFitEnum;
       if (!path.empty() && path != "empty") {
-        nvgBeginPath(args.vg);
-        NVGpaint imgPaint;
-        nvgScale(args.vg, blankModule->zoomX, blankModule->zoomY);
-        imgPaint =
-            nvgImagePattern(args.vg, blankModule->xOffset, blankModule->yOffset,
-                            imgWidth, imgHeight, 0, img, 1.0f);
-        nvgRect(args.vg, blankModule->xOffset, blankModule->yOffset, imgWidth,
-                imgHeight);
-        nvgFillPaint(args.vg, imgPaint);
-        nvgFill(args.vg);
-        nvgClosePath(args.vg);
+        float crossfadeAlpha = blankModule->getCrossfadeAlpha();
+        if (hasPreviousImage && blankModule->crossfadeActive) {
+          drawImageHandle(args, previousImg, previousImgWidth,
+                          previousImgHeight, previousZoomX, previousZoomY,
+                          previousXOffset, previousYOffset,
+                          1.f - crossfadeAlpha);
+        } else if (!blankModule->crossfadeActive) {
+          hasPreviousImage = false;
+        }
+
+        drawImageHandle(args, img, imgWidth, imgHeight, blankModule->zoomX,
+                        blankModule->zoomY, blankModule->xOffset,
+                        blankModule->yOffset, crossfadeAlpha);
       }
       if (!blankModule->pauseAnimation) {
         gifBuddy.displayGifFrame(args.vg, currentFrame);
@@ -1111,24 +1189,27 @@ struct ComputerscareBlankWidget : ModuleWidget {
     ComputerscareBlank* blank =
         dynamic_cast<ComputerscareBlank*>(this->blankModule);
 
-    modeMenu = new ParamSelectMenu();
-    modeMenu->text = "Animation Mode";
-    modeMenu->rightText = RIGHT_ARROW;
-    modeMenu->param =
-        blankModule->paramQuantities[ComputerscareBlank::ANIMATION_MODE];
-    modeMenu->options = blankModule->animationModeDescriptions;
-
-    endMenu = new ParamSelectMenu();
-    endMenu->text = "Slideshow / Next File Behavior";
-    endMenu->rightText = RIGHT_ARROW;
-    endMenu->param =
-        blankModule->paramQuantities[ComputerscareBlank::NEXT_FILE_BEHAVIOR];
-    endMenu->options = blankModule->nextFileDescriptions;
-
     menu->addChild(new MenuEntry);
 
-    menu->addChild(modeMenu);
-    menu->addChild(endMenu);
+    menu->addChild(createSubmenuItem("Image Scaling", "", [=](Menu* submenu) {
+      submenu->addChild(construct<ImageFitModeItem>(
+          &MenuItem::text, "Fit Both (stretch both directions)",
+          &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 0));
+      submenu->addChild(construct<ImageFitModeItem>(
+          &MenuItem::text, "Fit Width", &ImageFitModeItem::blank, blank,
+          &ImageFitModeItem::imageFitEnum, 1));
+      submenu->addChild(construct<ImageFitModeItem>(
+          &MenuItem::text, "Fit Height", &ImageFitModeItem::blank, blank,
+          &ImageFitModeItem::imageFitEnum, 2));
+      submenu->addChild(construct<ImageFitModeItem>(
+          &MenuItem::text, "Free", &ImageFitModeItem::blank, blank,
+          &ImageFitModeItem::imageFitEnum, 3));
+    }));
+
+    InvertedMenuToggle* dimVisualsWithRoom = new InvertedMenuToggle(
+        blank->paramQuantities[ComputerscareBlank::LIGHT_WIDGET_MODE],
+        "Dim Visuals with Room");
+    menu->addChild(dimVisualsWithRoom);
 
     KeyboardControlChildMenu* kbMenu = new KeyboardControlChildMenu();
     kbMenu->text = "Keyboard Controls";
@@ -1148,51 +1229,82 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
-    menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Image Scaling"));
-    menu->addChild(construct<ImageFitModeItem>(
-        &MenuItem::text, "Fit Both (stretch both directions)",
-        &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 0));
-    menu->addChild(construct<ImageFitModeItem>(
-        &MenuItem::text, "Fit Width", &ImageFitModeItem::blank, blank,
-        &ImageFitModeItem::imageFitEnum, 1));
-    menu->addChild(construct<ImageFitModeItem>(
-        &MenuItem::text, "Fit Height", &ImageFitModeItem::blank, blank,
-        &ImageFitModeItem::imageFitEnum, 2));
-    menu->addChild(construct<ImageFitModeItem>(
-        &MenuItem::text, "Free", &ImageFitModeItem::blank, blank,
-        &ImageFitModeItem::imageFitEnum, 3));
-
-    menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+    struct WideParamSlider : MenuEntry {
+      WideParamSlider(ParamQuantity* q) {
+        box.size.x = 280.f;
+        box.size.y = 32.f;
+        auto* slider = new ui::Slider;
+        slider->box.size.x = 260.f;
+        slider->quantity = q;
+        slider->box.pos = Vec(6.f, 0.f);
+        addChild(slider);
+      }
+    };
 
     MenuToggle* animEnabled = new MenuToggle(
         blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED]);
     menu->addChild(animEnabled);
 
-    MenuToggle* constantDelay = new MenuToggle(
-        blank->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY]);
-    menu->addChild(constantDelay);
+    menu->addChild(
+        createSubmenuItem("Animation Options", "", [=](Menu* submenu) {
+          ParamSelectMenu* modeMenu = new ParamSelectMenu();
+          modeMenu->text = "Animation Mode";
+          modeMenu->rightText = RIGHT_ARROW;
+          modeMenu->param =
+              blank->paramQuantities[ComputerscareBlank::ANIMATION_MODE];
+          modeMenu->options = blank->animationModeDescriptions;
+          submenu->addChild(modeMenu);
+
+          MenuToggle* constantDelay = new MenuToggle(
+              blank->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY]);
+          submenu->addChild(constantDelay);
+
+          MenuEntry* sliderSpacer = new MenuEntry;
+          sliderSpacer->box.size.y = 8.f;
+          submenu->addChild(sliderSpacer);
+
+          submenu->addChild(new WideParamSlider(
+              blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED]));
+        }));
 
     MenuToggle* slideshowEnabled = new MenuToggle(
         blank->paramQuantities[ComputerscareBlank::SLIDESHOW_ACTIVE]);
     menu->addChild(slideshowEnabled);
 
-    MenuToggle* lightWidgetMode = new MenuToggle(
-        blank->paramQuantities[ComputerscareBlank::LIGHT_WIDGET_MODE]);
-    menu->addChild(lightWidgetMode);
+    menu->addChild(
+        createSubmenuItem("Slideshow Options", "", [=](Menu* submenu) {
+          submenu->addChild(construct<MenuLabel>(
+              &MenuLabel::text, "Slideshow / Next File Behavior"));
+          for (unsigned int i = 0; i < blank->nextFileDescriptions.size();
+               i++) {
+            ssmi* menuItem = new ssmi(
+                i,
+                blank->paramQuantities[ComputerscareBlank::NEXT_FILE_BEHAVIOR]);
+            menuItem->text = blank->nextFileDescriptions[i];
+            submenu->addChild(menuItem);
+          }
 
-    menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+          MenuEntry* sliderSpacer = new MenuEntry;
+          sliderSpacer->box.size.y = 8.f;
+          submenu->addChild(sliderSpacer);
 
-    MenuParam* speedParam = new MenuParam(
-        blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED], 2);
-    menu->addChild(speedParam);
+          MenuToggle* crossfadeEnabled = new MenuToggle(
+              blank->paramQuantities[ComputerscareBlank::CROSSFADE_ENABLED]);
+          submenu->addChild(crossfadeEnabled);
 
-    MenuParam* shuffleParam = new MenuParam(
-        blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED], 2);
-    menu->addChild(shuffleParam);
+          MenuEntry* crossfadeSliderSpacer = new MenuEntry;
+          crossfadeSliderSpacer->box.size.y = 8.f;
+          submenu->addChild(crossfadeSliderSpacer);
 
-    MenuParam* slideshowSpeedParam = new MenuParam(
-        blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME], 2);
-    menu->addChild(slideshowSpeedParam);
+          submenu->addChild(new WideParamSlider(
+              blank->paramQuantities[ComputerscareBlank::CROSSFADE_TIME]));
+
+          submenu->addChild(new WideParamSlider(
+              blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED]));
+
+          submenu->addChild(new WideParamSlider(
+              blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME]));
+        }));
   }
   void step() override {
     if (module) {
@@ -1345,8 +1457,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
   ComputerscareResizeHandle* leftHandle;
   ComputerscareResizeHandle* rightHandle;
   GiantFrameDisplay* frameDisplay;
-  ParamSelectMenu* modeMenu;
-  ParamSelectMenu* endMenu;
 };
 
 Model* modelComputerscareBlank =

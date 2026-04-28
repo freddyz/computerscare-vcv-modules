@@ -78,6 +78,22 @@ struct MenuToggle : MenuItem {
   }
 };
 
+struct InvertedMenuToggle : MenuItem {
+  ParamQuantity* myParamQuantity;
+  InvertedMenuToggle(ParamQuantity* pq, std::string label) {
+    myParamQuantity = pq;
+    text = label;
+  }
+
+  void onAction(const event::Action& e) override {
+    myParamQuantity->setValue(myParamQuantity->getValue() == 0 ? 1 : 0);
+  }
+  void step() override {
+    rightText = myParamQuantity->getValue() == 0 ? "✔" : "";
+    MenuItem::step();
+  }
+};
+
 struct MenuParam : MenuEntry {
   ParamWidget* pWidget;
 
