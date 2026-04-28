@@ -1009,6 +1009,11 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         out.flipInputUV = true;
         return out;
       case PortaloofSourceKind::FULL_RACK:
+        if (m->cropRackBorders) {
+          math::Rect cropRect = portaloofRackInteriorScreenRect();
+          rectSources[index].setRect(cropRect);
+          return rectSources[index].render(vg, capture.nvgImg, cropRect);
+        }
         out.nvgImg = capture.nvgImg;
         out.texId = capture.texId;
         out.flipInputUV = false;
@@ -1107,7 +1112,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         addChild(s);
       }
     };
-    menu->addChild(createMenuLabel("Fold Frequency"));
+    menu->addChild(createMenuLabel("Color Warp"));
     menu->addChild(new WideParamSlider(
         m->paramQuantities[ComputerscarePortaloof::INVERT_KNOB]));
 
@@ -1144,6 +1149,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           createBoolPtrMenuItem("Tile empty space", "", &m->tileEmptySpace));
       menu->addChild(createBoolPtrMenuItem("Maintain aspect ratio", "",
                                            &m->maintainAspect));
+      menu->addChild(createBoolPtrMenuItem("Crop Rack Window Borders", "",
+                                           &m->cropRackBorders));
     }));
     menu->addChild(createSubmenuItem("Algorithm", "", [=](Menu* menu) {
       menu->addChild(createCheckMenuItem(

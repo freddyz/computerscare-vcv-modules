@@ -376,6 +376,11 @@ struct PortaloofBackdropWidget : widget::Widget {
         out.flipInputUV = true;
         return out;
       case PortaloofSourceKind::FULL_RACK:
+        if (module->cropRackBorders) {
+          math::Rect cropRect = portaloofRackInteriorScreenRect();
+          rectSources[index].setRect(cropRect);
+          return rectSources[index].render(vg, capture.nvgImg, cropRect);
+        }
         out.nvgImg = capture.nvgImg;
         out.texId = capture.texId;
         out.flipInputUV = false;

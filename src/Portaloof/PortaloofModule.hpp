@@ -70,6 +70,24 @@ static inline float mapPortaloofAxisScale(float k) {
   return sign * powf(5.f, (a - 1.f) / 4.f);
 }
 
+static inline math::Rect portaloofRackInteriorScreenRect() {
+  if (!APP || !APP->scene || !APP->scene->rackScroll) return math::Rect();
+
+  auto* rackScroll = APP->scene->rackScroll;
+  math::Rect r = rackScroll->box;
+  if (rackScroll->verticalScrollbar &&
+      rackScroll->verticalScrollbar->isVisible()) {
+    r.size.x -= rackScroll->verticalScrollbar->box.size.x;
+  }
+  if (rackScroll->horizontalScrollbar &&
+      rackScroll->horizontalScrollbar->isVisible()) {
+    r.size.y -= rackScroll->horizontalScrollbar->box.size.y;
+  }
+  r.size.x = std::max(r.size.x, 0.f);
+  r.size.y = std::max(r.size.y, 0.f);
+  return r;
+}
+
 enum PortaloofRowIndex {
   ROW_SCALE = 0,
   ROW_SCALE_X,
@@ -208,6 +226,7 @@ struct ComputerscarePortaloof : Module {
   bool loadedJSON = false;
   bool tileEmptySpace = true;
   bool maintainAspect = true;
+  bool cropRackBorders = true;
   bool backdropEnabled = false;
   bool emptyWindowInBgMode = true;
   bool transformPost = false;
@@ -546,6 +565,8 @@ struct ComputerscarePortaloof : Module {
     json_object_set_new(rootJ, "width", json_real(width));
     json_object_set_new(rootJ, "tileEmptySpace", json_boolean(tileEmptySpace));
     json_object_set_new(rootJ, "maintainAspect", json_boolean(maintainAspect));
+    json_object_set_new(rootJ, "cropRackBorders",
+                        json_boolean(cropRackBorders));
     json_object_set_new(rootJ, "backdropEnabled",
                         json_boolean(backdropEnabled));
     json_object_set_new(rootJ, "emptyWindowInBgMode",
@@ -587,6 +608,8 @@ struct ComputerscarePortaloof : Module {
     if (tileJ) tileEmptySpace = json_boolean_value(tileJ);
     json_t* aspectJ = json_object_get(rootJ, "maintainAspect");
     if (aspectJ) maintainAspect = json_boolean_value(aspectJ);
+    json_t* cropJ = json_object_get(rootJ, "cropRackBorders");
+    if (cropJ) cropRackBorders = json_boolean_value(cropJ);
     json_t* bdJ = json_object_get(rootJ, "backdropEnabled");
     if (bdJ) backdropEnabled = json_boolean_value(bdJ);
     json_t* ewJ = json_object_get(rootJ, "emptyWindowInBgMode");
