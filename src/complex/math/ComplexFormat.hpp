@@ -50,9 +50,9 @@ inline std::string fixedWidthRectString(float x, float y, int decimals = 2,
                                         int realWidth = 6, int imagWidth = 5) {
   int d = decimals < 0 ? 2 : decimals;
   std::ostringstream ss;
-  ss << std::fixed << std::setprecision(d) << std::setw(realWidth) << x
-     << " " << ((y < 0.f) ? "-" : "+") << " " << std::setw(imagWidth)
-     << std::fabs(y) << "i";
+  ss << std::fixed << std::setprecision(d) << std::setw(realWidth) << x << " "
+     << ((y < 0.f) ? "-" : "+") << " " << std::setw(imagWidth) << std::fabs(y)
+     << "i";
   return ss.str();
 }
 
@@ -69,10 +69,10 @@ inline std::string fixedWidthPolarEngineeringString(float r, float thetaRadians,
   return ss.str();
 }
 
-inline ComplexRenderParts polarParts(float r, float theta,
-                                      AngleUnit unit = AngleUnit::Degree,
-                                      PolarDisplayStyle style = PolarDisplayStyle::Engineering,
-                                      int decimals = -1) {
+inline ComplexRenderParts polarParts(
+    float r, float theta, AngleUnit unit = AngleUnit::Degree,
+    PolarDisplayStyle style = PolarDisplayStyle::Engineering,
+    int decimals = -1) {
   constexpr float pi = 3.14159265358979f;
   ComplexRenderParts p;
   p.magnitude = fmtFloat(r, decimals);

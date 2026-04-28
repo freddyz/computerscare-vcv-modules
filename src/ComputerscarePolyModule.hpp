@@ -60,9 +60,9 @@ struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
 };
 
 struct TinyCompolyLanesSnapKnob : ComputerscareRoundKnob {
-  std::shared_ptr<Svg> manualChannelsSetSvg = APP->window->loadSvg(
-      asset::plugin(pluginInstance,
-                    "res/components/compoly-lane-count-empty.svg"));
+  std::shared_ptr<Svg> manualChannelsSetSvg =
+      APP->window->loadSvg(asset::plugin(
+          pluginInstance, "res/components/compoly-lane-count-empty.svg"));
   std::shared_ptr<Svg> autoChannelsSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance, "res/components/compoly-lane-count-auto.svg"));
   int prevSetting = -1;
@@ -159,7 +159,8 @@ struct CompolyLaneCountWidget : Widget {
     lanesKnobTransform->box.pos = pos.plus(Vec(5, 1));
     lanesKnobTransform->scale(1.2f);
 
-    lanesKnob = createParam<TinyCompolyLanesSnapKnob>(Vec(0, 0), module, paramId);
+    lanesKnob =
+        createParam<TinyCompolyLanesSnapKnob>(Vec(0, 0), module, paramId);
     lanesKnob->module = module;
     lanesKnob->paramId = paramId;
     lanesKnob->allowAuto = allowAuto;

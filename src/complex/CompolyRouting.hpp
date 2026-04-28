@@ -20,11 +20,9 @@ enum class WrapMode {
 struct CablePolyChannels {
   int count;
 
-  CablePolyChannels() : count(0) {
-  }
+  CablePolyChannels() : count(0) {}
 
-  explicit CablePolyChannels(int count) : count(clamp(count)) {
-  }
+  explicit CablePolyChannels(int count) : count(clamp(count)) {}
 
   static int clamp(int count) {
     return std::max(0, std::min(maxCablePolyChannels, count));
@@ -34,36 +32,29 @@ struct CablePolyChannels {
 struct CompolyLane {
   int index;
 
-  CompolyLane() : index(0) {
-  }
+  CompolyLane() : index(0) {}
 
-  explicit CompolyLane(int index) : index(index) {
-  }
+  explicit CompolyLane(int index) : index(index) {}
 };
 
 struct SeparatedCablePolyChannels {
   CablePolyChannels first;
   CablePolyChannels second;
 
-  SeparatedCablePolyChannels() {
-  }
+  SeparatedCablePolyChannels() {}
 
-  SeparatedCablePolyChannels(CablePolyChannels first,
-                             CablePolyChannels second)
-      : first(first), second(second) {
-  }
+  SeparatedCablePolyChannels(CablePolyChannels first, CablePolyChannels second)
+      : first(first), second(second) {}
 };
 
 struct SeparatedCableChannels {
   int first;
   int second;
 
-  SeparatedCableChannels() : first(0), second(0) {
-  }
+  SeparatedCableChannels() : first(0), second(0) {}
 
   SeparatedCableChannels(int first, int second)
-      : first(first), second(second) {
-  }
+      : first(first), second(second) {}
 };
 
 inline const std::vector<std::string>& wrapModeDescriptions() {
@@ -80,27 +71,23 @@ inline int clampCompolyLanes(int lanes) {
   return std::max(0, std::min(maxCompolyLanes, lanes));
 }
 
-inline int compolyLanesForSeparatedCables(
-    SeparatedCablePolyChannels cables) {
+inline int compolyLanesForSeparatedCables(SeparatedCablePolyChannels cables) {
   return std::max(cables.first.count, cables.second.count);
 }
 
-inline int compolyLanesForInterleavedCables(
-    SeparatedCablePolyChannels cables) {
+inline int compolyLanesForInterleavedCables(SeparatedCablePolyChannels cables) {
   return (cables.first.count + cables.second.count + 1) / 2;
 }
 
 inline int outputCompolyLanes(int requestedLanes, int detectedLanes) {
-  if (requestedLanes != 0)
-    return clampCompolyLanes(requestedLanes);
+  if (requestedLanes != 0) return clampCompolyLanes(requestedLanes);
   detectedLanes = clampCompolyLanes(detectedLanes);
   return detectedLanes == 0 ? 1 : detectedLanes;
 }
 
 inline int cableChannelForCompolyLane(CompolyLane lane, WrapMode wrapMode,
                                       CablePolyChannels cableChannels) {
-  if (cableChannels.count <= 0)
-    return 0;
+  if (cableChannels.count <= 0) return 0;
 
   switch (wrapMode) {
     case WrapMode::Normal:

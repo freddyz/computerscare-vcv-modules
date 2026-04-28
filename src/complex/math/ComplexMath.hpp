@@ -1,7 +1,7 @@
 #pragma once
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "../CompolyRouting.hpp"
@@ -25,22 +25,18 @@ struct Rect {
   float x;
   float y;
 
-  Rect() : x(0.f), y(0.f) {
-  }
+  Rect() : x(0.f), y(0.f) {}
 
-  Rect(float x, float y) : x(x), y(y) {
-  }
+  Rect(float x, float y) : x(x), y(y) {}
 };
 
 struct Polar {
   float r;
   float theta;
 
-  Polar() : r(0.f), theta(0.f) {
-  }
+  Polar() : r(0.f), theta(0.f) {}
 
-  Polar(float r, float theta) : r(r), theta(theta) {
-  }
+  Polar(float r, float theta) : r(r), theta(theta) {}
 };
 
 struct Quad {
@@ -49,12 +45,10 @@ struct Quad {
   float r;
   float theta;
 
-  Quad() : x(0.f), y(0.f), r(0.f), theta(0.f) {
-  }
+  Quad() : x(0.f), y(0.f), r(0.f), theta(0.f) {}
 
   Quad(float x, float y, float r, float theta)
-      : x(x), y(y), r(r), theta(theta) {
-  }
+      : x(x), y(y), r(r), theta(theta) {}
 };
 
 using Channels = std::array<float, maxChannels>;
@@ -63,27 +57,23 @@ struct RectChannels {
   Channels x;
   Channels y;
 
-  RectChannels() : x(), y() {
-  }
+  RectChannels() : x(), y() {}
 };
 
 struct PortChannels {
   Channels a;
   Channels b;
 
-  PortChannels() : a(), b() {
-  }
+  PortChannels() : a(), b() {}
 };
 
 struct PortChannelCounts {
   int a;
   int b;
 
-  PortChannelCounts() : a(0), b(0) {
-  }
+  PortChannelCounts() : a(0), b(0) {}
 
-  PortChannelCounts(int a, int b) : a(a), b(b) {
-  }
+  PortChannelCounts(int a, int b) : a(a), b(b) {}
 };
 
 inline bool isRect(CoordinateMode mode) {
@@ -91,9 +81,7 @@ inline bool isRect(CoordinateMode mode) {
          mode == CoordinateMode::RectSeparated;
 }
 
-inline bool isPolar(CoordinateMode mode) {
-  return !isRect(mode);
-}
+inline bool isPolar(CoordinateMode mode) { return !isRect(mode); }
 
 inline bool isInterleaved(CoordinateMode mode) {
   return mode == CoordinateMode::RectInterleaved ||
@@ -131,9 +119,7 @@ inline Quad quadFromPair(float a, float b, CoordinateMode mode) {
                       : quadFromPolar(Polar(a, thetaCableVoltageToRadians(b)));
 }
 
-inline Rect add(Rect z, Rect w) {
-  return Rect(z.x + w.x, z.y + w.y);
-}
+inline Rect add(Rect z, Rect w) { return Rect(z.x + w.x, z.y + w.y); }
 
 inline Rect multiply(Rect z, Rect w) {
   return Rect(z.x * w.x - z.y * w.y, z.x * w.y + z.y * w.x);
@@ -162,7 +148,8 @@ inline int outputCompolyphony(int knobSetting, int maxInputCompolyphony) {
   return cpx::compoly::outputCompolyLanes(knobSetting, maxInputCompolyphony);
 }
 
-inline int channelIndexForOutput(int outputIndex, cpx::compoly::WrapMode wrapMode,
+inline int channelIndexForOutput(int outputIndex,
+                                 cpx::compoly::WrapMode wrapMode,
                                  int channelCount) {
   return cpx::compoly::cableChannelForCompolyLane(
       cpx::compoly::CompolyLane(outputIndex), wrapMode,
@@ -248,8 +235,7 @@ inline PortChannels writePortsFromRect(const RectChannels& rect,
   return ports;
 }
 
-inline RectChannels addChannels(const RectChannels& z,
-                                const RectChannels& w) {
+inline RectChannels addChannels(const RectChannels& z, const RectChannels& w) {
   RectChannels out = {};
   for (int c = 0; c < maxChannels; ++c) {
     Rect sum = add(Rect(z.x[c], z.y[c]), Rect(w.x[c], w.y[c]));

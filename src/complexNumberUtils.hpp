@@ -3,14 +3,10 @@
 // R^N->C^N
 // create
 
-
 // R->C^N
-
 
 // C^N -> R^N
 // Re(z), Im(z), |z|, Arg(z)
-
-
 
 // C^N -> C^N
 // add, subtract, divide, multiply
@@ -19,7 +15,6 @@
 // conjugate z*
 // z^p
 // (1-z)^p
-
 
 // C^N -> C
 // sum
