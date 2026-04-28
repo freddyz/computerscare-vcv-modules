@@ -1122,6 +1122,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     menu->addChild(createSubmenuItem("Full Rack BG", "", [=](Menu* menu) {
       menu->addChild(createBoolPtrMenuItem("Empty module window", "",
                                            &m->emptyWindowInBgMode));
+      MenuEntry* sliderSpacer = new MenuEntry;
+      sliderSpacer->box.size.y = 8.f;
+      menu->addChild(sliderSpacer);
       struct WideSlider : MenuEntry {
         WideSlider(ParamQuantity* q) {
           box.size.x = 280.f;

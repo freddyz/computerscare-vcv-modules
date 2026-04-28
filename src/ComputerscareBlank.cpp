@@ -1111,24 +1111,28 @@ struct ComputerscareBlankWidget : ModuleWidget {
     ComputerscareBlank* blank =
         dynamic_cast<ComputerscareBlank*>(this->blankModule);
 
-    modeMenu = new ParamSelectMenu();
-    modeMenu->text = "Animation Mode";
-    modeMenu->rightText = RIGHT_ARROW;
-    modeMenu->param =
-        blankModule->paramQuantities[ComputerscareBlank::ANIMATION_MODE];
-    modeMenu->options = blankModule->animationModeDescriptions;
-
-    endMenu = new ParamSelectMenu();
-    endMenu->text = "Slideshow / Next File Behavior";
-    endMenu->rightText = RIGHT_ARROW;
-    endMenu->param =
-        blankModule->paramQuantities[ComputerscareBlank::NEXT_FILE_BEHAVIOR];
-    endMenu->options = blankModule->nextFileDescriptions;
-
     menu->addChild(new MenuEntry);
 
-    menu->addChild(modeMenu);
-    menu->addChild(endMenu);
+    menu->addChild(createSubmenuItem("Image Scaling", "", [=](Menu* submenu) {
+      submenu->addChild(construct<ImageFitModeItem>(
+          &MenuItem::text, "Fit Both (stretch both directions)",
+          &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum,
+          0));
+      submenu->addChild(construct<ImageFitModeItem>(
+          &MenuItem::text, "Fit Width", &ImageFitModeItem::blank, blank,
+          &ImageFitModeItem::imageFitEnum, 1));
+      submenu->addChild(construct<ImageFitModeItem>(
+          &MenuItem::text, "Fit Height", &ImageFitModeItem::blank, blank,
+          &ImageFitModeItem::imageFitEnum, 2));
+      submenu->addChild(construct<ImageFitModeItem>(
+          &MenuItem::text, "Free", &ImageFitModeItem::blank, blank,
+          &ImageFitModeItem::imageFitEnum, 3));
+    }));
+
+    InvertedMenuToggle* dimVisualsWithRoom = new InvertedMenuToggle(
+        blank->paramQuantities[ComputerscareBlank::LIGHT_WIDGET_MODE],
+        "Dim Visuals with Room");
+    menu->addChild(dimVisualsWithRoom);
 
     KeyboardControlChildMenu* kbMenu = new KeyboardControlChildMenu();
     kbMenu->text = "Keyboard Controls";
@@ -1148,51 +1152,73 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
-    menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Image Scaling"));
-    menu->addChild(construct<ImageFitModeItem>(
-        &MenuItem::text, "Fit Both (stretch both directions)",
-        &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 0));
-    menu->addChild(construct<ImageFitModeItem>(
-        &MenuItem::text, "Fit Width", &ImageFitModeItem::blank, blank,
-        &ImageFitModeItem::imageFitEnum, 1));
-    menu->addChild(construct<ImageFitModeItem>(
-        &MenuItem::text, "Fit Height", &ImageFitModeItem::blank, blank,
-        &ImageFitModeItem::imageFitEnum, 2));
-    menu->addChild(construct<ImageFitModeItem>(
-        &MenuItem::text, "Free", &ImageFitModeItem::blank, blank,
-        &ImageFitModeItem::imageFitEnum, 3));
-
-    menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+    struct WideParamSlider : MenuEntry {
+      WideParamSlider(ParamQuantity* q) {
+        box.size.x = 280.f;
+        box.size.y = 32.f;
+        auto* slider = new ui::Slider;
+        slider->box.size.x = 260.f;
+        slider->quantity = q;
+        slider->box.pos = Vec(6.f, 0.f);
+        addChild(slider);
+      }
+    };
 
     MenuToggle* animEnabled = new MenuToggle(
         blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED]);
     menu->addChild(animEnabled);
 
-    MenuToggle* constantDelay = new MenuToggle(
-        blank->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY]);
-    menu->addChild(constantDelay);
+    menu->addChild(
+        createSubmenuItem("Animation Options", "", [=](Menu* submenu) {
+          ParamSelectMenu* modeMenu = new ParamSelectMenu();
+          modeMenu->text = "Animation Mode";
+          modeMenu->rightText = RIGHT_ARROW;
+          modeMenu->param =
+              blank->paramQuantities[ComputerscareBlank::ANIMATION_MODE];
+          modeMenu->options = blank->animationModeDescriptions;
+          submenu->addChild(modeMenu);
+
+          MenuToggle* constantDelay = new MenuToggle(
+              blank->paramQuantities[ComputerscareBlank::CONSTANT_FRAME_DELAY]);
+          submenu->addChild(constantDelay);
+
+          MenuEntry* sliderSpacer = new MenuEntry;
+          sliderSpacer->box.size.y = 8.f;
+          submenu->addChild(sliderSpacer);
+
+          submenu->addChild(new WideParamSlider(
+              blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED]));
+        }));
 
     MenuToggle* slideshowEnabled = new MenuToggle(
         blank->paramQuantities[ComputerscareBlank::SLIDESHOW_ACTIVE]);
     menu->addChild(slideshowEnabled);
 
-    MenuToggle* lightWidgetMode = new MenuToggle(
-        blank->paramQuantities[ComputerscareBlank::LIGHT_WIDGET_MODE]);
-    menu->addChild(lightWidgetMode);
+    menu->addChild(
+        createSubmenuItem("Slideshow Options", "", [=](Menu* submenu) {
+          submenu->addChild(
+              construct<MenuLabel>(&MenuLabel::text,
+                                   "Slideshow / Next File Behavior"));
+          for (unsigned int i = 0; i < blank->nextFileDescriptions.size();
+               i++) {
+            ssmi* menuItem =
+                new ssmi(i, blank->paramQuantities
+                                [ComputerscareBlank::NEXT_FILE_BEHAVIOR]);
+            menuItem->text = blank->nextFileDescriptions[i];
+            submenu->addChild(menuItem);
+          }
 
-    menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+          MenuEntry* sliderSpacer = new MenuEntry;
+          sliderSpacer->box.size.y = 8.f;
+          submenu->addChild(sliderSpacer);
 
-    MenuParam* speedParam = new MenuParam(
-        blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED], 2);
-    menu->addChild(speedParam);
+          submenu->addChild(new WideParamSlider(
+              blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED]));
 
-    MenuParam* shuffleParam = new MenuParam(
-        blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED], 2);
-    menu->addChild(shuffleParam);
+          submenu->addChild(new WideParamSlider(
+              blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME]));
+        }));
 
-    MenuParam* slideshowSpeedParam = new MenuParam(
-        blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME], 2);
-    menu->addChild(slideshowSpeedParam);
   }
   void step() override {
     if (module) {
@@ -1345,8 +1371,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
   ComputerscareResizeHandle* leftHandle;
   ComputerscareResizeHandle* rightHandle;
   GiantFrameDisplay* frameDisplay;
-  ParamSelectMenu* modeMenu;
-  ParamSelectMenu* endMenu;
 };
 
 Model* modelComputerscareBlank =
