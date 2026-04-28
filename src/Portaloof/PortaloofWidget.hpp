@@ -254,9 +254,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     const float HDR_BTN_DX = -24.f;  // button x = jack x + this
     const float HDR_BTN_DY = -2.f;   // button y = jack y + this
 
-    const float CONT_JACK_X = 56.f;
-    const float MIX_JACK_X = 122.f;
-    const float MIX_INPUT_JACK_Y = HDR_JACK_Y - 3.f;
+    const float CONT_JACK_X = 52.f;
+    const float MIX_JACK_X = 118.f;
+    const float MIX_INPUT_JACK_Y = HDR_JACK_Y;
 
     auto addHdrLabel = [&](float x, const char* text) {
       SmallLetterDisplay* lbl = new SmallLetterDisplay();
@@ -270,7 +270,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       addChild(lbl);
     };
 
-    addHdrLabel(CONT_JACK_X + HDR_BTN_DX, "FREEZE");
+    addHdrLabel(CONT_JACK_X + HDR_BTN_DX - 8.f, "FREEZE");
     addParam(createParam<SmallIsoButton>(
         Vec(CONT_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY), module,
         ComputerscarePortaloof::FREEZE_TOGGLE));
@@ -280,7 +280,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
     addHdrLabel(MIX_JACK_X + HDR_BTN_DX - 4.f, "MIX");
     addParam(createParam<DarkSmallKnob>(
-        Vec(MIX_JACK_X + HDR_BTN_DX + 1.f, HDR_JACK_Y + HDR_BTN_DY + 5.f),
+        Vec(MIX_JACK_X + HDR_BTN_DX - 3.f, HDR_JACK_Y + HDR_BTN_DY + 7.f),
         module, ComputerscarePortaloof::INPUT_SOURCE_MIX));
     trackInputPort(
         createInput<InPort>(Vec(MIX_JACK_X, MIX_INPUT_JACK_Y), module,
@@ -288,7 +288,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     {
       mixLeftLabel = new SmallLetterDisplay();
       mixLeftLabel->box.pos =
-          Vec(MIX_JACK_X + HDR_BTN_DX - 18.f, HDR_JACK_Y + 18.f);
+          Vec(MIX_JACK_X + HDR_BTN_DX - 19.f, HDR_JACK_Y + 17.f);
       mixLeftLabel->box.size = Vec(34.f, 14.f);
       mixLeftLabel->fontSize = 10;
       mixLeftLabel->letterSpacing = 1.5f;
@@ -300,7 +300,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
       mixRightLabel = new SmallLetterDisplay();
       mixRightLabel->box.pos =
-          Vec(MIX_JACK_X + HDR_BTN_DX + 8.f, HDR_JACK_Y + 18.f);
+          Vec(MIX_JACK_X + HDR_BTN_DX + 4.f, HDR_JACK_Y + 17.f);
       mixRightLabel->box.size = Vec(44.f, 14.f);
       mixRightLabel->fontSize = 10;
       mixRightLabel->letterSpacing = 1.5f;

@@ -2,6 +2,8 @@
 
 Portaloof is a real-time visual feedback module. It captures visual sources, blends them, applies geometric and color transforms, then draws the result back into the module display.
 
+The default source is your entire Rack window. The effect is like plugging a video camera into a TV and then pointing the camera at the TV.
+
 The module is resizable by dragging its right edge. Image files (PNG/JPG/JPEG/BMP) can also be dropped directly onto the module.
 
 ![Portaloof showing live Rack feedback](../doc/portaloof-images/portaloof-basic.png)
