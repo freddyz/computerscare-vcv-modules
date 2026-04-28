@@ -1,4 +1,4 @@
-# 2.2.2
+# 2.2.4
 Portaloof: Visual Tranformation Module
 
 Oh Peas!
