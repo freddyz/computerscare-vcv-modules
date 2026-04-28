@@ -731,11 +731,17 @@ struct ComplexDisplayWidget : Widget {
     };
     auto fixedSignedNumberString = [&](float value, int integerDigits) {
       std::ostringstream ss;
-      float absValue = std::fabs(value);
+      int width = integerDigits + 1 + displayDecimals + 1;
+      ss << std::fixed << std::setprecision(displayDecimals) << std::setw(width)
+         << value;
+      return ss.str();
+    };
+    auto fixedUnsignedNumberString = [&](float value, int integerDigits) {
+      std::ostringstream ss;
       int width = integerDigits + 1 + displayDecimals;
       ss << std::fixed << std::setprecision(displayDecimals) << std::setw(width)
-         << absValue;
-      return std::string(value < 0.f ? "-" : " ") + ss.str();
+         << std::fabs(value);
+      return ss.str();
     };
     auto drawCellText = [&](const std::string& s, float x, NVGcolor color) {
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
@@ -784,12 +790,12 @@ struct ComplexDisplayWidget : Widget {
           sourceMode == SourceMode::Polar ? vx * std::cos(vy) : vx;
       float imagValue =
           sourceMode == SourceMode::Polar ? vx * std::sin(vy) : vy;
-      cursorX = drawFixedCells(fixedNumberString(realValue, 2), cursorX, charW,
-                               normalColor);
-      cursorX = fixedOperator(imagValue < 0.f ? " - " : " + ", cursorX, charW,
+      cursorX = drawFixedCells(fixedSignedNumberString(realValue, 2), cursorX,
+                               charW, normalColor);
+      cursorX = fixedOperator(imagValue < 0.f ? " -" : " +", cursorX, charW,
                               dimColor);
-      cursorX = drawFixedCells(fixedNumberString(std::fabs(imagValue), 2),
-                               cursorX, charW, normalColor);
+      cursorX = drawFixedCells(fixedUnsignedNumberString(imagValue, 2), cursorX,
+                               charW, normalColor);
 
       iGlyph->box.pos = Vec(cursorX, midY - glyphH);
       iGlyph->box.size = Vec(iW, glyphH);
