@@ -61,15 +61,20 @@ struct PortaloofKaleidModeKnob : MediumDotSnapKnob {
   }
 };
 
-struct ScaledSvgWidget : widget::Widget {
-  std::shared_ptr<window::Svg> svg;
+struct PortaloofPanelWidget : widget::Widget {
+  std::shared_ptr<window::Svg> fullSvg;
+  std::shared_ptr<window::Svg> minimizedSvg;
+  bool minimized = false;
+
   void draw(const DrawArgs& args) override {
+    std::shared_ptr<window::Svg> svg = minimized ? minimizedSvg : fullSvg;
     if (!svg || !svg->handle) return;
     float svgW = svg->handle->width;
     float svgH = svg->handle->height;
     if (svgW <= 0 || svgH <= 0) return;
+    float drawW = minimized ? RACK_GRID_WIDTH : CONTROLS_WIDTH;
     nvgSave(args.vg);
-    nvgScale(args.vg, box.size.x / svgW, box.size.y / svgH);
+    nvgScale(args.vg, drawW / svgW, RACK_GRID_HEIGHT / svgH);
     window::svgDraw(args.vg, svg->handle);
     nvgRestore(args.vg);
   }
@@ -173,9 +178,11 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   struct HiddenPortPlacement {
     PortWidget* port = nullptr;
     Vec visiblePos;
+    std::shared_ptr<window::Svg> visibleSvg;
   };
 
   BGPanel* bgPanel;
+  PortaloofPanelWidget* panelWidget = nullptr;
   ComputerscareResizeHandle* rightHandle;
   ScreenCapture screenCap;
   ColorTransformFBO colorFBOs[2];
@@ -187,6 +194,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   PortaloofRectSource rectSources[2];
   PortaloofBackdropWidget* backdropWidget = nullptr;
   std::shared_ptr<window::Svg> panelSvg;
+  std::shared_ptr<window::Svg> minimizedPanelSvg;
+  std::shared_ptr<window::Svg> tinyJackSvg;
   std::shared_ptr<window::Svg> headerSvg;
   std::vector<HiddenPortPlacement> hiddenPortPlacements;
   bool portsInHiddenLayout = false;
@@ -231,12 +240,18 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
     panelSvg = APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/panels/portaloof-panel.svg"));
+    minimizedPanelSvg = APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/panels/Portaloof-Minimized.svg"));
+    tinyJackSvg = APP->window->loadSvg(
+        asset::plugin(pluginInstance, "res/components/tiny-jack.svg"));
     {
-      auto* svgBg = new ScaledSvgWidget();
-      svgBg->svg = panelSvg;
+      auto* svgBg = new PortaloofPanelWidget();
+      svgBg->fullSvg = panelSvg;
+      svgBg->minimizedSvg = minimizedPanelSvg;
       svgBg->box.pos = Vec(0, 0);
-      svgBg->box.size = Vec(CONTROLS_WIDTH, RACK_GRID_HEIGHT);
-      addChild(svgBg);
+      svgBg->box.size = Vec(box.size.x, RACK_GRID_HEIGHT);
+      panelWidget = svgBg;
+      setPanel(svgBg);
     }
 
     // ── Resize handles — added early so they are lower z-order than params
@@ -421,19 +436,36 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     HiddenPortPlacement placement;
     placement.port = port;
     placement.visiblePos = port->box.pos;
+    auto* svgPort = dynamic_cast<ComputerscareSvgPort*>(port);
+    if (svgPort && svgPort->sw) placement.visibleSvg = svgPort->sw->svg;
     hiddenPortPlacements.push_back(placement);
+  }
+
+  bool isHiddenPort(Widget* child) {
+    for (HiddenPortPlacement& p : hiddenPortPlacements) {
+      if (p.port == child) return true;
+    }
+    return false;
   }
 
   void updateHiddenPortLayout(bool hideUi) {
     if (portsInHiddenLayout == hideUi) return;
 
+    const float hiddenJackStartY = 24.f;
+    const float hiddenJackSpacing = 17.f;
     for (size_t i = 0; i < hiddenPortPlacements.size(); i++) {
       HiddenPortPlacement& p = hiddenPortPlacements[i];
       if (!p.port) continue;
+      auto* svgPort = dynamic_cast<ComputerscareSvgPort*>(p.port);
 
       if (hideUi) {
-        p.port->box.pos = Vec(0.f, RACK_GRID_HEIGHT - p.port->box.size.y);
+        if (svgPort && tinyJackSvg) svgPort->setSvg(tinyJackSvg);
+        if (svgPort) svgPort->setSvgScale(0.90f);
+        float x = (RACK_GRID_WIDTH - p.port->box.size.x) * 0.5f;
+        p.port->box.pos = Vec(x, hiddenJackStartY + i * hiddenJackSpacing);
       } else {
+        if (svgPort) svgPort->setSvgScale(1.f);
+        if (svgPort && p.visibleSvg) svgPort->setSvg(p.visibleSvg);
         p.port->box.pos = p.visiblePos;
       }
     }
@@ -445,7 +477,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     if (hiddenUiApplied == hideUi) return;
 
     for (Widget* child : children) {
-      child->setVisible(!hideUi || child == rightHandle);
+      child->setVisible(!hideUi || child == panelWidget ||
+                        child == rightHandle || isHiddenPort(child));
     }
 
     hiddenUiApplied = hideUi;
@@ -470,7 +503,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
   float getHiddenWidth(ComputerscarePortaloof* m) const {
     float fullWidth = m ? m->width : box.size.x;
-    return std::max(fullWidth - DISPLAY_X, RACK_GRID_WIDTH);
+    return std::max(fullWidth - DISPLAY_X + RACK_GRID_WIDTH,
+                    RACK_GRID_WIDTH);
   }
 
   void drawBrowserPreview(const DrawArgs& args) {
@@ -536,7 +570,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   void draw(const DrawArgs& args) override {
     ComputerscarePortaloof* m = dynamic_cast<ComputerscarePortaloof*>(module);
     if (m && m->hideUi) {
-      drawChild(rightHandle, args);
+      ModuleWidget::draw(args);
       return;
     }
 
@@ -596,7 +630,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         // Choose live params on capture, or based on transform pre/post setting
         bool useLive = doCapture || !m->freezeMode || m->transformPost;
 
-        const float displayX = hideUi ? 0.f : DISPLAY_X;
+        const float displayX = hideUi ? RACK_GRID_WIDTH : DISPLAY_X;
         float mirrorW = box.size.x - displayX;
         float mirrorH = box.size.y;
 
@@ -1117,7 +1151,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         m->paramQuantities[ComputerscarePortaloof::INVERT_KNOB]));
 
     menu->addChild(new MenuSeparator());
-    menu->addChild(createBoolPtrMenuItem("Hide UI", "", &m->hideUi));
+    menu->addChild(createBoolPtrMenuItem("Minimize UI", "", &m->hideUi));
     menu->addChild(createBoolPtrMenuItem("Dim visuals with room", "",
                                          &m->dimVisualsWithRoom));
     menu->addChild(createBoolPtrMenuItem("Render as rack background", "",
@@ -1203,6 +1237,11 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       bool hideUiChanged = m->hideUi != lastHideUiForSizing;
       rightHandle->minWidth = m->hideUi ? RACK_GRID_WIDTH : CONTROLS_WIDTH;
       float visibleWidth = m->hideUi ? getHiddenWidth(m) : m->width;
+      bgPanel->box.pos.x = m->hideUi ? RACK_GRID_WIDTH : DISPLAY_X;
+      if (panelWidget) {
+        panelWidget->minimized = m->hideUi;
+        panelWidget->box.size = Vec(visibleWidth, RACK_GRID_HEIGHT);
+      }
 
       if (!m->loadedJSON) {
         if (m->sources[1].kind == PortaloofSourceKind::IMAGE &&
@@ -1210,7 +1249,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           m->sources[1].imagePath = pickRandomDocImage();
         box.size.x = visibleWidth;
         if (!windowEmpty)
-          bgPanel->box.size.x = m->hideUi ? 0.f : (m->width - DISPLAY_X);
+          bgPanel->box.size.x =
+              m->hideUi ? (visibleWidth - RACK_GRID_WIDTH)
+                        : (m->width - DISPLAY_X);
         else
           bgPanel->box.size.x = 0;
         rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;
@@ -1223,8 +1264,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           APP->scene->rack->requestModulePos(this, box.pos);
         rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;
       } else if (m->hideUi && box.size.x != visibleWidth) {
-        m->width =
-            std::max(box.size.x + DISPLAY_X, DISPLAY_X + RACK_GRID_WIDTH);
+        m->width = std::max(box.size.x + DISPLAY_X - RACK_GRID_WIDTH,
+                            DISPLAY_X + RACK_GRID_WIDTH);
         visibleWidth = getHiddenWidth(m);
         rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;
       } else if (!m->hideUi && box.size.x != m->width) {
@@ -1235,7 +1276,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         if (box.size.x != visibleWidth) box.size.x = visibleWidth;
         // Keep panel width in sync when emptyWindowInBgMode toggles
         float desiredPanelW =
-            (windowEmpty || m->hideUi) ? 0.f : (box.size.x - DISPLAY_X);
+            windowEmpty
+                ? 0.f
+                : (m->hideUi ? (box.size.x - RACK_GRID_WIDTH)
+                             : (box.size.x - DISPLAY_X));
         if (bgPanel->box.size.x != desiredPanelW)
           bgPanel->box.size.x = desiredPanelW;
         rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;
