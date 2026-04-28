@@ -240,8 +240,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
     panelSvg = APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/panels/portaloof-panel.svg"));
-    minimizedPanelSvg = APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/panels/Portaloof-Minimized.svg"));
+    minimizedPanelSvg = APP->window->loadSvg(
+        asset::plugin(pluginInstance, "res/panels/Portaloof-Minimized.svg"));
     tinyJackSvg = APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/components/tiny-jack.svg"));
     {
@@ -503,8 +503,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
   float getHiddenWidth(ComputerscarePortaloof* m) const {
     float fullWidth = m ? m->width : box.size.x;
-    return std::max(fullWidth - DISPLAY_X + RACK_GRID_WIDTH,
-                    RACK_GRID_WIDTH);
+    return std::max(fullWidth - DISPLAY_X + RACK_GRID_WIDTH, RACK_GRID_WIDTH);
   }
 
   void drawBrowserPreview(const DrawArgs& args) {
@@ -1249,9 +1248,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           m->sources[1].imagePath = pickRandomDocImage();
         box.size.x = visibleWidth;
         if (!windowEmpty)
-          bgPanel->box.size.x =
-              m->hideUi ? (visibleWidth - RACK_GRID_WIDTH)
-                        : (m->width - DISPLAY_X);
+          bgPanel->box.size.x = m->hideUi ? (visibleWidth - RACK_GRID_WIDTH)
+                                          : (m->width - DISPLAY_X);
         else
           bgPanel->box.size.x = 0;
         rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;
@@ -1275,11 +1273,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       } else {
         if (box.size.x != visibleWidth) box.size.x = visibleWidth;
         // Keep panel width in sync when emptyWindowInBgMode toggles
-        float desiredPanelW =
-            windowEmpty
-                ? 0.f
-                : (m->hideUi ? (box.size.x - RACK_GRID_WIDTH)
-                             : (box.size.x - DISPLAY_X));
+        float desiredPanelW = windowEmpty
+                                  ? 0.f
+                                  : (m->hideUi ? (box.size.x - RACK_GRID_WIDTH)
+                                               : (box.size.x - DISPLAY_X));
         if (bgPanel->box.size.x != desiredPanelW)
           bgPanel->box.size.x = desiredPanelW;
         rightHandle->box.pos.x = visibleWidth - rightHandle->box.size.x;

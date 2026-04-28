@@ -341,9 +341,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
   bool getCrossfadeEnabled() {
     return params[CROSSFADE_ENABLED].getValue() > 0.f;
   }
-  float getCrossfadeTime() {
-    return 5.f * params[CROSSFADE_TIME].getValue();
-  }
+  float getCrossfadeTime() { return 5.f * params[CROSSFADE_TIME].getValue(); }
   float getCrossfadeAlpha() {
     float crossfadeTime = getCrossfadeTime();
     if (!crossfadeActive || crossfadeTime <= 0.f) return 1.f;
@@ -923,8 +921,7 @@ struct tPNGDisplay : TBase {
 
   void drawImageHandle(const BGPanel::DrawArgs& args, int imageHandle,
                        int imageWidth, int imageHeight, float zoomX,
-                       float zoomY, float xOffset, float yOffset,
-                       float alpha) {
+                       float zoomY, float xOffset, float yOffset, float alpha) {
     if (imageHandle <= 0 || imageWidth <= 0 || imageHeight <= 0 ||
         alpha <= 0.f) {
       return;
@@ -932,9 +929,8 @@ struct tPNGDisplay : TBase {
     nvgSave(args.vg);
     nvgBeginPath(args.vg);
     nvgScale(args.vg, zoomX, zoomY);
-    NVGpaint imgPaint =
-        nvgImagePattern(args.vg, xOffset, yOffset, imageWidth, imageHeight, 0,
-                        imageHandle, alpha);
+    NVGpaint imgPaint = nvgImagePattern(args.vg, xOffset, yOffset, imageWidth,
+                                        imageHeight, 0, imageHandle, alpha);
     nvgRect(args.vg, xOffset, yOffset, imageWidth, imageHeight);
     nvgFillPaint(args.vg, imgPaint);
     nvgFill(args.vg);
@@ -1198,8 +1194,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
     menu->addChild(createSubmenuItem("Image Scaling", "", [=](Menu* submenu) {
       submenu->addChild(construct<ImageFitModeItem>(
           &MenuItem::text, "Fit Both (stretch both directions)",
-          &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum,
-          0));
+          &ImageFitModeItem::blank, blank, &ImageFitModeItem::imageFitEnum, 0));
       submenu->addChild(construct<ImageFitModeItem>(
           &MenuItem::text, "Fit Width", &ImageFitModeItem::blank, blank,
           &ImageFitModeItem::imageFitEnum, 1));
@@ -1278,14 +1273,13 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
     menu->addChild(
         createSubmenuItem("Slideshow Options", "", [=](Menu* submenu) {
-          submenu->addChild(
-              construct<MenuLabel>(&MenuLabel::text,
-                                   "Slideshow / Next File Behavior"));
+          submenu->addChild(construct<MenuLabel>(
+              &MenuLabel::text, "Slideshow / Next File Behavior"));
           for (unsigned int i = 0; i < blank->nextFileDescriptions.size();
                i++) {
-            ssmi* menuItem =
-                new ssmi(i, blank->paramQuantities
-                                [ComputerscareBlank::NEXT_FILE_BEHAVIOR]);
+            ssmi* menuItem = new ssmi(
+                i,
+                blank->paramQuantities[ComputerscareBlank::NEXT_FILE_BEHAVIOR]);
             menuItem->text = blank->nextFileDescriptions[i];
             submenu->addChild(menuItem);
           }
@@ -1311,7 +1305,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
           submenu->addChild(new WideParamSlider(
               blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME]));
         }));
-
   }
   void step() override {
     if (module) {
