@@ -1,4 +1,4 @@
-# 2.2.0
+# 2.2.2
 Portaloof: Visual Tranformation Module
 
 Oh Peas!
@@ -8,6 +8,7 @@ Custom Blank:
 - Allow drag & drop image file from filesystem
 - show resize handles at module boundaries when hovering pointer
 - fix bug when switching gif and animation enabled
+- Crossfade for slideshow / image switching
 
 Foly Pace & Stoly Fick Pigure
 - Fix bug where randomizing "froze" the module

@@ -115,9 +115,9 @@ Applies a nonlinear color/tone transform.
 
 ![Portaloof color transforms](../doc/portaloof-images/portaloof-colors.png)
 
-### Fold Frequency
+### Color Warp
 
-Fold Frequency lives in the right-click menu rather than on the panel. It scales the color fold frequency from `1.0..4.0` internally and increases chromatic divergence at higher values.
+The Fold Frequency slider lives in the right-click menu under **Color Warp** rather than on the panel. It scales the color fold frequency from `1.0..4.0` internally and increases chromatic divergence at higher values.
 
 The Fold gate and CV inputs still exist in the hidden row position and still control Fold enable/modulation.
 
@@ -133,13 +133,14 @@ Each source can be configured independently from the right-click **Sources** men
 
 Each source submenu can select:
 
+- Clear source
 - Full Rack Window
-- A loaded image
-- A specific module
-- A rectangle in rack coordinates
-- A rectangle in window coordinates
+- Load image...
+- Select rack rectangle
+- Select window rectangle
+- Module
 
-**Clear source** removes that source. Drag-and-drop an image file onto the module to load it into Source 2.
+Drag-and-drop an image file onto the module to load it into Source 2.
 
 ![Portaloof using an external image source](../doc/portaloof-images/portaloof-external-image.png)
 
@@ -151,13 +152,13 @@ Each source submenu can select:
 
 Configure Source 1 and Source 2 for the Mix control. Each source can be the full Rack window, a loaded image, a selected module, a selected rack rectangle, or a selected window rectangle.
 
-### Fold Frequency
+### Color Warp
 
-Wide slider for the Fold amount.
+Adjusts Fold Frequency.
 
 ### Hide UI
 
-Hides the panel art, controls, labels, and jack graphics. The module shrinks to the display width, keeps the right edge in place, and leaves the resize handle available. Cable anchors are stacked at the bottom-left so existing patch cables continue to route.
+Hides the panel art, controls, labels, and jack graphics. This option was previously named **Minimize UI**. The module shrinks to the display width, keeps the right edge in place, and leaves the resize handle available. Cable anchors are stacked at the bottom-left so existing patch cables continue to route.
 
 ### Dim visuals with room
 
@@ -189,6 +190,8 @@ Options for rack-background mode.
 **Tile empty space:** Repeats the image to fill gaps created by rotation, scale, or translation.
 
 **Maintain aspect ratio:** Preserves the source aspect ratio instead of stretching it to the display.
+
+**Crop Rack Window Borders:** Crops the full Rack window source to Rack's interior area, excluding visible Rack window borders and scrollbars when possible.
 
 ### Algorithm
 
