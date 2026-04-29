@@ -7,25 +7,23 @@
 #include "complex/ComplexWidgets.hpp"
 
 struct ComputerscareNudiebug : ComputerscareComplexBase {
+  static float defaultWidth() { return 12.f * RACK_GRID_WIDTH; }
+  static float minWidth() { return 8.f * RACK_GRID_WIDTH; }
+
   enum ParamIds {
     Z_INPUT_MODE,
     Z_OUTPUT_MODE,
     TEXT_DISPLAY_MODE,
     BARS_DISPLAY_MODE,
     PLOT_DISPLAY_MODE,
+    CLEAR_PLOT_PER_FRAME,
     NUM_PARAMS
   };
-  enum InputIds {
-    Z_INPUT,
-    NUM_INPUTS = Z_INPUT + 2
-  };
-  enum OutputIds {
-    Z_OUTPUT,
-    NUM_OUTPUTS = Z_OUTPUT + 2
-  };
+  enum InputIds { Z_INPUT, NUM_INPUTS = Z_INPUT + 2 };
+  enum OutputIds { Z_OUTPUT, NUM_OUTPUTS = Z_OUTPUT + 2 };
   enum LightIds { NUM_LIGHTS };
 
-  float width = 12 * RACK_GRID_WIDTH;
+  float width = defaultWidth();
   bool loadedJson = false;
   int displaySnapshotCounter = 513;
   int displaySnapshotPeriod = 512;
@@ -42,8 +40,10 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                  {"Off", "Poly", "Compoly Rectangular", "Compoly Polar"});
     configSwitch(BARS_DISPLAY_MODE, 0.f, 2.f, nudiebug::BARS_UNIPOLAR, "Bars",
                  {"Off", "Unipolar", "Bipolar"});
-    configSwitch(PLOT_DISPLAY_MODE, 0.f, 0.f, nudiebug::PLOT_OFF, "Plot",
-                 {"Off"});
+    configSwitch(PLOT_DISPLAY_MODE, 0.f, 1.f, nudiebug::PLOT_OFF, "Plot",
+                 {"Off", "Dots"});
+    configSwitch(CLEAR_PLOT_PER_FRAME, 0.f, 1.f, 1.f, "Clear plot per frame",
+                 {"Persistent", "Clear"});
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 0>>(Z_INPUT, "z");
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 1>>(Z_INPUT + 1, "z");
     configOutput<cpx::CompolyPortInfo<Z_OUTPUT_MODE, 0>>(Z_OUTPUT, "z");
@@ -58,6 +58,8 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
         displayOptions.visualizationMode != nudiebug::BARS_OFF;
     displayOptions.plotMode = params[PLOT_DISPLAY_MODE].getValue();
     displayOptions.plotEnabled = displayOptions.plotMode != nudiebug::PLOT_OFF;
+    displayOptions.clearPlotPerFrame =
+        params[CLEAR_PLOT_PER_FRAME].getValue() > 0.5f;
 
     displaySnapshotCounter++;
     bool updateDisplay = displaySnapshotCounter > displaySnapshotPeriod;
@@ -79,6 +81,10 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                         json_boolean(displayOptions.visualizationEnabled));
     json_object_set_new(rootJ, "visualizationMode",
                         json_integer(displayOptions.visualizationMode));
+    json_object_set_new(rootJ, "plotMode",
+                        json_integer(displayOptions.plotMode));
+    json_object_set_new(rootJ, "clearPlotPerFrame",
+                        json_boolean(displayOptions.clearPlotPerFrame));
     return rootJ;
   }
 
@@ -86,8 +92,7 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     json_t* widthJ = json_object_get(rootJ, "width");
     if (widthJ) {
       width =
-          std::max(static_cast<float>(json_number_value(widthJ)),
-                   12.f * RACK_GRID_WIDTH);
+          std::max(static_cast<float>(json_number_value(widthJ)), minWidth());
     }
 
     json_t* textEnabledJ = json_object_get(rootJ, "textEnabled");
@@ -105,6 +110,14 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     json_t* visualizationModeJ = json_object_get(rootJ, "visualizationMode");
     if (visualizationModeJ) {
       displayOptions.visualizationMode = json_integer_value(visualizationModeJ);
+    }
+
+    json_t* plotModeJ = json_object_get(rootJ, "plotMode");
+    if (plotModeJ) displayOptions.plotMode = json_integer_value(plotModeJ);
+
+    json_t* clearPlotPerFrameJ = json_object_get(rootJ, "clearPlotPerFrame");
+    if (clearPlotPerFrameJ) {
+      displayOptions.clearPlotPerFrame = json_is_true(clearPlotPerFrameJ);
     }
   }
 };
@@ -139,8 +152,7 @@ struct NudiebugLabel : TransparentWidget {
     nvgFontSize(args.vg, 13.f);
     nvgTextLetterSpacing(args.vg, 0.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    nvgText(args.vg, box.size.x * 0.5f, box.size.y * 0.5f, "Nudiebug",
-            nullptr);
+    nvgText(args.vg, box.size.x * 0.5f, box.size.y * 0.5f, "Nudiebug", nullptr);
   }
 };
 
@@ -157,15 +169,16 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
     setModule(module);
     nudiebugModule = module;
     box.size =
-        Vec(module ? module->width : 12 * RACK_GRID_WIDTH, RACK_GRID_HEIGHT);
+        Vec(module ? module->width : ComputerscareNudiebug::defaultWidth(),
+            RACK_GRID_HEIGHT);
 
     bgPanel = new BGPanel(nvgRGB(0xE0, 0xE0, 0xD9));
     bgPanel->box.size = box.size;
     addChild(bgPanel);
 
     textDisplay = new nudiebug::TextDisplay();
-    textDisplay->box.pos = Vec(0.f, 48.f);
-    textDisplay->box.size = Vec(box.size.x, 282.f);
+    textDisplay->box.pos = Vec(0.f, 64.f);
+    textDisplay->box.size = Vec(box.size.x, 266.f);
     if (module) {
       textDisplay->snapshot = &module->snapshot;
       textDisplay->options = &module->displayOptions;
@@ -174,15 +187,17 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
 
     addModeButton("Txt", Vec(5.f, 7.f), module,
                   ComputerscareNudiebug::TEXT_DISPLAY_MODE);
-    addModeButton("Bars", Vec(31.f, 7.f), module,
+    addModeButton("Bars", Vec(5.f, 21.f), module,
                   ComputerscareNudiebug::BARS_DISPLAY_MODE);
-    addModeButton("Plot", Vec(63.f, 7.f), module,
+    addModeButton("Plot", Vec(5.f, 35.f), module,
                   ComputerscareNudiebug::PLOT_DISPLAY_MODE);
+    addModeButton("Clr", Vec(5.f, 49.f), module,
+                  ComputerscareNudiebug::CLEAR_PLOT_PER_FRAME);
 
     zOutput = new cpx::CompolyPortsWidget(
         Vec(box.size.x - 68.f, 16.f), module, ComputerscareNudiebug::Z_OUTPUT,
         ComputerscareNudiebug::Z_OUTPUT_MODE, 0.7f, true, "z");
-    zOutput->compolyLabelTransform->box.pos = Vec(box.size.x - 90.f, 15.f);
+    zOutput->compolyLabelTransform->box.pos = Vec(box.size.x - 82.f, 20.f);
     addChild(zOutput);
 
     zInput = new cpx::CompolyPortsWidget(
@@ -198,7 +213,7 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
 
     rightHandle = new ComputerscareResizeHandle();
     rightHandle->right = true;
-    rightHandle->minWidth = 12 * RACK_GRID_WIDTH;
+    rightHandle->minWidth = ComputerscareNudiebug::minWidth();
     rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
     addChild(rightHandle);
   }
@@ -239,6 +254,14 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
     menu->addChild(createSubmenuItem("Plot", "", [=](Menu* submenu) {
       addParamMenuItem(submenu, "Off", nudiebug::PLOT_OFF,
                        ComputerscareNudiebug::PLOT_DISPLAY_MODE);
+      addParamMenuItem(submenu, "Dots", nudiebug::PLOT_DOTS,
+                       ComputerscareNudiebug::PLOT_DISPLAY_MODE);
+    }));
+    menu->addChild(createSubmenuItem("Plot Clear", "", [=](Menu* submenu) {
+      addParamMenuItem(submenu, "Persistent", 0,
+                       ComputerscareNudiebug::CLEAR_PLOT_PER_FRAME);
+      addParamMenuItem(submenu, "Clear per frame", 1,
+                       ComputerscareNudiebug::CLEAR_PLOT_PER_FRAME);
     }));
   }
 
@@ -260,7 +283,7 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
     bgPanel->box.size = box.size;
     textDisplay->box.size.x = box.size.x;
     syncCompolyWidget(zOutput, box.size.x - 68.f, 16.f);
-    zOutput->compolyLabelTransform->box.pos = Vec(box.size.x - 90.f, 15.f);
+    zOutput->compolyLabelTransform->box.pos = Vec(box.size.x - 82.f, 20.f);
     syncCompolyWidget(zInput, 24.f, 346.f);
     zInput->compolyLabelTransform->box.pos = Vec(6.f, 350.f);
     label->box.size.x = box.size.x;

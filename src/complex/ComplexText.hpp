@@ -58,8 +58,7 @@ inline float drawCells(NVGcontext* vg, const std::string& s, float x, float y,
 }
 
 inline float drawOperator(NVGcontext* vg, const std::string& s, float x,
-                          float y, float charW, NVGcolor color,
-                          int textAlign) {
+                          float y, float charW, NVGcolor color, int textAlign) {
   nvgTextAlign(vg, textAlign);
   nvgFillColor(vg, color);
   for (int i = 0; i < (int)s.size(); i++) {
@@ -101,12 +100,12 @@ inline float drawRect(NVGcontext* vg, int fontHandle, int symbolFontHandle,
   nvgFontSize(vg, style.fontSize);
 
   float cursorX = x;
-  cursorX = drawCells(vg, fixedSigned(real, 2, style.decimals), cursorX, y, charW,
-                      style.numberColor, style.textAlign);
+  cursorX = drawCells(vg, fixedSigned(real, 2, style.decimals), cursorX, y,
+                      charW, style.numberColor, style.textAlign);
   cursorX = drawOperator(vg, imag < 0.f ? " -" : " +", cursorX, y, charW,
                          style.operatorColor, style.textAlign);
-  cursorX = drawCells(vg, fixedUnsigned(imag, 2, style.decimals), cursorX, y, charW,
-                      style.numberColor, style.textAlign);
+  cursorX = drawCells(vg, fixedUnsigned(imag, 2, style.decimals), cursorX, y,
+                      charW, style.numberColor, style.textAlign);
 
   nvgFontFaceId(vg, symbolFontHandle);
   nvgFontSize(vg, style.symbolFontSize);
@@ -125,15 +124,14 @@ inline float drawPolar(NVGcontext* vg, int fontHandle, float x, float y,
 
   float cursorX = x;
   const float thetaDegrees = thetaRadians * 180.f / complex_math::pi;
-  cursorX = drawCells(vg, fixedUnsigned(radius, 2, style.decimals), cursorX, y, charW,
-                      style.numberColor, style.textAlign);
+  cursorX = drawCells(vg, fixedUnsigned(radius, 2, style.decimals), cursorX, y,
+                      charW, style.numberColor, style.textAlign);
   cursorX += charW * 0.45f;
-  drawAngleGlyph(vg, cursorX, y + style.angleYOffset, charW,
-                 style.accentColor);
+  drawAngleGlyph(vg, cursorX, y + style.angleYOffset, charW, style.accentColor);
   cursorX += charW * 1.35f;
-  cursorX = drawCells(vg, fixedSigned(thetaDegrees, 3, style.decimals), cursorX, y, charW,
-                      style.numberColor, style.textAlign);
-  drawDegreeGlyph(vg, cursorX + charW * 0.25f, y + style.degreeYOffset,
+  cursorX = drawCells(vg, fixedSigned(thetaDegrees, 3, style.decimals), cursorX,
+                      y, charW, style.numberColor, style.textAlign);
+  drawDegreeGlyph(vg, cursorX + charW * 0.4f, y + style.degreeYOffset,
                   style.numberColor);
   return cursorX + charW * 0.75f;
 }

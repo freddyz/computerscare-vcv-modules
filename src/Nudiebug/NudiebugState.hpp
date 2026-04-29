@@ -6,22 +6,11 @@ namespace nudiebug {
 
 constexpr int kMaxChannels = 16;
 
-enum TextMode {
-  TEXT_OFF,
-  TEXT_POLY,
-  TEXT_COMPOLY_RECT,
-  TEXT_COMPOLY_POLAR
-};
+enum TextMode { TEXT_OFF, TEXT_POLY, TEXT_COMPOLY_RECT, TEXT_COMPOLY_POLAR };
 
-enum BarsMode {
-  BARS_OFF,
-  BARS_UNIPOLAR,
-  BARS_BIPOLAR
-};
+enum BarsMode { BARS_OFF, BARS_UNIPOLAR, BARS_BIPOLAR };
 
-enum PlotMode {
-  PLOT_OFF
-};
+enum PlotMode { PLOT_OFF, PLOT_DOTS };
 
 struct DisplayOptions {
   bool textEnabled = true;
@@ -30,6 +19,7 @@ struct DisplayOptions {
   int visualizationMode = BARS_UNIPOLAR;
   bool plotEnabled = false;
   int plotMode = PLOT_OFF;
+  bool clearPlotPerFrame = true;
 };
 
 struct Snapshot {
@@ -43,9 +33,7 @@ struct Snapshot {
   int rightChannels = 0;
   int compolyChannels = 0;
 
-  int maxChannels() const {
-    return kMaxChannels;
-  }
+  int maxChannels() const { return kMaxChannels; }
 };
 
 }  // namespace nudiebug
