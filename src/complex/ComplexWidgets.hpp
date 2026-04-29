@@ -92,6 +92,7 @@ struct ComplexXY : TransparentWidget {
   float originalMagnituteRadiusPixels = 120.f;
   ComplexXYMaxMode maxMode = ComplexXYMaxMode::Radial;
   float maxVoltage = 10.f;
+  float drawingScale = 1.f;
   ComplexXYDragOverlay* dragOverlay = nullptr;
 
   ComplexXY(ComputerscareComplexBase* mod, int indexParamA) {
@@ -133,6 +134,8 @@ struct ComplexXY : TransparentWidget {
     maxMode = ComplexXYMaxMode::Rectangular;
     maxVoltage = std::max(0.f, max);
   }
+
+  void setDrawingScale(float scale) { drawingScale = std::max(0.f, scale); }
 
   Vec clampToMax(Vec z) {
     if (maxVoltage <= 0.f) return Vec(0.f, 0.f);
@@ -327,6 +330,7 @@ struct ComplexXY : TransparentWidget {
 
   void draw(const DrawArgs& args) override {
     float fullR = box.size.x / 2;
+    float drawR = fullR * drawingScale;
 
     // circle at complex radius 1
     nvgSave(args.vg);
@@ -336,7 +340,7 @@ struct ComplexXY : TransparentWidget {
     nvgStrokeWidth(args.vg, 2.f);
     nvgFillColor(args.vg, faded ? fadedBackgroundColor : normalBackgroundColor);
     // nvgMoveTo(args.vg,box.size.x/2,box.size.y/2);
-    nvgEllipse(args.vg, 0, 0, fullR, fullR);
+    nvgEllipse(args.vg, 0, 0, drawR, drawR);
     nvgClosePath(args.vg);
     nvgFill(args.vg);
 
@@ -347,9 +351,9 @@ struct ComplexXY : TransparentWidget {
     nvgMoveTo(args.vg, 0, 0);
 
     float length = newZ.norm();
-    Vec tip = newZ.normalize().mult(2 * fullR / M_PI * std::atan(length));
+    Vec tip = newZ.normalize().mult(2 * drawR / M_PI * std::atan(length));
 
-    drawArrowTo(args.vg, tip, box.size.x / 6.4f,
+    drawArrowTo(args.vg, tip, drawR / 3.2f,
                 faded ? fadedArrowFillColor : normalArrowFillColor,
                 faded ? fadedArrowStrokeColor : normalArrowStrokeColor,
                 faded ? 1.f : 1.5f);
@@ -357,110 +361,110 @@ struct ComplexXY : TransparentWidget {
   }
   void drawEditingOverlay(const DrawArgs& args) {
     if (editing) {
-        float pxRatio = APP->window->pixelRatio;
+      float pxRatio = APP->window->pixelRatio;
 
-        nvgSave(args.vg);
-        // reset to "undo" the zoom
-        nvgResetTransform(args.vg);
-        nvgScale(args.vg, pxRatio, pxRatio);
+      nvgSave(args.vg);
+      // reset to "undo" the zoom
+      nvgResetTransform(args.vg);
+      nvgScale(args.vg, pxRatio, pxRatio);
 
-        nvgTranslate(args.vg, pixelsOrigin.x, pixelsOrigin.y);
+      nvgTranslate(args.vg, pixelsOrigin.x, pixelsOrigin.y);
 
-        // circle at complex radius 1
-        float r1Pixels = originalMagnituteRadiusPixels / origComplexLength;
-        float rMaxPixels =
-            maxVoltage * originalMagnituteRadiusPixels / origComplexLength;
-        float labelAngleScale = 1.f / std::sqrt(2.f);
-        Vec labelOutward = Vec(labelAngleScale, -labelAngleScale).mult(10.f);
-        nvgBeginPath(args.vg);
-        nvgStrokeWidth(args.vg, 3.f);
-        nvgFillColor(args.vg, nvgRGBA(0, 10, 30, 60));
-        nvgEllipse(args.vg, 0, 0, r1Pixels, r1Pixels);
-        nvgClosePath(args.vg);
-        nvgFill(args.vg);
-        nvgBeginPath(args.vg);
-        nvgStrokeWidth(args.vg, 3.f);
-        nvgStrokeColor(args.vg, nvgRGB(0, 100, 200));
-        nvgEllipse(args.vg, 0, 0, r1Pixels, r1Pixels);
-        nvgClosePath(args.vg);
-        nvgStroke(args.vg);
-        Vec r1LabelOutward =
-            Vec(labelAngleScale, -labelAngleScale).mult(3.f);
-        Vec r1LabelPos =
-            Vec(r1Pixels * labelAngleScale, -r1Pixels * labelAngleScale)
-                .plus(r1LabelOutward);
-        drawDragText(args.vg, "1v", r1LabelPos, nvgRGB(120, 190, 255), 28.f);
+      // circle at complex radius 1
+      float r1Pixels = originalMagnituteRadiusPixels / origComplexLength;
+      float rMaxPixels =
+          maxVoltage * originalMagnituteRadiusPixels / origComplexLength;
+      float labelAngleScale = 1.f / std::sqrt(2.f);
+      Vec labelOutward = Vec(labelAngleScale, -labelAngleScale).mult(10.f);
+      nvgBeginPath(args.vg);
+      nvgStrokeWidth(args.vg, 3.f);
+      nvgFillColor(args.vg, nvgRGBA(0, 10, 30, 60));
+      nvgEllipse(args.vg, 0, 0, r1Pixels, r1Pixels);
+      nvgClosePath(args.vg);
+      nvgFill(args.vg);
+      nvgBeginPath(args.vg);
+      nvgStrokeWidth(args.vg, 3.f);
+      nvgStrokeColor(args.vg, nvgRGB(0, 100, 200));
+      nvgEllipse(args.vg, 0, 0, r1Pixels, r1Pixels);
+      nvgClosePath(args.vg);
+      nvgStroke(args.vg);
+      Vec r1LabelOutward = Vec(labelAngleScale, -labelAngleScale).mult(3.f);
+      Vec r1LabelPos =
+          Vec(r1Pixels * labelAngleScale, -r1Pixels * labelAngleScale)
+              .plus(r1LabelOutward);
+      drawDragText(args.vg, "1v", r1LabelPos, nvgRGB(120, 190, 255), 28.f);
 
-        // circle at the zero point
-        nvgBeginPath(args.vg);
-        nvgStrokeWidth(args.vg, 3.f);
-        nvgFillColor(args.vg, nvgRGB(249, 220, 214));
-        nvgEllipse(args.vg, 0, 0, 10.f, 10.f);
-        nvgClosePath(args.vg);
-        nvgFill(args.vg);
+      // circle at the zero point
+      nvgBeginPath(args.vg);
+      nvgStrokeWidth(args.vg, 3.f);
+      nvgFillColor(args.vg, nvgRGB(249, 220, 214));
+      nvgEllipse(args.vg, 0, 0, 10.f, 10.f);
+      nvgClosePath(args.vg);
+      nvgFill(args.vg);
 
-        // circle at the original complex value magnitude
-        nvgBeginPath(args.vg);
-        nvgStrokeWidth(args.vg, 3.f);
-        nvgStrokeColor(args.vg, nvgRGB(140, 120, 80));
-        nvgEllipse(args.vg, 0, 0, originalMagnituteRadiusPixels,
-                   originalMagnituteRadiusPixels);
-        nvgClosePath(args.vg);
-        nvgStroke(args.vg);
-        Vec originalMagnitudeLabelPos =
-            Vec(originalMagnituteRadiusPixels * labelAngleScale,
-                -originalMagnituteRadiusPixels * labelAngleScale)
-                .plus(labelOutward);
-        drawDragText(args.vg, voltageLabelString(origComplexLength),
-                     originalMagnitudeLabelPos, nvgRGB(230, 205, 150), 28.f);
+      // circle at the original complex value magnitude
+      nvgBeginPath(args.vg);
+      nvgStrokeWidth(args.vg, 3.f);
+      nvgStrokeColor(args.vg, nvgRGB(140, 120, 80));
+      nvgEllipse(args.vg, 0, 0, originalMagnituteRadiusPixels,
+                 originalMagnituteRadiusPixels);
+      nvgClosePath(args.vg);
+      nvgStroke(args.vg);
+      Vec originalMagnitudeLabelPos =
+          Vec(originalMagnituteRadiusPixels * labelAngleScale,
+              -originalMagnituteRadiusPixels * labelAngleScale)
+              .plus(labelOutward);
+      drawDragText(args.vg, voltageLabelString(origComplexLength),
+                   originalMagnitudeLabelPos, nvgRGB(230, 205, 150), 28.f);
 
-        // max radius guide
-        nvgBeginPath(args.vg);
-        nvgStrokeWidth(args.vg, 3.f);
-        nvgStrokeColor(args.vg, nvgRGB(240, 30, 51));
-        nvgEllipse(args.vg, 0, 0, rMaxPixels, rMaxPixels);
-        nvgClosePath(args.vg);
-        nvgStroke(args.vg);
-        Vec rMaxLabelPos =
-            Vec(rMaxPixels * labelAngleScale, -rMaxPixels * labelAngleScale)
-                .plus(labelOutward);
-        drawDragText(args.vg, voltageLabelString(maxVoltage), rMaxLabelPos,
-                     nvgRGB(255, 120, 120), 28.f);
+      // max radius guide
+      nvgBeginPath(args.vg);
+      nvgStrokeWidth(args.vg, 3.f);
+      nvgStrokeColor(args.vg, nvgRGB(240, 30, 51));
+      nvgEllipse(args.vg, 0, 0, rMaxPixels, rMaxPixels);
+      nvgClosePath(args.vg);
+      nvgStroke(args.vg);
+      Vec rMaxLabelPos =
+          Vec(rMaxPixels * labelAngleScale, -rMaxPixels * labelAngleScale)
+              .plus(labelOutward);
+      drawDragText(args.vg, voltageLabelString(maxVoltage), rMaxLabelPos,
+                   nvgRGB(255, 120, 120), 28.f);
 
-        // line from the zero point to the original complex number
-        Vec originalComplexPixels = origComplexValue.mult(
-            originalMagnituteRadiusPixels / origComplexLength);
-        nvgBeginPath(args.vg);
-        nvgStrokeWidth(args.vg, 5.f);
-        nvgStrokeColor(args.vg, nvgRGB(140, 120, 80));
-        nvgMoveTo(args.vg, 0, 0);
-        nvgLineTo(args.vg, originalComplexPixels.x, originalComplexPixels.y);
-        nvgClosePath(args.vg);
-        nvgStroke(args.vg);
-        // line from the zero point to the users mouse
+      // line from the zero point to the original complex number
+      Vec originalComplexPixels = origComplexValue.mult(
+          originalMagnituteRadiusPixels / origComplexLength);
+      nvgBeginPath(args.vg);
+      nvgStrokeWidth(args.vg, 5.f);
+      nvgStrokeColor(args.vg, nvgRGB(140, 120, 80));
+      nvgMoveTo(args.vg, 0, 0);
+      nvgLineTo(args.vg, originalComplexPixels.x, originalComplexPixels.y);
+      nvgClosePath(args.vg);
+      nvgStroke(args.vg);
+      // line from the zero point to the users mouse
 
-        nvgSave(args.vg);
-        drawArrowTo(args.vg, pixelsDiff);
-        nvgRestore(args.vg);
+      nvgSave(args.vg);
+      drawArrowTo(args.vg, pixelsDiff);
+      nvgRestore(args.vg);
 
-        nvgRestore(args.vg);
+      nvgRestore(args.vg);
 
-        nvgSave(args.vg);
-        nvgResetTransform(args.vg);
-        nvgScale(args.vg, pxRatio, pxRatio);
-        drawRectDragText(
-            args.vg, rectDragDisplayString(newZ.x, -newZ.y),
-            pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 38.f)),
-            nvgRGB(245, 245, 245), 34.f);
-        drawRectDragText(
-            args.vg, rectDragDisplayString(origComplexValue.x, -origComplexValue.y),
-            pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 78.f)),
-            nvgRGB(230, 205, 150), 28.f);
-        drawDragText(
-            args.vg, polarDragDisplayString(newZ.x, -newZ.y),
-            pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 116.f)),
-            nvgRGB(245, 245, 245), 34.f, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgRestore(args.vg);
+      nvgSave(args.vg);
+      nvgResetTransform(args.vg);
+      nvgScale(args.vg, pxRatio, pxRatio);
+      drawRectDragText(
+          args.vg, rectDragDisplayString(newZ.x, -newZ.y),
+          pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 38.f)),
+          nvgRGB(245, 245, 245), 34.f);
+      drawRectDragText(
+          args.vg,
+          rectDragDisplayString(origComplexValue.x, -origComplexValue.y),
+          pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 78.f)),
+          nvgRGB(230, 205, 150), 28.f);
+      drawDragText(
+          args.vg, polarDragDisplayString(newZ.x, -newZ.y),
+          pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 116.f)),
+          nvgRGB(245, 245, 245), 34.f, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+      nvgRestore(args.vg);
     }
   }
   void drawLayer(const DrawArgs& args, int layer) override {
@@ -739,7 +743,8 @@ struct ComplexDisplayWidget : Widget {
 
   ~ComplexDisplayWidget() override {
     if (overlayWidget) {
-      if (overlayWidget->parent) overlayWidget->parent->removeChild(overlayWidget);
+      if (overlayWidget->parent)
+        overlayWidget->parent->removeChild(overlayWidget);
       delete overlayWidget;
       overlayWidget = nullptr;
     }
@@ -937,8 +942,8 @@ struct ComplexDisplayWidget : Widget {
       cursorX =
           drawFixedCells(fixedNumberString(r, 2), cursorX, charW, normalColor);
       cursorX = fixedOperator(" ∠", cursorX, charW, accentColor);
-      cursorX = drawFixedCells(fixedSignedNumberString(displayAngle, 3), cursorX,
-                               charW, normalColor);
+      cursorX = drawFixedCells(fixedSignedNumberString(displayAngle, 3),
+                               cursorX, charW, normalColor);
       drawCellText(unitSuffix, cursorX, normalColor);
     } else {
       float fieldStartX = 1.f;

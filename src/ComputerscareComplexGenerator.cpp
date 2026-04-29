@@ -253,6 +253,7 @@ struct DisableableSmoothKnob : RoundKnob {
 
 struct ComplexGeneratorViewModeSwitch : app::Switch {
   std::string label;
+  int textAlign = NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE;
 
   void draw(const DrawArgs& args) override;
 };
@@ -264,10 +265,14 @@ void ComplexGeneratorViewModeSwitch::draw(const DrawArgs& args) {
   nvgFill(args.vg);
 
   nvgFontSize(args.vg, 9.f);
-  nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+  nvgTextAlign(args.vg, textAlign);
   nvgFillColor(args.vg, nvgRGB(28, 34, 28));
-  nvgText(args.vg, box.size.x * 0.5f, box.size.y * 0.58f, label.c_str(),
-          nullptr);
+  float textX = box.size.x * 0.5f;
+  if (textAlign & NVG_ALIGN_RIGHT)
+    textX = box.size.x - 1.f;
+  else if (textAlign & NVG_ALIGN_LEFT)
+    textX = 1.f;
+  nvgText(args.vg, textX, box.size.y * 0.58f, label.c_str(), nullptr);
 }
 
 struct ComplexGeneratorSetAllViewModeItem : MenuItem {
@@ -294,8 +299,8 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
       addChild(panel);
     }
     channelWidget = new CompolyLaneCountWidget(
-        Vec(92, 4), module, ComputerscareComplexGenerator::COMPOLY_CHANNELS,
-        &module->polyChannels, false);
+        Vec(72, 0), module, ComputerscareComplexGenerator::COMPOLY_CHANNELS,
+        &module->polyChannels, false, 1.44f, 16.f);
 
     // addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 22), module,
     // ComputerscareComplexGenerator::POLY_OUTPUT));
@@ -356,6 +361,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
         module, paramIndex, polarParamIndex, modeParamId, arrowMaxMode,
         arrowMaxVoltage);
     control->box = Rect(Vec(x, y), Vec(32, 25));
+    control->setArrowDrawingScale(0.78f);
     addChild(control);
 
     ComplexGeneratorViewModeSwitch* modeButton =
@@ -386,16 +392,23 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
         ComputerscareComplexGenerator::LANE_VIEW_MODE + index / 2,
         cpx::ComplexXYMaxMode::Rectangular, 10.f, index / 2);
     control->box = Rect(Vec(x, y), Vec(32, 25));
+    control->setArrowDrawingScale(0.78f);
+    control->setArrowYOffset(-2.f);
     addChild(control);
 
-    Vec labelPos = Vec(x + labelDx, y - 12 + labelDy);
+    float labelWidth = label.size() > 1 ? 17.f : 12.f;
+    bool isSecondColumn = index / 2 >= 8;
+    Vec labelPos = isSecondColumn ? Vec(x + 32.f - labelWidth, y - 12.f)
+                                  : Vec(x + labelDx, y - 12 + labelDy);
 
     ComplexGeneratorViewModeSwitch* modeButton =
         createParam<ComplexGeneratorViewModeSwitch>(
             labelPos, module,
             ComputerscareComplexGenerator::LANE_VIEW_MODE + index / 2);
-    modeButton->box = Rect(labelPos, Vec(label.size() > 1 ? 17.f : 12.f, 12.f));
+    modeButton->box = Rect(labelPos, Vec(labelWidth, 12.f));
     modeButton->label = label;
+    if (isSecondColumn)
+      modeButton->textAlign = NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE;
     addParam(modeButton);
   }
 

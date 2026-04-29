@@ -15,6 +15,8 @@ struct SwitchableComplexControl : Widget {
   bool showDisabledOverlay = false;
   ComplexXYMaxMode arrowMaxMode = ComplexXYMaxMode::Rectangular;
   float arrowMaxVoltage = 10.f;
+  float arrowDrawingScale = 1.f;
+  float arrowYOffset = 0.f;
   NVGcolor disabledOverlayColor = nvgRGBA(120, 120, 120, 135);
   ComplexControl* control = nullptr;
 
@@ -31,6 +33,16 @@ struct SwitchableComplexControl : Widget {
     this->arrowMaxVoltage = arrowMaxVoltage;
     this->laneIndex = laneIndex;
     this->showDisabledOverlay = showDisabledOverlay;
+  }
+
+  void setArrowDrawingScale(float scale) {
+    arrowDrawingScale = std::max(0.f, scale);
+    if (control) control->setArrowDrawingScale(arrowDrawingScale);
+  }
+
+  void setArrowYOffset(float offset) {
+    arrowYOffset = offset;
+    if (control) control->setArrowYOffset(arrowYOffset);
   }
 
   int mode() const {
@@ -62,6 +74,8 @@ struct SwitchableComplexControl : Widget {
       control->setArrowRadialMax(arrowMaxVoltage);
     else
       control->setArrowRectangularMax(arrowMaxVoltage);
+    control->setArrowDrawingScale(arrowDrawingScale);
+    control->setArrowYOffset(arrowYOffset);
     control->box = Rect(Vec(0.f, 0.f), box.size);
     control->setStyle(isFaded() ? ComplexControlStyle::Faded
                                 : ComplexControlStyle::Normal);

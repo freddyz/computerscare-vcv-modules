@@ -69,6 +69,8 @@ struct ComplexControl : Widget {
   ComplexControlStyle style = ComplexControlStyle::Normal;
   ComplexXYMaxMode arrowMaxMode = ComplexXYMaxMode::Radial;
   float arrowMaxVoltage = 10.f;
+  float arrowDrawingScale = 1.f;
+  float arrowYOffset = 0.f;
 
   ComplexXY* arrowWidget = nullptr;
   ComplexDisplayWidget* display = nullptr;
@@ -203,8 +205,19 @@ struct ComplexControl : Widget {
     applyArrowMax();
   }
 
+  void setArrowDrawingScale(float scale) {
+    arrowDrawingScale = std::max(0.f, scale);
+    if (arrowWidget) arrowWidget->setDrawingScale(arrowDrawingScale);
+  }
+
+  void setArrowYOffset(float offset) {
+    arrowYOffset = offset;
+    layoutChildren();
+  }
+
   void applyArrowMax() {
     if (!arrowWidget) return;
+    arrowWidget->setDrawingScale(arrowDrawingScale);
     if (arrowMaxMode == ComplexXYMaxMode::Radial)
       arrowWidget->setRadialMax(arrowMaxVoltage);
     else
@@ -239,7 +252,7 @@ struct ComplexControl : Widget {
     float arrowH = box.size.y - (display ? displayH : 0.f);
 
     if (arrowWidget) {
-      arrowWidget->box = Rect(Vec(0, 0), Vec(box.size.x, arrowH));
+      arrowWidget->box = Rect(Vec(0, arrowYOffset), Vec(box.size.x, arrowH));
     }
     if (knobA && knobB) {
       if (arrowWidget) {

@@ -68,6 +68,8 @@ struct TinyCompolyLanesSnapKnob : ComputerscareRoundKnob {
   int prevSetting = -1;
   int paramId = -1;
   bool allowAuto = true;
+  bool hasDoubleClickResetValue = false;
+  float doubleClickResetValue = 0.f;
 
   ComputerscarePolyModule* module;
 
@@ -88,6 +90,31 @@ struct TinyCompolyLanesSnapKnob : ComputerscareRoundKnob {
       }
     }
     ComputerscareRoundKnob::draw(args);
+  }
+
+  void onDoubleClick(const DoubleClickEvent& e) override {
+    if (!hasDoubleClickResetValue) {
+      ComputerscareRoundKnob::onDoubleClick(e);
+      return;
+    }
+
+    engine::ParamQuantity* pq = getParamQuantity();
+    if (!pq || !pq->isBounded()) return;
+
+    float oldValue = pq->getValue();
+    float newValue = std::max(
+        pq->getMinValue(), std::min(pq->getMaxValue(), doubleClickResetValue));
+    pq->setValue(newValue);
+
+    if (module && oldValue != newValue) {
+      history::ParamChange* h = new history::ParamChange;
+      h->name = "Reset parameter";
+      h->moduleId = module->id;
+      h->paramId = paramId;
+      h->oldValue = oldValue;
+      h->newValue = newValue;
+      APP->history->push(h);
+    }
   }
 };
 
@@ -152,21 +179,29 @@ struct CompolyLaneCountWidget : Widget {
   TransformWidget* lanesKnobTransform;
   CompolyLaneCountWidget(math::Vec pos, ComputerscarePolyModule* mod,
                          int paramId, int* laneCount = NULL,
-                         bool allowAuto = true) {
+                         bool allowAuto = true, float knobScale = 1.2f,
+                         float doubleClickResetValue = -1.f) {
     module = mod;
 
     lanesKnobTransform = new TransformWidget();
     lanesKnobTransform->box.pos = pos.plus(Vec(5, 1));
-    lanesKnobTransform->scale(1.2f);
+    lanesKnobTransform->scale(knobScale);
 
     lanesKnob =
         createParam<TinyCompolyLanesSnapKnob>(Vec(0, 0), module, paramId);
     lanesKnob->module = module;
     lanesKnob->paramId = paramId;
     lanesKnob->allowAuto = allowAuto;
+    lanesKnob->hasDoubleClickResetValue = doubleClickResetValue >= 0.f;
+    lanesKnob->doubleClickResetValue = doubleClickResetValue;
     lanesKnobTransform->addChild(lanesKnob);
 
-    laneCountDisplay = new PolyChannelsDisplay(pos);
+    constexpr float knobSize = 18.f;
+    Vec knobCenter = lanesKnobTransform->box.pos.plus(
+        Vec(knobSize, knobSize).mult(0.5f * knobScale));
+    Vec displayTextCenter = Vec(16.f, 12.f);
+    laneCountDisplay =
+        new PolyChannelsDisplay(knobCenter.minus(displayTextCenter));
     laneCountDisplay->module = module;
     laneCountDisplay->channelCount = laneCount;
 
