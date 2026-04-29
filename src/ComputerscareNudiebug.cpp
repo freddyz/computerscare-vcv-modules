@@ -27,6 +27,8 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
 
   float width = 12 * RACK_GRID_WIDTH;
   bool loadedJson = false;
+  int displaySnapshotCounter = 513;
+  int displaySnapshotPeriod = 512;
   nudiebug::Snapshot snapshot;
   nudiebug::DisplayOptions displayOptions;
 
@@ -56,7 +58,14 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
         displayOptions.visualizationMode != nudiebug::BARS_OFF;
     displayOptions.plotMode = params[PLOT_DISPLAY_MODE].getValue();
     displayOptions.plotEnabled = displayOptions.plotMode != nudiebug::PLOT_OFF;
-    nudiebug::processDebugger(this);
+
+    displaySnapshotCounter++;
+    bool updateDisplay = displaySnapshotCounter > displaySnapshotPeriod;
+    if (updateDisplay) {
+      displaySnapshotCounter = 0;
+    }
+
+    nudiebug::processDebugger(this, updateDisplay);
   }
 
   json_t* dataToJson() override {
