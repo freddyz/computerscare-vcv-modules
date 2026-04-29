@@ -1,8 +1,7 @@
 # Project Instructions
 
-- Assume the dev server is running
-- After making changes, run `scripts/dev.sh` and fix any errors before finishing
-- In sandboxed/cloud agent environments, or if the VCV SDK is not available, run `scripts/sandbox-check.sh` directly. This is a lightweight validation fallback, not a replacement for the Rack SDK build.
-- VCV Rack source: `/Users/adammalone/dev/VCV-Rack/Rack`
-- Reference plugin (Fundamental): `/Users/adammalone/dev/VCV-Rack/Rack/plugins/Fundamental`
-- 3rd party library plugins: `/Users/adammalone/dev/VCV-Rack/library`
+- After code changes, run the strongest validation available and fix any errors before finishing:
+  - Lightweight fallback for sandboxed/cloud agents or missing SDK: `scripts/dev.sh sandbox`
+  - `scripts/sandbox-check.sh` is the same lightweight fallback and is not a replacement for a Rack SDK build.
+- `scripts/dev.sh` requires a subcommand. Run `scripts/dev.sh help` to list commands.
+- See `AGENTS.local.md` for local dev-server assumptions and machine-specific paths.
