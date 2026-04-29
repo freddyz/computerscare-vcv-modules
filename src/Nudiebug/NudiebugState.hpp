@@ -12,6 +12,10 @@ enum BarsMode { BARS_OFF, BARS_UNIPOLAR, BARS_BIPOLAR };
 
 enum PlotMode { PLOT_OFF, PLOT_DOTS };
 
+enum ChannelLayoutMode { CHANNEL_LAYOUT_ALL, CHANNEL_LAYOUT_STRETCH };
+
+enum DisplayOrientation { DISPLAY_VERTICAL, DISPLAY_HORIZONTAL };
+
 struct DisplayOptions {
   bool textEnabled = true;
   int textMode = TEXT_POLY;
@@ -20,6 +24,9 @@ struct DisplayOptions {
   bool plotEnabled = false;
   int plotMode = PLOT_OFF;
   bool clearPlotPerFrame = true;
+  bool channelLabelsEnabled = true;
+  int channelLayoutMode = CHANNEL_LAYOUT_ALL;
+  int displayOrientation = DISPLAY_VERTICAL;
 };
 
 struct Snapshot {

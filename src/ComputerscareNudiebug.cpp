@@ -17,6 +17,9 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     BARS_DISPLAY_MODE,
     PLOT_DISPLAY_MODE,
     CLEAR_PLOT_PER_FRAME,
+    CHANNEL_LABELS_MODE,
+    CHANNEL_LAYOUT_MODE,
+    DISPLAY_ORIENTATION_MODE,
     NUM_PARAMS
   };
   enum InputIds { Z_INPUT, NUM_INPUTS = Z_INPUT + 2 };
@@ -44,6 +47,12 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                  {"Off", "Dots"});
     configSwitch(CLEAR_PLOT_PER_FRAME, 0.f, 1.f, 1.f, "Clear plot per frame",
                  {"Persistent", "Clear"});
+    configSwitch(CHANNEL_LABELS_MODE, 0.f, 1.f, 1.f, "Channel labels",
+                 {"Off", "On"});
+    configSwitch(CHANNEL_LAYOUT_MODE, 0.f, 1.f, nudiebug::CHANNEL_LAYOUT_ALL,
+                 "Channel layout", {"All", "Stretch"});
+    configSwitch(DISPLAY_ORIENTATION_MODE, 0.f, 1.f, nudiebug::DISPLAY_VERTICAL,
+                 "Display orientation", {"Vertical", "Horizontal"});
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 0>>(Z_INPUT, "z");
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 1>>(Z_INPUT + 1, "z");
     configOutput<cpx::CompolyPortInfo<Z_OUTPUT_MODE, 0>>(Z_OUTPUT, "z");
@@ -60,6 +69,11 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     displayOptions.plotEnabled = displayOptions.plotMode != nudiebug::PLOT_OFF;
     displayOptions.clearPlotPerFrame =
         params[CLEAR_PLOT_PER_FRAME].getValue() > 0.5f;
+    displayOptions.channelLabelsEnabled =
+        params[CHANNEL_LABELS_MODE].getValue() > 0.5f;
+    displayOptions.channelLayoutMode = params[CHANNEL_LAYOUT_MODE].getValue();
+    displayOptions.displayOrientation =
+        params[DISPLAY_ORIENTATION_MODE].getValue();
 
     displaySnapshotCounter++;
     bool updateDisplay = displaySnapshotCounter > displaySnapshotPeriod;
@@ -85,6 +99,12 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                         json_integer(displayOptions.plotMode));
     json_object_set_new(rootJ, "clearPlotPerFrame",
                         json_boolean(displayOptions.clearPlotPerFrame));
+    json_object_set_new(rootJ, "channelLabelsEnabled",
+                        json_boolean(displayOptions.channelLabelsEnabled));
+    json_object_set_new(rootJ, "channelLayoutMode",
+                        json_integer(displayOptions.channelLayoutMode));
+    json_object_set_new(rootJ, "displayOrientation",
+                        json_integer(displayOptions.displayOrientation));
     return rootJ;
   }
 
@@ -118,6 +138,23 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     json_t* clearPlotPerFrameJ = json_object_get(rootJ, "clearPlotPerFrame");
     if (clearPlotPerFrameJ) {
       displayOptions.clearPlotPerFrame = json_is_true(clearPlotPerFrameJ);
+    }
+
+    json_t* channelLabelsEnabledJ =
+        json_object_get(rootJ, "channelLabelsEnabled");
+    if (channelLabelsEnabledJ) {
+      displayOptions.channelLabelsEnabled = json_is_true(channelLabelsEnabledJ);
+    }
+
+    json_t* channelLayoutModeJ = json_object_get(rootJ, "channelLayoutMode");
+    if (channelLayoutModeJ) {
+      displayOptions.channelLayoutMode = json_integer_value(channelLayoutModeJ);
+    }
+
+    json_t* displayOrientationJ = json_object_get(rootJ, "displayOrientation");
+    if (displayOrientationJ) {
+      displayOptions.displayOrientation =
+          json_integer_value(displayOrientationJ);
     }
   }
 };
@@ -187,12 +224,18 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
 
     addModeButton("Txt", Vec(5.f, 7.f), module,
                   ComputerscareNudiebug::TEXT_DISPLAY_MODE);
-    addModeButton("Bars", Vec(5.f, 21.f), module,
+    addModeButton("Bars", Vec(33.f, 7.f), module,
                   ComputerscareNudiebug::BARS_DISPLAY_MODE);
-    addModeButton("Plot", Vec(5.f, 35.f), module,
+    addModeButton("Plot", Vec(5.f, 21.f), module,
                   ComputerscareNudiebug::PLOT_DISPLAY_MODE);
-    addModeButton("Clr", Vec(5.f, 49.f), module,
+    addModeButton("Clr", Vec(33.f, 21.f), module,
                   ComputerscareNudiebug::CLEAR_PLOT_PER_FRAME);
+    addModeButton("Lbl", Vec(5.f, 35.f), module,
+                  ComputerscareNudiebug::CHANNEL_LABELS_MODE);
+    addModeButton("All", Vec(33.f, 35.f), module,
+                  ComputerscareNudiebug::CHANNEL_LAYOUT_MODE);
+    addModeButton("Hor", Vec(5.f, 49.f), module,
+                  ComputerscareNudiebug::DISPLAY_ORIENTATION_MODE);
 
     zOutput = new cpx::CompolyPortsWidget(
         Vec(box.size.x - 68.f, 16.f), module, ComputerscareNudiebug::Z_OUTPUT,
@@ -263,6 +306,25 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
       addParamMenuItem(submenu, "Clear per frame", 1,
                        ComputerscareNudiebug::CLEAR_PLOT_PER_FRAME);
     }));
+    menu->addChild(createSubmenuItem("Channel Labels", "", [=](Menu* submenu) {
+      addParamMenuItem(submenu, "Off", 0,
+                       ComputerscareNudiebug::CHANNEL_LABELS_MODE);
+      addParamMenuItem(submenu, "On", 1,
+                       ComputerscareNudiebug::CHANNEL_LABELS_MODE);
+    }));
+    menu->addChild(createSubmenuItem("Channel Layout", "", [=](Menu* submenu) {
+      addParamMenuItem(submenu, "All", nudiebug::CHANNEL_LAYOUT_ALL,
+                       ComputerscareNudiebug::CHANNEL_LAYOUT_MODE);
+      addParamMenuItem(submenu, "Stretch", nudiebug::CHANNEL_LAYOUT_STRETCH,
+                       ComputerscareNudiebug::CHANNEL_LAYOUT_MODE);
+    }));
+    menu->addChild(
+        createSubmenuItem("Display Orientation", "", [=](Menu* submenu) {
+          addParamMenuItem(submenu, "Vertical", nudiebug::DISPLAY_VERTICAL,
+                           ComputerscareNudiebug::DISPLAY_ORIENTATION_MODE);
+          addParamMenuItem(submenu, "Horizontal", nudiebug::DISPLAY_HORIZONTAL,
+                           ComputerscareNudiebug::DISPLAY_ORIENTATION_MODE);
+        }));
   }
 
   void addParamMenuItem(Menu* menu, std::string text, int value, int paramId) {
