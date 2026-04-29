@@ -242,6 +242,16 @@
 				"Polyphonic"
 			],
 			"manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/complex-transformer.md"
+		},
+		{
+			"slug": "computerscare-nudiebug",
+			"name": "Nudiebug",
+			"description": "Resizable compoly debugger with voltage text and visualizations",
+			"tags": [
+				"Utility",
+				"Polyphonic",
+				"Visual"
+			]
 		}
 	]
 }
