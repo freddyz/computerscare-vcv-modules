@@ -329,16 +329,17 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     // addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module,
     // ComputerscareComplexGenerator::GLOBAL_OFFSET));
 
-    float xx;
-    float yy;
-    float yInitial = 86;
-    float ySpacing = 36;
-    float yRightColumnOffset = 14.3 / 8;
+    constexpr float yInitial = 86.f;
+    constexpr float ySpacing = 36.f;
+    constexpr float leftColumnX = 5.4f;
+    constexpr float rightColumnX = 45.4f;
+    constexpr float rightColumnY = yInitial + 6.f;
     for (int i = 0; i < numComplexGeneratorKnobs; i++) {
-      xx = 1.4f + 56.f * (i - i % 8) / 8;
-      yy = yInitial + ySpacing * (i % 8) + yRightColumnOffset * (i - i % 8);
+      bool isRightColumn = i >= 8;
+      float xx = isRightColumn ? rightColumnX : leftColumnX;
+      float yy = (isRightColumn ? rightColumnY : yInitial) + ySpacing * (i % 8);
       addLabeledKnob(std::to_string(i + 1), xx, yy, module, i * 2,
-                     (i - i % 8) * 1.2 - 3 + (i == 8 ? 5 : 0), 2);
+                     isRightColumn ? 0.f : -3.f, 2.f);
     }
   }
   void addSmallLabel(std::string label, int x, int y, float fontSize) {
@@ -372,7 +373,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     addParam(modeButton);
   }
 
-  void addLabeledKnob(std::string label, int x, int y,
+  void addLabeledKnob(std::string label, float x, float y,
                       ComputerscareComplexGenerator* module, int index,
                       float labelDx, float labelDy) {
     /*	ParamWidget* pob =  createParam<DisableableSmoothKnob>(Vec(x, y),
