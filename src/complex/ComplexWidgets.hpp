@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ComplexText.hpp"
 #include "math/ComplexFormat.hpp"
 
 using namespace rack;
@@ -803,31 +804,13 @@ struct ComplexDisplayWidget : Widget {
     if (!font) {
       return;
     }
+    auto symbolFont = APP->window->loadFont(asset::plugin(
+        pluginInstance, "res/fonts/LibertinusSerif-Italic.ttf"));
 
     float vx = module->params[paramX].getValue();
     float vy = module->params[paramY].getValue();
 
-    cpx::complex_math::ComplexRenderParts parts;
     bool polar = (displayMode == DisplayMode::Polar);
-    if (polar) {
-      float r = vx;
-      float theta = vy;
-      if (sourceMode == SourceMode::Rect) {
-        r = std::hypot(vx, vy);
-        theta = std::atan2(vy, vx);
-      }
-      parts = cpx::complex_math::polarParts(r, theta, angleUnit, polarStyle,
-                                            decimals);
-    } else {
-      float x = vx;
-      float y = vy;
-      if (sourceMode == SourceMode::Polar) {
-        x = vx * std::cos(vy);
-        y = vx * std::sin(vy);
-      }
-      parts = cpx::complex_math::rectParts(x, y, decimals);
-    }
-
     float fsize = box.size.y * 0.72f;
     float midY = box.size.y * 0.55f;
     float bounds[4];
@@ -849,20 +832,6 @@ struct ComplexDisplayWidget : Widget {
       if (showPos) return std::string(value < 0.f ? "-" : "+") + numeric;
       if (value < 0.f) return std::string("-") + numeric;
       return std::string(" ") + numeric;
-    };
-    auto fixedSignedNumberString = [&](float value, int integerDigits) {
-      std::ostringstream ss;
-      int width = integerDigits + 1 + displayDecimals + 1;
-      ss << std::fixed << std::setprecision(displayDecimals) << std::setw(width)
-         << value;
-      return ss.str();
-    };
-    auto fixedUnsignedNumberString = [&](float value, int integerDigits) {
-      std::ostringstream ss;
-      int width = integerDigits + 1 + displayDecimals;
-      ss << std::fixed << std::setprecision(displayDecimals) << std::setw(width)
-         << std::fabs(value);
-      return ss.str();
     };
     auto drawCellText = [&](const std::string& s, float x, NVGcolor color) {
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
@@ -906,26 +875,25 @@ struct ComplexDisplayWidget : Widget {
     if (!polar) {
       float fieldStartX = 1.f;
       float charW = textWidth("0");
-      float cursorX = fieldStartX;
       float realValue =
           sourceMode == SourceMode::Polar ? vx * std::cos(vy) : vx;
       float imagValue =
           sourceMode == SourceMode::Polar ? vx * std::sin(vy) : vy;
-      cursorX = drawFixedCells(fixedSignedNumberString(realValue, 2), cursorX,
-                               charW, normalColor);
-      cursorX = fixedOperator(imagValue < 0.f ? " -" : " +", cursorX, charW,
-                              dimColor);
-      cursorX = drawFixedCells(fixedUnsignedNumberString(imagValue, 2), cursorX,
-                               charW, normalColor);
-
-      iGlyph->box.pos = Vec(cursorX, midY - glyphH);
-      iGlyph->box.size = Vec(iW, glyphH);
-      iGlyph->visible = true;
+      cpx::complex_text::FixedComplexTextStyle style;
+      style.numberColor = normalColor;
+      style.operatorColor = dimColor;
+      style.accentColor = accentColor;
+      style.textAlign = NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE;
+      style.fontSize = fsize;
+      style.symbolFontSize = fsize;
+      style.decimals = displayDecimals;
+      cpx::complex_text::drawRect(
+          args.vg, font->handle, symbolFont ? symbolFont->handle : font->handle,
+          fieldStartX, midY, realValue, imagValue, charW, style);
     } else if (polarStyle ==
                cpx::complex_math::PolarDisplayStyle::Engineering) {
       float fieldStartX = 1.f;
       float charW = textWidth("0");
-      float cursorX = fieldStartX;
 
       float r = vx;
       float theta = vy;
@@ -933,18 +901,17 @@ struct ComplexDisplayWidget : Widget {
         r = std::hypot(vx, vy);
         theta = std::atan2(vy, vx);
       }
-      float displayAngle = angleUnit == cpx::complex_math::AngleUnit::Degree
-                               ? theta * 180.f / cpx::complex_math::pi
-                               : theta;
-      std::string unitSuffix =
-          angleUnit == cpx::complex_math::AngleUnit::Degree ? "°" : " rad";
-
-      cursorX =
-          drawFixedCells(fixedNumberString(r, 2), cursorX, charW, normalColor);
-      cursorX = fixedOperator(" ∠", cursorX, charW, accentColor);
-      cursorX = drawFixedCells(fixedSignedNumberString(displayAngle, 3),
-                               cursorX, charW, normalColor);
-      drawCellText(unitSuffix, cursorX, normalColor);
+      cpx::complex_text::FixedComplexTextStyle style;
+      style.numberColor = normalColor;
+      style.operatorColor = dimColor;
+      style.accentColor = accentColor;
+      style.textAlign = NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE;
+      style.fontSize = fsize;
+      style.decimals = displayDecimals;
+      style.angleYOffset = -1.f;
+      style.degreeYOffset = -7.f;
+      cpx::complex_text::drawPolar(args.vg, font->handle, fieldStartX, midY, r,
+                                   theta, charW, style);
     } else {
       float fieldStartX = 1.f;
       float charW = textWidth("0");

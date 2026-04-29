@@ -39,6 +39,7 @@ extern Model* modelComputerscarePortaloof;
 extern Model* modelComputerscareNomplexPumbers;
 extern Model* modelComputerscareComplexGenerator;
 extern Model* modelComputerscareComplexTransformer;
+extern Model* modelComputerscareNudiebug;
 
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN =
     nvgRGB(0xC0, 0xE7, 0xDE);
