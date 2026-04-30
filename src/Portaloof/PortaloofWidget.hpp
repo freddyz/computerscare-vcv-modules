@@ -624,7 +624,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           m->sources[0].hasSource() || m->sources[1].hasSource();
 
       if (m && (doCapture || hasConfiguredSource || hasValidCache)) {
-        float baseAlpha = 0.85f;
+        float baseAlpha = 1.f;
 
         // Choose live params on capture, or based on transform pre/post setting
         bool useLive = doCapture || !m->freezeMode || m->transformPost;
