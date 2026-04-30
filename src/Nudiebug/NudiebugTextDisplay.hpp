@@ -33,13 +33,23 @@ struct TextDisplay : TransparentWidget {
 
     if (!snapshot) return;
 
-    const int barsMode = options ? options->visualizationMode : BARS_UNIPOLAR;
+    const int displayType = options ? options->displayType : DISPLAY_TYPE_POLY;
+    const bool compolyDisplay = displayType == DISPLAY_TYPE_COMPOLY;
+    const int configuredBarsMode =
+        options ? options->visualizationMode : BARS_UNIPOLAR;
+    const int barsMode = compolyDisplay && configuredBarsMode == BARS_BIPOLAR
+                             ? BARS_UNI_MID
+                             : configuredBarsMode;
     const int textMode = options ? options->textMode : TEXT_POLY;
+    const int compolyRepresentation =
+        options ? options->compolyRepresentation : COMPOLY_REP_RECT;
     const int plotMode = options ? options->plotMode : PLOT_OFF;
     const bool drawViz = barsMode != BARS_OFF;
     const bool drawText = textMode != TEXT_OFF;
     const bool drawPlot = options && plotMode != PLOT_OFF;
-    const bool labelsEnabled = !options || options->channelLabelsEnabled;
+    const int labelsMode =
+        options ? options->channelLabelsMode : CHANNEL_LABELS_BOTH;
+    const bool labelsEnabled = labelsMode != CHANNEL_LABELS_OFF;
     const bool drawLabels = labelsEnabled && (drawViz || drawText);
     const bool stretchChannels =
         options && options->channelLayoutMode == CHANNEL_LAYOUT_STRETCH;
@@ -61,7 +71,8 @@ struct TextDisplay : TransparentWidget {
     const float barWidth =
         std::max(8.f, (box.size.x - labelReserve * 2.f - barCenterGap) * 0.5f);
     const float barRightX = barRightValueRight - barWidth;
-    const int verticalSlots = stretchChannels ? activeSlotCount(textMode) : 16;
+    const int verticalSlots =
+        stretchChannels ? activeSlotCount(compolyDisplay) : 16;
     const float rowHeight =
         (box.size.y - top - bottom) / std::max(1, verticalSlots);
 
@@ -82,8 +93,9 @@ struct TextDisplay : TransparentWidget {
       if (drawLabels || drawText) {
         font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
         if (!font) {
-          drawHorizontal(args.vg, -1, -1, 0.f, barsMode, textMode, drawViz,
-                         false, false, stretchChannels);
+          drawHorizontal(args.vg, -1, -1, 0.f, barsMode, textMode,
+                         compolyRepresentation, compolyDisplay, drawViz, false,
+                         false, stretchChannels);
           return;
         }
         symbolFont = APP->window->loadFont(
@@ -98,7 +110,8 @@ struct TextDisplay : TransparentWidget {
       drawHorizontal(
           args.vg, font ? font->handle : -1,
           symbolFont ? symbolFont->handle : (font ? font->handle : -1), charW,
-          barsMode, textMode, drawViz, drawText, drawLabels, stretchChannels);
+          barsMode, textMode, compolyRepresentation, compolyDisplay, drawViz,
+          drawText, drawLabels, stretchChannels);
       return;
     }
 
@@ -110,13 +123,21 @@ struct TextDisplay : TransparentWidget {
         const float barHeight =
             stretchChannels ? std::max(2.f, rowHeight - slotMargin * 2.f)
                             : 14.f;
-        if (isLeftChannelActive(c)) {
-          drawBar(args.vg, barLeftX, textY, barWidth, snapshot->leftVoltages[c],
-                  false, barsMode, barHeight);
-        }
-        if (isRightChannelActive(c)) {
-          drawBar(args.vg, barRightX, textY, barWidth,
-                  snapshot->rightVoltages[c], true, barsMode, barHeight);
+        if (compolyDisplay) {
+          if (isCompolyChannelActive(c)) {
+            float first = 0.f;
+            float second = 0.f;
+            compolyBarParts(c, compolyRepresentation, first, second);
+            drawPartBars(args.vg, barLeftX, barRightX, textY, barWidth, first,
+                         second, barsMode, barHeight);
+          }
+        } else {
+          const bool drawFirst = isLeftChannelActive(c);
+          const bool drawSecond = isRightChannelActive(c);
+          drawPartBars(args.vg, barLeftX, barRightX, textY, barWidth,
+                       drawFirst ? snapshot->leftVoltages[c] : 0.f,
+                       drawSecond ? snapshot->rightVoltages[c] : 0.f, barsMode,
+                       barHeight, drawFirst, drawSecond);
         }
       }
     }
@@ -139,26 +160,44 @@ struct TextDisplay : TransparentWidget {
       const int c = stretchChannels ? slot : slot;
       const float y = top + slot * rowHeight + rowHeight * 0.55f;
 
-      if (drawLabels && (textMode == TEXT_POLY || !drawText)) {
+      if (drawLabels && !compolyDisplay) {
         drawChannelLabel(args.vg, leftLabelX, y, c, isLeftChannelActive(c),
                          NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, font->handle);
         drawChannelLabel(args.vg, rightLabelX, y, c, isRightChannelActive(c),
                          NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, font->handle);
       } else if (drawLabels) {
-        drawChannelLabel(args.vg, leftLabelX, y, c, isCompolyChannelActive(c),
-                         NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, font->handle);
+        if (labelsMode == CHANNEL_LABELS_LEFT ||
+            labelsMode == CHANNEL_LABELS_BOTH) {
+          drawChannelLabel(args.vg, leftLabelX, y, c, isCompolyChannelActive(c),
+                           NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, font->handle);
+        }
+        if (labelsMode == CHANNEL_LABELS_RIGHT ||
+            labelsMode == CHANNEL_LABELS_BOTH) {
+          drawChannelLabel(args.vg, rightLabelX, y, c,
+                           isCompolyChannelActive(c),
+                           NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, font->handle);
+        }
       }
 
       if (!drawText) continue;
 
-      if (textMode == TEXT_POLY) {
+      if (!compolyDisplay) {
         drawPolyText(args.vg, font->handle, leftValueX, rightValueRight, y, c);
-      } else if (textMode == TEXT_COMPOLY_RECT) {
-        drawCompolyRectText(args.vg, font->handle,
-                            symbolFont ? symbolFont->handle : font->handle,
-                            leftValueX, y, c, charW);
-      } else if (textMode == TEXT_COMPOLY_POLAR) {
-        drawCompolyPolarText(args.vg, font->handle, leftValueX, y, c, charW);
+      } else {
+        const float textW = compolyTextWidth(charW, compolyRepresentation);
+        float x = leftValueX;
+        if (textMode == TEXT_MIDDLE) {
+          x = box.size.x * 0.5f - textW * 0.5f;
+        } else if (textMode == TEXT_RIGHT) {
+          x = rightValueRight - textW;
+        }
+        if (compolyRepresentation == COMPOLY_REP_RECT) {
+          drawCompolyRectText(args.vg, font->handle,
+                              symbolFont ? symbolFont->handle : font->handle, x,
+                              y, c, charW);
+        } else {
+          drawCompolyPolarText(args.vg, font->handle, x, y, c, charW);
+        }
       }
     }
   }
@@ -175,13 +214,45 @@ struct TextDisplay : TransparentWidget {
     return snapshot && channel < snapshot->compolyChannels;
   }
 
-  int activeSlotCount(int textMode) const {
+  int activeSlotCount(bool compolyDisplay) const {
     if (!snapshot) return 1;
-    if (textMode == TEXT_POLY || textMode == TEXT_OFF) {
+    if (!compolyDisplay) {
       return std::max(
           1, std::max(snapshot->leftChannels, snapshot->rightChannels));
     }
     return std::max(1, snapshot->compolyChannels);
+  }
+
+  void compolyBarParts(int channel, int compolyRepresentation, float& first,
+                       float& second) const {
+    if (!snapshot || !isCompolyChannelActive(channel)) {
+      first = 0.f;
+      second = 0.f;
+      return;
+    }
+
+    if (compolyRepresentation == COMPOLY_REP_POLAR) {
+      first = snapshot->polarR[channel];
+      second = cpx::complex_math::thetaRadiansToCableVoltage(
+          snapshot->polarTheta[channel]);
+      return;
+    }
+
+    first = snapshot->rectX[channel];
+    second = snapshot->rectY[channel];
+  }
+
+  void drawPartBars(NVGcontext* vg, float leftX, float rightX, float centerY,
+                    float width, float first, float second, int mode,
+                    float height, bool drawFirst = true,
+                    bool drawSecond = true) {
+    const bool middle = mode == BARS_UNI_MID;
+    if (drawFirst) {
+      drawBar(vg, leftX, centerY, width, first, middle, mode, height);
+    }
+    if (drawSecond) {
+      drawBar(vg, rightX, centerY, width, second, !middle, mode, height);
+    }
   }
 
   void drawBar(NVGcontext* vg, float x, float centerY, float width,
@@ -193,10 +264,12 @@ struct TextDisplay : TransparentWidget {
     const NVGcolor fill = voltage >= 0.f ? nvgRGBA(0x24, 0xC9, 0xA6, 0x80)
                                          : nvgRGBA(0xC4, 0x34, 0x21, 0x80);
 
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, x, y, width, height, 2.f);
-    nvgFillColor(vg, nvgRGBA(0x23, 0x25, 0x27, 0xC0));
-    nvgFill(vg);
+    if (!options || options->barBackgroundEnabled) {
+      nvgBeginPath(vg);
+      nvgRoundedRect(vg, x, y, width, height, 2.f);
+      nvgFillColor(vg, nvgRGBA(0x23, 0x25, 0x27, 0xC0));
+      nvgFill(vg);
+    }
 
     float bx = rightAligned ? x + width - barWidth : x;
     float bw = barWidth;
@@ -247,39 +320,47 @@ struct TextDisplay : TransparentWidget {
   }
 
   void drawCompolyRectText(NVGcontext* vg, int fontHandle, int symbolFontHandle,
-                           float valueX, float y, int channel, float charW) {
+                           float valueX, float y, int channel, float charW,
+                           int align = NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE) {
     if (!isCompolyChannelActive(channel)) return;
 
     nvgFontFaceId(vg, fontHandle);
     nvgFontSize(vg, 12.f);
 
     cpx::complex_text::FixedComplexTextStyle style;
-    style.textAlign = NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE;
+    style.textAlign = align;
     cpx::complex_text::drawRect(vg, fontHandle, symbolFontHandle, valueX, y,
                                 snapshot->rectX[channel],
                                 snapshot->rectY[channel], charW, style);
   }
 
   void drawCompolyPolarText(NVGcontext* vg, int fontHandle, float valueX,
-                            float y, int channel, float charW) {
+                            float y, int channel, float charW,
+                            int align = NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE) {
     if (!isCompolyChannelActive(channel)) return;
 
     nvgFontFaceId(vg, fontHandle);
     nvgFontSize(vg, 12.f);
 
     cpx::complex_text::FixedComplexTextStyle style;
-    style.textAlign = NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE;
+    style.textAlign = align;
     cpx::complex_text::drawPolar(vg, fontHandle, valueX, y,
                                  snapshot->polarR[channel],
                                  snapshot->polarTheta[channel], charW, style);
   }
 
+  float compolyTextWidth(float charW, int compolyRepresentation) const {
+    return charW * (compolyRepresentation == COMPOLY_REP_RECT ? 14.f : 15.f);
+  }
+
   void drawHorizontal(NVGcontext* vg, int fontHandle, int symbolFontHandle,
-                      float charW, int barsMode, int textMode, bool drawViz,
-                      bool drawText, bool drawLabels, bool stretchChannels) {
+                      float charW, int barsMode, int textMode,
+                      int compolyRepresentation, bool compolyDisplay,
+                      bool drawViz, bool drawText, bool drawLabels,
+                      bool stretchChannels) {
     if (!snapshot) return;
 
-    const int slots = stretchChannels ? activeSlotCount(textMode) : 16;
+    const int slots = stretchChannels ? activeSlotCount(compolyDisplay) : 16;
     const float slotW = box.size.x / std::max(1, slots);
     const float labelTopY = 12.f;
     const float labelBottomY = box.size.y - 8.f;
@@ -297,15 +378,27 @@ struct TextDisplay : TransparentWidget {
     if (drawViz) {
       for (int c = 0; c < slots && c < kMaxChannels; c++) {
         const float x = c * slotW + slotW * 0.5f;
-        if (isLeftChannelActive(c)) {
-          drawVerticalBar(vg, x - barWidth * 0.5f, topBarTop, barWidth,
-                          topBarHeight, snapshot->leftVoltages[c], true,
-                          barsMode);
-        }
-        if (isRightChannelActive(c)) {
-          drawVerticalBar(vg, x - barWidth * 0.5f, bottomBarTop, barWidth,
-                          bottomBarHeight, snapshot->rightVoltages[c], false,
-                          barsMode);
+        if (compolyDisplay) {
+          if (isCompolyChannelActive(c)) {
+            float first = 0.f;
+            float second = 0.f;
+            compolyBarParts(c, compolyRepresentation, first, second);
+            drawVerticalBar(vg, x - barWidth * 0.5f, topBarTop, barWidth,
+                            topBarHeight, first, true, barsMode);
+            drawVerticalBar(vg, x - barWidth * 0.5f, bottomBarTop, barWidth,
+                            bottomBarHeight, second, false, barsMode);
+          }
+        } else {
+          if (isLeftChannelActive(c)) {
+            drawVerticalBar(vg, x - barWidth * 0.5f, topBarTop, barWidth,
+                            topBarHeight, snapshot->leftVoltages[c], true,
+                            barsMode);
+          }
+          if (isRightChannelActive(c)) {
+            drawVerticalBar(vg, x - barWidth * 0.5f, bottomBarTop, barWidth,
+                            bottomBarHeight, snapshot->rightVoltages[c], false,
+                            barsMode);
+          }
         }
       }
     }
@@ -313,14 +406,24 @@ struct TextDisplay : TransparentWidget {
     for (int c = 0; c < slots && c < kMaxChannels; c++) {
       const float x = c * slotW + slotW * 0.5f;
       if (drawLabels) {
-        if (textMode == TEXT_POLY || !drawText) {
+        if (!compolyDisplay) {
           drawChannelLabel(vg, x, labelTopY, c, isLeftChannelActive(c),
                            NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, fontHandle);
           drawChannelLabel(vg, x, labelBottomY, c, isRightChannelActive(c),
                            NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, fontHandle);
         } else {
-          drawChannelLabel(vg, x, labelTopY, c, isCompolyChannelActive(c),
-                           NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, fontHandle);
+          const int labelMode =
+              options ? options->channelLabelsMode : CHANNEL_LABELS_BOTH;
+          if (labelMode == CHANNEL_LABELS_LEFT ||
+              labelMode == CHANNEL_LABELS_BOTH) {
+            drawChannelLabel(vg, x, labelTopY, c, isCompolyChannelActive(c),
+                             NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, fontHandle);
+          }
+          if (labelMode == CHANNEL_LABELS_RIGHT ||
+              labelMode == CHANNEL_LABELS_BOTH) {
+            drawChannelLabel(vg, x, labelBottomY, c, isCompolyChannelActive(c),
+                             NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, fontHandle);
+          }
         }
       }
 
@@ -329,7 +432,7 @@ struct TextDisplay : TransparentWidget {
       nvgFontFaceId(vg, fontHandle);
       nvgFontSize(vg, 12.f);
       nvgFillColor(vg, nvgRGB(0xC8, 0xEA, 0xE2));
-      if (textMode == TEXT_POLY) {
+      if (!compolyDisplay) {
         if (isLeftChannelActive(c)) {
           nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
           std::string left = formatVoltage(snapshot->leftVoltages[c]);
@@ -340,12 +443,18 @@ struct TextDisplay : TransparentWidget {
           std::string right = formatVoltage(snapshot->rightVoltages[c]);
           nvgText(vg, x, box.size.y * 0.5f + 10.f, right.c_str(), nullptr);
         }
-      } else if (textMode == TEXT_COMPOLY_RECT && isCompolyChannelActive(c)) {
-        drawCompolyRectText(vg, fontHandle, symbolFontHandle, x - charW * 4.5f,
-                            box.size.y * 0.5f, c, charW);
-      } else if (textMode == TEXT_COMPOLY_POLAR && isCompolyChannelActive(c)) {
-        drawCompolyPolarText(vg, fontHandle, x - charW * 4.5f,
-                             box.size.y * 0.5f, c, charW);
+      } else if (isCompolyChannelActive(c)) {
+        float y = box.size.y * 0.5f;
+        if (textMode == TEXT_LEFT) y = box.size.y * 0.5f - 10.f;
+        if (textMode == TEXT_RIGHT) y = box.size.y * 0.5f + 10.f;
+        const float textX =
+            x - compolyTextWidth(charW, compolyRepresentation) * 0.5f;
+        if (compolyRepresentation == COMPOLY_REP_RECT) {
+          drawCompolyRectText(vg, fontHandle, symbolFontHandle, textX, y, c,
+                              charW);
+        } else {
+          drawCompolyPolarText(vg, fontHandle, textX, y, c, charW);
+        }
       }
     }
   }
@@ -356,10 +465,12 @@ struct TextDisplay : TransparentWidget {
     const NVGcolor fill = voltage >= 0.f ? nvgRGBA(0x24, 0xC9, 0xA6, 0x80)
                                          : nvgRGBA(0xC4, 0x34, 0x21, 0x80);
 
-    nvgBeginPath(vg);
-    nvgRoundedRect(vg, x, y, width, height, 2.f);
-    nvgFillColor(vg, nvgRGBA(0x23, 0x25, 0x27, 0xC0));
-    nvgFill(vg);
+    if (!options || options->barBackgroundEnabled) {
+      nvgBeginPath(vg);
+      nvgRoundedRect(vg, x, y, width, height, 2.f);
+      nvgFillColor(vg, nvgRGBA(0x23, 0x25, 0x27, 0xC0));
+      nvgFill(vg);
+    }
 
     float by = growUp ? y + height * (1.f - clamped) : y;
     float bh = std::max(2.f, height * clamped);

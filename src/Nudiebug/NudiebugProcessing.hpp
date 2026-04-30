@@ -7,17 +7,16 @@
 namespace nudiebug {
 
 template <typename ModuleT>
-inline void updateDisplaySnapshot(ModuleT* module, int zInputMode,
-                                  int compolyChannels,
-                                  const typename ModuleT::CompolyInputInfo&
-                                      inputInfo) {
+inline void updateDisplaySnapshot(
+    ModuleT* module, int zInputMode, int compolyChannels,
+    const typename ModuleT::CompolyInputInfo& inputInfo) {
   const bool needsComplexValues =
-      module->displayOptions.textMode == TEXT_COMPOLY_RECT ||
-      module->displayOptions.textMode == TEXT_COMPOLY_POLAR ||
+      module->displayOptions.displayType == DISPLAY_TYPE_COMPOLY ||
       module->displayOptions.plotEnabled;
 
   module->snapshot.compolyChannels = compolyChannels;
-  module->snapshot.leftChannels = module->inputs[ModuleT::Z_INPUT].getChannels();
+  module->snapshot.leftChannels =
+      module->inputs[ModuleT::Z_INPUT].getChannels();
   module->snapshot.rightChannels =
       module->inputs[ModuleT::Z_INPUT + 1].getChannels();
 
@@ -28,9 +27,11 @@ inline void updateDisplaySnapshot(ModuleT* module, int zInputMode,
         module->inputs[ModuleT::Z_INPUT + 1].getVoltage(c);
 
     if (needsComplexValues && c < compolyChannels) {
+      module->getCoordinatePair(
+          c, ModuleT::Z_INPUT, zInputMode, ModuleT::WRAP_NORMAL, inputInfo,
+          module->snapshot.compolyA[c], module->snapshot.compolyB[c]);
       typename ModuleT::ComplexSample z = module->getComplexSample(
-          c, ModuleT::Z_INPUT, zInputMode, ModuleT::WRAP_NORMAL,
-          inputInfo);
+          c, ModuleT::Z_INPUT, zInputMode, ModuleT::WRAP_NORMAL, inputInfo);
       module->snapshot.rectX[c] = z.x;
       module->snapshot.rectY[c] = z.y;
       module->snapshot.polarR[c] = z.r;
@@ -40,6 +41,8 @@ inline void updateDisplaySnapshot(ModuleT* module, int zInputMode,
       module->snapshot.rectY[c] = 0.f;
       module->snapshot.polarR[c] = 0.f;
       module->snapshot.polarTheta[c] = 0.f;
+      module->snapshot.compolyA[c] = 0.f;
+      module->snapshot.compolyB[c] = 0.f;
     }
   }
 }
