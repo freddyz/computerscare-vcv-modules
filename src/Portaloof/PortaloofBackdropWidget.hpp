@@ -155,10 +155,10 @@ struct PortaloofBackdropWidget : widget::Widget {
 
       nvgSave(args.vg);
       if (renderSourceIndex == 1 &&
-          portaloofBlendUsesCustomComposite(module->sourceBlendMode)) {
+          portaloofBlendUsesNanoVGComposite(module->sourceBlendMode)) {
         nvgGlobalCompositeOperation(
             args.vg,
-            portaloofBlendCompositeOperation(module->sourceBlendMode));
+            portaloofBlendNanoVGCompositeOperation(module->sourceBlendMode));
       }
       nvgScissor(args.vg, vpX, vpY, vpW, vpH);
       nvgTranslate(args.vg, vpX + imgHW, vpY + hh);
