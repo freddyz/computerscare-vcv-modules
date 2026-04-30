@@ -124,12 +124,15 @@ enum class PortaloofBlendMode {
   CROSSFADE = 0,
   NORMAL,
   ADD,
-  MULTIPLY,
-  SCREEN,
-  OVERLAY,
-  DIFFERENCE,
-  DARKEN,
-  LIGHTEN
+  SOURCE_IN,
+  SOURCE_OUT,
+  ATOP,
+  DESTINATION_OVER,
+  DESTINATION_IN,
+  DESTINATION_OUT,
+  DESTINATION_ATOP,
+  COPY,
+  XOR
 };
 
 static inline const char* portaloofBlendModeName(PortaloofBlendMode mode) {
@@ -140,21 +143,58 @@ static inline const char* portaloofBlendModeName(PortaloofBlendMode mode) {
       return "Normal";
     case PortaloofBlendMode::ADD:
       return "Add";
-    case PortaloofBlendMode::MULTIPLY:
-      return "Multiply";
-    case PortaloofBlendMode::SCREEN:
-      return "Screen";
-    case PortaloofBlendMode::OVERLAY:
-      return "Overlay";
-    case PortaloofBlendMode::DIFFERENCE:
-      return "Difference";
-    case PortaloofBlendMode::DARKEN:
-      return "Darken";
-    case PortaloofBlendMode::LIGHTEN:
-      return "Lighten";
+    case PortaloofBlendMode::SOURCE_IN:
+      return "Source In";
+    case PortaloofBlendMode::SOURCE_OUT:
+      return "Source Out";
+    case PortaloofBlendMode::ATOP:
+      return "Atop";
+    case PortaloofBlendMode::DESTINATION_OVER:
+      return "Behind";
+    case PortaloofBlendMode::DESTINATION_IN:
+      return "Mask";
+    case PortaloofBlendMode::DESTINATION_OUT:
+      return "Knockout";
+    case PortaloofBlendMode::DESTINATION_ATOP:
+      return "Destination Atop";
+    case PortaloofBlendMode::COPY:
+      return "Copy";
+    case PortaloofBlendMode::XOR:
+      return "XOR";
     default:
       return "Crossfade";
   }
+}
+
+static inline int portaloofBlendCompositeOperation(PortaloofBlendMode mode) {
+  switch (mode) {
+    case PortaloofBlendMode::ADD:
+      return NVG_LIGHTER;
+    case PortaloofBlendMode::DESTINATION_OVER:
+      return NVG_DESTINATION_OVER;
+    case PortaloofBlendMode::XOR:
+      return NVG_XOR;
+    default:
+      return NVG_SOURCE_OVER;
+  }
+}
+
+static inline bool portaloofBlendModeSupported(PortaloofBlendMode mode) {
+  switch (mode) {
+    case PortaloofBlendMode::CROSSFADE:
+    case PortaloofBlendMode::NORMAL:
+    case PortaloofBlendMode::ADD:
+    case PortaloofBlendMode::XOR:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static inline bool portaloofBlendUsesCustomComposite(PortaloofBlendMode mode) {
+  return portaloofBlendModeSupported(mode) &&
+         mode != PortaloofBlendMode::CROSSFADE &&
+         mode != PortaloofBlendMode::NORMAL;
 }
 
 struct PortaloofSourceConfig {
@@ -666,10 +706,11 @@ struct ComputerscarePortaloof : Module {
     if (blendJ) {
       int mode = (int)json_integer_value(blendJ);
       if (mode >= (int)PortaloofBlendMode::CROSSFADE &&
-          mode <= (int)PortaloofBlendMode::LIGHTEN) {
-        if (mode > (int)PortaloofBlendMode::ADD)
-          mode = (int)PortaloofBlendMode::NORMAL;
-        sourceBlendMode = (PortaloofBlendMode)mode;
+          mode <= (int)PortaloofBlendMode::XOR) {
+        PortaloofBlendMode loadedMode = (PortaloofBlendMode)mode;
+        sourceBlendMode = portaloofBlendModeSupported(loadedMode)
+                              ? loadedMode
+                              : PortaloofBlendMode::NORMAL;
       }
     }
     bool loadedNewSources = false;

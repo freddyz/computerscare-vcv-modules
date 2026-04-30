@@ -155,8 +155,11 @@ struct PortaloofBackdropWidget : widget::Widget {
 
       nvgSave(args.vg);
       if (renderSourceIndex == 1 &&
-          module->sourceBlendMode == PortaloofBlendMode::ADD)
-        nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
+          portaloofBlendUsesCustomComposite(module->sourceBlendMode)) {
+        nvgGlobalCompositeOperation(
+            args.vg,
+            portaloofBlendCompositeOperation(module->sourceBlendMode));
+      }
       nvgScissor(args.vg, vpX, vpY, vpW, vpH);
       nvgTranslate(args.vg, vpX + imgHW, vpY + hh);
       if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);

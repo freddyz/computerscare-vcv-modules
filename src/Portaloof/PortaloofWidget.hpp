@@ -776,8 +776,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
           nvgSave(args.vg);
           if (renderSourceIndex == 1 &&
-              m->sourceBlendMode == PortaloofBlendMode::ADD)
-            nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
+              portaloofBlendUsesCustomComposite(m->sourceBlendMode)) {
+            nvgGlobalCompositeOperation(
+                args.vg, portaloofBlendCompositeOperation(m->sourceBlendMode));
+          }
 
           nvgScissor(args.vg, displayX, 0.f, mirrorW, box.size.y);
           nvgTranslate(args.vg, displayX + hw,
@@ -1140,9 +1142,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         string::f("Blend mode: %s",
                   portaloofBlendModeName(m->sourceBlendMode)),
         "", [=](Menu* menu) {
-          for (int i = (int)PortaloofBlendMode::CROSSFADE;
-               i <= (int)PortaloofBlendMode::ADD; i++) {
-            PortaloofBlendMode mode = (PortaloofBlendMode)i;
+          static const PortaloofBlendMode modes[] = {
+              PortaloofBlendMode::CROSSFADE, PortaloofBlendMode::NORMAL,
+              PortaloofBlendMode::ADD, PortaloofBlendMode::XOR};
+          for (PortaloofBlendMode mode : modes) {
             menu->addChild(createCheckMenuItem(
                 portaloofBlendModeName(mode), "",
                 [=]() { return m->sourceBlendMode == mode; },
