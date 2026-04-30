@@ -869,6 +869,124 @@ struct KeyboardControlChildMenu : MenuItem {
   }
 };
 
+struct CustomBlankGifPlayback {
+  AnimatedGifBuddy gifBuddy;
+  int imageHandle = 0;
+  int imageWidth = 0;
+  int imageHeight = 0;
+  int scriptFrame = 0;
+  int mappedFrame = 0;
+  int frameCount = 0;
+  int animationMode = 0;
+  float zeroOffset = 0.f;
+  float frameElapsed = 0.f;
+  float crossfadeElapsed = 0.f;
+  std::vector<float> frameDelays;
+  std::vector<std::vector<int>> frameScripts;
+
+  void clear() {
+    imageHandle = 0;
+    imageWidth = 0;
+    imageHeight = 0;
+    scriptFrame = 0;
+    mappedFrame = 0;
+    frameCount = 0;
+    frameElapsed = 0.f;
+    crossfadeElapsed = 0.f;
+    frameDelays.clear();
+    frameScripts.clear();
+  }
+
+  void capture(AnimatedGifBuddy sourceGifBuddy, int sourceImageHandle,
+               int sourceImageWidth, int sourceImageHeight,
+               int sourceScriptFrame, int sourceMappedFrame,
+               ComputerscareBlank* module) {
+    gifBuddy = sourceGifBuddy;
+    imageHandle = sourceImageHandle;
+    imageWidth = sourceImageWidth;
+    imageHeight = sourceImageHeight;
+    frameCount = gifBuddy.getFrameCount();
+    scriptFrame = sourceScriptFrame;
+    mappedFrame = sourceMappedFrame;
+    animationMode =
+        module ? module->params[ComputerscareBlank::ANIMATION_MODE].getValue()
+               : 0;
+    zeroOffset = module ? module->zeroOffset : 0.f;
+    frameElapsed = 0.f;
+    crossfadeElapsed = 0.f;
+    frameDelays = gifBuddy.getAllFrameDelaysSeconds();
+    frameScripts = module ? module->frameScripts : frameScripts;
+  }
+
+  bool isValid() const {
+    return imageHandle > 0 && imageWidth > 0 && imageHeight > 0;
+  }
+
+  float frameDelay(ComputerscareBlank* module) const {
+    float base = defaultFrameDelayCentiseconds / 100.f;
+    if (mappedFrame >= 0 && mappedFrame < (int)frameDelays.size()) {
+      base = frameDelays[mappedFrame];
+    }
+
+    float speedDivisor = 1.f;
+    if (module && module->expanderConnected && module->clockConnected &&
+        module->clockMode == ComputerscareBlank::CLOCK_MODE_SYNC) {
+      speedDivisor = module->speedFactor;
+    } else if (module) {
+      speedDivisor = std::pow(
+          20.f, module->params[ComputerscareBlank::ANIMATION_SPEED].getValue());
+    }
+
+    if (module &&
+        module->params[ComputerscareBlank::CONSTANT_FRAME_DELAY].getValue()) {
+      base = defaultFrameDelayCentiseconds / 100.f;
+    }
+
+    return speedDivisor > 0.f ? base / speedDivisor : base;
+  }
+
+  void mapCurrentFrame() {
+    if (frameCount <= 0 || animationMode < 0 ||
+        animationMode >= (int)frameScripts.size() ||
+        frameScripts[animationMode].empty()) {
+      mappedFrame = 0;
+      return;
+    }
+
+    int numScriptFrames = frameScripts[animationMode].size();
+    scriptFrame += numScriptFrames * 10;
+    scriptFrame %= numScriptFrames;
+    mappedFrame = frameScripts[animationMode][scriptFrame];
+    mappedFrame +=
+        mapBlankFrameOffset(zeroOffset, frameCount) + 10 * frameCount;
+    mappedFrame %= frameCount;
+  }
+
+  void advance(NVGcontext* vg, ComputerscareBlank* module,
+               float nextCrossfadeElapsed) {
+    if (!isValid() || frameCount <= 1) return;
+
+    float delta = nextCrossfadeElapsed - crossfadeElapsed;
+    crossfadeElapsed = nextCrossfadeElapsed;
+    if (delta < 0.f) delta = 0.f;
+    frameElapsed += delta;
+
+    int guard = 0;
+    while (frameElapsed >= frameDelay(module) && guard < 128) {
+      frameElapsed -= frameDelay(module);
+      if (animationMode == ComputerscareBlank::ANIMATION_RANDOM) {
+        scriptFrame = (int)std::floor(random::uniform() * frameCount);
+      } else {
+        scriptFrame++;
+      }
+      mapCurrentFrame();
+      guard++;
+    }
+
+    gifBuddy.displayGifFrame(vg, mappedFrame);
+  }
+};
+
 template <class TBase>
 struct tPNGDisplay : TBase {
   ComputerscareBlank* blankModule;
@@ -879,11 +997,11 @@ struct tPNGDisplay : TBase {
   std::string path = "empty";
   int img = 0;
   int currentFrame = -1;
+  int displayedScriptFrame = 0;
+  int displayedMappedFrame = 0;
   bool missingOrBroken = false;
   AnimatedGifBuddy gifBuddy;
-  int previousImg = 0;
-  int previousImgWidth = 0;
-  int previousImgHeight = 0;
+  CustomBlankGifPlayback previousPlayback;
   float previousZoomX = 1.f;
   float previousZoomY = 1.f;
   float previousXOffset = 0.f;
@@ -954,9 +1072,9 @@ struct tPNGDisplay : TBase {
       if (path != modulePath) {
         if (blankModule->crossfadePending && img > 0 && imgWidth > 0 &&
             imgHeight > 0) {
-          previousImg = img;
-          previousImgWidth = imgWidth;
-          previousImgHeight = imgHeight;
+          previousPlayback.capture(gifBuddy, img, imgWidth, imgHeight,
+                                   displayedScriptFrame, displayedMappedFrame,
+                                   blankModule);
           previousZoomX = blankModule->zoomX;
           previousZoomY = blankModule->zoomY;
           previousXOffset = blankModule->xOffset;
@@ -1045,12 +1163,15 @@ struct tPNGDisplay : TBase {
       if (!path.empty() && path != "empty") {
         float crossfadeAlpha = blankModule->getCrossfadeAlpha();
         if (hasPreviousImage && blankModule->crossfadeActive) {
-          drawImageHandle(args, previousImg, previousImgWidth,
-                          previousImgHeight, previousZoomX, previousZoomY,
-                          previousXOffset, previousYOffset,
-                          1.f - crossfadeAlpha);
+          drawImageHandle(
+              args, previousPlayback.imageHandle, previousPlayback.imageWidth,
+              previousPlayback.imageHeight, previousZoomX, previousZoomY,
+              previousXOffset, previousYOffset, 1.f - crossfadeAlpha);
+          previousPlayback.advance(args.vg, blankModule,
+                                   blankModule->crossfadeElapsed);
         } else if (!blankModule->crossfadeActive) {
           hasPreviousImage = false;
+          previousPlayback.clear();
         }
 
         drawImageHandle(args, img, imgWidth, imgHeight, blankModule->zoomX,
@@ -1059,6 +1180,8 @@ struct tPNGDisplay : TBase {
       }
       if (!blankModule->pauseAnimation) {
         gifBuddy.displayGifFrame(args.vg, currentFrame);
+        displayedScriptFrame = blankModule->currentFrame;
+        displayedMappedFrame = currentFrame;
       }
     }
   }
