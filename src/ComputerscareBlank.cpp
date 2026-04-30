@@ -173,10 +173,10 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
                     nextFileDescriptions);
     configMenuParam(SHUFFLE_SEED, 0.f, 1.f, 0.5f, "Shuffle Seed", 2);
 
-    configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Active");
+    configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Enabled");
     configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.200948f, "Slideshow Time", 2,
                     " s", 400.f, 3.f);
-    configParam(CROSSFADE_ENABLED, 0.f, 1.f, 0.f, "Crossfade");
+    configParam(CROSSFADE_ENABLED, 0.f, 1.f, 0.f, "Crossfade Enabled");
     configMenuParam(CROSSFADE_TIME, 0.f, 1.f, 0.1f, "Crossfade Time", 2, " s",
                     0.f, 5.f);
     configParam(LIGHT_WIDGET_MODE, 0.f, 1.f, 0.f,
@@ -701,6 +701,14 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
       params[ANIMATION_ENABLED].setValue(1);
     }
   }
+  void toggleSlideshowEnabled() {
+    float current = params[SLIDESHOW_ACTIVE].getValue();
+    if (current == 1.0) {
+      params[SLIDESHOW_ACTIVE].setValue(0);
+    } else {
+      params[SLIDESHOW_ACTIVE].setValue(1);
+    }
+  }
   json_t* dataToJson() override {
     json_t* rootJ = json_object();
     if (paths.size() > 0) {
@@ -849,6 +857,8 @@ struct KeyboardControlChildMenu : MenuItem {
 
     menu->addChild(
         construct<MenuLabel>(&MenuLabel::text, "P: Toggle animation on/off"));
+    menu->addChild(
+        construct<MenuLabel>(&MenuLabel::text, "M: Toggle slideshow on/off"));
 
     InvertYMenuItem* invertYMenuItem = new InvertYMenuItem();
     invertYMenuItem->text = "Invert Y-Axis";
@@ -1267,6 +1277,8 @@ struct ComputerscareBlankWidget : ModuleWidget {
               blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED]));
         }));
 
+    menu->addChild(new MenuEntry);
+
     MenuToggle* slideshowEnabled = new MenuToggle(
         blank->paramQuantities[ComputerscareBlank::SLIDESHOW_ACTIVE]);
     menu->addChild(slideshowEnabled);
@@ -1284,9 +1296,18 @@ struct ComputerscareBlankWidget : ModuleWidget {
             submenu->addChild(menuItem);
           }
 
+          submenu->addChild(new WideParamSlider(
+              blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED]));
+
+          submenu->addChild(new WideParamSlider(
+              blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME]));
+
           MenuEntry* sliderSpacer = new MenuEntry;
           sliderSpacer->box.size.y = 8.f;
           submenu->addChild(sliderSpacer);
+
+          submenu->addChild(
+              construct<MenuLabel>(&MenuLabel::text, "Crossfade"));
 
           MenuToggle* crossfadeEnabled = new MenuToggle(
               blank->paramQuantities[ComputerscareBlank::CROSSFADE_ENABLED]);
@@ -1298,12 +1319,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
           submenu->addChild(new WideParamSlider(
               blank->paramQuantities[ComputerscareBlank::CROSSFADE_TIME]));
-
-          submenu->addChild(new WideParamSlider(
-              blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED]));
-
-          submenu->addChild(new WideParamSlider(
-              blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME]));
         }));
   }
   void step() override {
@@ -1403,6 +1418,9 @@ struct ComputerscareBlankWidget : ModuleWidget {
         e.consume(this);
       } else if (e.keyName == "p") {
         blankModule->toggleAnimationEnabled();
+        e.consume(this);
+      } else if (e.keyName == "m") {
+        blankModule->toggleSlideshowEnabled();
         e.consume(this);
       } else if (e.keyName == "o") {
         blankModule->loadRandomGif();
