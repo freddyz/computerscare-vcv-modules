@@ -78,6 +78,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
   int zoomCheckInterval = 5000;
   int zoomCheckCounter = 0;
   bool pauseAnimation = true;
+  bool fitResetPending = false;
 
   /*
           uninitialized: 0
@@ -176,7 +177,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     configParam(SLIDESHOW_ACTIVE, 0.f, 1.f, 0.f, "Slideshow Enabled");
     configMenuParam(SLIDESHOW_TIME, 0.f, 1.f, 0.200948f, "Slideshow Time", 2,
                     " s", 400.f, 3.f);
-    configParam(CROSSFADE_ENABLED, 0.f, 1.f, 0.f, "Crossfade Enabled");
+    configParam(CROSSFADE_ENABLED, 0.f, 1.f, 1.f, "Crossfade Enabled");
     configMenuParam(CROSSFADE_TIME, 0.f, 1.f, 0.1f, "Crossfade Time", 2, " s",
                     0.f, 5.f);
     configParam(LIGHT_WIDGET_MODE, 0.f, 1.f, 0.f,
@@ -360,10 +361,15 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
   }
 
   void onReset() override {
-    zoomX = 1;
-    zoomY = 1;
-    xOffset = 0;
-    yOffset = 0;
+    params[CROSSFADE_ENABLED].setValue(1.f);
+    if (imageFitEnum == 3) {
+      zoomX = 1;
+      zoomY = 1;
+      xOffset = 0;
+      yOffset = 0;
+    } else {
+      fitResetPending = true;
+    }
   }
   void loadImageDialog(int index = 0) {
     std::string dir = this->paths[index].empty()
@@ -763,6 +769,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     if (rotationJ) {
       rotation = json_integer_value(rotationJ);
     }
+    fitResetPending = false;
     this->loading = false;
   }
 };
@@ -1013,20 +1020,24 @@ struct tPNGDisplay : TBase {
   tPNGDisplay() {}
 
   void resetZooms() {
+    float displayWidth =
+        this->box.size.x > 0.f ? this->box.size.x : blankModule->width;
+    float displayHeight =
+        this->box.size.y > 0.f ? this->box.size.y : blankModule->height;
     if (blankModule->imageFitEnum == 0) {
-      blankModule->zoomX = blankModule->width / imgWidth;
-      blankModule->zoomY = blankModule->height / imgHeight;
+      blankModule->zoomX = displayWidth / imgWidth;
+      blankModule->zoomY = displayHeight / imgHeight;
       blankModule->xOffset = 0;
       blankModule->yOffset = 0;
 
     } else if (blankModule->imageFitEnum == 1) {  // fit width
-      blankModule->zoomX = blankModule->width / imgWidth;
+      blankModule->zoomX = displayWidth / imgWidth;
       blankModule->zoomY = blankModule->zoomX;
       blankModule->xOffset = 0;
       blankModule->yOffset = 0;
 
     } else if (blankModule->imageFitEnum == 2) {  // fit height
-      blankModule->zoomY = blankModule->height / imgHeight;
+      blankModule->zoomY = displayHeight / imgHeight;
       blankModule->zoomX = blankModule->zoomY;
       blankModule->xOffset = 0;
       blankModule->yOffset = 0;
@@ -1148,8 +1159,10 @@ struct tPNGDisplay : TBase {
           // unsure of another way to distinguish (1) from (3)
           // other than this janky flag
           blankModule->jsonFlag = false;
+          blankModule->fitResetPending = false;
         } else {
           resetZooms();
+          blankModule->jsonFlag = false;
         }
 
         path = modulePath;
@@ -1160,6 +1173,10 @@ struct tPNGDisplay : TBase {
         resetZooms();
       }
       lastEnum = blankModule->imageFitEnum;
+      if (blankModule->fitResetPending && blankModule->imageFitEnum != 3) {
+        resetZooms();
+        blankModule->fitResetPending = false;
+      }
       if (!path.empty() && path != "empty") {
         float crossfadeAlpha = blankModule->getCrossfadeAlpha();
         if (hasPreviousImage && blankModule->crossfadeActive) {
@@ -1212,7 +1229,10 @@ struct PNGDisplay : Widget {
     addChild(pngTransparent);
     Widget();
   }
-  void resetZooms() { pngTransparent->resetZooms(); }
+  void resetZooms() {
+    pngTransparent->box.size = box.size;
+    pngTransparent->resetZooms();
+  }
   void step() override {
     if (module) {
       pngTransparent->box.size = box.size;
@@ -1344,12 +1364,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
         "Dim Visuals with Room");
     menu->addChild(dimVisualsWithRoom);
 
-    KeyboardControlChildMenu* kbMenu = new KeyboardControlChildMenu();
-    kbMenu->text = "Keyboard Controls";
-    kbMenu->rightText = RIGHT_ARROW;
-    kbMenu->blank = blank;
-    menu->addChild(kbMenu);
-
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
     LoadImageItem* loadImageItem =
         createMenuItem<LoadImageItem>("Load image (PNG, JPEG, BMP, GIF)");
@@ -1443,6 +1457,14 @@ struct ComputerscareBlankWidget : ModuleWidget {
           submenu->addChild(new WideParamSlider(
               blank->paramQuantities[ComputerscareBlank::CROSSFADE_TIME]));
         }));
+
+    menu->addChild(new MenuEntry);
+
+    KeyboardControlChildMenu* kbMenu = new KeyboardControlChildMenu();
+    kbMenu->text = "Keyboard Controls";
+    kbMenu->rightText = RIGHT_ARROW;
+    kbMenu->blank = blank;
+    menu->addChild(kbMenu);
   }
   void step() override {
     if (module) {
