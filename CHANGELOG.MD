@@ -1,3 +1,12 @@
+# 2.3.0
+Portaloof:
+- Draw all sources at full alpha
+
+Custom Blank:
+- gifs continue animating during crossfade
+- Slideshow keyboard toggle
+
+
 # 2.2.5
 Portaloof: Visual Tranformation Module
 
