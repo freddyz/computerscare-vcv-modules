@@ -713,9 +713,13 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               renderSources[renderSourceIndex];
           if (!currentSource.isValid()) continue;
           float sourceMixAlpha = 1.f;
-          if (hasSource1 && hasSource2)
-            sourceMixAlpha =
-                renderSourceIndex == 0 ? (1.f - source2Amt) : source2Amt;
+          if (hasSource1 && hasSource2) {
+            if (m->sourceBlendMode == PortaloofBlendMode::CROSSFADE)
+              sourceMixAlpha =
+                  renderSourceIndex == 0 ? (1.f - source2Amt) : source2Amt;
+            else
+              sourceMixAlpha = renderSourceIndex == 0 ? 1.f : source2Amt;
+          }
           if (sourceMixAlpha <= 0.f) continue;
           float alpha = baseAlpha * sourceMixAlpha;
 
@@ -771,6 +775,9 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           }
 
           nvgSave(args.vg);
+          if (renderSourceIndex == 1 &&
+              m->sourceBlendMode == PortaloofBlendMode::ADD)
+            nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
 
           nvgScissor(args.vg, displayX, 0.f, mirrorW, box.size.y);
           nvgTranslate(args.vg, displayX + hw,
@@ -1128,6 +1135,20 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     menu->addChild(
         createSubmenuItem(m->getSourceMenuLabel(1), "",
                           [=](Menu* menu) { appendSourceMenu(menu, 1); }));
+    menu->addChild(new MenuSeparator());
+    menu->addChild(createSubmenuItem(
+        string::f("Blend mode: %s",
+                  portaloofBlendModeName(m->sourceBlendMode)),
+        "", [=](Menu* menu) {
+          for (int i = (int)PortaloofBlendMode::CROSSFADE;
+               i <= (int)PortaloofBlendMode::ADD; i++) {
+            PortaloofBlendMode mode = (PortaloofBlendMode)i;
+            menu->addChild(createCheckMenuItem(
+                portaloofBlendModeName(mode), "",
+                [=]() { return m->sourceBlendMode == mode; },
+                [=]() { m->sourceBlendMode = mode; }));
+          }
+        }));
     menu->addChild(new MenuSeparator());
 
     // Fold Frequency slider (replaces panel FOLD controls)

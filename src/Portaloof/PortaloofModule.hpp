@@ -120,6 +120,43 @@ enum class PortaloofSourceKind {
   SCREEN_RECT
 };
 
+enum class PortaloofBlendMode {
+  CROSSFADE = 0,
+  NORMAL,
+  ADD,
+  MULTIPLY,
+  SCREEN,
+  OVERLAY,
+  DIFFERENCE,
+  DARKEN,
+  LIGHTEN
+};
+
+static inline const char* portaloofBlendModeName(PortaloofBlendMode mode) {
+  switch (mode) {
+    case PortaloofBlendMode::CROSSFADE:
+      return "Crossfade";
+    case PortaloofBlendMode::NORMAL:
+      return "Normal";
+    case PortaloofBlendMode::ADD:
+      return "Add";
+    case PortaloofBlendMode::MULTIPLY:
+      return "Multiply";
+    case PortaloofBlendMode::SCREEN:
+      return "Screen";
+    case PortaloofBlendMode::OVERLAY:
+      return "Overlay";
+    case PortaloofBlendMode::DIFFERENCE:
+      return "Difference";
+    case PortaloofBlendMode::DARKEN:
+      return "Darken";
+    case PortaloofBlendMode::LIGHTEN:
+      return "Lighten";
+    default:
+      return "Crossfade";
+  }
+}
+
 struct PortaloofSourceConfig {
   PortaloofSourceKind kind = PortaloofSourceKind::NONE;
   std::string imagePath;
@@ -234,6 +271,7 @@ struct ComputerscarePortaloof : Module {
       true;  // false = Kaleid > Translate, true = Translate > Kaleid
   bool hideUi = false;
   bool dimVisualsWithRoom = false;
+  PortaloofBlendMode sourceBlendMode = PortaloofBlendMode::CROSSFADE;
   PortaloofSourceConfig sources[2];
   std::string loadedImagePath;
   int64_t rackSourceModuleId = -1;
@@ -576,6 +614,8 @@ struct ComputerscarePortaloof : Module {
     json_object_set_new(rootJ, "hideUi", json_boolean(hideUi));
     json_object_set_new(rootJ, "dimVisualsWithRoom",
                         json_boolean(dimVisualsWithRoom));
+    json_object_set_new(rootJ, "sourceBlendMode",
+                        json_integer((int)sourceBlendMode));
     json_t* sourcesJ = json_array();
     json_array_append_new(sourcesJ, sourceToJson(sources[0]));
     json_array_append_new(sourcesJ, sourceToJson(sources[1]));
@@ -622,6 +662,16 @@ struct ComputerscarePortaloof : Module {
     if (huiJ) hideUi = json_boolean_value(huiJ);
     json_t* dimJ = json_object_get(rootJ, "dimVisualsWithRoom");
     if (dimJ) dimVisualsWithRoom = json_boolean_value(dimJ);
+    json_t* blendJ = json_object_get(rootJ, "sourceBlendMode");
+    if (blendJ) {
+      int mode = (int)json_integer_value(blendJ);
+      if (mode >= (int)PortaloofBlendMode::CROSSFADE &&
+          mode <= (int)PortaloofBlendMode::LIGHTEN) {
+        if (mode > (int)PortaloofBlendMode::ADD)
+          mode = (int)PortaloofBlendMode::NORMAL;
+        sourceBlendMode = (PortaloofBlendMode)mode;
+      }
+    }
     bool loadedNewSources = false;
     json_t* sourcesJ = json_object_get(rootJ, "sources");
     if (sourcesJ && json_is_array(sourcesJ)) {

@@ -1,6 +1,7 @@
 #pragma once
 #include <nanovg_gl.h>
 
+#include "RackModuleSource.hpp"
 #include "rack.hpp"
 
 using namespace rack;
@@ -16,6 +17,7 @@ struct SourceBlendFBO {
   GLint uRackTex = -1;
   GLint uImageTex = -1;
   GLint uImageAmt = -1;
+  GLint uBlendMode = -1;
   GLint uRackFlipY = -1;
   GLint uImageFlipY = -1;
   GLint aPos = -1;
@@ -38,15 +40,42 @@ struct SourceBlendFBO {
            "uniform sampler2D rackTex;\n"
            "uniform sampler2D imageTex;\n"
            "uniform float imageAmt;\n"
+           "uniform int blendMode;\n"
            "uniform float rackFlipY;\n"
            "uniform float imageFlipY;\n"
            "vec2 flippedUv(vec2 coord, float flipY) {\n"
            "  return vec2(coord.x, coord.y * flipY + (1.0 - flipY) * 0.5);\n"
            "}\n"
+           "vec3 blendOverlay(vec3 b, vec3 t) {\n"
+           "  vec3 low = 2.0 * b * t;\n"
+           "  vec3 high = 1.0 - 2.0 * (1.0 - b) * (1.0 - t);\n"
+           "  return mix(low, high, step(vec3(0.5), b));\n"
+           "}\n"
+           "vec3 blendColor(vec3 b, vec3 t, int mode) {\n"
+           "  if (mode == 2) return min(b + t, 1.0);\n"
+           "  if (mode == 3) return b * t;\n"
+           "  if (mode == 4) return 1.0 - (1.0 - b) * (1.0 - t);\n"
+           "  if (mode == 5) return blendOverlay(b, t);\n"
+           "  if (mode == 6) return abs(b - t);\n"
+           "  if (mode == 7) return min(b, t);\n"
+           "  if (mode == 8) return max(b, t);\n"
+           "  return t;\n"
+           "}\n"
            "void main() {\n"
            "  vec4 rackCol = texture2D(rackTex, flippedUv(uv, rackFlipY));\n"
            "  vec4 imageCol = texture2D(imageTex, flippedUv(uv, imageFlipY));\n"
-           "  gl_FragColor = mix(rackCol, imageCol, imageAmt);\n"
+           "  float amt = clamp(imageAmt, 0.0, 1.0);\n"
+           "  if (blendMode == 0) {\n"
+           "    gl_FragColor = mix(rackCol, imageCol, amt);\n"
+           "    return;\n"
+           "  }\n"
+           "  float topA = clamp(imageCol.a * amt, 0.0, 1.0);\n"
+           "  vec3 baseRgb = rackCol.rgb;\n"
+           "  vec3 topRgb = imageCol.rgb;\n"
+           "  vec3 blended = blendColor(baseRgb, topRgb, blendMode);\n"
+           "  vec3 rgb = mix(baseRgb, blended, topA);\n"
+           "  float outA = rackCol.a + topA * (1.0 - rackCol.a);\n"
+           "  gl_FragColor = vec4(rgb, outA);\n"
            "}\n";
   }
 
@@ -111,6 +140,7 @@ struct SourceBlendFBO {
       uRackTex = glGetUniformLocation(program, "rackTex");
       uImageTex = glGetUniformLocation(program, "imageTex");
       uImageAmt = glGetUniformLocation(program, "imageAmt");
+      uBlendMode = glGetUniformLocation(program, "blendMode");
       uRackFlipY = glGetUniformLocation(program, "rackFlipY");
       uImageFlipY = glGetUniformLocation(program, "imageFlipY");
       aPos = glGetAttribLocation(program, "pos");
@@ -153,7 +183,8 @@ struct SourceBlendFBO {
   }
 
   int apply(NVGcontext* vg, GLuint rackTex, GLuint imageTex, int w, int h,
-            float imageAmt, bool imageFlipY = true, bool rackFlipY = false) {
+            float imageAmt, bool imageFlipY = true, bool rackFlipY = false,
+            int blendMode = 0) {
     if (w <= 0 || h <= 0 || !rackTex || !imageTex) return -1;
     if (!initialized) init();
     if (!program || aPos < 0) return -1;
@@ -189,6 +220,7 @@ struct SourceBlendFBO {
     glBindTexture(GL_TEXTURE_2D, imageTex);
     glUniform1i(uImageTex, 1);
     glUniform1f(uImageAmt, clamp(imageAmt, 0.f, 1.f));
+    glUniform1i(uBlendMode, blendMode);
     glUniform1f(uRackFlipY, rackFlipY ? -1.f : 1.f);
     glUniform1f(uImageFlipY, imageFlipY ? -1.f : 1.f);
 
@@ -214,6 +246,14 @@ struct SourceBlendFBO {
       glDisable(GL_BLEND);
 
     return nvgImg;
+  }
+
+  PortaloofInjectedSource getSource() const {
+    PortaloofInjectedSource out;
+    out.nvgImg = nvgImg;
+    out.texId = outTex;
+    out.flipInputUV = false;
+    return out;
   }
 
   ~SourceBlendFBO() = default;

@@ -107,9 +107,13 @@ struct PortaloofBackdropWidget : widget::Widget {
       PortaloofInjectedSource currentSource = renderSources[renderSourceIndex];
       if (!currentSource.isValid()) continue;
       float sourceMixAlpha = 1.f;
-      if (hasSource1 && hasSource2)
-        sourceMixAlpha =
-            renderSourceIndex == 0 ? (1.f - source2Amt) : source2Amt;
+      if (hasSource1 && hasSource2) {
+        if (module->sourceBlendMode == PortaloofBlendMode::CROSSFADE)
+          sourceMixAlpha =
+              renderSourceIndex == 0 ? (1.f - source2Amt) : source2Amt;
+        else
+          sourceMixAlpha = renderSourceIndex == 0 ? 1.f : source2Amt;
+      }
       if (sourceMixAlpha <= 0.f) continue;
       float alpha = baseAlpha * sourceMixAlpha;
 
@@ -150,6 +154,9 @@ struct PortaloofBackdropWidget : widget::Widget {
                              : srcTex;
 
       nvgSave(args.vg);
+      if (renderSourceIndex == 1 &&
+          module->sourceBlendMode == PortaloofBlendMode::ADD)
+        nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
       nvgScissor(args.vg, vpX, vpY, vpW, vpH);
       nvgTranslate(args.vg, vpX + imgHW, vpY + hh);
       if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
