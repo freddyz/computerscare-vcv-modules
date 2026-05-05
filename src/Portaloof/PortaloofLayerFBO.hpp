@@ -15,14 +15,20 @@ struct PortaloofLayerFBO {
   GLint prevFBO = 0;
   GLint prevViewport[4] = {};
 
+  void release() {
+    if (!fb) return;
+    nvgluDeleteFramebuffer(fb);
+    fb = nullptr;
+    lastW = 0;
+    lastH = 0;
+    fbSize = math::Vec();
+  }
+
   bool resizeIfNeeded(NVGcontext* vg, int w, int h) {
     if (w <= 0 || h <= 0) return false;
     if (fb && w == lastW && h == lastH) return true;
 
-    if (fb) {
-      nvgluDeleteFramebuffer(fb);
-      fb = nullptr;
-    }
+    release();
     fb = nvgluCreateFramebuffer(vg, w, h, 0);
     if (!fb) {
       lastW = 0;
@@ -71,7 +77,5 @@ struct PortaloofLayerFBO {
     return out;
   }
 
-  ~PortaloofLayerFBO() {
-    if (fb) nvgluDeleteFramebuffer(fb);
-  }
+  ~PortaloofLayerFBO() = default;
 };

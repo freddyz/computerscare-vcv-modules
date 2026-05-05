@@ -220,6 +220,19 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   // Browser preview fake module
   ComputerscarePortaloof* browserModule = nullptr;
 
+  void releaseTransientFramebuffers() {
+    for (PortaloofLayerFBO& sourceLayerFBO : sourceLayerFBOs) {
+      sourceLayerFBO.release();
+    }
+  }
+
+  void onRemove(const RemoveEvent& e) override {
+    if (APP && APP->window) {
+      releaseTransientFramebuffers();
+    }
+    ModuleWidget::onRemove(e);
+  }
+
   ~ComputerscarePortaloofWidget() {
     if (backdropWidget) {
       if (APP->scene && APP->scene->rack)
