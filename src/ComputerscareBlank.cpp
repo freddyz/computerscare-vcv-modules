@@ -39,6 +39,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
   float xOffset = 0.f;
   float yOffset = 0.f;
   int imageFitEnum = 0;
+  bool hidePanel = false;
   int currentFrame = 0;
   int mappedFrame = 0;
   int numFrames = 0;
@@ -729,6 +730,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     json_object_set_new(rootJ, "xOffset", json_real(xOffset));
     json_object_set_new(rootJ, "yOffset", json_real(yOffset));
     json_object_set_new(rootJ, "rotation", json_integer(rotation));
+    json_object_set_new(rootJ, "hidePanel", json_boolean(hidePanel));
     return rootJ;
   }
 
@@ -768,6 +770,10 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     json_t* rotationJ = json_object_get(rootJ, "rotation");
     if (rotationJ) {
       rotation = json_integer_value(rotationJ);
+    }
+    json_t* hidePanelJ = json_object_get(rootJ, "hidePanel");
+    if (hidePanelJ) {
+      hidePanel = json_is_true(hidePanelJ);
     }
     fitResetPending = false;
     this->loading = false;
@@ -1338,6 +1344,11 @@ struct ComputerscareBlankWidget : ModuleWidget {
     addChild(frameDisplay);
   }
 
+  void drawLayer(const DrawArgs& args, int layer) override {
+    if (blankModule && blankModule->hidePanel && layer == -1) return;
+    ModuleWidget::drawLayer(args, layer);
+  }
+
   void appendContextMenu(Menu* menu) override {
     ComputerscareBlank* blank =
         dynamic_cast<ComputerscareBlank*>(this->blankModule);
@@ -1363,6 +1374,8 @@ struct ComputerscareBlankWidget : ModuleWidget {
         blank->paramQuantities[ComputerscareBlank::LIGHT_WIDGET_MODE],
         "Dim Visuals with Room");
     menu->addChild(dimVisualsWithRoom);
+
+    menu->addChild(createBoolPtrMenuItem("Hide panel", "", &blank->hidePanel));
 
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
     LoadImageItem* loadImageItem =
@@ -1489,7 +1502,8 @@ struct ComputerscareBlankWidget : ModuleWidget {
           rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
           pngDisplay->resetZooms();
         }
-        panel->visible = blankModule->path.empty();
+        bgPanel->visible = !blankModule->hidePanel;
+        panel->visible = !blankModule->hidePanel && blankModule->path.empty();
       }
       ModuleWidget::step();
     }
