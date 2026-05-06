@@ -240,9 +240,9 @@ struct ComputerscareClockButton : ComputerscareMomentarySvgSwitch {
 
     shadow->opacity = 0.f;
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-clk-text.svg")));
+        pluginInstance, "res/components/computerscare-clk-btn-up.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-clk-text-red.svg")));
+        pluginInstance, "res/components/computerscare-clk-btn-pressed.svg")));
   }
 };
 struct ComputerscareInvisibleButton : app::SvgSwitch {
