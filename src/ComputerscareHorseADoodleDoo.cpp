@@ -404,9 +404,8 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
     configSwitch<HorseGateModeParam>(GATE_MODE, 0.f, 1.f, 1.f, "Gate Mode",
                                      {"Clock passthrough", "Variable gates"});
 
-    configParam<HorseResetParamQ>(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f,
-                                  "Reset all Sequences");
-    configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f, "Advance all Sequences");
+    configButton(MANUAL_RESET_BUTTON, "Reset all Sequences");
+    configButton(MANUAL_CLOCK_BUTTON, "Advance all Sequences");
 
     configMenuParam(CV_SCALE, -2.f, 2.f, 1.f, "CV Scale", 2);
     configMenuParam(CV_OFFSET, -10.f, 10.f, 0.f, "CV Offset", 2);

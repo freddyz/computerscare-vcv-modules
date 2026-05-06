@@ -3,11 +3,12 @@
 
 struct ComputerscareBlankExpander;
 
+const std::string clockModeNames[3] = {"Sync", "Scan", "Frame"};
+const std::string clockModeMenuLabels[3] = {"Sync", "Scan", "Frame Advance"};
 const std::string clockModeDescriptions[3] = {
-    "Sync\nAnimation will synchronize to a steady clock signal",
-    "Scan\nAnimation will linearly follow a 0-10v CV.  0v → frame 1, 10v → "
-    "last frame",
-    "Frame Advance\nClock signal will advance the animation by 1 frame"};
+    "Animation will synchronize to a steady clock signal",
+    "Animation will linearly follow a 0-10v CV",
+    "Clock signal will advance the animation by 1 frame"};
 
 struct FrameOffsetParam : ParamQuantity {
   int numFrames = -1;
@@ -19,10 +20,10 @@ struct FrameOffsetParam : ParamQuantity {
 };
 
 // template <const std::string& options>
-struct ClockModeParamQuantity : ParamQuantity {
+struct ClockModeParamQuantity : SwitchQuantity {
   std::string getDisplayValueString() override {
-    int val = getValue();
-    return clockModeDescriptions[val];
+    int val = math::clamp((int)getValue(), 0, 2);
+    return clockModeNames[val];
   }
 };
 
@@ -59,13 +60,14 @@ struct ComputerscareBlankExpander : Module {
 
   ComputerscareBlankExpander() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-    configParam<ClockModeParamQuantity>(CLOCK_MODE, 0.f, 2.f, 0.f,
-                                        "Clock Mode");
-    configParam(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f, "Manual Reset");
+    configSwitch<ClockModeParamQuantity>(
+        CLOCK_MODE, 0.f, 2.f, 0.f, "Clock Mode",
+        {clockModeNames[0], clockModeNames[1], clockModeNames[2]});
+    configButton(MANUAL_RESET_BUTTON, "Manual Reset");
     configParam<FrameOffsetParam>(ZERO_OFFSET, 0.f, 0.999f, 0.f,
                                   "EOC / Reset Frame #");
-    configParam(MANUAL_NEXT_FILE_BUTTON, 0.f, 1.f, 0.f,
-                "Next File (see right click menu of mother for options)");
+    configButton(MANUAL_NEXT_FILE_BUTTON,
+                 "Next File (see right click menu of mother for options)");
 
     configInput(SYNC_INPUT, "Sync");
     configInput(RESET_INPUT, "Reset");
@@ -157,16 +159,84 @@ struct FrameScrubKnob : SmallKnob {
     SmallKnob::onDragMove(e);
   };
 };
+struct ClockModeMenuItem : MenuItem {
+  ParamQuantity* param = nullptr;
+  int mode = 0;
+  std::string description;
+
+  void onAction(const event::Action& e) override {
+    if (param) param->setValue(mode);
+  }
+  void draw(const DrawArgs& args) override {
+    BNDwidgetState state = BND_DEFAULT;
+    if (APP->event->hoveredWidget == this) state = BND_HOVER;
+
+    const BNDtheme* theme = bndGetTheme();
+    if (state != BND_DEFAULT) {
+      bndInnerBox(args.vg, 0.0, 0.0, box.size.x, box.size.y, 0, 0, 0, 0,
+                  bndOffsetColor(theme->menuItemTheme.innerSelectedColor,
+                                 theme->menuItemTheme.shadeTop),
+                  bndOffsetColor(theme->menuItemTheme.innerSelectedColor,
+                                 theme->menuItemTheme.shadeDown));
+      state = BND_ACTIVE;
+    }
+
+    NVGcolor nameColor = bndTextColor(&theme->menuItemTheme, state);
+    NVGcolor descriptionColor = state == BND_DEFAULT
+                                    ? theme->menuTheme.textColor
+                                    : theme->menuTheme.textSelectedColor;
+
+    bndIconLabelValue(args.vg, 0.f, 3.f, box.size.x, 18.f, -1, nameColor,
+                      BND_LEFT, BND_LABEL_FONT_SIZE, text.c_str(), NULL);
+    bndIconLabelValue(args.vg, 0.f, 21.f, box.size.x, 18.f, -1,
+                      descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE - 2,
+                      description.c_str(), NULL);
+
+    if (!rightText.empty()) {
+      float x = box.size.x - bndLabelWidth(args.vg, -1, rightText.c_str());
+      bndIconLabelValue(args.vg, x, 0.f, box.size.x, box.size.y, -1,
+                        descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE,
+                        rightText.c_str(), NULL);
+    }
+  }
+  void step() override {
+    rightText = CHECKMARK(param && (int)param->getValue() == mode);
+    box.size.x =
+        std::max(bndLabelWidth(APP->window->vg, -1, text.c_str()),
+                 bndLabelWidth(APP->window->vg, -1, description.c_str())) +
+        34.f;
+    box.size.y = 42.f;
+    Widget::step();
+  }
+};
+
 struct ClockModeButton : app::SvgSwitch {
   ClockModeButton() {
     shadow->opacity = 0.f;
-    // momentary = true;
     addFrame(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/blank-clock-mode-sync.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/blank-clock-mode-scan.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/blank-clock-mode-frame.svg")));
+  }
+
+  void appendContextMenu(Menu* menu) override {
+    while (!menu->children.empty()) {
+      Widget* child = menu->children.front();
+      menu->removeChild(child);
+      delete child;
+    }
+
+    ParamQuantity* param = getParamQuantity();
+    for (int i = 0; i < 3; i++) {
+      ClockModeMenuItem* item = new ClockModeMenuItem;
+      item->text = clockModeMenuLabels[i];
+      item->description = clockModeDescriptions[i];
+      item->param = param;
+      item->mode = i;
+      menu->addChild(item);
+    }
   }
 };
 struct LogoWidget : SvgWidget {
@@ -212,9 +282,9 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
     float inStartY = 20;
     float dY = 40;
 
-    addParam(
-        createParam<ClockModeButton>(Vec(0.5, inStartY + .25 * dY), module,
-                                     ComputerscareBlankExpander::CLOCK_MODE));
+    addParam(createParam<ClockModeButton>(
+        Vec(0.5, inStartY + .25 * dY), module,
+        ComputerscareBlankExpander::CLOCK_MODE));
     addInput(createInput<InPort>(Vec(2, inStartY + 0.75 * dY), module,
                                  ComputerscareBlankExpander::SYNC_INPUT));
 
