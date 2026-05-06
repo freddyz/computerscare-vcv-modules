@@ -9,12 +9,11 @@ const int NUM_LINES = 16;
 static const char* DebugModeNames[3] = {"Single-Channel", "Internal",
                                         "Polyphonic"};
 static const char* DebugClockModeDescriptions[3] = {
-    "Use the selected clock input channel",
-    "Update continuously without a clock input",
-    "Use matching channels from the clock input"};
+    "Use one selected clock input channel", "Update continuously at audio rate",
+    "Use each matching clock input channel"};
 static const char* DebugInputModeDescriptions[3] = {
-    "Read the selected value input channel", "Generate random values",
-    "Read all value input channels"};
+    "Read one selected value input channel", "Generate random values",
+    "Read each matching value input channel"};
 static const char* DebugOutputRangeLabels[8] = {
     "  0v ... +10v", " -5v ...  +5v", "  0v ...  +5v", "  0v ...  +1v",
     " -1v ...  +1v", "-10v ... +10v", " -2v ...  +2v", "  0v ...  +2v"};
