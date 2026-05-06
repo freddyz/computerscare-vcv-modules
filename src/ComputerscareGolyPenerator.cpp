@@ -13,7 +13,7 @@ const std::string GolyPeneratorAvailableAlgorithmsArr[5] = {
     "Linear", "Sigmoid", "Hump", "Sinusoid", "Pseudo-Random"};
 
 // template <const std::string& options>
-struct GolyAlgoParamQuantity : ParamQuantity {
+struct GolyAlgoParamQuantity : SwitchQuantity {
   std::string getDisplayValueString() override {
     int val = getValue();
     return GolyPeneratorAvailableAlgorithmsArr[val];
@@ -45,7 +45,9 @@ struct ComputerscareGolyPenerator : ComputerscareMenuParamModule {
   ComputerscareGolyPenerator() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-    configParam<GolyAlgoParamQuantity>(ALGORITHM, 0.f, 4.f, 0.f, "Algorithm");
+    configSwitch<GolyAlgoParamQuantity>(
+        ALGORITHM, 0.f, 4.f, 0.f, "Algorithm",
+        {"Linear", "Sigmoid", "Hump", "Sinusoid", "Pseudo-Random"});
     configParam(IN_OFFSET, -1.f, 1.f, 0.f, "Channel Center");
 
     configParam(IN_SCALE, -2.f, 2.f, 1.f, "Channel Spread");
@@ -157,21 +159,51 @@ struct PeneratorDisplay : TransparentWidget {
         colorArg = random::uniform() * 2;
       }
       DrawHelper draw = DrawHelper(args.vg);
-      Points pts = Points();
 
       nvgTranslate(args.vg, box.size.x / 2, box.size.y / 2 + 5);
-      pts.linear(ch, Vec(0, -box.size.y / 2), Vec(0, 150));
+      const float edgeGap = 4.f;
+      const float channelGap = 1.5f;
+      const float minLength = 0.5f;
+      const float voltageScale = 10.f;
+      const float displayChannels = 16.f;
+      const float channelSpacing = 150.f / displayChannels;
+      const float baseBarThickness = channelSpacing - channelGap;
+      const float topEdge = -box.size.y / 2.f - baseBarThickness * 2.f;
+      const float bottomEdge = -box.size.y / 2.f +
+                               channelSpacing * (displayChannels - 1.f) +
+                               baseBarThickness / 2.f + 2.f;
+      const float displayHeight = bottomEdge - topEdge;
+      const float barThickness =
+          std::max(1.f, (displayHeight - channelGap * (ch - 1)) / ch);
+      const float maxLength = box.size.x / 2.f - edgeGap;
+
+      auto channelY = [&](int i) {
+        return topEdge + barThickness / 2.f + i * (barThickness + channelGap);
+      };
+      auto displayLength = [&](float value) {
+        float sign = value < 0.f ? -1.f : 1.f;
+        return sign * (minLength +
+                       (maxLength - minLength) *
+                           (1.f - std::exp(-std::fabs(value) / voltageScale)));
+      };
+
+      std::vector<Vec> pts;
       std::vector<Vec> polyVals;
       std::vector<NVGcolor> colors;
       std::vector<Vec> thicknesses;
 
-      for (int i = 0; i < 16; i++) {
-        polyVals.push_back(Vec(valsToDraw[i] * 2, 0.f));
+      for (int i = 0; i < ch; i++) {
+        pts.push_back(Vec(0.f, channelY(i)));
+        polyVals.push_back(Vec(displayLength(valsToDraw[i]), 0.f));
         colors.push_back(draw.sincolor(colorArg, {1, 1, 0}));
-
-        thicknesses.push_back(Vec(160 / (1 + ch), 0));
+        thicknesses.push_back(Vec(barThickness, 0));
       }
-      draw.drawLines(pts.get(), polyVals, colors, thicknesses);
+
+      nvgSave(args.vg);
+      nvgScissor(args.vg, -box.size.x / 2.f, topEdge - channelGap, box.size.x,
+                 displayHeight + channelGap * 2.f);
+      draw.drawLines(pts, polyVals, colors, thicknesses);
+      nvgRestore(args.vg);
     }
   }
 };
