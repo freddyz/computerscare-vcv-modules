@@ -869,7 +869,7 @@ struct HorseModeMenuItem : MenuItem {
     bndIconLabelValue(args.vg, 0.f, 3.f, box.size.x, 18.f, -1, nameColor,
                       BND_LEFT, BND_LABEL_FONT_SIZE, text.c_str(), NULL);
     bndIconLabelValue(args.vg, 0.f, 21.f, box.size.x, 18.f, -1,
-                      descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE - 2,
+                      descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE,
                       description.c_str(), NULL);
 
     if (!rightText.empty()) {
