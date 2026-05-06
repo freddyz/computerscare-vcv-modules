@@ -847,8 +847,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                                reverseY ? -1.f : 1.f);
                     }
                     NVGpaint p =
-                        nvgImagePattern(drawVg, -imgHW, -hh, imgW, mirrorH,
-                                        0.f, flowerImg, alpha);
+                        nvgImagePattern(drawVg, -imgHW, -hh, imgW, mirrorH, 0.f,
+                                        flowerImg, alpha);
                     nvgBeginPath(drawVg);
                     nvgRect(drawVg, -imgHW, -hh, imgW, mirrorH);
                     nvgFillPaint(drawVg, p);
@@ -857,8 +857,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                   }
                 }
               } else {
-                NVGpaint p = nvgImagePattern(drawVg, -imgHW, -hh, imgW,
-                                             mirrorH, 0.f, flowerImg, alpha);
+                NVGpaint p = nvgImagePattern(drawVg, -imgHW, -hh, imgW, mirrorH,
+                                             0.f, flowerImg, alpha);
                 nvgBeginPath(drawVg);
                 nvgRect(drawVg, -imgHW, -hh, imgW, mirrorH);
                 nvgFillPaint(drawVg, p);
@@ -887,8 +887,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             float classicScaleY =
                 (mirrorH > 0.f) ? ((float)classicTargetH / mirrorH) : 1.f;
             int classicImg = classicKaleidFBOs[renderSourceIndex].apply(
-                drawVg, effectTex, classicTargetW, classicTargetH,
-                kaliSegments, rotOn ? rotV : 0.f, kaliTxOff * classicScaleX,
+                drawVg, effectTex, classicTargetW, classicTargetH, kaliSegments,
+                rotOn ? rotV : 0.f, kaliTxOff * classicScaleX,
                 kaliTyOff * classicScaleY, flipInputUV);
 
             float pcx = -(txOn && !m->translateFirst ? nvgTx : 0.f);
@@ -1001,9 +1001,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           PortaloofInjectedSource layerSources[2];
           bool layersOk = true;
           for (int i = 0; i < 2; i++) {
-            NVGcontext* layerVg =
-                sourceLayerFBOs[i].begin(args.vg, mirrorW, mirrorH,
-                                         renderPixelRatio);
+            NVGcontext* layerVg = sourceLayerFBOs[i].begin(
+                args.vg, mirrorW, mirrorH, renderPixelRatio);
             if (!layerVg) {
               layersOk = false;
               break;
@@ -1017,9 +1016,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           if (layersOk) {
             int blendImg = sourceBlendFBO.apply(
                 args.vg, layerSources[0].texId, layerSources[1].texId,
-                sourceLayerFBOs[0].lastW, sourceLayerFBOs[0].lastH,
-                source2Amt, false, false,
-                portaloofBlendShaderMode(m->sourceBlendMode));
+                sourceLayerFBOs[0].lastW, sourceLayerFBOs[0].lastH, source2Amt,
+                false, false, portaloofBlendShaderMode(m->sourceBlendMode));
             if (blendImg >= 0) {
               NVGpaint p = nvgImagePattern(args.vg, displayX, 0.f, mirrorW,
                                            mirrorH, 0.f, blendImg, baseAlpha);
@@ -1039,8 +1037,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             if (!currentSource.isValid()) continue;
             float sourceMixAlpha = 1.f;
             if (hasSource1 && hasSource2) {
-              sourceMixAlpha = renderSourceIndex == 0 ? (1.f - source2Amt)
-                                                      : source2Amt;
+              sourceMixAlpha =
+                  renderSourceIndex == 0 ? (1.f - source2Amt) : source2Amt;
             }
             drawOneSource(args.vg, renderSourceIndex, currentSource,
                           baseAlpha * sourceMixAlpha, displayX);
@@ -1187,8 +1185,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                           [=](Menu* menu) { appendSourceMenu(menu, 1); }));
     menu->addChild(new MenuSeparator());
     menu->addChild(createSubmenuItem(
-        string::f("Blend mode: %s",
-                  portaloofBlendModeName(m->sourceBlendMode)),
+        string::f("Blend mode: %s", portaloofBlendModeName(m->sourceBlendMode)),
         "", [=](Menu* menu) {
           static const PortaloofBlendMode modes[] = {
               PortaloofBlendMode::CROSSFADE, PortaloofBlendMode::NORMAL,
