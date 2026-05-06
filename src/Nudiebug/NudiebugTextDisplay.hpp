@@ -55,6 +55,7 @@ struct TextDisplay : TransparentWidget {
         options && options->channelLayoutMode == CHANNEL_LAYOUT_STRETCH;
     const bool horizontal =
         options && options->displayOrientation == DISPLAY_HORIZONTAL;
+    const bool clearPlotPerFrame = options && options->clearPlotPerFrame;
     const float top = 2.f;
     const float bottom = 2.f;
     const float labelReserve = labelsEnabled ? 18.f : 0.f;
@@ -77,13 +78,17 @@ struct TextDisplay : TransparentWidget {
         (box.size.y - top - bottom) / std::max(1, verticalSlots);
 
     if (drawPlot) {
-      if (!args.fb) {
+      if (clearPlotPerFrame) {
+        plotDisplay.destroyFramebuffer();
+        plotDisplay.dotsRenderer.draw(args.vg, *snapshot, box.size.x,
+                                      box.size.y);
+      } else if (!args.fb) {
         plotDisplay.render(
             args.vg, *snapshot, *options,
             std::max(1, static_cast<int>(std::ceil(box.size.x))),
             std::max(1, static_cast<int>(std::ceil(box.size.y))));
+        plotDisplay.draw(args.vg, box.size.x, box.size.y);
       }
-      plotDisplay.draw(args.vg, box.size.x, box.size.y);
     }
 
     if (horizontal) {

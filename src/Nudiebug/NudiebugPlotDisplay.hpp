@@ -9,6 +9,8 @@
 namespace nudiebug {
 
 struct PlotDisplay {
+  static constexpr float kFramebufferSupersample = 2.f;
+
   NVGLUframebuffer* framebuffer = nullptr;
   int lastPixelWidth = 0;
   int lastPixelHeight = 0;
@@ -27,11 +29,15 @@ struct PlotDisplay {
 
   float pixelRatio() const {
     if (!APP || !APP->window) return 1.f;
-    return std::max(1.f, std::floor(APP->window->pixelRatio));
+    return std::max(1.f, APP->window->pixelRatio);
+  }
+
+  float framebufferPixelRatio() const {
+    return pixelRatio() * kFramebufferSupersample;
   }
 
   void resizeIfNeeded(NVGcontext* vg, float width, float height) {
-    const float ratio = pixelRatio();
+    const float ratio = framebufferPixelRatio();
     const int pixelWidth =
         std::max(1, static_cast<int>(std::ceil(width * ratio)));
     const int pixelHeight =
@@ -71,7 +77,7 @@ struct PlotDisplay {
     if (!framebuffer) return;
 
     NVGcontext* fbVg = APP->window->fbVg;
-    const float ratio = pixelRatio();
+    const float ratio = framebufferPixelRatio();
 
     GLint previousFbo = 0;
     GLint previousViewport[4] = {};
@@ -79,18 +85,19 @@ struct PlotDisplay {
     glGetIntegerv(GL_VIEWPORT, previousViewport);
 
     nvgluBindFramebuffer(framebuffer);
-    nvgBeginFrame(fbVg, width, height, ratio);
-
-    if (options.plotMode == PLOT_DOTS) {
-      dotsRenderer.draw(fbVg, snapshot, width, height);
-    }
-
     glViewport(0, 0, lastPixelWidth, lastPixelHeight);
     if (options.clearPlotPerFrame) {
       glClearColor(0.f, 0.f, 0.f, 0.f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT |
               GL_STENCIL_BUFFER_BIT);
     }
+
+    nvgBeginFrame(fbVg, width, height, ratio);
+
+    if (options.plotMode == PLOT_DOTS) {
+      dotsRenderer.draw(fbVg, snapshot, width, height);
+    }
+
     nvgEndFrame(fbVg);
     nvgReset(fbVg);
 
