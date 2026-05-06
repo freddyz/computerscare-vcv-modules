@@ -148,8 +148,8 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
 
   void setOutputChannels(int outIndex, int outMode, int compolyChannels) {
     cpx::compoly::PortChannelCounts counts =
-        cpx::compoly::outputPortChannelCounts(
-            coordinateModeFromParam(outMode), compolyChannels);
+        cpx::compoly::outputPortChannelCounts(coordinateModeFromParam(outMode),
+                                              compolyChannels);
     outputs[outIndex + 0].setChannels(counts.a);
     outputs[outIndex + 1].setChannels(counts.b);
   }
@@ -182,8 +182,8 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
           std::max(maxOfInputsCompolyphony, inputCompolyphonyChannels[i][0]);
     }
 
-    outputCompolyphony = cpx::compoly::outputCompolyLanes(
-        knobSetting, maxOfInputsCompolyphony);
+    outputCompolyphony =
+        cpx::compoly::outputCompolyLanes(knobSetting, maxOfInputsCompolyphony);
 
     return outputCompolyphony;
   }
@@ -319,10 +319,9 @@ Otherwise use the poly channels
     b = inputs[firstPortID + 1].getVoltage(secondPortIndex);
   }
 
-  void getCoordinatePairFromInterleavedInput(int outputIndex, int firstPortID,
-                                             int wrapMode,
-                                             std::vector<int>& inputCompolyphony,
-                                             float& a, float& b) {
+  void getCoordinatePairFromInterleavedInput(
+      int outputIndex, int firstPortID, int wrapMode,
+      std::vector<int>& inputCompolyphony, float& a, float& b) {
     int portIndex = outputIndex >= 8 ? firstPortID + 1 : firstPortID;
     int relativeOutputChannelIndex = outputIndex % 8;
     int firstChannelIndex = 0;
@@ -425,8 +424,9 @@ Otherwise use the poly channels
     return true;
   }
 
-  void routeComplexPairSameFamily(int inputFirstPortIndex, int outputFirstPortId,
-                                  int inputMode, int outputMode, int wrapMode,
+  void routeComplexPairSameFamily(int inputFirstPortIndex,
+                                  int outputFirstPortId, int inputMode,
+                                  int outputMode, int wrapMode,
                                   int compolyChannels,
                                   std::vector<int>& inputCompolyphony) {
     for (int c = 0; c < compolyChannels; c++) {
@@ -438,8 +438,9 @@ Otherwise use the poly channels
     }
   }
 
-  void routeComplexPairSameFamily(int inputFirstPortIndex, int outputFirstPortId,
-                                  int inputMode, int outputMode, int wrapMode,
+  void routeComplexPairSameFamily(int inputFirstPortIndex,
+                                  int outputFirstPortId, int inputMode,
+                                  int outputMode, int wrapMode,
                                   int compolyChannels,
                                   const CompolyInputInfo& inputInfo) {
     if (routeComplexPairExactLayout(inputFirstPortIndex, outputFirstPortId,

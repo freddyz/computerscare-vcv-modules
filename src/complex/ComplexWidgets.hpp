@@ -804,8 +804,8 @@ struct ComplexDisplayWidget : Widget {
     if (!font) {
       return;
     }
-    auto symbolFont = APP->window->loadFont(asset::plugin(
-        pluginInstance, "res/fonts/LibertinusSerif-Italic.ttf"));
+    auto symbolFont = APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/LibertinusSerif-Italic.ttf"));
 
     float vx = module->params[paramX].getValue();
     float vy = module->params[paramY].getValue();

@@ -51,8 +51,7 @@ inline std::string fixedWidthRectString(float x, float y, int decimals = 2,
   int d = decimals < 0 ? 2 : decimals;
   std::ostringstream ss;
   ss << std::fixed << std::setprecision(d) << std::setw(realWidth) << x << " "
-     << ((y < 0.f) ? "-" : "+") << std::setw(imagWidth) << std::fabs(y)
-     << "i";
+     << ((y < 0.f) ? "-" : "+") << std::setw(imagWidth) << std::fabs(y) << "i";
   return ss.str();
 }
 

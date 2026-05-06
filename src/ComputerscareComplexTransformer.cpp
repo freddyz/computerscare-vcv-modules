@@ -120,7 +120,7 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
         getInputCompolyphony({Z_INPUT_MODE}, {Z_INPUT});
 
     //	std::vector<std::vector <int>> inputCompolyphony =
-    //getInputCompolyphony({Z_INPUT_MODE,W_INPUT_MODE,A_INPUT_MODE},{Z_INPUT,W_INPUT,A_INPUT});
+    // getInputCompolyphony({Z_INPUT_MODE,W_INPUT_MODE,A_INPUT_MODE},{Z_INPUT,W_INPUT,A_INPUT});
 
     compolyChannelsMainOutput =
         calcOutputCompolyphony(compolyphonyKnobSetting, inputCompolyphony);

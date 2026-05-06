@@ -41,16 +41,17 @@ struct CoordinatePairTransform {
 
 inline int compolyLanesForInput(cpx::complex_math::CoordinateMode mode,
                                 int portAChannels, int portBChannels) {
-  SeparatedCablePolyChannels cables =
-      SeparatedCablePolyChannels(CablePolyChannels(portAChannels),
-                                 CablePolyChannels(portBChannels));
+  SeparatedCablePolyChannels cables = SeparatedCablePolyChannels(
+      CablePolyChannels(portAChannels), CablePolyChannels(portBChannels));
   if (cpx::complex_math::isInterleaved(mode))
     return compolyLanesForInterleavedCables(cables);
   return compolyLanesForSeparatedCables(cables);
 }
 
-inline std::array<int, 2> separatedInputChannelIndices(
-    int outputIndex, WrapMode wrapMode, int portAChannels, int portBChannels) {
+inline std::array<int, 2> separatedInputChannelIndices(int outputIndex,
+                                                       WrapMode wrapMode,
+                                                       int portAChannels,
+                                                       int portBChannels) {
   SeparatedCableChannels channels = separatedCableChannelsForCompolyLane(
       CompolyLane(outputIndex), wrapMode,
       SeparatedCablePolyChannels(CablePolyChannels(portAChannels),
@@ -81,12 +82,11 @@ inline cpx::complex_math::RectChannels readRectFromPorts(
     } else if (mode == cpx::complex_math::CoordinateMode::RectInterleaved) {
       rect.x[c] = c < 8 ? ports.a[2 * c]
                         : ports.b[(2 * c) % cpx::complex_math::maxChannels];
-      rect.y[c] =
-          c < 8 ? ports.a[2 * c + 1]
-                : ports.b[(2 * c + 1) % cpx::complex_math::maxChannels];
+      rect.y[c] = c < 8 ? ports.a[2 * c + 1]
+                        : ports.b[(2 * c + 1) % cpx::complex_math::maxChannels];
     } else if (mode == cpx::complex_math::CoordinateMode::PolarSeparated) {
-      cpx::complex_math::Rect z = cpx::complex_math::polarToRect(
-          cpx::complex_math::Polar(
+      cpx::complex_math::Rect z =
+          cpx::complex_math::polarToRect(cpx::complex_math::Polar(
               ports.a[c],
               cpx::complex_math::thetaCableVoltageToRadians(ports.b[c])));
       rect.x[c] = z.x;
@@ -94,11 +94,11 @@ inline cpx::complex_math::RectChannels readRectFromPorts(
     } else if (mode == cpx::complex_math::CoordinateMode::PolarInterleaved) {
       float r = c < 8 ? ports.a[2 * c]
                       : ports.b[(2 * c) % cpx::complex_math::maxChannels];
-      float theta =
-          c < 8 ? ports.a[2 * c + 1]
-                : ports.b[(2 * c + 1) % cpx::complex_math::maxChannels];
-      cpx::complex_math::Rect z = cpx::complex_math::polarToRect(
-          cpx::complex_math::Polar(
+      float theta = c < 8
+                        ? ports.a[2 * c + 1]
+                        : ports.b[(2 * c + 1) % cpx::complex_math::maxChannels];
+      cpx::complex_math::Rect z =
+          cpx::complex_math::polarToRect(cpx::complex_math::Polar(
               r, cpx::complex_math::thetaCableVoltageToRadians(theta)));
       rect.x[c] = z.x;
       rect.y[c] = z.y;
@@ -147,9 +147,8 @@ inline PortChannels writePortsFromRect(
   PortChannels ports = {};
 
   for (int c = 0; c < cpx::complex_math::maxChannels; ++c) {
-    cpx::complex_math::Quad z =
-        cpx::complex_math::quadFromRect(cpx::complex_math::Rect(rect.x[c],
-                                                                rect.y[c]));
+    cpx::complex_math::Quad z = cpx::complex_math::quadFromRect(
+        cpx::complex_math::Rect(rect.x[c], rect.y[c]));
     float a = cpx::complex_math::isPolar(mode) ? z.r : z.x;
     float b = cpx::complex_math::isPolar(mode)
                   ? cpx::complex_math::thetaRadiansToCableVoltage(z.theta)

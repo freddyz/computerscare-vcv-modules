@@ -1,8 +1,8 @@
 #include <array>
 
 #include "Computerscare.hpp"
-#include "complex/CompolyPortMapping.hpp"
 #include "complex/ComplexWidgets.hpp"
+#include "complex/CompolyPortMapping.hpp"
 #include "complex/math/ComplexMath.hpp"
 
 const std::vector<std::string>& wrapModeDescriptions =
@@ -225,8 +225,8 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase {
             cpx::compoly::PortChannelCounts(firstChannels, secondChannels),
             cpx::complex_math::CoordinateMode::RectSeparated,
             static_cast<cpx::compoly::WrapMode>(wrapMode), compolyChannels,
-            cpx::compoly::CoordinatePairTransform(
-                firstTrim, firstOffset, secondTrim, secondOffset));
+            cpx::compoly::CoordinatePairTransform(firstTrim, firstOffset,
+                                                  secondTrim, secondOffset));
 
     for (int c = 0; c < cpx::complex_math::maxChannels; c++) {
       x[c] = rect.x[c];
