@@ -1495,7 +1495,8 @@ struct ComputerscareBlankWidget : ModuleWidget {
           pngDisplay->resetZooms();
         }
         bgPanel->visible = !blankModule->hidePanel;
-        panel->visible = !blankModule->hidePanel && !blankModule->hasImagePath();
+        panel->visible =
+            !blankModule->hidePanel && !blankModule->hasImagePath();
       }
       ModuleWidget::step();
     }

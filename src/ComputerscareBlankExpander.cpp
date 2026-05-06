@@ -282,9 +282,9 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
     float inStartY = 20;
     float dY = 40;
 
-    addParam(createParam<ClockModeButton>(
-        Vec(0.5, inStartY + .25 * dY), module,
-        ComputerscareBlankExpander::CLOCK_MODE));
+    addParam(
+        createParam<ClockModeButton>(Vec(0.5, inStartY + .25 * dY), module,
+                                     ComputerscareBlankExpander::CLOCK_MODE));
     addInput(createInput<InPort>(Vec(2, inStartY + 0.75 * dY), module,
                                  ComputerscareBlankExpander::SYNC_INPUT));
 
