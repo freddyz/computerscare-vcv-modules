@@ -6,6 +6,19 @@
 
 const int NUM_LINES = 16;
 
+static const char* DebugModeNames[3] = {"Single-Channel", "Internal",
+                                        "Polyphonic"};
+static const char* DebugClockModeDescriptions[3] = {
+    "Use the selected clock input channel",
+    "Update continuously without a clock input",
+    "Use matching channels from the clock input"};
+static const char* DebugInputModeDescriptions[3] = {
+    "Read the selected value input channel", "Generate random values",
+    "Read all value input channels"};
+static const char* DebugOutputRangeLabels[8] = {
+    "  0v ... +10v", " -5v ...  +5v", "  0v ...  +5v", "  0v ...  +1v",
+    " -1v ...  +1v", "-10v ... +10v", " -2v ...  +2v", "  0v ...  +2v"};
+
 struct ComputerscareDebug;
 
 std::string noModuleStringValue =
@@ -21,6 +34,7 @@ struct ComputerscareDebug : Module {
     INPUT_CHANNEL_FOCUS,
     SWITCH_VIEW,
     WHICH_CLOCK,
+    TRIGGER_BLINKERS,
     NUM_PARAMS
   };
   enum InputIds { VAL_INPUT, TRG_INPUT, CLR_INPUT, NUM_INPUTS };
@@ -49,6 +63,7 @@ struct ComputerscareDebug : Module {
   int outputRangeEnum = 0;
 
   float outputRanges[8][2];
+  float clockLabelPulses[NUM_LINES] = {};
 
   int stepCounter;
   dsp::SchmittTrigger clockTriggers[NUM_LINES];
@@ -66,6 +81,8 @@ struct ComputerscareDebug : Module {
                  {"Single-Channel", "Internal", "Polyphonic"});
     configSwitch(WHICH_CLOCK, 0.0f, 2.0f, 1.0f, "Clock Mode",
                  {"Single-Channel", "Internal", "Polyphonic"});
+    configSwitch(TRIGGER_BLINKERS, 0.0f, 1.0f, 1.0f, "Clock Blinkers",
+                 {"Off", "On"});
     configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
     configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 
@@ -95,6 +112,7 @@ struct ComputerscareDebug : Module {
 
     getParamQuantity(SWITCH_VIEW)->randomizeEnabled = false;
     getParamQuantity(WHICH_CLOCK)->randomizeEnabled = false;
+    getParamQuantity(TRIGGER_BLINKERS)->randomizeEnabled = false;
     getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
     getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
 
@@ -113,10 +131,18 @@ struct ComputerscareDebug : Module {
     }
   }
 
+  void setClockLabelGate(int channel, bool high) {
+    if (channel >= 0 && channel < NUM_LINES) {
+      clockLabelPulses[channel] = high ? 1.f : clockLabelPulses[channel];
+    }
+  }
+
   json_t* dataToJson() override {
     json_t* rootJ = json_object();
 
     json_object_set_new(rootJ, "outputRange", json_integer(outputRangeEnum));
+    json_object_set_new(rootJ, "triggerBlinkers",
+                        json_boolean(params[TRIGGER_BLINKERS].getValue() > 0.5f));
 
     json_t* sequencesJ = json_array();
 
@@ -135,6 +161,11 @@ struct ComputerscareDebug : Module {
     if (outputRangeEnumJ) {
       outputRangeEnum = json_integer_value(outputRangeEnumJ);
     }
+
+    json_t* triggerBlinkersJ = json_object_get(rootJ, "triggerBlinkers");
+    params[TRIGGER_BLINKERS].setValue(
+        triggerBlinkersJ ? (json_boolean_value(triggerBlinkersJ) ? 1.f : 0.f)
+                         : 0.f);
 
     json_t* sequencesJ = json_object_get(rootJ, "lines");
 
@@ -204,11 +235,24 @@ void ComputerscareDebug::process(const ProcessArgs& args) {
   float min = outputRanges[outputRangeEnum][0];
   float max = outputRanges[outputRangeEnum][1];
   float spread = max - min;
+  bool manualClock = manualClockTrigger.process(params[MANUAL_TRIGGER].getValue());
+  bool triggerBlinkers = params[TRIGGER_BLINKERS].getValue() > 0.5f;
+
+  for (int i = 0; i < NUM_LINES; i++) {
+    if (triggerBlinkers) {
+      setClockLabelGate(i, inputs[TRG_INPUT].getVoltage(i) >= 1.f);
+      clockLabelPulses[i] *= std::max(0.f, 1.f - args.sampleTime * 5.f);
+    }
+    if (!triggerBlinkers || clockLabelPulses[i] < 0.001f) {
+      clockLabelPulses[i] = 0.f;
+    }
+  }
 
   if (clockMode == SINGLE_MODE) {
-    if (clockTriggers[clockChannel].process(
-            inputs[TRG_INPUT].getVoltage(clockChannel) / 2.f) ||
-        manualClockTrigger.process(params[MANUAL_TRIGGER].getValue())) {
+    float clockVoltage = inputs[TRG_INPUT].getVoltage(clockChannel);
+    bool clocked =
+        clockTriggers[clockChannel].process(clockVoltage / 2.f) || manualClock;
+    if (clocked) {
       if (inputMode == POLY_MODE) {
         for (int i = 0; i < 16; i++) {
           logLines[i] = inputs[VAL_INPUT].getVoltage(i);
@@ -243,22 +287,28 @@ void ComputerscareDebug::process(const ProcessArgs& args) {
   } else if (clockMode == POLY_MODE) {
     if (inputMode == POLY_MODE) {
       for (int i = 0; i < 16; i++) {
-        if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) ||
-            manualClockTrigger.process(params[MANUAL_TRIGGER].getValue())) {
+        float clockVoltage = inputs[TRG_INPUT].getVoltage(i);
+        bool clocked =
+            clockTriggers[i].process(clockVoltage / 2.f) || manualClock;
+        if (clocked) {
           logLines[i] = inputs[VAL_INPUT].getVoltage(i);
         }
       }
     } else if (inputMode == SINGLE_MODE) {
       for (int i = 0; i < 16; i++) {
-        if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) ||
-            manualClockTrigger.process(params[MANUAL_TRIGGER].getValue())) {
+        float clockVoltage = inputs[TRG_INPUT].getVoltage(i);
+        bool clocked =
+            clockTriggers[i].process(clockVoltage / 2.f) || manualClock;
+        if (clocked) {
           logLines[i] = inputs[VAL_INPUT].getVoltage(inputChannel);
         }
       }
     } else if (inputMode == INTERNAL_MODE) {
       for (int i = 0; i < 16; i++) {
-        if (clockTriggers[i].process(inputs[TRG_INPUT].getVoltage(i) / 2.f) ||
-            manualClockTrigger.process(params[MANUAL_TRIGGER].getValue())) {
+        float clockVoltage = inputs[TRG_INPUT].getVoltage(i);
+        bool clocked =
+            clockTriggers[i].process(clockVoltage / 2.f) || manualClock;
+        if (clocked) {
           logLines[i] = min + spread * random::uniform();
         }
       }
@@ -298,6 +348,15 @@ void ComputerscareDebug::process(const ProcessArgs& args) {
     strValue = thisVal;
   }
 }
+
+struct DebugModeSwitch : ThreeVerticalXSwitch {
+  DebugModeSwitch() {
+    sw->box.pos = Vec(2, 0);
+    fb->box.pos = sw->box.pos;
+    box.size = Vec(36, 22);
+  }
+};
+
 struct HidableSmallSnapKnob : SmallSnapKnob {
   bool visible = true;
   int hackIndex = 0;
@@ -360,6 +419,8 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
     value = std::to_string(dex + 1);
   }
   void draw(const DrawArgs& ctx) override {
+    baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
+    bool hasSelectionColor = false;
     if (module) {
       int cm = module->clockMode;
       int im = module->inputMode;
@@ -369,15 +430,31 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
       // both:pink
       // clock: green
       // input:yellow
-      baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
       if (cm == 0 && im == 0 && cc == index && ic == index) {
         baseColor = COLOR_COMPUTERSCARE_PINK;
+        hasSelectionColor = true;
       } else {
         if (cm == 0 && cc == index) {
           baseColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
+          hasSelectionColor = true;
         }
         if (im == 0 && ic == index) {
           baseColor = COLOR_COMPUTERSCARE_YELLOW;
+          hasSelectionColor = true;
+        }
+      }
+
+      float clockPulse = module->clockLabelPulses[index];
+      if (clockPulse > 0.f) {
+        if (hasSelectionColor) {
+          float mix = 0.70f * clockPulse;
+          baseColor.r += (0.58f - baseColor.r) * mix;
+          baseColor.g += (0.74f - baseColor.g) * mix;
+          baseColor.b += (0.68f - baseColor.b) * mix;
+          baseColor.a = std::max(baseColor.a, 0.95f);
+        } else {
+          baseColor =
+              nvgRGBA(0x6f, 0x8d, 0x83, (unsigned char)(clockPulse * 0xf2));
         }
       }
     }
@@ -390,23 +467,23 @@ struct ComputerscareDebugWidget : ModuleWidget {
     setPanel(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/panels/ComputerscareDebugPanel.svg")));
 
-    addInput(createInput<InPort>(Vec(2, 335), module,
+    addInput(createInput<InPort>(Vec(2, 339), module,
                                  ComputerscareDebug::TRG_INPUT));
-    addInput(createInput<InPort>(Vec(61, 335), module,
+    addInput(createInput<InPort>(Vec(61, 339), module,
                                  ComputerscareDebug::VAL_INPUT));
-    addInput(createInput<InPort>(Vec(31, 335), module,
+    addInput(createInput<InPort>(Vec(31, 339), module,
                                  ComputerscareDebug::CLR_INPUT));
 
     addParam(createParam<ComputerscareClockButton>(
-        Vec(2, 321), module, ComputerscareDebug::MANUAL_TRIGGER));
+        Vec(2, 325), module, ComputerscareDebug::MANUAL_TRIGGER));
 
     addParam(createParam<ComputerscareResetButton>(
-        Vec(32, 320), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
+        Vec(32, 324), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
 
-    addParam(createParam<ThreeVerticalXSwitch>(
-        Vec(2, 279), module, ComputerscareDebug::WHICH_CLOCK));
-    addParam(createParam<ThreeVerticalXSwitch>(
-        Vec(66, 279), module, ComputerscareDebug::SWITCH_VIEW));
+    addParam(createParam<DebugModeSwitch>(
+        Vec(0, 279), module, ComputerscareDebug::WHICH_CLOCK));
+    addParam(createParam<DebugModeSwitch>(
+        Vec(58, 279), module, ComputerscareDebug::SWITCH_VIEW));
 
     HidableSmallSnapKnob* clockKnob = createParam<HidableSmallSnapKnob>(
         Vec(6, 305), module, ComputerscareDebug::CLOCK_CHANNEL_FOCUS);
@@ -487,46 +564,136 @@ struct DebugOutputRangeItem : MenuItem {
   int outputRangeEnum;
   void onAction(const event::Action& e) override {
     debug->outputRangeEnum = outputRangeEnum;
-    printf("outputRangeEnum %i\n", outputRangeEnum);
   }
   void step() override {
     rightText = CHECKMARK(debug->outputRangeEnum == outputRangeEnum);
     MenuItem::step();
   }
 };
+
+struct DebugTriggerBlinkersItem : MenuItem {
+  ComputerscareDebug* debug;
+
+  void onAction(const event::Action& e) override {
+    Param& param = debug->params[ComputerscareDebug::TRIGGER_BLINKERS];
+    param.setValue(param.getValue() > 0.5f ? 0.f : 1.f);
+  }
+
+  void step() override {
+    rightText = CHECKMARK(
+        debug->params[ComputerscareDebug::TRIGGER_BLINKERS].getValue() > 0.5f);
+    MenuItem::step();
+  }
+};
+
+struct DebugModeMenuItem : MenuItem {
+  ComputerscareDebug* debug;
+  int paramId;
+  int value;
+  std::string description;
+
+  DebugModeMenuItem(int value, const char* description) {
+    this->value = value;
+    text = DebugModeNames[value];
+    this->description = description;
+    box.size.y = 42.f;
+  }
+
+  void onAction(const event::Action& e) override {
+    debug->params[paramId].setValue(value);
+  }
+
+  void draw(const DrawArgs& args) override {
+    BNDwidgetState state = BND_DEFAULT;
+    if (APP->event->hoveredWidget == this) state = BND_HOVER;
+
+    const BNDtheme* theme = bndGetTheme();
+    if (state != BND_DEFAULT) {
+      bndInnerBox(args.vg, 0.0, 0.0, box.size.x, box.size.y, 0, 0, 0, 0,
+                  bndOffsetColor(theme->menuItemTheme.innerSelectedColor,
+                                 theme->menuItemTheme.shadeTop),
+                  bndOffsetColor(theme->menuItemTheme.innerSelectedColor,
+                                 theme->menuItemTheme.shadeDown));
+      state = BND_ACTIVE;
+    }
+
+    NVGcolor nameColor = bndTextColor(&theme->menuItemTheme, state);
+    NVGcolor descriptionColor = state == BND_DEFAULT
+                                    ? theme->menuTheme.textColor
+                                    : theme->menuTheme.textSelectedColor;
+
+    bndIconLabelValue(args.vg, 0.f, 3.f, box.size.x, 18.f, -1, nameColor,
+                      BND_LEFT, BND_LABEL_FONT_SIZE, text.c_str(), NULL);
+    bndIconLabelValue(args.vg, 0.f, 21.f, box.size.x, 18.f, -1,
+                      descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE,
+                      description.c_str(), NULL);
+
+    if (!rightText.empty()) {
+      float x = box.size.x - bndLabelWidth(args.vg, -1, rightText.c_str());
+      bndIconLabelValue(args.vg, x, 0.f, box.size.x, box.size.y, -1,
+                        descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE,
+                        rightText.c_str(), NULL);
+    }
+  }
+
+  void step() override {
+    rightText = CHECKMARK(debug->params[paramId].getValue() == value);
+    box.size.x =
+        std::max(bndLabelWidth(APP->window->vg, -1, text.c_str()),
+                 bndLabelWidth(APP->window->vg, -1, description.c_str())) +
+        34.f;
+    box.size.y = 42.f;
+    Widget::step();
+  }
+};
+
 void ComputerscareDebugWidget::appendContextMenu(Menu* menu) {
   ComputerscareDebug* debug = dynamic_cast<ComputerscareDebug*>(this->module);
+  if (!debug) return;
 
   MenuLabel* spacerLabel = new MenuLabel();
   menu->addChild(spacerLabel);
 
-  menu->addChild(construct<MenuLabel>());
-  menu->addChild(construct<MenuLabel>(&MenuLabel::text,
-                                      "Random Generator Range (Internal In)"));
-  menu->addChild(construct<DebugOutputRangeItem>(
-      &MenuItem::text, "  0v ... +10v", &DebugOutputRangeItem::debug, debug,
-      &DebugOutputRangeItem::outputRangeEnum, 0));
-  menu->addChild(construct<DebugOutputRangeItem>(
-      &MenuItem::text, " -5v ...  +5v", &DebugOutputRangeItem::debug, debug,
-      &DebugOutputRangeItem::outputRangeEnum, 1));
-  menu->addChild(construct<DebugOutputRangeItem>(
-      &MenuItem::text, "  0v ...  +5v", &DebugOutputRangeItem::debug, debug,
-      &DebugOutputRangeItem::outputRangeEnum, 2));
-  menu->addChild(construct<DebugOutputRangeItem>(
-      &MenuItem::text, "  0v ...  +1v", &DebugOutputRangeItem::debug, debug,
-      &DebugOutputRangeItem::outputRangeEnum, 3));
-  menu->addChild(construct<DebugOutputRangeItem>(
-      &MenuItem::text, " -1v ...  +1v", &DebugOutputRangeItem::debug, debug,
-      &DebugOutputRangeItem::outputRangeEnum, 4));
-  menu->addChild(construct<DebugOutputRangeItem>(
-      &MenuItem::text, "-10v ... +10v", &DebugOutputRangeItem::debug, debug,
-      &DebugOutputRangeItem::outputRangeEnum, 5));
-  menu->addChild(construct<DebugOutputRangeItem>(
-      &MenuItem::text, " -2v ...  +2v", &DebugOutputRangeItem::debug, debug,
-      &DebugOutputRangeItem::outputRangeEnum, 6));
-  menu->addChild(construct<DebugOutputRangeItem>(
-      &MenuItem::text, "  0v ...  +2v", &DebugOutputRangeItem::debug, debug,
-      &DebugOutputRangeItem::outputRangeEnum, 7));
+  menu->addChild(construct<DebugTriggerBlinkersItem>(
+      &MenuItem::text, "Show Clock Blinkers",
+      &DebugTriggerBlinkersItem::debug, debug));
+
+  menu->addChild(createSubmenuItem(
+      "Clock Mode",
+      DebugModeNames[(int)debug->params[ComputerscareDebug::WHICH_CLOCK]
+                         .getValue()],
+      [=](Menu* submenu) {
+        for (int i = 0; i < 3; i++) {
+          DebugModeMenuItem* item =
+              new DebugModeMenuItem(i, DebugClockModeDescriptions[i]);
+          item->debug = debug;
+          item->paramId = ComputerscareDebug::WHICH_CLOCK;
+          submenu->addChild(item);
+        }
+      }));
+  menu->addChild(createSubmenuItem(
+      "Input Mode",
+      DebugModeNames[(int)debug->params[ComputerscareDebug::SWITCH_VIEW]
+                         .getValue()],
+      [=](Menu* submenu) {
+        for (int i = 0; i < 3; i++) {
+          DebugModeMenuItem* item =
+              new DebugModeMenuItem(i, DebugInputModeDescriptions[i]);
+          item->debug = debug;
+          item->paramId = ComputerscareDebug::SWITCH_VIEW;
+          submenu->addChild(item);
+        }
+      }));
+  menu->addChild(createSubmenuItem(
+      "Random Generator Range", DebugOutputRangeLabels[debug->outputRangeEnum],
+      [=](Menu* submenu) {
+        for (int i = 0; i < 8; i++) {
+          submenu->addChild(construct<DebugOutputRangeItem>(
+              &MenuItem::text, DebugOutputRangeLabels[i],
+              &DebugOutputRangeItem::debug, debug,
+              &DebugOutputRangeItem::outputRangeEnum, i));
+        }
+      }));
 }
 Model* modelComputerscareDebug =
     createModel<ComputerscareDebug, ComputerscareDebugWidget>(

@@ -54,8 +54,8 @@ struct ComputerscareTolyPoolsV2 : Module {
 
     configParam(ROTATE_KNOB, -16.f, 16.f, 0.f, "Rotation Offset", " channels");
 
-    configParam<AutoParamQuantity>(NUM_CHANNELS_KNOB, 0.f, 16.f, 0.f,
-                                   "Number of Output Channels Offset");
+    configSwitch(NUM_CHANNELS_KNOB, 0.f, 16.f, 0.f,
+                 "Number of Output Channels Offset", polyChannelLabels(true));
 
     configInput(POLY_INPUT, "Main");
     configInput(ROTATE_CV, "Rotation CV");

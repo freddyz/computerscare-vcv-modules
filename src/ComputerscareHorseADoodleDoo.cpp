@@ -7,6 +7,13 @@
 
 struct ComputerscareHorseADoodleDoo;
 
+const std::string HorseModeNames[4] = {"Independent", "Ch. 1 Trigger",
+                                       "Trigger Cascade", "EOC Cascade"};
+const std::string HorseModeDescriptions[4] = {
+    "Each channel outputs independent pulse & CV sequence",
+    "All channels are triggered by channel 1",
+    "Each channel is triggered by the previous channel's trigger sequence",
+    "Each channel is triggered by the previous channel's EOC"};
 const std::string HorseAvailableModes[4] = {
     "Each channel outputs independent pulse & CV sequence",
     "All channels triggered by Ch. 1 sequence",
@@ -16,14 +23,14 @@ const std::string HorseAvailableModes[4] = {
 const std::string HorseAvailableGateModes[2] = {
     "Pass through the clock signal for each gate", "Variable gates"};
 
-struct HorseModeParam : ParamQuantity {
+struct HorseModeParam : SwitchQuantity {
   std::string getDisplayValueString() override {
     int val = getValue();
-    return HorseAvailableModes[val];
+    return HorseModeNames[val];
   }
 };
 
-struct HorseGateModeParam : ParamQuantity {
+struct HorseGateModeParam : SwitchQuantity {
   std::string getDisplayValueString() override {
     int val = getValue();
     return HorseAvailableGateModes[val];
@@ -387,15 +394,18 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
     configParam<HorseDensitySpreadParam>(DENSITY_SPREAD, -1.f, 1.f, 0.f,
                                          "Density Spread", "", 0, 100);
 
-    configParam<AutoParamQuantity>(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
+    configSwitch(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony",
+                 polyChannelLabels(true));
 
-    configParam<HorseModeParam>(MODE_KNOB, 0.f, 3.f, 0.f, "Mode");
+    configSwitch<HorseModeParam>(MODE_KNOB, 0.f, 3.f, 0.f, "Mode",
+                                 {HorseModeNames[0], HorseModeNames[1],
+                                  HorseModeNames[2], HorseModeNames[3]});
 
-    configParam<HorseModeParam>(GATE_MODE, 0.f, 1.f, 1.f, "Gate Mode");
+    configSwitch<HorseGateModeParam>(GATE_MODE, 0.f, 1.f, 1.f, "Gate Mode",
+                                     {"Clock passthrough", "Variable gates"});
 
-    configParam<HorseResetParamQ>(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f,
-                                  "Reset all Sequences");
-    configParam(MANUAL_CLOCK_BUTTON, 0.f, 1.f, 0.f, "Advance all Sequences");
+    configButton(MANUAL_RESET_BUTTON, "Reset all Sequences");
+    configButton(MANUAL_CLOCK_BUTTON, "Advance all Sequences");
 
     configMenuParam(CV_SCALE, -2.f, 2.f, 1.f, "CV Scale", 2);
     configMenuParam(CV_OFFSET, -10.f, 10.f, 0.f, "CV Offset", 2);
@@ -822,6 +832,101 @@ struct setModeItem : MenuItem {
     MenuItem::step();
   }
 };
+
+struct HorseModeMenuItem : MenuItem {
+  ComputerscareHorseADoodleDoo* horse;
+  int mySetVal;
+  std::string description;
+
+  HorseModeMenuItem(int setVal) {
+    mySetVal = setVal;
+    text = HorseModeNames[setVal];
+    description = HorseModeDescriptions[setVal];
+    box.size.y = 42.f;
+  }
+
+  void onAction(const event::Action& e) override { horse->setMode(mySetVal); }
+
+  void draw(const DrawArgs& args) override {
+    BNDwidgetState state = BND_DEFAULT;
+    if (APP->event->hoveredWidget == this) state = BND_HOVER;
+
+    const BNDtheme* theme = bndGetTheme();
+    if (state != BND_DEFAULT) {
+      bndInnerBox(args.vg, 0.0, 0.0, box.size.x, box.size.y, 0, 0, 0, 0,
+                  bndOffsetColor(theme->menuItemTheme.innerSelectedColor,
+                                 theme->menuItemTheme.shadeTop),
+                  bndOffsetColor(theme->menuItemTheme.innerSelectedColor,
+                                 theme->menuItemTheme.shadeDown));
+      state = BND_ACTIVE;
+    }
+
+    NVGcolor nameColor = bndTextColor(&theme->menuItemTheme, state);
+    NVGcolor descriptionColor = state == BND_DEFAULT
+                                    ? theme->menuTheme.textColor
+                                    : theme->menuTheme.textSelectedColor;
+
+    bndIconLabelValue(args.vg, 0.f, 3.f, box.size.x, 18.f, -1, nameColor,
+                      BND_LEFT, BND_LABEL_FONT_SIZE, text.c_str(), NULL);
+    bndIconLabelValue(args.vg, 0.f, 21.f, box.size.x, 18.f, -1,
+                      descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE,
+                      description.c_str(), NULL);
+
+    if (!rightText.empty()) {
+      float x = box.size.x - bndLabelWidth(args.vg, -1, rightText.c_str());
+      bndIconLabelValue(args.vg, x, 0.f, box.size.x, box.size.y, -1,
+                        descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE,
+                        rightText.c_str(), NULL);
+    }
+  }
+
+  void step() override {
+    rightText = CHECKMARK(
+        horse->params[ComputerscareHorseADoodleDoo::MODE_KNOB].getValue() ==
+        mySetVal);
+    box.size.x =
+        std::max(bndLabelWidth(APP->window->vg, -1, text.c_str()),
+                 bndLabelWidth(APP->window->vg, -1, description.c_str())) +
+        34.f;
+    box.size.y = 42.f;
+    Widget::step();
+  }
+};
+
+struct HorseModeKnob : ScrambleSnapKnobNoRandom {
+  ComputerscareHorseADoodleDoo* horse;
+
+  void appendContextMenu(Menu* menu) override {
+    if (!horse) return;
+
+    for (auto it = menu->children.begin(); it != menu->children.end();) {
+      MenuItem* item = dynamic_cast<MenuItem*>(*it);
+      bool remove = false;
+      if (item) {
+        remove = item->text == "Initialize";
+        for (int i = 0; i < 4; i++) {
+          remove = remove || item->text == HorseModeNames[i];
+        }
+      }
+
+      if (remove) {
+        Widget* child = *it;
+        it++;
+        menu->removeChild(child);
+        delete child;
+      } else {
+        it++;
+      }
+    }
+
+    for (int i = 0; i < 4; i++) {
+      HorseModeMenuItem* menuItem = new HorseModeMenuItem(i);
+      menuItem->horse = horse;
+      menu->addChild(menuItem);
+    }
+  }
+};
+
 struct setGateModeItem : MenuItem {
   ComputerscareHorseADoodleDoo* horse;
   int mySetVal;
@@ -860,6 +965,7 @@ struct ModeChildMenu : MenuItem {
     return menu;
   }
 };
+
 struct GateModeChildMenu : MenuItem {
   ComputerscareHorseADoodleDoo* horse;
 
@@ -905,8 +1011,10 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
     addInputBlock("Density", 10, 200, module, 4,
                   ComputerscareHorseADoodleDoo::DENSITY_CV, 0,
                   ComputerscareHorseADoodleDoo::DENSITY_SPREAD, false);
-    addParam(createParam<ScrambleSnapKnobNoRandom>(
-        Vec(4, 234), module, ComputerscareHorseADoodleDoo::MODE_KNOB));
+    HorseModeKnob* modeKnob = createParam<HorseModeKnob>(
+        Vec(4, 234), module, ComputerscareHorseADoodleDoo::MODE_KNOB);
+    modeKnob->horse = module;
+    addParam(modeKnob);
 
     /*for (int i = 0; i < 1; i++) {
             horseDisplay = new HorseDisplay(i);
@@ -1013,18 +1121,14 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
             &MenuLabel::text,
             "Configuration of the 1st Control Voltage (CV) Pattern"));
 
-        MenuParam* cvScaleParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_SCALE], 2);
-        submenu->addChild(cvScaleParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_SCALE]));
 
-        MenuParam* cvOffsetParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_OFFSET],
-            2);
-        submenu->addChild(cvOffsetParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_OFFSET]));
 
-        MenuParam* cvPhaseParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_PHASE], 2);
-        submenu->addChild(cvPhaseParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_PHASE]));
 
         return submenu;
       }
@@ -1038,20 +1142,14 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
             &MenuLabel::text,
             "Configuration of the 2nd Control Voltage (CV2) Pattern"));
 
-        MenuParam* cvScaleParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_SCALE],
-            2);
-        submenu->addChild(cvScaleParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_SCALE]));
 
-        MenuParam* cvOffsetParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_OFFSET],
-            2);
-        submenu->addChild(cvOffsetParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_OFFSET]));
 
-        MenuParam* cvPhaseParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_PHASE],
-            2);
-        submenu->addChild(cvPhaseParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_PHASE]));
 
         return submenu;
       }
@@ -1063,23 +1161,17 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
         submenu->addChild(construct<MenuLabel>(
             &MenuLabel::text, "Configuration of the Pattern of Gate Lengths"));
-        MenuParam* gateScaleParamControl =
-            new MenuParam(module->paramQuantities
-                              [ComputerscareHorseADoodleDoo::GATE_LENGTH_SCALE],
-                          2);
-        submenu->addChild(gateScaleParamControl);
-
-        MenuParam* gateOffsetParamControl = new MenuParam(
+        submenu->addChild(new MenuParamSlider(
             module->paramQuantities
-                [ComputerscareHorseADoodleDoo::GATE_LENGTH_OFFSET],
-            2);
-        submenu->addChild(gateOffsetParamControl);
+                [ComputerscareHorseADoodleDoo::GATE_LENGTH_SCALE]));
 
-        MenuParam* gatePhaseParamControl =
-            new MenuParam(module->paramQuantities
-                              [ComputerscareHorseADoodleDoo::GATE_LENGTH_PHASE],
-                          2);
-        submenu->addChild(gatePhaseParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities
+                [ComputerscareHorseADoodleDoo::GATE_LENGTH_OFFSET]));
+
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities
+                [ComputerscareHorseADoodleDoo::GATE_LENGTH_PHASE]));
 
         return submenu;
       }

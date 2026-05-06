@@ -1203,23 +1203,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         }));
     menu->addChild(new MenuSeparator());
 
-    // Fold Frequency slider (replaces panel FOLD controls)
-    struct WideParamSlider : MenuEntry {
-      WideParamSlider(ParamQuantity* q) {
-        box.size.x = 280.f;
-        box.size.y = 32.f;
-        auto* lbl = new widget::Widget;
-        lbl->box.size = Vec(0.f, 0.f);
-        // Use a label via the slider's quantity name
-        auto* s = new ui::Slider;
-        s->box.size.x = 260.f;
-        s->quantity = q;
-        s->box.pos = Vec(6.f, 0.f);
-        addChild(s);
-      }
-    };
     menu->addChild(createMenuLabel("Color Warp"));
-    menu->addChild(new WideParamSlider(
+    menu->addChild(new MenuParamSlider(
         m->paramQuantities[ComputerscarePortaloof::INVERT_KNOB]));
 
     menu->addChild(new MenuSeparator());
@@ -1236,18 +1221,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       MenuEntry* sliderSpacer = new MenuEntry;
       sliderSpacer->box.size.y = 8.f;
       menu->addChild(sliderSpacer);
-      struct WideSlider : MenuEntry {
-        WideSlider(ParamQuantity* q) {
-          box.size.x = 280.f;
-          box.size.y = 32.f;
-          auto* s = new ui::Slider;
-          s->box.size.x = 260.f;
-          s->quantity = q;
-          s->box.pos = Vec(6.f, 0.f);
-          addChild(s);
-        }
-      };
-      menu->addChild(new WideSlider(
+      menu->addChild(new MenuParamSlider(
           m->paramQuantities[ComputerscarePortaloof::BACKDROP_ALPHA]));
     }));
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {

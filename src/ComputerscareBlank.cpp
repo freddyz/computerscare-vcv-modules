@@ -460,13 +460,17 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
     if (crossfade && index == 0 && path != paths[index]) {
       startCrossfade();
     }
+    bool noImagePath = path.empty() || path == "empty";
     numFrames = 0;
-    paths[index] = path;
-    this->path = path;
+    paths[index] = noImagePath ? "empty" : path;
+    this->path = noImagePath ? "" : path;
     currentFrame = 0;
     mappedFrame = 0;
     ready = false;
     imageStatus = 0;
+  }
+  bool hasImagePath() const {
+    return paths.size() > 0 && !paths[0].empty() && paths[0] != "empty";
   }
   void setFrameCount(int frameCount) { numFrames = frameCount; }
   void setImageStatus(int status) { imageStatus = status; }
@@ -1389,18 +1393,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
-    struct WideParamSlider : MenuEntry {
-      WideParamSlider(ParamQuantity* q) {
-        box.size.x = 280.f;
-        box.size.y = 32.f;
-        auto* slider = new ui::Slider;
-        slider->box.size.x = 260.f;
-        slider->quantity = q;
-        slider->box.pos = Vec(6.f, 0.f);
-        addChild(slider);
-      }
-    };
-
     MenuToggle* animEnabled = new MenuToggle(
         blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED]);
     menu->addChild(animEnabled);
@@ -1423,7 +1415,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
           sliderSpacer->box.size.y = 8.f;
           submenu->addChild(sliderSpacer);
 
-          submenu->addChild(new WideParamSlider(
+          submenu->addChild(new MenuParamSlider(
               blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED]));
         }));
 
@@ -1446,10 +1438,10 @@ struct ComputerscareBlankWidget : ModuleWidget {
             submenu->addChild(menuItem);
           }
 
-          submenu->addChild(new WideParamSlider(
+          submenu->addChild(new MenuParamSlider(
               blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED]));
 
-          submenu->addChild(new WideParamSlider(
+          submenu->addChild(new MenuParamSlider(
               blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME]));
 
           MenuEntry* sliderSpacer = new MenuEntry;
@@ -1467,7 +1459,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
           crossfadeSliderSpacer->box.size.y = 8.f;
           submenu->addChild(crossfadeSliderSpacer);
 
-          submenu->addChild(new WideParamSlider(
+          submenu->addChild(new MenuParamSlider(
               blank->paramQuantities[ComputerscareBlank::CROSSFADE_TIME]));
         }));
 
@@ -1503,7 +1495,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
           pngDisplay->resetZooms();
         }
         bgPanel->visible = !blankModule->hidePanel;
-        panel->visible = !blankModule->hidePanel && blankModule->path.empty();
+        panel->visible = !blankModule->hidePanel && !blankModule->hasImagePath();
       }
       ModuleWidget::step();
     }

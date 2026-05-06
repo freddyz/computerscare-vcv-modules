@@ -196,7 +196,18 @@ struct ComputerscareDebugFour : app::SvgSwitch {
         "res/components/debug-clock-selector-4way-template.svg")));
   }
 };
-struct ComputerscareResetButton : app::SvgSwitch {
+struct ComputerscareMomentarySvgSwitch : app::SvgSwitch {
+  void onButton(const event::Button& e) override {
+    if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_RIGHT &&
+        (e.mods & RACK_MOD_MASK) == 0) {
+      e.consume(this);
+      return;
+    }
+    app::SvgSwitch::onButton(e);
+  }
+};
+
+struct ComputerscareResetButton : ComputerscareMomentarySvgSwitch {
   ComputerscareResetButton() {
     momentary = true;
     shadow->opacity = 0.f;
@@ -206,7 +217,7 @@ struct ComputerscareResetButton : app::SvgSwitch {
         pluginInstance, "res/components/computerscare-rst-text-red.svg")));
   }
 };
-struct ComputerscareNextButton : app::SvgSwitch {
+struct ComputerscareNextButton : ComputerscareMomentarySvgSwitch {
   ComputerscareNextButton() {
     momentary = true;
 
@@ -217,7 +228,7 @@ struct ComputerscareNextButton : app::SvgSwitch {
         pluginInstance, "res/components/computerscare-next-button-down.svg")));
   }
 };
-struct ComputerscareClearButton : app::SvgSwitch {
+struct ComputerscareClearButton : ComputerscareMomentarySvgSwitch {
   ComputerscareClearButton() {
     momentary = true;
 
@@ -229,15 +240,15 @@ struct ComputerscareClearButton : app::SvgSwitch {
   }
 };
 
-struct ComputerscareClockButton : app::SvgSwitch {
+struct ComputerscareClockButton : ComputerscareMomentarySvgSwitch {
   ComputerscareClockButton() {
     momentary = true;
 
     shadow->opacity = 0.f;
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-clk-text.svg")));
+        pluginInstance, "res/components/computerscare-clk-btn-up.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/computerscare-clk-text-red.svg")));
+        pluginInstance, "res/components/computerscare-clk-btn-pressed.svg")));
   }
 };
 struct ComputerscareInvisibleButton : app::SvgSwitch {

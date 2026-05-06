@@ -29,8 +29,8 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
                   "output ch" + std::to_string(i + 1) + " = input ch");
       routing[i] = i;
     }
-    configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f,
-                                   "Poly Channels");
+    configSwitch(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels",
+                 polyChannelLabels(true));
     configParam(RANDOMIZE_ONE_TO_ONE, 0.f, 1.f, 0.f);
 
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
