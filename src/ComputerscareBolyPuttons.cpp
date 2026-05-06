@@ -32,8 +32,8 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
       configSwitch(TOGGLE + i, 0.f, 1.f, 0.f,
                    "Channel " + std::to_string(i + 1), {"A", "B"});
     }
-    configParam<AutoParamQuantity>(POLY_CHANNELS, 0.f, 16.f, 16.f,
-                                   "Poly Channels");
+    configSwitch(POLY_CHANNELS, 0.f, 16.f, 16.f, "Poly Channels",
+                 polyChannelLabels(true));
 
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
     getParamQuantity(POLY_CHANNELS)->resetEnabled = false;

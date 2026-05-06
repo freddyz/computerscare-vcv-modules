@@ -27,7 +27,8 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
     for (int i = 0; i < numKnobs; i++) {
       configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
     }
-    configParam(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels");
+    configSwitch(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels",
+                 polyChannelLabels(false));
     configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale");
     configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset", " volts");
 

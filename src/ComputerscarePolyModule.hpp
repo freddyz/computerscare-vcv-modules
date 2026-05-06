@@ -9,6 +9,17 @@ struct AutoParamQuantity : ParamQuantity {
   }
 };
 
+static std::vector<std::string> polyChannelLabels(bool includeAuto) {
+  std::vector<std::string> labels;
+  if (includeAuto) {
+    labels.push_back("Auto");
+  }
+  for (int i = 1; i <= 16; i++) {
+    labels.push_back(std::to_string(i));
+  }
+  return labels;
+}
+
 struct ComputerscarePolyModule : Module {
   int polyChannels = 16;
   int polyChannelsKnobSetting = 0;
@@ -25,6 +36,7 @@ struct ComputerscarePolyModule : Module {
 
   virtual void checkPoly() {};
 };
+
 struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
   std::shared_ptr<Svg> manualChannelsSetSvg = APP->window->loadSvg(
       asset::plugin(pluginInstance,

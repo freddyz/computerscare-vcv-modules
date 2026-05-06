@@ -52,8 +52,8 @@ struct ComputerscareGolyPenerator : ComputerscareMenuParamModule {
 
     configParam(OUT_SCALE, -20.f, 20.f, 10.f, "Output Scale");
     configParam(OUT_OFFSET, -10.f, 10.f, 0.f, "Output Offset");
-    configParam<AutoParamQuantity>(POLY_CHANNELS, 1.f, 16.f, 16.f,
-                                   "Poly Channels");
+    configSwitch(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels",
+                 polyChannelLabels(false));
     configMenuParam(COLOR, 0.f, 9.f, 0.f, "Display Color", 2);
 
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;

@@ -16,14 +16,14 @@ const std::string HorseAvailableModes[4] = {
 const std::string HorseAvailableGateModes[2] = {
     "Pass through the clock signal for each gate", "Variable gates"};
 
-struct HorseModeParam : ParamQuantity {
+struct HorseModeParam : SwitchQuantity {
   std::string getDisplayValueString() override {
     int val = getValue();
     return HorseAvailableModes[val];
   }
 };
 
-struct HorseGateModeParam : ParamQuantity {
+struct HorseGateModeParam : SwitchQuantity {
   std::string getDisplayValueString() override {
     int val = getValue();
     return HorseAvailableGateModes[val];
@@ -387,11 +387,15 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
     configParam<HorseDensitySpreadParam>(DENSITY_SPREAD, -1.f, 1.f, 0.f,
                                          "Density Spread", "", 0, 100);
 
-    configParam<AutoParamQuantity>(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony");
+    configSwitch(POLY_KNOB, 0.f, 16.f, 0.f, "Polyphony",
+                 polyChannelLabels(true));
 
-    configParam<HorseModeParam>(MODE_KNOB, 0.f, 3.f, 0.f, "Mode");
+    configSwitch<HorseModeParam>(
+        MODE_KNOB, 0.f, 3.f, 0.f, "Mode",
+        {"Independent", "Ch. 1 trigger", "Trigger cascade", "EOC cascade"});
 
-    configParam<HorseModeParam>(GATE_MODE, 0.f, 1.f, 1.f, "Gate Mode");
+    configSwitch<HorseGateModeParam>(GATE_MODE, 0.f, 1.f, 1.f, "Gate Mode",
+                                     {"Clock passthrough", "Variable gates"});
 
     configParam<HorseResetParamQ>(MANUAL_RESET_BUTTON, 0.f, 1.f, 0.f,
                                   "Reset all Sequences");
@@ -860,6 +864,7 @@ struct ModeChildMenu : MenuItem {
     return menu;
   }
 };
+
 struct GateModeChildMenu : MenuItem {
   ComputerscareHorseADoodleDoo* horse;
 
