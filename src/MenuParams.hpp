@@ -55,6 +55,13 @@ struct SmoothSlider : ui::Slider {
   }
 };
 
+struct MenuParamSlider : ui::Slider {
+  MenuParamSlider(ParamQuantity* paramQ) {
+    box.size.x = 250.0f;
+    quantity = paramQ;
+  }
+};
+
 struct MomentaryButton : ui::Button {
   MomentaryButton(ParamQuantity* paramQ) {
     box.size.x = 32.f;

@@ -904,7 +904,7 @@ struct HorseModeKnob : ScrambleSnapKnobNoRandom {
       MenuItem* item = dynamic_cast<MenuItem*>(*it);
       bool remove = false;
       if (item) {
-        remove = item->text == string::translate("ParamWidget.initialize");
+        remove = item->text == "Initialize";
         for (int i = 0; i < 4; i++) {
           remove = remove || item->text == HorseModeNames[i];
         }
@@ -1122,18 +1122,14 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
             &MenuLabel::text,
             "Configuration of the 1st Control Voltage (CV) Pattern"));
 
-        MenuParam* cvScaleParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_SCALE], 2);
-        submenu->addChild(cvScaleParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_SCALE]));
 
-        MenuParam* cvOffsetParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_OFFSET],
-            2);
-        submenu->addChild(cvOffsetParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_OFFSET]));
 
-        MenuParam* cvPhaseParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_PHASE], 2);
-        submenu->addChild(cvPhaseParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV_PHASE]));
 
         return submenu;
       }
@@ -1147,20 +1143,14 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
             &MenuLabel::text,
             "Configuration of the 2nd Control Voltage (CV2) Pattern"));
 
-        MenuParam* cvScaleParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_SCALE],
-            2);
-        submenu->addChild(cvScaleParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_SCALE]));
 
-        MenuParam* cvOffsetParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_OFFSET],
-            2);
-        submenu->addChild(cvOffsetParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_OFFSET]));
 
-        MenuParam* cvPhaseParamControl = new MenuParam(
-            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_PHASE],
-            2);
-        submenu->addChild(cvPhaseParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities[ComputerscareHorseADoodleDoo::CV2_PHASE]));
 
         return submenu;
       }
@@ -1172,23 +1162,17 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
 
         submenu->addChild(construct<MenuLabel>(
             &MenuLabel::text, "Configuration of the Pattern of Gate Lengths"));
-        MenuParam* gateScaleParamControl =
-            new MenuParam(module->paramQuantities
-                              [ComputerscareHorseADoodleDoo::GATE_LENGTH_SCALE],
-                          2);
-        submenu->addChild(gateScaleParamControl);
-
-        MenuParam* gateOffsetParamControl = new MenuParam(
+        submenu->addChild(new MenuParamSlider(
             module->paramQuantities
-                [ComputerscareHorseADoodleDoo::GATE_LENGTH_OFFSET],
-            2);
-        submenu->addChild(gateOffsetParamControl);
+                [ComputerscareHorseADoodleDoo::GATE_LENGTH_SCALE]));
 
-        MenuParam* gatePhaseParamControl =
-            new MenuParam(module->paramQuantities
-                              [ComputerscareHorseADoodleDoo::GATE_LENGTH_PHASE],
-                          2);
-        submenu->addChild(gatePhaseParamControl);
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities
+                [ComputerscareHorseADoodleDoo::GATE_LENGTH_OFFSET]));
+
+        submenu->addChild(new MenuParamSlider(
+            module->paramQuantities
+                [ComputerscareHorseADoodleDoo::GATE_LENGTH_PHASE]));
 
         return submenu;
       }

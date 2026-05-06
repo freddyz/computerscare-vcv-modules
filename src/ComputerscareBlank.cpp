@@ -1389,18 +1389,6 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
-    struct WideParamSlider : MenuEntry {
-      WideParamSlider(ParamQuantity* q) {
-        box.size.x = 280.f;
-        box.size.y = 32.f;
-        auto* slider = new ui::Slider;
-        slider->box.size.x = 260.f;
-        slider->quantity = q;
-        slider->box.pos = Vec(6.f, 0.f);
-        addChild(slider);
-      }
-    };
-
     MenuToggle* animEnabled = new MenuToggle(
         blank->paramQuantities[ComputerscareBlank::ANIMATION_ENABLED]);
     menu->addChild(animEnabled);
@@ -1423,7 +1411,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
           sliderSpacer->box.size.y = 8.f;
           submenu->addChild(sliderSpacer);
 
-          submenu->addChild(new WideParamSlider(
+          submenu->addChild(new MenuParamSlider(
               blank->paramQuantities[ComputerscareBlank::ANIMATION_SPEED]));
         }));
 
@@ -1446,10 +1434,10 @@ struct ComputerscareBlankWidget : ModuleWidget {
             submenu->addChild(menuItem);
           }
 
-          submenu->addChild(new WideParamSlider(
+          submenu->addChild(new MenuParamSlider(
               blank->paramQuantities[ComputerscareBlank::SHUFFLE_SEED]));
 
-          submenu->addChild(new WideParamSlider(
+          submenu->addChild(new MenuParamSlider(
               blank->paramQuantities[ComputerscareBlank::SLIDESHOW_TIME]));
 
           MenuEntry* sliderSpacer = new MenuEntry;
@@ -1467,7 +1455,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
           crossfadeSliderSpacer->box.size.y = 8.f;
           submenu->addChild(crossfadeSliderSpacer);
 
-          submenu->addChild(new WideParamSlider(
+          submenu->addChild(new MenuParamSlider(
               blank->paramQuantities[ComputerscareBlank::CROSSFADE_TIME]));
         }));
 

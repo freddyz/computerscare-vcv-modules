@@ -248,9 +248,8 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
     ComputerscareGolyPenerator* penerator =
         dynamic_cast<ComputerscareGolyPenerator*>(this->module);
 
-    MenuParam* colorParam = new MenuParam(
-        penerator->paramQuantities[ComputerscareGolyPenerator::COLOR], 2);
-    menu->addChild(colorParam);
+    menu->addChild(new MenuParamSlider(
+        penerator->paramQuantities[ComputerscareGolyPenerator::COLOR]));
 
     menu->addChild(new MenuSeparator);
 
