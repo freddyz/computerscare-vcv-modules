@@ -187,6 +187,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   ScreenCapture screenCap;
   ColorTransformFBO colorFBOs[2];
   SourceBlendFBO sourceBlendFBO;
+  PortaloofLayerFBO sourceLayerFBOs[2];
   PortaloofTextureCopyFBO frozenSourceFBOs[2];
   FlowerKaleidFBO flowerKaleidFBOs[2];
   ClassicKaleidFBO classicKaleidFBOs[2];
@@ -218,6 +219,19 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
   // Browser preview fake module
   ComputerscarePortaloof* browserModule = nullptr;
+
+  void releaseTransientFramebuffers() {
+    for (PortaloofLayerFBO& sourceLayerFBO : sourceLayerFBOs) {
+      sourceLayerFBO.release();
+    }
+  }
+
+  void onRemove(const RemoveEvent& e) override {
+    if (APP && APP->window) {
+      releaseTransientFramebuffers();
+    }
+    ModuleWidget::onRemove(e);
+  }
 
   ~ComputerscarePortaloofWidget() {
     if (backdropWidget) {
@@ -624,7 +638,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           m->sources[0].hasSource() || m->sources[1].hasSource();
 
       if (m && (doCapture || hasConfiguredSource || hasValidCache)) {
-        float baseAlpha = 0.85f;
+        float baseAlpha = 1.f;
 
         // Choose live params on capture, or based on transform pre/post setting
         bool useLive = doCapture || !m->freezeMode || m->transformPost;
@@ -706,19 +720,19 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             m->maintainAspect ? (mirrorH * (float)fbW / (float)fbH) : mirrorW;
         float imgHW = imgW * 0.5f;
 
-        bool drewStageBg = false;
-        for (int renderSourceIndex = 0; renderSourceIndex < 2;
-             renderSourceIndex++) {
-          PortaloofInjectedSource currentSource =
-              renderSources[renderSourceIndex];
-          if (!currentSource.isValid()) continue;
-          float sourceMixAlpha = 1.f;
-          if (hasSource1 && hasSource2)
-            sourceMixAlpha =
-                renderSourceIndex == 0 ? (1.f - source2Amt) : source2Amt;
-          if (sourceMixAlpha <= 0.f) continue;
-          float alpha = baseAlpha * sourceMixAlpha;
+        auto drawStageBackground = [&](NVGcontext* drawVg) {
+          nvgSave(drawVg);
+          nvgBeginPath(drawVg);
+          nvgRect(drawVg, displayX, 0.f, mirrorW, box.size.y);
+          nvgFillColor(drawVg, nvgRGB(0x23, 0x21, 0x29));
+          nvgFill(drawVg);
+          nvgRestore(drawVg);
+        };
 
+        auto drawOneSource = [&](NVGcontext* drawVg, int renderSourceIndex,
+                                 PortaloofInjectedSource currentSource,
+                                 float alpha, float drawDisplayX) {
+          if (!currentSource.isValid() || alpha <= 0.f) return;
           bool* en = (useLive || !hasValidCache)
                          ? m->sourceRowEnabled[renderSourceIndex]
                          : cachedRowEnabled[renderSourceIndex];
@@ -758,28 +772,15 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           float txLocal = txOn ? txV * imgW : 0.f;
           float tyLocal = tyOn ? tyV * mirrorH : 0.f;
 
-          // Grey stage background — drawn in raw display coords, isolated from
-          // any scale/rotation transforms applied to the image rendering below.
-          if (!drewStageBg) {
-            drewStageBg = true;
-            nvgSave(args.vg);
-            nvgBeginPath(args.vg);
-            nvgRect(args.vg, displayX, 0.f, mirrorW, box.size.y);
-            nvgFillColor(args.vg, nvgRGB(0x23, 0x21, 0x29));
-            nvgFill(args.vg);
-            nvgRestore(args.vg);
-          }
-
-          nvgSave(args.vg);
-
-          nvgScissor(args.vg, displayX, 0.f, mirrorW, box.size.y);
-          nvgTranslate(args.vg, displayX + hw,
+          nvgSave(drawVg);
+          nvgScissor(drawVg, drawDisplayX, 0.f, mirrorW, box.size.y);
+          nvgTranslate(drawVg, drawDisplayX + hw,
                        hh);  // center of display area
 
-          if (sx != 1.f || sy != 1.f) nvgScale(args.vg, sx, sy);
+          if (sx != 1.f || sy != 1.f) nvgScale(drawVg, sx, sy);
 
           bool tileOn = m->tileEmptySpace;
-          int img = colorFBOs[renderSourceIndex].apply(args.vg, srcTex, srcImg,
+          int img = colorFBOs[renderSourceIndex].apply(drawVg, srcTex, srcImg,
                                                        fbW, fbH, hueV, warpV,
                                                        foldFreqV, flipInputUV);
           GLuint effectTex = (img == colorFBOs[renderSourceIndex].nvgImg &&
@@ -805,7 +806,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               } else {
                 nvgTx = txOn ? (2.f * txLocal) : 0.f;
                 nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
-                nvgTranslate(args.vg, nvgTx, nvgTy);
+                nvgTranslate(drawVg, nvgTx, nvgTy);
               }
             }
             int flowerTargetW = flowerKaleidTargetDim(imgW, renderScale, fbW);
@@ -816,7 +817,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             float flowerScaleY =
                 (mirrorH > 0.f) ? ((float)flowerTargetH / mirrorH) : 1.f;
             int flowerImg = flowerKaleidFBOs[renderSourceIndex].apply(
-                args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
+                drawVg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
                 rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
                 kaliTyOff * flowerScaleY, flipInputUV);
             if (flowerImg >= 0) {
@@ -839,29 +840,29 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                     float tileY = (float)j * mirrorH;
                     bool reverseX = reverseOuterTile(i);
                     bool reverseY = reverseOuterTile(j);
-                    nvgSave(args.vg);
-                    nvgTranslate(args.vg, tileX, tileY);
+                    nvgSave(drawVg);
+                    nvgTranslate(drawVg, tileX, tileY);
                     if (reverseX || reverseY) {
-                      nvgScale(args.vg, reverseX ? -1.f : 1.f,
+                      nvgScale(drawVg, reverseX ? -1.f : 1.f,
                                reverseY ? -1.f : 1.f);
                     }
                     NVGpaint p =
-                        nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
+                        nvgImagePattern(drawVg, -imgHW, -hh, imgW, mirrorH,
                                         0.f, flowerImg, alpha);
-                    nvgBeginPath(args.vg);
-                    nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
-                    nvgFillPaint(args.vg, p);
-                    nvgFill(args.vg);
-                    nvgRestore(args.vg);
+                    nvgBeginPath(drawVg);
+                    nvgRect(drawVg, -imgHW, -hh, imgW, mirrorH);
+                    nvgFillPaint(drawVg, p);
+                    nvgFill(drawVg);
+                    nvgRestore(drawVg);
                   }
                 }
               } else {
-                NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW,
+                NVGpaint p = nvgImagePattern(drawVg, -imgHW, -hh, imgW,
                                              mirrorH, 0.f, flowerImg, alpha);
-                nvgBeginPath(args.vg);
-                nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
-                nvgFillPaint(args.vg, p);
-                nvgFill(args.vg);
+                nvgBeginPath(drawVg);
+                nvgRect(drawVg, -imgHW, -hh, imgW, mirrorH);
+                nvgFillPaint(drawVg, p);
+                nvgFill(drawVg);
               }
             }
           } else if (kaliMode < 0) {
@@ -874,7 +875,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
               } else {
                 nvgTx = txOn ? (2.f * txLocal) : 0.f;
                 nvgTy = tyOn ? (2.f * tyLocal) : 0.f;
-                nvgTranslate(args.vg, nvgTx, nvgTy);
+                nvgTranslate(drawVg, nvgTx, nvgTy);
               }
             }
 
@@ -886,7 +887,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
             float classicScaleY =
                 (mirrorH > 0.f) ? ((float)classicTargetH / mirrorH) : 1.f;
             int classicImg = classicKaleidFBOs[renderSourceIndex].apply(
-                args.vg, effectTex, classicTargetW, classicTargetH,
+                drawVg, effectTex, classicTargetW, classicTargetH,
                 kaliSegments, rotOn ? rotV : 0.f, kaliTxOff * classicScaleX,
                 kaliTyOff * classicScaleY, flipInputUV);
 
@@ -910,38 +911,38 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                   float tileY = (float)j * mirrorH;
                   bool reverseX = reverseOuterTile(i);
                   bool reverseY = reverseOuterTile(j);
-                  nvgSave(args.vg);
-                  nvgTranslate(args.vg, tileX, tileY);
+                  nvgSave(drawVg);
+                  nvgTranslate(drawVg, tileX, tileY);
                   if (reverseX || reverseY) {
-                    nvgScale(args.vg, reverseX ? -1.f : 1.f,
+                    nvgScale(drawVg, reverseX ? -1.f : 1.f,
                              reverseY ? -1.f : 1.f);
                   }
-                  NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW,
+                  NVGpaint p = nvgImagePattern(drawVg, -imgHW, -hh, imgW,
                                                mirrorH, 0.f, classicImg, alpha);
-                  nvgBeginPath(args.vg);
-                  nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
-                  nvgFillPaint(args.vg, p);
-                  nvgFill(args.vg);
-                  nvgRestore(args.vg);
+                  nvgBeginPath(drawVg);
+                  nvgRect(drawVg, -imgHW, -hh, imgW, mirrorH);
+                  nvgFillPaint(drawVg, p);
+                  nvgFill(drawVg);
+                  nvgRestore(drawVg);
                 }
               }
             } else if (classicImg >= 0) {
-              NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
+              NVGpaint p = nvgImagePattern(drawVg, -imgHW, -hh, imgW, mirrorH,
                                            0.f, classicImg, alpha);
-              nvgBeginPath(args.vg);
-              nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
-              nvgFillPaint(args.vg, p);
-              nvgFill(args.vg);
+              nvgBeginPath(drawVg);
+              nvgRect(drawVg, -imgHW, -hh, imgW, mirrorH);
+              nvgFillPaint(drawVg, p);
+              nvgFill(drawVg);
             }
           } else {
             // No kaleidoscope — apply rotation then translate in image space so
             // one full 0-10V sweep always traverses one wrapped image cycle.
             float cosA = rotOn ? fabsf(cosf(rotV * (float)M_PI / 180.f)) : 1.f;
             float sinA = rotOn ? fabsf(sinf(rotV * (float)M_PI / 180.f)) : 0.f;
-            if (rotOn) applyRotation(args.vg, rotV);
+            if (rotOn) applyRotation(drawVg, rotV);
             float txOffset = txOn ? txLocal : 0.f;
             float tyOffset = tyOn ? tyLocal : 0.f;
-            if (txOn || tyOn) nvgTranslate(args.vg, txOffset, tyOffset);
+            if (txOn || tyOn) nvgTranslate(drawVg, txOffset, tyOffset);
             float txOffsetAbs = fabsf(txOffset);
             float tyOffsetAbs = fabsf(tyOffset);
             float rHW = ((imgW + 2.f * txOffsetAbs) * cosA +
@@ -968,26 +969,82 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
                 for (int i = iMin; i <= iMax; i++) {
                   float ox = -imgHW + i * imgW;
                   float oy = -hh + j * mirrorH;
-                  NVGpaint p = nvgImagePattern(args.vg, ox, oy, imgW, mirrorH,
+                  NVGpaint p = nvgImagePattern(drawVg, ox, oy, imgW, mirrorH,
                                                0.f, img, alpha);
-                  nvgBeginPath(args.vg);
-                  nvgRect(args.vg, ox, oy, imgW, mirrorH);
-                  nvgFillPaint(args.vg, p);
-                  nvgFill(args.vg);
+                  nvgBeginPath(drawVg);
+                  nvgRect(drawVg, ox, oy, imgW, mirrorH);
+                  nvgFillPaint(drawVg, p);
+                  nvgFill(drawVg);
                 }
               }
             } else {
               // Image drawn with exact rect — no tiling, no smear at edges.
-              NVGpaint p = nvgImagePattern(args.vg, -imgHW, -hh, imgW, mirrorH,
+              NVGpaint p = nvgImagePattern(drawVg, -imgHW, -hh, imgW, mirrorH,
                                            0.f, img, alpha);
-              nvgBeginPath(args.vg);
-              nvgRect(args.vg, -imgHW, -hh, imgW, mirrorH);
-              nvgFillPaint(args.vg, p);
-              nvgFill(args.vg);
+              nvgBeginPath(drawVg);
+              nvgRect(drawVg, -imgHW, -hh, imgW, mirrorH);
+              nvgFillPaint(drawVg, p);
+              nvgFill(drawVg);
             }
           }
 
-          nvgRestore(args.vg);
+          nvgRestore(drawVg);
+        };
+
+        bool shaderBlend = hasSource1 && hasSource2 &&
+                           portaloofBlendUsesShader(m->sourceBlendMode);
+        bool shaderDrew = false;
+        drawStageBackground(args.vg);
+        if (shaderBlend) {
+          float renderPixelRatio =
+              std::max(APP->window->windowRatio * getAbsoluteZoom(), 1.f);
+          PortaloofInjectedSource layerSources[2];
+          bool layersOk = true;
+          for (int i = 0; i < 2; i++) {
+            NVGcontext* layerVg =
+                sourceLayerFBOs[i].begin(args.vg, mirrorW, mirrorH,
+                                         renderPixelRatio);
+            if (!layerVg) {
+              layersOk = false;
+              break;
+            }
+            drawOneSource(layerVg, i, renderSources[i], 1.f, 0.f);
+            sourceLayerFBOs[i].end();
+            layerSources[i] = sourceLayerFBOs[i].getSource(args.vg);
+            layersOk = layersOk && layerSources[i].isValid();
+          }
+
+          if (layersOk) {
+            int blendImg = sourceBlendFBO.apply(
+                args.vg, layerSources[0].texId, layerSources[1].texId,
+                sourceLayerFBOs[0].lastW, sourceLayerFBOs[0].lastH,
+                source2Amt, false, false,
+                portaloofBlendShaderMode(m->sourceBlendMode));
+            if (blendImg >= 0) {
+              NVGpaint p = nvgImagePattern(args.vg, displayX, 0.f, mirrorW,
+                                           mirrorH, 0.f, blendImg, baseAlpha);
+              nvgBeginPath(args.vg);
+              nvgRect(args.vg, displayX, 0.f, mirrorW, mirrorH);
+              nvgFillPaint(args.vg, p);
+              nvgFill(args.vg);
+              shaderDrew = true;
+            }
+          }
+        }
+        if (!shaderDrew) {
+          for (int renderSourceIndex = 0; renderSourceIndex < 2;
+               renderSourceIndex++) {
+            PortaloofInjectedSource currentSource =
+                renderSources[renderSourceIndex];
+            if (!currentSource.isValid()) continue;
+            float sourceMixAlpha = 1.f;
+            if (hasSource1 && hasSource2) {
+              sourceMixAlpha = renderSourceIndex == 0 ? (1.f - source2Amt)
+                                                      : source2Amt;
+            }
+            drawOneSource(args.vg, renderSourceIndex, currentSource,
+                          baseAlpha * sourceMixAlpha, displayX);
+          }
         }
         nvgRestore(args.vg);
 
@@ -1128,6 +1185,25 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     menu->addChild(
         createSubmenuItem(m->getSourceMenuLabel(1), "",
                           [=](Menu* menu) { appendSourceMenu(menu, 1); }));
+    menu->addChild(new MenuSeparator());
+    menu->addChild(createSubmenuItem(
+        string::f("Blend mode: %s",
+                  portaloofBlendModeName(m->sourceBlendMode)),
+        "", [=](Menu* menu) {
+          static const PortaloofBlendMode modes[] = {
+              PortaloofBlendMode::CROSSFADE, PortaloofBlendMode::NORMAL,
+              PortaloofBlendMode::ADD,       PortaloofBlendMode::SUBTRACT,
+              PortaloofBlendMode::MULTIPLY,  PortaloofBlendMode::SCREEN,
+              PortaloofBlendMode::OVERLAY,   PortaloofBlendMode::DIFFERENCE,
+              PortaloofBlendMode::DARKEN,    PortaloofBlendMode::LIGHTEN,
+              PortaloofBlendMode::XOR};
+          for (PortaloofBlendMode mode : modes) {
+            menu->addChild(createCheckMenuItem(
+                portaloofBlendModeName(mode), "",
+                [=]() { return m->sourceBlendMode == mode; },
+                [=]() { m->sourceBlendMode = mode; }));
+          }
+        }));
     menu->addChild(new MenuSeparator());
 
     // Fold Frequency slider (replaces panel FOLD controls)

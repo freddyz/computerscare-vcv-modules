@@ -12,6 +12,7 @@
 #include "FlowerKaleid.hpp"
 #include "MirrorKaleidoscope.hpp"
 #include "MirrorRotation.hpp"
+#include "PortaloofLayerFBO.hpp"
 #include "RackModuleSource.hpp"
 #include "ScreenCaptureEffect.hpp"
 #include "SourceBlendFBO.hpp"
@@ -119,6 +120,140 @@ enum class PortaloofSourceKind {
   RACK_RECT,
   SCREEN_RECT
 };
+
+enum class PortaloofBlendMode {
+  CROSSFADE = 0,
+  NORMAL,
+  ADD,
+  SOURCE_IN,
+  SOURCE_OUT,
+  ATOP,
+  DESTINATION_OVER,
+  DESTINATION_IN,
+  DESTINATION_OUT,
+  DESTINATION_ATOP,
+  COPY,
+  XOR,
+  SUBTRACT,
+  MULTIPLY,
+  SCREEN,
+  OVERLAY,
+  DIFFERENCE,
+  DARKEN,
+  LIGHTEN
+};
+
+static inline const char* portaloofBlendModeName(PortaloofBlendMode mode) {
+  switch (mode) {
+    case PortaloofBlendMode::CROSSFADE:
+      return "Crossfade";
+    case PortaloofBlendMode::NORMAL:
+      return "Normal";
+    case PortaloofBlendMode::ADD:
+      return "Add";
+    case PortaloofBlendMode::SOURCE_IN:
+      return "Source In";
+    case PortaloofBlendMode::SOURCE_OUT:
+      return "Source Out";
+    case PortaloofBlendMode::ATOP:
+      return "Atop";
+    case PortaloofBlendMode::DESTINATION_OVER:
+      return "Behind";
+    case PortaloofBlendMode::DESTINATION_IN:
+      return "Mask";
+    case PortaloofBlendMode::DESTINATION_OUT:
+      return "Knockout";
+    case PortaloofBlendMode::DESTINATION_ATOP:
+      return "Destination Atop";
+    case PortaloofBlendMode::COPY:
+      return "Copy";
+    case PortaloofBlendMode::XOR:
+      return "XOR";
+    case PortaloofBlendMode::SUBTRACT:
+      return "Subtract";
+    case PortaloofBlendMode::MULTIPLY:
+      return "Multiply";
+    case PortaloofBlendMode::SCREEN:
+      return "Screen";
+    case PortaloofBlendMode::OVERLAY:
+      return "Overlay";
+    case PortaloofBlendMode::DIFFERENCE:
+      return "Difference";
+    case PortaloofBlendMode::DARKEN:
+      return "Darken";
+    case PortaloofBlendMode::LIGHTEN:
+      return "Lighten";
+    default:
+      return "Crossfade";
+  }
+}
+
+static inline int portaloofBlendShaderMode(PortaloofBlendMode mode) {
+  switch (mode) {
+    case PortaloofBlendMode::NORMAL:
+      return 1;
+    case PortaloofBlendMode::ADD:
+      return 2;
+    case PortaloofBlendMode::XOR:
+      return 3;
+    case PortaloofBlendMode::SUBTRACT:
+      return 4;
+    case PortaloofBlendMode::MULTIPLY:
+      return 5;
+    case PortaloofBlendMode::SCREEN:
+      return 6;
+    case PortaloofBlendMode::OVERLAY:
+      return 7;
+    case PortaloofBlendMode::DIFFERENCE:
+      return 8;
+    case PortaloofBlendMode::DARKEN:
+      return 9;
+    case PortaloofBlendMode::LIGHTEN:
+      return 10;
+    default:
+      return 0;
+  }
+}
+
+static inline int portaloofBlendNanoVGCompositeOperation(
+    PortaloofBlendMode mode) {
+  switch (mode) {
+    case PortaloofBlendMode::ADD:
+      return NVG_LIGHTER;
+    case PortaloofBlendMode::XOR:
+      return NVG_XOR;
+    default:
+      return NVG_SOURCE_OVER;
+  }
+}
+
+static inline bool portaloofBlendUsesNanoVGComposite(PortaloofBlendMode mode) {
+  return mode == PortaloofBlendMode::ADD || mode == PortaloofBlendMode::XOR;
+}
+
+static inline bool portaloofBlendModeSupported(PortaloofBlendMode mode) {
+  switch (mode) {
+    case PortaloofBlendMode::CROSSFADE:
+    case PortaloofBlendMode::NORMAL:
+    case PortaloofBlendMode::ADD:
+    case PortaloofBlendMode::XOR:
+    case PortaloofBlendMode::SUBTRACT:
+    case PortaloofBlendMode::MULTIPLY:
+    case PortaloofBlendMode::SCREEN:
+    case PortaloofBlendMode::OVERLAY:
+    case PortaloofBlendMode::DIFFERENCE:
+    case PortaloofBlendMode::DARKEN:
+    case PortaloofBlendMode::LIGHTEN:
+      return true;
+    default:
+      return false;
+  }
+}
+
+static inline bool portaloofBlendUsesShader(PortaloofBlendMode mode) {
+  return portaloofBlendModeSupported(mode) &&
+         mode != PortaloofBlendMode::CROSSFADE;
+}
 
 struct PortaloofSourceConfig {
   PortaloofSourceKind kind = PortaloofSourceKind::NONE;
@@ -234,6 +369,7 @@ struct ComputerscarePortaloof : Module {
       true;  // false = Kaleid > Translate, true = Translate > Kaleid
   bool hideUi = false;
   bool dimVisualsWithRoom = false;
+  PortaloofBlendMode sourceBlendMode = PortaloofBlendMode::CROSSFADE;
   PortaloofSourceConfig sources[2];
   std::string loadedImagePath;
   int64_t rackSourceModuleId = -1;
@@ -576,6 +712,8 @@ struct ComputerscarePortaloof : Module {
     json_object_set_new(rootJ, "hideUi", json_boolean(hideUi));
     json_object_set_new(rootJ, "dimVisualsWithRoom",
                         json_boolean(dimVisualsWithRoom));
+    json_object_set_new(rootJ, "sourceBlendMode",
+                        json_integer((int)sourceBlendMode));
     json_t* sourcesJ = json_array();
     json_array_append_new(sourcesJ, sourceToJson(sources[0]));
     json_array_append_new(sourcesJ, sourceToJson(sources[1]));
@@ -622,6 +760,17 @@ struct ComputerscarePortaloof : Module {
     if (huiJ) hideUi = json_boolean_value(huiJ);
     json_t* dimJ = json_object_get(rootJ, "dimVisualsWithRoom");
     if (dimJ) dimVisualsWithRoom = json_boolean_value(dimJ);
+    json_t* blendJ = json_object_get(rootJ, "sourceBlendMode");
+    if (blendJ) {
+      int mode = (int)json_integer_value(blendJ);
+      if (mode >= (int)PortaloofBlendMode::CROSSFADE &&
+          mode <= (int)PortaloofBlendMode::LIGHTEN) {
+        PortaloofBlendMode loadedMode = (PortaloofBlendMode)mode;
+        sourceBlendMode = portaloofBlendModeSupported(loadedMode)
+                              ? loadedMode
+                              : PortaloofBlendMode::NORMAL;
+      }
+    }
     bool loadedNewSources = false;
     json_t* sourcesJ = json_object_get(rootJ, "sources");
     if (sourcesJ && json_is_array(sourcesJ)) {

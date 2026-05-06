@@ -39,12 +39,12 @@ Loads a still image or animated GIF from disk. Image files can also be dragged a
 
 ### Slideshow
 
-**Slideshow Active** automatically loads another file from the current image's directory.
+**Slideshow Enabled** automatically loads another file from the current image's directory.
 
 **Slideshow Options** contains:
 
 - **Slideshow / Next File Behavior:** choose whether next-file triggers load the next alphabetical file, previous alphabetical file, or a random file from the directory
-- **Crossfade:** fade between the current image and the next loaded image
+- **Crossfade Enabled:** fade between the current image and the next loaded image
 - **Crossfade Time:** crossfade duration
 - **Shuffle Seed:** changes the random order used by shuffled playback/file selection
 - **Slideshow Time:** time between automatic slideshow file changes
