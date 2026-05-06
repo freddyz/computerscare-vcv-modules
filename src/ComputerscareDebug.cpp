@@ -141,8 +141,9 @@ struct ComputerscareDebug : Module {
     json_t* rootJ = json_object();
 
     json_object_set_new(rootJ, "outputRange", json_integer(outputRangeEnum));
-    json_object_set_new(rootJ, "triggerBlinkers",
-                        json_boolean(params[TRIGGER_BLINKERS].getValue() > 0.5f));
+    json_object_set_new(
+        rootJ, "triggerBlinkers",
+        json_boolean(params[TRIGGER_BLINKERS].getValue() > 0.5f));
 
     json_t* sequencesJ = json_array();
 
@@ -235,7 +236,8 @@ void ComputerscareDebug::process(const ProcessArgs& args) {
   float min = outputRanges[outputRangeEnum][0];
   float max = outputRanges[outputRangeEnum][1];
   float spread = max - min;
-  bool manualClock = manualClockTrigger.process(params[MANUAL_TRIGGER].getValue());
+  bool manualClock =
+      manualClockTrigger.process(params[MANUAL_TRIGGER].getValue());
   bool triggerBlinkers = params[TRIGGER_BLINKERS].getValue() > 0.5f;
 
   for (int i = 0; i < NUM_LINES; i++) {
@@ -480,10 +482,10 @@ struct ComputerscareDebugWidget : ModuleWidget {
     addParam(createParam<ComputerscareResetButton>(
         Vec(32, 324), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
 
-    addParam(createParam<DebugModeSwitch>(
-        Vec(0, 279), module, ComputerscareDebug::WHICH_CLOCK));
-    addParam(createParam<DebugModeSwitch>(
-        Vec(58, 279), module, ComputerscareDebug::SWITCH_VIEW));
+    addParam(createParam<DebugModeSwitch>(Vec(0, 279), module,
+                                          ComputerscareDebug::WHICH_CLOCK));
+    addParam(createParam<DebugModeSwitch>(Vec(58, 279), module,
+                                          ComputerscareDebug::SWITCH_VIEW));
 
     HidableSmallSnapKnob* clockKnob = createParam<HidableSmallSnapKnob>(
         Vec(6, 305), module, ComputerscareDebug::CLOCK_CHANNEL_FOCUS);
@@ -655,8 +657,8 @@ void ComputerscareDebugWidget::appendContextMenu(Menu* menu) {
   menu->addChild(spacerLabel);
 
   menu->addChild(construct<DebugTriggerBlinkersItem>(
-      &MenuItem::text, "Show Clock Blinkers",
-      &DebugTriggerBlinkersItem::debug, debug));
+      &MenuItem::text, "Show Clock Blinkers", &DebugTriggerBlinkersItem::debug,
+      debug));
 
   menu->addChild(createSubmenuItem(
       "Clock Mode",
