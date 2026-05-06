@@ -61,7 +61,7 @@ inline void processDebugger(ModuleT* module, bool updateDisplay) {
   typename ModuleT::CompolyInputInfo inputInfo =
       module->getInputCompolyInfo(zInputMode, ModuleT::Z_INPUT);
   const int compolyChannels =
-      cpx::complex_math::outputCompolyphony(0, inputInfo.compolyChannels);
+      cpx::compoly::outputCompolyLanes(0, inputInfo.compolyChannels);
 
   if (outputConnected) {
     module->setOutputChannels(ModuleT::Z_OUTPUT, zOutputMode, compolyChannels);

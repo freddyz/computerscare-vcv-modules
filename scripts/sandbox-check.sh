@@ -202,6 +202,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+echo "==> SDK-free compoly port mapping tests..."
+if command -v g++ >/dev/null; then
+  if g++ -std=c++11 -I src tests/compoly_port_mapping_test.cpp -o /tmp/cs_compoly_port_mapping_test; then
+    /tmp/cs_compoly_port_mapping_test || fail "compoly port mapping tests failed"
+  else
+    fail "compoly port mapping tests did not compile"
+  fi
+else
+  echo "  skip: g++ not installed"
+fi
+
+# ---------------------------------------------------------------------------
 echo "==> SDK-free complex format tests..."
 if command -v g++ >/dev/null; then
   if g++ -std=c++11 -I src tests/complex_format_test.cpp -o /tmp/cs_complex_format_test; then

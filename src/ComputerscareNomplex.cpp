@@ -1,6 +1,7 @@
 #include <array>
 
 #include "Computerscare.hpp"
+#include "complex/CompolyPortMapping.hpp"
 #include "complex/ComplexWidgets.hpp"
 #include "complex/math/ComplexMath.hpp"
 
@@ -214,32 +215,22 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase {
                                      float firstTrim, float firstOffset,
                                      float secondTrim, float secondOffset,
                                      float* x, float* y) {
-    float a[16] = {};
-    float b[16] = {};
-    inputs[firstInput].readVoltages(a);
-    inputs[secondInput].readVoltages(b);
+    cpx::compoly::PortChannels ports = {};
+    inputs[firstInput].readVoltages(ports.a.data());
+    inputs[secondInput].readVoltages(ports.b.data());
 
-    bool direct = wrapMode == WRAP_NORMAL && firstChannels > 1 &&
-                  secondChannels > 1 && compolyChannels <= firstChannels &&
-                  compolyChannels <= secondChannels;
+    cpx::complex_math::RectChannels rect =
+        cpx::compoly::readWrappedSeparatedInputToRect(
+            ports,
+            cpx::compoly::PortChannelCounts(firstChannels, secondChannels),
+            cpx::complex_math::CoordinateMode::RectSeparated,
+            static_cast<cpx::compoly::WrapMode>(wrapMode), compolyChannels,
+            cpx::compoly::CoordinatePairTransform(
+                firstTrim, firstOffset, secondTrim, secondOffset));
 
-    int c = 0;
-    if (direct) {
-      for (; c + 3 < compolyChannels; c += 4) {
-        simd::float_4 av = simd::float_4::load(a + c);
-        simd::float_4 bv = simd::float_4::load(b + c);
-        (av * firstTrim + firstOffset).store(x + c);
-        (bv * secondTrim + secondOffset).store(y + c);
-      }
-    }
-
-    for (; c < compolyChannels; c++) {
-      int firstCh = cpx::complex_math::channelIndexForOutput(
-          c, static_cast<cpx::compoly::WrapMode>(wrapMode), firstChannels);
-      int secondCh = cpx::complex_math::channelIndexForOutput(
-          c, static_cast<cpx::compoly::WrapMode>(wrapMode), secondChannels);
-      x[c] = a[firstCh] * firstTrim + firstOffset;
-      y[c] = b[secondCh] * secondTrim + secondOffset;
+    for (int c = 0; c < cpx::complex_math::maxChannels; c++) {
+      x[c] = rect.x[c];
+      y[c] = rect.y[c];
     }
   }
 
@@ -250,41 +241,23 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase {
                                       float thetaTrim, float thetaOffset,
                                       float xOffset, float yOffset, float* x,
                                       float* y) {
-    float radiusIn[16] = {};
-    float thetaIn[16] = {};
-    inputs[firstInput].readVoltages(radiusIn);
-    inputs[secondInput].readVoltages(thetaIn);
+    cpx::compoly::PortChannels ports = {};
+    inputs[firstInput].readVoltages(ports.a.data());
+    inputs[secondInput].readVoltages(ports.b.data());
 
-    bool direct = wrapMode == WRAP_NORMAL && firstChannels > 1 &&
-                  secondChannels > 1 && compolyChannels <= firstChannels &&
-                  compolyChannels <= secondChannels;
+    cpx::complex_math::RectChannels rect =
+        cpx::compoly::readWrappedSeparatedInputToRect(
+            ports,
+            cpx::compoly::PortChannelCounts(firstChannels, secondChannels),
+            cpx::complex_math::CoordinateMode::PolarSeparated,
+            static_cast<cpx::compoly::WrapMode>(wrapMode), compolyChannels,
+            cpx::compoly::CoordinatePairTransform(radiusTrim, radiusOffset,
+                                                  thetaTrim, thetaOffset),
+            cpx::complex_math::Rect(xOffset, yOffset));
 
-    int c = 0;
-    if (direct) {
-      for (; c + 3 < compolyChannels; c += 4) {
-        simd::float_4 radius =
-            simd::float_4::load(radiusIn + c) * radiusTrim + radiusOffset;
-        simd::float_4 theta = simd::float_4::load(thetaIn + c) *
-                                  cpx::complex_math::thetaRadiansPerVolt *
-                                  thetaTrim +
-                              thetaOffset;
-        (radius * simd::cos(theta) + xOffset).store(x + c);
-        (radius * simd::sin(theta) + yOffset).store(y + c);
-      }
-    }
-
-    for (; c < compolyChannels; c++) {
-      int radiusCh = cpx::complex_math::channelIndexForOutput(
-          c, static_cast<cpx::compoly::WrapMode>(wrapMode), firstChannels);
-      int thetaCh = cpx::complex_math::channelIndexForOutput(
-          c, static_cast<cpx::compoly::WrapMode>(wrapMode), secondChannels);
-      float radius = radiusIn[radiusCh] * radiusTrim + radiusOffset;
-      float theta =
-          cpx::complex_math::thetaCableVoltageToRadians(thetaIn[thetaCh]) *
-              thetaTrim +
-          thetaOffset;
-      x[c] = radius * std::cos(theta) + xOffset;
-      y[c] = radius * std::sin(theta) + yOffset;
+    for (int c = 0; c < cpx::complex_math::maxChannels; c++) {
+      x[c] = rect.x[c];
+      y[c] = rect.y[c];
     }
   }
 

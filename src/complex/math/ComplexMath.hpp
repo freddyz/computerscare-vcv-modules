@@ -4,8 +4,6 @@
 #include <array>
 #include <cmath>
 
-#include "../CompolyRouting.hpp"
-
 namespace cpx {
 namespace complex_math {
 
@@ -58,22 +56,6 @@ struct RectChannels {
   Channels y;
 
   RectChannels() : x(), y() {}
-};
-
-struct PortChannels {
-  Channels a;
-  Channels b;
-
-  PortChannels() : a(), b() {}
-};
-
-struct PortChannelCounts {
-  int a;
-  int b;
-
-  PortChannelCounts() : a(0), b(0) {}
-
-  PortChannelCounts(int a, int b) : a(a), b(b) {}
 };
 
 inline bool isRect(CoordinateMode mode) {
@@ -132,107 +114,6 @@ inline Rect scaleAndOffset(Rect z, Rect scale, Rect offset) {
 
 inline int clampChannelCount(int channels) {
   return std::max(0, std::min(maxChannels, channels));
-}
-
-inline int compolyphonyForInput(CoordinateMode mode, int portAChannels,
-                                int portBChannels) {
-  cpx::compoly::CablePolyChannels portA(portAChannels);
-  cpx::compoly::CablePolyChannels portB(portBChannels);
-  cpx::compoly::SeparatedCablePolyChannels cables(portA, portB);
-  if (isInterleaved(mode))
-    return cpx::compoly::compolyLanesForInterleavedCables(cables);
-  return cpx::compoly::compolyLanesForSeparatedCables(cables);
-}
-
-inline int outputCompolyphony(int knobSetting, int maxInputCompolyphony) {
-  return cpx::compoly::outputCompolyLanes(knobSetting, maxInputCompolyphony);
-}
-
-inline int channelIndexForOutput(int outputIndex,
-                                 cpx::compoly::WrapMode wrapMode,
-                                 int channelCount) {
-  return cpx::compoly::cableChannelForCompolyLane(
-      cpx::compoly::CompolyLane(outputIndex), wrapMode,
-      cpx::compoly::CablePolyChannels(channelCount));
-}
-
-inline std::array<int, 2> separatedInputChannelIndices(
-    int outputIndex, cpx::compoly::WrapMode wrapMode, int portAChannels,
-    int portBChannels) {
-  cpx::compoly::SeparatedCableChannels channels =
-      cpx::compoly::separatedCableChannelsForCompolyLane(
-          cpx::compoly::CompolyLane(outputIndex), wrapMode,
-          cpx::compoly::SeparatedCablePolyChannels(
-              cpx::compoly::CablePolyChannels(portAChannels),
-              cpx::compoly::CablePolyChannels(portBChannels)));
-  return {{channels.first, channels.second}};
-}
-
-inline PortChannelCounts outputPortChannelCounts(CoordinateMode mode,
-                                                 int compolyChannels) {
-  compolyChannels = clampChannelCount(compolyChannels);
-  if (!isInterleaved(mode))
-    return PortChannelCounts(compolyChannels, compolyChannels);
-
-  int totalChannels = compolyChannels * 2;
-  return PortChannelCounts(std::min(maxChannels, totalChannels),
-                           std::max(0, totalChannels - maxChannels));
-}
-
-inline RectChannels readRectFromPorts(const PortChannels& ports,
-                                      CoordinateMode mode) {
-  RectChannels rect = {};
-
-  for (int c = 0; c < maxChannels; ++c) {
-    if (mode == CoordinateMode::RectSeparated) {
-      rect.x[c] = ports.a[c];
-      rect.y[c] = ports.b[c];
-    } else if (mode == CoordinateMode::RectInterleaved) {
-      rect.x[c] = c < 8 ? ports.a[2 * c] : ports.b[(2 * c) % maxChannels];
-      rect.y[c] =
-          c < 8 ? ports.a[2 * c + 1] : ports.b[(2 * c + 1) % maxChannels];
-    } else if (mode == CoordinateMode::PolarSeparated) {
-      Rect z = polarToRect(
-          Polar(ports.a[c], thetaCableVoltageToRadians(ports.b[c])));
-      rect.x[c] = z.x;
-      rect.y[c] = z.y;
-    } else if (mode == CoordinateMode::PolarInterleaved) {
-      float r = c < 8 ? ports.a[2 * c] : ports.b[(2 * c) % maxChannels];
-      float theta =
-          c < 8 ? ports.a[2 * c + 1] : ports.b[(2 * c + 1) % maxChannels];
-      Rect z = polarToRect(Polar(r, thetaCableVoltageToRadians(theta)));
-      rect.x[c] = z.x;
-      rect.y[c] = z.y;
-    }
-  }
-
-  return rect;
-}
-
-inline PortChannels writePortsFromRect(const RectChannels& rect,
-                                       CoordinateMode mode) {
-  PortChannels ports = {};
-
-  for (int c = 0; c < maxChannels; ++c) {
-    Quad z = quadFromRect(Rect(rect.x[c], rect.y[c]));
-    float a = isPolar(mode) ? z.r : z.x;
-    float b = isPolar(mode) ? thetaRadiansToCableVoltage(z.theta) : z.y;
-
-    if (isInterleaved(mode)) {
-      if (c < 8) {
-        ports.a[2 * c] = a;
-        ports.a[2 * c + 1] = b;
-      } else {
-        ports.b[(2 * c) % maxChannels] = a;
-        ports.b[(2 * c + 1) % maxChannels] = b;
-      }
-    } else {
-      ports.a[c] = a;
-      ports.b[c] = b;
-    }
-  }
-
-  return ports;
 }
 
 inline RectChannels addChannels(const RectChannels& z, const RectChannels& w) {

@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "CompolyPortMapping.hpp"
 #include "math/ComplexMath.hpp"
 
 using namespace rack;
@@ -96,7 +97,7 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
 
       int portOnePolyphony = inputs[inputFirstPortIndices[i]].getChannels();
       int portTwoPolyphony = inputs[inputFirstPortIndices[i] + 1].getChannels();
-      myStuff.push_back(cpx::complex_math::compolyphonyForInput(
+      myStuff.push_back(cpx::compoly::compolyLanesForInput(
           coordinateModeFromParam(inputMode), portOnePolyphony,
           portTwoPolyphony));
 
@@ -111,7 +112,7 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
   CompolyInputInfo getInputCompolyInfo(int inputMode, int inputFirstPortIndex) {
     int portAChannels = inputs[inputFirstPortIndex].getChannels();
     int portBChannels = inputs[inputFirstPortIndex + 1].getChannels();
-    int compolyChannels = cpx::complex_math::compolyphonyForInput(
+    int compolyChannels = cpx::compoly::compolyLanesForInput(
         coordinateModeFromParam(inputMode), portAChannels, portBChannels);
     return CompolyInputInfo(compolyChannels, portAChannels, portBChannels);
   }
@@ -146,8 +147,8 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
   }
 
   void setOutputChannels(int outIndex, int outMode, int compolyChannels) {
-    cpx::complex_math::PortChannelCounts counts =
-        cpx::complex_math::outputPortChannelCounts(
+    cpx::compoly::PortChannelCounts counts =
+        cpx::compoly::outputPortChannelCounts(
             coordinateModeFromParam(outMode), compolyChannels);
     outputs[outIndex + 0].setChannels(counts.a);
     outputs[outIndex + 1].setChannels(counts.b);
@@ -181,7 +182,7 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
           std::max(maxOfInputsCompolyphony, inputCompolyphonyChannels[i][0]);
     }
 
-    outputCompolyphony = cpx::complex_math::outputCompolyphony(
+    outputCompolyphony = cpx::compoly::outputCompolyLanes(
         knobSetting, maxOfInputsCompolyphony);
 
     return outputCompolyphony;
@@ -189,11 +190,11 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
 
   void readComplexInputPairToRect(int firstPortIndex, int inputMode, float* x,
                                   float* y) {
-    cpx::complex_math::PortChannels ports = {};
+    cpx::compoly::PortChannels ports = {};
     inputs[firstPortIndex].readVoltages(ports.a.data());
     inputs[firstPortIndex + 1].readVoltages(ports.b.data());
 
-    cpx::complex_math::RectChannels rect = cpx::complex_math::readRectFromPorts(
+    cpx::complex_math::RectChannels rect = cpx::compoly::readRectFromPorts(
         ports, coordinateModeFromParam(inputMode));
     for (int c = 0; c < cpx::complex_math::maxChannels; c++) {
       x[c] = rect.x[c];
@@ -209,9 +210,8 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
       rect.y[c] = y[c];
     }
 
-    cpx::complex_math::PortChannels ports =
-        cpx::complex_math::writePortsFromRect(
-            rect, coordinateModeFromParam(outputMode));
+    cpx::compoly::PortChannels ports = cpx::compoly::writePortsFromRect(
+        rect, coordinateModeFromParam(outputMode));
     outputs[firstPortIndex].writeVoltages(ports.a.data());
     outputs[firstPortIndex + 1].writeVoltages(ports.b.data());
   }
@@ -408,8 +408,8 @@ Otherwise use the poly channels
                                    const CompolyInputInfo& inputInfo) {
     if (inputMode != outputMode || wrapMode != WRAP_NORMAL) return false;
 
-    cpx::complex_math::PortChannelCounts outputCounts =
-        cpx::complex_math::outputPortChannelCounts(
+    cpx::compoly::PortChannelCounts outputCounts =
+        cpx::compoly::outputPortChannelCounts(
             coordinateModeFromParam(outputMode), compolyChannels);
     if (inputInfo.portAChannels != outputCounts.a ||
         inputInfo.portBChannels != outputCounts.b) {
