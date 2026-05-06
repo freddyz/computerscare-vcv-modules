@@ -1,8 +1,8 @@
 #pragma once
 
 #include <algorithm>
-#include <string>
-#include <vector>
+
+#include "PolyphonicMapping.hpp"
 
 namespace cpx {
 namespace compoly {
@@ -10,12 +10,15 @@ namespace compoly {
 constexpr int maxCablePolyChannels = 16;
 constexpr int maxCompolyLanes = 16;
 
-enum class WrapMode {
-  Normal = 0,
-  Cycle = 1,
-  Minimal = 2,
-  Stall = 3,
-};
+using PolyphonicMappingMode = cpx::polyphonic::MappingMode;
+using WrapMode = cpx::polyphonic::MappingMode;
+
+constexpr int firstPolyphonicMappingModeValue =
+    cpx::polyphonic::firstMappingModeValue;
+constexpr int lastPolyphonicMappingModeValue =
+    cpx::polyphonic::lastMappingModeValue;
+constexpr int defaultPolyphonicMappingModeValue =
+    cpx::polyphonic::defaultMappingModeValue;
 
 struct CablePolyChannels {
   int count;
@@ -58,13 +61,7 @@ struct SeparatedCableChannels {
 };
 
 inline const std::vector<std::string>& wrapModeDescriptions() {
-  static const std::vector<std::string> descriptions = {
-      "Normal (Standard Polyphonic Behavior)",
-      "Cycle (Repeat Channels)",
-      "Minimal (Pad with 0v)",
-      "Stall (Pad with final voltage)",
-  };
-  return descriptions;
+  return cpx::polyphonic::mappingModeDescriptions();
 }
 
 inline int clampCompolyLanes(int lanes) {
@@ -87,20 +84,9 @@ inline int outputCompolyLanes(int requestedLanes, int detectedLanes) {
 
 inline int cableChannelForCompolyLane(CompolyLane lane, WrapMode wrapMode,
                                       CablePolyChannels cableChannels) {
-  if (cableChannels.count <= 0) return 0;
-
-  switch (wrapMode) {
-    case WrapMode::Normal:
-      return cableChannels.count == 1 ? 0 : lane.index;
-    case WrapMode::Cycle:
-      return lane.index % cableChannels.count;
-    case WrapMode::Minimal:
-      return lane.index;
-    case WrapMode::Stall:
-      return lane.index > cableChannels.count - 1 ? cableChannels.count - 1
-                                                  : lane.index;
-  }
-  return lane.index;
+  return cpx::polyphonic::inputChannelForOutputChannel(
+      cpx::polyphonic::OutputChannel(lane.index), wrapMode,
+      cpx::polyphonic::ChannelCount(cableChannels.count));
 }
 
 inline SeparatedCableChannels separatedCableChannelsForCompolyLane(

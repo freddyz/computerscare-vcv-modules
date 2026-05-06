@@ -20,19 +20,19 @@ struct ComputerscareComplexBase;
 
 struct ComputerscareComplexBase : ComputerscareMenuParamModule {
   static constexpr int WRAP_NORMAL =
-      static_cast<int>(cpx::compoly::WrapMode::Normal);
+      static_cast<int>(cpx::polyphonic::MappingMode::Normal);
   static constexpr int WRAP_CYCLE =
-      static_cast<int>(cpx::compoly::WrapMode::Cycle);
+      static_cast<int>(cpx::polyphonic::MappingMode::Cycle);
   static constexpr int WRAP_MINIMAL =
-      static_cast<int>(cpx::compoly::WrapMode::Minimal);
+      static_cast<int>(cpx::polyphonic::MappingMode::Minimal);
   static constexpr int WRAP_STALL =
-      static_cast<int>(cpx::compoly::WrapMode::Stall);
-  static constexpr int RECT_INTERLEAVED =
-      static_cast<int>(cpx::complex_math::CoordinateMode::RectInterleaved);
+      static_cast<int>(cpx::polyphonic::MappingMode::Stall);
+  static constexpr int RECT_INTERLEAVED = static_cast<int>(
+      cpx::complex_math::CoordinateMode::RectangularInterleaved);
   static constexpr int POLAR_INTERLEAVED =
       static_cast<int>(cpx::complex_math::CoordinateMode::PolarInterleaved);
   static constexpr int RECT_SEPARATED =
-      static_cast<int>(cpx::complex_math::CoordinateMode::RectSeparated);
+      static_cast<int>(cpx::complex_math::CoordinateMode::RectangularSeparated);
   static constexpr int POLAR_SEPARATED =
       static_cast<int>(cpx::complex_math::CoordinateMode::PolarSeparated);
 

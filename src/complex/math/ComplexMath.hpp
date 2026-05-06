@@ -13,11 +13,21 @@ constexpr float thetaVoltsPerRadian = 5.f / pi;
 constexpr float thetaRadiansPerVolt = pi / 5.f;
 
 enum class CoordinateMode {
-  RectInterleaved = 0,
+  RectangularInterleaved = 0,
   PolarInterleaved = 1,
-  RectSeparated = 2,
+  RectangularSeparated = 2,
   PolarSeparated = 3,
+
+  RectInterleaved = RectangularInterleaved,
+  RectSeparated = RectangularSeparated,
 };
+
+constexpr int firstCoordinateModeValue =
+    static_cast<int>(CoordinateMode::RectangularInterleaved);
+constexpr int lastCoordinateModeValue =
+    static_cast<int>(CoordinateMode::PolarSeparated);
+constexpr int defaultCoordinateModeValue =
+    static_cast<int>(CoordinateMode::RectangularInterleaved);
 
 struct Rect {
   float x;
@@ -59,14 +69,14 @@ struct RectChannels {
 };
 
 inline bool isRect(CoordinateMode mode) {
-  return mode == CoordinateMode::RectInterleaved ||
-         mode == CoordinateMode::RectSeparated;
+  return mode == CoordinateMode::RectangularInterleaved ||
+         mode == CoordinateMode::RectangularSeparated;
 }
 
 inline bool isPolar(CoordinateMode mode) { return !isRect(mode); }
 
 inline bool isInterleaved(CoordinateMode mode) {
-  return mode == CoordinateMode::RectInterleaved ||
+  return mode == CoordinateMode::RectangularInterleaved ||
          mode == CoordinateMode::PolarInterleaved;
 }
 

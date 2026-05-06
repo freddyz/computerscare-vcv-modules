@@ -64,21 +64,35 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     getParamQuantity(COMPOLY_CHANNELS)->randomizeEnabled = false;
     getParamQuantity(COMPOLY_CHANNELS)->resetEnabled = false;
 
-    configParam<cpx::CompolyModeParam>(MAIN_OUTPUT_MODE, 0.f, 3.f, 0.f,
-                                       "Main Output Mode");
-    configParam<cpx::CompolyModeParam>(PRODUCT_OUTPUT_MODE, 0.f, 3.f, 0.f,
-                                       "Product Output Mode");
+    configParam<cpx::CompolyModeParam>(
+        MAIN_OUTPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "Main Output Mode");
+    configParam<cpx::CompolyModeParam>(
+        PRODUCT_OUTPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "Product Output Mode");
 
-    configParam<cpx::CompolyModeParam>(Z_INPUT_MODE, 0.f, 3.f, 0.f,
-                                       "z Input Mode");
-    configParam<cpx::CompolyModeParam>(W_INPUT_MODE, 0.f, 3.f, 0.f,
-                                       "w Input Mode");
-    configParam<cpx::CompolyModeParam>(A_INPUT_MODE, 0.f, 3.f, 0.f,
-                                       "a Input Mode");
-    configParam<cpx::CompolyModeParam>(B_INPUT_MODE, 0.f, 3.f, 0.f,
-                                       "b Input Mode");
-    configParam<cpx::CompolyModeParam>(C_INPUT_MODE, 0.f, 3.f, 0.f,
-                                       "c Input Mode");
+    configParam<cpx::CompolyModeParam>(
+        Z_INPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "z Input Mode");
+    configParam<cpx::CompolyModeParam>(
+        W_INPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "w Input Mode");
+    configParam<cpx::CompolyModeParam>(
+        A_INPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "a Input Mode");
+    configParam<cpx::CompolyModeParam>(
+        B_INPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "b Input Mode");
+    configParam<cpx::CompolyModeParam>(
+        C_INPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "c Input Mode");
 
     getParamQuantity(MAIN_OUTPUT_MODE)->randomizeEnabled = false;
     getParamQuantity(PRODUCT_OUTPUT_MODE)->randomizeEnabled = false;

@@ -114,8 +114,10 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
     configParam(COMPOLY_CHANNELS, 1.f, 16.f, 16.f, "Compoly Lanes");
     configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale");
     configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset", " volts");
-    configParam<cpx::CompolyModeParam>(MAIN_OUTPUT_MODE, 0.f, 3.f, 0.f,
-                                       "Main Output Mode");
+    configParam<cpx::CompolyModeParam>(
+        MAIN_OUTPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "Main Output Mode");
     for (int i = 0; i < numComplexGeneratorKnobs; i++) {
       configParam<cpx::ComplexControlViewModeParam>(
           LANE_VIEW_MODE + i, 0.f, 2.f, 0.f,

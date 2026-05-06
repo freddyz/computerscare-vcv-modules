@@ -48,12 +48,11 @@ inline int compolyLanesForInput(cpx::complex_math::CoordinateMode mode,
   return compolyLanesForSeparatedCables(cables);
 }
 
-inline std::array<int, 2> separatedInputChannelIndices(int outputIndex,
-                                                       WrapMode wrapMode,
-                                                       int portAChannels,
-                                                       int portBChannels) {
+inline std::array<int, 2> separatedInputChannelIndices(
+    int outputIndex, cpx::polyphonic::MappingMode mappingMode,
+    int portAChannels, int portBChannels) {
   SeparatedCableChannels channels = separatedCableChannelsForCompolyLane(
-      CompolyLane(outputIndex), wrapMode,
+      CompolyLane(outputIndex), mappingMode,
       SeparatedCablePolyChannels(CablePolyChannels(portAChannels),
                                  CablePolyChannels(portBChannels)));
   return {{channels.first, channels.second}};
@@ -76,10 +75,11 @@ inline cpx::complex_math::RectChannels readRectFromPorts(
   cpx::complex_math::RectChannels rect = {};
 
   for (int c = 0; c < cpx::complex_math::maxChannels; ++c) {
-    if (mode == cpx::complex_math::CoordinateMode::RectSeparated) {
+    if (mode == cpx::complex_math::CoordinateMode::RectangularSeparated) {
       rect.x[c] = ports.a[c];
       rect.y[c] = ports.b[c];
-    } else if (mode == cpx::complex_math::CoordinateMode::RectInterleaved) {
+    } else if (mode ==
+               cpx::complex_math::CoordinateMode::RectangularInterleaved) {
       rect.x[c] = c < 8 ? ports.a[2 * c]
                         : ports.b[(2 * c) % cpx::complex_math::maxChannels];
       rect.y[c] = c < 8 ? ports.a[2 * c + 1]
@@ -110,8 +110,8 @@ inline cpx::complex_math::RectChannels readRectFromPorts(
 
 inline cpx::complex_math::RectChannels readWrappedSeparatedInputToRect(
     const PortChannels& ports, PortChannelCounts portChannels,
-    cpx::complex_math::CoordinateMode mode, WrapMode wrapMode,
-    int compolyChannels,
+    cpx::complex_math::CoordinateMode mode,
+    cpx::polyphonic::MappingMode mappingMode, int compolyChannels,
     CoordinatePairTransform transform = CoordinatePairTransform(),
     cpx::complex_math::Rect rectOffset = cpx::complex_math::Rect()) {
   cpx::complex_math::RectChannels rect = {};
@@ -119,7 +119,7 @@ inline cpx::complex_math::RectChannels readWrappedSeparatedInputToRect(
 
   for (int c = 0; c < compolyChannels; ++c) {
     std::array<int, 2> inputChannels = separatedInputChannelIndices(
-        c, wrapMode, portChannels.a, portChannels.b);
+        c, mappingMode, portChannels.a, portChannels.b);
     float a = ports.a[inputChannels[0]] * transform.aScale + transform.aOffset;
     float b = ports.b[inputChannels[1]] * transform.bScale + transform.bOffset;
 

@@ -8,11 +8,11 @@ using namespace rack;
 namespace cpx {
 
 constexpr int RECT_INTERLEAVED =
-    static_cast<int>(cpx::complex_math::CoordinateMode::RectInterleaved);
+    static_cast<int>(cpx::complex_math::CoordinateMode::RectangularInterleaved);
 constexpr int POLAR_INTERLEAVED =
     static_cast<int>(cpx::complex_math::CoordinateMode::PolarInterleaved);
 constexpr int RECT_SEPARATED =
-    static_cast<int>(cpx::complex_math::CoordinateMode::RectSeparated);
+    static_cast<int>(cpx::complex_math::CoordinateMode::RectangularSeparated);
 constexpr int POLAR_SEPARATED =
     static_cast<int>(cpx::complex_math::CoordinateMode::PolarSeparated);
 

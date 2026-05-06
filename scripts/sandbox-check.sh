@@ -202,6 +202,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+echo "==> SDK-free polyphonic mapping tests..."
+if command -v g++ >/dev/null; then
+  if g++ -std=c++11 -I src tests/polyphonic_mapping_test.cpp -o /tmp/cs_polyphonic_mapping_test; then
+    /tmp/cs_polyphonic_mapping_test || fail "polyphonic mapping tests failed"
+  else
+    fail "polyphonic mapping tests did not compile"
+  fi
+else
+  echo "  skip: g++ not installed"
+fi
+
+# ---------------------------------------------------------------------------
 echo "==> SDK-free compoly port mapping tests..."
 if command -v g++ >/dev/null; then
   if g++ -std=c++11 -I src tests/compoly_port_mapping_test.cpp -o /tmp/cs_compoly_port_mapping_test; then

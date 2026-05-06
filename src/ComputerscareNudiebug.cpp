@@ -39,10 +39,14 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
 
   ComputerscareNudiebug() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
-    configParam<cpx::CompolyModeParam>(Z_INPUT_MODE, 0.f, 3.f, 0.f,
-                                       "z Input Mode");
-    configParam<cpx::CompolyModeParam>(Z_OUTPUT_MODE, 0.f, 3.f, 0.f,
-                                       "z Output Mode");
+    configParam<cpx::CompolyModeParam>(
+        Z_INPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "z Input Mode");
+    configParam<cpx::CompolyModeParam>(
+        Z_OUTPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "z Output Mode");
     configSwitch(TEXT_DISPLAY_MODE, 0.f, 3.f, nudiebug::TEXT_LEFT, "Text",
                  {"Off", "Left", "Middle", "Right"});
     configSwitch(BARS_DISPLAY_MODE, 0.f, 3.f, nudiebug::BARS_UNI_EDGE, "Bars",

@@ -50,8 +50,8 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase {
   ComputerscareNomplexPumbers() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-    configMenuParam(WRAP_MODE, 0.f, "Polyphonic Wrapping Mode",
-                    wrapModeDescriptions);
+    configMenuParam(WRAP_MODE, cpx::polyphonic::defaultMappingModeValue,
+                    "Polyphonic Mapping Mode", wrapModeDescriptions);
     getParamQuantity(WRAP_MODE)->randomizeEnabled = false;
     getParamQuantity(WRAP_MODE)->resetEnabled = false;
 
@@ -83,14 +83,22 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase {
     configParam(ARGUMENT_INPUT_TRIM, -2.f, 2.f, 1.f,
                 "Argument Input Attenuversion");
 
-    configParam<cpx::CompolyModeParam>(RECT_IN_RECT_OUT_MODE, 0.f, 3.f, 0.f,
-                                       "Rect Output 1 Mode");
-    configParam<cpx::CompolyModeParam>(RECT_IN_POLAR_OUT_MODE, 0.f, 3.f, 0.f,
-                                       "Rect Output 2 Mode");
-    configParam<cpx::CompolyModeParam>(POLAR_IN_RECT_OUT_MODE, 0.f, 3.f, 0.f,
-                                       "Polar Output 1 Mode");
-    configParam<cpx::CompolyModeParam>(POLAR_IN_POLAR_OUT_MODE, 0.f, 3.f, 0.f,
-                                       "Polar Output 2 Mode");
+    configParam<cpx::CompolyModeParam>(
+        RECT_IN_RECT_OUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "Rect Output 1 Mode");
+    configParam<cpx::CompolyModeParam>(
+        RECT_IN_POLAR_OUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "Rect Output 2 Mode");
+    configParam<cpx::CompolyModeParam>(
+        POLAR_IN_RECT_OUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "Polar Output 1 Mode");
+    configParam<cpx::CompolyModeParam>(
+        POLAR_IN_POLAR_OUT_MODE, cpx::complex_math::firstCoordinateModeValue,
+        cpx::complex_math::lastCoordinateModeValue,
+        cpx::complex_math::defaultCoordinateModeValue, "Polar Output 2 Mode");
     getParamQuantity(RECT_IN_RECT_OUT_MODE)->randomizeEnabled = false;
     getParamQuantity(RECT_IN_POLAR_OUT_MODE)->randomizeEnabled = false;
     getParamQuantity(POLAR_IN_RECT_OUT_MODE)->randomizeEnabled = false;
@@ -223,8 +231,9 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase {
         cpx::compoly::readWrappedSeparatedInputToRect(
             ports,
             cpx::compoly::PortChannelCounts(firstChannels, secondChannels),
-            cpx::complex_math::CoordinateMode::RectSeparated,
-            static_cast<cpx::compoly::WrapMode>(wrapMode), compolyChannels,
+            cpx::complex_math::CoordinateMode::RectangularSeparated,
+            static_cast<cpx::polyphonic::MappingMode>(wrapMode),
+            compolyChannels,
             cpx::compoly::CoordinatePairTransform(firstTrim, firstOffset,
                                                   secondTrim, secondOffset));
 
@@ -250,7 +259,8 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase {
             ports,
             cpx::compoly::PortChannelCounts(firstChannels, secondChannels),
             cpx::complex_math::CoordinateMode::PolarSeparated,
-            static_cast<cpx::compoly::WrapMode>(wrapMode), compolyChannels,
+            static_cast<cpx::polyphonic::MappingMode>(wrapMode),
+            compolyChannels,
             cpx::compoly::CoordinatePairTransform(radiusTrim, radiusOffset,
                                                   thetaTrim, thetaOffset),
             cpx::complex_math::Rect(xOffset, yOffset));
@@ -424,7 +434,7 @@ struct ComputerscareNomplexPumbersWidget : ModuleWidget {
         dynamic_cast<ComputerscareNomplexPumbers*>(this->nomplex);
 
     wrapModeMenu = new NomplexWrapModeMenu();
-    wrapModeMenu->text = "Polyphonic Wrap Mode";
+    wrapModeMenu->text = "Polyphonic Mapping Mode";
     wrapModeMenu->rightText = RIGHT_ARROW;
     wrapModeMenu->param =
         pumbersModule->paramQuantities[ComputerscareNomplexPumbers::WRAP_MODE];

@@ -33,15 +33,16 @@ int main() {
   namespace cp = cpx::compoly;
   constexpr float pi = 3.14159265358979323846f;
 
-  require(cp::compolyLanesForInput(cm::CoordinateMode::RectInterleaved, 3, 2) ==
-              3,
+  require(cp::compolyLanesForInput(cm::CoordinateMode::RectangularInterleaved,
+                                   3, 2) == 3,
           "interleaved compolyphony rounds up combined channel pairs");
-  require(cp::compolyLanesForInput(cm::CoordinateMode::RectSeparated, 3, 2) ==
-              3,
+  require(cp::compolyLanesForInput(cm::CoordinateMode::RectangularSeparated, 3,
+                                   2) == 3,
           "separated compolyphony uses max port channels");
 
   cp::PortChannelCounts interleavedCounts =
-      cp::outputPortChannelCounts(cm::CoordinateMode::RectInterleaved, 9);
+      cp::outputPortChannelCounts(cm::CoordinateMode::RectangularInterleaved,
+                                  9);
   require(interleavedCounts.a == 16 && interleavedCounts.b == 2,
           "interleaved output channel counts split after 16 lanes");
 
@@ -58,7 +59,8 @@ int main() {
   }
 
   cm::RectChannels rect =
-      cp::readRectFromPorts(rectInterleaved, cm::CoordinateMode::RectInterleaved);
+      cp::readRectFromPorts(rectInterleaved,
+                            cm::CoordinateMode::RectangularInterleaved);
   for (int c = 0; c < cm::maxChannels; ++c) {
     requireNear(rect.x[c], static_cast<float>(10 + c),
                 "readRectFromPorts interleaved x");
@@ -67,7 +69,8 @@ int main() {
   }
 
   cp::PortChannels packed =
-      cp::writePortsFromRect(rect, cm::CoordinateMode::RectInterleaved);
+      cp::writePortsFromRect(rect,
+                             cm::CoordinateMode::RectangularInterleaved);
   for (int c = 0; c < cm::maxChannels; ++c) {
     int index = (2 * c) % cm::maxChannels;
     const cm::Channels& a = c < 8 ? packed.a : packed.b;
@@ -101,7 +104,8 @@ int main() {
   wrappedSeparated.b[2] = 30.f;
   cm::RectChannels wrappedRect = cp::readWrappedSeparatedInputToRect(
       wrappedSeparated, cp::PortChannelCounts(2, 3),
-      cm::CoordinateMode::RectSeparated, cp::WrapMode::Cycle, 5,
+      cm::CoordinateMode::RectangularSeparated,
+      cpx::polyphonic::MappingMode::Cycle, 5,
       cp::CoordinatePairTransform(2.f, 0.5f, 1.f, -1.f));
   requireNear(wrappedRect.x[0], 2.5f, "wrapped separated rect x0");
   requireNear(wrappedRect.x[2], 2.5f, "wrapped separated rect cycles x");
@@ -114,7 +118,7 @@ int main() {
   wrappedPolar.b[1] = 2.5f;
   cm::RectChannels polarWrappedRect = cp::readWrappedSeparatedInputToRect(
       wrappedPolar, cp::PortChannelCounts(2, 2),
-      cm::CoordinateMode::PolarSeparated, cp::WrapMode::Stall, 4,
+      cm::CoordinateMode::PolarSeparated, cpx::polyphonic::MappingMode::Stall, 4,
       cp::CoordinatePairTransform(1.f, 1.f, 1.f, pi / 2.f),
       cm::Rect(0.25f, -0.5f));
   requireNear(polarWrappedRect.x[0], 0.25f,
