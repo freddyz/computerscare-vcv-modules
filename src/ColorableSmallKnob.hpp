@@ -119,20 +119,17 @@ struct ColorableSmallKnob : Knob {
     if (value <= -1.f) {
       NVGcolor hotRed = nvgRGB(0xff, 0x3a, 0x24);
       hotRed = rotateColor(hotRed, negativeHue, rotateAmount);
-      NVGcolor pink = rotateColor(COLOR_COMPUTERSCARE_PINK, negativePinkHue,
-                                  rotateAmount);
-      target = mixColor(hotRed, pink,
-                        clampf(-value - 1.f, 0.f, 1.f));
+      NVGcolor pink =
+          rotateColor(COLOR_COMPUTERSCARE_PINK, negativePinkHue, rotateAmount);
+      target = mixColor(hotRed, pink, clampf(-value - 1.f, 0.f, 1.f));
     } else if (value < 0.f) {
       NVGcolor hotRed =
           rotateColor(nvgRGB(0xff, 0x3a, 0x24), negativeHue, rotateAmount);
-      target = mixColor(neutral, hotRed,
-                        clampf(-value, 0.f, 1.f));
+      target = mixColor(neutral, hotRed, clampf(-value, 0.f, 1.f));
     } else if (value > 1.f) {
       NVGcolor neon =
           rotateColor(COLOR_COMPUTERSCARE_YELLOW, positiveHue, rotateAmount);
-      target = mixColor(neutral, neon,
-                        clampf(value - 1.f, 0.f, 1.f));
+      target = mixColor(neutral, neon, clampf(value - 1.f, 0.f, 1.f));
     }
 
     NVGcolor color = mixColor(base, target, colorAmount);
@@ -155,8 +152,7 @@ struct ColorableSmallKnob : Knob {
       return 1.f + (normalFadeAlpha - 1.f) * fade;
     }
     float extremeNormalized = clampf(absValue / 2.f, 0.f, 1.f);
-    float extremeFadeAlpha =
-        0.02f + 0.98f * std::pow(extremeNormalized, 2.2f);
+    float extremeFadeAlpha = 0.02f + 0.98f * std::pow(extremeNormalized, 2.2f);
     return normalFadeAlpha +
            (extremeFadeAlpha - normalFadeAlpha) * (fade - 1.f);
   }
@@ -164,34 +160,34 @@ struct ColorableSmallKnob : Knob {
   void drawBodyPath(NVGcontext* vg) {
     nvgBeginPath(vg);
     nvgMoveTo(vg, 17.306156f, 8.928799f);
-    nvgBezierTo(vg, 17.853300f, 15.421582f, 13.631479f, 18.224601f,
-                8.787282f, 17.778464f);
-    nvgBezierTo(vg, 4.332828f, 17.368221f, -0.464907f, 13.620190f,
-                0.661091f, 8.970148f);
+    nvgBezierTo(vg, 17.853300f, 15.421582f, 13.631479f, 18.224601f, 8.787282f,
+                17.778464f);
+    nvgBezierTo(vg, 4.332828f, 17.368221f, -0.464907f, 13.620190f, 0.661091f,
+                8.970148f);
     nvgBezierTo(vg, 2.473968f, 1.483498f, 5.201003f, 0.480310f, 9.469406f,
                 0.161832f);
     nvgBezierTo(vg, 9.740443f, 0.141612f, 9.963818f, 0.090232f, 10.086859f,
                 0.174862f);
     nvgBezierTo(vg, 10.938155f, 0.759968f, 8.481710f, 2.412317f, 14.495388f,
                 3.262220f);
-    nvgBezierTo(vg, 14.495388f, 3.262220f, 17.153964f, 7.122867f,
-                17.306156f, 8.928857f);
+    nvgBezierTo(vg, 14.495388f, 3.262220f, 17.153964f, 7.122867f, 17.306156f,
+                8.928857f);
     nvgClosePath(vg);
   }
 
   void drawPointerPath(NVGcontext* vg) {
     nvgBeginPath(vg);
     nvgMoveTo(vg, 9.649306f, 0.217346f);
-    nvgBezierTo(vg, 10.339440f, 1.480190f, 9.100341f, 3.434183f,
-                9.100341f, 3.434183f);
+    nvgBezierTo(vg, 10.339440f, 1.480190f, 9.100341f, 3.434183f, 9.100341f,
+                3.434183f);
     nvgLineTo(vg, 8.777169f, 4.295306f);
     nvgLineTo(vg, 8.407328f, 5.170551f);
     nvgLineTo(vg, 8.378368f, 6.246799f);
     nvgLineTo(vg, 8.832016f, 7.241607f);
     nvgLineTo(vg, 9.087293f, 8.610831f);
     nvgLineTo(vg, 8.257950f, 10.978162f);
-    nvgBezierTo(vg, 9.834706f, 11.107129f, 9.893502f, 11.084118f,
-                11.237064f, 10.280713f);
+    nvgBezierTo(vg, 9.834706f, 11.107129f, 9.893502f, 11.084118f, 11.237064f,
+                10.280713f);
     nvgLineTo(vg, 10.582241f, 8.567480f);
     nvgLineTo(vg, 10.243278f, 7.163124f);
     nvgLineTo(vg, 10.215678f, 5.786943f);
@@ -215,10 +211,10 @@ struct ColorableSmallKnob : Knob {
            outputChannel > *polyChannels - 1);
     }
 
-    float value = useDisplayState ? displayValue
-                                  : (getParamQuantity()
-                                         ? getParamQuantity()->getValue()
-                                         : 1.f);
+    float value =
+        useDisplayState
+            ? displayValue
+            : (getParamQuantity() ? getParamQuantity()->getValue() : 1.f);
     NVGcolor bodyColor =
         disabled ? nvgRGBA(0x78, 0x78, 0x78, 0xff) : knobColor(value);
     NVGcolor pointerColor =

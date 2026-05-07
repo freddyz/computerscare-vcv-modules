@@ -1,5 +1,5 @@
-#include "Computerscare.hpp"
 #include "ColorableSmallKnob.hpp"
+#include "Computerscare.hpp"
 
 struct ComputerscareMolyPatrix;
 
@@ -220,9 +220,9 @@ struct DisableableSmallKnob : ComputerscareRoundKnob {
           module ? module->numInputChannels : previewNumInputChannels;
       int activePolyChannels =
           module ? module->polyChannels : previewPolyChannels;
-      bool candidateDisabled =
-          ((activeInputChannels != 0 && inputChannel > activeInputChannels - 1) ||
-           outputChannel > activePolyChannels - 1);
+      bool candidateDisabled = ((activeInputChannels != 0 &&
+                                 inputChannel > activeInputChannels - 1) ||
+                                outputChannel > activePolyChannels - 1);
       if (disabled != candidateDisabled || !initialized) {
         setSvg(candidateDisabled ? disabledSvg : enabledThemes[themeIndex]);
         disabled = candidateDisabled;
