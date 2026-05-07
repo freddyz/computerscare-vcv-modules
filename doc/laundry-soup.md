@@ -82,6 +82,48 @@ To program a rhythm that divides the incoming clock by 16, the proper input is N
 ~~~~
 
 
+### Math:
+Simple math can be used anywhere an integer length is expected.  Operators are evaluated from left to right.
+
+~~~~
+2+3    --->   x----       (same as <5>)
+8/2    --->   x---        (same as 4)
+2^4    --->   x--------------- (same as <16>)
+5%2    --->   x          (remainder after division, same as 1)
+~~~~
+
+Available operators: `+` add, `-` subtract, `*` multiply, `/` divide, `^` power, `%` remainder.
+
+
+### Polyphonic channel number:
+When a row is set to output more than one polyphonic channel, `#` can be used as the current channel number.  Channel numbers start at 1, so `#` means channel 1 divides by 1, channel 2 divides by 2, and so on.
+
+~~~~
+#      ---> ch1: xxxxxxxx
+           ch2: x-x-x-x-
+           ch3: x--x--x-
+
+#+1    ---> ch1 divides by 2, ch2 divides by 3, etc.
+#*2    ---> ch1 divides by 2, ch2 divides by 4, etc.
+~~~~
+
+
+### Polyphonic patterns:
+Separate patterns with semicolons to give different patterns to different polyphonic channels.  If there are more channels than patterns, the pattern list repeats.
+
+~~~~
+1;2;3  ---> ch1 divides by 1
+           ch2 divides by 2
+           ch3 divides by 3
+           ch4 divides by 1
+
+31;<8>;[311,2]@16
+        ---> ch1 uses 31
+             ch2 divides by 8
+             ch3 uses [311,2]@16
+~~~~
+
+
 
 ### Input Jacks:
 ![ComputerscarePatchSequencer](./laundry-soup-inputs-1.png)
