@@ -2,6 +2,7 @@
 
 #include "../ImagePathHelpers.hpp"
 #include "PortaloofBackdropWidget.hpp"
+#include "PortaloofMouseControl.hpp"
 
 // ─── Widget ──────────────────────────────────────────────────────────────────
 
@@ -216,6 +217,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
   GLuint loadedTexId[2] = {0, 0};
   SmallLetterDisplay* mixLeftLabel = nullptr;
   SmallLetterDisplay* mixRightLabel = nullptr;
+  PortaloofMouseControl mouseControl;
 
   // Browser preview fake module
   ComputerscarePortaloof* browserModule = nullptr;
@@ -1067,6 +1069,20 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     }
 
     if (!hideUi) ModuleWidget::drawLayer(args, layer);
+    if (layer == 1) {
+      if (!hideUi)
+        mouseControl.drawPanelHint(
+            args, math::Rect(Vec(0.f, 0.f), Vec(CONTROLS_WIDTH, box.size.y)),
+            this);
+      mouseControl.drawIndicator(
+          args, hideUi ? Vec(RACK_GRID_WIDTH * 0.5f, 16.f) : Vec(13.f, 44.f),
+          this);
+      if (!hideUi) {
+        std::vector<PortaloofMouseControl::ControlTab> tabs = {
+            {91.f, "WHEEL"}, {256.f, "DRAG X"}, {289.f, "DRAG Y"}};
+        mouseControl.drawControlTabs(args, CONTROLS_WIDTH, tabs);
+      }
+    }
     drawHeaderLayer(args, layer, hideUi);
   }
 
@@ -1250,6 +1266,54 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       if (m) m->setSourceImage(1, path);
       e.consume(this);
     }
+  }
+
+  void onHover(const HoverEvent& e) override {
+    mouseControl.onHover(e);
+    ModuleWidget::onHover(e);
+  }
+
+  void onLeave(const LeaveEvent& e) override {
+    mouseControl.onLeave(e);
+    ModuleWidget::onLeave(e);
+  }
+
+  void onHoverKey(const HoverKeyEvent& e) override {
+    if (mouseControl.onHoverKey(this, e)) return;
+    ModuleWidget::onHoverKey(e);
+  }
+
+  void onButton(const ButtonEvent& e) override {
+    auto* m = dynamic_cast<ComputerscarePortaloof*>(module);
+    float displayX = m && m->hideUi ? RACK_GRID_WIDTH : DISPLAY_X;
+    math::Rect visualRect(
+        Vec(displayX, 0.f),
+        Vec(std::max(box.size.x - displayX, 1.f), box.size.y));
+    if (mouseControl.onButton(this, m, e, visualRect)) return;
+    ModuleWidget::onButton(e);
+  }
+
+  void onDragMove(const DragMoveEvent& e) override {
+    auto* m = dynamic_cast<ComputerscarePortaloof*>(module);
+    float displayX = m && m->hideUi ? RACK_GRID_WIDTH : DISPLAY_X;
+    math::Vec displaySize(std::max(box.size.x - displayX, 1.f), box.size.y);
+    if (mouseControl.onDragMove(this, m, e, displaySize)) return;
+    ModuleWidget::onDragMove(e);
+  }
+
+  void onDragEnd(const DragEndEvent& e) override {
+    if (mouseControl.onDragEnd(this, e)) return;
+    ModuleWidget::onDragEnd(e);
+  }
+
+  void onHoverScroll(const HoverScrollEvent& e) override {
+    auto* m = dynamic_cast<ComputerscarePortaloof*>(module);
+    float displayX = m && m->hideUi ? RACK_GRID_WIDTH : DISPLAY_X;
+    math::Rect visualRect(
+        Vec(displayX, 0.f),
+        Vec(std::max(box.size.x - displayX, 1.f), box.size.y));
+    if (mouseControl.onHoverScroll(this, m, e, visualRect)) return;
+    ModuleWidget::onHoverScroll(e);
   }
 
   void step() override {
