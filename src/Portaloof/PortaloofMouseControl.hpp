@@ -33,6 +33,7 @@ struct PortaloofMouseControl {
   bool onButton(Widget* owner, ComputerscarePortaloof* module,
                 const event::Button& e, math::Rect controlRect) {
     if (!module) return false;
+    if (state.endDrag(owner, e)) return true;
     if (!controlRect.contains(e.pos)) return false;
     if (state.beginDrag(
             owner, e,
@@ -40,7 +41,13 @@ struct PortaloofMouseControl {
             getParamValue(module, ComputerscarePortaloof::TRANS_Y_KNOB))) {
       return true;
     }
-    return state.endDrag(owner, e);
+    return false;
+  }
+
+  bool onDragStart(Widget* owner, const event::DragStart& e) {
+    if (!state.editing) return false;
+    e.consume(owner);
+    return true;
   }
 
   bool onDragMove(Widget* owner, ComputerscarePortaloof* module,
@@ -58,10 +65,13 @@ struct PortaloofMouseControl {
     float modSpeed = ComputerscareModifierMouseControl::getRackModSpeed();
     float dx = e.mouseDelta.x / displaySize.x * modSpeed;
     float dy = e.mouseDelta.y / displaySize.y * modSpeed;
+    bool secondaryMode = state.isSecondaryMode();
     engine::ParamQuantity* transX =
-        getParam(module, ComputerscarePortaloof::TRANS_X_KNOB);
+        getParam(module, secondaryMode ? ComputerscarePortaloof::SCALE_X_KNOB
+                                       : ComputerscarePortaloof::TRANS_X_KNOB);
     engine::ParamQuantity* transY =
-        getParam(module, ComputerscarePortaloof::TRANS_Y_KNOB);
+        getParam(module, secondaryMode ? ComputerscarePortaloof::SCALE_Y_KNOB
+                                       : ComputerscarePortaloof::TRANS_Y_KNOB);
     ComputerscareModifierMouseControl::setParamValue(
         transX, transX ? transX->getValue() + dx : 0.f);
     ComputerscareModifierMouseControl::setParamValue(
@@ -81,17 +91,24 @@ struct PortaloofMouseControl {
                      const event::HoverScroll& e, math::Rect controlRect) {
     if (!module || e.isConsumed() || !state.shouldControl(owner)) return false;
     if (!controlRect.contains(e.pos)) return false;
-    engine::ParamQuantity* scale =
-        getParam(module, ComputerscarePortaloof::SCALE_KNOB);
-    if (!scale) return false;
+    bool secondaryMode = state.isSecondaryMode();
+    engine::ParamQuantity* target =
+        getParam(module, secondaryMode ? ComputerscarePortaloof::ROT_KNOB
+                                       : ComputerscarePortaloof::SCALE_KNOB);
+    if (!target) return false;
 
     float direction =
         e.scrollDelta.y != 0.f ? e.scrollDelta.y : -e.scrollDelta.x;
     if (direction == 0.f) return false;
     float modSpeed = ComputerscareModifierMouseControl::getRackModSpeed();
-    float factor = std::pow(1.08f, direction * modSpeed / 8.f);
-    ComputerscareModifierMouseControl::setParamValue(
-        scale, scale->getValue() * factor);
+    if (secondaryMode) {
+      ComputerscareModifierMouseControl::setParamValue(
+          target, target->getValue() + direction * modSpeed * 0.08f);
+    } else {
+      float factor = std::pow(1.08f, direction * modSpeed / 24.f);
+      ComputerscareModifierMouseControl::setParamValue(
+          target, target->getValue() * factor);
+    }
     e.consume(owner);
     return true;
   }

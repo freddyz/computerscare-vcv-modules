@@ -15,6 +15,7 @@ struct ComputerscareModifierMouseControl {
   bool hovered = false;
   bool focused = false;
   bool editing = false;
+  int controlMode = 0;
   math::Vec dragStart;
   float dragStartX = 0.f;
   float dragStartY = 0.f;
@@ -36,16 +37,23 @@ struct ComputerscareModifierMouseControl {
 
   static float getRackModSpeed() {
     if (!APP || !APP->window) return 1.f;
-    int mods = APP->window->getMods();
-    if ((mods & RACK_MOD_MASK) == RACK_MOD_CTRL) return 1.f / 10.f;
-    if ((mods & RACK_MOD_MASK) == GLFW_MOD_SHIFT) return 4.f;
-    if ((mods & RACK_MOD_MASK) == (RACK_MOD_CTRL | GLFW_MOD_SHIFT))
-      return 1.f / 100.f;
+    int mods = APP->window->getMods() & (RACK_MOD_CTRL | GLFW_MOD_SHIFT);
+    if (mods == RACK_MOD_CTRL) return 1.f / 10.f;
+    if (mods == GLFW_MOD_SHIFT) return 4.f;
+    if (mods == (RACK_MOD_CTRL | GLFW_MOD_SHIFT)) return 1.f / 100.f;
     return 1.f;
   }
 
+  int getControlMode() const { return controlMode; }
+
+  bool isSecondaryMode() const { return controlMode == 1; }
+
   static bool isEditToggleKey(const event::HoverKey& e) {
     return e.keyName == "q";
+  }
+
+  static bool isModeCycleKey(const event::HoverKey& e) {
+    return e.keyName == "a";
   }
 
   bool shouldControl(Widget* owner) const {
@@ -109,7 +117,7 @@ struct ComputerscareModifierMouseControl {
     std::shared_ptr<Font> font = APP->window->loadFont(
         asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
     if (font) {
-      const char* label = "Q TO TOGGLE";
+      const char* label = "Q EDIT  A MODE";
       nvgFontFaceId(args.vg, font->handle);
       nvgFontSize(args.vg, 16.f);
       nvgTextLetterSpacing(args.vg, 0.f);
@@ -139,21 +147,26 @@ struct ComputerscareModifierMouseControl {
     if (!font) return;
 
     for (const ComputerscareMouseControlTab& tab : tabs) {
-      const float tabW = 42.f;
-      const float tabH = 13.f;
-      const float x = panelRight - 10.f;
+      const float tabW = 52.f;
+      const float tabH = 16.f;
+      const float x = panelRight - 18.f;
       nvgSave(args.vg);
       nvgTranslate(args.vg, x, tab.y);
       nvgRotate(args.vg, -(float)M_PI * 0.5f);
       nvgBeginPath(args.vg);
-      nvgRoundedRect(args.vg, -tabW * 0.5f, -tabH * 0.5f, tabW, tabH, 2.f);
-      nvgFillColor(args.vg, nvgRGBA(0xff, 0x7b, 0x2c, 0xd0));
+      nvgRoundedRect(args.vg, -tabW * 0.5f - 2.f, -tabH * 0.5f - 2.f,
+                     tabW + 4.f, tabH + 4.f, 3.f);
+      nvgFillColor(args.vg, nvgRGBA(0x12, 0x10, 0x16, 0xe8));
       nvgFill(args.vg);
-      nvgStrokeWidth(args.vg, 1.f);
+      nvgBeginPath(args.vg);
+      nvgRoundedRect(args.vg, -tabW * 0.5f, -tabH * 0.5f, tabW, tabH, 2.f);
+      nvgFillColor(args.vg, nvgRGB(0xff, 0x7b, 0x2c));
+      nvgFill(args.vg);
+      nvgStrokeWidth(args.vg, 1.25f);
       nvgStrokeColor(args.vg, nvgRGB(0x21, 0x12, 0x08));
       nvgStroke(args.vg);
       nvgFontFaceId(args.vg, font->handle);
-      nvgFontSize(args.vg, 9.f);
+      nvgFontSize(args.vg, 10.f);
       nvgTextLetterSpacing(args.vg, 0.f);
       nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
       nvgFillColor(args.vg, nvgRGB(0xff, 0xfb, 0xf2));
@@ -167,7 +180,13 @@ struct ComputerscareModifierMouseControl {
   void onLeave(const event::Leave& e) { hovered = false; }
 
   bool onHoverKey(Widget* owner, const event::HoverKey& e) {
-    if (e.isConsumed() || !isEditToggleKey(e)) return false;
+    if (e.isConsumed()) return false;
+    if (isModeCycleKey(e)) {
+      if (e.action == GLFW_PRESS) controlMode = (controlMode + 1) % 2;
+      e.consume(owner);
+      return true;
+    }
+    if (!isEditToggleKey(e)) return false;
     if (e.action == GLFW_PRESS) editKeyOn() = !editKeyOn();
     if (!editKeyOn()) editing = false;
     focused = editKeyOn();

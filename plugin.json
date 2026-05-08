@@ -148,7 +148,7 @@
       "name": "Portaloof",
       "description": "Visual experimentation.  A Kaleidoscopic mirror pointed back at your Rack, and yourself.",
       "tags": ["Visual"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/docs/Portaloof.md"
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/portaloof.md"
     }
   ]
 }

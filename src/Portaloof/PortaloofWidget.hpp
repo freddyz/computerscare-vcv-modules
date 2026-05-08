@@ -1078,8 +1078,17 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
           args, hideUi ? Vec(RACK_GRID_WIDTH * 0.5f, 16.f) : Vec(13.f, 44.f),
           this);
       if (!hideUi) {
-        std::vector<PortaloofMouseControl::ControlTab> tabs = {
-            {91.f, "WHEEL"}, {256.f, "DRAG X"}, {289.f, "DRAG Y"}};
+        bool secondaryMode = mouseControl.state.isSecondaryMode();
+        std::vector<PortaloofMouseControl::ControlTab> tabs =
+            secondaryMode
+                ? std::vector<PortaloofMouseControl::ControlTab>{{124.f,
+                                                                  "DRAG X"},
+                                                                 {157.f,
+                                                                  "DRAG Y"},
+                                                                 {190.f,
+                                                                  "WHEEL"}}
+                : std::vector<PortaloofMouseControl::ControlTab>{
+                      {91.f, "WHEEL"}, {256.f, "DRAG X"}, {289.f, "DRAG Y"}};
         mouseControl.drawControlTabs(args, CONTROLS_WIDTH, tabs);
       }
     }
@@ -1291,6 +1300,11 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         Vec(std::max(box.size.x - displayX, 1.f), box.size.y));
     if (mouseControl.onButton(this, m, e, visualRect)) return;
     ModuleWidget::onButton(e);
+  }
+
+  void onDragStart(const DragStartEvent& e) override {
+    if (mouseControl.onDragStart(this, e)) return;
+    ModuleWidget::onDragStart(e);
   }
 
   void onDragMove(const DragMoveEvent& e) override {
