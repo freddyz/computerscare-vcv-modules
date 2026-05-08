@@ -191,6 +191,11 @@ void ComputerscareOhPeas::process(const ProcessArgs& args) {
 
         Q = quant.quantizeEven(D, iTranspose);
 
+        if (unipolarGainMode[i]) {
+          D = std::max(D, 0.f);
+          Q = std::max(Q, 0.f);
+        }
+
         outputs[SCALED_OUTPUT + i].setVoltage(D, ch);
         outputs[QUANTIZED_OUTPUT + i].setVoltage(Q, ch);
       }
