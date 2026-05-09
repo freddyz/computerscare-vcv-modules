@@ -82,7 +82,7 @@ struct PortaloofPanelWidget : widget::Widget {
 };
 
 static std::string pickRandomDocImage() {
-  std::string dir = asset::plugin(pluginInstance, "doc");
+  std::string dir = asset::plugin(pluginInstance, "doc/images");
   DIR* dp = opendir(dir.c_str());
   if (!dp) return "";
   std::vector<std::string> paths;
