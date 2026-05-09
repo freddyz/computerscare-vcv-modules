@@ -39,10 +39,10 @@ When the mouse is over Portaloof, press `Q` to toggle edit mode. The orange `Q` 
 
 Press `A` while hovering Portaloof to cycle the mouse-control mapping:
 
-| Mode | Mouse drag X | Mouse drag Y | Mouse wheel |
-| --- | --- | --- | --- |
-| Translate / Scale | Translate X | Translate Y | Scale |
-| Axis Scale / Rotate | Scale X | Scale Y | Rotation |
+| Mode                | Mouse drag X | Mouse drag Y | Mouse wheel |
+| ------------------- | ------------ | ------------ | ----------- |
+| Translate / Scale   | Translate X  | Translate Y  | Scale       |
+| Axis Scale / Rotate | Scale X      | Scale Y      | Rotation    |
 
 The small orange tabs in the panel show the active mouse mapping. Rack fine-control modifiers also apply: hold Cmd/Ctrl for slower changes, Shift for faster changes, and Cmd/Ctrl+Shift for very fine changes.
 
@@ -65,18 +65,18 @@ The CV input modulates the value knob:
 
 Wrapped rows wrap around their range. Other rows clamp to their range.
 
-| Row | Knob range | CV scale | Final range / behavior |
-| --- | --- | --- | --- |
-| Scale | `0.1..4.0` | `0.3` per volt | Clamped `0.1..4.0` |
-| Scale X | `-5..+5` | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors X |
-| Scale Y | `-5..+5` | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors Y |
-| Rotation | `-180..+180°` | `36°` per volt | Wrapped `-360..+360°` |
-| Kaleido | `-12..+12` | `1.1` per volt | Clamped `-12..+12`, integer steps |
-| Translate X | `-1..+1` | `0.1` per volt | Wrapped `-1..+1` |
-| Translate Y | `-1..+1` | `0.1` per volt | Wrapped `-1..+1` |
-| Hue | `-360..+360°` | `36°` per volt | Wrapped `-360..+360°` |
-| Fold Frequency | `0..1` | `0.1` per volt | Clamped `0..1`; right-click slider |
-| Color Warp | `-1..+1` | `0.1` per volt | Clamped `-1..+1` |
+| Row            | Knob range    | CV scale       | Final range / behavior                                 |
+| -------------- | ------------- | -------------- | ------------------------------------------------------ |
+| Scale          | `0.1..4.0`    | `0.3` per volt | Clamped `0.1..4.0`                                     |
+| Scale X        | `-5..+5`      | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors X |
+| Scale Y        | `-5..+5`      | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors Y |
+| Rotation       | `-180..+180°` | `36°` per volt | Wrapped `-360..+360°`                                  |
+| Kaleido        | `-12..+12`    | `1.1` per volt | Clamped `-12..+12`, integer steps                      |
+| Translate X    | `-1..+1`      | `0.1` per volt | Wrapped `-1..+1`                                       |
+| Translate Y    | `-1..+1`      | `0.1` per volt | Wrapped `-1..+1`                                       |
+| Hue            | `-360..+360°` | `36°` per volt | Wrapped `-360..+360°`                                  |
+| Fold Frequency | `0..1`        | `0.1` per volt | Clamped `0..1`; right-click slider                     |
+| Color Warp     | `-1..+1`      | `0.1` per volt | Clamped `-1..+1`                                       |
 
 ---
 

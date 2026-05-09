@@ -50,20 +50,21 @@ Loads a still image or animated GIF from disk. Image files can also be dragged a
 - **Slideshow Time:** time between automatic slideshow file changes
 
 ## Expander
+
 Connect to LEFT side of Custom Blank (it must be left side, the right side will not work)
 
 ### Inputs
+
 - Clock Input
-Control GIF animation via the clock input with 3 different clock modes:
-	- Sync: Animation will synchronize to a steady clock signal
-	- Scan: Animation will linearly follow a 0-10v CV.  0v → frame 1, 10v → last frame
-	- Frame Advance: Clock signal will advance the animation by 1 frame
+  Control GIF animation via the clock input with 3 different clock modes: - Sync: Animation will synchronize to a steady clock signal - Scan: Animation will linearly follow a 0-10v CV. 0v → frame 1, 10v → last frame - Frame Advance: Clock signal will advance the animation by 1 frame
 
 - Reset: Return to the 1st frame of the animation
 
 ### Knobs
-	Zero Offset: Control the 1st frame for reset input/button, EOC output, and ping pong bounce point
+
+    Zero Offset: Control the 1st frame for reset input/button, EOC output, and ping pong bounce point
 
 ### Outputs
-	- EOC: emits a trigger when the animation restarts
-	- Frame: emits a trigger each time the frame changes
+
+    - EOC: emits a trigger when the animation restarts
+    - Frame: emits a trigger each time the frame changes

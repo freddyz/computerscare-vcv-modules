@@ -5,6 +5,7 @@
 Generate constant polyphonic CV according to various formulas.
 
 ### Modes (displayed in order left to right in image above)
+
 - Linear
 - Sigmoid
 - Hump

@@ -75,4 +75,4 @@ Each clock input channel samples its matching value input channel, making a poly
 
 Rack's module Randomize command sets all 16 displayed/output values to random voltages using the selected Random Generator Range. It does not randomize the clock mode, input mode, clock blinkers, or channel selector knobs.
 
-*Inspired by ML Modules Volt Meter*
+_Inspired by ML Modules Volt Meter_

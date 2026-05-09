@@ -7,12 +7,14 @@ CMD=${1:-all}
 fmt() {
   echo "==> Formatting..."
   clang-format -i $SRC_FILES
+  npm run format
   echo "    Done."
 }
 
 fmt_check() {
   echo "==> Checking format..."
   clang-format --dry-run --Werror $SRC_FILES
+  npm run format:check
   echo "    OK."
 }
 
