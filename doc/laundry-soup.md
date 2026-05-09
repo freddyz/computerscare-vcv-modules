@@ -2,7 +2,7 @@
 
 Laundry Soup is a trigger sequencer that takes text as input. If you connect a clock signal to the "clk" input, and type `1` in the top text box, the top "out" output will send a trigger each clock. `2` sends a trigger every 2 clock signals. `31` sends a trigger on the 1st and 4th clock signals, and then repeats this pattern forever or until reset.
 
-![Laundry Soup](./laundry-soup-basic-2.png)
+![Laundry Soup](images/laundry-soup-basic-2.png)
 
 ### Text Input:
 
@@ -118,7 +118,7 @@ Separate patterns with semicolons to give different patterns to different polyph
 
 ### Input Jacks:
 
-![ComputerscarePatchSequencer](./laundry-soup-inputs-1.png)
+![ComputerscarePatchSequencer](images/laundry-soup-inputs-1.png)
 
 **Global Clock (clk):** Increases each row's absoluteStep by 1.
 
@@ -130,7 +130,7 @@ Separate patterns with semicolons to give different patterns to different polyph
 
 ### Output Jacks:
 
-![ComputerscarePatchSequencer](./laundry-soup-outputs-1.png)
+![ComputerscarePatchSequencer](images/laundry-soup-outputs-1.png)
 
 **Individual Row Output (out):** The output of the row's pattern. Outputs 10 volts if:
 
