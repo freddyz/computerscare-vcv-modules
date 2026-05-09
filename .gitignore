@@ -1,5 +1,6 @@
 build
 dist
+node_modules
 .DS_Store
 plugin.*
 !plugin.json
@@ -9,4 +10,3 @@ a.out
 .claude/
 CLAUDE.local.md
 AGENTS.local.md
-AGENTS.MD

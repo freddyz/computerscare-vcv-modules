@@ -6,7 +6,7 @@ The default source is your entire Rack window. The effect is like plugging a vid
 
 The module is resizable by dragging its right edge. Image files (PNG/JPG/JPEG/BMP) can also be dropped directly onto the module.
 
-![Portaloof showing live Rack feedback](../doc/portaloof-images/portaloof-basic.png)
+![Portaloof showing live Rack feedback](portaloof-images/portaloof-basic.png)
 
 ---
 
@@ -33,6 +33,21 @@ Source 1 defaults to the full Rack window. Source 2 defaults to an image slot, b
 
 ---
 
+## Keyboard And Mouse Control
+
+When the mouse is over Portaloof, press `Q` to toggle edit mode. The orange `Q` indicator shows that edit mode is on. Mouse controls only apply while the pointer is inside the module, and drag controls only start from the visual display area.
+
+Press `A` while hovering Portaloof to cycle the mouse-control mapping:
+
+| Mode                | Mouse drag X | Mouse drag Y | Mouse wheel |
+| ------------------- | ------------ | ------------ | ----------- |
+| Translate / Scale   | Translate X  | Translate Y  | Scale       |
+| Axis Scale / Rotate | Scale X      | Scale Y      | Rotation    |
+
+The small orange tabs in the panel show the active mouse mapping. Rack fine-control modifiers also apply: hold Cmd/Ctrl for slower changes, Shift for faster changes, and Cmd/Ctrl+Shift for very fine changes.
+
+---
+
 ## Row Controls And CV
 
 Each effect row has:
@@ -50,18 +65,18 @@ The CV input modulates the value knob:
 
 Wrapped rows wrap around their range. Other rows clamp to their range.
 
-| Row | Knob range | CV scale | Final range / behavior |
-| --- | --- | --- | --- |
-| Scale | `0.1..4.0` | `0.3` per volt | Clamped `0.1..4.0` |
-| Scale X | `-5..+5` | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors X |
-| Scale Y | `-5..+5` | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors Y |
-| Rotation | `-180..+180°` | `36°` per volt | Wrapped `-360..+360°` |
-| Kaleido | `-12..+12` | `1.1` per volt | Clamped `-12..+12`, integer steps |
-| Translate X | `-1..+1` | `0.1` per volt | Wrapped `-1..+1` |
-| Translate Y | `-1..+1` | `0.1` per volt | Wrapped `-1..+1` |
-| Hue | `-360..+360°` | `36°` per volt | Wrapped `-360..+360°` |
-| Fold Frequency | `0..1` | `0.1` per volt | Clamped `0..1`; right-click slider |
-| Color Warp | `-1..+1` | `0.1` per volt | Clamped `-1..+1` |
+| Row            | Knob range    | CV scale       | Final range / behavior                                 |
+| -------------- | ------------- | -------------- | ------------------------------------------------------ |
+| Scale          | `0.1..4.0`    | `0.3` per volt | Clamped `0.1..4.0`                                     |
+| Scale X        | `-5..+5`      | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors X |
+| Scale Y        | `-5..+5`      | `0.5` per volt | Clamped, then mapped exponentially; negative mirrors Y |
+| Rotation       | `-180..+180°` | `36°` per volt | Wrapped `-360..+360°`                                  |
+| Kaleido        | `-12..+12`    | `1.1` per volt | Clamped `-12..+12`, integer steps                      |
+| Translate X    | `-1..+1`      | `0.1` per volt | Wrapped `-1..+1`                                       |
+| Translate Y    | `-1..+1`      | `0.1` per volt | Wrapped `-1..+1`                                       |
+| Hue            | `-360..+360°` | `36°` per volt | Wrapped `-360..+360°`                                  |
+| Fold Frequency | `0..1`        | `0.1` per volt | Clamped `0..1`; right-click slider                     |
+| Color Warp     | `-1..+1`      | `0.1` per volt | Clamped `-1..+1`                                       |
 
 ---
 
@@ -85,7 +100,7 @@ Rotates the image around the center of the display.
 
 Kaleidoscope mode. `0` is off. Positive values are Premium modes, which use flower rotational symmetry. Negative values are Classic modes, which use various 2- or 4-part kaleidoscopes.
 
-![Portaloof kaleidoscope effect](../doc/portaloof-images/portaloof-kaleid.png)
+![Portaloof kaleidoscope effect](portaloof-images/portaloof-kaleid.png)
 
 ### TRN X / TRN Y
 
@@ -113,7 +128,7 @@ Applies a nonlinear color/tone transform.
 - Positive values: posterize/crush-style contrast shaping
 - Negative values: solarize toward inversion; full negative is an inverted image
 
-![Portaloof color transforms](../doc/portaloof-images/portaloof-colors.png)
+![Portaloof color transforms](portaloof-images/portaloof-colors.png)
 
 ### Color Warp
 
@@ -142,7 +157,7 @@ Each source submenu can select:
 
 Drag-and-drop an image file onto the module to load it into Source 2.
 
-![Portaloof using an external image source](../doc/portaloof-images/portaloof-external-image.png)
+![Portaloof using an external image source](portaloof-images/portaloof-external-image.png)
 
 ---
 
@@ -168,7 +183,7 @@ When enabled, Portaloof's visual feedback render follows Rack's room brightness 
 
 Renders Portaloof as a rack backdrop behind modules in addition to the module display. This resets to off when the module is initialized.
 
-![Portaloof rendered as a full Rack background](../doc/portaloof-images/portaloof-full-bg.png)
+![Portaloof rendered as a full Rack background](portaloof-images/portaloof-full-bg.png)
 
 ### Transform when frozen
 
