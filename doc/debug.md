@@ -2,7 +2,7 @@
 
 Polyphonic voltmeter, sample & hold, and random voltage source.
 
-<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/computerscare-debug-basic.png" width="300" alt="Computerscare Debug" />
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/images/computerscare-debug-basic.png" width="300" alt="Computerscare Debug" />
 
 ### Inputs
 

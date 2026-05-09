@@ -6,7 +6,7 @@ The default source is your entire Rack window. The effect is like plugging a vid
 
 The module is resizable by dragging its right edge. Image files (PNG/JPG/JPEG/BMP) can also be dropped directly onto the module.
 
-![Portaloof showing live Rack feedback](portaloof-images/portaloof-basic.png)
+![Portaloof showing live Rack feedback](images/portaloof-basic.png)
 
 ---
 
@@ -100,7 +100,7 @@ Rotates the image around the center of the display.
 
 Kaleidoscope mode. `0` is off. Positive values are Premium modes, which use flower rotational symmetry. Negative values are Classic modes, which use various 2- or 4-part kaleidoscopes.
 
-![Portaloof kaleidoscope effect](portaloof-images/portaloof-kaleid.png)
+![Portaloof kaleidoscope effect](images/portaloof-kaleid.png)
 
 ### TRN X / TRN Y
 
@@ -128,7 +128,7 @@ Applies a nonlinear color/tone transform.
 - Positive values: posterize/crush-style contrast shaping
 - Negative values: solarize toward inversion; full negative is an inverted image
 
-![Portaloof color transforms](portaloof-images/portaloof-colors.png)
+![Portaloof color transforms](images/portaloof-colors.png)
 
 ### Color Warp
 
@@ -157,7 +157,7 @@ Each source submenu can select:
 
 Drag-and-drop an image file onto the module to load it into Source 2.
 
-![Portaloof using an external image source](portaloof-images/portaloof-external-image.png)
+![Portaloof using an external image source](images/portaloof-external-image.png)
 
 ---
 
@@ -183,7 +183,7 @@ When enabled, Portaloof's visual feedback render follows Rack's room brightness 
 
 Renders Portaloof as a rack backdrop behind modules in addition to the module display. This resets to off when the module is initialized.
 
-![Portaloof rendered as a full Rack background](portaloof-images/portaloof-full-bg.png)
+![Portaloof rendered as a full Rack background](images/portaloof-full-bg.png)
 
 ### Transform when frozen
 

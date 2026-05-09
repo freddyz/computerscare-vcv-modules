@@ -2,7 +2,7 @@
 
 Patch matrix with 16 scenes. If multiple buttons are active for a single row, the 2 active input signals will be summed.
 
-<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/patch-sequencer-basic-2.png" width="500" alt="Father & Son Patch Sequencer" />
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/images/patch-sequencer-basic-2.png" width="500" alt="Father & Son Patch Sequencer" />
 
 ### Buttons:
 
@@ -30,7 +30,7 @@ Patch matrix with 16 scenes. If multiple buttons are active for a single row, th
 
 ### Randomization Options:
 
-![ComputerscarePatchSequencerRightClickOptions](./doc/patch-sequencer-right-click-options.png)
+![ComputerscarePatchSequencerRightClickOptions](images/patch-sequencer-right-click-options.png)
 
 **Only Randomize Active Connections:** Only input rows/output columns with patch cables connected will be randomized. Default is un-checked.
 

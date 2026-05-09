@@ -2,7 +2,7 @@
 
 Polyphonic matrix mixer
 
-<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/moly-patrix.jpg" width="500" alt="Moly Patrix" />
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/images/moly-patrix.jpg" width="500" alt="Moly Patrix" />
 
 ## Knobs
 

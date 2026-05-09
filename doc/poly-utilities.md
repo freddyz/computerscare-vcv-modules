@@ -1,6 +1,6 @@
 # Computerscare Modules Polyphonic Utilities
 
-<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/computerscare-poly-utilities.png" width="600" alt="Computerscare Polyphonic Utilities" />
+<img src="https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/images/computerscare-poly-utilities.png" width="600" alt="Computerscare Polyphonic Utilities" />
 
 ## Knoly Pobs
 
