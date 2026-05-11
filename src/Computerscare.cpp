@@ -1,5 +1,7 @@
 #include "Computerscare.hpp"
 
+#include "CvControlGroup.hpp"
+
 Plugin* pluginInstance;
 
 void init(Plugin* p) {
@@ -30,6 +32,7 @@ void init(Plugin* p) {
   p->addModel(modelComputerscarePortaloof);
 
   p->addModel(modelComputerscareNomplexPumbers);
+  p->addModel(modelComputerscareCompolyLane);
   p->addModel(modelComputerscareComplexGenerator);
   p->addModel(modelComputerscareComplexTransformer);
   p->addModel(modelComputerscareNudiebug);
