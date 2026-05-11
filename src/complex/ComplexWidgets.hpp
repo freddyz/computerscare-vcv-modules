@@ -558,12 +558,10 @@ struct CompolyTypeLabelSwitch : app::SvgSwitch {
   }
 };
 
-struct CompolySingleLabelSwitch : app::SvgSwitch {
+struct CompolySingleLabelSwitch : SvgWidget {
   widget::TransformWidget* tw;
-  // SvgWidget* svg;
   CompolySingleLabelSwitch(std::string svgLabelFilename = "z") {
-    shadow->opacity = 0.f;
-    addFrame(APP->window->loadSvg(asset::plugin(
+    setSvg(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/complex-labels/" + svgLabelFilename + ".svg")));
   }
 };
@@ -662,6 +660,40 @@ struct CompolyPortsWidget : CompolyInOrOutWidget<ComplexOutport> {
   CompolySingleLabelSwitch* compolyLabel;
   TransformWidget* compolyLabelTransform;
   Vec labelOffset;
+  int hoveredModeHotspots = 0;
+
+  struct ModeHotspot : app::ParamWidget {
+    CompolyPortsWidget* owner = nullptr;
+    bool hovering = false;
+
+    void draw(const DrawArgs& args) override {}
+
+    void onEnter(const event::Enter& e) override {
+      if (!hovering && owner) owner->hoveredModeHotspots++;
+      hovering = true;
+      app::ParamWidget::onEnter(e);
+    }
+
+    void onLeave(const event::Leave& e) override {
+      if (hovering && owner)
+        owner->hoveredModeHotspots =
+            std::max(0, owner->hoveredModeHotspots - 1);
+      hovering = false;
+      app::ParamWidget::onLeave(e);
+    }
+
+    void onButton(const event::Button& e) override {
+      if (owner && e.button == GLFW_MOUSE_BUTTON_LEFT &&
+          e.action == GLFW_PRESS) {
+        owner->cycleMode();
+        e.consume(this);
+        return;
+      }
+      app::ParamWidget::onButton(e);
+    }
+  };
+
+  ModeHotspot* portLabelsHotspot = nullptr;
 
   CompolyPortsWidget(math::Vec pos, ComputerscareComplexBase* cModule,
                      int firstPortID, int compolyTypeParamID, float scale = 1.0,
@@ -671,10 +703,6 @@ struct CompolyPortsWidget : CompolyInOrOutWidget<ComplexOutport> {
     paramID = compolyTypeParamID;
 
     compolyLabel = new CompolySingleLabelSwitch(labelSvgFilename);
-
-    compolyLabel->app::ParamWidget::module = cModule;
-    compolyLabel->app::ParamWidget::paramId = compolyTypeParamID;
-    compolyLabel->initParamQuantity();
 
     compolyLabelTransform = new TransformWidget();
     compolyLabelTransform->box.pos = pos.minus(Vec(40, 0));
@@ -695,6 +723,101 @@ struct CompolyPortsWidget : CompolyInOrOutWidget<ComplexOutport> {
       ports[i] = port;
       addChild(port);
     }
+
+    portLabelsHotspot = createModeHotspot(cModule, compolyTypeParamID);
+    addChild(portLabelsHotspot);
+  }
+
+  ModeHotspot* createModeHotspot(ComputerscareComplexBase* cModule,
+                                 int compolyTypeParamID) {
+    ModeHotspot* hotspot = new ModeHotspot();
+    hotspot->owner = this;
+    hotspot->app::ParamWidget::module = cModule;
+    hotspot->app::ParamWidget::paramId = compolyTypeParamID;
+    hotspot->initParamQuantity();
+    return hotspot;
+  }
+
+  void setHotspotRect(ModeHotspot* hotspot, Rect rect, bool visible = true) {
+    if (!visible && hotspot->hovering) {
+      hotspot->hovering = false;
+      hoveredModeHotspots = std::max(0, hoveredModeHotspots - 1);
+    }
+    hotspot->box = rect;
+    hotspot->visible = visible;
+  }
+
+  void syncModeHotspots() {
+    setHotspotRect(portLabelsHotspot, modeHeaderRect());
+  }
+
+  Rect modeHeaderRect() {
+    float left = leftLabel->box.pos.x - 3.f;
+    float right = left + 60.f;
+    if (ports.size() >= 2 && ports[0] && ports[1]) {
+      left = std::min(ports[0]->box.pos.x, ports[1]->box.pos.x) - 3.f;
+      float firstRight = ports[0]->box.pos.x + ports[0]->box.size.x;
+      float secondRight = ports[1]->box.pos.x + ports[1]->box.size.x;
+      right = std::max(firstRight, secondRight) + 3.f;
+    }
+
+    float top = leftLabel->box.pos.y + 12.f;
+    if (ports.size() >= 1 && ports[0]) {
+      top = ports[0]->box.pos.y - 11.f;
+    }
+    return Rect(Vec(left, top), Vec(right - left, 14.f));
+  }
+
+  void cycleMode() {
+    if (!module) return;
+    int mode = module->params[paramID].getValue();
+    int nextMode = mode >= POLAR_SEPARATED ? RECT_INTERLEAVED : mode + 1;
+    if (ParamQuantity* pq = module->paramQuantities[paramID]) {
+      pq->setValue(nextMode);
+    } else {
+      module->params[paramID].setValue(nextMode);
+    }
+  }
+
+  int mode() const {
+    if (module) return module->params[paramID].getValue();
+    return RECT_INTERLEAVED;
+  }
+
+  void drawModeHeaderPath(NVGcontext* vg, Rect r) {
+    int currentMode = mode();
+    if (currentMode == RECT_INTERLEAVED) {
+      float skew = 3.f;
+      nvgMoveTo(vg, r.pos.x + skew, r.pos.y);
+      nvgLineTo(vg, r.pos.x + r.size.x, r.pos.y);
+      nvgLineTo(vg, r.pos.x + r.size.x - skew, r.pos.y + r.size.y);
+      nvgLineTo(vg, r.pos.x, r.pos.y + r.size.y);
+      nvgClosePath(vg);
+    } else if (currentMode == POLAR_INTERLEAVED) {
+      nvgRoundedRect(vg, r.pos.x, r.pos.y, r.size.x, r.size.y,
+                     r.size.y * 0.48f);
+    } else {
+      nvgRect(vg, r.pos.x, r.pos.y, r.size.x, r.size.y);
+    }
+  }
+
+  void step() override {
+    syncModeHotspots();
+    CompolyInOrOutWidget<ComplexOutport>::step();
+  }
+
+  void draw(const DrawArgs& args) override {
+    if (hoveredModeHotspots > 0) {
+      Rect r = modeHeaderRect();
+      nvgBeginPath(args.vg);
+      drawModeHeaderPath(args.vg, r);
+      nvgFillColor(args.vg, nvgRGBA(0x24, 0xc9, 0xa6, 0x28));
+      nvgFill(args.vg);
+      nvgStrokeWidth(args.vg, 1.f);
+      nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_DARK_GREEN);
+      nvgStroke(args.vg);
+    }
+    CompolyInOrOutWidget<ComplexOutport>::draw(args);
   }
 };
 
