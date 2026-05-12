@@ -4,7 +4,5 @@
   <rect x="0" y="0" width="180" height="24" fill="#24c9a6"/>
   <rect x="0" y="356" width="180" height="24" fill="#24c9a6"/>
   <text x="90" y="374" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#101000">Compoly Lane</text>
-  <path d="M42 42v228" stroke="#186d5b" stroke-width="1" stroke-dasharray="3 5" opacity="0.55"/>
   <path d="M87 35v242" stroke="#186d5b" stroke-width="1.5" opacity="0.65"/>
-  <path d="M124 42v228" stroke="#186d5b" stroke-width="1" stroke-dasharray="3 5" opacity="0.55"/>
 </svg>
