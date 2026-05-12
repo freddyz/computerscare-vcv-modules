@@ -528,7 +528,7 @@ struct CompolyLaneOutputOperationLabel : app::ParamWidget {
   cpx::ScaledSvgWidget* label = nullptr;
   std::string lastFilename;
   bool hovering = false;
-  float labelScale = 0.24f;
+  float labelScale = 0.36f;
   float rightEdgeX = 0.f;
   float paddingX = 4.f;
   float paddingY = 2.f;
@@ -538,7 +538,7 @@ struct CompolyLaneOutputOperationLabel : app::ParamWidget {
     laneModule = module;
     app::ParamWidget::module = module;
     app::ParamWidget::paramId = paramId;
-    box.size = Vec(24.f, 16.f);
+    box.size = Vec(28.f, 18.f);
     initParamQuantity();
 
     label = new cpx::ScaledSvgWidget(labelScale);
@@ -614,10 +614,33 @@ struct CompolyLaneOutputOperationLabel : app::ParamWidget {
       e.consume(this);
       return;
     }
+    if (e.button == GLFW_MOUSE_BUTTON_RIGHT && e.action == GLFW_PRESS) {
+      createOperationMenu();
+      e.consume(this);
+      return;
+    }
     app::ParamWidget::onButton(e);
   }
 
-  // ParamWidget already provides the direct right-click selector for switches.
+  void createOperationMenu() {
+    if (!laneModule || paramId < 0) return;
+    Menu* menu = createMenu();
+    MenuLabel* paramLabel = new MenuLabel;
+    ParamQuantity* pq = getParamQuantity();
+    paramLabel->text = pq ? pq->getLabel() : "Output Operation";
+    menu->addChild(paramLabel);
+
+    const std::vector<std::string>& labels =
+        ComputerscareCompolyLane::outputOperationLabels();
+    int current = operation();
+    for (int i = 0; i < (int)labels.size(); ++i) {
+      ParamSettingItem* item =
+          new ParamSettingItem(i, &laneModule->params[paramId]);
+      item->text = labels[i];
+      item->rightText = CHECKMARK(i == current);
+      menu->addChild(item);
+    }
+  }
 };
 
 struct CompolyLaneWrapModeMenu : MenuItem {
@@ -766,7 +789,7 @@ struct ComputerscareCompolyLaneWidget : ModuleWidget {
 
     CompolyLaneOutputOperationLabel* operationLabel =
         new CompolyLaneOutputOperationLabel(module, operationParamId);
-    operationLabel->rightEdgeX = pos.x - 1.f;
+    operationLabel->rightEdgeX = pos.x + 3.f;
     operationLabel->box.pos = Vec(
         operationLabel->rightEdgeX - operationLabel->box.size.x, pos.y + 6.f);
     addChild(operationLabel);
