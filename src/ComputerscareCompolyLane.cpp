@@ -236,6 +236,10 @@ struct ComputerscareCompolyLane : ComputerscareComplexBase {
     getParamQuantity(W_OUTPUT_OPERATION)->randomizeEnabled = false;
     getParamQuantity(SUM_OUTPUT_OPERATION)->randomizeEnabled = false;
     getParamQuantity(PRODUCT_OUTPUT_OPERATION)->randomizeEnabled = false;
+    getParamQuantity(Z_OUTPUT_OPERATION)->resetEnabled = false;
+    getParamQuantity(W_OUTPUT_OPERATION)->resetEnabled = false;
+    getParamQuantity(SUM_OUTPUT_OPERATION)->resetEnabled = false;
+    getParamQuantity(PRODUCT_OUTPUT_OPERATION)->resetEnabled = false;
 
     configLane<Z_INPUT_MODE, false>(A_INPUT, A_SCALE_CV, A_OFFSET_CV,
                                     A_SCALE_VAL, A_SCALE_TRIM, A_OFFSET_VAL,
@@ -528,8 +532,9 @@ struct CompolyLaneOutputOperationLabel : app::ParamWidget {
   cpx::ScaledSvgWidget* label = nullptr;
   std::string lastFilename;
   bool hovering = false;
-  float labelScale = 0.36f;
+  float labelScale = 0.44f;
   float rightEdgeX = 0.f;
+  float minWidth = 38.f;
   float paddingX = 4.f;
   float paddingY = 2.f;
 
@@ -575,12 +580,13 @@ struct CompolyLaneOutputOperationLabel : app::ParamWidget {
     }
     if (label && label->svg && label->svg->svg) {
       Vec labelSize = label->svg->box.size.mult(labelScale);
-      box.size = Vec(labelSize.x + paddingX * 2.f,
+      box.size = Vec(std::max(minWidth, labelSize.x + paddingX * 2.f),
                      std::max(16.f, labelSize.y + paddingY * 2.f));
       if (rightEdgeX > 0.f) {
         box.pos.x = rightEdgeX - box.size.x;
       }
-      label->box.pos = Vec(paddingX, (box.size.y - labelSize.y) * 0.5f);
+      label->box.pos = Vec(box.size.x - paddingX - labelSize.x,
+                           (box.size.y - labelSize.y) * 0.5f);
     }
     app::ParamWidget::step();
   }
@@ -621,6 +627,8 @@ struct CompolyLaneOutputOperationLabel : app::ParamWidget {
     }
     app::ParamWidget::onButton(e);
   }
+
+  void onDoubleClick(const event::DoubleClick& e) override { e.consume(this); }
 
   void createOperationMenu() {
     if (!laneModule || paramId < 0) return;
@@ -751,22 +759,26 @@ struct ComputerscareCompolyLaneWidget : ModuleWidget {
           laneControlLayout);
     }
 
-    addOutputPair(Vec(18.f, 288.f), module,
+    constexpr float outputBlockXLeft = 27.f;
+    constexpr float outputBlockXRight = 117.f;
+
+    addOutputPair(Vec(outputBlockXLeft, 288.f), module,
                   ComputerscareCompolyLane::Z_OUTPUT_A,
                   ComputerscareCompolyLane::Z_OUTPUT_MODE,
                   ComputerscareCompolyLane::Z_OUTPUT_OPERATION, "z");
-    addOutputPair(Vec(98.f, 288.f), module,
+    addOutputPair(Vec(outputBlockXRight, 288.f), module,
                   ComputerscareCompolyLane::W_OUTPUT_A,
                   ComputerscareCompolyLane::W_OUTPUT_MODE,
                   ComputerscareCompolyLane::W_OUTPUT_OPERATION, "w");
-    addOutputPair(Vec(18.f, 334.f), module,
+    addOutputPair(Vec(outputBlockXLeft, 334.f), module,
                   ComputerscareCompolyLane::SUM_OUTPUT_A,
                   ComputerscareCompolyLane::SUM_OUTPUT_MODE,
                   ComputerscareCompolyLane::SUM_OUTPUT_OPERATION, "zplusw");
-    addOutputPair(
-        Vec(98.f, 334.f), module, ComputerscareCompolyLane::PRODUCT_OUTPUT_A,
-        ComputerscareCompolyLane::PRODUCT_OUTPUT_MODE,
-        ComputerscareCompolyLane::PRODUCT_OUTPUT_OPERATION, "ztimesw");
+    addOutputPair(Vec(outputBlockXRight, 334.f), module,
+                  ComputerscareCompolyLane::PRODUCT_OUTPUT_A,
+                  ComputerscareCompolyLane::PRODUCT_OUTPUT_MODE,
+                  ComputerscareCompolyLane::PRODUCT_OUTPUT_OPERATION,
+                  "ztimesw");
   }
 
   void addCoordinateLabel(Vec pos, ComputerscareCompolyLane* module,
@@ -789,7 +801,7 @@ struct ComputerscareCompolyLaneWidget : ModuleWidget {
 
     CompolyLaneOutputOperationLabel* operationLabel =
         new CompolyLaneOutputOperationLabel(module, operationParamId);
-    operationLabel->rightEdgeX = pos.x + 3.f;
+    operationLabel->rightEdgeX = pos.x + 6.f;
     operationLabel->box.pos = Vec(
         operationLabel->rightEdgeX - operationLabel->box.size.x, pos.y + 6.f);
     addChild(operationLabel);
