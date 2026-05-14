@@ -360,9 +360,13 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
                       int polarParamIndex, int modeParamId,
                       cpx::ComplexXYMaxMode arrowMaxMode,
                       float arrowMaxVoltage) {
+    std::string controlLabel = label;
+    if (!controlLabel.empty() && controlLabel[0] >= 'a' &&
+        controlLabel[0] <= 'z')
+      controlLabel[0] += 'A' - 'a';
     cpx::SwitchableComplexControl* control = new cpx::SwitchableComplexControl(
         module, paramIndex, polarParamIndex, modeParamId, arrowMaxMode,
-        arrowMaxVoltage);
+        arrowMaxVoltage, -1, false, controlLabel);
     control->box = Rect(Vec(x, y), Vec(32, 25));
     control->setArrowDrawingScale(0.78f);
     addChild(control);
@@ -393,7 +397,8 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
         module, ComputerscareComplexGenerator::COMPLEX_XY + index,
         ComputerscareComplexGenerator::LANE_POLAR + index,
         ComputerscareComplexGenerator::LANE_VIEW_MODE + index / 2,
-        cpx::ComplexXYMaxMode::Rectangular, 10.f, index / 2);
+        cpx::ComplexXYMaxMode::Rectangular, 10.f, index / 2, false,
+        "Lane " + label);
     control->box = Rect(Vec(x, y), Vec(32, 25));
     control->setArrowDrawingScale(0.78f);
     control->setArrowYOffset(-2.f);

@@ -256,13 +256,15 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
     addChild(channelWidget);
 
     cpx::ComplexXY* offsetValAB = new cpx::ComplexXY(
-        module, ComputerscareComplexTransformer::OFFSET_VAL_AB);
+        module, ComputerscareComplexTransformer::OFFSET_VAL_AB,
+        cpx::ComplexXYParamMode::Rectangular, "Offset");
     offsetValAB->box.size = Vec(25, 25);
     offsetValAB->box.pos = Vec(32, 27);
     addChild(offsetValAB);
 
     cpx::ComplexXY* scaleValAB = new cpx::ComplexXY(
-        module, ComputerscareComplexTransformer::SCALE_VAL_AB);
+        module, ComputerscareComplexTransformer::SCALE_VAL_AB,
+        cpx::ComplexXYParamMode::Rectangular, "Scale");
     scaleValAB->box.size = Vec(25, 25);
     scaleValAB->box.pos = Vec(5, 27);
     addChild(scaleValAB);

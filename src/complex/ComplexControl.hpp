@@ -67,6 +67,7 @@ struct ComplexControl : Widget {
   int firstParamIdx = 0;
   ComplexControlPreset preset = ComplexControlPreset::ArrowXY;
   ComplexControlStyle style = ComplexControlStyle::Normal;
+  std::string controlName;
   ComplexXYMaxMode arrowMaxMode = ComplexXYMaxMode::Radial;
   float arrowMaxVoltage = 10.f;
   float arrowDrawingScale = 1.f;
@@ -150,7 +151,11 @@ struct ComplexControl : Widget {
                      preset == ComplexControlPreset::ArrowXY ||
                      preset == ComplexControlPreset::ArrowPolar);
     if (hasArrow) {
-      arrowWidget = new ComplexXY(m, firstIdx);
+      bool polar = (preset == ComplexControlPreset::ArrowPolar);
+      arrowWidget = new ComplexXY(m, firstIdx,
+                                  polar ? ComplexXYParamMode::PolarDegrees
+                                        : ComplexXYParamMode::Rectangular,
+                                  controlName);
       applyArrowMax();
       addChild(arrowWidget);
     }
@@ -191,6 +196,11 @@ struct ComplexControl : Widget {
     if (arrowWidget) arrowWidget->setFaded(shouldFade);
     if (knobAWidget) knobAWidget->setFaded(shouldFade);
     if (knobBWidget) knobBWidget->setFaded(shouldFade);
+  }
+
+  void setControlName(const std::string& name) {
+    controlName = name;
+    if (arrowWidget) arrowWidget->setControlName(controlName);
   }
 
   void setArrowRadialMax(float maxVoltage) {

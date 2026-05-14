@@ -11,6 +11,7 @@ struct SwitchableComplexControl : Widget {
   int modeParamId = -1;
   int laneIndex = -1;
   int lastMode = -1;
+  std::string controlName;
   bool lastFaded = false;
   bool showDisabledOverlay = false;
   ComplexXYMaxMode arrowMaxMode = ComplexXYMaxMode::Rectangular;
@@ -23,8 +24,8 @@ struct SwitchableComplexControl : Widget {
   SwitchableComplexControl(ComputerscareComplexBase* module, int paramIndex,
                            int polarParamIndex, int modeParamId,
                            ComplexXYMaxMode arrowMaxMode, float arrowMaxVoltage,
-                           int laneIndex = -1,
-                           bool showDisabledOverlay = false) {
+                           int laneIndex = -1, bool showDisabledOverlay = false,
+                           std::string controlName = "") {
     this->module = module;
     this->paramIndex = paramIndex;
     this->polarParamIndex = polarParamIndex;
@@ -33,6 +34,12 @@ struct SwitchableComplexControl : Widget {
     this->arrowMaxVoltage = arrowMaxVoltage;
     this->laneIndex = laneIndex;
     this->showDisabledOverlay = showDisabledOverlay;
+    this->controlName = controlName;
+  }
+
+  void setControlName(const std::string& name) {
+    controlName = name;
+    if (control) control->setControlName(controlName);
   }
 
   void setArrowDrawingScale(float scale) {
@@ -70,6 +77,7 @@ struct SwitchableComplexControl : Widget {
 
     int controlParamIndex = mode == 2 ? polarParamIndex : paramIndex;
     control = new ComplexControl(module, controlParamIndex, preset);
+    control->setControlName(controlName);
     if (arrowMaxMode == ComplexXYMaxMode::Radial)
       control->setArrowRadialMax(arrowMaxVoltage);
     else

@@ -52,11 +52,63 @@ enum class ComplexXYMaxMode {
   Rectangular,
 };
 
+enum class ComplexXYParamMode {
+  Rectangular,
+  PolarDegrees,
+};
+
 struct ComplexXY;
 
 struct ComplexXYDragOverlay : TransparentWidget {
   ComplexXY* source = nullptr;
 
+  void step() override;
+  void draw(const DrawArgs& args) override;
+};
+
+struct ComplexXYTooltip : ui::Tooltip {
+  ComplexXY* source = nullptr;
+
+  void step() override;
+};
+
+struct ComplexXYValueField : ui::TextField {
+  enum class Field { X, Y, R, Theta };
+
+  ComplexXY* source = nullptr;
+  Field field = Field::X;
+
+  void step() override;
+  void onSelectKey(const SelectKeyEvent& e) override;
+  void commit();
+};
+
+struct ComplexXYValueQuantity : Quantity {
+  ComplexXY* source = nullptr;
+  ComplexXYValueField::Field field = ComplexXYValueField::Field::X;
+  std::string label;
+
+  float getValue() override;
+  void setValue(float value) override;
+  float getMinValue() override;
+  float getMaxValue() override;
+  float getDefaultValue() override;
+  int getDisplayPrecision() override { return 5; }
+  std::string getLabel() override { return ""; }
+  std::string getUnit() override;
+};
+
+struct ComplexXYValueRow : ui::MenuEntry {
+  ComplexXY* source = nullptr;
+  ComplexXYValueField::Field field = ComplexXYValueField::Field::X;
+  std::string label;
+  ComplexXYValueQuantity* quantity = nullptr;
+  ui::Slider* slider = nullptr;
+  ComplexXYValueField* textField = nullptr;
+
+  ComplexXYValueRow(ComplexXY* source, const std::string& label,
+                    ComplexXYValueField::Field field);
+  ~ComplexXYValueRow() override;
   void step() override;
   void draw(const DrawArgs& args) override;
 };
@@ -79,9 +131,14 @@ struct ComplexXY : TransparentWidget {
   Vec newZ;
 
   int paramA;
+  ComplexXYParamMode paramMode = ComplexXYParamMode::Rectangular;
+  std::string controlName;
 
   bool editing = false;
   bool cancelledDrag = false;
+  bool pendingLeftPress = false;
+  double pendingLeftPressTime = 0.0;
+  Vec pendingMousePosition;
   bool faded = false;
   NVGcolor normalBackgroundColor = nvgRGBA(0, 35, 25, 80);
   NVGcolor fadedBackgroundColor = nvgRGBA(150, 150, 150, 70);
@@ -95,21 +152,171 @@ struct ComplexXY : TransparentWidget {
   float maxVoltage = 10.f;
   float drawingScale = 1.f;
   ComplexXYDragOverlay* dragOverlay = nullptr;
+  ComplexXYTooltip* tooltip = nullptr;
 
-  ComplexXY(ComputerscareComplexBase* mod, int indexParamA) {
+  ComplexXY(ComputerscareComplexBase* mod, int indexParamA,
+            ComplexXYParamMode mode = ComplexXYParamMode::Rectangular,
+            std::string name = "") {
     module = mod;
     paramA = indexParamA;
+    paramMode = mode;
+    controlName = name;
     // box.size = Vec(30,30);
     TransparentWidget();
   }
 
   ~ComplexXY() override {
+    destroyTooltip();
     if (dragOverlay) {
       if (dragOverlay->parent) dragOverlay->parent->removeChild(dragOverlay);
       delete dragOverlay;
       dragOverlay = nullptr;
     }
   }
+
+  engine::ParamQuantity* getParamQuantity(int offset) {
+    if (!module) return nullptr;
+    int id = paramA + offset;
+    if (id < 0 || id >= (int)module->paramQuantities.size()) return nullptr;
+    return module->paramQuantities[id];
+  }
+
+  Vec getParamPair() {
+    if (!module) return Vec(0.f, 0.f);
+    return Vec(module->params[paramA].getValue(),
+               module->params[paramA + 1].getValue());
+  }
+
+  Vec getRectValue() {
+    Vec ab = getParamPair();
+    if (paramMode == ComplexXYParamMode::PolarDegrees) {
+      float thetaRadians = ab.y * cpx::complex_math::pi / 180.f;
+      return Vec(ab.x * std::cos(thetaRadians), ab.x * std::sin(thetaRadians));
+    }
+    return ab;
+  }
+
+  Vec getPolarValue() {
+    Vec xy = getRectValue();
+    return Vec(std::hypot(xy.x, xy.y),
+               std::atan2(xy.y, xy.x) * 180.f / cpx::complex_math::pi);
+  }
+
+  Vec rectToParamPair(float x, float y) {
+    if (paramMode == ComplexXYParamMode::PolarDegrees) {
+      return Vec(std::hypot(x, y),
+                 std::atan2(y, x) * 180.f / cpx::complex_math::pi);
+    }
+    return Vec(x, y);
+  }
+
+  Vec polarToParamPair(float r, float thetaDegrees) {
+    if (paramMode == ComplexXYParamMode::PolarDegrees) {
+      return Vec(r, thetaDegrees);
+    }
+
+    float thetaRadians = thetaDegrees * cpx::complex_math::pi / 180.f;
+    return Vec(r * std::cos(thetaRadians), r * std::sin(thetaRadians));
+  }
+
+  std::string shortFloatString(float value, int precision = 5) {
+    std::ostringstream ss;
+    ss << std::setprecision(precision) << math::normalizeZero(value);
+    return ss.str();
+  }
+
+  std::string hoverValueString() {
+    Vec xy = getRectValue();
+    Vec rt = getPolarValue();
+    return "x: " + shortFloatString(xy.x) + "   y: " + shortFloatString(xy.y) +
+           "\nr: " + shortFloatString(rt.x) +
+           "   θ: " + shortFloatString(rt.y) + "°";
+  }
+
+  std::vector<std::string> splitWords(const std::string& s) {
+    std::istringstream ss(s);
+    std::vector<std::string> words;
+    std::string word;
+    while (ss >> word) {
+      words.push_back(word);
+    }
+    return words;
+  }
+
+  std::string joinWords(const std::vector<std::string>& words, int first,
+                        int last) {
+    std::string out;
+    for (int i = first; i < last; i++) {
+      if (!out.empty()) out += " ";
+      out += words[i];
+    }
+    return out;
+  }
+
+  bool isCoordinateWord(const std::string& word) {
+    return word == "Real" || word == "Imaginary" || word == "Radius" ||
+           word == "Theta" || word == "X" || word == "Y" || word == "x" ||
+           word == "y" || word == "R" || word == "r" || word == "θ";
+  }
+
+  std::string withoutTrailingCoordinateWord(const std::string& label) {
+    std::vector<std::string> words = splitWords(label);
+    if (!words.empty() && isCoordinateWord(words.back())) {
+      words.pop_back();
+    }
+    return joinWords(words, 0, words.size());
+  }
+
+  std::string withoutLeadingCoordinateWord(const std::string& label) {
+    std::vector<std::string> words = splitWords(label);
+    int first = (!words.empty() && isCoordinateWord(words.front())) ? 1 : 0;
+    return joinWords(words, first, words.size());
+  }
+
+  std::string commonWordPrefix(const std::string& a, const std::string& b) {
+    std::vector<std::string> aw = splitWords(a);
+    std::vector<std::string> bw = splitWords(b);
+    int n = std::min(aw.size(), bw.size());
+    int common = 0;
+    while (common < n && aw[common] == bw[common]) {
+      common++;
+    }
+    return joinWords(aw, 0, common);
+  }
+
+  std::string menuControlName() {
+    if (!controlName.empty()) return controlName;
+
+    engine::ParamQuantity* pqa = getParamQuantity(0);
+    engine::ParamQuantity* pqb = getParamQuantity(1);
+    if (pqa && pqb) {
+      std::string a = pqa->getLabel();
+      std::string b = pqb->getLabel();
+      if (a == b) return a;
+
+      std::string trailingA = withoutTrailingCoordinateWord(a);
+      std::string trailingB = withoutTrailingCoordinateWord(b);
+      if (!trailingA.empty() && trailingA == trailingB) return trailingA;
+
+      std::string prefix = commonWordPrefix(a, b);
+      if (!prefix.empty()) return prefix;
+
+      std::string leadingA = withoutLeadingCoordinateWord(a);
+      std::string leadingB = withoutLeadingCoordinateWord(b);
+      if (!leadingA.empty() && leadingA == leadingB) return leadingA;
+
+      return a + " / " + b;
+    }
+    if (pqa) return pqa->getLabel();
+    if (pqb) return pqb->getLabel();
+    return "Complex Arrow";
+  }
+
+  std::string tooltipString() {
+    return menuControlName() + "\n" + hoverValueString();
+  }
+
+  void setControlName(const std::string& name) { controlName = name; }
 
   std::string rectDragDisplayString(float x, float y) {
     return cpx::complex_math::fixedWidthRectString(x, y);
@@ -155,6 +362,188 @@ struct ComplexXY : TransparentWidget {
     if (absX > 0.f) scale = std::min(scale, maxVoltage / absX);
     if (absY > 0.f) scale = std::min(scale, maxVoltage / absY);
     return z.mult(scale);
+  }
+
+  void setParamPairRaw(float a, float b) {
+    if (!module) return;
+    module->params[paramA].setValue(a);
+    module->params[paramA + 1].setValue(b);
+  }
+
+  void setRectRaw(float x, float y) {
+    Vec ab = rectToParamPair(x, y);
+    setParamPairRaw(ab.x, ab.y);
+  }
+
+  void setPolarRaw(float r, float thetaDegrees) {
+    Vec ab = polarToParamPair(r, thetaDegrees);
+    setParamPairRaw(ab.x, ab.y);
+  }
+
+  float getFieldValue(ComplexXYValueField::Field field) {
+    Vec xy = getRectValue();
+    Vec rt = getPolarValue();
+    switch (field) {
+      case ComplexXYValueField::Field::X:
+        return xy.x;
+      case ComplexXYValueField::Field::Y:
+        return xy.y;
+      case ComplexXYValueField::Field::R:
+        return rt.x;
+      case ComplexXYValueField::Field::Theta:
+        return rt.y;
+    }
+    return 0.f;
+  }
+
+  void setFieldRaw(ComplexXYValueField::Field field, float value) {
+    Vec xy = getRectValue();
+    Vec rt = getPolarValue();
+    switch (field) {
+      case ComplexXYValueField::Field::X:
+        setRectRaw(value, xy.y);
+        break;
+      case ComplexXYValueField::Field::Y:
+        setRectRaw(xy.x, value);
+        break;
+      case ComplexXYValueField::Field::R:
+        setPolarRaw(value, rt.y);
+        break;
+      case ComplexXYValueField::Field::Theta:
+        setPolarRaw(rt.x, value);
+        break;
+    }
+  }
+
+  float getFieldMin(ComplexXYValueField::Field field) {
+    if (field == ComplexXYValueField::Field::R) return 0.f;
+    if (field == ComplexXYValueField::Field::Theta) return -180.f;
+    return -maxVoltage;
+  }
+
+  float getFieldMax(ComplexXYValueField::Field field) {
+    if (field == ComplexXYValueField::Field::R) {
+      return maxMode == ComplexXYMaxMode::Rectangular
+                 ? maxVoltage * std::sqrt(2.f)
+                 : maxVoltage;
+    }
+    if (field == ComplexXYValueField::Field::Theta) return 180.f;
+    return maxVoltage;
+  }
+
+  void setParamPairWithHistory(float a, float b, const std::string& name) {
+    if (!module) return;
+    engine::ParamQuantity* pqa = getParamQuantity(0);
+    engine::ParamQuantity* pqb = getParamQuantity(1);
+    if (!pqa || !pqb) return;
+
+    float oldA = pqa->getValue();
+    float oldB = pqb->getValue();
+    pqa->setValue(a);
+    pqb->setValue(b);
+    float newA = pqa->getValue();
+    float newB = pqb->getValue();
+
+    history::ComplexAction* h = new history::ComplexAction;
+    h->name = name;
+    if (oldA != newA) {
+      history::ParamChange* ha = new history::ParamChange;
+      ha->name = name;
+      ha->moduleId = module->id;
+      ha->paramId = paramA;
+      ha->oldValue = oldA;
+      ha->newValue = newA;
+      h->push(ha);
+    }
+    if (oldB != newB) {
+      history::ParamChange* hb = new history::ParamChange;
+      hb->name = name;
+      hb->moduleId = module->id;
+      hb->paramId = paramA + 1;
+      hb->oldValue = oldB;
+      hb->newValue = newB;
+      h->push(hb);
+    }
+    if (h->isEmpty()) {
+      delete h;
+    } else {
+      APP->history->push(h);
+    }
+  }
+
+  void setRectWithHistory(float x, float y, const std::string& name) {
+    Vec ab = rectToParamPair(x, y);
+    setParamPairWithHistory(ab.x, ab.y, name);
+  }
+
+  void setPolarWithHistory(float r, float thetaDegrees,
+                           const std::string& name) {
+    Vec ab = polarToParamPair(r, thetaDegrees);
+    setParamPairWithHistory(ab.x, ab.y, name);
+  }
+
+  void resetWithHistory() {
+    engine::ParamQuantity* pqa = getParamQuantity(0);
+    engine::ParamQuantity* pqb = getParamQuantity(1);
+    if (!pqa || !pqb) return;
+    setParamPairWithHistory(pqa->getDefaultValue(), pqb->getDefaultValue(),
+                            "initialize complex arrow");
+  }
+
+  void startEditing(Vec mousePosition) {
+    if (editing || !module) return;
+    editing = true;
+    pendingLeftPress = false;
+    cancelledDrag = false;
+    clickedMousePosition = mousePosition;
+
+    Vec xy = getRectValue();
+    origParamAValue = module->params[paramA].getValue();
+    origParamBValue = module->params[paramA + 1].getValue();
+    origComplexValue = Vec(xy.x, -xy.y);
+    origComplexLength = origComplexValue.norm();
+
+    if (origComplexLength < 0.1) {
+      origComplexLength = 1;
+      pixelsOrigin = clickedMousePosition;
+    } else {
+      pixelsOrigin = clickedMousePosition.minus(origComplexValue.mult(
+          originalMagnituteRadiusPixels / origComplexLength));
+    }
+  }
+
+  void createTooltip() {
+    if (!settings::tooltips || tooltip || !module || editing) return;
+    tooltip = new ComplexXYTooltip;
+    tooltip->source = this;
+    APP->scene->addChild(tooltip);
+  }
+
+  void destroyTooltip() {
+    if (!tooltip) return;
+    if (tooltip->parent) tooltip->parent->removeChild(tooltip);
+    delete tooltip;
+    tooltip = nullptr;
+  }
+
+  void createContextMenu() {
+    destroyTooltip();
+    ui::Menu* menu = createMenu();
+    menu->addChild(construct<MenuLabel>(&MenuLabel::text, menuControlName()));
+
+    addValueField(menu, "x", ComplexXYValueField::Field::X);
+    addValueField(menu, "y", ComplexXYValueField::Field::Y);
+    addValueField(menu, "r", ComplexXYValueField::Field::R);
+    addValueField(menu, "θ°", ComplexXYValueField::Field::Theta);
+
+    menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
+    menu->addChild(createMenuItem("Initialize", "double-click",
+                                  [=]() { resetWithHistory(); }));
+  }
+
+  void addValueField(ui::Menu* menu, const std::string& label,
+                     ComplexXYValueField::Field field) {
+    menu->addChild(new ComplexXYValueRow(this, label, field));
   }
 
   void drawDragText(NVGcontext* vg, const std::string& text, Vec pos,
@@ -245,31 +634,43 @@ struct ComplexXY : TransparentWidget {
   void setFaded(bool shouldFade) { faded = shouldFade; }
 
   void onButton(const event::Button& e) override {
+    if (e.button == GLFW_MOUSE_BUTTON_RIGHT && e.action == GLFW_PRESS &&
+        (e.mods & RACK_MOD_MASK) == 0) {
+      createContextMenu();
+      e.consume(this);
+      return;
+    }
+
     if (e.button == GLFW_MOUSE_BUTTON_LEFT) {
       if (e.action == GLFW_PRESS) {
+        destroyTooltip();
         e.consume(this);
-        editing = true;
+        pendingLeftPress = true;
         cancelledDrag = false;
-        clickedMousePosition = APP->scene->getMousePos();
-        if (module) {
-          float complexA = module->params[paramA].getValue();
-          float complexB = module->params[paramA + 1].getValue();
-          origParamAValue = complexA;
-          origParamBValue = complexB;
-          origComplexValue = Vec(complexA, -complexB);
-          origComplexLength = origComplexValue.norm();
-
-          if (origComplexLength < 0.1) {
-            origComplexLength = 1;
-            pixelsOrigin = clickedMousePosition;
-          } else {
-            pixelsOrigin = clickedMousePosition.minus(origComplexValue.mult(
-                originalMagnituteRadiusPixels / origComplexLength));
-          }
-        }
+        pendingMousePosition = APP->scene->getMousePos();
+        pendingLeftPressTime = glfwGetTime();
+      } else if (e.action == GLFW_RELEASE) {
+        pendingLeftPress = false;
       }
     }
   }
+
+  void onDoubleClick(const DoubleClickEvent& e) override {
+    pendingLeftPress = false;
+    cancelDrag();
+    resetWithHistory();
+    e.consume(this);
+  }
+
+  void onEnter(const EnterEvent& e) override { createTooltip(); }
+
+  void onLeave(const LeaveEvent& e) override { destroyTooltip(); }
+
+  void onHover(const HoverEvent& e) override {
+    createTooltip();
+    e.consume(this);
+  }
+
   void onHoverKey(const HoverKeyEvent& e) override {
     if (editing && e.action == GLFW_PRESS && e.key == GLFW_KEY_ESCAPE) {
       cancelDrag();
@@ -278,11 +679,19 @@ struct ComplexXY : TransparentWidget {
   }
 
   void onDragEnd(const event::DragEnd& e) override {
+    pendingLeftPress = false;
     if (!cancelledDrag) editing = false;
     cancelledDrag = false;
   }
 
   void step() override {
+    if (pendingLeftPress && module && APP && APP->scene) {
+      Vec mouse = APP->scene->getMousePos();
+      bool moved = mouse.minus(pendingMousePosition).norm() > 2.f;
+      bool held = glfwGetTime() - pendingLeftPressTime > 0.18;
+      if (moved || held) startEditing(pendingMousePosition);
+    }
+
     if (editing && module) {
       if (!dragOverlay && APP && APP->scene) {
         dragOverlay = new ComplexXYDragOverlay();
@@ -311,8 +720,8 @@ struct ComplexXY : TransparentWidget {
                             .mult(origComplexLength));
       pixelsDiff = newZ.mult(originalMagnituteRadiusPixels / origComplexLength);
 
-      module->params[paramA].setValue(newZ.x);
-      module->params[paramA + 1].setValue(-newZ.y);
+      Vec ab = rectToParamPair(newZ.x, -newZ.y);
+      setParamPairRaw(ab.x, ab.y);
     } else {
       if (dragOverlay) {
         if (dragOverlay->parent) dragOverlay->parent->removeChild(dragOverlay);
@@ -321,8 +730,8 @@ struct ComplexXY : TransparentWidget {
       }
 
       if (module) {
-        newZ = Vec(module->params[paramA].getValue(),
-                   -module->params[paramA + 1].getValue());
+        Vec xy = getRectValue();
+        newZ = Vec(xy.x, -xy.y);
       } else {
         newZ = Vec(-10 + 20 * random::uniform(), -10 + 20 * random::uniform());
       }
@@ -472,6 +881,130 @@ struct ComplexXY : TransparentWidget {
     Widget::drawLayer(args, layer);
   }
 };
+
+inline void ComplexXYTooltip::step() {
+  if (!source || !source->module || source->editing) return;
+  text = source->tooltipString();
+  ui::Tooltip::step();
+  box.pos = source->getAbsoluteOffset(source->box.size).round();
+  if (parent) box = box.nudge(parent->box.zeroPos());
+}
+
+inline float ComplexXYValueQuantity::getValue() {
+  return source ? source->getFieldValue(field) : 0.f;
+}
+
+inline void ComplexXYValueQuantity::setValue(float value) {
+  if (!source) return;
+  source->setFieldRaw(field, math::clamp(value, getMinValue(), getMaxValue()));
+}
+
+inline float ComplexXYValueQuantity::getMinValue() {
+  return source ? source->getFieldMin(field) : 0.f;
+}
+
+inline float ComplexXYValueQuantity::getMaxValue() {
+  return source ? source->getFieldMax(field) : 1.f;
+}
+
+inline float ComplexXYValueQuantity::getDefaultValue() {
+  return source ? source->getFieldValue(field) : 0.f;
+}
+
+inline std::string ComplexXYValueQuantity::getUnit() {
+  return field == ComplexXYValueField::Field::Theta ? "°" : "";
+}
+
+inline ComplexXYValueRow::ComplexXYValueRow(ComplexXY* source,
+                                            const std::string& label,
+                                            ComplexXYValueField::Field field) {
+  this->source = source;
+  this->label = label;
+  this->field = field;
+  box.size = Vec(270.f, BND_WIDGET_HEIGHT);
+
+  quantity = new ComplexXYValueQuantity;
+  quantity->source = source;
+  quantity->field = field;
+  quantity->label = label;
+
+  slider = new ui::Slider;
+  slider->quantity = quantity;
+  slider->box.size = Vec(132.f, BND_WIDGET_HEIGHT);
+  addChild(slider);
+
+  textField = new ComplexXYValueField;
+  textField->source = source;
+  textField->field = field;
+  textField->box.size = Vec(84.f, BND_WIDGET_HEIGHT);
+  if (source) textField->text = source->shortFloatString(quantity->getValue());
+  addChild(textField);
+}
+
+inline ComplexXYValueRow::~ComplexXYValueRow() { delete quantity; }
+
+inline void ComplexXYValueRow::step() {
+  if (slider) slider->box.pos = Vec(34.f, 0.f);
+  if (textField) {
+    textField->box.pos = Vec(174.f, 0.f);
+    if (source && APP->event->selectedWidget != textField) {
+      textField->text = source->shortFloatString(quantity->getValue());
+    }
+  }
+  ui::MenuEntry::step();
+}
+
+inline void ComplexXYValueRow::draw(const DrawArgs& args) {
+  std::shared_ptr<Font> font = APP->window->uiFont;
+  if (font) {
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, 13.f);
+    nvgTextLetterSpacing(args.vg, 0.f);
+    nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(args.vg, nvgRGB(0xee, 0xee, 0xee));
+    nvgText(args.vg, 8.f, box.size.y * 0.5f, label.c_str(), nullptr);
+  }
+  ui::MenuEntry::draw(args);
+}
+
+inline void ComplexXYValueField::step() { ui::TextField::step(); }
+
+inline void ComplexXYValueField::onSelectKey(const SelectKeyEvent& e) {
+  if (e.action == GLFW_PRESS &&
+      (e.key == GLFW_KEY_ENTER || e.key == GLFW_KEY_KP_ENTER)) {
+    commit();
+    if (ui::MenuOverlay* overlay = getAncestorOfType<ui::MenuOverlay>()) {
+      overlay->requestDelete();
+    }
+    e.consume(this);
+  }
+
+  if (!e.getTarget()) ui::TextField::onSelectKey(e);
+}
+
+inline void ComplexXYValueField::commit() {
+  if (!source) return;
+  try {
+    float value = std::stof(text);
+    Vec xy = source->getRectValue();
+    Vec rt = source->getPolarValue();
+    switch (field) {
+      case Field::X:
+        source->setRectWithHistory(value, xy.y, "set complex x");
+        break;
+      case Field::Y:
+        source->setRectWithHistory(xy.x, value, "set complex y");
+        break;
+      case Field::R:
+        source->setPolarWithHistory(value, rt.y, "set complex radius");
+        break;
+      case Field::Theta:
+        source->setPolarWithHistory(rt.x, value, "set complex theta");
+        break;
+    }
+  } catch (...) {
+  }
+}
 
 inline void ComplexXYDragOverlay::step() {
   if (!source || !source->editing) {
