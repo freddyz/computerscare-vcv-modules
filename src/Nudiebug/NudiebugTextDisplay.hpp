@@ -81,7 +81,7 @@ struct TextDisplay : TransparentWidget {
       if (clearPlotPerFrame) {
         plotDisplay.destroyFramebuffer();
         plotDisplay.dotsRenderer.draw(args.vg, *snapshot, box.size.x,
-                                      box.size.y);
+                                      box.size.y, plotMode);
       } else if (!args.fb) {
         plotDisplay.render(
             args.vg, *snapshot, *options,

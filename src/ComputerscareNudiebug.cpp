@@ -51,8 +51,8 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                  {"Off", "Left", "Middle", "Right"});
     configSwitch(BARS_DISPLAY_MODE, 0.f, 3.f, nudiebug::BARS_UNI_EDGE, "Bars",
                  {"Off", "Unipolar Edge", "Unipolar Middle", "Bipolar"});
-    configSwitch(PLOT_DISPLAY_MODE, 0.f, 1.f, nudiebug::PLOT_OFF, "Plot",
-                 {"Off", "Dots"});
+    configSwitch(PLOT_DISPLAY_MODE, 0.f, 2.f, nudiebug::PLOT_OFF, "Plot",
+                 {"Off", "Dots", "Lines"});
     configSwitch(CLEAR_PLOT_PER_FRAME, 0.f, 1.f, 1.f, "Clear plot per frame",
                  {"Persistent", "Clear"});
     configSwitch(CHANNEL_LABELS_MODE, 0.f, 3.f, nudiebug::CHANNEL_LABELS_BOTH,
@@ -203,7 +203,10 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     }
 
     json_t* plotModeJ = json_object_get(rootJ, "plotMode");
-    if (plotModeJ) displayOptions.plotMode = json_integer_value(plotModeJ);
+    if (plotModeJ) {
+      displayOptions.plotMode = json_integer_value(plotModeJ);
+      params[PLOT_DISPLAY_MODE].setValue(displayOptions.plotMode);
+    }
 
     json_t* clearPlotPerFrameJ = json_object_get(rootJ, "clearPlotPerFrame");
     if (clearPlotPerFrameJ) {
@@ -429,10 +432,12 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
         "Plot", Vec(5.f, 63.f), module,
         ComputerscareNudiebug::PLOT_DISPLAY_MODE, [](Module* m, int) {
           auto* n = dynamic_cast<ComputerscareNudiebug*>(m);
-          return n && n->params[ComputerscareNudiebug::PLOT_DISPLAY_MODE]
-                                 .getValue() > 0.5f
-                     ? "Dots"
-                     : "Off";
+          int mode =
+              n ? n->params[ComputerscareNudiebug::PLOT_DISPLAY_MODE].getValue()
+                : nudiebug::PLOT_OFF;
+          if (mode == nudiebug::PLOT_LINES) return std::string("Lines");
+          if (mode == nudiebug::PLOT_DOTS) return std::string("Dots");
+          return std::string("Off");
         });
     addModeButton(
         "Clr", Vec(47.f, 63.f), module,
@@ -529,6 +534,8 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
       addParamMenuItem(submenu, "Off", nudiebug::PLOT_OFF,
                        ComputerscareNudiebug::PLOT_DISPLAY_MODE);
       addParamMenuItem(submenu, "Dots", nudiebug::PLOT_DOTS,
+                       ComputerscareNudiebug::PLOT_DISPLAY_MODE);
+      addParamMenuItem(submenu, "Lines", nudiebug::PLOT_LINES,
                        ComputerscareNudiebug::PLOT_DISPLAY_MODE);
     }));
     menu->addChild(createSubmenuItem("Plot Clear", "", [=](Menu* submenu) {

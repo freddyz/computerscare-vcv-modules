@@ -22,7 +22,7 @@ enum BarsMode { BARS_OFF, BARS_UNI_EDGE, BARS_UNI_MID, BARS_BIPOLAR };
 
 constexpr int BARS_UNIPOLAR = BARS_UNI_EDGE;
 
-enum PlotMode { PLOT_OFF, PLOT_DOTS };
+enum PlotMode { PLOT_OFF, PLOT_DOTS, PLOT_LINES };
 
 enum CompolyRepresentation { COMPOLY_REP_RECT, COMPOLY_REP_POLAR };
 

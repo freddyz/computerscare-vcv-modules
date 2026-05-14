@@ -94,8 +94,8 @@ struct PlotDisplay {
 
     nvgBeginFrame(fbVg, width, height, ratio);
 
-    if (options.plotMode == PLOT_DOTS) {
-      dotsRenderer.draw(fbVg, snapshot, width, height);
+    if (options.plotMode != PLOT_OFF) {
+      dotsRenderer.draw(fbVg, snapshot, width, height, options.plotMode);
     }
 
     nvgEndFrame(fbVg);
