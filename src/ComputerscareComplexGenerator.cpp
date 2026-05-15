@@ -253,39 +253,6 @@ struct DisableableSmoothKnob : RoundKnob {
   }
 };
 
-struct ComplexGeneratorViewModeSwitch : app::Switch {
-  std::string label;
-  int textAlign = NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE;
-
-  void draw(const DrawArgs& args) override;
-};
-
-void ComplexGeneratorViewModeSwitch::draw(const DrawArgs& args) {
-  nvgBeginPath(args.vg);
-  nvgRoundedRect(args.vg, 0.f, 0.f, box.size.x, box.size.y, 1.5f);
-  nvgFillColor(args.vg, nvgRGBA(8, 28, 24, 42));
-  nvgFill(args.vg);
-
-  nvgFontSize(args.vg, 9.f);
-  nvgTextAlign(args.vg, textAlign);
-  nvgFillColor(args.vg, nvgRGB(28, 34, 28));
-  float textX = box.size.x * 0.5f;
-  if (textAlign & NVG_ALIGN_RIGHT)
-    textX = box.size.x - 1.f;
-  else if (textAlign & NVG_ALIGN_LEFT)
-    textX = 1.f;
-  nvgText(args.vg, textX, box.size.y * 0.58f, label.c_str(), nullptr);
-}
-
-struct ComplexGeneratorSetAllViewModeItem : MenuItem {
-  ComputerscareComplexGenerator* module = nullptr;
-  int mode = 0;
-
-  void onAction(const event::Action& e) override {
-    if (module) module->setAllControlModes(mode);
-  }
-};
-
 struct ComputerscareComplexGeneratorWidget : ModuleWidget {
   ComputerscareComplexGeneratorWidget(ComputerscareComplexGenerator* module) {
     setModule(module);
@@ -364,19 +331,15 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     if (!controlLabel.empty() && controlLabel[0] >= 'a' &&
         controlLabel[0] <= 'z')
       controlLabel[0] += 'A' - 'a';
-    cpx::SwitchableComplexControl* control = new cpx::SwitchableComplexControl(
-        module, paramIndex, polarParamIndex, modeParamId, arrowMaxMode,
-        arrowMaxVoltage, -1, false, controlLabel);
-    control->box = Rect(Vec(x, y), Vec(32, 25));
+    cpx::LabeledSwitchableComplexControl* control =
+        new cpx::LabeledSwitchableComplexControl(
+            module, paramIndex, polarParamIndex, modeParamId, arrowMaxMode,
+            arrowMaxVoltage, label, Vec(32.f, 25.f), Vec(0.f, 0.f),
+            Vec(32.f, 12.f), -1, false, controlLabel,
+            NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, Vec(2.f, 12.f));
+    control->box = Rect(Vec(x - 2.f, y - 12.f), Vec(34.f, 37.f));
     control->setArrowDrawingScale(0.78f);
     addChild(control);
-
-    ComplexGeneratorViewModeSwitch* modeButton =
-        createParam<ComplexGeneratorViewModeSwitch>(Vec(x - 2, y - 12), module,
-                                                    modeParamId);
-    modeButton->box = Rect(Vec(x - 2, y - 12), Vec(32.f, 12.f));
-    modeButton->label = label;
-    addParam(modeButton);
   }
 
   void addLabeledKnob(std::string label, float x, float y,
@@ -393,51 +356,40 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
             addParam(fader);*/
 
-    cpx::SwitchableComplexControl* control = new cpx::SwitchableComplexControl(
-        module, ComputerscareComplexGenerator::COMPLEX_XY + index,
-        ComputerscareComplexGenerator::LANE_POLAR + index,
-        ComputerscareComplexGenerator::LANE_VIEW_MODE + index / 2,
-        cpx::ComplexXYMaxMode::Rectangular, 10.f, index / 2, false,
-        "Lane " + label);
-    control->box = Rect(Vec(x, y), Vec(32, 25));
-    control->setArrowDrawingScale(0.78f);
-    control->setArrowYOffset(-2.f);
-    addChild(control);
-
     float labelWidth = label.size() > 1 ? 17.f : 12.f;
     bool isSecondColumn = index / 2 >= 8;
     Vec labelPos = isSecondColumn ? Vec(x + 32.f - labelWidth, y - 12.f)
                                   : Vec(x + labelDx, y - 12 + labelDy);
+    Vec wrapperPos = Vec(std::min(labelPos.x, x), labelPos.y);
+    Vec labelRel = labelPos.minus(wrapperPos);
+    Vec controlRel = Vec(x, y).minus(wrapperPos);
+    Vec wrapperSize =
+        Vec(std::max(labelRel.x + labelWidth, controlRel.x + 32.f), 37.f);
 
-    ComplexGeneratorViewModeSwitch* modeButton =
-        createParam<ComplexGeneratorViewModeSwitch>(
-            labelPos, module,
-            ComputerscareComplexGenerator::LANE_VIEW_MODE + index / 2);
-    modeButton->box = Rect(labelPos, Vec(labelWidth, 12.f));
-    modeButton->label = label;
-    if (isSecondColumn)
-      modeButton->textAlign = NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE;
-    addParam(modeButton);
+    cpx::LabeledSwitchableComplexControl* control =
+        new cpx::LabeledSwitchableComplexControl(
+            module, ComputerscareComplexGenerator::COMPLEX_XY + index,
+            ComputerscareComplexGenerator::LANE_POLAR + index,
+            ComputerscareComplexGenerator::LANE_VIEW_MODE + index / 2,
+            cpx::ComplexXYMaxMode::Rectangular, 10.f, label, Vec(32.f, 25.f),
+            labelRel, Vec(labelWidth, 12.f), index / 2, false, "Lane " + label,
+            isSecondColumn ? NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE
+                           : NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE,
+            controlRel);
+    control->box = Rect(wrapperPos, wrapperSize);
+    control->setArrowDrawingScale(0.78f);
+    control->setArrowYOffset(-2.f);
+    addChild(control);
   }
 
   void appendContextMenu(Menu* menu) override {
-    ComputerscareComplexGenerator* generator =
-        dynamic_cast<ComputerscareComplexGenerator*>(module);
-
-    menu->addChild(new MenuSeparator);
-    menu->addChild(construct<MenuLabel>(&MenuLabel::text, "View"));
-    menu->addChild(construct<ComplexGeneratorSetAllViewModeItem>(
-        &MenuItem::text, "set all to arrow",
-        &ComplexGeneratorSetAllViewModeItem::module, generator,
-        &ComplexGeneratorSetAllViewModeItem::mode, 0));
-    menu->addChild(construct<ComplexGeneratorSetAllViewModeItem>(
-        &MenuItem::text, "set all to xy",
-        &ComplexGeneratorSetAllViewModeItem::module, generator,
-        &ComplexGeneratorSetAllViewModeItem::mode, 1));
-    menu->addChild(construct<ComplexGeneratorSetAllViewModeItem>(
-        &MenuItem::text, "set all to rθ",
-        &ComplexGeneratorSetAllViewModeItem::module, generator,
-        &ComplexGeneratorSetAllViewModeItem::mode, 2));
+    std::vector<int> modeParamIds;
+    for (int i = 0; i < numComplexGeneratorKnobs; i++) {
+      modeParamIds.push_back(ComputerscareComplexGenerator::LANE_VIEW_MODE + i);
+    }
+    modeParamIds.push_back(ComputerscareComplexGenerator::SCALE_VIEW_MODE);
+    modeParamIds.push_back(ComputerscareComplexGenerator::OFFSET_VIEW_MODE);
+    cpx::addSetAllComplexControlViewModeMenu(menu, module, modeParamIds);
   }
 
   CompolyLaneCountWidget* channelWidget;

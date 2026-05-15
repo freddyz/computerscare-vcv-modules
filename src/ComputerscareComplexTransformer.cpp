@@ -1,7 +1,7 @@
 #include <array>
 
 #include "Computerscare.hpp"
-#include "complex/ComplexWidgets.hpp"
+#include "complex/SwitchableComplexControl.hpp"
 #include "complex/math/ComplexMath.hpp"
 
 struct ComputerscareComplexTransformer;
@@ -14,10 +14,12 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 
     COMPOLY_CHANNELS,
 
-    SCALE_VAL_AB,
-    SCALE_TRIM_AB = SCALE_VAL_AB + 2,
+    Z_SCALE_VAL_AB,
+    SCALE_VAL_AB = Z_SCALE_VAL_AB,
+    SCALE_TRIM_AB = Z_SCALE_VAL_AB + 2,
 
     OFFSET_VAL_AB = SCALE_TRIM_AB + 2,
+    Z_OFFSET_VAL_AB = OFFSET_VAL_AB,
     OFFSET_TRIM_AB = OFFSET_VAL_AB + 2,
 
     Z_INPUT_MODE,
@@ -27,7 +29,17 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     C_INPUT_MODE,
     MAIN_OUTPUT_MODE,
     PRODUCT_OUTPUT_MODE,
-    NUM_PARAMS
+    W_SCALE_VAL_AB,
+    W_OFFSET_VAL_AB = W_SCALE_VAL_AB + 2,
+    Z_SCALE_VIEW_MODE = W_OFFSET_VAL_AB + 2,
+    Z_OFFSET_VIEW_MODE,
+    W_SCALE_VIEW_MODE,
+    W_OFFSET_VIEW_MODE,
+    Z_SCALE_POLAR,
+    Z_OFFSET_POLAR = Z_SCALE_POLAR + 2,
+    W_SCALE_POLAR = Z_OFFSET_POLAR + 2,
+    W_OFFSET_POLAR = W_SCALE_POLAR + 2,
+    NUM_PARAMS = W_OFFSET_POLAR + 2
   };
   enum InputIds {
     Z_INPUT,
@@ -49,15 +61,10 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
   ComputerscareComplexTransformer() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-    configParam(SCALE_VAL_AB, -10.f, 10.f, 0.f, "Channel ");
-    configParam(SCALE_VAL_AB + 1, -10.f, 10.f, 0.f, "Channel ");
-    getParamQuantity(SCALE_VAL_AB)->randomizeEnabled = false;
-    getParamQuantity(SCALE_VAL_AB + 1)->randomizeEnabled = false;
-
-    configParam(OFFSET_VAL_AB, -10.f, 10.f, 0.f, "Channel ");
-    configParam(OFFSET_VAL_AB + 1, -10.f, 10.f, 0.f, "Channel ");
-    getParamQuantity(OFFSET_VAL_AB)->randomizeEnabled = false;
-    getParamQuantity(OFFSET_VAL_AB + 1)->randomizeEnabled = false;
+    configComplexAffineParams(Z_SCALE_VAL_AB, Z_OFFSET_VAL_AB, Z_SCALE_POLAR,
+                              Z_OFFSET_POLAR, "z");
+    configComplexAffineParams(W_SCALE_VAL_AB, W_OFFSET_VAL_AB, W_SCALE_POLAR,
+                              W_OFFSET_POLAR, "w");
 
     configParam<AutoParamQuantity>(COMPOLY_CHANNELS, 0.f, 16.f, 0.f,
                                    "Compoly Output Channels");
@@ -93,6 +100,14 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
         C_INPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
         cpx::complex_math::lastCoordinateModeValue,
         cpx::complex_math::defaultCoordinateModeValue, "c Input Mode");
+    configParam<cpx::ComplexControlViewModeParam>(Z_SCALE_VIEW_MODE, 0.f, 2.f,
+                                                  0.f, "z Scale View");
+    configParam<cpx::ComplexControlViewModeParam>(Z_OFFSET_VIEW_MODE, 0.f, 2.f,
+                                                  0.f, "z Offset View");
+    configParam<cpx::ComplexControlViewModeParam>(W_SCALE_VIEW_MODE, 0.f, 2.f,
+                                                  0.f, "w Scale View");
+    configParam<cpx::ComplexControlViewModeParam>(W_OFFSET_VIEW_MODE, 0.f, 2.f,
+                                                  0.f, "w Offset View");
 
     getParamQuantity(MAIN_OUTPUT_MODE)->randomizeEnabled = false;
     getParamQuantity(PRODUCT_OUTPUT_MODE)->randomizeEnabled = false;
@@ -122,6 +137,71 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
         COMPOLY_PRODUCT_OUT_B, "z*w");
   }
 
+  void configComplexAffineParams(int scaleParamId, int offsetParamId,
+                                 int scalePolarParamId, int offsetPolarParamId,
+                                 const std::string& inputName) {
+    configParam(scaleParamId, -3.f, 3.f, 1.f, inputName + " Scale Real");
+    configParam(scaleParamId + 1, -3.f, 3.f, 0.f,
+                inputName + " Scale Imaginary");
+    configParam(offsetParamId, -10.f, 10.f, 0.f, inputName + " Offset Real");
+    configParam(offsetParamId + 1, -10.f, 10.f, 0.f,
+                inputName + " Offset Imaginary");
+
+    cpx::ComplexControl::configParams(this, scalePolarParamId,
+                                      cpx::ComplexControlPreset::RThetaKnobs);
+    cpx::ComplexControl::configParams(this, offsetPolarParamId,
+                                      cpx::ComplexControlPreset::RThetaKnobs);
+    getParamQuantity(scalePolarParamId)->name = inputName + " Scale Radius";
+    getParamQuantity(scalePolarParamId + 1)->name = inputName + " Scale Theta";
+    getParamQuantity(offsetPolarParamId)->name = inputName + " Offset Radius";
+    getParamQuantity(offsetPolarParamId + 1)->name =
+        inputName + " Offset Theta";
+    getParamQuantity(scalePolarParamId)->maxValue = 3.f;
+
+    for (int id : {scalePolarParamId, scalePolarParamId + 1, offsetPolarParamId,
+                   offsetPolarParamId + 1}) {
+      getParamQuantity(id)->randomizeEnabled = false;
+    }
+  }
+
+  void setAllControlModes(int mode) {
+    mode = std::max(0, std::min(2, mode));
+    for (int id : {Z_SCALE_VIEW_MODE, Z_OFFSET_VIEW_MODE, W_SCALE_VIEW_MODE,
+                   W_OFFSET_VIEW_MODE}) {
+      params[id].setValue(mode);
+    }
+  }
+
+  void syncPolarViewsFromRect() {
+    syncPolarViewFromRect(Z_SCALE_VIEW_MODE, Z_SCALE_VAL_AB, Z_SCALE_POLAR);
+    syncPolarViewFromRect(Z_OFFSET_VIEW_MODE, Z_OFFSET_VAL_AB, Z_OFFSET_POLAR);
+    syncPolarViewFromRect(W_SCALE_VIEW_MODE, W_SCALE_VAL_AB, W_SCALE_POLAR);
+    syncPolarViewFromRect(W_OFFSET_VIEW_MODE, W_OFFSET_VAL_AB, W_OFFSET_POLAR);
+  }
+
+  void syncPolarViewFromRect(int viewModeParamId, int rectParamId,
+                             int polarParamId) {
+    if ((int)params[viewModeParamId].getValue() == 2) {
+      cpx::ComplexControl::syncRectParamsToPolarParams(this, rectParamId,
+                                                       polarParamId);
+    }
+  }
+
+  void applyComplexAffine(float* x, float* y, int scaleParamId,
+                          int offsetParamId) {
+    float scaleX = params[scaleParamId].getValue();
+    float scaleY = params[scaleParamId + 1].getValue();
+    float offsetX = params[offsetParamId].getValue();
+    float offsetY = params[offsetParamId + 1].getValue();
+
+    for (uint8_t c = 0; c < 16; c += 4) {
+      simd::float_4 xv = simd::float_4::load(x + c);
+      simd::float_4 yv = simd::float_4::load(y + c);
+      (xv * scaleX - yv * scaleY + offsetX).store(x + c);
+      (xv * scaleY + yv * scaleX + offsetY).store(y + c);
+    }
+  }
+
   void process(const ProcessArgs& args) override {
     ComputerscarePolyModule::checkCounter();
 
@@ -131,10 +211,7 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 
     // + 1%
     std::vector<std::vector<int>> inputCompolyphony =
-        getInputCompolyphony({Z_INPUT_MODE}, {Z_INPUT});
-
-    //	std::vector<std::vector <int>> inputCompolyphony =
-    // getInputCompolyphony({Z_INPUT_MODE,W_INPUT_MODE,A_INPUT_MODE},{Z_INPUT,W_INPUT,A_INPUT});
+        getInputCompolyphony({Z_INPUT_MODE, W_INPUT_MODE}, {Z_INPUT, W_INPUT});
 
     compolyChannelsMainOutput =
         calcOutputCompolyphony(compolyphonyKnobSetting, inputCompolyphony);
@@ -160,6 +237,8 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
 
     readComplexInputPairToRect(Z_INPUT, zInputMode, zx, zy);
     readComplexInputPairToRect(W_INPUT, wInputMode, wx, wy);
+    applyComplexAffine(zx, zy, Z_SCALE_VAL_AB, Z_OFFSET_VAL_AB);
+    applyComplexAffine(wx, wy, W_SCALE_VAL_AB, W_OFFSET_VAL_AB);
 
     for (uint8_t c = 0; c < 16; c += 4) {
       simd::float_4 zxv = simd::float_4::load(zx + c);
@@ -185,6 +264,8 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
   }
 
   void dataFromJson(json_t* rootJ) override {}
+  void onRandomize() override { syncPolarViewsFromRect(); }
+  void onReset() override { syncPolarViewsFromRect(); }
 };
 
 struct NoRandomSmallKnob : SmallKnob {
@@ -255,31 +336,31 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
 
     addChild(channelWidget);
 
-    cpx::ComplexXY* offsetValAB = new cpx::ComplexXY(
-        module, ComputerscareComplexTransformer::OFFSET_VAL_AB,
-        cpx::ComplexXYParamMode::Rectangular, "Offset");
-    offsetValAB->box.size = Vec(25, 25);
-    offsetValAB->box.pos = Vec(32, 27);
-    addChild(offsetValAB);
-
-    cpx::ComplexXY* scaleValAB = new cpx::ComplexXY(
-        module, ComputerscareComplexTransformer::SCALE_VAL_AB,
-        cpx::ComplexXYParamMode::Rectangular, "Scale");
-    scaleValAB->box.size = Vec(25, 25);
-    scaleValAB->box.pos = Vec(5, 27);
-    addChild(scaleValAB);
-
     cpx::CompolyPortsWidget* zInput = new cpx::CompolyPortsWidget(
-        Vec(50, 80), module, ComputerscareComplexTransformer::Z_INPUT,
+        Vec(50, 48), module, ComputerscareComplexTransformer::Z_INPUT,
         ComputerscareComplexTransformer::Z_INPUT_MODE, 0.8, false, "z");
     zInput->compolyLabel->box.pos = Vec(18, 6);
     addChild(zInput);
+    addAffineControls("scale", "offset", Vec(6, 95), module,
+                      ComputerscareComplexTransformer::Z_SCALE_VAL_AB,
+                      ComputerscareComplexTransformer::Z_SCALE_POLAR,
+                      ComputerscareComplexTransformer::Z_SCALE_VIEW_MODE,
+                      ComputerscareComplexTransformer::Z_OFFSET_VAL_AB,
+                      ComputerscareComplexTransformer::Z_OFFSET_POLAR,
+                      ComputerscareComplexTransformer::Z_OFFSET_VIEW_MODE, "z");
 
     cpx::CompolyPortsWidget* wInput = new cpx::CompolyPortsWidget(
-        Vec(50, 140), module, ComputerscareComplexTransformer::W_INPUT,
+        Vec(50, 155), module, ComputerscareComplexTransformer::W_INPUT,
         ComputerscareComplexTransformer::W_INPUT_MODE, 1.f, false, "w");
     wInput->compolyLabel->box.pos = Vec(15, 6);
     addChild(wInput);
+    addAffineControls("scale", "offset", Vec(6, 205), module,
+                      ComputerscareComplexTransformer::W_SCALE_VAL_AB,
+                      ComputerscareComplexTransformer::W_SCALE_POLAR,
+                      ComputerscareComplexTransformer::W_SCALE_VIEW_MODE,
+                      ComputerscareComplexTransformer::W_OFFSET_VAL_AB,
+                      ComputerscareComplexTransformer::W_OFFSET_POLAR,
+                      ComputerscareComplexTransformer::W_OFFSET_VIEW_MODE, "w");
 
     // addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module,
     // ComputerscareComplexTransformer::GLOBAL_SCALE));
@@ -287,7 +368,7 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
     // ComputerscareComplexTransformer::GLOBAL_OFFSET));
 
     cpx::CompolyPortsWidget* mainOutput = new cpx::CompolyPortsWidget(
-        Vec(50, 260), module,
+        Vec(50, 285), module,
         ComputerscareComplexTransformer::COMPOLY_MAIN_OUT_A,
         ComputerscareComplexTransformer::MAIN_OUTPUT_MODE, 0.7f, true,
         "zplusw");
@@ -295,12 +376,52 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
     addChild(mainOutput);
 
     cpx::CompolyPortsWidget* productOutput = new cpx::CompolyPortsWidget(
-        Vec(50, 320), module,
+        Vec(50, 335), module,
         ComputerscareComplexTransformer::COMPOLY_PRODUCT_OUT_A,
         ComputerscareComplexTransformer::PRODUCT_OUTPUT_MODE, 0.7f, true,
         "ztimesw");
     productOutput->compolyLabel->box.pos = Vec(0, 10);
     addChild(productOutput);
+  }
+
+  void addAffineControls(std::string scaleLabel, std::string offsetLabel,
+                         Vec pos, ComputerscareComplexTransformer* module,
+                         int scaleParamId, int scalePolarParamId,
+                         int scaleViewModeParamId, int offsetParamId,
+                         int offsetPolarParamId, int offsetViewModeParamId,
+                         const std::string& inputName) {
+    addModeControl(scaleLabel, pos.x, pos.y, module, scaleParamId,
+                   scalePolarParamId, scaleViewModeParamId,
+                   cpx::ComplexXYMaxMode::Radial, 3.f, inputName + " Scale");
+    addModeControl(offsetLabel, pos.x + 48.f, pos.y, module, offsetParamId,
+                   offsetPolarParamId, offsetViewModeParamId,
+                   cpx::ComplexXYMaxMode::Rectangular, 10.f,
+                   inputName + " Offset");
+  }
+
+  void addModeControl(std::string label, float x, float y,
+                      ComputerscareComplexTransformer* module, int paramIndex,
+                      int polarParamIndex, int modeParamId,
+                      cpx::ComplexXYMaxMode arrowMaxMode, float arrowMaxVoltage,
+                      const std::string& controlName) {
+    cpx::LabeledSwitchableComplexControl* control =
+        new cpx::LabeledSwitchableComplexControl(
+            module, paramIndex, polarParamIndex, modeParamId, arrowMaxMode,
+            arrowMaxVoltage, label, Vec(32.f, 25.f), Vec(0.f, 0.f),
+            Vec(38.f, 12.f), -1, false, controlName,
+            NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, Vec(2.f, 12.f));
+    control->box = Rect(Vec(x - 2.f, y - 12.f), Vec(40.f, 37.f));
+    control->setArrowDrawingScale(0.78f);
+    addChild(control);
+  }
+
+  void appendContextMenu(Menu* menu) override {
+    cpx::addSetAllComplexControlViewModeMenu(
+        menu, module,
+        {ComputerscareComplexTransformer::Z_SCALE_VIEW_MODE,
+         ComputerscareComplexTransformer::Z_OFFSET_VIEW_MODE,
+         ComputerscareComplexTransformer::W_SCALE_VIEW_MODE,
+         ComputerscareComplexTransformer::W_OFFSET_VIEW_MODE});
   }
 
   CompolyLaneCountWidget* channelWidget;

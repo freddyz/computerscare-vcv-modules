@@ -4,6 +4,65 @@
 
 namespace cpx {
 
+struct ComplexControlViewModeSwitch : app::Switch {
+  std::string label;
+  int textAlign = NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE;
+
+  void draw(const DrawArgs& args) override {
+    nvgBeginPath(args.vg);
+    nvgRoundedRect(args.vg, 0.f, 0.f, box.size.x, box.size.y, 1.5f);
+    nvgFillColor(args.vg, nvgRGBA(8, 28, 24, 42));
+    nvgFill(args.vg);
+
+    nvgFontSize(args.vg, 9.f);
+    nvgTextAlign(args.vg, textAlign);
+    nvgFillColor(args.vg, nvgRGB(28, 34, 28));
+    float textX = box.size.x * 0.5f;
+    if (textAlign & NVG_ALIGN_RIGHT)
+      textX = box.size.x - 1.f;
+    else if (textAlign & NVG_ALIGN_LEFT)
+      textX = 1.f;
+    nvgText(args.vg, textX, box.size.y * 0.58f, label.c_str(), nullptr);
+  }
+};
+
+struct SetAllComplexControlViewModeItem : MenuItem {
+  Module* module = nullptr;
+  std::vector<int> modeParamIds;
+  int mode = 0;
+
+  void onAction(const event::Action& e) override {
+    if (!module) return;
+    mode = std::max(0, std::min(2, mode));
+    for (int modeParamId : modeParamIds) {
+      if (modeParamId >= 0 && modeParamId < (int)module->params.size()) {
+        module->params[modeParamId].setValue(mode);
+      }
+    }
+  }
+};
+
+inline void addSetAllComplexControlViewModeMenu(
+    Menu* menu, Module* module, const std::vector<int>& modeParamIds) {
+  menu->addChild(new MenuSeparator);
+  menu->addChild(construct<MenuLabel>(&MenuLabel::text, "View"));
+  menu->addChild(construct<SetAllComplexControlViewModeItem>(
+      &MenuItem::text, "set all to arrow",
+      &SetAllComplexControlViewModeItem::module, module,
+      &SetAllComplexControlViewModeItem::modeParamIds, modeParamIds,
+      &SetAllComplexControlViewModeItem::mode, 0));
+  menu->addChild(construct<SetAllComplexControlViewModeItem>(
+      &MenuItem::text, "set all to xy",
+      &SetAllComplexControlViewModeItem::module, module,
+      &SetAllComplexControlViewModeItem::modeParamIds, modeParamIds,
+      &SetAllComplexControlViewModeItem::mode, 1));
+  menu->addChild(construct<SetAllComplexControlViewModeItem>(
+      &MenuItem::text, "set all to rθ",
+      &SetAllComplexControlViewModeItem::module, module,
+      &SetAllComplexControlViewModeItem::modeParamIds, modeParamIds,
+      &SetAllComplexControlViewModeItem::mode, 2));
+}
+
 struct SwitchableComplexControl : Widget {
   ComputerscareComplexBase* module = nullptr;
   int paramIndex = 0;
@@ -138,6 +197,41 @@ struct SwitchableComplexControl : Widget {
       nvgFillColor(args.vg, disabledOverlayColor);
       nvgFill(args.vg);
     }
+  }
+};
+
+struct LabeledSwitchableComplexControl : Widget {
+  SwitchableComplexControl* control = nullptr;
+  ComplexControlViewModeSwitch* modeSwitch = nullptr;
+
+  LabeledSwitchableComplexControl(
+      ComputerscareComplexBase* module, int paramIndex, int polarParamIndex,
+      int modeParamId, ComplexXYMaxMode arrowMaxMode, float arrowMaxVoltage,
+      const std::string& label, Vec controlSize, Vec labelPos, Vec labelSize,
+      int laneIndex = -1, bool showDisabledOverlay = false,
+      const std::string& controlName = "",
+      int labelTextAlign = NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE,
+      Vec controlPos = Vec(0.f, 0.f)) {
+    control = new SwitchableComplexControl(
+        module, paramIndex, polarParamIndex, modeParamId, arrowMaxMode,
+        arrowMaxVoltage, laneIndex, showDisabledOverlay, controlName);
+    control->box = Rect(controlPos, controlSize);
+    addChild(control);
+
+    modeSwitch = createParam<ComplexControlViewModeSwitch>(labelPos, module,
+                                                           modeParamId);
+    modeSwitch->box = Rect(labelPos, labelSize);
+    modeSwitch->label = label;
+    modeSwitch->textAlign = labelTextAlign;
+    addChild(modeSwitch);
+  }
+
+  void setArrowDrawingScale(float scale) {
+    if (control) control->setArrowDrawingScale(scale);
+  }
+
+  void setArrowYOffset(float offset) {
+    if (control) control->setArrowYOffset(offset);
   }
 };
 
