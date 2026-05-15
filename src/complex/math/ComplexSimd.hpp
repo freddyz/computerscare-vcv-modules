@@ -10,7 +10,12 @@ namespace simd {
 using Float4 = float __attribute__((vector_size(16)));
 
 inline Float4 load4(const float* values) {
-  return {values[0], values[1], values[2], values[3]};
+  Float4 lanes = {};
+  lanes[0] = values[0];
+  lanes[1] = values[1];
+  lanes[2] = values[2];
+  lanes[3] = values[3];
+  return lanes;
 }
 
 inline void store4(float* values, Float4 lanes) {
