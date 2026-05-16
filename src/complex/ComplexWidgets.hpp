@@ -620,6 +620,35 @@ struct ComplexXY : TransparentWidget {
     nvgText(vg, x + prefixW, pos.y, "i", nullptr);
   }
 
+  void drawPolarDragText(NVGcontext* vg, const std::string& text, Vec pos,
+                         NVGcolor color, float size) {
+    auto font = APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/RobotoMono-Regular.ttf"));
+    if (!font) return;
+
+    nvgFontFaceId(vg, font->handle);
+    nvgFontSize(vg, size);
+    nvgTextLetterSpacing(vg, 0.f);
+    nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+
+    float bounds[4];
+    nvgTextBounds(vg, 0.f, pos.y, "0", nullptr, bounds);
+    float charW = bounds[2] - bounds[0];
+    float totalW = charW * text.size();
+    float x = pos.x - totalW / 2.f;
+    constexpr float padX = 7.f;
+    constexpr float padY = 4.f;
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, x - padX, pos.y - size * 0.5f - padY,
+                   totalW + 2.f * padX, size + 2.f * padY, 4.f);
+    nvgFillColor(vg, nvgRGBA(0, 0, 0, 175));
+    nvgFill(vg);
+
+    nvgFillColor(vg, color);
+    nvgText(vg, x, pos.y, text.c_str(), nullptr);
+  }
+
   void cancelDrag() {
     if (!editing) return;
     if (module) {
@@ -870,10 +899,15 @@ struct ComplexXY : TransparentWidget {
           rectDragDisplayString(origComplexValue.x, -origComplexValue.y),
           pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 78.f)),
           nvgRGB(230, 205, 150), 28.f);
-      drawDragText(
+      drawPolarDragText(
           args.vg, polarDragDisplayString(newZ.x, -newZ.y),
-          pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 116.f)),
-          nvgRGB(245, 245, 245), 34.f, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+          pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 138.f)),
+          nvgRGB(245, 245, 245), 34.f);
+      drawPolarDragText(
+          args.vg,
+          polarDragDisplayString(origComplexValue.x, -origComplexValue.y),
+          pixelsOrigin.plus(Vec(0.f, originalMagnituteRadiusPixels + 178.f)),
+          nvgRGB(230, 205, 150), 28.f);
       nvgRestore(args.vg);
     }
   }
