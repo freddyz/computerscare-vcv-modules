@@ -58,6 +58,41 @@ inline std::array<int, 2> separatedInputChannelIndices(
   return {{channels.first, channels.second}};
 }
 
+inline float channelVoltage(const cpx::complex_math::Channels& channels,
+                            int channel, int channelCount) {
+  if (channel < 0 || channel >= channelCount ||
+      channel >= cpx::complex_math::maxChannels) {
+    return 0.f;
+  }
+  return channels[channel];
+}
+
+inline int inputCompolyLaneForOutputLane(
+    int outputLane, cpx::complex_math::CoordinateMode mode,
+    cpx::polyphonic::MappingMode mappingMode, PortChannelCounts portChannels) {
+  int inputLanes = compolyLanesForInput(mode, portChannels.a, portChannels.b);
+  return cpx::polyphonic::inputChannelForOutputChannel(
+      cpx::polyphonic::OutputChannel(outputLane), mappingMode,
+      cpx::polyphonic::ChannelCount(inputLanes));
+}
+
+inline std::array<float, 2> coordinatePairForCompolyLane(
+    const PortChannels& ports, PortChannelCounts portChannels,
+    cpx::complex_math::CoordinateMode mode, int compolyLane) {
+  if (cpx::complex_math::isInterleaved(mode)) {
+    int portChannel = 2 * (compolyLane % 8);
+    if (compolyLane < 8) {
+      return {{channelVoltage(ports.a, portChannel, portChannels.a),
+               channelVoltage(ports.a, portChannel + 1, portChannels.a)}};
+    }
+    return {{channelVoltage(ports.b, portChannel, portChannels.b),
+             channelVoltage(ports.b, portChannel + 1, portChannels.b)}};
+  }
+
+  return {{channelVoltage(ports.a, compolyLane, portChannels.a),
+           channelVoltage(ports.b, compolyLane, portChannels.b)}};
+}
+
 inline PortChannelCounts outputPortChannelCounts(
     cpx::complex_math::CoordinateMode mode, int compolyChannels) {
   compolyChannels = cpx::complex_math::clampChannelCount(compolyChannels);
@@ -103,6 +138,27 @@ inline cpx::complex_math::RectChannels readRectFromPorts(
       rect.x[c] = z.x;
       rect.y[c] = z.y;
     }
+  }
+
+  return rect;
+}
+
+inline cpx::complex_math::RectChannels readWrappedInputToRect(
+    const PortChannels& ports, PortChannelCounts portChannels,
+    cpx::complex_math::CoordinateMode mode,
+    cpx::polyphonic::MappingMode mappingMode, int compolyChannels) {
+  cpx::complex_math::RectChannels rect = {};
+  compolyChannels = cpx::complex_math::clampChannelCount(compolyChannels);
+
+  for (int c = 0; c < compolyChannels; ++c) {
+    int inputLane =
+        inputCompolyLaneForOutputLane(c, mode, mappingMode, portChannels);
+    std::array<float, 2> pair =
+        coordinatePairForCompolyLane(ports, portChannels, mode, inputLane);
+    cpx::complex_math::Quad z =
+        cpx::complex_math::quadFromPair(pair[0], pair[1], mode);
+    rect.x[c] = z.x;
+    rect.y[c] = z.y;
   }
 
   return rect;

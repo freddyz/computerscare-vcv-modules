@@ -61,7 +61,13 @@ struct SeparatedCableChannels {
 };
 
 inline const std::vector<std::string>& wrapModeDescriptions() {
-  return cpx::polyphonic::mappingModeDescriptions();
+  static const std::vector<std::string> descriptions = {
+      "Standard Compoly Behavior",
+      "Cycle",
+      "Zero Pad",
+      "Stall",
+  };
+  return descriptions;
 }
 
 inline int clampCompolyLanes(int lanes) {

@@ -99,6 +99,7 @@ int main() {
   cp::PortChannels wrappedSeparated = {};
   wrappedSeparated.a[0] = 1.f;
   wrappedSeparated.a[1] = 2.f;
+  wrappedSeparated.a[2] = 3.f;
   wrappedSeparated.b[0] = 10.f;
   wrappedSeparated.b[1] = 20.f;
   wrappedSeparated.b[2] = 30.f;
@@ -110,6 +111,67 @@ int main() {
   requireNear(wrappedRect.x[0], 2.5f, "wrapped separated rect x0");
   requireNear(wrappedRect.x[2], 2.5f, "wrapped separated rect cycles x");
   requireNear(wrappedRect.y[4], 19.f, "wrapped separated rect cycles y");
+
+  cm::RectChannels genericWrappedRect = cp::readWrappedInputToRect(
+      wrappedSeparated, cp::PortChannelCounts(3, 3),
+      cm::CoordinateMode::RectangularSeparated,
+      cpx::polyphonic::MappingMode::Stall, 5);
+  requireNear(genericWrappedRect.x[0], 1.f,
+              "generic wrapped separated rect x0");
+  requireNear(genericWrappedRect.x[4], 3.f,
+              "generic wrapped separated stalls x");
+  requireNear(genericWrappedRect.y[4], 30.f,
+              "generic wrapped separated stalls y");
+
+  cp::PortChannels monoSeparated = {};
+  monoSeparated.a[0] = 7.f;
+  monoSeparated.b[0] = 70.f;
+  cm::RectChannels standardMonoRect = cp::readWrappedInputToRect(
+      monoSeparated, cp::PortChannelCounts(1, 1),
+      cm::CoordinateMode::RectangularSeparated,
+      cpx::polyphonic::MappingMode::Normal, 4);
+  requireNear(standardMonoRect.x[0], 7.f,
+              "standard wrapped separated reads mono x");
+  requireNear(standardMonoRect.x[3], 7.f,
+              "standard wrapped separated spreads one lane x");
+  requireNear(standardMonoRect.y[3], 70.f,
+              "standard wrapped separated spreads one lane y");
+
+  cm::RectChannels standardPolyRect = cp::readWrappedInputToRect(
+      wrappedSeparated, cp::PortChannelCounts(3, 3),
+      cm::CoordinateMode::RectangularSeparated,
+      cpx::polyphonic::MappingMode::Normal, 5);
+  requireNear(standardPolyRect.x[2], 3.f,
+              "standard wrapped separated matches existing lanes");
+  requireNear(standardPolyRect.x[3], 0.f,
+              "standard wrapped separated zeroes after input lanes x");
+  requireNear(standardPolyRect.y[3], 0.f,
+              "standard wrapped separated zeroes after input lanes y");
+
+  cm::RectChannels genericZeroPadRect = cp::readWrappedInputToRect(
+      wrappedSeparated, cp::PortChannelCounts(2, 3),
+      cm::CoordinateMode::RectangularSeparated,
+      cpx::polyphonic::MappingMode::PadWithZero, 5);
+  requireNear(genericZeroPadRect.x[4], 0.f,
+              "generic wrapped separated zero-pads x");
+  requireNear(genericZeroPadRect.y[4], 0.f,
+              "generic wrapped separated zero-pads y");
+
+  cp::PortChannels shortInterleaved = {};
+  shortInterleaved.a[0] = 1.f;
+  shortInterleaved.a[1] = 10.f;
+  shortInterleaved.a[2] = 2.f;
+  shortInterleaved.a[3] = 20.f;
+  cm::RectChannels cycledInterleaved = cp::readWrappedInputToRect(
+      shortInterleaved, cp::PortChannelCounts(4, 0),
+      cm::CoordinateMode::RectangularInterleaved,
+      cpx::polyphonic::MappingMode::Cycle, 5);
+  requireNear(cycledInterleaved.x[0], 1.f,
+              "generic wrapped interleaved reads lane 0 x");
+  requireNear(cycledInterleaved.y[1], 20.f,
+              "generic wrapped interleaved reads lane 1 y");
+  requireNear(cycledInterleaved.x[2], 1.f,
+              "generic wrapped interleaved cycles lanes");
 
   cp::PortChannels wrappedPolar = {};
   wrappedPolar.a[0] = 2.f;

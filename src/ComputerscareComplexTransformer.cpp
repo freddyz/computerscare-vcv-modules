@@ -39,7 +39,8 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     Z_OFFSET_POLAR = Z_SCALE_POLAR + 2,
     W_SCALE_POLAR = Z_OFFSET_POLAR + 2,
     W_OFFSET_POLAR = W_SCALE_POLAR + 2,
-    NUM_PARAMS = W_OFFSET_POLAR + 2
+    COMPOLY_WRAP_MODE = W_OFFSET_POLAR + 2,
+    NUM_PARAMS
   };
   enum InputIds {
     Z_INPUT,
@@ -109,6 +110,10 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     configParam<cpx::ComplexControlViewModeParam>(W_OFFSET_VIEW_MODE, 0.f, 2.f,
                                                   0.f, "w Offset View");
 
+    configMenuParam(COMPOLY_WRAP_MODE, cpx::polyphonic::defaultMappingModeValue,
+                    "Compoly Wrapping Mode",
+                    cpx::compoly::wrapModeDescriptions());
+
     getParamQuantity(MAIN_OUTPUT_MODE)->randomizeEnabled = false;
     getParamQuantity(PRODUCT_OUTPUT_MODE)->randomizeEnabled = false;
     getParamQuantity(Z_INPUT_MODE)->randomizeEnabled = false;
@@ -116,6 +121,8 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     getParamQuantity(A_INPUT_MODE)->randomizeEnabled = false;
     getParamQuantity(B_INPUT_MODE)->randomizeEnabled = false;
     getParamQuantity(C_INPUT_MODE)->randomizeEnabled = false;
+    getParamQuantity(COMPOLY_WRAP_MODE)->randomizeEnabled = false;
+    getParamQuantity(COMPOLY_WRAP_MODE)->resetEnabled = false;
 
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 0>>(Z_INPUT, "z");
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 1>>(Z_INPUT + 1, "z");
@@ -208,6 +215,7 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     int compolyphonyKnobSetting = params[COMPOLY_CHANNELS].getValue();
     int zInputMode = params[Z_INPUT_MODE].getValue();
     int wInputMode = params[W_INPUT_MODE].getValue();
+    int wrapMode = params[COMPOLY_WRAP_MODE].getValue();
 
     // + 1%
     std::vector<std::vector<int>> inputCompolyphony =
@@ -235,8 +243,10 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     float prodx[16] = {};
     float prody[16] = {};
 
-    readComplexInputPairToRect(Z_INPUT, zInputMode, zx, zy);
-    readComplexInputPairToRect(W_INPUT, wInputMode, wx, wy);
+    readComplexInputPairToRect(Z_INPUT, zInputMode, zx, zy, wrapMode,
+                               compolyChannelsMainOutput);
+    readComplexInputPairToRect(W_INPUT, wInputMode, wx, wy, wrapMode,
+                               compolyChannelsMainOutput);
     applyComplexAffine(zx, zy, Z_SCALE_VAL_AB, Z_OFFSET_VAL_AB);
     applyComplexAffine(wx, wy, W_SCALE_VAL_AB, W_OFFSET_VAL_AB);
 
@@ -329,7 +339,7 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
     }
     channelWidget = new CompolyLaneCountWidget(
         Vec(92, 4), module, ComputerscareComplexTransformer::COMPOLY_CHANNELS,
-        &module->compolyChannelsMainOutput);
+        module ? &module->compolyChannelsMainOutput : nullptr);
 
     // addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 22), module,
     // ComputerscareComplexTransformer::POLY_OUTPUT));
@@ -416,6 +426,16 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
   }
 
   void appendContextMenu(Menu* menu) override {
+    ComputerscareComplexTransformer* transformerModule =
+        dynamic_cast<ComputerscareComplexTransformer*>(this->module);
+    if (transformerModule) {
+      menu->addChild(new MenuEntry);
+      menu->addChild(cpx::createCompolyWrapModeMenu(
+          transformerModule->paramQuantities
+              [ComputerscareComplexTransformer::COMPOLY_WRAP_MODE],
+          "Compoly Wrapping Mode"));
+    }
+
     cpx::addSetAllComplexControlViewModeMenu(
         menu, module,
         {ComputerscareComplexTransformer::Z_SCALE_VIEW_MODE,

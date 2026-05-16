@@ -651,31 +651,6 @@ struct CompolyLaneOutputOperationLabel : app::ParamWidget {
   }
 };
 
-struct CompolyLaneWrapModeMenu : MenuItem {
-  ParamQuantity* param = nullptr;
-  std::vector<std::string> options;
-
-  Menu* createChildMenu() override {
-    Menu* menu = new Menu;
-    if (!param) return menu;
-    for (int i = 0; i < (int)options.size(); i++) {
-      ParamSettingItem* item =
-          new ParamSettingItem(i, &param->module->params[param->paramId]);
-      item->text = options[i];
-      menu->addChild(item);
-    }
-    return menu;
-  }
-
-  void step() override {
-    if (param && !options.empty()) {
-      int index = clamp((int)param->getValue(), 0, (int)options.size() - 1);
-      rightText = "(" + options[index] + ") " + RIGHT_ARROW;
-    }
-    MenuItem::step();
-  }
-};
-
 struct ComputerscareCompolyLaneWidget : ModuleWidget {
   ComputerscareCompolyLaneWidget(ComputerscareCompolyLane* module) {
     setModule(module);
@@ -821,12 +796,8 @@ struct ComputerscareCompolyLaneWidget : ModuleWidget {
 
   void addWrapModeMenu(Menu* menu, ComputerscareCompolyLane* module,
                        int paramId, std::string text) {
-    CompolyLaneWrapModeMenu* wrapModeMenu = new CompolyLaneWrapModeMenu();
-    wrapModeMenu->text = text;
-    wrapModeMenu->rightText = RIGHT_ARROW;
-    wrapModeMenu->param = module->paramQuantities[paramId];
-    wrapModeMenu->options = cpx::compoly::wrapModeDescriptions();
-    menu->addChild(wrapModeMenu);
+    menu->addChild(
+        cpx::createCompolyWrapModeMenu(module->paramQuantities[paramId], text));
   }
 };
 

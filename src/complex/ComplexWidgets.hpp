@@ -1,6 +1,10 @@
 #pragma once
 
+#include <utility>
+#include <vector>
+
 #include "ComplexText.hpp"
+#include "CompolyRouting.hpp"
 #include "math/ComplexFormat.hpp"
 
 using namespace rack;
@@ -1082,6 +1086,62 @@ struct CompolyModeParam : SwitchQuantity {
     return "";
   }
 };
+
+struct CompolyWrapModeMenu : MenuItem {
+  ParamQuantity* param = nullptr;
+  std::vector<std::string> options = cpx::compoly::wrapModeDescriptions();
+
+  Menu* createChildMenu() override {
+    Menu* menu = new Menu;
+    if (!param) return menu;
+    for (int i = 0; i < (int)options.size(); i++) {
+      ParamSettingItem* item =
+          new ParamSettingItem(i, &param->module->params[param->paramId]);
+      item->text = options[i];
+      menu->addChild(item);
+    }
+    return menu;
+  }
+
+  void step() override {
+    if (param && !options.empty()) {
+      int index = clamp((int)param->getValue(), 0, (int)options.size() - 1);
+      rightText = "(" + options[index] + ") " + RIGHT_ARROW;
+    }
+    MenuItem::step();
+  }
+};
+
+inline CompolyWrapModeMenu* createCompolyWrapModeMenu(ParamQuantity* param,
+                                                      std::string text) {
+  CompolyWrapModeMenu* wrapModeMenu = new CompolyWrapModeMenu();
+  wrapModeMenu->text = text;
+  wrapModeMenu->rightText = RIGHT_ARROW;
+  wrapModeMenu->param = param;
+  return wrapModeMenu;
+}
+
+struct CompolyWrapModeSubmenu : MenuItem {
+  std::vector<std::pair<std::string, ParamQuantity*>> entries;
+
+  Menu* createChildMenu() override {
+    Menu* menu = new Menu;
+    for (auto& entry : entries) {
+      menu->addChild(createCompolyWrapModeMenu(entry.second, entry.first));
+    }
+    return menu;
+  }
+};
+
+inline void addCompolyWrapModeSubmenu(
+    Menu* menu, const std::string& text,
+    const std::vector<std::pair<std::string, ParamQuantity*>>& entries) {
+  CompolyWrapModeSubmenu* submenu = new CompolyWrapModeSubmenu();
+  submenu->text = text;
+  submenu->rightText = RIGHT_ARROW;
+  submenu->entries = entries;
+  menu->addChild(submenu);
+}
 
 template <int TModeParamIndex, int blockNum = 0>
 struct CompolyPortInfo : PortInfo {

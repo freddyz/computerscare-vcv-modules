@@ -202,6 +202,24 @@ struct ComputerscareComplexBase : ComputerscareMenuParamModule {
     }
   }
 
+  void readComplexInputPairToRect(int firstPortIndex, int inputMode, float* x,
+                                  float* y, int wrapMode, int compolyChannels) {
+    cpx::compoly::PortChannels ports = {};
+    inputs[firstPortIndex].readVoltages(ports.a.data());
+    inputs[firstPortIndex + 1].readVoltages(ports.b.data());
+
+    cpx::compoly::PortChannelCounts portChannels(
+        inputs[firstPortIndex].getChannels(),
+        inputs[firstPortIndex + 1].getChannels());
+    cpx::complex_math::RectChannels rect = cpx::compoly::readWrappedInputToRect(
+        ports, portChannels, coordinateModeFromParam(inputMode),
+        static_cast<cpx::polyphonic::MappingMode>(wrapMode), compolyChannels);
+    for (int c = 0; c < cpx::complex_math::maxChannels; c++) {
+      x[c] = rect.x[c];
+      y[c] = rect.y[c];
+    }
+  }
+
   void writeComplexOutputPairFromRect(int firstPortIndex, int outputMode,
                                       const float* x, const float* y) {
     cpx::complex_math::RectChannels rect = {};
