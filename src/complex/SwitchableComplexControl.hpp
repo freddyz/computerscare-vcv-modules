@@ -7,6 +7,7 @@ namespace cpx {
 struct ComplexControlViewModeSwitch : app::Switch {
   std::string label;
   int textAlign = NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE;
+  float fontSize = 9.f;
 
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
@@ -14,7 +15,7 @@ struct ComplexControlViewModeSwitch : app::Switch {
     nvgFillColor(args.vg, nvgRGBA(8, 28, 24, 42));
     nvgFill(args.vg);
 
-    nvgFontSize(args.vg, 9.f);
+    nvgFontSize(args.vg, fontSize);
     nvgTextAlign(args.vg, textAlign);
     nvgFillColor(args.vg, nvgRGB(28, 34, 28));
     float textX = box.size.x * 0.5f;

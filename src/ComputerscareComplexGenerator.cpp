@@ -356,7 +356,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
             addParam(fader);*/
 
-    float labelWidth = label.size() > 1 ? 17.f : 12.f;
+    float labelWidth = label.size() > 1 ? 15.f : 10.f;
     bool isSecondColumn = index / 2 >= 8;
     Vec labelPos = isSecondColumn ? Vec(x + 32.f - labelWidth, y - 12.f)
                                   : Vec(x + labelDx, y - 12 + labelDy);
@@ -373,12 +373,11 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
             ComputerscareComplexGenerator::LANE_VIEW_MODE + index / 2,
             cpx::ComplexXYMaxMode::Rectangular, 10.f, label, Vec(32.f, 25.f),
             labelRel, Vec(labelWidth, 12.f), index / 2, false, "Lane " + label,
-            isSecondColumn ? NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE
-                           : NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE,
-            controlRel);
+            NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, controlRel);
     control->box = Rect(wrapperPos, wrapperSize);
     control->setArrowDrawingScale(0.78f);
     control->setArrowYOffset(-2.f);
+    control->modeSwitch->fontSize = 8.f;
     addChild(control);
   }
 
