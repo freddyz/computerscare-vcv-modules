@@ -24,6 +24,9 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     DISPLAY_TYPE_MODE,
     COMPOLY_REPRESENTATION_MODE,
     BAR_BACKGROUND_MODE,
+    INTERLEAVED_PARTIAL_PAIR_MODE,
+    INTERLEAVED_BANK_MODE,
+    SEPARATED_LANE_MODE,
     NUM_PARAMS
   };
   enum InputIds { Z_INPUT, NUM_INPUTS = Z_INPUT + 2 };
@@ -47,8 +50,8 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
         Z_OUTPUT_MODE, cpx::complex_math::firstCoordinateModeValue,
         cpx::complex_math::lastCoordinateModeValue,
         cpx::complex_math::defaultCoordinateModeValue, "z Output Mode");
-    configSwitch(TEXT_DISPLAY_MODE, 0.f, 3.f, nudiebug::TEXT_LEFT, "Text",
-                 {"Off", "Left", "Middle", "Right"});
+    configSwitch(TEXT_DISPLAY_MODE, 0.f, 4.f, nudiebug::TEXT_LEFT, "Text",
+                 {"Off", "Left", "Middle", "Right", "Both"});
     configSwitch(BARS_DISPLAY_MODE, 0.f, 3.f, nudiebug::BARS_UNI_EDGE, "Bars",
                  {"Off", "Unipolar Edge", "Unipolar Middle", "Bipolar"});
     configSwitch(PLOT_DISPLAY_MODE, 0.f, 2.f, nudiebug::PLOT_OFF, "Plot",
@@ -68,6 +71,12 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                  {"Rectangular", "Polar"});
     configSwitch(BAR_BACKGROUND_MODE, 0.f, 1.f, 1.f, "Bar background",
                  {"Off", "On"});
+    configSwitch(INTERLEAVED_PARTIAL_PAIR_MODE, 0.f, 1.f, 0.f,
+                 "Interleaved partial pairs", {"Strict", "Zero fill"});
+    configSwitch(INTERLEAVED_BANK_MODE, 0.f, 2.f, 2.f, "Interleaved banks",
+                 {"Compact", "Preserve second bank position", "Strict"});
+    configSwitch(SEPARATED_LANE_MODE, 0.f, 1.f, 0.f, "Separated lanes",
+                 {"Strict", "Zero fill"});
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 0>>(Z_INPUT, "z");
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 1>>(Z_INPUT + 1, "z");
     configOutput<cpx::CompolyPortInfo<Z_OUTPUT_MODE, 0>>(Z_OUTPUT, "z");
@@ -358,6 +367,7 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
               n->params[ComputerscareNudiebug::DISPLAY_TYPE_MODE].getValue() >
                   0.5f;
           if (!compoly) return std::string("Edge");
+          if (mode == nudiebug::TEXT_BOTH) return std::string("Both");
           if (mode == nudiebug::TEXT_MIDDLE) return std::string("Mid");
           return mode == nudiebug::TEXT_RIGHT ? std::string("Right")
                                               : std::string("Left");
@@ -491,81 +501,124 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
     if (!m) return;
 
     menu->addChild(new MenuSeparator);
-    menu->addChild(createSubmenuItem("Type", "", [=](Menu* submenu) {
-      addParamMenuItem(submenu, "Poly", nudiebug::DISPLAY_TYPE_POLY,
-                       ComputerscareNudiebug::DISPLAY_TYPE_MODE);
-      addParamMenuItem(submenu, "Compoly", nudiebug::DISPLAY_TYPE_COMPOLY,
-                       ComputerscareNudiebug::DISPLAY_TYPE_MODE);
+    menu->addChild(createSubmenuItem("View", "", [=](Menu* viewMenu) {
+      viewMenu->addChild(createSubmenuItem("Type", "", [=](Menu* submenu) {
+        addParamMenuItem(submenu, "Poly", nudiebug::DISPLAY_TYPE_POLY,
+                         ComputerscareNudiebug::DISPLAY_TYPE_MODE);
+        addParamMenuItem(submenu, "Compoly", nudiebug::DISPLAY_TYPE_COMPOLY,
+                         ComputerscareNudiebug::DISPLAY_TYPE_MODE);
+      }));
+      viewMenu->addChild(
+          createSubmenuItem("Compoly Representation", "", [=](Menu* submenu) {
+            addParamMenuItem(
+                submenu, "Rectangular", nudiebug::COMPOLY_REP_RECT,
+                ComputerscareNudiebug::COMPOLY_REPRESENTATION_MODE);
+            addParamMenuItem(
+                submenu, "Polar", nudiebug::COMPOLY_REP_POLAR,
+                ComputerscareNudiebug::COMPOLY_REPRESENTATION_MODE);
+          }));
+      viewMenu->addChild(createSubmenuItem("Text", "", [=](Menu* submenu) {
+        addParamMenuItem(submenu, "Off", nudiebug::TEXT_OFF,
+                         ComputerscareNudiebug::TEXT_DISPLAY_MODE);
+        addParamMenuItem(submenu, "Left / Edge", nudiebug::TEXT_LEFT,
+                         ComputerscareNudiebug::TEXT_DISPLAY_MODE);
+        addParamMenuItem(submenu, "Middle", nudiebug::TEXT_MIDDLE,
+                         ComputerscareNudiebug::TEXT_DISPLAY_MODE);
+        addParamMenuItem(submenu, "Right", nudiebug::TEXT_RIGHT,
+                         ComputerscareNudiebug::TEXT_DISPLAY_MODE);
+        addParamMenuItem(submenu, "Both", nudiebug::TEXT_BOTH,
+                         ComputerscareNudiebug::TEXT_DISPLAY_MODE);
+      }));
+      viewMenu->addChild(createSubmenuItem("Bars", "", [=](Menu* submenu) {
+        addParamMenuItem(submenu, "Off", nudiebug::BARS_OFF,
+                         ComputerscareNudiebug::BARS_DISPLAY_MODE);
+        addParamMenuItem(submenu, "Unipolar Edge", nudiebug::BARS_UNI_EDGE,
+                         ComputerscareNudiebug::BARS_DISPLAY_MODE);
+        addParamMenuItem(submenu, "Unipolar Middle", nudiebug::BARS_UNI_MID,
+                         ComputerscareNudiebug::BARS_DISPLAY_MODE);
+        addParamMenuItem(submenu, "Bipolar", nudiebug::BARS_BIPOLAR,
+                         ComputerscareNudiebug::BARS_DISPLAY_MODE);
+      }));
+      viewMenu->addChild(
+          createSubmenuItem("Bar Background", "", [=](Menu* submenu) {
+            addParamMenuItem(submenu, "Off", 0,
+                             ComputerscareNudiebug::BAR_BACKGROUND_MODE);
+            addParamMenuItem(submenu, "On", 1,
+                             ComputerscareNudiebug::BAR_BACKGROUND_MODE);
+          }));
+      viewMenu->addChild(createSubmenuItem("Plot", "", [=](Menu* submenu) {
+        addParamMenuItem(submenu, "Off", nudiebug::PLOT_OFF,
+                         ComputerscareNudiebug::PLOT_DISPLAY_MODE);
+        addParamMenuItem(submenu, "Dots", nudiebug::PLOT_DOTS,
+                         ComputerscareNudiebug::PLOT_DISPLAY_MODE);
+        addParamMenuItem(submenu, "Lines", nudiebug::PLOT_LINES,
+                         ComputerscareNudiebug::PLOT_DISPLAY_MODE);
+      }));
+      viewMenu->addChild(
+          createSubmenuItem("Plot Clear", "", [=](Menu* submenu) {
+            addParamMenuItem(submenu, "Persistent", 0,
+                             ComputerscareNudiebug::CLEAR_PLOT_PER_FRAME);
+            addParamMenuItem(submenu, "Clear per frame", 1,
+                             ComputerscareNudiebug::CLEAR_PLOT_PER_FRAME);
+          }));
+      viewMenu->addChild(
+          createSubmenuItem("Channel Labels", "", [=](Menu* submenu) {
+            addParamMenuItem(submenu, "Off", nudiebug::CHANNEL_LABELS_OFF,
+                             ComputerscareNudiebug::CHANNEL_LABELS_MODE);
+            addParamMenuItem(submenu, "Left", nudiebug::CHANNEL_LABELS_LEFT,
+                             ComputerscareNudiebug::CHANNEL_LABELS_MODE);
+            addParamMenuItem(submenu, "Right", nudiebug::CHANNEL_LABELS_RIGHT,
+                             ComputerscareNudiebug::CHANNEL_LABELS_MODE);
+            addParamMenuItem(submenu, "Both", nudiebug::CHANNEL_LABELS_BOTH,
+                             ComputerscareNudiebug::CHANNEL_LABELS_MODE);
+          }));
+      viewMenu->addChild(
+          createSubmenuItem("Channel Layout", "", [=](Menu* submenu) {
+            addParamMenuItem(submenu, "All", nudiebug::CHANNEL_LAYOUT_ALL,
+                             ComputerscareNudiebug::CHANNEL_LAYOUT_MODE);
+            addParamMenuItem(submenu, "Stretch",
+                             nudiebug::CHANNEL_LAYOUT_STRETCH,
+                             ComputerscareNudiebug::CHANNEL_LAYOUT_MODE);
+          }));
+      viewMenu->addChild(
+          createSubmenuItem("Display Orientation", "", [=](Menu* submenu) {
+            addParamMenuItem(submenu, "Vertical", nudiebug::DISPLAY_VERTICAL,
+                             ComputerscareNudiebug::DISPLAY_ORIENTATION_MODE);
+            addParamMenuItem(submenu, "Horizontal",
+                             nudiebug::DISPLAY_HORIZONTAL,
+                             ComputerscareNudiebug::DISPLAY_ORIENTATION_MODE);
+          }));
     }));
-    menu->addChild(
-        createSubmenuItem("Compoly Representation", "", [=](Menu* submenu) {
-          addParamMenuItem(submenu, "Rectangular", nudiebug::COMPOLY_REP_RECT,
-                           ComputerscareNudiebug::COMPOLY_REPRESENTATION_MODE);
-          addParamMenuItem(submenu, "Polar", nudiebug::COMPOLY_REP_POLAR,
-                           ComputerscareNudiebug::COMPOLY_REPRESENTATION_MODE);
-        }));
-    menu->addChild(createSubmenuItem("Text", "", [=](Menu* submenu) {
-      addParamMenuItem(submenu, "Off", nudiebug::TEXT_OFF,
-                       ComputerscareNudiebug::TEXT_DISPLAY_MODE);
-      addParamMenuItem(submenu, "Left / Edge", nudiebug::TEXT_LEFT,
-                       ComputerscareNudiebug::TEXT_DISPLAY_MODE);
-      addParamMenuItem(submenu, "Middle", nudiebug::TEXT_MIDDLE,
-                       ComputerscareNudiebug::TEXT_DISPLAY_MODE);
-      addParamMenuItem(submenu, "Right", nudiebug::TEXT_RIGHT,
-                       ComputerscareNudiebug::TEXT_DISPLAY_MODE);
-    }));
-    menu->addChild(createSubmenuItem("Bars", "", [=](Menu* submenu) {
-      addParamMenuItem(submenu, "Off", nudiebug::BARS_OFF,
-                       ComputerscareNudiebug::BARS_DISPLAY_MODE);
-      addParamMenuItem(submenu, "Unipolar Edge", nudiebug::BARS_UNI_EDGE,
-                       ComputerscareNudiebug::BARS_DISPLAY_MODE);
-      addParamMenuItem(submenu, "Unipolar Middle", nudiebug::BARS_UNI_MID,
-                       ComputerscareNudiebug::BARS_DISPLAY_MODE);
-      addParamMenuItem(submenu, "Bipolar", nudiebug::BARS_BIPOLAR,
-                       ComputerscareNudiebug::BARS_DISPLAY_MODE);
-    }));
-    menu->addChild(createSubmenuItem("Bar Background", "", [=](Menu* submenu) {
-      addParamMenuItem(submenu, "Off", 0,
-                       ComputerscareNudiebug::BAR_BACKGROUND_MODE);
-      addParamMenuItem(submenu, "On", 1,
-                       ComputerscareNudiebug::BAR_BACKGROUND_MODE);
-    }));
-    menu->addChild(createSubmenuItem("Plot", "", [=](Menu* submenu) {
-      addParamMenuItem(submenu, "Off", nudiebug::PLOT_OFF,
-                       ComputerscareNudiebug::PLOT_DISPLAY_MODE);
-      addParamMenuItem(submenu, "Dots", nudiebug::PLOT_DOTS,
-                       ComputerscareNudiebug::PLOT_DISPLAY_MODE);
-      addParamMenuItem(submenu, "Lines", nudiebug::PLOT_LINES,
-                       ComputerscareNudiebug::PLOT_DISPLAY_MODE);
-    }));
-    menu->addChild(createSubmenuItem("Plot Clear", "", [=](Menu* submenu) {
-      addParamMenuItem(submenu, "Persistent", 0,
-                       ComputerscareNudiebug::CLEAR_PLOT_PER_FRAME);
-      addParamMenuItem(submenu, "Clear per frame", 1,
-                       ComputerscareNudiebug::CLEAR_PLOT_PER_FRAME);
-    }));
-    menu->addChild(createSubmenuItem("Channel Labels", "", [=](Menu* submenu) {
-      addParamMenuItem(submenu, "Off", nudiebug::CHANNEL_LABELS_OFF,
-                       ComputerscareNudiebug::CHANNEL_LABELS_MODE);
-      addParamMenuItem(submenu, "Left", nudiebug::CHANNEL_LABELS_LEFT,
-                       ComputerscareNudiebug::CHANNEL_LABELS_MODE);
-      addParamMenuItem(submenu, "Right", nudiebug::CHANNEL_LABELS_RIGHT,
-                       ComputerscareNudiebug::CHANNEL_LABELS_MODE);
-      addParamMenuItem(submenu, "Both", nudiebug::CHANNEL_LABELS_BOTH,
-                       ComputerscareNudiebug::CHANNEL_LABELS_MODE);
-    }));
-    menu->addChild(createSubmenuItem("Channel Layout", "", [=](Menu* submenu) {
-      addParamMenuItem(submenu, "All", nudiebug::CHANNEL_LAYOUT_ALL,
-                       ComputerscareNudiebug::CHANNEL_LAYOUT_MODE);
-      addParamMenuItem(submenu, "Stretch", nudiebug::CHANNEL_LAYOUT_STRETCH,
-                       ComputerscareNudiebug::CHANNEL_LAYOUT_MODE);
-    }));
-    menu->addChild(
-        createSubmenuItem("Display Orientation", "", [=](Menu* submenu) {
-          addParamMenuItem(submenu, "Vertical", nudiebug::DISPLAY_VERTICAL,
-                           ComputerscareNudiebug::DISPLAY_ORIENTATION_MODE);
-          addParamMenuItem(submenu, "Horizontal", nudiebug::DISPLAY_HORIZONTAL,
-                           ComputerscareNudiebug::DISPLAY_ORIENTATION_MODE);
+    menu->addChild(createSubmenuItem(
+        "Compoly Input Formation", "", [=](Menu* formationMenu) {
+          formationMenu->addChild(createSubmenuItem(
+              "Interleaved Partial Pairs", "", [=](Menu* submenu) {
+                addParamMenuItem(
+                    submenu, "Strict", 0,
+                    ComputerscareNudiebug::INTERLEAVED_PARTIAL_PAIR_MODE);
+                addParamMenuItem(
+                    submenu, "Zero fill", 1,
+                    ComputerscareNudiebug::INTERLEAVED_PARTIAL_PAIR_MODE);
+              }));
+          formationMenu->addChild(
+              createSubmenuItem("Interleaved Banks", "", [=](Menu* submenu) {
+                addParamMenuItem(submenu, "Compact", 0,
+                                 ComputerscareNudiebug::INTERLEAVED_BANK_MODE);
+                addParamMenuItem(submenu,
+                                 "Preserve second bank "
+                                 "position",
+                                 1,
+                                 ComputerscareNudiebug::INTERLEAVED_BANK_MODE);
+                addParamMenuItem(submenu, "Strict", 2,
+                                 ComputerscareNudiebug::INTERLEAVED_BANK_MODE);
+              }));
+          formationMenu->addChild(
+              createSubmenuItem("Separated Lanes", "", [=](Menu* submenu) {
+                addParamMenuItem(submenu, "Strict", 0,
+                                 ComputerscareNudiebug::SEPARATED_LANE_MODE);
+                addParamMenuItem(submenu, "Zero fill", 1,
+                                 ComputerscareNudiebug::SEPARATED_LANE_MODE);
+              }));
         }));
   }
 

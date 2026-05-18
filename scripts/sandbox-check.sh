@@ -226,6 +226,18 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+echo "==> SDK-free compoly input formation tests..."
+if command -v g++ >/dev/null; then
+  if g++ -std=c++11 -I src tests/compoly_input_formation_test.cpp -o /tmp/cs_compoly_input_formation_test; then
+    /tmp/cs_compoly_input_formation_test || fail "compoly input formation tests failed"
+  else
+    fail "compoly input formation tests did not compile"
+  fi
+else
+  echo "  skip: g++ not installed"
+fi
+
+# ---------------------------------------------------------------------------
 echo "==> SDK-free complex format tests..."
 if command -v g++ >/dev/null; then
   if g++ -std=c++11 -I src tests/complex_format_test.cpp -o /tmp/cs_complex_format_test; then

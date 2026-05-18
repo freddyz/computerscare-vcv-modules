@@ -189,9 +189,13 @@ struct TextDisplay : TransparentWidget {
       if (!compolyDisplay) {
         drawPolyText(args.vg, font->handle, leftValueX, rightValueRight, y, c);
       } else {
+        if (textMode == TEXT_BOTH) {
+          drawPolyText(args.vg, font->handle, leftValueX, rightValueRight, y,
+                       c);
+        }
         const float textW = compolyTextWidth(charW, compolyRepresentation);
         float x = leftValueX;
-        if (textMode == TEXT_MIDDLE) {
+        if (textMode == TEXT_MIDDLE || textMode == TEXT_BOTH) {
           x = box.size.x * 0.5f - textW * 0.5f;
         } else if (textMode == TEXT_RIGHT) {
           x = rightValueRight - textW;
@@ -452,6 +456,18 @@ struct TextDisplay : TransparentWidget {
         float y = box.size.y * 0.5f;
         if (textMode == TEXT_LEFT) y = box.size.y * 0.5f - 10.f;
         if (textMode == TEXT_RIGHT) y = box.size.y * 0.5f + 10.f;
+        if (textMode == TEXT_BOTH) {
+          if (isLeftChannelActive(c)) {
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            std::string left = formatVoltage(snapshot->leftVoltages[c]);
+            nvgText(vg, x, box.size.y * 0.5f - 18.f, left.c_str(), nullptr);
+          }
+          if (isRightChannelActive(c)) {
+            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+            std::string right = formatVoltage(snapshot->rightVoltages[c]);
+            nvgText(vg, x, box.size.y * 0.5f + 18.f, right.c_str(), nullptr);
+          }
+        }
         const float textX =
             x - compolyTextWidth(charW, compolyRepresentation) * 0.5f;
         if (compolyRepresentation == COMPOLY_REP_RECT) {

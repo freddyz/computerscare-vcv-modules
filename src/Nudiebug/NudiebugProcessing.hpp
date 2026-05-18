@@ -2,6 +2,7 @@
 
 #include "../Computerscare.hpp"
 #include "../complex/ComplexWidgets.hpp"
+#include "../complex/CompolyInputFormation.hpp"
 #include "NudiebugState.hpp"
 
 namespace nudiebug {
@@ -9,7 +10,9 @@ namespace nudiebug {
 template <typename ModuleT>
 inline void updateDisplaySnapshot(
     ModuleT* module, int zInputMode, int compolyChannels,
-    const typename ModuleT::CompolyInputInfo& inputInfo) {
+    const cpx::compoly::PortChannels& ports,
+    cpx::compoly::PortChannelCounts portChannels,
+    cpx::compoly::input_formation::Options inputFormationOptions) {
   const bool needsComplexValues =
       module->displayOptions.displayType == DISPLAY_TYPE_COMPOLY ||
       module->displayOptions.plotEnabled;
@@ -27,11 +30,13 @@ inline void updateDisplaySnapshot(
         module->inputs[ModuleT::Z_INPUT + 1].getVoltage(c);
 
     if (needsComplexValues && c < compolyChannels) {
-      module->getCoordinatePair(
-          c, ModuleT::Z_INPUT, zInputMode, ModuleT::WRAP_NORMAL, inputInfo,
-          module->snapshot.compolyA[c], module->snapshot.compolyB[c]);
-      typename ModuleT::ComplexSample z = module->getComplexSample(
-          c, ModuleT::Z_INPUT, zInputMode, ModuleT::WRAP_NORMAL, inputInfo);
+      std::array<float, 2> pair = cpx::compoly::input_formation::pairForLane(
+          ports, portChannels, ModuleT::coordinateModeFromParam(zInputMode), c,
+          inputFormationOptions);
+      cpx::complex_math::Quad z = cpx::complex_math::quadFromPair(
+          pair[0], pair[1], ModuleT::coordinateModeFromParam(zInputMode));
+      module->snapshot.compolyA[c] = pair[0];
+      module->snapshot.compolyB[c] = pair[1];
       module->snapshot.rectX[c] = z.x;
       module->snapshot.rectY[c] = z.y;
       module->snapshot.polarR[c] = z.r;
@@ -58,21 +63,40 @@ inline void processDebugger(ModuleT* module, bool updateDisplay) {
 
   if (!outputConnected && !(displayActive && updateDisplay)) return;
 
-  typename ModuleT::CompolyInputInfo inputInfo =
-      module->getInputCompolyInfo(zInputMode, ModuleT::Z_INPUT);
-  const int compolyChannels =
-      cpx::compoly::outputCompolyLanes(0, inputInfo.compolyChannels);
+  cpx::compoly::input_formation::Options inputFormationOptions(
+      cpx::compoly::input_formation::partialPairPolicyFromInt(
+          module->params[ModuleT::INTERLEAVED_PARTIAL_PAIR_MODE].getValue()),
+      cpx::compoly::input_formation::interleavedBankPolicyFromInt(
+          module->params[ModuleT::INTERLEAVED_BANK_MODE].getValue()),
+      cpx::compoly::input_formation::separatedLanePolicyFromInt(
+          module->params[ModuleT::SEPARATED_LANE_MODE].getValue()));
+
+  cpx::compoly::PortChannels ports = {};
+  module->inputs[ModuleT::Z_INPUT].readVoltages(ports.a.data());
+  module->inputs[ModuleT::Z_INPUT + 1].readVoltages(ports.b.data());
+  cpx::compoly::PortChannelCounts portChannels(
+      module->inputs[ModuleT::Z_INPUT].getChannels(),
+      module->inputs[ModuleT::Z_INPUT + 1].getChannels());
+  const int compolyChannels = cpx::compoly::outputCompolyLanes(
+      0, cpx::compoly::input_formation::lanesForInput(
+             ModuleT::coordinateModeFromParam(zInputMode), portChannels,
+             inputFormationOptions));
 
   if (outputConnected) {
     module->setOutputChannels(ModuleT::Z_OUTPUT, zOutputMode, compolyChannels);
-    if (ModuleT::coordinateFamiliesMatch(zInputMode, zOutputMode)) {
-      module->routeComplexPairSameFamily(
-          ModuleT::Z_INPUT, ModuleT::Z_OUTPUT, zInputMode, zOutputMode,
-          ModuleT::WRAP_NORMAL, compolyChannels, inputInfo);
-    } else {
-      module->routeComplexPairConverted(
-          ModuleT::Z_INPUT, ModuleT::Z_OUTPUT, zInputMode, zOutputMode,
-          ModuleT::WRAP_NORMAL, compolyChannels, inputInfo);
+    for (int c = 0; c < compolyChannels; c++) {
+      std::array<float, 2> pair = cpx::compoly::input_formation::pairForLane(
+          ports, portChannels, ModuleT::coordinateModeFromParam(zInputMode), c,
+          inputFormationOptions);
+      if (ModuleT::coordinateFamiliesMatch(zInputMode, zOutputMode)) {
+        module->setOutputCoordinatePair(ModuleT::Z_OUTPUT, zOutputMode, c,
+                                        pair[0], pair[1]);
+      } else {
+        cpx::complex_math::Quad z = cpx::complex_math::quadFromPair(
+            pair[0], pair[1], ModuleT::coordinateModeFromParam(zInputMode));
+        module->setOutputVoltages(ModuleT::Z_OUTPUT, zOutputMode, c, z.x, z.y,
+                                  z.r, z.theta);
+      }
     }
   } else {
     module->outputs[ModuleT::Z_OUTPUT].setChannels(0);
@@ -80,7 +104,8 @@ inline void processDebugger(ModuleT* module, bool updateDisplay) {
   }
 
   if (displayActive && updateDisplay) {
-    updateDisplaySnapshot(module, zInputMode, compolyChannels, inputInfo);
+    updateDisplaySnapshot(module, zInputMode, compolyChannels, ports,
+                          portChannels, inputFormationOptions);
   }
 }
 
