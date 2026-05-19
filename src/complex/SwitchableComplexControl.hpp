@@ -9,12 +9,9 @@ struct ComplexControlViewModeSwitch : app::Switch {
   int textAlign = NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE;
   float fontSize = 9.f;
 
-  void draw(const DrawArgs& args) override {
-    nvgBeginPath(args.vg);
-    nvgRoundedRect(args.vg, 0.f, 0.f, box.size.x, box.size.y, 1.5f);
-    nvgFillColor(args.vg, nvgRGBA(8, 28, 24, 42));
-    nvgFill(args.vg);
+  void onButton(const event::Button& e) override { Widget::onButton(e); }
 
+  void draw(const DrawArgs& args) override {
     nvgFontSize(args.vg, fontSize);
     nvgTextAlign(args.vg, textAlign);
     nvgFillColor(args.vg, nvgRGB(28, 34, 28));
