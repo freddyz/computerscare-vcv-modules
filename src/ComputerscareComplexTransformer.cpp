@@ -67,8 +67,8 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     configComplexAffineParams(W_SCALE_VAL_AB, W_OFFSET_VAL_AB, W_SCALE_POLAR,
                               W_OFFSET_POLAR, "w");
 
-    configParam<AutoParamQuantity>(COMPOLY_CHANNELS, 0.f, 16.f, 0.f,
-                                   "Compoly Output Channels");
+    configSwitch(COMPOLY_CHANNELS, 0.f, 16.f, 0.f, "Compoly Output Channels",
+                 polyChannelLabels(true));
     getParamQuantity(COMPOLY_CHANNELS)->randomizeEnabled = false;
     getParamQuantity(COMPOLY_CHANNELS)->resetEnabled = false;
 

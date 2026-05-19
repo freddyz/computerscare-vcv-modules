@@ -200,8 +200,8 @@ struct ComputerscareCompolyLane : ComputerscareComplexBase {
     getParamQuantity(W_WRAP_MODE)->randomizeEnabled = false;
     getParamQuantity(W_WRAP_MODE)->resetEnabled = false;
 
-    configParam<AutoParamQuantity>(COMPOLY_CHANNELS, 0.f, 16.f, 0.f,
-                                   "Compoly Lanes");
+    configSwitch(COMPOLY_CHANNELS, 0.f, 16.f, 0.f, "Compoly Lanes",
+                 polyChannelLabels(true));
     getParamQuantity(COMPOLY_CHANNELS)->randomizeEnabled = false;
 
     configParam<InputModeParam>(Z_INPUT_MODE, 0.f, 1.f, 0.f, "Z Input Mode");

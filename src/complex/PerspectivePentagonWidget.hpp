@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "SwitchableComplexControl.hpp"
 
 namespace cpx {
@@ -406,6 +408,21 @@ inline void addPerspectivePentagonMenu(Menu* menu,
   addPerspectivePentagonMenuItems(menu, settings);
 }
 
+struct PerspectivePentagonViewSubmenuItem : MenuItem {
+  PerspectivePentagonSettings* settings = nullptr;
+
+  Menu* createChildMenu() override {
+    Menu* menu = new Menu;
+    addPerspectivePentagonMenuItems(menu, settings);
+    return menu;
+  }
+
+  void step() override {
+    rightText = RIGHT_ARROW;
+    MenuItem::step();
+  }
+};
+
 struct PerspectivePentagonWidget : Widget {
   PerspectivePentagonDisplay* display = nullptr;
   Widget* content = nullptr;
@@ -413,6 +430,9 @@ struct PerspectivePentagonWidget : Widget {
   bool drawSidesEnabled = true;
   bool drawFaceEnabled = true;
   bool hoverHighlightEnabled = false;
+  bool contentFillsBox = false;
+  bool contextMenuEnabled = true;
+  std::function<void(Menu*)> appendContextMenuHandler;
 
   PerspectivePentagonWidget(PerspectivePentagonSettings* settings, int seed) {
     this->settings = settings;
@@ -452,6 +472,13 @@ struct PerspectivePentagonWidget : Widget {
     hoverHighlightEnabled = enabled;
   }
 
+  void setContentFillsBox(bool enabled) {
+    contentFillsBox = enabled;
+    layout();
+  }
+
+  void setContextMenuEnabled(bool enabled) { contextMenuEnabled = enabled; }
+
   bool isHoveredWithin() const {
     Widget* hovered = APP->event->hoveredWidget;
     while (hovered) {
@@ -467,7 +494,10 @@ struct PerspectivePentagonWidget : Widget {
       display->ownerPos = box.pos;
       if (parent) display->canvasSize = parent->box.size;
     }
-    if (content && display) content->box = display->contentRect();
+    if (content && display) {
+      content->box = contentFillsBox ? Rect(Vec(0.f, 0.f), box.size)
+                                     : display->contentRect();
+    }
   }
 
   void onResize(const ResizeEvent& e) override {
@@ -490,36 +520,20 @@ struct PerspectivePentagonWidget : Widget {
 
   Menu* makeMenu() {
     Menu* menu = createMenu();
-    addPerspectivePentagonMenu(menu, settings);
+    if (appendContextMenuHandler) {
+      appendContextMenuHandler(menu);
+    } else {
+      menu->addChild(construct<PerspectivePentagonViewSubmenuItem>(
+          &MenuItem::text, "View",
+          &PerspectivePentagonViewSubmenuItem::settings, settings));
+    }
     return menu;
   }
 
   void onButton(const event::Button& e) override {
-    if (e.button == GLFW_MOUSE_BUTTON_RIGHT && e.action == GLFW_PRESS &&
-        (e.mods & RACK_MOD_MASK) == 0) {
+    if (contextMenuEnabled && e.button == GLFW_MOUSE_BUTTON_RIGHT &&
+        e.action == GLFW_PRESS && (e.mods & RACK_MOD_MASK) == 0) {
       makeMenu();
-      e.consume(this);
-      return;
-    }
-    Widget::onButton(e);
-  }
-};
-
-struct PerspectiveControlCycleOverlay : Widget {
-  ComputerscareComplexBase* module = nullptr;
-  int modeParamId = -1;
-
-  void cycleControlMode() {
-    if (!module || modeParamId < 0 || modeParamId >= (int)module->params.size())
-      return;
-    int mode = std::round(module->params[modeParamId].getValue());
-    module->params[modeParamId].setValue((mode + 1) % 3);
-  }
-
-  void onButton(const event::Button& e) override {
-    if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS &&
-        (e.mods & RACK_MOD_MASK) == 0) {
-      cycleControlMode();
       e.consume(this);
       return;
     }
@@ -529,7 +543,6 @@ struct PerspectiveControlCycleOverlay : Widget {
 
 struct PerspectiveLabeledSwitchableComplexControl : PerspectivePentagonWidget {
   LabeledSwitchableComplexControl* complexControl = nullptr;
-  PerspectiveControlCycleOverlay* cycleOverlay = nullptr;
   ComputerscareComplexBase* module = nullptr;
   int modeParamId = -1;
 
@@ -550,10 +563,6 @@ struct PerspectiveLabeledSwitchableComplexControl : PerspectivePentagonWidget {
         arrowMaxVoltage, label, controlSize, labelPos, labelSize, laneIndex,
         showDisabledOverlay, controlName, labelTextAlign, controlPos);
     setContent(complexControl);
-    cycleOverlay = new PerspectiveControlCycleOverlay();
-    cycleOverlay->module = module;
-    cycleOverlay->modeParamId = modeParamId;
-    addChild(cycleOverlay);
   }
 
   void setArrowDrawingScale(float scale) {
@@ -562,11 +571,6 @@ struct PerspectiveLabeledSwitchableComplexControl : PerspectivePentagonWidget {
 
   void setArrowYOffset(float offset) {
     if (complexControl) complexControl->setArrowYOffset(offset);
-  }
-
-  void step() override {
-    if (cycleOverlay) cycleOverlay->box = Rect(Vec(0.f, 0.f), box.size);
-    PerspectivePentagonWidget::step();
   }
 
   void cycleControlMode() {
@@ -578,7 +582,7 @@ struct PerspectiveLabeledSwitchableComplexControl : PerspectivePentagonWidget {
 
   void onButton(const event::Button& e) override {
     if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS &&
-        (e.mods & RACK_MOD_MASK) == 0) {
+        (e.mods & RACK_MOD_MASK) == 0 && e.pos.y <= 12.f) {
       cycleControlMode();
       e.consume(this);
       return;

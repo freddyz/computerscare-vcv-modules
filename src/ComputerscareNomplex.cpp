@@ -55,12 +55,13 @@ struct ComputerscareNomplexPumbers : ComputerscareComplexBase {
     getParamQuantity(WRAP_MODE)->randomizeEnabled = false;
     getParamQuantity(WRAP_MODE)->resetEnabled = false;
 
-    configParam<AutoParamQuantity>(COMPOLY_CHANNELS_RECT_IN, 0.f, 16.f, 0.f,
-                                   "Compoly Channels for Rectangular Input");
+    configSwitch(COMPOLY_CHANNELS_RECT_IN, 0.f, 16.f, 0.f,
+                 "Compoly Channels for Rectangular Input",
+                 polyChannelLabels(true));
     getParamQuantity(COMPOLY_CHANNELS_RECT_IN)->randomizeEnabled = false;
 
-    configParam<AutoParamQuantity>(COMPOLY_CHANNELS_POLAR_IN, 0.f, 16.f, 0.f,
-                                   "Compoly Channels for Polar Input");
+    configSwitch(COMPOLY_CHANNELS_POLAR_IN, 0.f, 16.f, 0.f,
+                 "Compoly Channels for Polar Input", polyChannelLabels(true));
     getParamQuantity(COMPOLY_CHANNELS_POLAR_IN)->randomizeEnabled = false;
 
     configInput(REAL_IN, "Real");

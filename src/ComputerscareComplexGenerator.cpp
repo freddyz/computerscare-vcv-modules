@@ -114,7 +114,8 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
     configParam(DELTA_OFFSET_AB, -10.f, 10.f, 0.f, "Channel ");
     configParam(DELTA_OFFSET_AB + 1, -10.f, 10.f, 0.f, "Channel ");
 
-    configParam(COMPOLY_CHANNELS, 1.f, 16.f, 16.f, "Compoly Lanes");
+    configSwitch(COMPOLY_CHANNELS, 1.f, 16.f, 16.f, "Compoly Lanes",
+                 polyChannelLabels(false));
     configParam(GLOBAL_SCALE, -2.f, 2.f, 1.f, "Scale");
     configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset", " volts");
     configParam<cpx::CompolyModeParam>(
@@ -349,14 +350,14 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
 
     constexpr float pentLeftX = 2.f;
     constexpr float pentRightX = 62.f;
-    constexpr float pentTopY = 72.f;
-    constexpr float pentRowSpacing = 35.f;
+    constexpr float pentTopY = 80.f;
+    constexpr float pentRowSpacing = 33.f;
     Vec titlePos = Vec(2.f, -1.f);
     Vec titleSize = Vec(58.f, 31.f);
     Vec channelPos = Vec(64.f, -1.f);
     Vec channelSize = Vec(54.f, 31.f);
-    Vec outputPos = Vec(61.f, 31.f);
-    Vec outputSize = Vec(57.f, 43.f);
+    Vec outputPos = Vec(2.f, 31.f);
+    Vec outputSize = Vec(116.f, 48.f);
     Vec modeSize = Vec(56.f, 43.f);
     Vec laneSize = Vec(56.f, 36.f);
 
@@ -393,11 +394,11 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     }
 
     SmallLetterDisplay* titleDisplay = new SmallLetterDisplay();
-    titleDisplay->box = Rect(Vec(5.f, 7.f), Vec(52.f, 19.f));
+    titleDisplay->box = Rect(titlePos.plus(Vec(5.f, 2.f)), Vec(50.f, 19.f));
     titleDisplay->value = "complex\ngenerator";
     titleDisplay->fontSize = 10;
     titleDisplay->letterSpacing = 0.4f;
-    titleDisplay->textAlign = NVG_ALIGN_CENTER;
+    titleDisplay->textAlign = NVG_ALIGN_LEFT;
     titleDisplay->breakRowWidth = 58.f;
     addChild(titleDisplay);
 
@@ -411,9 +412,9 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     addChild(channelWidget);
 
     cpx::CompolyPortsWidget* mainOutput = new cpx::CompolyPortsWidget(
-        Vec(66, 36), module, ComputerscareComplexGenerator::COMPOLY_MAIN_OUT_A,
+        Vec(45, 43), module, ComputerscareComplexGenerator::COMPOLY_MAIN_OUT_A,
         ComputerscareComplexGenerator::MAIN_OUTPUT_MODE, 0.6);
-    mainOutput->compolyLabelTransform->box.pos = Vec(38, 28);
+    mainOutput->compolyLabelTransform->box.pos = Vec(21, 44);
     addChild(mainOutput);
 
     addModeControl("scale", pentLeftX, pentTopY, module,
@@ -469,6 +470,14 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     pentagon->setDrawParts(drawSides, drawFace);
     if (faceShade >= 0 && sideShade >= 0)
       pentagon->setBaseShades(faceShade, sideShade, sideStep);
+    pentagon->appendContextMenuHandler = [module](Menu* menu) {
+      menu->addChild(construct<ComputerscareComplexGeneratorViewMenu>(
+          &MenuItem::text, "View",
+          &ComputerscareComplexGeneratorViewMenu::generator, module));
+      menu->addChild(construct<ComputerscareComplexGeneratorControlsMenu>(
+          &MenuItem::text, "Controls",
+          &ComputerscareComplexGeneratorControlsMenu::generator, module));
+    };
     addChild(pentagon);
   }
 
@@ -485,11 +494,13 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
         new cpx::PerspectiveLabeledSwitchableComplexControl(
             module ? &module->pentagonSettings : nullptr, paramIndex, module,
             paramIndex, polarParamIndex, modeParamId, arrowMaxMode,
-            arrowMaxVoltage, label, Vec(34.f, 26.f), Vec(2.f, 1.f),
+            arrowMaxVoltage, label, Vec(34.f, 26.f), Vec(17.f, 2.f),
             Vec(34.f, 10.f), -1, false, controlLabel,
-            NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, Vec(0.f, 4.f));
+            NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, Vec(11.f, 7.f));
     control->box = Rect(Vec(x, y), Vec(56.f, 43.f));
     control->setDrawParts(false, false);
+    control->setContextMenuEnabled(false);
+    control->setContentFillsBox(true);
     control->setHoverHighlightEnabled(true);
     control->setBaseShades(0x74, 0x78, 0x0a);
     control->setArrowDrawingScale(0.76f);
@@ -511,8 +522,8 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
             addParam(fader);*/
 
     float labelWidth = label.size() > 1 ? 16.f : 12.f;
-    Vec labelRel = Vec(2.f, 1.f);
-    Vec controlRel = Vec(0.f, 4.f);
+    Vec labelRel = Vec(56.f - labelWidth - 5.f, 2.f);
+    Vec controlRel = Vec(11.f, 5.f);
     Vec wrapperSize = Vec(56.f, 36.f);
 
     cpx::PerspectiveLabeledSwitchableComplexControl* control =
@@ -523,9 +534,11 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
             ComputerscareComplexGenerator::LANE_VIEW_MODE + index / 2,
             cpx::ComplexXYMaxMode::Rectangular, 10.f, label, Vec(34.f, 26.f),
             labelRel, Vec(labelWidth, 10.f), index / 2, false, "Lane " + label,
-            NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, controlRel);
+            NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, controlRel);
     control->box = Rect(Vec(x, y), wrapperSize);
     control->setDrawParts(false, false);
+    control->setContextMenuEnabled(false);
+    control->setContentFillsBox(true);
     control->setHoverHighlightEnabled(true);
     control->setArrowDrawingScale(0.76f);
     control->setArrowYOffset(-5.f);
