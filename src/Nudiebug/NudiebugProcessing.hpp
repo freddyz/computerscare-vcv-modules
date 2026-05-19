@@ -22,12 +22,20 @@ inline void updateDisplaySnapshot(
       module->inputs[ModuleT::Z_INPUT].getChannels();
   module->snapshot.rightChannels =
       module->inputs[ModuleT::Z_INPUT + 1].getChannels();
+  module->snapshot.leftOutputChannels =
+      module->outputs[ModuleT::Z_OUTPUT].getChannels();
+  module->snapshot.rightOutputChannels =
+      module->outputs[ModuleT::Z_OUTPUT + 1].getChannels();
 
   for (int c = 0; c < kMaxChannels; c++) {
     module->snapshot.leftVoltages[c] =
         module->inputs[ModuleT::Z_INPUT].getVoltage(c);
     module->snapshot.rightVoltages[c] =
         module->inputs[ModuleT::Z_INPUT + 1].getVoltage(c);
+    module->snapshot.leftOutputVoltages[c] =
+        module->outputs[ModuleT::Z_OUTPUT].getVoltage(c);
+    module->snapshot.rightOutputVoltages[c] =
+        module->outputs[ModuleT::Z_OUTPUT + 1].getVoltage(c);
 
     if (needsComplexValues && c < compolyChannels) {
       std::array<float, 2> pair = cpx::compoly::input_formation::pairForLane(
@@ -82,7 +90,9 @@ inline void processDebugger(ModuleT* module, bool updateDisplay) {
              ModuleT::coordinateModeFromParam(zInputMode), portChannels,
              inputFormationOptions));
 
-  if (outputConnected) {
+  const bool computeOutputs =
+      outputConnected || (displayActive && updateDisplay);
+  if (computeOutputs) {
     module->setOutputChannels(ModuleT::Z_OUTPUT, zOutputMode, compolyChannels);
     for (int c = 0; c < compolyChannels; c++) {
       std::array<float, 2> pair = cpx::compoly::input_formation::pairForLane(

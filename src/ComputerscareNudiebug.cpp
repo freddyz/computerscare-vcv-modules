@@ -27,6 +27,7 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     INTERLEAVED_PARTIAL_PAIR_MODE,
     INTERLEAVED_BANK_MODE,
     SEPARATED_LANE_MODE,
+    IO_VIEW_MODE,
     NUM_PARAMS
   };
   enum InputIds { Z_INPUT, NUM_INPUTS = Z_INPUT + 2 };
@@ -77,6 +78,8 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                  {"Compact", "Preserve second bank position", "Strict"});
     configSwitch(SEPARATED_LANE_MODE, 0.f, 1.f, 0.f, "Separated lanes",
                  {"Strict", "Zero fill"});
+    configSwitch(IO_VIEW_MODE, 0.f, 2.f, nudiebug::IO_VIEW_INPUT, "I/O view",
+                 {"Input", "Output", "Both"});
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 0>>(Z_INPUT, "z");
     configInput<cpx::CompolyPortInfo<Z_INPUT_MODE, 1>>(Z_INPUT + 1, "z");
     configOutput<cpx::CompolyPortInfo<Z_OUTPUT_MODE, 0>>(Z_OUTPUT, "z");
@@ -104,6 +107,7 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     displayOptions.channelLayoutMode = params[CHANNEL_LAYOUT_MODE].getValue();
     displayOptions.displayOrientation =
         params[DISPLAY_ORIENTATION_MODE].getValue();
+    displayOptions.ioViewMode = params[IO_VIEW_MODE].getValue();
 
     displaySnapshotCounter++;
     bool updateDisplay = displaySnapshotCounter > displaySnapshotPeriod;
@@ -143,6 +147,8 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                         json_integer(displayOptions.channelLayoutMode));
     json_object_set_new(rootJ, "displayOrientation",
                         json_integer(displayOptions.displayOrientation));
+    json_object_set_new(rootJ, "ioViewMode",
+                        json_integer(displayOptions.ioViewMode));
     return rootJ;
   }
 
@@ -249,6 +255,12 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     if (displayOrientationJ) {
       displayOptions.displayOrientation =
           json_integer_value(displayOrientationJ);
+    }
+
+    json_t* ioViewModeJ = json_object_get(rootJ, "ioViewMode");
+    if (ioViewModeJ) {
+      displayOptions.ioViewMode = json_integer_value(ioViewModeJ);
+      params[IO_VIEW_MODE].setValue(displayOptions.ioViewMode);
     }
   }
 };
@@ -588,6 +600,14 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
                              nudiebug::DISPLAY_HORIZONTAL,
                              ComputerscareNudiebug::DISPLAY_ORIENTATION_MODE);
           }));
+      viewMenu->addChild(createSubmenuItem("I/O View", "", [=](Menu* submenu) {
+        addParamMenuItem(submenu, "Input", nudiebug::IO_VIEW_INPUT,
+                         ComputerscareNudiebug::IO_VIEW_MODE);
+        addParamMenuItem(submenu, "Output", nudiebug::IO_VIEW_OUTPUT,
+                         ComputerscareNudiebug::IO_VIEW_MODE);
+        addParamMenuItem(submenu, "Both", nudiebug::IO_VIEW_BOTH,
+                         ComputerscareNudiebug::IO_VIEW_MODE);
+      }));
     }));
     menu->addChild(createSubmenuItem(
         "Compoly Input Formation", "", [=](Menu* formationMenu) {

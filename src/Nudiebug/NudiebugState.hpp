@@ -38,6 +38,8 @@ enum ChannelLayoutMode { CHANNEL_LAYOUT_ALL, CHANNEL_LAYOUT_STRETCH };
 
 enum DisplayOrientation { DISPLAY_VERTICAL, DISPLAY_HORIZONTAL };
 
+enum IoViewMode { IO_VIEW_INPUT, IO_VIEW_OUTPUT, IO_VIEW_BOTH };
+
 struct DisplayOptions {
   int displayType = DISPLAY_TYPE_POLY;
   bool textEnabled = true;
@@ -53,6 +55,7 @@ struct DisplayOptions {
   int channelLabelsMode = CHANNEL_LABELS_BOTH;
   int channelLayoutMode = CHANNEL_LAYOUT_ALL;
   int displayOrientation = DISPLAY_VERTICAL;
+  int ioViewMode = IO_VIEW_INPUT;
 };
 
 struct Snapshot {
@@ -64,9 +67,13 @@ struct Snapshot {
   std::array<float, kMaxChannels> rectY = {};
   std::array<float, kMaxChannels> polarR = {};
   std::array<float, kMaxChannels> polarTheta = {};
+  std::array<float, kMaxChannels> leftOutputVoltages = {};
+  std::array<float, kMaxChannels> rightOutputVoltages = {};
   int leftChannels = 0;
   int rightChannels = 0;
   int compolyChannels = 0;
+  int leftOutputChannels = 0;
+  int rightOutputChannels = 0;
 
   int maxChannels() const { return kMaxChannels; }
 };

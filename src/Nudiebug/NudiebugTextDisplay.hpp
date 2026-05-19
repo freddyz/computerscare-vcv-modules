@@ -120,6 +120,8 @@ struct TextDisplay : TransparentWidget {
       return;
     }
 
+    const int ioMode = options ? options->ioViewMode : IO_VIEW_INPUT;
+
     if (drawViz) {
       for (int slot = 0; slot < verticalSlots; slot++) {
         const int c = stretchChannels ? slot : slot;
@@ -129,20 +131,12 @@ struct TextDisplay : TransparentWidget {
             stretchChannels ? std::max(2.f, rowHeight - slotMargin * 2.f)
                             : 14.f;
         if (compolyDisplay) {
-          if (isCompolyChannelActive(c)) {
-            float first = 0.f;
-            float second = 0.f;
-            compolyBarParts(c, compolyRepresentation, first, second);
-            drawPartBars(args.vg, barLeftX, barRightX, textY, barWidth, first,
-                         second, barsMode, barHeight);
-          }
+          drawCompolyRowBars(args.vg, barLeftX, barRightX, textY, barWidth,
+                             barsMode, barHeight, c, compolyRepresentation,
+                             ioMode);
         } else {
-          const bool drawFirst = isLeftChannelActive(c);
-          const bool drawSecond = isRightChannelActive(c);
-          drawPartBars(args.vg, barLeftX, barRightX, textY, barWidth,
-                       drawFirst ? snapshot->leftVoltages[c] : 0.f,
-                       drawSecond ? snapshot->rightVoltages[c] : 0.f, barsMode,
-                       barHeight, drawFirst, drawSecond);
+          drawPolyRowBars(args.vg, barLeftX, barRightX, textY, barWidth,
+                          barsMode, barHeight, c, ioMode);
         }
       }
     }
@@ -166,9 +160,11 @@ struct TextDisplay : TransparentWidget {
       const float y = top + slot * rowHeight + rowHeight * 0.55f;
 
       if (drawLabels && !compolyDisplay) {
-        drawChannelLabel(args.vg, leftLabelX, y, c, isLeftChannelActive(c),
+        const bool leftActive = isLeftSideActive(c, ioMode);
+        const bool rightActive = isRightSideActive(c, ioMode);
+        drawChannelLabel(args.vg, leftLabelX, y, c, leftActive,
                          NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, font->handle);
-        drawChannelLabel(args.vg, rightLabelX, y, c, isRightChannelActive(c),
+        drawChannelLabel(args.vg, rightLabelX, y, c, rightActive,
                          NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE, font->handle);
       } else if (drawLabels) {
         if (labelsMode == CHANNEL_LABELS_LEFT ||
@@ -194,18 +190,24 @@ struct TextDisplay : TransparentWidget {
                        c);
         }
         const float textW = compolyTextWidth(charW, compolyRepresentation);
-        float x = leftValueX;
-        if (textMode == TEXT_MIDDLE || textMode == TEXT_BOTH) {
-          x = box.size.x * 0.5f - textW * 0.5f;
-        } else if (textMode == TEXT_RIGHT) {
-          x = rightValueRight - textW;
-        }
-        if (compolyRepresentation == COMPOLY_REP_RECT) {
-          drawCompolyRectText(args.vg, font->handle,
-                              symbolFont ? symbolFont->handle : font->handle, x,
-                              y, c, charW);
+        if (ioMode == IO_VIEW_BOTH && isCompolyChannelActive(c)) {
+          drawCompolyText(args.vg, font->handle,
+                          symbolFont ? symbolFont->handle : font->handle,
+                          leftValueX, y, c, charW, compolyRepresentation);
+          drawCompolyText(args.vg, font->handle,
+                          symbolFont ? symbolFont->handle : font->handle,
+                          rightValueRight - textW, y, c, charW,
+                          compolyRepresentation);
         } else {
-          drawCompolyPolarText(args.vg, font->handle, x, y, c, charW);
+          float x = leftValueX;
+          if (textMode == TEXT_MIDDLE || textMode == TEXT_BOTH) {
+            x = box.size.x * 0.5f - textW * 0.5f;
+          } else if (textMode == TEXT_RIGHT) {
+            x = rightValueRight - textW;
+          }
+          drawCompolyText(args.vg, font->handle,
+                          symbolFont ? symbolFont->handle : font->handle, x, y,
+                          c, charW, compolyRepresentation);
         }
       }
     }
@@ -219,15 +221,44 @@ struct TextDisplay : TransparentWidget {
     return snapshot && channel < snapshot->rightChannels;
   }
 
+  bool isLeftOutputActive(int channel) const {
+    return snapshot && channel < snapshot->leftOutputChannels;
+  }
+
+  bool isRightOutputActive(int channel) const {
+    return snapshot && channel < snapshot->rightOutputChannels;
+  }
+
+  bool isLeftSideActive(int channel, int ioMode) const {
+    if (ioMode == IO_VIEW_INPUT) return isLeftChannelActive(channel);
+    if (ioMode == IO_VIEW_OUTPUT) return isLeftOutputActive(channel);
+    return isLeftChannelActive(channel) || isLeftOutputActive(channel);
+  }
+
+  bool isRightSideActive(int channel, int ioMode) const {
+    if (ioMode == IO_VIEW_INPUT) return isRightChannelActive(channel);
+    if (ioMode == IO_VIEW_OUTPUT) return isRightOutputActive(channel);
+    return isRightChannelActive(channel) || isRightOutputActive(channel);
+  }
+
   bool isCompolyChannelActive(int channel) const {
     return snapshot && channel < snapshot->compolyChannels;
   }
 
   int activeSlotCount(bool compolyDisplay) const {
     if (!snapshot) return 1;
+    const int ioMode = options ? options->ioViewMode : IO_VIEW_INPUT;
     if (!compolyDisplay) {
-      return std::max(
-          1, std::max(snapshot->leftChannels, snapshot->rightChannels));
+      int count = 0;
+      if (ioMode != IO_VIEW_OUTPUT) {
+        count = std::max(count,
+                         std::max(snapshot->leftChannels, snapshot->rightChannels));
+      }
+      if (ioMode != IO_VIEW_INPUT) {
+        count = std::max(count, std::max(snapshot->leftOutputChannels,
+                                         snapshot->rightOutputChannels));
+      }
+      return std::max(1, count);
     }
     return std::max(1, snapshot->compolyChannels);
   }
@@ -249,6 +280,75 @@ struct TextDisplay : TransparentWidget {
 
     first = snapshot->rectX[channel];
     second = snapshot->rectY[channel];
+  }
+
+  void drawPolyRowBars(NVGcontext* vg, float barLeftX, float barRightX,
+                       float centerY, float barWidth, int barsMode,
+                       float barHeight, int channel, int ioMode) {
+    const bool middle = barsMode == BARS_UNI_MID;
+    if (ioMode != IO_VIEW_BOTH) {
+      const bool useOutput = ioMode == IO_VIEW_OUTPUT;
+      const bool drawFirst =
+          useOutput ? isLeftOutputActive(channel) : isLeftChannelActive(channel);
+      const bool drawSecond = useOutput ? isRightOutputActive(channel)
+                                        : isRightChannelActive(channel);
+      const float first =
+          useOutput ? snapshot->leftOutputVoltages[channel]
+                    : snapshot->leftVoltages[channel];
+      const float second =
+          useOutput ? snapshot->rightOutputVoltages[channel]
+                    : snapshot->rightVoltages[channel];
+      drawPartBars(vg, barLeftX, barRightX, centerY, barWidth,
+                   drawFirst ? first : 0.f, drawSecond ? second : 0.f, barsMode,
+                   barHeight, drawFirst, drawSecond);
+      return;
+    }
+
+    const float halfWidth = std::max(2.f, barWidth * 0.5f);
+    if (isLeftOutputActive(channel)) {
+      drawBar(vg, barLeftX, centerY, halfWidth,
+              snapshot->leftOutputVoltages[channel], middle, barsMode,
+              barHeight);
+    }
+    if (isLeftChannelActive(channel)) {
+      drawBar(vg, barLeftX + halfWidth, centerY, halfWidth,
+              snapshot->leftVoltages[channel], middle, barsMode, barHeight);
+    }
+    if (isRightChannelActive(channel)) {
+      drawBar(vg, barRightX, centerY, halfWidth,
+              snapshot->rightVoltages[channel], !middle, barsMode, barHeight);
+    }
+    if (isRightOutputActive(channel)) {
+      drawBar(vg, barRightX + halfWidth, centerY, halfWidth,
+              snapshot->rightOutputVoltages[channel], !middle, barsMode,
+              barHeight);
+    }
+  }
+
+  void drawCompolyRowBars(NVGcontext* vg, float barLeftX, float barRightX,
+                          float centerY, float barWidth, int barsMode,
+                          float barHeight, int channel, int compolyRepresentation,
+                          int ioMode) {
+    if (!isCompolyChannelActive(channel)) return;
+    float first = 0.f;
+    float second = 0.f;
+    compolyBarParts(channel, compolyRepresentation, first, second);
+    if (ioMode != IO_VIEW_BOTH) {
+      drawPartBars(vg, barLeftX, barRightX, centerY, barWidth, first, second,
+                   barsMode, barHeight);
+      return;
+    }
+
+    const float halfWidth = std::max(2.f, barWidth * 0.5f);
+    const bool middle = barsMode == BARS_UNI_MID;
+    drawBar(vg, barLeftX, centerY, halfWidth, first, middle, barsMode,
+            barHeight);
+    drawBar(vg, barLeftX + halfWidth, centerY, halfWidth, first, middle,
+            barsMode, barHeight);
+    drawBar(vg, barRightX, centerY, halfWidth, second, !middle, barsMode,
+            barHeight);
+    drawBar(vg, barRightX + halfWidth, centerY, halfWidth, second, !middle,
+            barsMode, barHeight);
   }
 
   void drawPartBars(NVGcontext* vg, float leftX, float rightX, float centerY,
@@ -313,18 +413,54 @@ struct TextDisplay : TransparentWidget {
                     float rightValueRight, float y, int channel) {
     nvgFontFaceId(vg, fontHandle);
     nvgFontSize(vg, 12.f);
-
     nvgFillColor(vg, nvgRGB(0xC8, 0xEA, 0xE2));
-    if (isLeftChannelActive(channel)) {
-      nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-      std::string left = formatVoltage(snapshot->leftVoltages[channel]);
-      nvgText(vg, leftValueX, y, left.c_str(), nullptr);
+
+    const int ioMode = options ? options->ioViewMode : IO_VIEW_INPUT;
+
+    if (ioMode != IO_VIEW_BOTH) {
+      const bool useOutput = ioMode == IO_VIEW_OUTPUT;
+      const bool leftActive = useOutput ? isLeftOutputActive(channel)
+                                        : isLeftChannelActive(channel);
+      const bool rightActive = useOutput ? isRightOutputActive(channel)
+                                         : isRightChannelActive(channel);
+      if (leftActive) {
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+        const float v = useOutput ? snapshot->leftOutputVoltages[channel]
+                                  : snapshot->leftVoltages[channel];
+        nvgText(vg, leftValueX, y, formatVoltage(v).c_str(), nullptr);
+      }
+      if (rightActive) {
+        nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+        const float v = useOutput ? snapshot->rightOutputVoltages[channel]
+                                  : snapshot->rightVoltages[channel];
+        nvgText(vg, rightValueRight, y, formatVoltage(v).c_str(), nullptr);
+      }
+      return;
     }
 
-    if (isRightChannelActive(channel)) {
+    const float centerX = (leftValueX + rightValueRight) * 0.5f;
+    const float innerGap = 2.f;
+    if (isLeftOutputActive(channel)) {
+      nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+      nvgText(vg, leftValueX, y,
+              formatVoltage(snapshot->leftOutputVoltages[channel]).c_str(),
+              nullptr);
+    }
+    if (isLeftChannelActive(channel)) {
       nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-      std::string right = formatVoltage(snapshot->rightVoltages[channel]);
-      nvgText(vg, rightValueRight, y, right.c_str(), nullptr);
+      nvgText(vg, centerX - innerGap, y,
+              formatVoltage(snapshot->leftVoltages[channel]).c_str(), nullptr);
+    }
+    if (isRightChannelActive(channel)) {
+      nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+      nvgText(vg, centerX + innerGap, y,
+              formatVoltage(snapshot->rightVoltages[channel]).c_str(), nullptr);
+    }
+    if (isRightOutputActive(channel)) {
+      nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+      nvgText(vg, rightValueRight, y,
+              formatVoltage(snapshot->rightOutputVoltages[channel]).c_str(),
+              nullptr);
     }
   }
 
@@ -358,6 +494,18 @@ struct TextDisplay : TransparentWidget {
                                  snapshot->polarTheta[channel], charW, style);
   }
 
+  void drawCompolyText(NVGcontext* vg, int fontHandle, int symbolFontHandle,
+                       float x, float y, int channel, float charW,
+                       int compolyRepresentation,
+                       int align = NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE) {
+    if (compolyRepresentation == COMPOLY_REP_RECT) {
+      drawCompolyRectText(vg, fontHandle, symbolFontHandle, x, y, channel,
+                          charW, align);
+    } else {
+      drawCompolyPolarText(vg, fontHandle, x, y, channel, charW, align);
+    }
+  }
+
   float compolyTextWidth(float charW, int compolyRepresentation) const {
     return charW * (compolyRepresentation == COMPOLY_REP_RECT ? 14.f : 15.f);
   }
@@ -369,6 +517,8 @@ struct TextDisplay : TransparentWidget {
                       bool stretchChannels) {
     if (!snapshot) return;
 
+    const int ioMode = options ? options->ioViewMode : IO_VIEW_INPUT;
+    const bool ioBoth = ioMode == IO_VIEW_BOTH;
     const int slots = stretchChannels ? activeSlotCount(compolyDisplay) : 16;
     const float slotW = box.size.x / std::max(1, slots);
     const float labelTopY = 12.f;
@@ -376,13 +526,19 @@ struct TextDisplay : TransparentWidget {
     const float barWidth =
         std::max(3.f, slotW * (stretchChannels ? 0.9f : 0.62f));
     const float edgeMargin = drawLabels ? 18.f : 0.f;
-    const float centerMargin = drawText ? 24.f : 6.f;
+    const float centerMargin =
+        drawText ? (ioBoth ? 56.f : 24.f) : 6.f;
     const float topBarTop = edgeMargin;
     const float topBarBottom = box.size.y * 0.5f - centerMargin * 0.5f;
     const float bottomBarTop = box.size.y * 0.5f + centerMargin * 0.5f;
     const float bottomBarBottom = box.size.y - edgeMargin;
     const float topBarHeight = std::max(2.f, topBarBottom - topBarTop);
     const float bottomBarHeight = std::max(2.f, bottomBarBottom - bottomBarTop);
+    const float topBarMidY = (topBarTop + topBarBottom) * 0.5f;
+    const float bottomBarMidY = (bottomBarTop + bottomBarBottom) * 0.5f;
+    const float halfTopBarHeight = std::max(2.f, topBarMidY - topBarTop);
+    const float halfBottomBarHeight =
+        std::max(2.f, bottomBarBottom - bottomBarMidY);
 
     if (drawViz) {
       for (int c = 0; c < slots && c < kMaxChannels; c++) {
@@ -392,22 +548,27 @@ struct TextDisplay : TransparentWidget {
             float first = 0.f;
             float second = 0.f;
             compolyBarParts(c, compolyRepresentation, first, second);
-            drawVerticalBar(vg, x - barWidth * 0.5f, topBarTop, barWidth,
-                            topBarHeight, first, true, barsMode);
-            drawVerticalBar(vg, x - barWidth * 0.5f, bottomBarTop, barWidth,
-                            bottomBarHeight, second, false, barsMode);
+            if (!ioBoth) {
+              drawVerticalBar(vg, x - barWidth * 0.5f, topBarTop, barWidth,
+                              topBarHeight, first, true, barsMode);
+              drawVerticalBar(vg, x - barWidth * 0.5f, bottomBarTop, barWidth,
+                              bottomBarHeight, second, false, barsMode);
+            } else {
+              drawVerticalBar(vg, x - barWidth * 0.5f, topBarTop, barWidth,
+                              halfTopBarHeight, first, true, barsMode);
+              drawVerticalBar(vg, x - barWidth * 0.5f, topBarMidY, barWidth,
+                              halfTopBarHeight, first, true, barsMode);
+              drawVerticalBar(vg, x - barWidth * 0.5f, bottomBarTop, barWidth,
+                              halfBottomBarHeight, second, false, barsMode);
+              drawVerticalBar(vg, x - barWidth * 0.5f, bottomBarMidY, barWidth,
+                              halfBottomBarHeight, second, false, barsMode);
+            }
           }
         } else {
-          if (isLeftChannelActive(c)) {
-            drawVerticalBar(vg, x - barWidth * 0.5f, topBarTop, barWidth,
-                            topBarHeight, snapshot->leftVoltages[c], true,
-                            barsMode);
-          }
-          if (isRightChannelActive(c)) {
-            drawVerticalBar(vg, x - barWidth * 0.5f, bottomBarTop, barWidth,
-                            bottomBarHeight, snapshot->rightVoltages[c], false,
-                            barsMode);
-          }
+          drawHorizontalPolyBars(vg, x - barWidth * 0.5f, barWidth, topBarTop,
+                                 topBarMidY, topBarBottom, bottomBarTop,
+                                 bottomBarMidY, bottomBarBottom, c, barsMode,
+                                 ioMode);
         }
       }
     }
@@ -416,9 +577,11 @@ struct TextDisplay : TransparentWidget {
       const float x = c * slotW + slotW * 0.5f;
       if (drawLabels) {
         if (!compolyDisplay) {
-          drawChannelLabel(vg, x, labelTopY, c, isLeftChannelActive(c),
+          const bool leftActive = isLeftSideActive(c, ioMode);
+          const bool rightActive = isRightSideActive(c, ioMode);
+          drawChannelLabel(vg, x, labelTopY, c, leftActive,
                            NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, fontHandle);
-          drawChannelLabel(vg, x, labelBottomY, c, isRightChannelActive(c),
+          drawChannelLabel(vg, x, labelBottomY, c, rightActive,
                            NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, fontHandle);
         } else {
           const int labelMode =
@@ -442,41 +605,105 @@ struct TextDisplay : TransparentWidget {
       nvgFontSize(vg, 12.f);
       nvgFillColor(vg, nvgRGB(0xC8, 0xEA, 0xE2));
       if (!compolyDisplay) {
-        if (isLeftChannelActive(c)) {
-          nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-          std::string left = formatVoltage(snapshot->leftVoltages[c]);
-          nvgText(vg, x, box.size.y * 0.5f - 10.f, left.c_str(), nullptr);
-        }
-        if (isRightChannelActive(c)) {
-          nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-          std::string right = formatVoltage(snapshot->rightVoltages[c]);
-          nvgText(vg, x, box.size.y * 0.5f + 10.f, right.c_str(), nullptr);
-        }
+        drawHorizontalPolyText(vg, x, c, ioMode);
       } else if (isCompolyChannelActive(c)) {
         float y = box.size.y * 0.5f;
         if (textMode == TEXT_LEFT) y = box.size.y * 0.5f - 10.f;
         if (textMode == TEXT_RIGHT) y = box.size.y * 0.5f + 10.f;
         if (textMode == TEXT_BOTH) {
-          if (isLeftChannelActive(c)) {
-            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            std::string left = formatVoltage(snapshot->leftVoltages[c]);
-            nvgText(vg, x, box.size.y * 0.5f - 18.f, left.c_str(), nullptr);
-          }
-          if (isRightChannelActive(c)) {
-            nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-            std::string right = formatVoltage(snapshot->rightVoltages[c]);
-            nvgText(vg, x, box.size.y * 0.5f + 18.f, right.c_str(), nullptr);
-          }
+          drawHorizontalPolyText(vg, x, c, ioMode);
         }
         const float textX =
             x - compolyTextWidth(charW, compolyRepresentation) * 0.5f;
-        if (compolyRepresentation == COMPOLY_REP_RECT) {
-          drawCompolyRectText(vg, fontHandle, symbolFontHandle, textX, y, c,
-                              charW);
-        } else {
-          drawCompolyPolarText(vg, fontHandle, textX, y, c, charW);
-        }
+        drawCompolyText(vg, fontHandle, symbolFontHandle, textX, y, c, charW,
+                        compolyRepresentation);
       }
+    }
+  }
+
+  void drawHorizontalPolyBars(NVGcontext* vg, float x, float barWidth,
+                              float topBarTop, float topBarMidY,
+                              float topBarBottom, float bottomBarTop,
+                              float bottomBarMidY, float bottomBarBottom,
+                              int channel, int barsMode, int ioMode) {
+    const float topHeight = std::max(2.f, topBarBottom - topBarTop);
+    const float bottomHeight = std::max(2.f, bottomBarBottom - bottomBarTop);
+    const float halfTopHeight = std::max(2.f, topBarMidY - topBarTop);
+    const float halfBottomHeight = std::max(2.f, bottomBarBottom - bottomBarMidY);
+
+    if (ioMode != IO_VIEW_BOTH) {
+      const bool useOutput = ioMode == IO_VIEW_OUTPUT;
+      if (useOutput ? isLeftOutputActive(channel) : isLeftChannelActive(channel)) {
+        const float v = useOutput ? snapshot->leftOutputVoltages[channel]
+                                  : snapshot->leftVoltages[channel];
+        drawVerticalBar(vg, x, topBarTop, barWidth, topHeight, v, true,
+                        barsMode);
+      }
+      if (useOutput ? isRightOutputActive(channel) : isRightChannelActive(channel)) {
+        const float v = useOutput ? snapshot->rightOutputVoltages[channel]
+                                  : snapshot->rightVoltages[channel];
+        drawVerticalBar(vg, x, bottomBarTop, barWidth, bottomHeight, v, false,
+                        barsMode);
+      }
+      return;
+    }
+
+    if (isLeftOutputActive(channel)) {
+      drawVerticalBar(vg, x, topBarTop, barWidth, halfTopHeight,
+                      snapshot->leftOutputVoltages[channel], true, barsMode);
+    }
+    if (isLeftChannelActive(channel)) {
+      drawVerticalBar(vg, x, topBarMidY, barWidth, halfTopHeight,
+                      snapshot->leftVoltages[channel], true, barsMode);
+    }
+    if (isRightChannelActive(channel)) {
+      drawVerticalBar(vg, x, bottomBarTop, barWidth, halfBottomHeight,
+                      snapshot->rightVoltages[channel], false, barsMode);
+    }
+    if (isRightOutputActive(channel)) {
+      drawVerticalBar(vg, x, bottomBarMidY, barWidth, halfBottomHeight,
+                      snapshot->rightOutputVoltages[channel], false, barsMode);
+    }
+  }
+
+  void drawHorizontalPolyText(NVGcontext* vg, float x, int channel, int ioMode) {
+    const float centerY = box.size.y * 0.5f;
+    nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    if (ioMode != IO_VIEW_BOTH) {
+      const bool useOutput = ioMode == IO_VIEW_OUTPUT;
+      const bool leftActive = useOutput ? isLeftOutputActive(channel)
+                                        : isLeftChannelActive(channel);
+      const bool rightActive = useOutput ? isRightOutputActive(channel)
+                                         : isRightChannelActive(channel);
+      if (leftActive) {
+        const float v = useOutput ? snapshot->leftOutputVoltages[channel]
+                                  : snapshot->leftVoltages[channel];
+        nvgText(vg, x, centerY - 10.f, formatVoltage(v).c_str(), nullptr);
+      }
+      if (rightActive) {
+        const float v = useOutput ? snapshot->rightOutputVoltages[channel]
+                                  : snapshot->rightVoltages[channel];
+        nvgText(vg, x, centerY + 10.f, formatVoltage(v).c_str(), nullptr);
+      }
+      return;
+    }
+    if (isLeftOutputActive(channel)) {
+      nvgText(vg, x, centerY - 24.f,
+              formatVoltage(snapshot->leftOutputVoltages[channel]).c_str(),
+              nullptr);
+    }
+    if (isLeftChannelActive(channel)) {
+      nvgText(vg, x, centerY - 10.f,
+              formatVoltage(snapshot->leftVoltages[channel]).c_str(), nullptr);
+    }
+    if (isRightChannelActive(channel)) {
+      nvgText(vg, x, centerY + 10.f,
+              formatVoltage(snapshot->rightVoltages[channel]).c_str(), nullptr);
+    }
+    if (isRightOutputActive(channel)) {
+      nvgText(vg, x, centerY + 24.f,
+              formatVoltage(snapshot->rightOutputVoltages[channel]).c_str(),
+              nullptr);
     }
   }
 
