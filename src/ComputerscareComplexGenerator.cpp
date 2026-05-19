@@ -470,14 +470,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     pentagon->setDrawParts(drawSides, drawFace);
     if (faceShade >= 0 && sideShade >= 0)
       pentagon->setBaseShades(faceShade, sideShade, sideStep);
-    pentagon->appendContextMenuHandler = [module](Menu* menu) {
-      menu->addChild(construct<ComputerscareComplexGeneratorViewMenu>(
-          &MenuItem::text, "View",
-          &ComputerscareComplexGeneratorViewMenu::generator, module));
-      menu->addChild(construct<ComputerscareComplexGeneratorControlsMenu>(
-          &MenuItem::text, "Controls",
-          &ComputerscareComplexGeneratorControlsMenu::generator, module));
-    };
+    pentagon->setContextMenuEnabled(false);
     addChild(pentagon);
   }
 
