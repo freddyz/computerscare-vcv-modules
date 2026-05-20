@@ -219,6 +219,210 @@ struct SlolyPitRoutingModeMenu : MenuItem {
   }
 };
 
+struct SlolyPitOutputLabels : Widget {
+  ComputerscareSlolyPit* module;
+  std::string fontPath =
+      asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
+
+  float rowSpacing = 19.f;
+  float rowHeight = 15.f;
+  float backgroundX = 6.f;
+  float backgroundWidth = 17.f;
+  float textRightX = 22.f;
+  float textBaselineY = 12.f;
+
+  SlolyPitOutputLabels(ComputerscareSlolyPit* module) {
+    this->module = module;
+    box.pos = Vec(14, 55);
+    box.size = Vec(24, rowSpacing * 15 + rowHeight);
+  }
+
+  void draw(const DrawArgs& args) override {
+    drawRouteBackgrounds(args);
+    drawLabels(args);
+  }
+
+  void drawRouteBackgrounds(const DrawArgs& args) {
+    if (!module) {
+      for (int channel = 0; channel < 16; channel++) {
+        drawRouteBlock(args, channel, channel + 1, channel);
+      }
+      return;
+    }
+
+    int inputChannels =
+        module->inputs[ComputerscareSlolyPit::POLY_INPUT].getChannels();
+    int visualChannels = inputChannels > 0 ? inputChannels : 16;
+
+    if (module->routingMode == ComputerscareSlolyPit::ROUTING_DYNAMIC_BELOW) {
+      drawDynamicBelow(args, visualChannels);
+      return;
+    }
+    if (module->routingMode == ComputerscareSlolyPit::ROUTING_DYNAMIC_ABOVE) {
+      drawDynamicAbove(args, visualChannels);
+      return;
+    }
+
+    for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
+      drawRoutingVector(args, module->routing[outputIndex], visualChannels,
+                        outputIndex);
+    }
+  }
+
+  void drawDynamicBelow(const DrawArgs& args, int visualChannels) {
+    int blockIndex = 0;
+    for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
+      if (!module->outputs[ComputerscareSlolyPit::CHANNEL_OUTPUT + outputIndex]
+               .isConnected()) {
+        continue;
+      }
+
+      int nextConnectedOutput = visualChannels;
+      for (int nextOutputIndex = outputIndex + 1; nextOutputIndex < 16;
+           nextOutputIndex++) {
+        if (module
+                ->outputs[ComputerscareSlolyPit::CHANNEL_OUTPUT +
+                          nextOutputIndex]
+                .isConnected()) {
+          nextConnectedOutput = std::min(nextOutputIndex, visualChannels);
+          break;
+        }
+      }
+      drawRouteBlock(args, outputIndex, nextConnectedOutput, blockIndex);
+      blockIndex++;
+    }
+  }
+
+  void drawDynamicAbove(const DrawArgs& args, int visualChannels) {
+    int blockIndex = 0;
+    for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
+      if (!module->outputs[ComputerscareSlolyPit::CHANNEL_OUTPUT + outputIndex]
+               .isConnected()) {
+        continue;
+      }
+
+      int previousConnectedOutput = -1;
+      for (int previousOutputIndex = outputIndex - 1; previousOutputIndex >= 0;
+           previousOutputIndex--) {
+        if (module
+                ->outputs[ComputerscareSlolyPit::CHANNEL_OUTPUT +
+                          previousOutputIndex]
+                .isConnected()) {
+          previousConnectedOutput = previousOutputIndex;
+          break;
+        }
+      }
+      drawRouteBlock(args, previousConnectedOutput + 1, outputIndex + 1,
+                     blockIndex);
+      blockIndex++;
+    }
+  }
+
+  void drawRoutingVector(const DrawArgs& args,
+                         const std::vector<int>& inputRoute, int visualChannels,
+                         int blockIndex) {
+    int blockStart = -1;
+    int previousChannel = -2;
+
+    for (int inputChannel : inputRoute) {
+      if (inputChannel < 0 || inputChannel >= visualChannels) {
+        continue;
+      }
+
+      if (blockStart < 0) {
+        blockStart = inputChannel;
+      } else if (inputChannel != previousChannel + 1) {
+        drawRouteBlock(args, blockStart, previousChannel + 1, blockIndex);
+        blockIndex++;
+        blockStart = inputChannel;
+      }
+      previousChannel = inputChannel;
+    }
+
+    if (blockStart >= 0) {
+      drawRouteBlock(args, blockStart, previousChannel + 1, blockIndex);
+    }
+  }
+
+  void drawRouteBlock(const DrawArgs& args, int startChannel, int endChannel,
+                      int blockIndex) {
+    startChannel = clamp(startChannel, 0, 16);
+    endChannel = clamp(endChannel, startChannel, 16);
+    if (endChannel <= startChannel) {
+      return;
+    }
+
+    bool useLightBase = blockIndex % 2 == 0;
+    int baseRed = useLightBase ? 0x24 : 0x24;
+    int baseGreen = useLightBase ? 0xc9 : 0x86;
+    int baseBlue = useLightBase ? 0xa6 : 0x73;
+    float randomDarkness =
+        (blockNoise(startChannel, endChannel, 4) + 1.f) * 12.f;
+    int red = clamp((int)(baseRed - randomDarkness), 0, 255);
+    int green = clamp((int)(baseGreen - randomDarkness), 0, 255);
+    int blue = clamp((int)(baseBlue - randomDarkness), 0, 255);
+
+    float x = backgroundX;
+    float y = startChannel * rowSpacing + 1.f;
+    float width = backgroundWidth;
+    float height = (endChannel - startChannel - 1) * rowSpacing + rowHeight;
+    float wiggle = 2.0f;
+    Vec topLeft = Vec(x + blockWiggle(startChannel, endChannel, 0) * wiggle,
+                      y + blockWiggle(startChannel, endChannel, 1) * wiggle);
+    Vec topRight =
+        Vec(x + width + blockWiggle(startChannel, endChannel, 2) * wiggle,
+            y + blockWiggle(startChannel, endChannel, 3) * wiggle);
+    Vec bottomRight =
+        Vec(x + width + blockWiggle(startChannel, endChannel, 5) * wiggle,
+            y + height + blockWiggle(startChannel, endChannel, 6) * wiggle);
+    Vec bottomLeft =
+        Vec(x + blockWiggle(startChannel, endChannel, 7) * wiggle,
+            y + height + blockWiggle(startChannel, endChannel, 8) * wiggle);
+
+    nvgBeginPath(args.vg);
+    nvgMoveTo(args.vg, topLeft.x, topLeft.y);
+    nvgLineTo(args.vg, topRight.x, topRight.y);
+    nvgLineTo(args.vg, bottomRight.x, bottomRight.y);
+    nvgLineTo(args.vg, bottomLeft.x, bottomLeft.y);
+    nvgClosePath(args.vg);
+    nvgFillColor(args.vg, nvgRGBA(red, green, blue, 0x9c));
+    nvgFill(args.vg);
+  }
+
+  float blockNoise(int startChannel, int endChannel, int salt) {
+    uint32_t seed = (startChannel + 1) * 73856093u ^
+                    (endChannel + 1) * 19349663u ^ (salt + 1) * 83492791u;
+    seed ^= seed >> 13;
+    seed *= 1274126177u;
+    seed ^= seed >> 16;
+    return (seed & 0xffff) / 32767.5f - 1.f;
+  }
+
+  float blockWiggle(int startChannel, int endChannel, int salt) {
+    return blockNoise(startChannel, endChannel, salt);
+  }
+
+  void drawLabels(const DrawArgs& args) {
+    std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
+    if (!font) {
+      return;
+    }
+
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, 16);
+    nvgTextLetterSpacing(args.vg, 0.f);
+    nvgTextLineHeight(args.vg, 0.7);
+    nvgTextAlign(args.vg, NVG_ALIGN_RIGHT);
+    nvgFillColor(args.vg, nvgRGB(0x10, 0x10, 0x00));
+
+    for (int channel = 0; channel < 16; channel++) {
+      std::string label = std::to_string(channel + 1);
+      nvgText(args.vg, textRightX, textBaselineY + channel * rowSpacing,
+              label.c_str(), NULL);
+    }
+  }
+};
+
 struct ComputerscareSlolyPitWidget : ModuleWidget {
   ComputerscareSlolyPitWidget(ComputerscareSlolyPit* module) {
     setModule(module);
@@ -234,24 +438,13 @@ struct ComputerscareSlolyPitWidget : ModuleWidget {
     addInput(createInput<InPort>(Vec(4, 32), module,
                                  ComputerscareSlolyPit::POLY_INPUT));
 
+    addChild(new SlolyPitOutputLabels(module));
+
     for (int i = 0; i < 16; i++) {
-      addOutputLabel(i);
       addOutput(
           createOutput<TinyJack>(Vec(39, 53 + i * 19), module,
                                  ComputerscareSlolyPit::CHANNEL_OUTPUT + i));
     }
-  }
-
-  void addOutputLabel(int index) {
-    SmallLetterDisplay* label = new SmallLetterDisplay();
-    label->box.pos = Vec(20, 55 + index * 19);
-    label->box.size = Vec(16, 16);
-    label->value = std::to_string(index + 1);
-    label->fontSize = 16;
-    label->letterSpacing = 0.f;
-    label->textAlign = NVG_ALIGN_RIGHT;
-    label->breakRowWidth = 10.f;
-    addChild(label);
   }
 
   void appendContextMenu(Menu* menu) override {
