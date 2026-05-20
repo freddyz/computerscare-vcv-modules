@@ -226,7 +226,7 @@ struct SlolyPitOutputLabels : Widget {
 
   float rowSpacing = 19.f;
   float rowHeight = 15.f;
-  float backgroundX = 6.f;
+  float backgroundX = 9.f;
   float backgroundWidth = 17.f;
   float textRightX = 22.f;
   float textBaselineY = 12.f;
