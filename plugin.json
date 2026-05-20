@@ -137,6 +137,12 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/moly-patrix.md"
     },
     {
+      "slug": "computerscare-sloly-pit",
+      "name": "Sloly Pit",
+      "description": "Split a polyphonic input into 16 monophonic outputs",
+      "tags": ["Polyphonic", "Utility"]
+    },
+    {
       "slug": "computerscare-horse-a-doodle-doo",
       "name": "Horse A Doodle Doo",
       "description": "Melody, rhythm generator.  Generate complex repeatable sequences with the turn of a single knob.  Fully Polyphonic.",
