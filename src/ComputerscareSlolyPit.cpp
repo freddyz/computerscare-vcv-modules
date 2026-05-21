@@ -37,6 +37,7 @@ struct ComputerscareSlolyPit : Module {
   std::array<std::vector<int>, 16> routing;
   int routingMode = ROUTING_DYNAMIC_BELOW;
   int editingOutputIndex = -1;
+  bool customRoutingInitialized = false;
 
   enum ParamIds { NUM_PARAMS };
   enum InputIds { POLY_INPUT, NUM_INPUTS };
@@ -78,6 +79,8 @@ struct ComputerscareSlolyPit : Module {
     json_object_set_new(rootJ, "routingMode", json_integer(routingMode));
     json_object_set_new(rootJ, "editingOutputIndex",
                         json_integer(editingOutputIndex));
+    json_object_set_new(rootJ, "customRoutingInitialized",
+                        json_boolean(customRoutingInitialized));
     return rootJ;
   }
 
@@ -106,6 +109,14 @@ struct ComputerscareSlolyPit : Module {
       return;
     }
 
+    json_t* customRoutingInitializedJ =
+        json_object_get(rootJ, "customRoutingInitialized");
+    if (customRoutingInitializedJ) {
+      customRoutingInitialized = json_boolean_value(customRoutingInitializedJ);
+    } else {
+      customRoutingInitialized = true;
+    }
+
     for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
       json_t* outputRoutingJ = json_array_get(routingJ, outputIndex);
       if (!json_is_array(outputRoutingJ)) {
@@ -128,7 +139,16 @@ struct ComputerscareSlolyPit : Module {
     }
   }
 
-  void setRoutingMode(int newRoutingMode) { routingMode = newRoutingMode; }
+  void setRoutingMode(int newRoutingMode) {
+    if (newRoutingMode == ROUTING_CUSTOM && !customRoutingInitialized) {
+      int inputChannels = inputs[POLY_INPUT].getChannels();
+      int routingChannels = inputChannels > 0 ? inputChannels : 16;
+      routing = getRoutingForMode(routingMode, routingChannels);
+      customRoutingInitialized = true;
+    }
+
+    routingMode = newRoutingMode;
+  }
 
   static int routeCharToInputChannel(char routeChar) {
     if (routeChar >= '1' && routeChar <= '9') {
@@ -397,6 +417,7 @@ struct SlolyPitRouteInputItem : MenuItem {
   int outputIndex;
   int routeIndex;
   int inputChannel;
+  int addCount = 1;
   bool addRoute;
   bool clearFromRoute;
 
@@ -418,7 +439,9 @@ struct SlolyPitRouteInputItem : MenuItem {
     }
 
     if (addRoute) {
-      outputRouting.push_back(inputChannel);
+      for (int i = 0; i < addCount && (int)outputRouting.size() < 16; i++) {
+        outputRouting.push_back(inputChannel);
+      }
       return;
     }
 
@@ -550,6 +573,8 @@ struct SlolyPitOutputLabels : Widget {
   float textRightX = 34.f;
   float textBaselineY = 12.f;
   int hoveredOutputIndex = -1;
+  int hoveredRouteIndex = -1;
+  ui::Tooltip* hoverTooltip = NULL;
 
   SlolyPitOutputLabels(ComputerscareSlolyPit* module) {
     this->module = module;
@@ -557,34 +582,160 @@ struct SlolyPitOutputLabels : Widget {
     box.size = Vec(36, rowSpacing * 15 + rowHeight);
   }
 
+  ~SlolyPitOutputLabels() { destroyHoverTooltip(); }
+
   void draw(const DrawArgs& args) override {
     drawRouteBackgrounds(args);
     drawEditSelection(args);
     drawMainLabelHover(args);
     drawEditRouteBackgrounds(args);
+    drawEditRouteHover(args);
     drawEditRouteLabels(args);
     drawLabels(args);
   }
 
   void onHover(const event::Hover& e) override {
-    hoveredOutputIndex = -1;
-    if (module &&
-        module->routingMode == ComputerscareSlolyPit::ROUTING_CUSTOM &&
-        isInMainColumn(e.pos)) {
-      int row = (int)std::floor(e.pos.y / rowSpacing);
-      if (row >= 0 && row < 16) {
-        hoveredOutputIndex = row;
-      }
-    }
+    hoveredRouteIndex = getHoveredRouteIndex(e.pos);
+    hoveredOutputIndex =
+        hoveredRouteIndex < 0 ? getHoveredOutputIndex(e.pos) : -1;
     if (hoveredOutputIndex >= 0) {
+      createHoverTooltip();
+      updateHoverTooltip();
       e.consume(this);
+    } else if (hoveredRouteIndex >= 0) {
+      destroyHoverTooltip();
+      e.consume(this);
+    } else {
+      destroyHoverTooltip();
     }
     Widget::onHover(e);
   }
 
+  int getHoveredOutputIndex(Vec pos) {
+    if (!module || !isInMainColumn(pos)) {
+      return -1;
+    }
+
+    int row = (int)std::floor(pos.y / rowSpacing);
+    if (row < 0 || row >= 16) {
+      return -1;
+    }
+
+    if (module->routingMode == ComputerscareSlolyPit::ROUTING_CUSTOM) {
+      return row;
+    }
+
+    int visualChannels = getVisualInputChannels();
+    std::array<std::vector<int>, 16> currentRouting =
+        module->getRoutingForMode(module->routingMode, visualChannels);
+    for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
+      if (routeContainsVisualChannel(currentRouting[outputIndex], row,
+                                     visualChannels)) {
+        return outputIndex;
+      }
+    }
+
+    return -1;
+  }
+
+  bool routeContainsVisualChannel(const std::vector<int>& outputRoute,
+                                  int visualChannel, int visualChannels) {
+    for (int inputChannel : outputRoute) {
+      if (inputChannel >= 0 && inputChannel < visualChannels &&
+          inputChannel == visualChannel) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   void onLeave(const event::Leave& e) override {
     hoveredOutputIndex = -1;
+    hoveredRouteIndex = -1;
+    destroyHoverTooltip();
     Widget::onLeave(e);
+  }
+
+  int getHoveredRouteIndex(Vec pos) {
+    if (!module ||
+        module->routingMode != ComputerscareSlolyPit::ROUTING_CUSTOM ||
+        module->editingOutputIndex < 0 || module->editingOutputIndex >= 16 ||
+        !isInRouteColumn(pos)) {
+      return -1;
+    }
+
+    int row = (int)std::floor(pos.y / rowSpacing);
+    if (row < 0 || row >= 16) {
+      return -1;
+    }
+
+    const std::vector<int>& inputRoute =
+        module->routing[module->editingOutputIndex];
+    if (row < (int)inputRoute.size()) {
+      return row;
+    }
+    return inputRoute.size() < 16 ? row : -1;
+  }
+
+  void createHoverTooltip() {
+    if (!settings::tooltips || hoverTooltip) {
+      return;
+    }
+
+    hoverTooltip = new ui::Tooltip;
+    APP->scene->addChild(hoverTooltip);
+  }
+
+  void updateHoverTooltip() {
+    if (!hoverTooltip || hoveredOutputIndex < 0 || hoveredOutputIndex >= 16) {
+      return;
+    }
+
+    hoverTooltip->text = getHoverTooltipText(hoveredOutputIndex);
+  }
+
+  void destroyHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    APP->scene->removeChild(hoverTooltip);
+    delete hoverTooltip;
+    hoverTooltip = NULL;
+  }
+
+  std::string getHoverTooltipText(int outputIndex) {
+    std::string text = slolyPitOrdinal(outputIndex + 1) + " Output";
+    std::vector<int> outputRoute = getDisplayedRoute(outputIndex);
+    text += "\n";
+    text += routeToTooltipText(outputRoute);
+    return text;
+  }
+
+  std::vector<int> getDisplayedRoute(int outputIndex) {
+    if (!module || outputIndex < 0 || outputIndex >= 16) {
+      return {};
+    }
+
+    int visualChannels = getVisualInputChannels();
+    std::array<std::vector<int>, 16> currentRouting =
+        module->getRoutingForMode(module->routingMode, visualChannels);
+    return currentRouting[outputIndex];
+  }
+
+  std::string routeToTooltipText(const std::vector<int>& outputRoute) {
+    if (outputRoute.empty()) {
+      return "(none)";
+    }
+
+    std::string text;
+    for (size_t routeIndex = 0; routeIndex < outputRoute.size(); routeIndex++) {
+      if (routeIndex > 0) {
+        text += " ";
+      }
+      text += std::to_string(outputRoute[routeIndex] + 1);
+    }
+    return text;
   }
 
   void onButton(const event::Button& e) override {
@@ -626,7 +777,7 @@ struct SlolyPitOutputLabels : Widget {
         e.consume(this);
         return;
       }
-      if ((int)inputRoute.size() < 16 && row == addRouteIndex) {
+      if ((int)inputRoute.size() < 16 && row >= addRouteIndex) {
         openRouteInputMenu(row, true);
         e.consume(this);
         return;
@@ -712,6 +863,7 @@ struct SlolyPitOutputLabels : Widget {
       item->outputIndex = outputIndex;
       item->routeIndex = routeIndex;
       item->inputChannel = -1;
+      item->addCount = 1;
       item->addRoute = false;
       item->clearFromRoute = true;
       menu->addChild(item);
@@ -743,6 +895,9 @@ struct SlolyPitOutputLabels : Widget {
       item->outputIndex = outputIndex;
       item->routeIndex = routeIndex;
       item->inputChannel = inputChannel;
+      item->addCount =
+          addRoute ? routeIndex - (int)module->routing[outputIndex].size() + 1
+                   : 1;
       item->addRoute = addRoute;
       item->clearFromRoute = false;
       menu->addChild(item);
@@ -813,14 +968,45 @@ struct SlolyPitOutputLabels : Widget {
   }
 
   void drawMainLabelHover(const DrawArgs& args) {
-    if (!module ||
-        module->routingMode != ComputerscareSlolyPit::ROUTING_CUSTOM ||
-        hoveredOutputIndex < 0 || hoveredOutputIndex >= 16) {
+    if (!module || hoveredOutputIndex < 0 || hoveredOutputIndex >= 16) {
       return;
     }
 
-    drawRouteOutline(args, hoveredOutputIndex, backgroundX, backgroundWidth,
-                     nvgRGB(0x00, 0x00, 0x00));
+    if (module->routingMode == ComputerscareSlolyPit::ROUTING_CUSTOM) {
+      drawRouteOutline(args, hoveredOutputIndex, hoveredOutputIndex + 1,
+                       backgroundX, backgroundWidth, nvgRGB(0x00, 0x00, 0x00));
+      return;
+    }
+
+    drawRouteVectorOutline(args, getDisplayedRoute(hoveredOutputIndex),
+                           getVisualInputChannels());
+  }
+
+  void drawRouteVectorOutline(const DrawArgs& args,
+                              const std::vector<int>& inputRoute,
+                              int visualChannels) {
+    int blockStart = -1;
+    int previousChannel = -2;
+
+    for (int inputChannel : inputRoute) {
+      if (inputChannel < 0 || inputChannel >= visualChannels) {
+        continue;
+      }
+
+      if (blockStart < 0) {
+        blockStart = inputChannel;
+      } else if (inputChannel != previousChannel + 1) {
+        drawRouteOutline(args, blockStart, previousChannel + 1, backgroundX,
+                         backgroundWidth, nvgRGB(0x00, 0x00, 0x00));
+        blockStart = inputChannel;
+      }
+      previousChannel = inputChannel;
+    }
+
+    if (blockStart >= 0) {
+      drawRouteOutline(args, blockStart, previousChannel + 1, backgroundX,
+                       backgroundWidth, nvgRGB(0x00, 0x00, 0x00));
+    }
   }
 
   void drawEditRouteBackgrounds(const DrawArgs& args) {
@@ -846,6 +1032,32 @@ struct SlolyPitOutputLabels : Widget {
       drawDottedRouteBlock(args, addRouteIndex, routeBackgroundX,
                            routeBackgroundWidth);
     }
+  }
+
+  void drawEditRouteHover(const DrawArgs& args) {
+    if (!module ||
+        module->routingMode != ComputerscareSlolyPit::ROUTING_CUSTOM ||
+        module->editingOutputIndex < 0 || module->editingOutputIndex >= 16 ||
+        hoveredRouteIndex < 0 || hoveredRouteIndex >= 16) {
+      return;
+    }
+
+    const std::vector<int>& inputRoute =
+        module->routing[module->editingOutputIndex];
+    if (hoveredRouteIndex < (int)inputRoute.size()) {
+      drawRouteOutline(args, hoveredRouteIndex, routeBackgroundX,
+                       routeBackgroundWidth, nvgRGB(0x00, 0x00, 0x00));
+      return;
+    }
+
+    int addRouteIndex = std::min((int)inputRoute.size(), 15);
+    for (int routeIndex = addRouteIndex; routeIndex <= hoveredRouteIndex;
+         routeIndex++) {
+      drawDottedRouteBlock(args, routeIndex, routeBackgroundX,
+                           routeBackgroundWidth);
+    }
+    drawRoutePlus(args, hoveredRouteIndex, routeBackgroundX,
+                  routeBackgroundWidth);
   }
 
   void drawDynamicBelow(const DrawArgs& args, int visualChannels) {
@@ -1005,22 +1217,48 @@ struct SlolyPitOutputLabels : Widget {
     }
   }
 
+  void drawRoutePlus(const DrawArgs& args, int channel, float x, float width) {
+    float centerX = x + width * 0.5f;
+    float centerY = channel * rowSpacing + 1.f + rowHeight * 0.5f;
+    float radius = 4.f;
+
+    nvgBeginPath(args.vg);
+    nvgMoveTo(args.vg, centerX - radius, centerY);
+    nvgLineTo(args.vg, centerX + radius, centerY);
+    nvgMoveTo(args.vg, centerX, centerY - radius);
+    nvgLineTo(args.vg, centerX, centerY + radius);
+    nvgStrokeWidth(args.vg, 1.6f);
+    nvgStrokeColor(args.vg, nvgRGB(0xe4, 0xc4, 0x21));
+    nvgStroke(args.vg);
+  }
+
   void drawRouteOutline(const DrawArgs& args, int channel, float x, float width,
                         NVGcolor color) {
-    float y = channel * rowSpacing + 1.f;
-    float height = rowHeight;
+    drawRouteOutline(args, channel, channel + 1, x, width, color);
+  }
+
+  void drawRouteOutline(const DrawArgs& args, int startChannel, int endChannel,
+                        float x, float width, NVGcolor color) {
+    startChannel = clamp(startChannel, 0, 16);
+    endChannel = clamp(endChannel, startChannel, 16);
+    if (endChannel <= startChannel) {
+      return;
+    }
+
+    float y = startChannel * rowSpacing + 1.f;
+    float height = (endChannel - startChannel - 1) * rowSpacing + rowHeight;
     float wiggle = 2.0f;
-    Vec topLeft = Vec(x + blockWiggle(channel, channel + 1, 0) * wiggle,
-                      y + blockWiggle(channel, channel + 1, 1) * wiggle);
+    Vec topLeft = Vec(x + blockWiggle(startChannel, endChannel, 0) * wiggle,
+                      y + blockWiggle(startChannel, endChannel, 1) * wiggle);
     Vec topRight =
-        Vec(x + width + blockWiggle(channel, channel + 1, 2) * wiggle,
-            y + blockWiggle(channel, channel + 1, 3) * wiggle);
+        Vec(x + width + blockWiggle(startChannel, endChannel, 2) * wiggle,
+            y + blockWiggle(startChannel, endChannel, 3) * wiggle);
     Vec bottomRight =
-        Vec(x + width + blockWiggle(channel, channel + 1, 5) * wiggle,
-            y + height + blockWiggle(channel, channel + 1, 6) * wiggle);
+        Vec(x + width + blockWiggle(startChannel, endChannel, 5) * wiggle,
+            y + height + blockWiggle(startChannel, endChannel, 6) * wiggle);
     Vec bottomLeft =
-        Vec(x + blockWiggle(channel, channel + 1, 7) * wiggle,
-            y + height + blockWiggle(channel, channel + 1, 8) * wiggle);
+        Vec(x + blockWiggle(startChannel, endChannel, 7) * wiggle,
+            y + height + blockWiggle(startChannel, endChannel, 8) * wiggle);
 
     nvgBeginPath(args.vg);
     nvgMoveTo(args.vg, topLeft.x, topLeft.y);
