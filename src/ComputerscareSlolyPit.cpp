@@ -1,4 +1,5 @@
 #include <array>
+#include <cctype>
 #include <vector>
 
 #include "Computerscare.hpp"
@@ -15,7 +16,7 @@ struct ComputerscareSlolyPit : Module {
   };
 
   std::array<std::vector<int>, 16> routing;
-  int routingMode = ROUTING_SINGLE;
+  int routingMode = ROUTING_DYNAMIC_BELOW;
   int editingOutputIndex = -1;
 
   enum ParamIds { NUM_PARAMS };
@@ -110,6 +111,72 @@ struct ComputerscareSlolyPit : Module {
 
   void setRoutingMode(int newRoutingMode) { routingMode = newRoutingMode; }
 
+  static int routeCharToInputChannel(char routeChar) {
+    if (routeChar >= '1' && routeChar <= '9') {
+      return routeChar - '1';
+    }
+    if (routeChar == '0') {
+      return 9;
+    }
+
+    routeChar = std::tolower((unsigned char)routeChar);
+    if (routeChar >= 'a' && routeChar <= 'f') {
+      return 10 + routeChar - 'a';
+    }
+
+    return -1;
+  }
+
+  static char inputChannelToRouteChar(int inputChannel) {
+    if (inputChannel >= 0 && inputChannel < 9) {
+      return '1' + inputChannel;
+    }
+    if (inputChannel == 9) {
+      return '0';
+    }
+    if (inputChannel >= 10 && inputChannel < 16) {
+      return 'a' + inputChannel - 10;
+    }
+    return '?';
+  }
+
+  std::string routingToText(int outputIndex) {
+    if (outputIndex < 0 || outputIndex >= 16) {
+      return "";
+    }
+
+    std::string text;
+    for (int inputChannel : routing[outputIndex]) {
+      if ((int)text.size() >= 16) {
+        break;
+      }
+
+      char routeChar = inputChannelToRouteChar(inputChannel);
+      if (routeChar != '?') {
+        text.push_back(routeChar);
+      }
+    }
+    return text;
+  }
+
+  void setRoutingFromText(int outputIndex, const std::string& text) {
+    if (outputIndex < 0 || outputIndex >= 16) {
+      return;
+    }
+
+    routing[outputIndex].clear();
+    for (char routeChar : text) {
+      if ((int)routing[outputIndex].size() >= 16) {
+        break;
+      }
+
+      int inputChannel = routeCharToInputChannel(routeChar);
+      if (inputChannel >= 0 && inputChannel < 16) {
+        routing[outputIndex].push_back(inputChannel);
+      }
+    }
+  }
+
   std::array<std::vector<int>, 16> getRoutingForMode(int mode,
                                                      int inputChannels) {
     if (mode == ROUTING_DYNAMIC_BELOW) {
@@ -189,8 +256,9 @@ struct ComputerscareSlolyPit : Module {
 
   void process(const ProcessArgs& args) override {
     int inputChannels = inputs[POLY_INPUT].getChannels();
+    int routingChannels = inputChannels > 0 ? inputChannels : 16;
     std::array<std::vector<int>, 16> currentRouting =
-        getRoutingForMode(routingMode, inputChannels);
+        getRoutingForMode(routingMode, routingChannels);
 
     for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
       setOutputFromRouting(outputIndex, currentRouting[outputIndex],
@@ -341,6 +409,53 @@ struct SlolyPitRouteInputItem : MenuItem {
   }
 };
 
+struct SlolyPitRouteTextField : ComputerscareTextField {
+  ComputerscareSlolyPit* module;
+  int outputIndex;
+
+  void onSelectText(const event::SelectText& e) override {
+    ComputerscareTextField::onSelectText(e);
+    sanitizeAndApply();
+  }
+
+  void onSelectKey(const event::SelectKey& e) override {
+    ComputerscareTextField::onSelectKey(e);
+    sanitizeAndApply();
+  }
+
+  void onAction(const event::Action& e) override {
+    sanitizeAndApply();
+    ui::MenuOverlay* overlay = getAncestorOfType<ui::MenuOverlay>();
+    if (overlay) {
+      overlay->requestDelete();
+    }
+  }
+
+  void sanitizeAndApply() {
+    std::string sanitized;
+    for (char routeChar : text) {
+      if ((int)sanitized.size() >= 16) {
+        break;
+      }
+
+      int inputChannel =
+          ComputerscareSlolyPit::routeCharToInputChannel(routeChar);
+      if (inputChannel >= 0) {
+        sanitized.push_back(std::tolower((unsigned char)routeChar));
+      }
+    }
+
+    if (sanitized != text) {
+      text = sanitized;
+      cursor = selection = std::min(cursor, (int)text.size());
+    }
+
+    if (module) {
+      module->setRoutingFromText(outputIndex, text);
+    }
+  }
+};
+
 struct SlolyPitOutputLabels : Widget {
   ComputerscareSlolyPit* module;
   std::string fontPath =
@@ -355,6 +470,7 @@ struct SlolyPitOutputLabels : Widget {
   float routeTextRightX = 13.f;
   float textRightX = 34.f;
   float textBaselineY = 12.f;
+  int hoveredOutputIndex = -1;
 
   SlolyPitOutputLabels(ComputerscareSlolyPit* module) {
     this->module = module;
@@ -365,21 +481,58 @@ struct SlolyPitOutputLabels : Widget {
   void draw(const DrawArgs& args) override {
     drawRouteBackgrounds(args);
     drawEditSelection(args);
+    drawMainLabelHover(args);
     drawEditRouteBackgrounds(args);
     drawEditRouteLabels(args);
     drawLabels(args);
   }
 
+  void onHover(const event::Hover& e) override {
+    hoveredOutputIndex = -1;
+    if (module &&
+        module->routingMode == ComputerscareSlolyPit::ROUTING_CUSTOM &&
+        isInMainColumn(e.pos)) {
+      int row = (int)std::floor(e.pos.y / rowSpacing);
+      if (row >= 0 && row < 16) {
+        hoveredOutputIndex = row;
+      }
+    }
+    if (hoveredOutputIndex >= 0) {
+      e.consume(this);
+    }
+    Widget::onHover(e);
+  }
+
+  void onLeave(const event::Leave& e) override {
+    hoveredOutputIndex = -1;
+    Widget::onLeave(e);
+  }
+
   void onButton(const event::Button& e) override {
     if (!module ||
         module->routingMode != ComputerscareSlolyPit::ROUTING_CUSTOM ||
-        e.button != GLFW_MOUSE_BUTTON_LEFT || e.action != GLFW_PRESS) {
+        (e.button != GLFW_MOUSE_BUTTON_LEFT &&
+         e.button != GLFW_MOUSE_BUTTON_RIGHT) ||
+        e.action != GLFW_PRESS) {
       Widget::onButton(e);
       return;
     }
 
     int row = (int)std::floor(e.pos.y / rowSpacing);
     if (row < 0 || row >= 16) {
+      Widget::onButton(e);
+      return;
+    }
+
+    if (e.button == GLFW_MOUSE_BUTTON_RIGHT && e.action == GLFW_PRESS &&
+        isInMainColumn(e.pos)) {
+      module->editingOutputIndex = row;
+      openRoutingTextMenu(row);
+      e.consume(this);
+      return;
+    }
+
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
       Widget::onButton(e);
       return;
     }
@@ -408,6 +561,36 @@ struct SlolyPitOutputLabels : Widget {
   bool isInRouteColumn(Vec pos) {
     return pos.x >= routeBackgroundX - 4.f &&
            pos.x <= routeBackgroundX + routeBackgroundWidth + 4.f;
+  }
+
+  bool isInMainColumn(Vec pos) {
+    return pos.x >= backgroundX - 4.f &&
+           pos.x <= backgroundX + backgroundWidth + 4.f;
+  }
+
+  void openRoutingTextMenu(int outputIndex) {
+    Menu* menu = createMenu();
+    menu->addChild(createMenuLabel("Output " + std::to_string(outputIndex + 1) +
+                                   " routing"));
+
+    SlolyPitRouteTextField* textField = new SlolyPitRouteTextField();
+    textField->module = module;
+    textField->outputIndex = outputIndex;
+    textField->box.size = Vec(180.f, 28.f);
+    textField->multiline = false;
+    textField->dimWithRoom = true;
+    textField->fontSize = 20;
+    textField->textOffset = Vec(4.f, 3.f);
+    textField->color = nvgRGB(0xC0, 0xE7, 0xDE);
+    textField->text = module->routingToText(outputIndex);
+    textField->cursor = textField->selection = textField->text.size();
+    menu->addChild(textField);
+
+    menu->addChild(createMenuLabel("1-9: ch 1-9"));
+    menu->addChild(createMenuLabel("  0: ch10"));
+    menu->addChild(createMenuLabel("a-f: ch11-16"));
+    APP->event->setSelectedWidget(textField);
+    textField->selectAll();
   }
 
   void openRouteInputMenu(int routeIndex, bool addRoute) {
@@ -465,15 +648,11 @@ struct SlolyPitOutputLabels : Widget {
 
   void drawRouteBackgrounds(const DrawArgs& args) {
     if (!module) {
-      for (int channel = 0; channel < 16; channel++) {
-        drawRouteBlock(args, channel, channel + 1, channel);
-      }
+      drawBrowserPreview(args);
       return;
     }
 
-    int inputChannels =
-        module->inputs[ComputerscareSlolyPit::POLY_INPUT].getChannels();
-    int visualChannels = inputChannels;
+    int visualChannels = getVisualInputChannels();
 
     if (module->routingMode == ComputerscareSlolyPit::ROUTING_CUSTOM) {
       drawCustomRoutingPresence(args);
@@ -481,10 +660,31 @@ struct SlolyPitOutputLabels : Widget {
     }
 
     std::array<std::vector<int>, 16> currentRouting =
-        module->getRoutingForMode(module->routingMode, inputChannels);
+        module->getRoutingForMode(module->routingMode, visualChannels);
     for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
       drawRoutingVector(args, currentRouting[outputIndex], visualChannels,
                         outputIndex);
+    }
+  }
+
+  int getVisualInputChannels() {
+    if (!module) {
+      return 16;
+    }
+
+    int inputChannels =
+        module->inputs[ComputerscareSlolyPit::POLY_INPUT].getChannels();
+    return inputChannels > 0 ? inputChannels : 16;
+  }
+
+  void drawBrowserPreview(const DrawArgs& args) {
+    const int fakeOutputs[] = {0, 2, 7, 9, 14};
+    int blockIndex = 0;
+    for (int i = 0; i < 5; i++) {
+      int outputIndex = fakeOutputs[i];
+      int nextOutputIndex = i < 4 ? fakeOutputs[i + 1] : 16;
+      drawRouteBlock(args, outputIndex, nextOutputIndex, blockIndex);
+      blockIndex++;
     }
   }
 
@@ -509,6 +709,17 @@ struct SlolyPitOutputLabels : Widget {
                    module->editingOutputIndex + 1, 0, true);
   }
 
+  void drawMainLabelHover(const DrawArgs& args) {
+    if (!module ||
+        module->routingMode != ComputerscareSlolyPit::ROUTING_CUSTOM ||
+        hoveredOutputIndex < 0 || hoveredOutputIndex >= 16) {
+      return;
+    }
+
+    drawRouteOutline(args, hoveredOutputIndex, backgroundX, backgroundWidth,
+                     nvgRGB(0x00, 0x00, 0x00));
+  }
+
   void drawEditRouteBackgrounds(const DrawArgs& args) {
     if (!module ||
         module->routingMode != ComputerscareSlolyPit::ROUTING_CUSTOM ||
@@ -518,8 +729,7 @@ struct SlolyPitOutputLabels : Widget {
 
     const std::vector<int>& inputRoute =
         module->routing[module->editingOutputIndex];
-    int inputChannels =
-        module->inputs[ComputerscareSlolyPit::POLY_INPUT].getChannels();
+    int inputChannels = getVisualInputChannels();
     for (size_t routeIndex = 0;
          routeIndex < inputRoute.size() && routeIndex < 16; routeIndex++) {
       bool outOfBounds = inputRoute[routeIndex] >= inputChannels;
@@ -692,6 +902,34 @@ struct SlolyPitOutputLabels : Widget {
     }
   }
 
+  void drawRouteOutline(const DrawArgs& args, int channel, float x, float width,
+                        NVGcolor color) {
+    float y = channel * rowSpacing + 1.f;
+    float height = rowHeight;
+    float wiggle = 2.0f;
+    Vec topLeft = Vec(x + blockWiggle(channel, channel + 1, 0) * wiggle,
+                      y + blockWiggle(channel, channel + 1, 1) * wiggle);
+    Vec topRight =
+        Vec(x + width + blockWiggle(channel, channel + 1, 2) * wiggle,
+            y + blockWiggle(channel, channel + 1, 3) * wiggle);
+    Vec bottomRight =
+        Vec(x + width + blockWiggle(channel, channel + 1, 5) * wiggle,
+            y + height + blockWiggle(channel, channel + 1, 6) * wiggle);
+    Vec bottomLeft =
+        Vec(x + blockWiggle(channel, channel + 1, 7) * wiggle,
+            y + height + blockWiggle(channel, channel + 1, 8) * wiggle);
+
+    nvgBeginPath(args.vg);
+    nvgMoveTo(args.vg, topLeft.x, topLeft.y);
+    nvgLineTo(args.vg, topRight.x, topRight.y);
+    nvgLineTo(args.vg, bottomRight.x, bottomRight.y);
+    nvgLineTo(args.vg, bottomLeft.x, bottomLeft.y);
+    nvgClosePath(args.vg);
+    nvgStrokeWidth(args.vg, 1.2f);
+    nvgStrokeColor(args.vg, color);
+    nvgStroke(args.vg);
+  }
+
   float blockNoise(int startChannel, int endChannel, int salt) {
     uint32_t seed = (startChannel + 1) * 73856093u ^
                     (endChannel + 1) * 19349663u ^ (salt + 1) * 83492791u;
@@ -723,6 +961,7 @@ struct SlolyPitOutputLabels : Widget {
     if (fadeBeyondInputChannels) {
       inputChannels =
           module->inputs[ComputerscareSlolyPit::POLY_INPUT].getChannels();
+      fadeBeyondInputChannels = inputChannels > 0;
     }
 
     for (int channel = 0; channel < 16; channel++) {
@@ -758,8 +997,7 @@ struct SlolyPitOutputLabels : Widget {
 
     const std::vector<int>& inputRoute =
         module->routing[module->editingOutputIndex];
-    int inputChannels =
-        module->inputs[ComputerscareSlolyPit::POLY_INPUT].getChannels();
+    int inputChannels = getVisualInputChannels();
     for (size_t routeIndex = 0;
          routeIndex < inputRoute.size() && routeIndex < 16; routeIndex++) {
       if (inputRoute[routeIndex] >= inputChannels) {
