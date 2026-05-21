@@ -8,6 +8,14 @@
 
 const std::string SlolyPitRoutingModeNames[4] = {"Single", "Dynamic Below",
                                                  "Dynamic Above", "Custom"};
+const std::string SlolyPitInputPoolNames[2] = {"Only active input channels",
+                                               "All input channels"};
+const std::string SlolyPitReplacementNames[3] = {
+    "With replacement", "Without replacement", "Shuffle existing"};
+const std::string SlolyPitChannelCountNames[2] = {"Same channels as current",
+                                                  "Random channels"};
+const std::string SlolyPitOutputTargetNames[2] = {"Only connected outputs",
+                                                  "All outputs"};
 
 std::string slolyPitOrdinal(int number) {
   if (number % 100 >= 11 && number % 100 <= 13) {
@@ -34,12 +42,33 @@ struct ComputerscareSlolyPit : Module {
     ROUTING_CUSTOM,
   };
 
+  enum RandomizeInputPool {
+    RANDOMIZE_ONLY_ACTIVE_INPUT_CHANNELS,
+    RANDOMIZE_ALL_INPUT_CHANNELS,
+  };
+
+  enum RandomizeReplacement {
+    RANDOMIZE_WITH_REPLACEMENT,
+    RANDOMIZE_WITHOUT_REPLACEMENT,
+    RANDOMIZE_SHUFFLE_EXISTING,
+  };
+
+  enum RandomizeChannelCount {
+    RANDOMIZE_SAME_CHANNEL_COUNT,
+    RANDOMIZE_RANDOM_CHANNEL_COUNT,
+    RANDOMIZE_FIXED_CHANNEL_COUNT,
+  };
+
   std::array<std::vector<int>, 16> routing;
   std::array<std::vector<int>, 16> cachedRouting;
   std::array<int, 16> outputChannelCounts;
   int routingMode = ROUTING_DYNAMIC_BELOW;
   int editingOutputIndex = -1;
   bool customRoutingInitialized = false;
+  int randomizeInputPool = RANDOMIZE_ONLY_ACTIVE_INPUT_CHANNELS;
+  int randomizeReplacement = RANDOMIZE_WITH_REPLACEMENT;
+  int randomizeChannelCount = RANDOMIZE_SAME_CHANNEL_COUNT;
+  bool randomizeOnlyConnectedOutputs = true;
   int cachedRoutingMode = -1;
   int cachedRoutingChannels = -1;
   uint16_t cachedOutputConnectionMask = 0;
@@ -88,6 +117,14 @@ struct ComputerscareSlolyPit : Module {
                         json_integer(editingOutputIndex));
     json_object_set_new(rootJ, "customRoutingInitialized",
                         json_boolean(customRoutingInitialized));
+    json_object_set_new(rootJ, "randomizeInputPool",
+                        json_integer(randomizeInputPool));
+    json_object_set_new(rootJ, "randomizeReplacement",
+                        json_integer(randomizeReplacement));
+    json_object_set_new(rootJ, "randomizeChannelCount",
+                        json_integer(randomizeChannelCount));
+    json_object_set_new(rootJ, "randomizeOnlyConnectedOutputs",
+                        json_boolean(randomizeOnlyConnectedOutputs));
     return rootJ;
   }
 
@@ -124,6 +161,68 @@ struct ComputerscareSlolyPit : Module {
       customRoutingInitialized = true;
     }
 
+    json_t* randomizeInputPoolJ = json_object_get(rootJ, "randomizeInputPool");
+    if (randomizeInputPoolJ) {
+      int loadedInputPool = json_integer_value(randomizeInputPoolJ);
+      if (loadedInputPool >= RANDOMIZE_ONLY_ACTIVE_INPUT_CHANNELS &&
+          loadedInputPool <= RANDOMIZE_ALL_INPUT_CHANNELS) {
+        randomizeInputPool = loadedInputPool;
+      } else if (loadedInputPool == RANDOMIZE_SHUFFLE_EXISTING) {
+        randomizeReplacement = RANDOMIZE_SHUFFLE_EXISTING;
+      }
+    } else {
+      json_t* randomizeOnlyActiveInputsJ =
+          json_object_get(rootJ, "randomizeOnlyActiveInputs");
+      if (randomizeOnlyActiveInputsJ) {
+        randomizeInputPool = json_boolean_value(randomizeOnlyActiveInputsJ)
+                                 ? RANDOMIZE_ONLY_ACTIVE_INPUT_CHANNELS
+                                 : RANDOMIZE_ALL_INPUT_CHANNELS;
+      }
+    }
+
+    json_t* randomizeReplacementJ =
+        json_object_get(rootJ, "randomizeReplacement");
+    if (randomizeReplacementJ) {
+      int loadedReplacement = json_integer_value(randomizeReplacementJ);
+      if (loadedReplacement >= RANDOMIZE_WITH_REPLACEMENT &&
+          loadedReplacement <= RANDOMIZE_SHUFFLE_EXISTING) {
+        randomizeReplacement = loadedReplacement;
+      }
+    } else {
+      json_t* randomizeWithReplacementJ =
+          json_object_get(rootJ, "randomizeWithReplacement");
+      if (randomizeWithReplacementJ) {
+        randomizeReplacement = json_boolean_value(randomizeWithReplacementJ)
+                                   ? RANDOMIZE_WITH_REPLACEMENT
+                                   : RANDOMIZE_WITHOUT_REPLACEMENT;
+      }
+    }
+
+    json_t* randomizeChannelCountJ =
+        json_object_get(rootJ, "randomizeChannelCount");
+    if (randomizeChannelCountJ) {
+      int loadedChannelCount = json_integer_value(randomizeChannelCountJ);
+      if (loadedChannelCount >= RANDOMIZE_SAME_CHANNEL_COUNT &&
+          loadedChannelCount < RANDOMIZE_FIXED_CHANNEL_COUNT + 16) {
+        randomizeChannelCount = loadedChannelCount;
+      }
+    } else {
+      json_t* randomizeSameChannelCountJ =
+          json_object_get(rootJ, "randomizeSameChannelCount");
+      if (randomizeSameChannelCountJ) {
+        randomizeChannelCount = json_boolean_value(randomizeSameChannelCountJ)
+                                    ? RANDOMIZE_SAME_CHANNEL_COUNT
+                                    : RANDOMIZE_RANDOM_CHANNEL_COUNT;
+      }
+    }
+
+    json_t* randomizeOnlyConnectedOutputsJ =
+        json_object_get(rootJ, "randomizeOnlyConnectedOutputs");
+    if (randomizeOnlyConnectedOutputsJ) {
+      randomizeOnlyConnectedOutputs =
+          json_boolean_value(randomizeOnlyConnectedOutputsJ);
+    }
+
     for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
       json_t* outputRoutingJ = json_array_get(routingJ, outputIndex);
       if (!json_is_array(outputRoutingJ)) {
@@ -155,6 +254,117 @@ struct ComputerscareSlolyPit : Module {
     }
 
     routingMode = newRoutingMode;
+  }
+
+  void onRandomize() override {
+    if (routingMode != ROUTING_CUSTOM) {
+      return;
+    }
+
+    randomizeCustomRouting();
+  }
+
+  void randomizeCustomRouting() {
+    customRoutingInitialized = true;
+
+    int activeInputChannels = inputs[POLY_INPUT].getChannels();
+    int inputPoolSize =
+        randomizeInputPool == RANDOMIZE_ONLY_ACTIVE_INPUT_CHANNELS &&
+                activeInputChannels > 0
+            ? activeInputChannels
+            : 16;
+    inputPoolSize = clamp(inputPoolSize, 1, 16);
+
+    for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
+      if (randomizeOnlyConnectedOutputs &&
+          !outputs[CHANNEL_OUTPUT + outputIndex].isConnected()) {
+        continue;
+      }
+
+      bool shuffleExisting = randomizeReplacement == RANDOMIZE_SHUFFLE_EXISTING;
+      std::vector<int> inputPool = shuffleExisting
+                                       ? uniqueValidInputs(routing[outputIndex])
+                                       : inputRange(inputPoolSize);
+      if (inputPool.empty()) {
+        routing[outputIndex].clear();
+        continue;
+      }
+
+      int channelCount = shuffleExisting ? (int)routing[outputIndex].size()
+                                         : randomizedChannelCount(outputIndex);
+      channelCount = clamp(channelCount, 0, 16);
+      if (randomizeReplacement != RANDOMIZE_WITH_REPLACEMENT) {
+        channelCount = std::min(channelCount, (int)inputPool.size());
+      }
+
+      routing[outputIndex].clear();
+      if (randomizeReplacement == RANDOMIZE_WITH_REPLACEMENT) {
+        for (int routeIndex = 0; routeIndex < channelCount; routeIndex++) {
+          routing[outputIndex].push_back(
+              inputPool[randomIndex((int)inputPool.size())]);
+        }
+      } else {
+        std::vector<int> shuffled = shuffledInputs(inputPool);
+        for (int routeIndex = 0; routeIndex < channelCount; routeIndex++) {
+          routing[outputIndex].push_back(shuffled[routeIndex]);
+        }
+      }
+    }
+  }
+
+  int randomizedChannelCount(int outputIndex) {
+    if (randomizeChannelCount == RANDOMIZE_SAME_CHANNEL_COUNT) {
+      return (int)routing[outputIndex].size();
+    }
+    if (randomizeChannelCount == RANDOMIZE_RANDOM_CHANNEL_COUNT) {
+      return 1 + randomIndex(16);
+    }
+    return randomizeChannelCount - RANDOMIZE_FIXED_CHANNEL_COUNT + 1;
+  }
+
+  std::vector<int> inputRange(int inputChannels) {
+    std::vector<int> inputs;
+    for (int inputChannel = 0; inputChannel < inputChannels; inputChannel++) {
+      inputs.push_back(inputChannel);
+    }
+    return inputs;
+  }
+
+  std::vector<int> uniqueValidInputs(const std::vector<int>& inputs) {
+    std::vector<int> uniqueInputs;
+    for (int inputChannel : inputs) {
+      if (inputChannel < 0 || inputChannel >= 16) {
+        continue;
+      }
+
+      bool alreadyAdded = false;
+      for (int uniqueInput : uniqueInputs) {
+        if (uniqueInput == inputChannel) {
+          alreadyAdded = true;
+          break;
+        }
+      }
+      if (!alreadyAdded) {
+        uniqueInputs.push_back(inputChannel);
+      }
+    }
+    return uniqueInputs;
+  }
+
+  std::vector<int> shuffledInputs(std::vector<int> inputs) {
+    std::vector<int> shuffled = inputs;
+    for (int i = (int)shuffled.size() - 1; i > 0; i--) {
+      int j = randomIndex(i + 1);
+      std::swap(shuffled[i], shuffled[j]);
+    }
+    return shuffled;
+  }
+
+  static int randomIndex(int count) {
+    if (count <= 0) {
+      return 0;
+    }
+    return clamp((int)std::floor(random::uniform() * count), 0, count - 1);
   }
 
   static int routeCharToInputChannel(char routeChar) {
@@ -482,6 +692,152 @@ struct SlolyPitRoutingModeMenu : MenuItem {
     rightText =
         SlolyPitRoutingModeNames[module->routingMode] + " " + RIGHT_ARROW;
     MenuItem::step();
+  }
+};
+
+struct SlolyPitRandomizationBoolItem : MenuItem {
+  ComputerscareSlolyPit* module;
+  bool ComputerscareSlolyPit::* option;
+  bool value;
+
+  void onAction(const event::Action& e) override { module->*option = value; }
+
+  void step() override {
+    rightText = CHECKMARK((module->*option) == value);
+    MenuItem::step();
+  }
+};
+
+struct SlolyPitRandomizationBoolMenu : MenuItem {
+  ComputerscareSlolyPit* module;
+  bool ComputerscareSlolyPit::* option;
+  const std::string* labels;
+
+  Menu* createChildMenu() override {
+    Menu* menu = new Menu;
+    for (int i = 0; i < 2; i++) {
+      SlolyPitRandomizationBoolItem* item = new SlolyPitRandomizationBoolItem();
+      item->text = labels[i];
+      item->module = module;
+      item->option = option;
+      item->value = i == 0;
+      menu->addChild(item);
+    }
+    return menu;
+  }
+
+  void step() override {
+    rightText = labels[(module->*option) ? 0 : 1] + " " + RIGHT_ARROW;
+    MenuItem::step();
+  }
+};
+
+struct SlolyPitRandomizationIntItem : MenuItem {
+  ComputerscareSlolyPit* module;
+  int ComputerscareSlolyPit::* option;
+  int value;
+
+  void onAction(const event::Action& e) override { module->*option = value; }
+
+  void step() override {
+    rightText = CHECKMARK((module->*option) == value);
+    MenuItem::step();
+  }
+};
+
+struct SlolyPitInputPoolMenu : MenuItem {
+  ComputerscareSlolyPit* module;
+
+  Menu* createChildMenu() override {
+    Menu* menu = new Menu;
+    for (int i = 0; i < 2; i++) {
+      SlolyPitRandomizationIntItem* item = new SlolyPitRandomizationIntItem();
+      item->text = SlolyPitInputPoolNames[i];
+      item->module = module;
+      item->option = &ComputerscareSlolyPit::randomizeInputPool;
+      item->value = i;
+      menu->addChild(item);
+    }
+    return menu;
+  }
+
+  void step() override {
+    rightText =
+        SlolyPitInputPoolNames[module->randomizeInputPool] + " " + RIGHT_ARROW;
+    MenuItem::step();
+  }
+};
+
+struct SlolyPitReplacementMenu : MenuItem {
+  ComputerscareSlolyPit* module;
+
+  Menu* createChildMenu() override {
+    Menu* menu = new Menu;
+    for (int i = 0; i < 3; i++) {
+      SlolyPitRandomizationIntItem* item = new SlolyPitRandomizationIntItem();
+      item->text = SlolyPitReplacementNames[i];
+      item->module = module;
+      item->option = &ComputerscareSlolyPit::randomizeReplacement;
+      item->value = i;
+      menu->addChild(item);
+    }
+    return menu;
+  }
+
+  void step() override {
+    rightText = SlolyPitReplacementNames[module->randomizeReplacement] + " " +
+                RIGHT_ARROW;
+    MenuItem::step();
+  }
+};
+
+struct SlolyPitChannelCountMenu : MenuItem {
+  ComputerscareSlolyPit* module;
+
+  Menu* createChildMenu() override {
+    Menu* menu = new Menu;
+    for (int i = ComputerscareSlolyPit::RANDOMIZE_SAME_CHANNEL_COUNT;
+         i <= ComputerscareSlolyPit::RANDOMIZE_RANDOM_CHANNEL_COUNT; i++) {
+      SlolyPitRandomizationIntItem* item = new SlolyPitRandomizationIntItem();
+      item->text = SlolyPitChannelCountNames[i];
+      item->module = module;
+      item->option = &ComputerscareSlolyPit::randomizeChannelCount;
+      item->value = i;
+      menu->addChild(item);
+    }
+
+    menu->addChild(new MenuSeparator);
+
+    for (int channels = 1; channels <= 16; channels++) {
+      SlolyPitRandomizationIntItem* item = new SlolyPitRandomizationIntItem();
+      item->text = std::to_string(channels);
+      item->module = module;
+      item->option = &ComputerscareSlolyPit::randomizeChannelCount;
+      item->value =
+          ComputerscareSlolyPit::RANDOMIZE_FIXED_CHANNEL_COUNT + channels - 1;
+      menu->addChild(item);
+    }
+    return menu;
+  }
+
+  void step() override {
+    rightText =
+        channelCountLabel(module->randomizeChannelCount) + " " + RIGHT_ARROW;
+    MenuItem::step();
+  }
+
+  std::string channelCountLabel(int channelCountMode) {
+    if (channelCountMode ==
+        ComputerscareSlolyPit::RANDOMIZE_SAME_CHANNEL_COUNT) {
+      return SlolyPitChannelCountNames[0];
+    }
+    if (channelCountMode ==
+        ComputerscareSlolyPit::RANDOMIZE_RANDOM_CHANNEL_COUNT) {
+      return SlolyPitChannelCountNames[1];
+    }
+    return std::to_string(channelCountMode -
+                          ComputerscareSlolyPit::RANDOMIZE_FIXED_CHANNEL_COUNT +
+                          1);
   }
 };
 
@@ -1464,6 +1820,41 @@ struct ComputerscareSlolyPitWidget : ModuleWidget {
     routingModeMenu->text = "Routing Mode";
     routingModeMenu->module = slolyPit;
     menu->addChild(routingModeMenu);
+
+    menu->addChild(new MenuSeparator);
+    menu->addChild(createMenuLabel("Custom Randomization"));
+
+    SlolyPitInputPoolMenu* inputPoolMenu = new SlolyPitInputPoolMenu();
+    inputPoolMenu->text = "Input Pool";
+    inputPoolMenu->module = slolyPit;
+    menu->addChild(inputPoolMenu);
+
+    SlolyPitReplacementMenu* replacementMenu = new SlolyPitReplacementMenu();
+    replacementMenu->text = "Replacement";
+    replacementMenu->module = slolyPit;
+    menu->addChild(replacementMenu);
+
+    SlolyPitChannelCountMenu* channelCountMenu = new SlolyPitChannelCountMenu();
+    channelCountMenu->text = "Channel Count";
+    channelCountMenu->module = slolyPit;
+    menu->addChild(channelCountMenu);
+
+    addRandomizationBoolMenu(
+        menu, slolyPit, "Output Targets",
+        &ComputerscareSlolyPit::randomizeOnlyConnectedOutputs,
+        SlolyPitOutputTargetNames);
+  }
+
+  void addRandomizationBoolMenu(Menu* menu, ComputerscareSlolyPit* slolyPit,
+                                const std::string& text,
+                                bool ComputerscareSlolyPit::* option,
+                                const std::string* labels) {
+    SlolyPitRandomizationBoolMenu* item = new SlolyPitRandomizationBoolMenu();
+    item->text = text;
+    item->module = slolyPit;
+    item->option = option;
+    item->labels = labels;
+    menu->addChild(item);
   }
 };
 
