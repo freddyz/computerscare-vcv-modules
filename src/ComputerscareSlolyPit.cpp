@@ -35,9 +35,15 @@ struct ComputerscareSlolyPit : Module {
   };
 
   std::array<std::vector<int>, 16> routing;
+  std::array<std::vector<int>, 16> cachedRouting;
+  std::array<int, 16> outputChannelCounts;
   int routingMode = ROUTING_DYNAMIC_BELOW;
   int editingOutputIndex = -1;
   bool customRoutingInitialized = false;
+  int cachedRoutingMode = -1;
+  int cachedRoutingChannels = -1;
+  uint16_t cachedOutputConnectionMask = 0;
+  bool cachedRoutingValid = false;
 
   enum ParamIds { NUM_PARAMS };
   enum InputIds { POLY_INPUT, NUM_INPUTS };
@@ -56,6 +62,7 @@ struct ComputerscareSlolyPit : Module {
     }
 
     resetRouting();
+    outputChannelCounts.fill(-1);
   }
 
   void resetRouting() {
@@ -231,6 +238,33 @@ struct ComputerscareSlolyPit : Module {
     return getSingleRouting();
   }
 
+  const std::array<std::vector<int>, 16>& getCachedRoutingForMode(
+      int mode, int inputChannels) {
+    uint16_t outputConnectionMask = getOutputConnectionMask();
+    bool cacheMatches = cachedRoutingValid && cachedRoutingMode == mode &&
+                        cachedRoutingChannels == inputChannels &&
+                        cachedOutputConnectionMask == outputConnectionMask;
+    if (!cacheMatches) {
+      cachedRouting = getRoutingForMode(mode, inputChannels);
+      cachedRoutingMode = mode;
+      cachedRoutingChannels = inputChannels;
+      cachedOutputConnectionMask = outputConnectionMask;
+      cachedRoutingValid = true;
+    }
+
+    return cachedRouting;
+  }
+
+  uint16_t getOutputConnectionMask() {
+    uint16_t mask = 0;
+    for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
+      if (outputs[CHANNEL_OUTPUT + outputIndex].isConnected()) {
+        mask |= 1u << outputIndex;
+      }
+    }
+    return mask;
+  }
+
   std::array<std::vector<int>, 16> getSingleRouting() {
     std::array<std::vector<int>, 16> singleRouting;
     for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
@@ -296,13 +330,38 @@ struct ComputerscareSlolyPit : Module {
   void process(const ProcessArgs& args) override {
     int inputChannels = inputs[POLY_INPUT].getChannels();
     int routingChannels = inputChannels > 0 ? inputChannels : 16;
-    std::array<std::vector<int>, 16> currentRouting =
-        getRoutingForMode(routingMode, routingChannels);
+
+    if (routingMode == ROUTING_SINGLE) {
+      for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
+        setOutputFromInputChannel(outputIndex, outputIndex, inputChannels);
+      }
+      return;
+    }
+
+    const std::array<std::vector<int>, 16>* currentRouting =
+        routingMode == ROUTING_CUSTOM
+            ? &routing
+            : &getCachedRoutingForMode(routingMode, routingChannels);
 
     for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
-      setOutputFromRouting(outputIndex, currentRouting[outputIndex],
+      setOutputFromRouting(outputIndex, (*currentRouting)[outputIndex],
                            inputChannels);
     }
+  }
+
+  void setOutputFromInputChannel(int outputIndex, int inputChannel,
+                                 int inputChannels) {
+    if (!outputs[CHANNEL_OUTPUT + outputIndex].isConnected()) {
+      setOutputChannels(outputIndex, 0);
+      return;
+    }
+
+    setOutputChannels(outputIndex, 1);
+    outputs[CHANNEL_OUTPUT + outputIndex].setVoltage(
+        inputChannel < inputChannels
+            ? inputs[POLY_INPUT].getVoltage(inputChannel)
+            : 0.f,
+        0);
   }
 
   void processDynamicBelow(int inputChannels) {
@@ -349,7 +408,12 @@ struct ComputerscareSlolyPit : Module {
 
   void setOutputFromRouting(int outputIndex, const std::vector<int>& inputRoute,
                             int inputChannels) {
-    outputs[CHANNEL_OUTPUT + outputIndex].setChannels(inputRoute.size());
+    if (!outputs[CHANNEL_OUTPUT + outputIndex].isConnected()) {
+      setOutputChannels(outputIndex, 0);
+      return;
+    }
+
+    setOutputChannels(outputIndex, (int)inputRoute.size());
     for (size_t polyChannel = 0; polyChannel < inputRoute.size();
          polyChannel++) {
       int inputChannel = inputRoute[polyChannel];
@@ -367,12 +431,21 @@ struct ComputerscareSlolyPit : Module {
     endInputChannel = clamp(endInputChannel, startInputChannel, inputChannels);
     int outputChannels = endInputChannel - startInputChannel;
 
-    outputs[CHANNEL_OUTPUT + outputIndex].setChannels(outputChannels);
+    setOutputChannels(outputIndex, outputChannels);
     for (int polyChannel = 0; polyChannel < outputChannels; polyChannel++) {
       outputs[CHANNEL_OUTPUT + outputIndex].setVoltage(
           inputs[POLY_INPUT].getVoltage(startInputChannel + polyChannel),
           polyChannel);
     }
+  }
+
+  void setOutputChannels(int outputIndex, int channels) {
+    if (outputChannelCounts[outputIndex] == channels) {
+      return;
+    }
+
+    outputs[CHANNEL_OUTPUT + outputIndex].setChannels(channels);
+    outputChannelCounts[outputIndex] = channels;
   }
 };
 
