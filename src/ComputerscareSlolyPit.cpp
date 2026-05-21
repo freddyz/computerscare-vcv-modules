@@ -1,11 +1,30 @@
 #include <array>
 #include <cctype>
+#include <cmath>
+#include <utility>
 #include <vector>
 
 #include "Computerscare.hpp"
 
 const std::string SlolyPitRoutingModeNames[4] = {"Single", "Dynamic Below",
                                                  "Dynamic Above", "Custom"};
+
+std::string slolyPitOrdinal(int number) {
+  if (number % 100 >= 11 && number % 100 <= 13) {
+    return std::to_string(number) + "th";
+  }
+
+  switch (number % 10) {
+    case 1:
+      return std::to_string(number) + "st";
+    case 2:
+      return std::to_string(number) + "nd";
+    case 3:
+      return std::to_string(number) + "rd";
+    default:
+      return std::to_string(number) + "th";
+  }
+}
 
 struct ComputerscareSlolyPit : Module {
   enum RoutingMode {
@@ -30,9 +49,9 @@ struct ComputerscareSlolyPit : Module {
   ComputerscareSlolyPit() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-    configInput(POLY_INPUT, "Poly In");
+    configInput(POLY_INPUT, "Poly");
     for (int i = 0; i < 16; i++) {
-      configOutput(CHANNEL_OUTPUT + i, "Output " + std::to_string(i + 1));
+      configOutput(CHANNEL_OUTPUT + i, slolyPitOrdinal(i + 1));
     }
 
     resetRouting();
@@ -456,6 +475,66 @@ struct SlolyPitRouteTextField : ComputerscareTextField {
   }
 };
 
+struct SlolyPitRouteRandomizeItem : MenuItem {
+  enum RandomizeMode {
+    RANDOMIZE_FULL,
+    RANDOMIZE_KEEP_CHANNELS,
+    RANDOMIZE_SHUFFLE,
+  };
+
+  SlolyPitRouteTextField* textField;
+  RandomizeMode mode;
+
+  void onAction(const event::Action& e) override {
+    applyRandomization();
+    e.unconsume();
+  }
+
+  void applyRandomization() {
+    if (!textField || !textField->module) {
+      return;
+    }
+
+    std::string randomized = textField->text;
+    if (mode == RANDOMIZE_FULL) {
+      int channels = 1 + randomIndex(16);
+      randomized = randomRouteText(channels);
+    } else if (mode == RANDOMIZE_KEEP_CHANNELS) {
+      randomized = randomRouteText(randomized.size());
+    } else {
+      shuffleText(randomized);
+    }
+
+    textField->text = randomized;
+    textField->cursor = textField->selection = textField->text.size();
+    textField->sanitizeAndApply();
+    APP->event->setSelectedWidget(textField);
+  }
+
+  static int randomIndex(int count) {
+    if (count <= 0) {
+      return 0;
+    }
+    return clamp((int)std::floor(random::uniform() * count), 0, count - 1);
+  }
+
+  static std::string randomRouteText(size_t channels) {
+    std::string text;
+    for (size_t channel = 0; channel < channels && channel < 16; channel++) {
+      text.push_back(
+          ComputerscareSlolyPit::inputChannelToRouteChar(randomIndex(16)));
+    }
+    return text;
+  }
+
+  static void shuffleText(std::string& text) {
+    for (int i = (int)text.size() - 1; i > 0; i--) {
+      int j = randomIndex(i + 1);
+      std::swap(text[i], text[j]);
+    }
+  }
+};
+
 struct SlolyPitOutputLabels : Widget {
   ComputerscareSlolyPit* module;
   std::string fontPath =
@@ -554,8 +633,13 @@ struct SlolyPitOutputLabels : Widget {
       }
     }
 
-    module->editingOutputIndex = row;
-    e.consume(this);
+    if (isInMainColumn(e.pos)) {
+      module->editingOutputIndex = row;
+      e.consume(this);
+      return;
+    }
+
+    Widget::onButton(e);
   }
 
   bool isInRouteColumn(Vec pos) {
@@ -589,8 +673,27 @@ struct SlolyPitOutputLabels : Widget {
     menu->addChild(createMenuLabel("1-9: ch 1-9"));
     menu->addChild(createMenuLabel("  0: ch10"));
     menu->addChild(createMenuLabel("a-f: ch11-16"));
+    menu->addChild(new MenuSeparator);
+    menu->addChild(createMenuLabel("Randomize:"));
+    addRouteRandomizeItem(menu, textField, "Full",
+                          SlolyPitRouteRandomizeItem::RANDOMIZE_FULL);
+    addRouteRandomizeItem(menu, textField, "Keep channels",
+                          SlolyPitRouteRandomizeItem::RANDOMIZE_KEEP_CHANNELS);
+    addRouteRandomizeItem(menu, textField, "Shuffle",
+                          SlolyPitRouteRandomizeItem::RANDOMIZE_SHUFFLE);
+
     APP->event->setSelectedWidget(textField);
     textField->selectAll();
+  }
+
+  void addRouteRandomizeItem(Menu* menu, SlolyPitRouteTextField* textField,
+                             const std::string& text,
+                             SlolyPitRouteRandomizeItem::RandomizeMode mode) {
+    SlolyPitRouteRandomizeItem* item = new SlolyPitRouteRandomizeItem();
+    item->text = text;
+    item->textField = textField;
+    item->mode = mode;
+    menu->addChild(item);
   }
 
   void openRouteInputMenu(int routeIndex, bool addRoute) {
