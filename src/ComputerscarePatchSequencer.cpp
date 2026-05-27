@@ -45,6 +45,7 @@ struct ComputerscarePatchSequencer : Module {
   int addressPlusOne = 1;
   int editAddressPlusOne = 1;
   int counter = 513;
+  int matrixButtonCounter = 0;
 
   int numAddresses = 2;
   bool switch_states[maxSteps][10][10] = {};
@@ -108,8 +109,10 @@ struct ComputerscarePatchSequencer : Module {
       } else {
         currentMax = channelCountEnum;
       }
-      channelCount[j] = currentMax;
-      outputs[OUTPUTS + j].setChannels(currentMax);
+      if (channelCount[j] != currentMax) {
+        channelCount[j] = currentMax;
+        outputs[OUTPUTS + j].setChannels(currentMax);
+      }
     }
   }
 
@@ -286,21 +289,15 @@ struct ComputerscarePatchSequencer : Module {
 void ComputerscarePatchSequencer::process(const ProcessArgs& args) {
   int numStepsKnobPosition =
       (int)clamp(roundf(params[STEPS_PARAM].getValue()), 1.0f, 16.0f);
-  // int channels[10] = {0};
 
-  for (int j = 0; j < 10; j++) {
-    // channels[i] = inputs[INPUT_JACKS + i].getChannels();
-    for (int c = 0; c < 16; c++) {
-      sums[j * 16 + c] = 0.0;
-    }
-  }
-
-  for (int i = 0; i < 10; i++) {
-    for (int j = 0; j < 10; j++) {
-      if (switch_triggers[i][j].process(
-              params[SWITCHES + j * 10 + i].getValue())) {
-        // handle button clicks in the patch matrix
-        switch_states[editAddress][i][j] = !switch_states[editAddress][i][j];
+  if (++matrixButtonCounter >= 16) {
+    matrixButtonCounter = 0;
+    for (int i = 0; i < 10; i++) {
+      for (int j = 0; j < 10; j++) {
+        if (switch_triggers[i][j].process(
+                params[SWITCHES + j * 10 + i].getValue())) {
+          switch_states[editAddress][i][j] = !switch_states[editAddress][i][j];
+        }
       }
     }
   }
@@ -359,26 +356,68 @@ void ComputerscarePatchSequencer::process(const ProcessArgs& args) {
   addressPlusOne = address + 1;
   editAddressPlusOne = editAddress + 1;
 
-  for (int i = 0; i < 10; i++) {
-    for (int c = 0; c < 16; c++) {
-      input_values[i * 16 + c] = inputs[INPUT_JACKS + i].getVoltage(c);
-    }
+  bool connectedOutputs[numOutputs] = {};
+  bool neededInputs[numInputs] = {};
+  bool anyOutputConnected = false;
+  for (int j = 0; j < numOutputs; j++) {
+    connectedOutputs[j] =
+        outputs[OUTPUTS + j].isConnected() && channelCount[j] > 0;
+    anyOutputConnected = anyOutputConnected || connectedOutputs[j];
   }
 
-  for (int i = 0; i < 10; i++) {
-    for (int j = 0; j < 10; j++) {
-      // todo: toggle for each output of how to combine multiple active signals
-      // in a column sum, average, and, or etc
-      if (switch_states[address][i][j]) {
-        for (int c = 0; c < channelCount[j]; c++) {
-          sums[j * 16 + c] += input_values[i * 16 + c];
-        }
+  if (!anyOutputConnected) {
+    return;
+  }
+
+  for (int j = 0; j < numOutputs; j++) {
+    if (!connectedOutputs[j]) {
+      continue;
+    }
+
+    for (int c = 0; c < channelCount[j]; c++) {
+      sums[j * 16 + c] = 0.0;
+    }
+
+    for (int i = 0; i < numInputs; i++) {
+      if (switch_states[address][i][j] &&
+          inputs[INPUT_JACKS + i].isConnected()) {
+        neededInputs[i] = true;
       }
     }
   }
-  /// outputs
-  for (int j = 0; j < 10; j++) {
-    // outputs[OUTPUTS + j].setChannels(16);
+
+  for (int i = 0; i < numInputs; i++) {
+    if (!neededInputs[i]) {
+      continue;
+    }
+
+    for (int c = 0; c < 16; c++) {
+      input_values[i * 16 + c] = 0.f;
+    }
+    inputs[INPUT_JACKS + i].readVoltages(&input_values[i * 16]);
+  }
+
+  for (int j = 0; j < numOutputs; j++) {
+    if (!connectedOutputs[j]) {
+      continue;
+    }
+
+    for (int i = 0; i < numInputs; i++) {
+      if (!neededInputs[i] || !switch_states[address][i][j]) {
+        continue;
+      }
+
+      for (int c = 0; c < channelCount[j]; c++) {
+        sums[j * 16 + c] += input_values[i * 16 + c];
+      }
+    }
+  }
+
+  for (int j = 0; j < numOutputs; j++) {
+    if (!connectedOutputs[j]) {
+      continue;
+    }
+
     for (int c = 0; c < channelCount[j]; c++) {
       outputs[OUTPUTS + j].setVoltage(sums[j * 16 + c], c);
     }
