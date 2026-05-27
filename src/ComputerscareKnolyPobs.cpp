@@ -8,6 +8,9 @@ const int numToggles = 16;
 
 struct ComputerscareKnolyPobs : ComputerscarePolyModule {
   ComputerscareSVGPanel* panelRef;
+  bool bipolarMainKnobs = false;
+  int mainKnobRangeRevision = 0;
+
   enum ParamIds {
     KNOB,
     TOGGLES = KNOB + numKnobs,
@@ -39,6 +42,36 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 
     configOutput(POLY_OUTPUT, "Main");
   }
+
+  void setMainKnobRange(bool bipolar) {
+    bool changed = bipolarMainKnobs != bipolar;
+    bipolarMainKnobs = bipolar;
+    for (int i = 0; i < numKnobs; i++) {
+      engine::ParamQuantity* pq = getParamQuantity(KNOB + i);
+      if (!pq) continue;
+      pq->minValue = bipolar ? -10.f : 0.f;
+      pq->maxValue = 10.f;
+      pq->defaultValue = 0.f;
+      pq->setValue(math::clamp(pq->getValue(), pq->minValue, pq->maxValue));
+    }
+    if (changed) {
+      mainKnobRangeRevision++;
+    }
+  }
+
+  json_t* dataToJson() override {
+    json_t* rootJ = json_object();
+    json_object_set_new(rootJ, "bipolarMainKnobs",
+                        json_boolean(bipolarMainKnobs));
+    return rootJ;
+  }
+
+  void dataFromJson(json_t* rootJ) override {
+    json_t* bipolarMainKnobsJ = json_object_get(rootJ, "bipolarMainKnobs");
+    setMainKnobRange(bipolarMainKnobsJ &&
+                     json_boolean_value(bipolarMainKnobsJ));
+  }
+
   void process(const ProcessArgs& args) override {
     ComputerscarePolyModule::checkCounter();
     float trim = params[GLOBAL_SCALE].getValue();
@@ -80,6 +113,7 @@ struct DisableableSmoothKnob : ComputerscareRoundKnob {
 
   int channel = 0;
   bool disabled = false;
+  int mainKnobRangeRevision = -1;
   ComputerscarePolyModule* module;
 
   DisableableSmoothKnob() {
@@ -89,6 +123,14 @@ struct DisableableSmoothKnob : ComputerscareRoundKnob {
   }
   void step() override {
     if (module) {
+      ComputerscareKnolyPobs* pobs =
+          dynamic_cast<ComputerscareKnolyPobs*>(module);
+      if (pobs && mainKnobRangeRevision != pobs->mainKnobRangeRevision) {
+        event::Change eChange;
+        onChange(eChange);
+        mainKnobRangeRevision = pobs->mainKnobRangeRevision;
+      }
+
       bool candidate = channel > module->polyChannels - 1;
       if (disabled != candidate) {
         setSvg(candidate ? disabledSvg : enabledSvg);
@@ -138,6 +180,32 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
       addLabeledKnob(std::to_string(i + 1), xx, yy, module, i,
                      (i - i % 8) * 1.2 - 3 + (i == 8 ? 5 : 0), 2);
     }
+  }
+  void appendContextMenu(Menu* menu) override {
+    ComputerscareKnolyPobs* module =
+        dynamic_cast<ComputerscareKnolyPobs*>(this->module);
+    if (!module) return;
+
+    struct MainKnobRangeItem : MenuItem {
+      ComputerscareKnolyPobs* module;
+      bool bipolar;
+      void onAction(const event::Action& e) override {
+        module->setMainKnobRange(bipolar);
+      }
+      void step() override {
+        rightText = CHECKMARK(module->bipolarMainKnobs == bipolar);
+        MenuItem::step();
+      }
+    };
+
+    menu->addChild(new MenuSeparator());
+    menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Main Knob Range"));
+    menu->addChild(construct<MainKnobRangeItem>(
+        &MenuItem::text, "Unipolar", &MainKnobRangeItem::module, module,
+        &MainKnobRangeItem::bipolar, false));
+    menu->addChild(construct<MainKnobRangeItem>(
+        &MenuItem::text, "Bipolar", &MainKnobRangeItem::module, module,
+        &MainKnobRangeItem::bipolar, true));
   }
   void addLabeledKnob(std::string label, int x, int y,
                       ComputerscareKnolyPobs* module, int index, float labelDx,

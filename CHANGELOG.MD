@@ -6,6 +6,12 @@ Custom Blank:
 - gifs continue animating during crossfade
 - Slideshow keyboard toggle
 
+Knoly Pobs:
+- Add unipolar/bipolar main knob range option
+
+Father & Son:
+- Performance improvements
+
 
 # 2.2.5
 Portaloof: Visual Tranformation Module
