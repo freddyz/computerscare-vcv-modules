@@ -1160,8 +1160,10 @@ struct SlolyPitOutputLabels : Widget {
     std::string text;
     for (size_t routeIndex = 0; routeIndex < outputRoute.size(); routeIndex++) {
       if (routeIndex > 0) {
-        text += " ";
+        text += "\n";
       }
+      text += std::to_string(routeIndex + 1);
+      text += ": Input ch ";
       text += std::to_string(outputRoute[routeIndex] + 1);
     }
     return text;
@@ -1283,7 +1285,11 @@ struct SlolyPitOutputLabels : Widget {
 
     Menu* menu = createMenu();
     menu->addChild(
-        createMenuLabel(addRoute ? "Add input channel" : "Set input channel"));
+        createMenuLabel(addRoute ? "Add Input Channel" : "Set Input Channel"));
+    menu->addChild(createMenuLabel("Output " + std::to_string(outputIndex + 1) +
+                                   ", channel " +
+                                   std::to_string(routeIndex + 1)));
+    menu->addChild(createMenuLabel("Input Channel:"));
 
     if (!addRoute) {
       SlolyPitRouteInputItem* item = new SlolyPitRouteInputItem();
