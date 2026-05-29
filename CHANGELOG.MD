@@ -1,4 +1,7 @@
 # 2.3.0
+Sloly Pit:
+- Polyphonic splitter/router, split a poly signal into multiple poly signals
+
 Portaloof:
 - Draw all sources at full alpha
 

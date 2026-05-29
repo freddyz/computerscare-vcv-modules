@@ -73,9 +73,10 @@ struct ComputerscareSlolyPit : Module {
   int cachedRoutingChannels = -1;
   uint16_t cachedOutputConnectionMask = 0;
   bool cachedRoutingValid = false;
+  rack::dsp::SchmittTrigger randomizeTriggers[16];
 
   enum ParamIds { NUM_PARAMS };
-  enum InputIds { POLY_INPUT, NUM_INPUTS };
+  enum InputIds { POLY_INPUT, RANDOMIZE_INPUT, NUM_INPUTS };
   enum OutputIds {
     CHANNEL_OUTPUT,
     NUM_OUTPUTS = CHANNEL_OUTPUT + 16,
@@ -86,6 +87,7 @@ struct ComputerscareSlolyPit : Module {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
     configInput(POLY_INPUT, "Poly");
+    configInput(RANDOMIZE_INPUT, "Randomize Trigger");
     for (int i = 0; i < 16; i++) {
       configOutput(CHANNEL_OUTPUT + i, slolyPitOrdinal(i + 1));
     }
@@ -256,12 +258,52 @@ struct ComputerscareSlolyPit : Module {
     routingMode = newRoutingMode;
   }
 
+  void setCustomRoutingToMode(int mode) {
+    int inputChannels = inputs[POLY_INPUT].getChannels();
+    int routingChannels = inputChannels > 0 ? inputChannels : 16;
+    routing = getRoutingForMode(mode, routingChannels);
+    customRoutingInitialized = true;
+  }
+
   void onRandomize() override {
     if (routingMode != ROUTING_CUSTOM) {
       return;
     }
 
     randomizeCustomRouting();
+  }
+
+  void processRandomizeTriggers() {
+    int triggerChannels = inputs[RANDOMIZE_INPUT].getChannels();
+    bool triggeredChannels[16] = {};
+    bool triggered = false;
+
+    for (int triggerChannel = 0; triggerChannel < 16; triggerChannel++) {
+      float voltage = triggerChannel < triggerChannels
+                          ? inputs[RANDOMIZE_INPUT].getVoltage(triggerChannel)
+                          : 0.f;
+      if (randomizeTriggers[triggerChannel].process(voltage / 2.f)) {
+        triggeredChannels[triggerChannel] = true;
+        triggered = true;
+      }
+    }
+
+    if (!triggered || routingMode != ROUTING_CUSTOM) {
+      return;
+    }
+
+    if (triggerChannels <= 1) {
+      randomizeCustomRouting();
+      return;
+    }
+
+    customRoutingInitialized = true;
+    for (int routeIndex = 0; routeIndex < triggerChannels && routeIndex < 16;
+         routeIndex++) {
+      if (triggeredChannels[routeIndex]) {
+        randomizeCustomRouteIndex(routeIndex);
+      }
+    }
   }
 
   void randomizeCustomRouting() {
@@ -310,6 +352,68 @@ struct ComputerscareSlolyPit : Module {
         }
       }
     }
+  }
+
+  void randomizeCustomRouteIndex(int routeIndex) {
+    for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
+      if (randomizeOnlyConnectedOutputs &&
+          !outputs[CHANNEL_OUTPUT + outputIndex].isConnected()) {
+        continue;
+      }
+
+      if (routeIndex >= (int)routing[outputIndex].size()) {
+        continue;
+      }
+
+      int inputChannel = randomInputForRouteIndex(outputIndex, routeIndex);
+      if (inputChannel >= 0) {
+        routing[outputIndex][routeIndex] = inputChannel;
+      }
+    }
+  }
+
+  int randomInputForRouteIndex(int outputIndex, int routeIndex) {
+    int activeInputChannels = inputs[POLY_INPUT].getChannels();
+    int inputPoolSize =
+        randomizeInputPool == RANDOMIZE_ONLY_ACTIVE_INPUT_CHANNELS &&
+                activeInputChannels > 0
+            ? activeInputChannels
+            : 16;
+    inputPoolSize = clamp(inputPoolSize, 1, 16);
+
+    std::vector<int> inputPool =
+        randomizeReplacement == RANDOMIZE_SHUFFLE_EXISTING
+            ? uniqueValidInputs(routing[outputIndex])
+            : inputRange(inputPoolSize);
+    if (inputPool.empty()) {
+      return -1;
+    }
+
+    if (randomizeReplacement == RANDOMIZE_WITHOUT_REPLACEMENT) {
+      std::vector<int> availableInputs;
+      for (int inputChannel : inputPool) {
+        bool usedByOtherRoute = false;
+        for (int otherRouteIndex = 0;
+             otherRouteIndex < (int)routing[outputIndex].size();
+             otherRouteIndex++) {
+          if (otherRouteIndex != routeIndex &&
+              routing[outputIndex][otherRouteIndex] == inputChannel) {
+            usedByOtherRoute = true;
+            break;
+          }
+        }
+        if (!usedByOtherRoute) {
+          availableInputs.push_back(inputChannel);
+        }
+      }
+      inputPool = availableInputs;
+    }
+
+    if (inputPool.empty()) {
+      return -1;
+    }
+
+    return inputPool[randomIndex((int)inputPool.size())];
   }
 
   int randomizedChannelCount(int outputIndex) {
@@ -538,6 +642,8 @@ struct ComputerscareSlolyPit : Module {
   }
 
   void process(const ProcessArgs& args) override {
+    processRandomizeTriggers();
+
     int inputChannels = inputs[POLY_INPUT].getChannels();
     int routingChannels = inputChannels > 0 ? inputChannels : 16;
 
@@ -691,6 +797,39 @@ struct SlolyPitRoutingModeMenu : MenuItem {
   void step() override {
     rightText =
         SlolyPitRoutingModeNames[module->routingMode] + " " + RIGHT_ARROW;
+    MenuItem::step();
+  }
+};
+
+struct SlolyPitSetCustomRoutingItem : MenuItem {
+  ComputerscareSlolyPit* module;
+  int routingMode;
+
+  void onAction(const event::Action& e) override {
+    module->setCustomRoutingToMode(routingMode);
+  }
+};
+
+struct SlolyPitSetCustomRoutingMenu : MenuItem {
+  ComputerscareSlolyPit* module;
+
+  Menu* createChildMenu() override {
+    Menu* menu = new Menu;
+    const int modes[] = {ComputerscareSlolyPit::ROUTING_SINGLE,
+                         ComputerscareSlolyPit::ROUTING_DYNAMIC_BELOW,
+                         ComputerscareSlolyPit::ROUTING_DYNAMIC_ABOVE};
+    for (int mode : modes) {
+      SlolyPitSetCustomRoutingItem* item = new SlolyPitSetCustomRoutingItem();
+      item->text = SlolyPitRoutingModeNames[mode];
+      item->module = module;
+      item->routingMode = mode;
+      menu->addChild(item);
+    }
+    return menu;
+  }
+
+  void step() override {
+    rightText = RIGHT_ARROW;
     MenuItem::step();
   }
 };
@@ -1803,6 +1942,8 @@ struct ComputerscareSlolyPitWidget : ModuleWidget {
 
     addInput(createInput<InPort>(Vec(4, 25), module,
                                  ComputerscareSlolyPit::POLY_INPUT));
+    addInput(createInput<TinyJack>(Vec(39, 25), module,
+                                   ComputerscareSlolyPit::RANDOMIZE_INPUT));
 
     addChild(new SlolyPitOutputLabels(module));
 
@@ -1827,8 +1968,14 @@ struct ComputerscareSlolyPitWidget : ModuleWidget {
     routingModeMenu->module = slolyPit;
     menu->addChild(routingModeMenu);
 
+    SlolyPitSetCustomRoutingMenu* setCustomRoutingMenu =
+        new SlolyPitSetCustomRoutingMenu();
+    setCustomRoutingMenu->text = "Set Custom Routing to";
+    setCustomRoutingMenu->module = slolyPit;
+    menu->addChild(setCustomRoutingMenu);
+
     menu->addChild(new MenuSeparator);
-    menu->addChild(createMenuLabel("Custom Randomization"));
+    menu->addChild(createMenuLabel("Randomization (Custom mode only)"));
 
     SlolyPitInputPoolMenu* inputPoolMenu = new SlolyPitInputPoolMenu();
     inputPoolMenu->text = "Input Pool";

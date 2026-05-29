@@ -140,7 +140,8 @@
       "slug": "computerscare-sloly-pit",
       "name": "Sloly Pit",
       "description": "Split a polyphonic input into 16 monophonic outputs",
-      "tags": ["Polyphonic", "Utility"]
+      "tags": ["Polyphonic", "Utility"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/sloly-pit.md"
     },
     {
       "slug": "computerscare-horse-a-doodle-doo",
