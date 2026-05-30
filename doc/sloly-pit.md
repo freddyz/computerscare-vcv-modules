@@ -8,7 +8,7 @@ Sloly Pit can act as a simple polyphonic breakout, or it can build grouped and c
 
 **Poly in:** Polyphonic input signal to split or route.
 
-**Randomize Trigger:** Trigger input for custom routing randomization. This only affects Custom routing mode. A monophonic trigger performs the same randomization as Rack's module Randomize command. A polyphonic trigger randomizes the matching custom route channel for each triggered poly channel across the output routes.
+**Randomize Trigger:** Trigger input for custom routing randomization. This only affects Custom routing mode. A monophonic trigger performs the same randomization as Rack's module Randomize command. A polyphonic trigger randomizes the matching output's custom route for each triggered poly channel.
 
 **1st through 16th outputs:** Routed outputs. Output channel counts depend on the selected routing mode and custom route contents.
 

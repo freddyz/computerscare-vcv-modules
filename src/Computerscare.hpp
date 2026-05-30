@@ -212,6 +212,16 @@ struct ComputerscareResetButton : ComputerscareMomentarySvgSwitch {
         pluginInstance, "res/components/computerscare-rst-text-red.svg")));
   }
 };
+struct ComputerscareBlankButton : ComputerscareMomentarySvgSwitch {
+  ComputerscareBlankButton() {
+    momentary = true;
+    shadow->opacity = 0.f;
+    addFrame(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/computerscare-blank-button.svg")));
+    addFrame(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/computerscare-blank-button-down.svg")));
+  }
+};
 struct ComputerscareNextButton : ComputerscareMomentarySvgSwitch {
   ComputerscareNextButton() {
     momentary = true;
