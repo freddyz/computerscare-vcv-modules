@@ -14,15 +14,21 @@ Sloly Pit can act as a simple polyphonic breakout, or it can build grouped and c
 
 ## Routing Modes
 
-Right-click the module and use **Routing Mode** to select the active routing behavior.
+Use the mode button, or right-click the module and use **Routing Mode**, to select the active routing behavior.
 
 **Single:** Each output receives the matching input channel as a monophonic output. The 1st output receives input channel 1, the 2nd output receives input channel 2, and so on.
 
 **Dynamic Below:** Connected outputs receive ranges of input channels from their output number up to the next connected output. If no later output is connected, the range continues to the end of the input's channel count.
 
+![Sloly Pit Dynamic Below routing](images/sloly-pit-below.png)
+
 **Dynamic Above:** Connected outputs receive ranges of input channels from the previous connected output up through their own output number.
 
+![Sloly Pit Dynamic Above routing](images/sloly-pit-above.png)
+
 **Custom:** Each output uses its stored custom route. A custom route can contain 0 to 16 input channel references, so an output can be silent, mono, or polyphonic.
+
+![Sloly Pit Custom routing](images/sloly-pit-custom.png)
 
 ## Custom Editing
 
@@ -46,10 +52,12 @@ Randomization only changes routes in Custom mode.
 
 The **Randomization (Custom mode only)** context-menu section controls how Rack's module Randomize command and the Randomize Trigger input choose custom routes.
 
-**Input Pool:** Choose whether randomization picks only from currently active input channels or from all 16 possible input channels.
+The right-click randomization dropdowns set the rules for full-module randomization and trigger-input randomization:
 
-**Replacement:** Choose whether a route may reuse the same input channel, must avoid duplicate input channels, or shuffles the route's existing input channels.
+**Input Pool:** Picks from currently active input channels, or from all 16 possible input channels.
 
-**Channel Count:** Choose whether randomization keeps each output's current custom route length, picks a random route length, or sets a fixed route length.
+**Replacement:** Allows repeated input channels, prevents duplicates, or shuffles each route's existing channels.
 
-**Output Targets:** Choose whether randomization changes only connected outputs or all outputs.
+**Channel Count:** Keeps each output's current route length, chooses a random length, or uses a fixed length.
+
+**Output Targets:** Changes only connected outputs, or all outputs.

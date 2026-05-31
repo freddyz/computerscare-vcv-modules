@@ -118,6 +118,17 @@ struct ComputerscareSlolyPit : Module {
     }
   }
 
+  void onReset() override {
+    if (routingMode != ROUTING_CUSTOM) {
+      return;
+    }
+
+    for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
+      routing[outputIndex].clear();
+    }
+    customRoutingInitialized = true;
+  }
+
   json_t* dataToJson() override {
     json_t* rootJ = json_object();
     json_t* routingJ = json_array();
