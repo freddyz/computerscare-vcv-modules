@@ -4,9 +4,9 @@ Polyphonic utility for splitting a polyphonic input into multiple mono or polyph
 
 ### Use cases:
 
-- Quickly split a poly signal into multiple poly signals by plugging in an output cable where you want it split
-- 16 fully customizable routings from a signel poly input
-- Standard poly breakout "split" - 16ch poly signal into 16 mono signals
+- Quickly split a poly signal into multiple poly signals by plugging in an output cable where you want it split (Dynamic modes)
+- 16 fully customizable routings (Custom Mode)
+- Standard poly breakout "split" - 16ch poly signal into 16 mono signals (Single Mode)
 
 ## Ports
 
