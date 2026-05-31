@@ -1,8 +1,12 @@
 # Sloly Pit
 
-Polyphonic utility for splitting one polyphonic input into up to 16 outputs.
+Polyphonic utility for splitting a polyphonic input into multiple mono or polyphonic outputs
 
-Sloly Pit can act as a simple polyphonic breakout, or it can build grouped and custom output routings. Each output can emit one or more polyphonic channels depending on the selected routing mode.
+### Use cases:
+
+- Quickly split a poly signal into multiple poly signals by plugging in an output cable where you want it split
+- 16 fully customizable routings from a signel poly input
+- Standard poly breakout "split" - 16ch poly signal into 16 mono signals
 
 ## Ports
 
@@ -20,21 +24,27 @@ Use the mode button, or right-click the module and use **Routing Mode**, to sele
 
 **Dynamic Below:** Connected outputs receive ranges of input channels from their output number up to the next connected output. If no later output is connected, the range continues to the end of the input's channel count.
 
-![Sloly Pit Dynamic Below routing](images/sloly-pit-below.png)
-
 **Dynamic Above:** Connected outputs receive ranges of input channels from the previous connected output up through their own output number.
-
-![Sloly Pit Dynamic Above routing](images/sloly-pit-above.png)
 
 **Custom:** Each output uses its stored custom route. A custom route can contain 0 to 16 input channel references, so an output can be silent, mono, or polyphonic.
 
 ![Sloly Pit Custom routing](images/sloly-pit-custom.png)
 
+### Routing Modes Visualized:
+
+**Dynamic Below:**
+![Sloly Pit Dynamic Below routing](images/sloly-pit-below.png)
+
+**Dynamic Above:**
+
+![Sloly Pit Dynamic Above routing](images/sloly-pit-above.png)
+
+**Custom:**
+![Sloly Pit Custom routing](images/sloly-pit-custom.png)
+
 ## Custom Editing
 
-In Custom mode, click an output's row to edit that output's route. The left column shows the selected output's custom route channels. Type or select channel references from the context controls to change the route.
-
-Channel references use 1 through 9, 0 for channel 10, and a through f for channels 11 through 16.
+In Custom mode, click an output's row to edit that output's route. The left column shows the selected output's custom route channels. Click an existing yellow box, or the [+] to add a new input channel to the routing. Right clicking the output channel label allows for typing a routing in. There is a shorthand for channels so that each input channel can be represented by a sigle character: 1-9: channels 1 through 9, 0: channel 10, `a` through `f` : channels 11 through 16.
 
 ## Set Custom Routing To
 
