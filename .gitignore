@@ -8,6 +8,7 @@ a.out
 *.swp
 *.swo
 __pycache__/
+scripts/gen/
 .claude/
 CLAUDE.local.md
 AGENTS.local.md

@@ -216,6 +216,10 @@ def translation(tx, ty):
     return [1.0, 0.0, 0.0, 1.0, tx, ty]
 
 
+def rotation(angle):
+    return [math.cos(angle), math.sin(angle), -math.sin(angle), math.cos(angle), 0.0, 0.0]
+
+
 def transform_segments(segments, matrix):
     for segment in segments:
         for point in segment["points"]:
@@ -266,9 +270,13 @@ def mutation_profile(rand_value):
         "shared_shift_chance": clamp(0.18 + eased * 0.72, 0.0, 0.92),
         "shared_shift": 0.9 + eased * 8.5,
         "drop_chance": 0.0 if amount < 0.8 else clamp((amount - 0.8) / 0.2 * 0.008, 0.0, 0.008),
-        "transform_chance": 0.0 if amount <= 0.05 else 0.34 + (amount - 0.05) / 0.95 * 0.62,
-        "translate": eased * 9.0,
-        "scale": eased * 0.42,
+        "transform_chance": 0.0 if amount <= 0.0 else 0.72 + eased * 0.28,
+        "translate_x": eased * 10.0,
+        "translate_y": eased * 18.0,
+        "spacing": eased * 12.0,
+        "rotation": math.radians(eased * 40.0),
+        "scale_x": eased * 0.46,
+        "scale_y": eased * 0.38,
         "skew": eased * 0.42,
     }
 
@@ -324,14 +332,17 @@ def randomize_segments(segments, profile, rng):
     cy = (y_min + y_max) / 2.0
 
     if rng.random() < profile["transform_chance"]:
-        sx = 1.0 + rng.uniform(-profile["scale"], profile["scale"])
-        sy = 1.0 + rng.uniform(-profile["scale"], profile["scale"])
+        sx = 1.0 + rng.uniform(-profile["scale_x"], profile["scale_x"])
+        sy = 1.0 + rng.uniform(-profile["scale_y"], profile["scale_y"])
         skew_x = rng.uniform(-profile["skew"], profile["skew"])
         skew_y = rng.uniform(-profile["skew"], profile["skew"])
-        tx = rng.gauss(0.0, profile["translate"] * 0.45)
-        ty = rng.gauss(0.0, profile["translate"] * 0.45)
+        angle = rng.uniform(-profile["rotation"], profile["rotation"])
+        tx = rng.gauss(0.0, profile["translate_x"] * 0.5)
+        tx += rng.gauss(0.0, profile["spacing"] * 0.4)
+        ty = rng.gauss(0.0, profile["translate_y"] * 0.55)
 
         matrix = translation(cx + tx, cy + ty)
+        matrix = multiply(matrix, rotation(angle))
         matrix = multiply(matrix, [1.0, math.tan(skew_y), math.tan(skew_x), 1.0, 0.0, 0.0])
         matrix = multiply(matrix, [sx, 0.0, 0.0, sy, 0.0, 0.0])
         matrix = multiply(matrix, translation(-cx, -cy))
