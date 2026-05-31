@@ -1,6 +1,6 @@
 {
   "slug": "computerscare",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "name": "computerscare",
   "brand": "computerscare",
   "author": "computerscare",
@@ -130,6 +130,13 @@
       "description": "Polyphonic mix matrix",
       "tags": ["Polyphonic", "Utility", "Mixer"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/moly-patrix.md"
+    },
+    {
+      "slug": "computerscare-sloly-pit",
+      "name": "Sloly Pit",
+      "description": "Split a polyphonic input into 16 monophonic outputs",
+      "tags": ["Polyphonic", "Utility"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/sloly-pit.md"
     },
     {
       "slug": "computerscare-horse-a-doodle-doo",

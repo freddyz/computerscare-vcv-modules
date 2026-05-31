@@ -1,10 +1,21 @@
-# 2.3.0
+# 2.3.1
+Sloly Pit:
+- Polyphonic splitter/router, split a poly signal into multiple poly signals
+
 Portaloof:
 - Draw all sources at full alpha
+- Drag/Mouse wheel control
+- Blend modes
 
 Custom Blank:
 - gifs continue animating during crossfade
 - Slideshow keyboard toggle
+
+Knoly Pobs:
+- Add unipolar/bipolar main knob range option
+
+Father & Son:
+- Performance improvements
 
 
 # 2.2.5
