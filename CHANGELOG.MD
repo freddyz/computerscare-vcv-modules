@@ -4,6 +4,8 @@ Sloly Pit:
 
 Portaloof:
 - Draw all sources at full alpha
+- Drag/Mouse wheel control
+- Blend modes
 
 Custom Blank:
 - gifs continue animating during crossfade
