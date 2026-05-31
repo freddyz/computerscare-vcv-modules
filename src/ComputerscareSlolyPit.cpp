@@ -82,7 +82,7 @@ struct ComputerscareSlolyPit : Module {
   bool cachedRoutingValid = false;
   rack::dsp::SchmittTrigger randomizeTriggers[16];
 
-  enum ParamIds { NUM_PARAMS };
+  enum ParamIds { MODE_BUTTON_PARAM, NUM_PARAMS };
   enum InputIds { POLY_INPUT, RANDOMIZE_INPUT, NUM_INPUTS };
   enum OutputIds {
     CHANNEL_OUTPUT,
@@ -90,14 +90,22 @@ struct ComputerscareSlolyPit : Module {
   };
   enum LightIds { NUM_LIGHTS };
 
+  struct RoutingModeParamQuantity : SwitchQuantity {
+    std::string getString() override;
+    std::string getDescription() override;
+  };
+
   ComputerscareSlolyPit() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
+    configButton<RoutingModeParamQuantity>(MODE_BUTTON_PARAM, "Routing Mode");
     configInput(POLY_INPUT, "Poly");
     configInput(RANDOMIZE_INPUT, "Randomize Trigger");
     for (int i = 0; i < 16; i++) {
       configOutput(CHANNEL_OUTPUT + i, slolyPitOrdinal(i + 1));
     }
+
+    getParamQuantity(MODE_BUTTON_PARAM)->randomizeEnabled = false;
 
     resetRouting();
     outputChannelCounts.fill(-1);
@@ -790,6 +798,30 @@ struct ComputerscareSlolyPit : Module {
   }
 };
 
+std::string ComputerscareSlolyPit::RoutingModeParamQuantity::getString() {
+  ComputerscareSlolyPit* slolyPit =
+      dynamic_cast<ComputerscareSlolyPit*>(module);
+  int mode = slolyPit ? slolyPit->routingMode
+                      : ComputerscareSlolyPit::ROUTING_DYNAMIC_BELOW;
+  if (mode < 0 || mode >= 4) {
+    mode = ComputerscareSlolyPit::ROUTING_DYNAMIC_BELOW;
+  }
+
+  return getLabel() + "\n" + SlolyPitRoutingModeNames[mode];
+}
+
+std::string ComputerscareSlolyPit::RoutingModeParamQuantity::getDescription() {
+  ComputerscareSlolyPit* slolyPit =
+      dynamic_cast<ComputerscareSlolyPit*>(module);
+  int mode = slolyPit ? slolyPit->routingMode
+                      : ComputerscareSlolyPit::ROUTING_DYNAMIC_BELOW;
+  if (mode < 0 || mode >= 4) {
+    mode = ComputerscareSlolyPit::ROUTING_DYNAMIC_BELOW;
+  }
+
+  return SlolyPitRoutingModeDescriptions[mode];
+}
+
 struct SlolyPitRoutingModeItem : MenuItem {
   ComputerscareSlolyPit* module;
   int routingMode;
@@ -1200,7 +1232,7 @@ struct SlolyPitOutputLabels : Widget {
 
   SlolyPitOutputLabels(ComputerscareSlolyPit* module) {
     this->module = module;
-    box.pos = Vec(2, 61);
+    box.pos = Vec(2, 64);
     box.size = Vec(36, rowSpacing * 15 + rowHeight);
   }
 
@@ -1978,32 +2010,80 @@ struct SlolyPitOutputLabels : Widget {
   }
 };
 
-struct SlolyPitRndLabel : Widget {
-  std::string fontPath =
-      asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
+struct SlolyPitModeButton : ComputerscareBlankButton {
+  ComputerscareSlolyPit* slolyPit = nullptr;
+  WeakPtr<ui::MenuOverlay> activeMenuOverlay;
+  std::shared_ptr<Svg> routingIcons[4];
+  int menuFrame = -1;
+  int displayedRoutingMode = -1;
 
-  SlolyPitRndLabel() {
-    box.pos = Vec(34, 8);
-    box.size = Vec(23, 8);
+  SlolyPitModeButton() {
+    box.size.x *= 0.6f;
+    routingIcons[ComputerscareSlolyPit::ROUTING_SINGLE] = APP->window->loadSvg(
+        asset::plugin(pluginInstance,
+                      "res/components/sloly-pit-routing-icons/single.svg"));
+    routingIcons[ComputerscareSlolyPit::ROUTING_DYNAMIC_BELOW] =
+        APP->window->loadSvg(asset::plugin(
+            pluginInstance,
+            "res/components/sloly-pit-routing-icons/dynamic-below.svg"));
+    routingIcons[ComputerscareSlolyPit::ROUTING_DYNAMIC_ABOVE] =
+        APP->window->loadSvg(asset::plugin(
+            pluginInstance,
+            "res/components/sloly-pit-routing-icons/dynamic-above.svg"));
+    routingIcons[ComputerscareSlolyPit::ROUTING_CUSTOM] = APP->window->loadSvg(
+        asset::plugin(pluginInstance,
+                      "res/components/sloly-pit-routing-icons/custom.svg"));
   }
 
-  void draw(const DrawArgs& args) override {
-    std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
-    if (!font) {
+  bool isMenuOpen() {
+    ui::MenuOverlay* overlay = activeMenuOverlay.get();
+    return overlay && !overlay->requestedDelete;
+  }
+
+  void updateMenuFrame() {
+    int frame = isMenuOpen() ? 1 : 0;
+    if (menuFrame == frame || frame >= (int)frames.size()) {
       return;
     }
 
-    nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, 8);
-    nvgTextLetterSpacing(args.vg, 0.f);
-    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    nvgFillColor(args.vg, nvgRGB(0x10, 0x10, 0x00));
-    nvgText(args.vg, box.size.x * 0.5f, box.size.y * 0.5f, "rnd", NULL);
+    sw->setSvg(frames[frame]);
+    fb->setDirty();
+    menuFrame = frame;
+    setIconPressed(frame == 1);
   }
-};
 
-struct SlolyPitModeButton : ComputerscareBlankButton {
-  ComputerscareSlolyPit* module = nullptr;
+  void updateRoutingIcon() {
+    if (!slolyPit || displayedRoutingMode == slolyPit->routingMode) {
+      return;
+    }
+
+    displayedRoutingMode = slolyPit->routingMode;
+    setIcon(routingIcons[displayedRoutingMode]);
+  }
+
+  void step() override {
+    ComputerscareBlankButton::step();
+    updateRoutingIcon();
+    updateMenuFrame();
+  }
+
+  void draw(const DrawArgs& args) override {
+    updateRoutingIcon();
+    updateMenuFrame();
+    nvgSave(args.vg);
+    nvgScale(args.vg, 0.6f, 1.f);
+    ComputerscareBlankButton::draw(args);
+    nvgRestore(args.vg);
+  }
+
+  void onDragEnd(const event::DragEnd& e) override {
+    if (e.button == GLFW_MOUSE_BUTTON_LEFT && isMenuOpen()) {
+      updateMenuFrame();
+      return;
+    }
+
+    ComputerscareBlankButton::onDragEnd(e);
+  }
 
   void onButton(const event::Button& e) override {
     if (e.button != GLFW_MOUSE_BUTTON_LEFT || e.action != GLFW_PRESS) {
@@ -2012,13 +2092,16 @@ struct SlolyPitModeButton : ComputerscareBlankButton {
     }
 
     e.consume(this);
-    if (!module) {
+    destroyTooltip();
+    if (!slolyPit) {
       return;
     }
 
     Menu* menu = createMenu();
+    activeMenuOverlay = menu->getAncestorOfType<ui::MenuOverlay>();
     menu->addChild(createMenuLabel("Routing Mode"));
-    addSlolyPitRoutingModeItems(menu, module);
+    addSlolyPitRoutingModeItems(menu, slolyPit);
+    updateMenuFrame();
   }
 };
 
@@ -2036,19 +2119,18 @@ struct ComputerscareSlolyPitWidget : ModuleWidget {
 
     addInput(createInput<InPort>(Vec(4, 31), module,
                                  ComputerscareSlolyPit::POLY_INPUT));
-    addChild(new SlolyPitRndLabel());
-    addInput(createInput<TinyJack>(Vec(39, 18), module,
+    addInput(createInput<TinyJack>(Vec(31, 25), module,
                                    ComputerscareSlolyPit::RANDOMIZE_INPUT));
-    SlolyPitModeButton* modeButton =
-        createWidget<SlolyPitModeButton>(Vec(21, 38));
-    modeButton->module = module;
-    addChild(modeButton);
+    SlolyPitModeButton* modeButton = createParam<SlolyPitModeButton>(
+        Vec(33, 43), module, ComputerscareSlolyPit::MODE_BUTTON_PARAM);
+    modeButton->slolyPit = module;
+    addParam(modeButton);
 
     addChild(new SlolyPitOutputLabels(module));
 
     for (int i = 0; i < 16; i++) {
       addOutput(
-          createOutput<TinyJack>(Vec(39, 59 + i * 19), module,
+          createOutput<TinyJack>(Vec(41, 62 + i * 19), module,
                                  ComputerscareSlolyPit::CHANNEL_OUTPUT + i));
     }
   }

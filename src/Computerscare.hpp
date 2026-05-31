@@ -213,6 +213,11 @@ struct ComputerscareResetButton : ComputerscareMomentarySvgSwitch {
   }
 };
 struct ComputerscareBlankButton : ComputerscareMomentarySvgSwitch {
+  widget::SvgWidget* iconWidget = NULL;
+  Vec iconUpPos = Vec(5.6f, 1.2f);
+  Vec iconDownOffset = Vec(3.6f, 2.9f);
+  bool iconPressed = false;
+
   ComputerscareBlankButton() {
     momentary = true;
     shadow->opacity = 0.f;
@@ -220,6 +225,39 @@ struct ComputerscareBlankButton : ComputerscareMomentarySvgSwitch {
         pluginInstance, "res/components/computerscare-blank-button.svg")));
     addFrame(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/components/computerscare-blank-button-down.svg")));
+
+    iconWidget = new widget::SvgWidget;
+    iconWidget->box.pos = iconUpPos;
+    fb->addChild(iconWidget);
+  }
+
+  void setIcon(std::shared_ptr<Svg> svg) {
+    if (!iconWidget || iconWidget->svg == svg) {
+      return;
+    }
+
+    iconWidget->setSvg(svg);
+    updateIconPosition();
+    fb->setDirty();
+  }
+
+  void setIconPressed(bool pressed) {
+    if (iconPressed == pressed) {
+      return;
+    }
+
+    iconPressed = pressed;
+    updateIconPosition();
+    fb->setDirty();
+  }
+
+  void updateIconPosition() {
+    if (!iconWidget) {
+      return;
+    }
+
+    iconWidget->box.pos =
+        iconPressed ? iconUpPos.plus(iconDownOffset) : iconUpPos;
   }
 };
 struct ComputerscareNextButton : ComputerscareMomentarySvgSwitch {
