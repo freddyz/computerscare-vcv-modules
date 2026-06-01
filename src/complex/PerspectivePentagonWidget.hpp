@@ -252,21 +252,9 @@ struct PerspectivePentagonDisplay : Widget {
     return 0;
   }
 
-  void drawHighlight(const DrawArgs& args) {
+  void drawFaceHighlight(const DrawArgs& args) {
     PerspectivePentagonGeometry g = geometry();
     NVGcolor highlightColor = nvgRGBA(238, 209, 61, 58);
-    for (int i = 0; i < g.pointCount; i++) {
-      int j = (i + 1) % g.pointCount;
-      nvgBeginPath(args.vg);
-      nvgMoveTo(args.vg, g.face[i].x, g.face[i].y);
-      nvgLineTo(args.vg, g.face[j].x, g.face[j].y);
-      nvgLineTo(args.vg, g.extruded[j].x, g.extruded[j].y);
-      nvgLineTo(args.vg, g.extruded[i].x, g.extruded[i].y);
-      nvgClosePath(args.vg);
-      nvgFillColor(args.vg, highlightColor);
-      nvgFill(args.vg);
-    }
-
     nvgBeginPath(args.vg);
     drawFacePath(args.vg, g);
     nvgFillColor(args.vg, highlightColor);
@@ -479,6 +467,21 @@ struct PerspectivePentagonWidget : Widget {
 
   void setContextMenuEnabled(bool enabled) { contextMenuEnabled = enabled; }
 
+  bool containsFacePoint(Vec p) const {
+    if (!display) return false;
+    PerspectivePentagonGeometry g = display->geometry();
+    bool inside = false;
+    for (int i = 0, j = g.pointCount - 1; i < g.pointCount; j = i++) {
+      Vec pi = g.face[i];
+      Vec pj = g.face[j];
+      bool crosses =
+          ((pi.y > p.y) != (pj.y > p.y)) &&
+          (p.x < (pj.x - pi.x) * (p.y - pi.y) / (pj.y - pi.y) + pi.x);
+      if (crosses) inside = !inside;
+    }
+    return inside;
+  }
+
   bool isHoveredWithin() const {
     Widget* hovered = APP->event->hoveredWidget;
     while (hovered) {
@@ -486,6 +489,21 @@ struct PerspectivePentagonWidget : Widget {
       hovered = hovered->parent;
     }
     return false;
+  }
+
+  bool isMouseOverFace() {
+    if (!APP || !APP->scene) return false;
+    Vec mouse = APP->scene->getMousePos();
+    Vec pos = getAbsoluteOffset(Vec());
+    float zoom = getAbsoluteZoom();
+    if (zoom <= 0.f) return false;
+    return containsFacePoint(mouse.minus(pos).div(zoom));
+  }
+
+  void onHover(const event::Hover& e) override {
+    if (!containsFacePoint(e.pos)) return;
+    Widget::onHover(e);
+    if (!e.isConsumed()) e.consume(this);
   }
 
   void layout() {
@@ -513,8 +531,9 @@ struct PerspectivePentagonWidget : Widget {
   void draw(const DrawArgs& args) override {
     if (display && drawSidesEnabled) display->drawSides(args);
     if (display && drawFaceEnabled) display->drawFace(args);
-    if (display && hoverHighlightEnabled && isHoveredWithin())
-      display->drawHighlight(args);
+    if (display && drawFaceEnabled && hoverHighlightEnabled &&
+        isHoveredWithin() && isMouseOverFace())
+      display->drawFaceHighlight(args);
     Widget::draw(args);
   }
 
@@ -531,6 +550,7 @@ struct PerspectivePentagonWidget : Widget {
   }
 
   void onButton(const event::Button& e) override {
+    if (!containsFacePoint(e.pos)) return;
     if (contextMenuEnabled && e.button == GLFW_MOUSE_BUTTON_RIGHT &&
         e.action == GLFW_PRESS && (e.mods & RACK_MOD_MASK) == 0) {
       makeMenu();

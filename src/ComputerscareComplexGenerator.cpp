@@ -358,40 +358,15 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     Vec channelSize = Vec(54.f, 31.f);
     Vec outputPos = Vec(2.f, 31.f);
     Vec outputSize = Vec(116.f, 48.f);
-    Vec modeSize = Vec(56.f, 43.f);
-    Vec laneSize = Vec(56.f, 36.f);
+    constexpr float mainOutputY = 47.f;
 
-    addPerspectiveDisplay(titlePos, titleSize, module, 100, true, false);
     addPerspectiveDisplay(channelPos, channelSize, module, 101, true, false);
+    addPerspectiveDisplay(titlePos, titleSize, module, 100, true, false);
     addPerspectiveDisplay(outputPos, outputSize, module, 102, true, false);
-    addPerspectiveDisplay(pentLeftX, pentTopY, modeSize, module,
-                          ComputerscareComplexGenerator::SCALE_VAL_AB, true,
-                          false, 0x74, 0x78, 0x0a);
-    addPerspectiveDisplay(pentRightX, pentTopY, modeSize, module,
-                          ComputerscareComplexGenerator::OFFSET_VAL_AB, true,
-                          false, 0x74, 0x78, 0x0a);
-    for (int i = 0; i < numComplexGeneratorKnobs; i++) {
-      bool isRightColumn = i % 2 == 1;
-      float xx = isRightColumn ? pentRightX : pentLeftX;
-      float yy = pentTopY + pentRowSpacing * (1 + i / 2);
-      addPerspectiveDisplay(xx, yy, laneSize, module, i + 2, true, false);
-    }
 
-    addPerspectiveDisplay(titlePos, titleSize, module, 100, false, true);
     addPerspectiveDisplay(channelPos, channelSize, module, 101, false, true);
+    addPerspectiveDisplay(titlePos, titleSize, module, 100, false, true);
     addPerspectiveDisplay(outputPos, outputSize, module, 102, false, true);
-    addPerspectiveDisplay(pentLeftX, pentTopY, modeSize, module,
-                          ComputerscareComplexGenerator::SCALE_VAL_AB, false,
-                          true, 0x74, 0x78, 0x0a);
-    addPerspectiveDisplay(pentRightX, pentTopY, modeSize, module,
-                          ComputerscareComplexGenerator::OFFSET_VAL_AB, false,
-                          true, 0x74, 0x78, 0x0a);
-    for (int i = 0; i < numComplexGeneratorKnobs; i++) {
-      bool isRightColumn = i % 2 == 1;
-      float xx = isRightColumn ? pentRightX : pentLeftX;
-      float yy = pentTopY + pentRowSpacing * (1 + i / 2);
-      addPerspectiveDisplay(xx, yy, laneSize, module, i + 2, false, true);
-    }
 
     SmallLetterDisplay* titleDisplay = new SmallLetterDisplay();
     titleDisplay->box = Rect(titlePos.plus(Vec(5.f, 2.f)), Vec(50.f, 19.f));
@@ -412,32 +387,35 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     addChild(channelWidget);
 
     cpx::CompolyPortsWidget* mainOutput = new cpx::CompolyPortsWidget(
-        Vec(45, 43), module, ComputerscareComplexGenerator::COMPOLY_MAIN_OUT_A,
+        Vec(45, mainOutputY), module,
+        ComputerscareComplexGenerator::COMPOLY_MAIN_OUT_A,
         ComputerscareComplexGenerator::MAIN_OUTPUT_MODE, 0.6);
-    mainOutput->compolyLabelTransform->box.pos = Vec(21, 44);
+    mainOutput->compolyLabelTransform->box.pos = Vec(21, mainOutputY + 1.f);
     addChild(mainOutput);
 
-    addModeControl("scale", pentLeftX, pentTopY, module,
-                   ComputerscareComplexGenerator::SCALE_VAL_AB,
-                   ComputerscareComplexGenerator::SCALE_POLAR,
-                   ComputerscareComplexGenerator::SCALE_VIEW_MODE,
-                   cpx::ComplexXYMaxMode::Radial, 3.f);
     addModeControl("offset", pentRightX, pentTopY, module,
                    ComputerscareComplexGenerator::OFFSET_VAL_AB,
                    ComputerscareComplexGenerator::OFFSET_POLAR,
                    ComputerscareComplexGenerator::OFFSET_VIEW_MODE,
                    cpx::ComplexXYMaxMode::Rectangular, 10.f);
+    addModeControl("scale", pentLeftX, pentTopY, module,
+                   ComputerscareComplexGenerator::SCALE_VAL_AB,
+                   ComputerscareComplexGenerator::SCALE_POLAR,
+                   ComputerscareComplexGenerator::SCALE_VIEW_MODE,
+                   cpx::ComplexXYMaxMode::Radial, 3.f);
 
     // addParam(createParam<NoRandomSmallKnob>(Vec(11, 54), module,
     // ComputerscareComplexGenerator::GLOBAL_SCALE));
     // addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module,
     // ComputerscareComplexGenerator::GLOBAL_OFFSET));
 
-    for (int i = 0; i < numComplexGeneratorKnobs; i++) {
-      bool isRightColumn = i % 2 == 1;
-      float xx = isRightColumn ? pentRightX : pentLeftX;
-      float yy = pentTopY + pentRowSpacing * (1 + i / 2);
-      addLabeledKnob(std::to_string(i + 1), xx, yy, module, i * 2);
+    for (int i = 8; i < numComplexGeneratorKnobs; i++) {
+      float yy = pentTopY + pentRowSpacing * (1 + i - 8);
+      addLabeledKnob(std::to_string(i + 1), pentRightX, yy, module, i * 2);
+    }
+    for (int i = 0; i < 8; i++) {
+      float yy = pentTopY + pentRowSpacing * (1 + i);
+      addLabeledKnob(std::to_string(i + 1), pentLeftX, yy, module, i * 2);
     }
   }
   void addSmallLabel(std::string label, int x, int y, float fontSize) {
@@ -491,7 +469,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
             Vec(34.f, 10.f), -1, false, controlLabel,
             NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, Vec(11.f, 7.f));
     control->box = Rect(Vec(x, y), Vec(56.f, 43.f));
-    control->setDrawParts(false, false);
+    control->setDrawParts(true, true);
     control->setContextMenuEnabled(false);
     control->setContentFillsBox(true);
     control->setHoverHighlightEnabled(true);
@@ -529,7 +507,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
             labelRel, Vec(labelWidth, 10.f), index / 2, false, "Lane " + label,
             NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, controlRel);
     control->box = Rect(Vec(x, y), wrapperSize);
-    control->setDrawParts(false, false);
+    control->setDrawParts(true, true);
     control->setContextMenuEnabled(false);
     control->setContentFillsBox(true);
     control->setHoverHighlightEnabled(true);
