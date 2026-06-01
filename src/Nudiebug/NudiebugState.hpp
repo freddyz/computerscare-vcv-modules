@@ -53,6 +53,8 @@ struct DisplayOptions {
   int channelLabelsMode = CHANNEL_LABELS_BOTH;
   int channelLayoutMode = CHANNEL_LAYOUT_ALL;
   int displayOrientation = DISPLAY_VERTICAL;
+  float textColorHue = 0.f;
+  float barColorHue = 0.f;
 };
 
 struct Snapshot {

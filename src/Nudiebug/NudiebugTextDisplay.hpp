@@ -56,21 +56,28 @@ struct TextDisplay : TransparentWidget {
     const bool horizontal =
         options && options->displayOrientation == DISPLAY_HORIZONTAL;
     const bool clearPlotPerFrame = options && options->clearPlotPerFrame;
+    const bool leftLabels =
+        drawLabels && (!compolyDisplay || labelsMode == CHANNEL_LABELS_LEFT ||
+                       labelsMode == CHANNEL_LABELS_BOTH);
+    const bool rightLabels =
+        drawLabels && (!compolyDisplay || labelsMode == CHANNEL_LABELS_RIGHT ||
+                       labelsMode == CHANNEL_LABELS_BOTH);
     const float top = 2.f;
     const float bottom = 2.f;
-    const float labelReserve = labelsEnabled ? 18.f : 0.f;
-    const float labelTextGap = labelsEnabled ? 3.f : 0.f;
-    const float leftLabelX = labelReserve - labelTextGap;
-    const float rightLabelX = box.size.x - labelReserve + labelTextGap;
+    const float leftLabelReserve = leftLabels ? 18.f : 0.f;
+    const float rightLabelReserve = rightLabels ? 18.f : 0.f;
+    const float labelTextGap = drawLabels ? 3.f : 0.f;
+    const float leftLabelX = leftLabelReserve - labelTextGap;
+    const float rightLabelX = box.size.x - rightLabelReserve + labelTextGap;
     const float centerGap = 4.f;
-    const float leftValueX = labelsEnabled ? labelReserve : 0.f;
-    const float rightValueRight =
-        labelsEnabled ? box.size.x - labelReserve : box.size.x;
+    const float leftValueX = leftLabelReserve;
+    const float rightValueRight = box.size.x - rightLabelReserve;
     const float barCenterGap = drawText ? centerGap : 6.f;
-    const float barLeftX = labelReserve;
-    const float barRightValueRight = box.size.x - labelReserve;
-    const float barWidth =
-        std::max(8.f, (box.size.x - labelReserve * 2.f - barCenterGap) * 0.5f);
+    const float barLeftX = leftLabelReserve;
+    const float barRightValueRight = box.size.x - rightLabelReserve;
+    const float barWidth = std::max(8.f, (box.size.x - leftLabelReserve -
+                                          rightLabelReserve - barCenterGap) *
+                                             0.5f);
     const float barRightX = barRightValueRight - barWidth;
     const int verticalSlots =
         stretchChannels ? activeSlotCount(compolyDisplay) : 16;
@@ -270,8 +277,7 @@ struct TextDisplay : TransparentWidget {
     const float y = centerY - height * 0.5f;
     const float clamped = clamp(std::fabs(voltage) / 10.f, 0.f, 1.f);
     const float barWidth = std::max(2.f, width * clamped);
-    const NVGcolor fill = voltage >= 0.f ? nvgRGBA(0x24, 0xC9, 0xA6, 0x80)
-                                         : nvgRGBA(0xC4, 0x34, 0x21, 0x80);
+    const NVGcolor fill = barColor(voltage);
 
     if (!options || options->barBackgroundEnabled) {
       nvgBeginPath(vg);
@@ -303,8 +309,7 @@ struct TextDisplay : TransparentWidget {
       nvgFontSize(vg, 12.f);
       nvgTextLetterSpacing(vg, 0.f);
     }
-    nvgFillColor(vg, active ? nvgRGB(0xF3, 0xF1, 0xDE)
-                            : nvgRGBA(0xF3, 0xF1, 0xDE, 0x55));
+    nvgFillColor(vg, textColor(active ? 1.f : 0.33f));
     nvgTextAlign(vg, align);
     nvgText(vg, x, y, string::f("%d", channel + 1).c_str(), nullptr);
   }
@@ -314,7 +319,7 @@ struct TextDisplay : TransparentWidget {
     nvgFontFaceId(vg, fontHandle);
     nvgFontSize(vg, 12.f);
 
-    nvgFillColor(vg, nvgRGB(0xC8, 0xEA, 0xE2));
+    nvgFillColor(vg, textColor());
     if (isLeftChannelActive(channel)) {
       nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
       std::string left = formatVoltage(snapshot->leftVoltages[channel]);
@@ -337,6 +342,9 @@ struct TextDisplay : TransparentWidget {
     nvgFontSize(vg, 12.f);
 
     cpx::complex_text::FixedComplexTextStyle style;
+    style.numberColor = textColor();
+    style.operatorColor = textOperatorColor();
+    style.accentColor = textAccentColor();
     style.textAlign = align;
     cpx::complex_text::drawRect(vg, fontHandle, symbolFontHandle, valueX, y,
                                 snapshot->rectX[channel],
@@ -352,6 +360,9 @@ struct TextDisplay : TransparentWidget {
     nvgFontSize(vg, 12.f);
 
     cpx::complex_text::FixedComplexTextStyle style;
+    style.numberColor = textColor();
+    style.operatorColor = textOperatorColor();
+    style.accentColor = textAccentColor();
     style.textAlign = align;
     cpx::complex_text::drawPolar(vg, fontHandle, valueX, y,
                                  snapshot->polarR[channel],
@@ -375,12 +386,21 @@ struct TextDisplay : TransparentWidget {
     const float labelBottomY = box.size.y - 8.f;
     const float barWidth =
         std::max(3.f, slotW * (stretchChannels ? 0.9f : 0.62f));
-    const float edgeMargin = drawLabels ? 18.f : 0.f;
+    const int labelMode =
+        options ? options->channelLabelsMode : CHANNEL_LABELS_BOTH;
+    const bool topLabels =
+        drawLabels && (!compolyDisplay || labelMode == CHANNEL_LABELS_LEFT ||
+                       labelMode == CHANNEL_LABELS_BOTH);
+    const bool bottomLabels =
+        drawLabels && (!compolyDisplay || labelMode == CHANNEL_LABELS_RIGHT ||
+                       labelMode == CHANNEL_LABELS_BOTH);
+    const float topEdgeMargin = topLabels ? 18.f : 0.f;
+    const float bottomEdgeMargin = bottomLabels ? 18.f : 0.f;
     const float centerMargin = drawText ? 24.f : 6.f;
-    const float topBarTop = edgeMargin;
+    const float topBarTop = topEdgeMargin;
     const float topBarBottom = box.size.y * 0.5f - centerMargin * 0.5f;
     const float bottomBarTop = box.size.y * 0.5f + centerMargin * 0.5f;
-    const float bottomBarBottom = box.size.y - edgeMargin;
+    const float bottomBarBottom = box.size.y - bottomEdgeMargin;
     const float topBarHeight = std::max(2.f, topBarBottom - topBarTop);
     const float bottomBarHeight = std::max(2.f, bottomBarBottom - bottomBarTop);
 
@@ -421,8 +441,6 @@ struct TextDisplay : TransparentWidget {
           drawChannelLabel(vg, x, labelBottomY, c, isRightChannelActive(c),
                            NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, fontHandle);
         } else {
-          const int labelMode =
-              options ? options->channelLabelsMode : CHANNEL_LABELS_BOTH;
           if (labelMode == CHANNEL_LABELS_LEFT ||
               labelMode == CHANNEL_LABELS_BOTH) {
             drawChannelLabel(vg, x, labelTopY, c, isCompolyChannelActive(c),
@@ -440,7 +458,7 @@ struct TextDisplay : TransparentWidget {
 
       nvgFontFaceId(vg, fontHandle);
       nvgFontSize(vg, 12.f);
-      nvgFillColor(vg, nvgRGB(0xC8, 0xEA, 0xE2));
+      nvgFillColor(vg, textColor());
       if (!compolyDisplay) {
         if (isLeftChannelActive(c)) {
           nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
@@ -483,8 +501,7 @@ struct TextDisplay : TransparentWidget {
   void drawVerticalBar(NVGcontext* vg, float x, float y, float width,
                        float height, float voltage, bool growUp, int mode) {
     const float clamped = clamp(std::fabs(voltage) / 10.f, 0.f, 1.f);
-    const NVGcolor fill = voltage >= 0.f ? nvgRGBA(0x24, 0xC9, 0xA6, 0x80)
-                                         : nvgRGBA(0xC4, 0x34, 0x21, 0x80);
+    const NVGcolor fill = barColor(voltage);
 
     if (!options || options->barBackgroundEnabled) {
       nvgBeginPath(vg);
@@ -506,6 +523,44 @@ struct TextDisplay : TransparentWidget {
     nvgRoundedRect(vg, x, by, width, bh, 2.f);
     nvgFillColor(vg, fill);
     nvgFill(vg);
+  }
+
+  float hueParam(float value) const {
+    if (value <= 0.f) return -1.f;
+    return std::fmod(value / 9.f, 1.f);
+  }
+
+  NVGcolor textColor(float alpha = 1.f) const {
+    const float hue = hueParam(options ? options->textColorHue : 0.f);
+    if (hue < 0.f) return nvgRGBA(0xC8, 0xEA, 0xE2, (int)(alpha * 255.f));
+    return nvgHSLA(hue, 0.86f, 0.76f, (int)(alpha * 255.f));
+  }
+
+  NVGcolor textOperatorColor() const {
+    const float hue = hueParam(options ? options->textColorHue : 0.f);
+    if (hue < 0.f) return nvgRGB(0x88, 0x92, 0x8F);
+    return nvgHSLA(std::fmod(hue + 0.22f, 1.f), 0.54f, 0.58f, 0xff);
+  }
+
+  NVGcolor textAccentColor() const {
+    const float hue = hueParam(options ? options->textColorHue : 0.f);
+    if (hue < 0.f) return COLOR_COMPUTERSCARE_LIGHT_GREEN;
+    return nvgHSLA(std::fmod(hue + 0.42f, 1.f), 0.96f, 0.62f, 0xff);
+  }
+
+  NVGcolor barColor(float voltage) const {
+    const float hue = hueParam(options ? options->barColorHue : 0.f);
+    if (hue < 0.f) {
+      return voltage >= 0.f ? nvgRGBA(0x24, 0xC9, 0xA6, 0x80)
+                            : nvgRGBA(0xC4, 0x34, 0x21, 0x80);
+    }
+
+    const float signOffset = voltage >= 0.f ? 0.05f : 0.57f;
+    const float wobble = voltage >= 0.f ? 0.13f : 0.31f;
+    const float h = std::fmod(hue * 1.37f + signOffset + wobble, 1.f);
+    const float sat = voltage >= 0.f ? 0.88f : 0.96f;
+    const float lum = voltage >= 0.f ? 0.56f : 0.52f;
+    return nvgHSLA(h, sat, lum, 0x98);
   }
 };
 

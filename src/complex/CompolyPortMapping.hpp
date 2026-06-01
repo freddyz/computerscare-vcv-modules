@@ -93,6 +93,15 @@ inline std::array<float, 2> coordinatePairForCompolyLane(
            channelVoltage(ports.b, compolyLane, portChannels.b)}};
 }
 
+inline std::array<float, 2> coordinatePairForSeparatedOutputLane(
+    const PortChannels& ports, PortChannelCounts portChannels, int outputLane,
+    cpx::polyphonic::MappingMode mappingMode) {
+  std::array<int, 2> inputChannels = separatedInputChannelIndices(
+      outputLane, mappingMode, portChannels.a, portChannels.b);
+  return {{channelVoltage(ports.a, inputChannels[0], portChannels.a),
+           channelVoltage(ports.b, inputChannels[1], portChannels.b)}};
+}
+
 inline PortChannelCounts outputPortChannelCounts(
     cpx::complex_math::CoordinateMode mode, int compolyChannels) {
   compolyChannels = cpx::complex_math::clampChannelCount(compolyChannels);
@@ -151,10 +160,15 @@ inline cpx::complex_math::RectChannels readWrappedInputToRect(
   compolyChannels = cpx::complex_math::clampChannelCount(compolyChannels);
 
   for (int c = 0; c < compolyChannels; ++c) {
-    int inputLane =
-        inputCompolyLaneForOutputLane(c, mode, mappingMode, portChannels);
-    std::array<float, 2> pair =
-        coordinatePairForCompolyLane(ports, portChannels, mode, inputLane);
+    std::array<float, 2> pair = {};
+    if (cpx::complex_math::isInterleaved(mode)) {
+      int inputLane =
+          inputCompolyLaneForOutputLane(c, mode, mappingMode, portChannels);
+      pair = coordinatePairForCompolyLane(ports, portChannels, mode, inputLane);
+    } else {
+      pair = coordinatePairForSeparatedOutputLane(ports, portChannels, c,
+                                                  mappingMode);
+    }
     cpx::complex_math::Quad z =
         cpx::complex_math::quadFromPair(pair[0], pair[1], mode);
     rect.x[c] = z.x;
@@ -176,12 +190,13 @@ inline cpx::complex_math::RectChannels readWrappedSeparatedInputToRect(
   for (int c = 0; c < compolyChannels; ++c) {
     std::array<int, 2> inputChannels = separatedInputChannelIndices(
         c, mappingMode, portChannels.a, portChannels.b);
-    float a = ports.a[inputChannels[0]] * transform.aScale + transform.aOffset;
-    float b = ports.b[inputChannels[1]] * transform.bScale + transform.bOffset;
+    float rawA = channelVoltage(ports.a, inputChannels[0], portChannels.a);
+    float rawB = channelVoltage(ports.b, inputChannels[1], portChannels.b);
+    float a = rawA * transform.aScale + transform.aOffset;
+    float b = rawB * transform.bScale + transform.bOffset;
 
     if (mode == cpx::complex_math::CoordinateMode::PolarSeparated) {
-      b = cpx::complex_math::thetaCableVoltageToRadians(
-              ports.b[inputChannels[1]]) *
+      b = cpx::complex_math::thetaCableVoltageToRadians(rawB) *
               transform.bScale +
           transform.bOffset;
     }

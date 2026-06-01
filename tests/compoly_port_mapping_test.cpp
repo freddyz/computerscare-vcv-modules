@@ -173,6 +173,34 @@ int main() {
   requireNear(cycledInterleaved.x[2], 1.f,
               "generic wrapped interleaved cycles lanes");
 
+  cp::PortChannels mixedSeparated = {};
+  mixedSeparated.a[0] = 1.f;
+  mixedSeparated.a[1] = 2.f;
+  mixedSeparated.b[0] = 10.f;
+  cm::RectChannels mixedSeparatedCycle = cp::readWrappedInputToRect(
+      mixedSeparated, cp::PortChannelCounts(2, 1),
+      cm::CoordinateMode::RectangularSeparated,
+      cpx::polyphonic::MappingMode::Cycle, 4);
+  requireNear(mixedSeparatedCycle.x[2], 1.f,
+              "generic wrapped separated cycles first cable independently");
+  requireNear(mixedSeparatedCycle.y[2], 10.f,
+              "generic wrapped separated spreads mono second cable");
+
+  cp::PortChannels mixedPolar = {};
+  mixedPolar.a[0] = 1.f;
+  mixedPolar.a[1] = 2.f;
+  mixedPolar.b[0] = 2.5f;
+  cm::RectChannels mixedPolarCycle = cp::readWrappedInputToRect(
+      mixedPolar, cp::PortChannelCounts(2, 1),
+      cm::CoordinateMode::PolarSeparated, cpx::polyphonic::MappingMode::Cycle,
+      4);
+  requireNear(mixedPolarCycle.x[2], 0.f,
+              "generic wrapped polar separated spreads mono theta x");
+  requireNear(mixedPolarCycle.y[2], 1.f,
+              "generic wrapped polar separated cycles radius with mono theta");
+  requireNear(mixedPolarCycle.y[3], 2.f,
+              "generic wrapped polar separated keeps mono theta on odd lane");
+
   cp::PortChannels wrappedPolar = {};
   wrappedPolar.a[0] = 2.f;
   wrappedPolar.a[1] = 4.f;

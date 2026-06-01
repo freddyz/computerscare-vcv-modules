@@ -27,6 +27,8 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     INTERLEAVED_PARTIAL_PAIR_MODE,
     INTERLEAVED_BANK_MODE,
     SEPARATED_LANE_MODE,
+    TEXT_COLOR_HUE,
+    BAR_COLOR_HUE,
     NUM_PARAMS
   };
   enum InputIds { Z_INPUT, NUM_INPUTS = Z_INPUT + 2 };
@@ -71,6 +73,8 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                  {"Rectangular", "Polar"});
     configSwitch(BAR_BACKGROUND_MODE, 0.f, 1.f, 1.f, "Bar background",
                  {"Off", "On"});
+    configParam(TEXT_COLOR_HUE, 0.f, 9.f, 0.f, "Text Color Hue");
+    configParam(BAR_COLOR_HUE, 0.f, 9.f, 0.f, "Bar Color Scheme");
     configSwitch(INTERLEAVED_PARTIAL_PAIR_MODE, 0.f, 1.f, 0.f,
                  "Interleaved partial pairs", {"Strict", "Zero fill"});
     configSwitch(INTERLEAVED_BANK_MODE, 0.f, 2.f, 2.f, "Interleaved banks",
@@ -104,6 +108,8 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     displayOptions.channelLayoutMode = params[CHANNEL_LAYOUT_MODE].getValue();
     displayOptions.displayOrientation =
         params[DISPLAY_ORIENTATION_MODE].getValue();
+    displayOptions.textColorHue = params[TEXT_COLOR_HUE].getValue();
+    displayOptions.barColorHue = params[BAR_COLOR_HUE].getValue();
 
     displaySnapshotCounter++;
     bool updateDisplay = displaySnapshotCounter > displaySnapshotPeriod;
@@ -143,6 +149,10 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
                         json_integer(displayOptions.channelLayoutMode));
     json_object_set_new(rootJ, "displayOrientation",
                         json_integer(displayOptions.displayOrientation));
+    json_object_set_new(rootJ, "textColorHue",
+                        json_real(displayOptions.textColorHue));
+    json_object_set_new(rootJ, "barColorHue",
+                        json_real(displayOptions.barColorHue));
     return rootJ;
   }
 
@@ -249,6 +259,18 @@ struct ComputerscareNudiebug : ComputerscareComplexBase {
     if (displayOrientationJ) {
       displayOptions.displayOrientation =
           json_integer_value(displayOrientationJ);
+    }
+
+    json_t* textColorHueJ = json_object_get(rootJ, "textColorHue");
+    if (textColorHueJ) {
+      displayOptions.textColorHue = json_number_value(textColorHueJ);
+      params[TEXT_COLOR_HUE].setValue(displayOptions.textColorHue);
+    }
+
+    json_t* barColorHueJ = json_object_get(rootJ, "barColorHue");
+    if (barColorHueJ) {
+      displayOptions.barColorHue = json_number_value(barColorHueJ);
+      params[BAR_COLOR_HUE].setValue(displayOptions.barColorHue);
     }
   }
 };
@@ -588,6 +610,12 @@ struct ComputerscareNudiebugWidget : ModuleWidget {
                              nudiebug::DISPLAY_HORIZONTAL,
                              ComputerscareNudiebug::DISPLAY_ORIENTATION_MODE);
           }));
+    }));
+    menu->addChild(createSubmenuItem("Sub Colors", "", [=](Menu* colorMenu) {
+      colorMenu->addChild(new MenuParamSlider(
+          m->paramQuantities[ComputerscareNudiebug::TEXT_COLOR_HUE]));
+      colorMenu->addChild(new MenuParamSlider(
+          m->paramQuantities[ComputerscareNudiebug::BAR_COLOR_HUE]));
     }));
     menu->addChild(createSubmenuItem(
         "Compoly Input Formation", "", [=](Menu* formationMenu) {
