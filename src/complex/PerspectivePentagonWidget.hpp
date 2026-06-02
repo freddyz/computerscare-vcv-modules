@@ -1,7 +1,5 @@
 #pragma once
 
-#include <functional>
-
 #include "SwitchableComplexControl.hpp"
 
 namespace cpx {
@@ -12,25 +10,9 @@ enum class PerspectivePentagonSize {
   Large = 2,
 };
 
-enum class PerspectivePentagonPreset {
-  DownLeft = 0,
-  DownRight = 1,
-  UpLeft = 2,
-  UpRight = 3,
-  DeepLeft = 4,
-  ShallowLeft = 5,
-};
-
-enum class PerspectivePentagonShape {
-  Pentagon = 0,
-  Rectangle = 1,
-};
-
 struct PerspectivePentagonSettings {
   int size = static_cast<int>(PerspectivePentagonSize::Medium);
-  int preset = static_cast<int>(PerspectivePentagonPreset::DownLeft);
   int colorVariation = 1;
-  int shape = static_cast<int>(PerspectivePentagonShape::Rectangle);
 };
 
 struct PerspectivePentagonGeometry {
@@ -45,16 +27,8 @@ inline int clampPerspectivePentagonSize(int size) {
   return std::max(0, std::min(2, size));
 }
 
-inline int clampPerspectivePentagonPreset(int preset) {
-  return std::max(0, std::min(5, preset));
-}
-
 inline int clampPerspectivePentagonColorVariation(int variation) {
   return std::max(0, std::min(4, variation));
-}
-
-inline int clampPerspectivePentagonShape(int shape) {
-  return std::max(0, std::min(1, shape));
 }
 
 inline std::string perspectivePentagonSizeName(int size) {
@@ -65,22 +39,6 @@ inline std::string perspectivePentagonSizeName(int size) {
       return "large";
   }
   return "medium";
-}
-
-inline std::string perspectivePentagonPresetName(int preset) {
-  switch (clampPerspectivePentagonPreset(preset)) {
-    case 1:
-      return "down right";
-    case 2:
-      return "up left";
-    case 3:
-      return "up right";
-    case 4:
-      return "deep left";
-    case 5:
-      return "shallow left";
-  }
-  return "down left";
 }
 
 inline std::string perspectivePentagonColorVariationName(int variation) {
@@ -95,14 +53,6 @@ inline std::string perspectivePentagonColorVariationName(int variation) {
       return "wild";
   }
   return "low";
-}
-
-inline std::string perspectivePentagonShapeName(int shape) {
-  switch (clampPerspectivePentagonShape(shape)) {
-    case 1:
-      return "rectangle";
-  }
-  return "pentagon";
 }
 
 struct PerspectivePentagonDisplay : Widget {
@@ -121,20 +71,10 @@ struct PerspectivePentagonDisplay : Widget {
                     : static_cast<int>(PerspectivePentagonSize::Medium);
   }
 
-  int currentPreset() const {
-    return settings ? clampPerspectivePentagonPreset(settings->preset)
-                    : static_cast<int>(PerspectivePentagonPreset::DownLeft);
-  }
-
   int currentColorVariation() const {
     return settings ? clampPerspectivePentagonColorVariation(
                           settings->colorVariation)
                     : 1;
-  }
-
-  int currentShape() const {
-    return settings ? clampPerspectivePentagonShape(settings->shape)
-                    : static_cast<int>(PerspectivePentagonShape::Rectangle);
   }
 
   float contentScale() const {
@@ -175,54 +115,23 @@ struct PerspectivePentagonDisplay : Widget {
 
   PerspectivePentagonGeometry geometry() const {
     PerspectivePentagonGeometry g;
-    int preset = currentPreset();
     Vec vp = Vec(-canvasSize.x * 0.45f, canvasSize.y * 1.22f);
     float depletion = 0.72f;
-    if (preset == 1) vp = Vec(canvasSize.x * 1.45f, canvasSize.y * 1.22f);
-    if (preset == 2) vp = Vec(-canvasSize.x * 0.45f, -canvasSize.y * 0.35f);
-    if (preset == 3) vp = Vec(canvasSize.x * 1.45f, -canvasSize.y * 0.35f);
-    if (preset == 4) {
-      vp = Vec(-canvasSize.x * 0.9f, canvasSize.y * 1.65f);
-      depletion = 0.88f;
-    }
-    if (preset == 5) {
-      vp = Vec(-canvasSize.x * 0.18f, canvasSize.y * 1.08f);
-      depletion = 0.56f;
-    }
     g.vanishingPoint = vp.minus(ownerPos);
     g.depletion = depletion;
 
     Vec inset = faceInset();
     float maxJitter = std::min(box.size.x, box.size.y) * 0.04f;
-    if (currentShape() ==
-        static_cast<int>(PerspectivePentagonShape::Rectangle)) {
-      g.pointCount = 4;
-      Vec points[4] = {Vec(inset.x, inset.y),
-                       Vec(box.size.x - inset.x, inset.y),
-                       Vec(box.size.x - inset.x, box.size.y - inset.y),
-                       Vec(inset.x, box.size.y - inset.y)};
-      for (int i = 0; i < 4; i++) {
-        Vec p = points[i];
-        p.x += distortion(i, 0) * maxJitter;
-        p.y += distortion(i, 1) * maxJitter;
-        g.face[i] = p;
-        g.extruded[i] = p.plus(g.vanishingPoint.minus(p).mult(depletion));
-      }
-    } else {
-      g.pointCount = 5;
-      Vec center = box.size.mult(0.5f);
-      float rx = std::max(1.f, box.size.x * 0.5f - inset.x);
-      float ry = std::max(1.f, box.size.y * 0.5f - inset.y);
-      float angle0 = -M_PI * 0.5f;
-      maxJitter = std::min(rx, ry) * 0.08f;
-      for (int i = 0; i < 5; i++) {
-        float a = angle0 + i * 2.f * M_PI / 5.f;
-        Vec p = center.plus(Vec(std::cos(a) * rx, std::sin(a) * ry));
-        p.x += distortion(i, 0) * maxJitter;
-        p.y += distortion(i, 1) * maxJitter;
-        g.face[i] = p;
-        g.extruded[i] = p.plus(g.vanishingPoint.minus(p).mult(depletion));
-      }
+    g.pointCount = 4;
+    Vec points[4] = {Vec(inset.x, inset.y), Vec(box.size.x - inset.x, inset.y),
+                     Vec(box.size.x - inset.x, box.size.y - inset.y),
+                     Vec(inset.x, box.size.y - inset.y)};
+    for (int i = 0; i < 4; i++) {
+      Vec p = points[i];
+      p.x += distortion(i, 0) * maxJitter;
+      p.y += distortion(i, 1) * maxJitter;
+      g.face[i] = p;
+      g.extruded[i] = p.plus(g.vanishingPoint.minus(p).mult(depletion));
     }
     return g;
   }
@@ -321,96 +230,6 @@ struct PerspectivePentagonDisplay : Widget {
   void draw(const DrawArgs& args) override { drawBack(args); }
 };
 
-struct PerspectivePentagonMenuItem : MenuItem {
-  int* value = nullptr;
-  int nextValue = 0;
-
-  void onAction(const event::Action& e) override {
-    if (value) *value = nextValue;
-  }
-};
-
-inline void addPerspectivePentagonMenuItems(
-    Menu* menu, PerspectivePentagonSettings* settings) {
-  menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Pentagon Display"));
-  menu->addChild(construct<MenuLabel>(
-      &MenuLabel::text, "shape: " + perspectivePentagonShapeName(
-                                        settings ? settings->shape : 1)));
-  for (int i = 0; i < 2; i++) {
-    PerspectivePentagonMenuItem* item = new PerspectivePentagonMenuItem();
-    item->text = perspectivePentagonShapeName(i);
-    item->rightText = CHECKMARK(
-        settings && clampPerspectivePentagonShape(settings->shape) == i);
-    item->value = settings ? &settings->shape : nullptr;
-    item->nextValue = i;
-    menu->addChild(item);
-  }
-
-  menu->addChild(new MenuSeparator);
-  menu->addChild(construct<MenuLabel>(
-      &MenuLabel::text,
-      "size: " + perspectivePentagonSizeName(settings ? settings->size : 1)));
-  for (int i = 0; i < 3; i++) {
-    PerspectivePentagonMenuItem* item = new PerspectivePentagonMenuItem();
-    item->text = perspectivePentagonSizeName(i);
-    item->rightText = CHECKMARK(settings && settings->size == i);
-    item->value = settings ? &settings->size : nullptr;
-    item->nextValue = i;
-    menu->addChild(item);
-  }
-
-  menu->addChild(new MenuSeparator);
-  menu->addChild(construct<MenuLabel>(
-      &MenuLabel::text,
-      "perspective: " +
-          perspectivePentagonPresetName(settings ? settings->preset : 0)));
-  for (int i = 0; i < 6; i++) {
-    PerspectivePentagonMenuItem* item = new PerspectivePentagonMenuItem();
-    item->text = perspectivePentagonPresetName(i);
-    item->rightText = CHECKMARK(settings && settings->preset == i);
-    item->value = settings ? &settings->preset : nullptr;
-    item->nextValue = i;
-    menu->addChild(item);
-  }
-
-  menu->addChild(new MenuSeparator);
-  menu->addChild(construct<MenuLabel>(
-      &MenuLabel::text,
-      "color variation: " + perspectivePentagonColorVariationName(
-                                settings ? settings->colorVariation : 1)));
-  for (int i = 0; i < 5; i++) {
-    PerspectivePentagonMenuItem* item = new PerspectivePentagonMenuItem();
-    item->text = perspectivePentagonColorVariationName(i);
-    item->rightText =
-        CHECKMARK(settings && clampPerspectivePentagonColorVariation(
-                                  settings->colorVariation) == i);
-    item->value = settings ? &settings->colorVariation : nullptr;
-    item->nextValue = i;
-    menu->addChild(item);
-  }
-}
-
-inline void addPerspectivePentagonMenu(Menu* menu,
-                                       PerspectivePentagonSettings* settings) {
-  menu->addChild(new MenuSeparator);
-  addPerspectivePentagonMenuItems(menu, settings);
-}
-
-struct PerspectivePentagonViewSubmenuItem : MenuItem {
-  PerspectivePentagonSettings* settings = nullptr;
-
-  Menu* createChildMenu() override {
-    Menu* menu = new Menu;
-    addPerspectivePentagonMenuItems(menu, settings);
-    return menu;
-  }
-
-  void step() override {
-    rightText = RIGHT_ARROW;
-    MenuItem::step();
-  }
-};
-
 struct PerspectivePentagonWidget : Widget {
   PerspectivePentagonDisplay* display = nullptr;
   Widget* content = nullptr;
@@ -419,8 +238,10 @@ struct PerspectivePentagonWidget : Widget {
   bool drawFaceEnabled = true;
   bool hoverHighlightEnabled = false;
   bool contentFillsBox = false;
-  bool contextMenuEnabled = true;
-  std::function<void(Menu*)> appendContextMenuHandler;
+  bool layoutInitialized = false;
+  Vec lastLayoutPos;
+  Vec lastLayoutSize;
+  Vec lastLayoutParentSize;
 
   PerspectivePentagonWidget(PerspectivePentagonSettings* settings, int seed) {
     this->settings = settings;
@@ -464,8 +285,6 @@ struct PerspectivePentagonWidget : Widget {
     contentFillsBox = enabled;
     layout();
   }
-
-  void setContextMenuEnabled(bool enabled) { contextMenuEnabled = enabled; }
 
   bool containsFacePoint(Vec p) const {
     if (!display) return false;
@@ -516,6 +335,19 @@ struct PerspectivePentagonWidget : Widget {
       content->box = contentFillsBox ? Rect(Vec(0.f, 0.f), box.size)
                                      : display->contentRect();
     }
+    layoutInitialized = true;
+    lastLayoutPos = box.pos;
+    lastLayoutSize = box.size;
+    lastLayoutParentSize = parent ? parent->box.size : Vec(0.f, 0.f);
+  }
+
+  bool needsLayout() const {
+    if (!layoutInitialized) return true;
+    Vec parentSize = parent ? parent->box.size : Vec(0.f, 0.f);
+    return box.pos.x != lastLayoutPos.x || box.pos.y != lastLayoutPos.y ||
+           box.size.x != lastLayoutSize.x || box.size.y != lastLayoutSize.y ||
+           parentSize.x != lastLayoutParentSize.x ||
+           parentSize.y != lastLayoutParentSize.y;
   }
 
   void onResize(const ResizeEvent& e) override {
@@ -524,7 +356,7 @@ struct PerspectivePentagonWidget : Widget {
   }
 
   void step() override {
-    layout();
+    if (needsLayout()) layout();
     Widget::step();
   }
 
@@ -537,29 +369,52 @@ struct PerspectivePentagonWidget : Widget {
     Widget::draw(args);
   }
 
-  Menu* makeMenu() {
-    Menu* menu = createMenu();
-    if (appendContextMenuHandler) {
-      appendContextMenuHandler(menu);
-    } else {
-      menu->addChild(construct<PerspectivePentagonViewSubmenuItem>(
-          &MenuItem::text, "View",
-          &PerspectivePentagonViewSubmenuItem::settings, settings));
-    }
-    return menu;
-  }
-
   void onButton(const event::Button& e) override {
     if (!containsFacePoint(e.pos)) return;
-    if (contextMenuEnabled && e.button == GLFW_MOUSE_BUTTON_RIGHT &&
-        e.action == GLFW_PRESS && (e.mods & RACK_MOD_MASK) == 0) {
-      makeMenu();
-      e.consume(this);
-      return;
-    }
     Widget::onButton(e);
   }
 };
+
+struct PerspectivePentagonMenuItem : MenuItem {
+  int* value = nullptr;
+  int nextValue = 0;
+
+  void onAction(const event::Action& e) override {
+    if (value) *value = nextValue;
+  }
+};
+
+inline void addPerspectivePentagonMenuItems(
+    Menu* menu, PerspectivePentagonSettings* settings) {
+  menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Perspective Display"));
+  menu->addChild(construct<MenuLabel>(
+      &MenuLabel::text,
+      "size: " + perspectivePentagonSizeName(settings ? settings->size : 1)));
+  for (int i = 0; i < 3; i++) {
+    PerspectivePentagonMenuItem* item = new PerspectivePentagonMenuItem();
+    item->text = perspectivePentagonSizeName(i);
+    item->rightText = CHECKMARK(settings && settings->size == i);
+    item->value = settings ? &settings->size : nullptr;
+    item->nextValue = i;
+    menu->addChild(item);
+  }
+
+  menu->addChild(new MenuSeparator);
+  menu->addChild(construct<MenuLabel>(
+      &MenuLabel::text,
+      "color variation: " + perspectivePentagonColorVariationName(
+                                settings ? settings->colorVariation : 1)));
+  for (int i = 0; i < 5; i++) {
+    PerspectivePentagonMenuItem* item = new PerspectivePentagonMenuItem();
+    item->text = perspectivePentagonColorVariationName(i);
+    item->rightText =
+        CHECKMARK(settings && clampPerspectivePentagonColorVariation(
+                                  settings->colorVariation) == i);
+    item->value = settings ? &settings->colorVariation : nullptr;
+    item->nextValue = i;
+    menu->addChild(item);
+  }
+}
 
 struct PerspectiveLabeledSwitchableComplexControl : PerspectivePentagonWidget {
   LabeledSwitchableComplexControl* complexControl = nullptr;

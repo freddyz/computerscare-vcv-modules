@@ -12,6 +12,14 @@ const int numComplexGeneratorKnobs = 16;
 struct ComputerscareComplexGenerator : ComputerscareComplexBase {
   ComputerscareSVGPanel* panelRef;
   cpx::PerspectivePentagonSettings pentagonSettings;
+  std::array<float, 2 * numComplexGeneratorKnobs> lastLaneValues = {};
+  float lastScaleX = 0.f;
+  float lastScaleY = 0.f;
+  float lastOffsetX = 0.f;
+  float lastOffsetY = 0.f;
+  int lastMainOutputMode = -1;
+  int lastCompolyChannels = -1;
+  bool outputCacheDirty = true;
 
   void setAllControlModes(int mode) {
     mode = std::max(0, std::min(2, mode));
@@ -143,7 +151,9 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
                                                             "Main");
   }
   void process(const ProcessArgs& args) override {
-    ComputerscarePolyModule::checkCounter();
+    counter++;
+    if (counter <= counterPeriod && !outputCacheDirty) return;
+    counter = 0;
 
     float offsetX = params[OFFSET_VAL_AB].getValue();
     float offsetY = params[OFFSET_VAL_AB + 1].getValue();
@@ -151,32 +161,69 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
     float scaleX = params[SCALE_VAL_AB].getValue();
     float scaleY = params[SCALE_VAL_AB + 1].getValue();
 
-    math::Vec scaleRect = Vec(scaleX, scaleY);
-
     int mainOutputMode = params[MAIN_OUTPUT_MODE].getValue();
-    for (int i = 0; i < polyChannels; i++) {
-      if (i < numComplexGeneratorKnobs) {
-        float x0 = params[COMPLEX_XY + 2 * i].getValue();
-        float y0 = params[COMPLEX_XY + 2 * i + 1].getValue();
-
-        float x1 = x0 * scaleRect.x - y0 * scaleRect.y;
-        float y1 = x0 * scaleRect.y + y0 * scaleRect.x;
-
-        float outX = x1 + offsetX;
-        float outY = y1 + offsetY;
-        float outR = std::hypot(outX, outY);
-        float outTheta = std::atan2(outY, outX);
-
-        setOutputVoltages(COMPOLY_MAIN_OUT_A, mainOutputMode, i, outX, outY,
-                          outR, outTheta);
-      }
-
-      // outputs[POLY_OUTPUT].setVoltage(params[KNOB + i].getValue()*trim +
-      // offset, i);
+    int nextPolyChannels = params[COMPOLY_CHANNELS].getValue();
+    if (nextPolyChannels == 0) {
+      nextPolyChannels = 16;
+      params[COMPOLY_CHANNELS].setValue(16);
     }
+    nextPolyChannels =
+        std::max(1, std::min(numComplexGeneratorKnobs, nextPolyChannels));
+
+    bool channelsChanged = nextPolyChannels != lastCompolyChannels;
+    bool modeChanged = mainOutputMode != lastMainOutputMode;
+    bool valuesChanged = outputCacheDirty || channelsChanged || modeChanged ||
+                         scaleX != lastScaleX || scaleY != lastScaleY ||
+                         offsetX != lastOffsetX || offsetY != lastOffsetY;
+    for (int i = 0; i < nextPolyChannels; i++) {
+      float x0 = params[COMPLEX_XY + 2 * i].getValue();
+      float y0 = params[COMPLEX_XY + 2 * i + 1].getValue();
+      if (x0 != lastLaneValues[2 * i] || y0 != lastLaneValues[2 * i + 1]) {
+        valuesChanged = true;
+      }
+      lastLaneValues[2 * i] = x0;
+      lastLaneValues[2 * i + 1] = y0;
+    }
+    if (!valuesChanged) return;
+
+    polyChannels = nextPolyChannels;
+    if (channelsChanged || modeChanged) {
+      setOutputChannels(COMPOLY_MAIN_OUT_A, mainOutputMode, polyChannels);
+    }
+
+    bool needsPolar = mainOutputMode == POLAR_INTERLEAVED ||
+                      mainOutputMode == POLAR_SEPARATED;
+    for (int i = 0; i < polyChannels; i++) {
+      float x0 = lastLaneValues[2 * i];
+      float y0 = lastLaneValues[2 * i + 1];
+
+      float x1 = x0 * scaleX - y0 * scaleY;
+      float y1 = x0 * scaleY + y0 * scaleX;
+
+      float outX = x1 + offsetX;
+      float outY = y1 + offsetY;
+      float outR = needsPolar ? std::hypot(outX, outY) : 0.f;
+      float outTheta = needsPolar ? std::atan2(outY, outX) : 0.f;
+
+      setOutputVoltages(COMPOLY_MAIN_OUT_A, mainOutputMode, i, outX, outY, outR,
+                        outTheta);
+    }
+    lastScaleX = scaleX;
+    lastScaleY = scaleY;
+    lastOffsetX = offsetX;
+    lastOffsetY = offsetY;
+    lastMainOutputMode = mainOutputMode;
+    lastCompolyChannels = polyChannels;
+    outputCacheDirty = false;
   }
-  void onRandomize() override { syncPolarViewsFromRect(); }
-  void onReset() override { syncPolarViewsFromRect(); }
+  void onRandomize() override {
+    syncPolarViewsFromRect();
+    outputCacheDirty = true;
+  }
+  void onReset() override {
+    syncPolarViewsFromRect();
+    outputCacheDirty = true;
+  }
   void checkPoly() override {
     polyChannels = params[COMPOLY_CHANNELS].getValue();
     if (polyChannels == 0) {
@@ -185,17 +232,14 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
     }
     int mainOutputMode = params[MAIN_OUTPUT_MODE].getValue();
     setOutputChannels(COMPOLY_MAIN_OUT_A, mainOutputMode, polyChannels);
+    outputCacheDirty = true;
   }
   json_t* dataToJson() override {
     json_t* rootJ = json_object();
     json_object_set_new(rootJ, "pentagonDisplaySize",
                         json_integer(pentagonSettings.size));
-    json_object_set_new(rootJ, "pentagonPerspective",
-                        json_integer(pentagonSettings.preset));
     json_object_set_new(rootJ, "pentagonColorVariation",
                         json_integer(pentagonSettings.colorVariation));
-    json_object_set_new(rootJ, "pentagonShape",
-                        json_integer(pentagonSettings.shape));
     return rootJ;
   }
 
@@ -206,23 +250,12 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
       pentagonSettings.size = cpx::clampPerspectivePentagonSize(
           json_integer_value(pentagonDisplaySizeJ));
     }
-    json_t* pentagonPerspectiveJ =
-        json_object_get(rootJ, "pentagonPerspective");
-    if (pentagonPerspectiveJ) {
-      pentagonSettings.preset = cpx::clampPerspectivePentagonPreset(
-          json_integer_value(pentagonPerspectiveJ));
-    }
     json_t* pentagonColorVariationJ =
         json_object_get(rootJ, "pentagonColorVariation");
     if (pentagonColorVariationJ) {
       pentagonSettings.colorVariation =
           cpx::clampPerspectivePentagonColorVariation(
               json_integer_value(pentagonColorVariationJ));
-    }
-    json_t* pentagonShapeJ = json_object_get(rootJ, "pentagonShape");
-    if (pentagonShapeJ) {
-      pentagonSettings.shape = cpx::clampPerspectivePentagonShape(
-          json_integer_value(pentagonShapeJ));
     }
 
     json_t* laneControlModesJ = json_object_get(rootJ, "laneControlModes");
@@ -448,7 +481,6 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     pentagon->setDrawParts(drawSides, drawFace);
     if (faceShade >= 0 && sideShade >= 0)
       pentagon->setBaseShades(faceShade, sideShade, sideStep);
-    pentagon->setContextMenuEnabled(false);
     addChild(pentagon);
   }
 
@@ -470,7 +502,6 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
             NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, Vec(11.f, 7.f));
     control->box = Rect(Vec(x, y), Vec(56.f, 43.f));
     control->setDrawParts(true, true);
-    control->setContextMenuEnabled(false);
     control->setContentFillsBox(true);
     control->setHoverHighlightEnabled(true);
     control->setBaseShades(0x74, 0x78, 0x0a);
@@ -508,7 +539,6 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
             NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, controlRel);
     control->box = Rect(Vec(x, y), wrapperSize);
     control->setDrawParts(true, true);
-    control->setContextMenuEnabled(false);
     control->setContentFillsBox(true);
     control->setHoverHighlightEnabled(true);
     control->setArrowDrawingScale(0.76f);
