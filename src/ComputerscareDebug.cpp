@@ -25,6 +25,17 @@ std::string noModuleStringValue =
     "000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0."
     "000000\n+0.000000\n+0.000000\n+0.000000\n";
 
+static std::string formatDebugVoltage(float value) {
+  if (std::fabs(value) < 0.0000005f) {
+    value = 0.f;
+  }
+
+  std::ostringstream stream;
+  stream << (value < 0.f ? "-" : "+") << std::fixed << std::setprecision(6)
+         << std::fabs(value);
+  return stream.str();
+}
+
 struct ComputerscareDebug : Module {
   enum ParamIds {
     MANUAL_TRIGGER,
@@ -45,9 +56,9 @@ struct ComputerscareDebug : Module {
       "000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0."
       "000000\n+0.000000\n+0.000000\n+0.000000\n";
   std::string strValue =
-      "0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0."
-      "000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0.000000\n0."
-      "000000\n0.000000\n";
+      "+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0."
+      "000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0.000000\n+0."
+      "000000\n+0.000000\n+0.000000\n+0.000000\n";
 
   float logLines[NUM_LINES] = {0.f};
 
@@ -335,9 +346,7 @@ void ComputerscareDebug::process(const ProcessArgs& args) {
     std::string thisLine = "";
     for (unsigned int a = 0; a < NUM_LINES; a = a + 1) {
       if (a < (unsigned int)numOutputChannels) {
-        thisLine = logLines[a] >= 0 ? "+" : "";
-        thisLine += std::to_string(logLines[a]);
-        thisLine = thisLine.substr(0, 9);
+        thisLine = formatDebugVoltage(logLines[a]);
       } else {
         thisLine = "";
       }
