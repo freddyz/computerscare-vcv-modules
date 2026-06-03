@@ -13,11 +13,17 @@ static const char* MollysPorridgeModeCodes[] = {"ADD", "INS", "XFD", "VCB",
                                                 "VCU"};
 
 static const char* MollysPorridgeModeDescriptions[] = {
-    "Sum the processed main input with the processed block input.",
-    "Pass the main input unless the block input is patched, then replace it.",
-    "Crossfade between main and block input using the attenuverter knob.",
-    "Use main input as bipolar signal and processed block input as amplitude.",
-    "Use main input as signal and processed block input floored at zero.",
+    "Sum the processed main input with the processed channel input.",
+    "Pass the main input unless the channel input is patched, then replace it.",
+    "Crossfade between main and channel input using the attenuverter knob.",
+    ("Use main input as bipolar signal and processed channel input as "
+     "amplitude."),
+    "Use main input as signal and processed channel input floored at zero.",
+};
+
+static const char* MollysPorridgeNormalizationNames[] = {
+    "No normalization",
+    "Normalize polyphonic",
 };
 
 struct ComputerscareMollysPorridge : ComputerscarePolyModule {
@@ -28,6 +34,12 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
     MODE_VCA_BIPOLAR,
     MODE_VCA_UNIPOLAR,
     NUM_MODES
+  };
+
+  enum NormalizationMode {
+    NORMALIZATION_NONE,
+    NORMALIZATION_POLY,
+    NUM_NORMALIZATION_MODES
   };
 
   enum ParamIds {
@@ -47,7 +59,11 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
   enum LightIds { NUM_LIGHTS };
 
   int blockModes[MOLLYS_PORRIDGE_BLOCKS] = {};
+  int normalizationMode = NORMALIZATION_NONE;
   int numInputChannels = 0;
+  int insertSourceBlocks[MOLLYS_PORRIDGE_BLOCKS] = {};
+  int insertSourceChannels[MOLLYS_PORRIDGE_BLOCKS] = {};
+  bool insertActive[MOLLYS_PORRIDGE_BLOCKS] = {};
 
   ComputerscareMollysPorridge() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -67,11 +83,13 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
 
     for (int i = 0; i < MOLLYS_PORRIDGE_BLOCKS; i++) {
       blockModes[i] = MODE_INSERT;
+      insertSourceBlocks[i] = -1;
+      insertSourceChannels[i] = -1;
       configParam(BLOCK_ATTEN + i, -1.f, 1.f, 1.f,
-                  "Block " + std::to_string(i + 1) + " Attenuverter");
+                  "Channel " + std::to_string(i + 1) + " Attenuverter");
       configParam(BLOCK_OFFSET + i, -10.f, 10.f, 0.f,
-                  "Block " + std::to_string(i + 1) + " Offset", " volts");
-      configInput(BLOCK_INPUT + i, "Block " + std::to_string(i + 1));
+                  "Channel " + std::to_string(i + 1) + " Offset", " volts");
+      configInput(BLOCK_INPUT + i, "Channel " + std::to_string(i + 1));
     }
   }
 
@@ -82,10 +100,18 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
       json_array_append_new(modesJ, json_integer(blockModes[i]));
     }
     json_object_set_new(rootJ, "blockModes", modesJ);
+    json_object_set_new(rootJ, "normalizationMode",
+                        json_integer(normalizationMode));
     return rootJ;
   }
 
   void dataFromJson(json_t* rootJ) override {
+    json_t* normalizationJ = json_object_get(rootJ, "normalizationMode");
+    if (normalizationJ) {
+      normalizationMode = math::clamp((int)json_integer_value(normalizationJ),
+                                      0, (int)NUM_NORMALIZATION_MODES - 1);
+    }
+
     json_t* modesJ = json_object_get(rootJ, "blockModes");
     if (!modesJ) {
       return;
@@ -110,6 +136,7 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
       polyChannels = knobSetting == 0 ? 16 : knobSetting;
     }
     outputs[POLY_OUTPUT].setChannels(polyChannels);
+    updateInsertNormalizationCache();
   }
 
   float getMainVoltage(int channel) {
@@ -130,37 +157,159 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
     return input.getPolyVoltage(channels == 1 ? 0 : channel % channels);
   }
 
+  int getNormalizedSourceBlock(int blockIndex) {
+    if (normalizationMode != NORMALIZATION_POLY ||
+        inputs[BLOCK_INPUT + blockIndex].isConnected()) {
+      return -1;
+    }
+
+    int columnStart = blockIndex < 8 ? 0 : 8;
+    for (int sourceIndex = blockIndex - 1; sourceIndex >= columnStart;
+         sourceIndex--) {
+      Input& sourceInput = inputs[BLOCK_INPUT + sourceIndex];
+      int sourceChannels = sourceInput.getChannels();
+      if (sourceChannels <= 0) {
+        continue;
+      }
+
+      if (blockIndex - sourceIndex < sourceChannels) {
+        return sourceIndex;
+      }
+      return -1;
+    }
+
+    if (blockIndex >= 8) {
+      for (int sourceIndex = 7; sourceIndex >= 0; sourceIndex--) {
+        Input& sourceInput = inputs[BLOCK_INPUT + sourceIndex];
+        int sourceChannels = sourceInput.getChannels();
+        if (sourceChannels <= 0) {
+          continue;
+        }
+
+        if (blockIndex - sourceIndex < sourceChannels) {
+          return sourceIndex;
+        }
+      }
+    }
+
+    return -1;
+  }
+
+  int getNormalizationSegmentEnd(int sourceIndex, int segmentStartIndex) {
+    if (normalizationMode != NORMALIZATION_POLY || sourceIndex < 0 ||
+        sourceIndex >= MOLLYS_PORRIDGE_BLOCKS || segmentStartIndex < 0 ||
+        segmentStartIndex >= MOLLYS_PORRIDGE_BLOCKS) {
+      return segmentStartIndex;
+    }
+
+    Input& sourceInput = inputs[BLOCK_INPUT + sourceIndex];
+    int sourceChannels = sourceInput.getChannels();
+    if (sourceChannels <= 0) {
+      return segmentStartIndex;
+    }
+
+    if (segmentStartIndex != sourceIndex &&
+        inputs[BLOCK_INPUT + segmentStartIndex].isConnected()) {
+      return segmentStartIndex;
+    }
+
+    int columnEnd = segmentStartIndex < 8 ? 8 : 16;
+    int endIndex = std::min(columnEnd, sourceIndex + sourceChannels);
+    int firstBlockToCheck =
+        segmentStartIndex == sourceIndex ? sourceIndex + 1 : segmentStartIndex;
+    for (int blockIndex = firstBlockToCheck; blockIndex < endIndex;
+         blockIndex++) {
+      if (inputs[BLOCK_INPUT + blockIndex].isConnected()) {
+        return blockIndex;
+      }
+    }
+
+    return endIndex;
+  }
+
+  bool isBlockNormalized(int blockIndex) {
+    return getNormalizedSourceBlock(blockIndex) >= 0;
+  }
+
+  void updateInsertNormalizationCache() {
+    for (int blockIndex = 0; blockIndex < MOLLYS_PORRIDGE_BLOCKS;
+         blockIndex++) {
+      insertSourceBlocks[blockIndex] = -1;
+      insertSourceChannels[blockIndex] = -1;
+      insertActive[blockIndex] = false;
+
+      Input& input = inputs[BLOCK_INPUT + blockIndex];
+      if (input.isConnected()) {
+        insertSourceBlocks[blockIndex] = blockIndex;
+        insertActive[blockIndex] = true;
+        continue;
+      }
+
+      int sourceIndex = getNormalizedSourceBlock(blockIndex);
+      if (sourceIndex >= 0) {
+        insertSourceBlocks[blockIndex] = sourceIndex;
+        insertSourceChannels[blockIndex] = blockIndex - sourceIndex;
+        insertActive[blockIndex] = true;
+      }
+    }
+  }
+
+  float getEffectiveBlockPortVoltage(int blockIndex, int channel) {
+    int sourceIndex = insertSourceBlocks[blockIndex];
+    if (sourceIndex < 0) {
+      return 0.f;
+    }
+
+    Input& input = inputs[BLOCK_INPUT + sourceIndex];
+    int channels = input.getChannels();
+    if (channels <= 0) {
+      return 0.f;
+    }
+
+    int sourceChannel = insertSourceChannels[blockIndex];
+    if (sourceChannel >= 0) {
+      return sourceChannel < channels ? input.getPolyVoltage(sourceChannel)
+                                      : 0.f;
+    }
+
+    return input.getPolyVoltage(channels == 1 ? 0 : channel % channels);
+  }
+
   float getInsertVoltage(int blockIndex, int channel) {
-    return getBlockPortVoltage(blockIndex, channel) *
+    return getEffectiveBlockPortVoltage(blockIndex, channel) *
                params[BLOCK_ATTEN + blockIndex].getValue() +
            params[BLOCK_OFFSET + blockIndex].getValue();
   }
 
-  bool isBlockPatched(int blockIndex) {
-    return inputs[BLOCK_INPUT + blockIndex].isConnected();
-  }
+  bool isInsertActive(int blockIndex) { return insertActive[blockIndex]; }
 
   float processBlock(int blockIndex, int channel) {
     float main = getMainVoltage(channel);
-    float insert = getInsertVoltage(blockIndex, channel);
     int mode = math::clamp(blockModes[blockIndex], 0, (int)NUM_MODES - 1);
 
     switch (mode) {
       case MODE_ADD:
-        return main + insert;
+        return main + getInsertVoltage(blockIndex, channel);
       case MODE_INSERT:
-        return isBlockPatched(blockIndex) ? insert : main;
+        if (isInsertActive(blockIndex)) {
+          return getEffectiveBlockPortVoltage(blockIndex, channel) *
+                     params[BLOCK_ATTEN + blockIndex].getValue() +
+                 params[GLOBAL_OFFSET].getValue() +
+                 params[BLOCK_OFFSET + blockIndex].getValue();
+        }
+        return main + params[BLOCK_OFFSET + blockIndex].getValue();
       case MODE_XFADE: {
         float fade = math::rescale(params[BLOCK_ATTEN + blockIndex].getValue(),
                                    -1.f, 1.f, 0.f, 1.f);
-        float portWithOffset = getBlockPortVoltage(blockIndex, channel) +
-                               params[BLOCK_OFFSET + blockIndex].getValue();
+        float portWithOffset =
+            getEffectiveBlockPortVoltage(blockIndex, channel) +
+            params[BLOCK_OFFSET + blockIndex].getValue();
         return crossfade(main, portWithOffset, fade);
       }
       case MODE_VCA_BIPOLAR:
-        return main * insert;
+        return main * getInsertVoltage(blockIndex, channel);
       case MODE_VCA_UNIPOLAR:
-        return main * std::max(0.f, insert);
+        return main * std::max(0.f, getInsertVoltage(blockIndex, channel));
       default:
         return main;
     }
@@ -227,6 +376,132 @@ struct MollysPorridgeBlockNumber : Widget {
     nvgTextAlign(args.vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, BLACK);
     nvgText(args.vg, box.size.x, box.size.y * 0.5f, value.c_str(), NULL);
+  }
+};
+
+struct MollysPorridgeNormalizationOverlay : Widget {
+  ComputerscareMollysPorridge* module = nullptr;
+
+  static constexpr float startY = 52.f;
+  static constexpr float rowSpacing = 41.f;
+  static constexpr float leftX = 4.f;
+  static constexpr float rightX = 94.f;
+  static constexpr float blockW = 76.f;
+  static constexpr float blockH = 36.f;
+
+  float runNoise(int sourceIndex, int salt) {
+    uint32_t seed = (sourceIndex + 1) * 73856093u ^ (salt + 1) * 83492791u;
+    seed ^= seed >> 13;
+    seed *= 1274126177u;
+    seed ^= seed >> 16;
+    return (seed & 0xffff) / 32767.5f - 1.f;
+  }
+
+  void drawRun(const DrawArgs& args, int sourceIndex, int segmentStartIndex,
+               int runEndIndex, int runIndex) {
+    int row = segmentStartIndex % 8;
+    int lastRow = (runEndIndex - 1) % 8;
+    bool rightColumn = segmentStartIndex >= 8;
+    float x = (rightColumn ? rightX : leftX) - 12.f;
+    float y = startY + row * rowSpacing + 5.f;
+    float bottom = startY + lastRow * rowSpacing + 40.f;
+    float height = bottom - y;
+    float width = 40.f;
+    float wiggle = 4.0f;
+
+    Vec points[12] = {
+        Vec(x + 2.f + runNoise(segmentStartIndex, 0) * wiggle,
+            y + 1.f + runNoise(segmentStartIndex, 1) * wiggle),
+        Vec(x + width * 0.34f + runNoise(segmentStartIndex, 2) * wiggle,
+            y - 1.f + runNoise(segmentStartIndex, 3) * wiggle),
+        Vec(x + width - 3.f + runNoise(segmentStartIndex, 4) * wiggle,
+            y + 3.f + runNoise(segmentStartIndex, 5) * wiggle),
+        Vec(x + width + runNoise(segmentStartIndex, 6) * wiggle,
+            y + height * 0.20f + runNoise(segmentStartIndex, 7) * wiggle),
+        Vec(x + width - 2.f + runNoise(segmentStartIndex, 8) * wiggle,
+            y + height * 0.42f + runNoise(segmentStartIndex, 9) * wiggle),
+        Vec(x + width - 5.f + runNoise(segmentStartIndex, 10) * wiggle,
+            y + height * 0.72f + runNoise(segmentStartIndex, 11) * wiggle),
+        Vec(x + width - 1.f + runNoise(segmentStartIndex, 12) * wiggle,
+            y + height + runNoise(segmentStartIndex, 13) * wiggle),
+        Vec(x + width * 0.58f + runNoise(segmentStartIndex, 14) * wiggle,
+            y + height + 1.f + runNoise(segmentStartIndex, 15) * wiggle),
+        Vec(x + 2.f + runNoise(segmentStartIndex, 16) * wiggle,
+            y + height + runNoise(segmentStartIndex, 17) * wiggle),
+        Vec(x - 2.f + runNoise(segmentStartIndex, 18) * wiggle,
+            y + height * 0.70f + runNoise(segmentStartIndex, 19) * wiggle),
+        Vec(x + runNoise(segmentStartIndex, 20) * wiggle,
+            y + height * 0.45f + runNoise(segmentStartIndex, 21) * wiggle),
+        Vec(x - 1.f + runNoise(segmentStartIndex, 22) * wiggle,
+            y + height * 0.18f + runNoise(segmentStartIndex, 23) * wiggle),
+    };
+
+    bool dark = runIndex % 2 == 1;
+    int baseRed = 0x24;
+    int baseGreen = dark ? 0x86 : 0xc9;
+    int baseBlue = dark ? 0x73 : 0xa6;
+    float randomDarkness = (runNoise(segmentStartIndex, 24) + 1.f) * 12.f;
+    int red = clamp((int)(baseRed - randomDarkness), 0, 255);
+    int green = clamp((int)(baseGreen - randomDarkness), 0, 255);
+    int blue = clamp((int)(baseBlue - randomDarkness), 0, 255);
+    NVGcolor fill = nvgRGBA(red, green, blue, 0x90);
+    NVGcolor stroke =
+        nvgRGBA(clamp(red - 18, 0, 255), clamp(green - 18, 0, 255),
+                clamp(blue - 18, 0, 255), 0xd0);
+
+    nvgBeginPath(args.vg);
+    nvgMoveTo(args.vg, points[0].x, points[0].y);
+    for (int i = 1; i < 12; i++) {
+      nvgLineTo(args.vg, points[i].x, points[i].y);
+    }
+    nvgClosePath(args.vg);
+    nvgFillColor(args.vg, fill);
+    nvgFill(args.vg);
+    nvgStrokeWidth(args.vg, 1.2f);
+    nvgStrokeColor(args.vg, stroke);
+    nvgStroke(args.vg);
+  }
+
+  void draw(const DrawArgs& args) override {
+    if (!module || module->normalizationMode !=
+                       ComputerscareMollysPorridge::NORMALIZATION_POLY) {
+      return;
+    }
+
+    int runIndex = 0;
+    for (int sourceIndex = 0; sourceIndex < MOLLYS_PORRIDGE_BLOCKS;
+         sourceIndex++) {
+      if (!module
+               ->inputs[ComputerscareMollysPorridge::BLOCK_INPUT + sourceIndex]
+               .isConnected()) {
+        continue;
+      }
+
+      int runEndIndex =
+          module->getNormalizationSegmentEnd(sourceIndex, sourceIndex);
+      if (runEndIndex <= sourceIndex) {
+        continue;
+      }
+
+      int currentRunIndex = runIndex;
+      drawRun(args, sourceIndex, sourceIndex, runEndIndex, currentRunIndex);
+
+      if (sourceIndex < 8) {
+        int sourceChannels =
+            module
+                ->inputs[ComputerscareMollysPorridge::BLOCK_INPUT + sourceIndex]
+                .getChannels();
+        if (sourceIndex + sourceChannels > 8) {
+          int rightRunEndIndex =
+              module->getNormalizationSegmentEnd(sourceIndex, 8);
+          if (rightRunEndIndex > 8) {
+            drawRun(args, sourceIndex, 8, rightRunEndIndex, currentRunIndex);
+          }
+        }
+      }
+
+      runIndex++;
+    }
   }
 };
 
@@ -298,17 +573,75 @@ struct MollysPorridgeModeItem : MenuItem {
   }
 };
 
+struct MollysPorridgeSimpleModeItem : MenuItem {
+  ComputerscareMollysPorridge* module = nullptr;
+  int blockIndex = 0;
+  int mode = 0;
+
+  void onAction(const event::Action& e) override {
+    if (module) {
+      module->blockModes[blockIndex] = mode;
+    }
+  }
+
+  void step() override {
+    rightText = CHECKMARK(module && module->blockModes[blockIndex] == mode);
+    MenuItem::step();
+  }
+};
+
+struct MollysPorridgeNormalizationItem : MenuItem {
+  ComputerscareMollysPorridge* module = nullptr;
+  int normalizationMode = 0;
+
+  void onAction(const event::Action& e) override {
+    if (module) {
+      module->normalizationMode = normalizationMode;
+    }
+  }
+
+  void step() override {
+    rightText =
+        CHECKMARK(module && module->normalizationMode == normalizationMode);
+    MenuItem::step();
+  }
+};
+
+static void addMollysPorridgeNormalizationItems(
+    Menu* menu, ComputerscareMollysPorridge* module) {
+  for (int mode = 0;
+       mode < ComputerscareMollysPorridge::NUM_NORMALIZATION_MODES; mode++) {
+    MollysPorridgeNormalizationItem* item =
+        new MollysPorridgeNormalizationItem();
+    item->text = MollysPorridgeNormalizationNames[mode];
+    item->module = module;
+    item->normalizationMode = mode;
+    menu->addChild(item);
+  }
+}
+
 static void addMollysPorridgeModeItems(Menu* menu,
                                        ComputerscareMollysPorridge* module,
-                                       int blockIndex, bool setAll) {
+                                       int blockIndex, bool setAll,
+                                       bool showDescriptions) {
   for (int mode = 0; mode < ComputerscareMollysPorridge::NUM_MODES; mode++) {
-    MollysPorridgeModeItem* item = new MollysPorridgeModeItem();
-    item->text = MollysPorridgeModeNames[mode];
-    item->module = module;
-    item->blockIndex = blockIndex;
-    item->mode = mode;
-    item->setAll = setAll;
-    menu->addChild(item);
+    if (showDescriptions) {
+      MollysPorridgeModeItem* modeItem = new MollysPorridgeModeItem();
+      modeItem->text = MollysPorridgeModeNames[mode];
+      modeItem->module = module;
+      modeItem->blockIndex = blockIndex;
+      modeItem->mode = mode;
+      modeItem->setAll = setAll;
+      menu->addChild(modeItem);
+    } else {
+      MollysPorridgeSimpleModeItem* simpleItem =
+          new MollysPorridgeSimpleModeItem();
+      simpleItem->text = MollysPorridgeModeNames[mode];
+      simpleItem->module = module;
+      simpleItem->blockIndex = blockIndex;
+      simpleItem->mode = mode;
+      menu->addChild(simpleItem);
+    }
   }
 }
 
@@ -438,8 +771,9 @@ struct MollysPorridgeModeButton : ComputerscareBlankButton {
 
     Menu* menu = createMenu();
     activeMenuOverlay = menu->getAncestorOfType<ui::MenuOverlay>();
-    menu->addChild(createMenuLabel("Block " + std::to_string(blockIndex + 1)));
-    addMollysPorridgeModeItems(menu, module, blockIndex, false);
+    menu->addChild(
+        createMenuLabel("Channel " + std::to_string(blockIndex + 1) + " mode"));
+    addMollysPorridgeModeItems(menu, module, blockIndex, false, false);
     updateMenuFrame();
   }
 };
@@ -469,7 +803,21 @@ struct ComputerscareMollysPorridgeWidget : ModuleWidget {
       bool rightColumn = i >= 8;
       float x = rightColumn ? rightX : leftX;
       float y = startY + row * rowSpacing;
-      addBlock(module, i, x, y);
+      addBlockBackground(x, y, 76.f, 36.f);
+    }
+
+    MollysPorridgeNormalizationOverlay* normalizationOverlay =
+        createWidget<MollysPorridgeNormalizationOverlay>(Vec(0.f, 0.f));
+    normalizationOverlay->box.size = box.size;
+    normalizationOverlay->module = module;
+    addChild(normalizationOverlay);
+
+    for (int i = 0; i < MOLLYS_PORRIDGE_BLOCKS; i++) {
+      int row = i % 8;
+      bool rightColumn = i >= 8;
+      float x = rightColumn ? rightX : leftX;
+      float y = startY + row * rowSpacing;
+      addBlockControls(module, i, x, y);
     }
   }
 
@@ -490,13 +838,8 @@ struct ComputerscareMollysPorridgeWidget : ModuleWidget {
                                 ComputerscareMollysPorridge::GLOBAL_OFFSET));
   }
 
-  void addBlock(ComputerscareMollysPorridge* module, int blockIndex, float x,
-                float y) {
-    const float blockW = 76.f;
-    const float blockH = 36.f;
-
-    addBlockBackground(x, y, blockW, blockH);
-
+  void addBlockControls(ComputerscareMollysPorridge* module, int blockIndex,
+                        float x, float y) {
     const float jackX = x + 2.f;
     const float jackY = y + 13.f;
 
@@ -532,8 +875,12 @@ struct ComputerscareMollysPorridgeWidget : ModuleWidget {
 
     menu->addChild(new MenuSeparator);
     menu->addChild(createSubmenuItem("Set all to", "", [=](Menu* submenu) {
-      addMollysPorridgeModeItems(submenu, molly, 0, true);
+      addMollysPorridgeModeItems(submenu, molly, 0, true, true);
     }));
+    menu->addChild(
+        createSubmenuItem("Insert normalization", "", [=](Menu* submenu) {
+          addMollysPorridgeNormalizationItems(submenu, molly);
+        }));
   }
 };
 
