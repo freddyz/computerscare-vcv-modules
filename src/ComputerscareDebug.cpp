@@ -410,10 +410,10 @@ struct StringDisplayWidget3 : Widget {
       // text
       nvgFontSize(args.vg, 15);
       nvgFontFaceId(args.vg, font->handle);
-      nvgTextLetterSpacing(args.vg, 2.5);
+      nvgTextLetterSpacing(args.vg, 2.2);
 
       std::string textToDraw = module ? module->strValue : noModuleStringValue;
-      Vec textPos = Vec(6.0f, 12.0f);
+      Vec textPos = Vec(5.0f, 12.0f);
       NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
       nvgFillColor(args.vg, textColor);
       nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);

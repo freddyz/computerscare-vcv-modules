@@ -29,6 +29,7 @@ extern Model* modelComputerscareBlank;
 extern Model* modelComputerscareBlankExpander;
 extern Model* modelComputerscareGolyPenerator;
 extern Model* modelComputerscareMolyPatrix;
+extern Model* modelComputerscareMollysPorridge;
 extern Model* modelComputerscareSlolyPit;
 
 extern Model* modelComputerscareHorseADoodleDoo;
