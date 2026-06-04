@@ -1,5 +1,6 @@
 #include "Computerscare.hpp"
 #include "ComputerscarePolyModule.hpp"
+#include "complex/PolyphonicMapping.hpp"
 
 struct ComputerscareMollysPorridge;
 
@@ -24,6 +25,23 @@ static const char* MollysPorridgeModeDescriptions[] = {
 static const char* MollysPorridgeNormalizationNames[] = {
     "No normalization",
     "Normalize polyphonic",
+};
+
+static const char* MollysPorridgeMainInputMappingNames[] = {
+    "Standard",
+    "Cycle",
+    "Zero pad",
+    "Stall",
+};
+
+static const char* MollysPorridgeMainInputMappingDescriptions[] = {
+    "Mono main input is copied to all manual output channels; poly input uses "
+    "matching channels.",
+    "Main input channels repeat until the manual output channel count is "
+    "filled.",
+    "Channels past the main input channel count are padded with 0V.",
+    "Channels past the main input channel count use the final main input "
+    "channel.",
 };
 
 struct ComputerscareMollysPorridge : ComputerscarePolyModule {
@@ -60,6 +78,7 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
 
   int blockModes[MOLLYS_PORRIDGE_BLOCKS] = {};
   int normalizationMode = NORMALIZATION_NONE;
+  int mainInputMappingMode = cpx::polyphonic::defaultMappingModeValue;
   int numInputChannels = 0;
   int insertSourceBlocks[MOLLYS_PORRIDGE_BLOCKS] = {};
   int insertSourceChannels[MOLLYS_PORRIDGE_BLOCKS] = {};
@@ -102,6 +121,8 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
     json_object_set_new(rootJ, "blockModes", modesJ);
     json_object_set_new(rootJ, "normalizationMode",
                         json_integer(normalizationMode));
+    json_object_set_new(rootJ, "mainInputMappingMode",
+                        json_integer(mainInputMappingMode));
     return rootJ;
   }
 
@@ -110,6 +131,14 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
     if (normalizationJ) {
       normalizationMode = math::clamp((int)json_integer_value(normalizationJ),
                                       0, (int)NUM_NORMALIZATION_MODES - 1);
+    }
+
+    json_t* mainInputMappingJ = json_object_get(rootJ, "mainInputMappingMode");
+    if (mainInputMappingJ) {
+      mainInputMappingMode =
+          math::clamp((int)json_integer_value(mainInputMappingJ),
+                      cpx::polyphonic::firstMappingModeValue,
+                      cpx::polyphonic::lastMappingModeValue);
     }
 
     json_t* modesJ = json_object_get(rootJ, "blockModes");
@@ -140,12 +169,30 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
   }
 
   float getMainVoltage(int channel) {
-    float input =
-        numInputChannels > 0
-            ? inputs[POLY_INPUT].getPolyVoltage(channel % numInputChannels)
-            : 0.f;
+    float input = getMainInputVoltage(channel);
     return input * params[GLOBAL_ATTEN].getValue() +
            params[GLOBAL_OFFSET].getValue();
+  }
+
+  float getMainInputVoltage(int channel) {
+    if (numInputChannels <= 0) {
+      return 0.f;
+    }
+
+    int knobSetting = (int)params[POLY_CHANNELS].getValue();
+    if (knobSetting == 0) {
+      return channel < numInputChannels
+                 ? inputs[POLY_INPUT].getPolyVoltage(channel)
+                 : 0.f;
+    }
+
+    int inputChannel = cpx::polyphonic::inputChannelForOutputChannel(
+        cpx::polyphonic::OutputChannel(channel),
+        static_cast<cpx::polyphonic::MappingMode>(mainInputMappingMode),
+        cpx::polyphonic::ChannelCount(numInputChannels));
+    return inputChannel < numInputChannels
+               ? inputs[POLY_INPUT].getPolyVoltage(inputChannel)
+               : 0.f;
   }
 
   float getBlockPortVoltage(int blockIndex, int channel) {
@@ -154,7 +201,7 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
     if (channels <= 0) {
       return 0.f;
     }
-    return input.getPolyVoltage(channels == 1 ? 0 : channel % channels);
+    return channel < channels ? input.getPolyVoltage(channel) : 0.f;
   }
 
   int getNormalizedSourceBlock(int blockIndex) {
@@ -241,6 +288,7 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
       Input& input = inputs[BLOCK_INPUT + blockIndex];
       if (input.isConnected()) {
         insertSourceBlocks[blockIndex] = blockIndex;
+        insertSourceChannels[blockIndex] = 0;
         insertActive[blockIndex] = true;
         continue;
       }
@@ -272,7 +320,7 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
                                       : 0.f;
     }
 
-    return input.getPolyVoltage(channels == 1 ? 0 : channel % channels);
+    return channel < channels ? input.getPolyVoltage(channel) : 0.f;
   }
 
   float getInsertVoltage(int blockIndex, int channel) {
@@ -307,9 +355,10 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
         return crossfade(main, portWithOffset, fade);
       }
       case MODE_VCA_BIPOLAR:
-        return main * getInsertVoltage(blockIndex, channel);
+        return main * getInsertVoltage(blockIndex, channel) / 10.f;
       case MODE_VCA_UNIPOLAR:
-        return main * std::max(0.f, getInsertVoltage(blockIndex, channel));
+        return main * std::max(0.f, getInsertVoltage(blockIndex, channel)) /
+               10.f;
       default:
         return main;
     }
@@ -376,6 +425,90 @@ struct MollysPorridgeBlockNumber : Widget {
     nvgTextAlign(args.vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, BLACK);
     nvgText(args.vg, box.size.x, box.size.y * 0.5f, value.c_str(), NULL);
+  }
+};
+
+struct MollysPorridgeDisableableSmallKnob : ComputerscareRoundKnob {
+  ComputerscareMollysPorridge* module = nullptr;
+  int channel = 0;
+  bool disabled = false;
+  bool initialized = false;
+  std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
+      pluginInstance, "res/components/computerscare-small-knob-effed.svg"));
+  std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(
+      pluginInstance,
+      "res/components/computerscare-small-knob-effed-disabled.svg"));
+
+  MollysPorridgeDisableableSmallKnob() {
+    setSvg(enabledSvg);
+    shadow->opacity = 0.f;
+  }
+
+  void step() override {
+    bool candidateDisabled =
+        module ? channel > module->polyChannels - 1 : false;
+    if (!initialized || disabled != candidateDisabled) {
+      setSvg(candidateDisabled ? disabledSvg : enabledSvg);
+      event::Change changeEvent;
+      onChange(changeEvent);
+      fb->dirty = true;
+      disabled = candidateDisabled;
+      initialized = true;
+    }
+    ComputerscareRoundKnob::step();
+  }
+};
+
+struct MollysPorridgeDisableableSmoothKnob : ComputerscareRoundKnob {
+  ComputerscareMollysPorridge* module = nullptr;
+  int channel = 0;
+  bool disabled = false;
+  bool initialized = false;
+  std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
+      pluginInstance, "res/components/computerscare-medium-knob-effed.svg"));
+  std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(
+      pluginInstance, "res/components/computerscare-medium-knob-disabled.svg"));
+
+  MollysPorridgeDisableableSmoothKnob() {
+    setSvg(enabledSvg);
+    shadow->opacity = 0.f;
+  }
+
+  void step() override {
+    bool candidateDisabled =
+        module ? channel > module->polyChannels - 1 : false;
+    if (!initialized || disabled != candidateDisabled) {
+      setSvg(candidateDisabled ? disabledSvg : enabledSvg);
+      event::Change changeEvent;
+      onChange(changeEvent);
+      fb->dirty = true;
+      disabled = candidateDisabled;
+      initialized = true;
+    }
+    ComputerscareRoundKnob::step();
+  }
+};
+
+struct MollysPorridgeInsertPort : PointingUpPentagonPort {
+  int blockIndex = 0;
+
+  void step() override {
+    ComputerscareMollysPorridge* molly =
+        dynamic_cast<ComputerscareMollysPorridge*>(module);
+    engine::PortInfo* portInfo = molly ? getPortInfo() : nullptr;
+    if (portInfo) {
+      int sourceIndex = molly->getNormalizedSourceBlock(blockIndex);
+      if (sourceIndex >= 0) {
+        int sourceChannel = blockIndex - sourceIndex;
+        portInfo->description = "Normaled to Insert " +
+                                std::to_string(sourceIndex + 1) + ", ch" +
+                                std::to_string(sourceChannel + 1);
+      } else {
+        portInfo->description = "";
+      }
+    }
+
+    PointingUpPentagonPort::step();
   }
 };
 
@@ -607,6 +740,67 @@ struct MollysPorridgeNormalizationItem : MenuItem {
   }
 };
 
+struct MollysPorridgeMainInputMappingItem : MenuItem {
+  ComputerscareMollysPorridge* module = nullptr;
+  int mappingMode = 0;
+
+  void onAction(const event::Action& e) override {
+    if (module) {
+      module->mainInputMappingMode = mappingMode;
+    }
+  }
+
+  void draw(const DrawArgs& args) override {
+    BNDwidgetState state = BND_DEFAULT;
+    if (APP->event->hoveredWidget == this) {
+      state = BND_HOVER;
+    }
+
+    const BNDtheme* theme = bndGetTheme();
+    if (state != BND_DEFAULT) {
+      bndInnerBox(args.vg, 0.0, 0.0, box.size.x, box.size.y, 0, 0, 0, 0,
+                  bndOffsetColor(theme->menuItemTheme.innerSelectedColor,
+                                 theme->menuItemTheme.shadeTop),
+                  bndOffsetColor(theme->menuItemTheme.innerSelectedColor,
+                                 theme->menuItemTheme.shadeDown));
+      state = BND_ACTIVE;
+    }
+
+    NVGcolor nameColor = bndTextColor(&theme->menuItemTheme, state);
+    NVGcolor descriptionColor = state == BND_DEFAULT
+                                    ? theme->menuTheme.textColor
+                                    : theme->menuTheme.textSelectedColor;
+    const char* description =
+        MollysPorridgeMainInputMappingDescriptions[mappingMode];
+
+    bndIconLabelValue(args.vg, 0.f, 3.f, box.size.x, 18.f, -1, nameColor,
+                      BND_LEFT, BND_LABEL_FONT_SIZE, text.c_str(), NULL);
+    bndIconLabelValue(args.vg, 0.f, 21.f, box.size.x, 18.f, -1,
+                      descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE,
+                      description, NULL);
+
+    if (!rightText.empty()) {
+      float x = box.size.x - bndLabelWidth(args.vg, -1, rightText.c_str());
+      bndIconLabelValue(args.vg, x, 0.f, box.size.x, box.size.y, -1,
+                        descriptionColor, BND_LEFT, BND_LABEL_FONT_SIZE,
+                        rightText.c_str(), NULL);
+    }
+  }
+
+  void step() override {
+    rightText =
+        CHECKMARK(module && module->mainInputMappingMode == mappingMode);
+    box.size.x =
+        std::max(bndLabelWidth(APP->window->vg, -1, text.c_str()),
+                 bndLabelWidth(
+                     APP->window->vg, -1,
+                     MollysPorridgeMainInputMappingDescriptions[mappingMode])) +
+        34.f;
+    box.size.y = 42.f;
+    Widget::step();
+  }
+};
+
 static void addMollysPorridgeNormalizationItems(
     Menu* menu, ComputerscareMollysPorridge* module) {
   for (int mode = 0;
@@ -616,6 +810,19 @@ static void addMollysPorridgeNormalizationItems(
     item->text = MollysPorridgeNormalizationNames[mode];
     item->module = module;
     item->normalizationMode = mode;
+    menu->addChild(item);
+  }
+}
+
+static void addMollysPorridgeMainInputMappingItems(
+    Menu* menu, ComputerscareMollysPorridge* module) {
+  for (int mode = cpx::polyphonic::firstMappingModeValue;
+       mode <= cpx::polyphonic::lastMappingModeValue; mode++) {
+    MollysPorridgeMainInputMappingItem* item =
+        new MollysPorridgeMainInputMappingItem();
+    item->text = MollysPorridgeMainInputMappingNames[mode];
+    item->module = module;
+    item->mappingMode = mode;
     menu->addChild(item);
   }
 }
@@ -732,8 +939,10 @@ struct MollysPorridgeModeButton : ComputerscareBlankButton {
     nvgFontSize(args.vg, 10.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, BLACK);
+    float textXOffset = isMenuOpen() ? 1.5f : 0.f;
     float textYOffset = isMenuOpen() ? 2.9f : 0.f;
-    nvgText(args.vg, box.size.x * 0.5f, box.size.y * 0.48f + textYOffset,
+    nvgText(args.vg, box.size.x * 0.5f + textXOffset,
+            box.size.y * 0.48f + textYOffset,
             MollysPorridgeModeCodes[currentMode()], NULL);
   }
 
@@ -843,21 +1052,31 @@ struct ComputerscareMollysPorridgeWidget : ModuleWidget {
     const float jackX = x + 2.f;
     const float jackY = y + 13.f;
 
-    addInput(createInput<PointingUpPentagonPort>(
+    MollysPorridgeInsertPort* inputPort = createInput<MollysPorridgeInsertPort>(
         Vec(jackX, jackY), module,
-        ComputerscareMollysPorridge::BLOCK_INPUT + blockIndex));
-    addParam(createParam<SmallKnob>(
-        Vec(x + 32.f, y + 7.f), module,
-        ComputerscareMollysPorridge::BLOCK_ATTEN + blockIndex));
+        ComputerscareMollysPorridge::BLOCK_INPUT + blockIndex);
+    inputPort->blockIndex = blockIndex;
+    addInput(inputPort);
+    MollysPorridgeDisableableSmallKnob* attenKnob =
+        createParam<MollysPorridgeDisableableSmallKnob>(
+            Vec(x + 32.f, y + 7.f), module,
+            ComputerscareMollysPorridge::BLOCK_ATTEN + blockIndex);
+    attenKnob->module = module;
+    attenKnob->channel = blockIndex;
+    addParam(attenKnob);
     MollysPorridgeModeButton* button =
         createWidget<MollysPorridgeModeButton>(Vec(x + 27.f, y + 25.f));
     button->module = module;
     button->blockIndex = blockIndex;
     addChild(button);
 
-    addParam(createParam<SmoothKnob>(
-        Vec(x + 56.f, y + 14.f), module,
-        ComputerscareMollysPorridge::BLOCK_OFFSET + blockIndex));
+    MollysPorridgeDisableableSmoothKnob* offsetKnob =
+        createParam<MollysPorridgeDisableableSmoothKnob>(
+            Vec(x + 56.f, y + 14.f), module,
+            ComputerscareMollysPorridge::BLOCK_OFFSET + blockIndex);
+    offsetKnob->module = module;
+    offsetKnob->channel = blockIndex;
+    addParam(offsetKnob);
 
     MollysPorridgeBlockNumber* label =
         createWidget<MollysPorridgeBlockNumber>(Vec(jackX - 11.f, jackY - 5.f));
@@ -880,6 +1099,10 @@ struct ComputerscareMollysPorridgeWidget : ModuleWidget {
     menu->addChild(
         createSubmenuItem("Insert normalization", "", [=](Menu* submenu) {
           addMollysPorridgeNormalizationItems(submenu, molly);
+        }));
+    menu->addChild(createSubmenuItem(
+        "Main Input Polyphonic Mapping", "", [=](Menu* submenu) {
+          addMollysPorridgeMainInputMappingItems(submenu, molly);
         }));
   }
 };
