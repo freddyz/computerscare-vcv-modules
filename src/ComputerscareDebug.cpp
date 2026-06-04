@@ -1,3 +1,4 @@
+#include <cmath>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -17,6 +18,10 @@ static const char* DebugInputModeDescriptions[3] = {
 static const char* DebugOutputRangeLabels[8] = {
     "  0v ... +10v", " -5v ...  +5v", "  0v ...  +5v", "  0v ...  +1v",
     " -1v ...  +1v", "-10v ... +10v", " -2v ...  +2v", "  0v ...  +2v"};
+static const char* DebugVisualModeNames[3] = {"Text", "Bars", "Text + Bars"};
+static const char* DebugVisualModeCodes[3] = {"TXT", "BAR", "T+B"};
+static const char* DebugBarModeNames[2] = {"Unipolar", "Bipolar"};
+static const char* DebugBarModeCodes[2] = {"UNI", "BI"};
 
 struct ComputerscareDebug;
 
@@ -45,6 +50,11 @@ struct ComputerscareDebug : Module {
     SWITCH_VIEW,
     WHICH_CLOCK,
     TRIGGER_BLINKERS,
+    VISUAL_MODE,
+    BAR_MODE,
+    BAR_COLOR_HUE,
+    TEXT_COLOR_HUE,
+    TEXT_OPACITY,
     NUM_PARAMS
   };
   enum InputIds { VAL_INPUT, TRG_INPUT, CLR_INPUT, NUM_INPUTS };
@@ -82,6 +92,8 @@ struct ComputerscareDebug : Module {
   dsp::SchmittTrigger manualClearTrigger;
 
   enum clockAndInputModes { SINGLE_MODE, INTERNAL_MODE, POLY_MODE };
+  enum VisualMode { VISUAL_TEXT, VISUAL_BARS, VISUAL_TEXT_BARS };
+  enum BarMode { BAR_UNIPOLAR, BAR_BIPOLAR };
 
   ComputerscareDebug() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -93,6 +105,13 @@ struct ComputerscareDebug : Module {
                  {"Single-Channel", "Internal", "Polyphonic"});
     configSwitch(TRIGGER_BLINKERS, 0.0f, 1.0f, 1.0f, "Clock Blinkers",
                  {"Off", "On"});
+    configSwitch(VISUAL_MODE, 0.f, 2.f, VISUAL_TEXT, "Visual Mode",
+                 {"Text", "Bars", "Text + Bars"});
+    configSwitch(BAR_MODE, 0.f, 1.f, BAR_UNIPOLAR, "Bar Mode",
+                 {"Unipolar", "Bipolar"});
+    configParam(BAR_COLOR_HUE, 0.f, 9.f, 0.f, "Bar Color Scheme");
+    configParam(TEXT_COLOR_HUE, 0.f, 9.f, 0.f, "Text Color Hue");
+    configParam(TEXT_OPACITY, 0.15f, 1.f, 1.f, "Text Opacity");
     configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
     configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 
@@ -123,6 +142,11 @@ struct ComputerscareDebug : Module {
     getParamQuantity(SWITCH_VIEW)->randomizeEnabled = false;
     getParamQuantity(WHICH_CLOCK)->randomizeEnabled = false;
     getParamQuantity(TRIGGER_BLINKERS)->randomizeEnabled = false;
+    getParamQuantity(VISUAL_MODE)->randomizeEnabled = false;
+    getParamQuantity(BAR_MODE)->randomizeEnabled = false;
+    getParamQuantity(TEXT_OPACITY)->randomizeEnabled = false;
+    getParamQuantity(VISUAL_MODE)->resetEnabled = false;
+    getParamQuantity(BAR_MODE)->resetEnabled = false;
     getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
     getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
 
@@ -130,7 +154,20 @@ struct ComputerscareDebug : Module {
   }
   void process(const ProcessArgs& args) override;
 
-  void onRandomize() override { randomizeStorage(); }
+  void onRandomize() override {
+    if (shouldPreserveStorageOnRandomize()) {
+      return;
+    }
+    randomizeStorage();
+  }
+
+  bool shouldPreserveStorageOnRandomize() {
+    int currentClockMode = floor(params[WHICH_CLOCK].getValue());
+    int currentInputMode = floor(params[SWITCH_VIEW].getValue());
+    return currentClockMode == INTERNAL_MODE &&
+           inputs[VAL_INPUT].isConnected() &&
+           (currentInputMode == INTERNAL_MODE || currentInputMode == POLY_MODE);
+  }
 
   void randomizeStorage() {
     float min = outputRanges[outputRangeEnum][0];
@@ -154,6 +191,16 @@ struct ComputerscareDebug : Module {
     json_object_set_new(
         rootJ, "triggerBlinkers",
         json_boolean(params[TRIGGER_BLINKERS].getValue() > 0.5f));
+    json_object_set_new(rootJ, "visualMode",
+                        json_integer((int)params[VISUAL_MODE].getValue()));
+    json_object_set_new(rootJ, "barMode",
+                        json_integer((int)params[BAR_MODE].getValue()));
+    json_object_set_new(rootJ, "barColorHue",
+                        json_real(params[BAR_COLOR_HUE].getValue()));
+    json_object_set_new(rootJ, "textColorHue",
+                        json_real(params[TEXT_COLOR_HUE].getValue()));
+    json_object_set_new(rootJ, "textOpacity",
+                        json_real(params[TEXT_OPACITY].getValue()));
 
     json_t* sequencesJ = json_array();
 
@@ -166,7 +213,7 @@ struct ComputerscareDebug : Module {
   }
 
   void dataFromJson(json_t* rootJ) override {
-    float val;
+    float val = 0.f;
 
     json_t* outputRangeEnumJ = json_object_get(rootJ, "outputRange");
     if (outputRangeEnumJ) {
@@ -177,6 +224,35 @@ struct ComputerscareDebug : Module {
     params[TRIGGER_BLINKERS].setValue(
         triggerBlinkersJ ? (json_boolean_value(triggerBlinkersJ) ? 1.f : 0.f)
                          : 0.f);
+
+    json_t* visualModeJ = json_object_get(rootJ, "visualMode");
+    params[VISUAL_MODE].setValue(
+        visualModeJ ? math::clamp((int)json_integer_value(visualModeJ), 0, 2)
+                    : VISUAL_TEXT);
+
+    json_t* barModeJ = json_object_get(rootJ, "barMode");
+    if (barModeJ) {
+      params[BAR_MODE].setValue(
+          math::clamp((int)json_integer_value(barModeJ), 0, 1));
+    }
+
+    json_t* barColorHueJ = json_object_get(rootJ, "barColorHue");
+    if (barColorHueJ) {
+      params[BAR_COLOR_HUE].setValue(
+          math::clamp((float)json_number_value(barColorHueJ), 0.f, 9.f));
+    }
+
+    json_t* textColorHueJ = json_object_get(rootJ, "textColorHue");
+    if (textColorHueJ) {
+      params[TEXT_COLOR_HUE].setValue(
+          math::clamp((float)json_number_value(textColorHueJ), 0.f, 9.f));
+    }
+
+    json_t* textOpacityJ = json_object_get(rootJ, "textOpacity");
+    if (textOpacityJ) {
+      params[TEXT_OPACITY].setValue(
+          math::clamp((float)json_number_value(textOpacityJ), 0.15f, 1.f));
+    }
 
     json_t* sequencesJ = json_object_get(rootJ, "lines");
 
@@ -389,6 +465,92 @@ struct StringDisplayWidget3 : Widget {
 
   StringDisplayWidget3() {};
 
+  float hueParam(float value) const {
+    if (value <= 0.f) return -1.f;
+    return std::fmod(value / 9.f, 1.f);
+  }
+
+  NVGcolor textColor(float alpha = 1.f) const {
+    const float hue = hueParam(
+        module ? module->params[ComputerscareDebug::TEXT_COLOR_HUE].getValue()
+               : 0.f);
+    if (hue < 0.f) return nvgRGBA(0xC0, 0xE7, 0xDE, (int)(alpha * 255.f));
+    return nvgHSLA(hue, 0.86f, 0.76f, (int)(alpha * 255.f));
+  }
+
+  NVGcolor barColor(float voltage) const {
+    const float hue = hueParam(
+        module ? module->params[ComputerscareDebug::BAR_COLOR_HUE].getValue()
+               : 0.f);
+    if (hue < 0.f) {
+      return voltage >= 0.f ? nvgRGBA(0x24, 0xC9, 0xA6, 0x98)
+                            : COLOR_COMPUTERSCARE_PINK;
+    }
+
+    const float signOffset = voltage >= 0.f ? 0.05f : 0.57f;
+    const float wobble = voltage >= 0.f ? 0.13f : 0.31f;
+    const float h = std::fmod(hue * 1.37f + signOffset + wobble, 1.f);
+    const float sat = voltage >= 0.f ? 0.88f : 0.96f;
+    const float lum = voltage >= 0.f ? 0.56f : 0.52f;
+    return nvgHSLA(h, sat, lum, 0x98);
+  }
+
+  void drawBar(NVGcontext* vg, float y, float voltage) {
+    const float x = 4.f;
+    const float width = box.size.x - 8.f;
+    const float height = 13.f;
+    const float clamped = clamp(std::fabs(voltage) / 10.f, 0.f, 1.f);
+    const bool zero = std::fabs(voltage) < 0.0000005f;
+    const int barMode =
+        module ? (int)module->params[ComputerscareDebug::BAR_MODE].getValue()
+               : ComputerscareDebug::BAR_UNIPOLAR;
+
+    float barX = x;
+    float barWidth = zero ? 0.f : std::max(0.8f, width * clamped);
+    if (barMode == ComputerscareDebug::BAR_BIPOLAR) {
+      const float centerX = x + width * 0.5f;
+      barWidth = zero ? 0.f : std::max(0.8f, width * 0.5f * clamped);
+      barX = voltage >= 0.f ? centerX : centerX - barWidth;
+    }
+
+    if (barWidth <= 0.f) {
+      return;
+    }
+
+    nvgBeginPath(vg);
+    nvgRoundedRect(vg, barX, y - height * 0.5f, barWidth, height, 2.f);
+    nvgFillColor(vg, barColor(voltage));
+    nvgFill(vg);
+  }
+
+  void drawBars(NVGcontext* vg) {
+    if (!module) {
+      return;
+    }
+
+    int visualMode =
+        (int)module->params[ComputerscareDebug::VISUAL_MODE].getValue();
+    if (visualMode != ComputerscareDebug::VISUAL_BARS &&
+        visualMode != ComputerscareDebug::VISUAL_TEXT_BARS) {
+      return;
+    }
+
+    int activeChannels =
+        module->outputs[ComputerscareDebug::POLY_OUTPUT].getChannels();
+    if (activeChannels <= 0) {
+      activeChannels = NUM_LINES;
+    }
+    activeChannels = math::clamp(activeChannels, 0, NUM_LINES);
+
+    nvgSave(vg);
+    nvgIntersectScissor(vg, 1.f, 1.f, box.size.x - 2.f, box.size.y - 2.f);
+    for (int i = 0; i < activeChannels; i++) {
+      float y = 7.5f + 15.08f * i;
+      drawBar(vg, y, module->logLines[i]);
+    }
+    nvgRestore(vg);
+  }
+
   void draw(const DrawArgs& ctx) override {
     // Background
     NVGcolor backgroundColor = nvgRGB(0x10, 0x00, 0x10);
@@ -401,9 +563,22 @@ struct StringDisplayWidget3 : Widget {
     nvgRoundedRect(ctx.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
     nvgFillColor(ctx.vg, backgroundColor);
     nvgFill(ctx.vg);
+    drawBars(ctx.vg);
   }
   void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
     if (layer == 1) {
+      int visualMode =
+          module
+              ? (int)module->params[ComputerscareDebug::VISUAL_MODE].getValue()
+              : ComputerscareDebug::VISUAL_TEXT;
+      bool drawText = visualMode == ComputerscareDebug::VISUAL_TEXT ||
+                      visualMode == ComputerscareDebug::VISUAL_TEXT_BARS;
+
+      if (!drawText) {
+        Widget::drawLayer(args, layer);
+        return;
+      }
+
       std::shared_ptr<Font> font =
           APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
 
@@ -414,8 +589,10 @@ struct StringDisplayWidget3 : Widget {
 
       std::string textToDraw = module ? module->strValue : noModuleStringValue;
       Vec textPos = Vec(5.0f, 12.0f);
-      NVGcolor textColor = nvgRGB(0xC0, 0xE7, 0xDE);
-      nvgFillColor(args.vg, textColor);
+      float textOpacity =
+          module ? module->params[ComputerscareDebug::TEXT_OPACITY].getValue()
+                 : 1.f;
+      nvgFillColor(args.vg, textColor(textOpacity));
       nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
     }
     Widget::drawLayer(args, layer);
@@ -471,6 +648,230 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
     SmallLetterDisplay::draw(ctx);
   }
 };
+
+struct DebugVisualParamItem : MenuItem {
+  ComputerscareDebug* debug = nullptr;
+  int paramId = 0;
+  int value = 0;
+
+  void onAction(const event::Action& e) override {
+    if (debug) {
+      debug->params[paramId].setValue(value);
+    }
+  }
+
+  void step() override {
+    rightText =
+        CHECKMARK(debug && (int)debug->params[paramId].getValue() == value);
+    MenuItem::step();
+  }
+};
+
+static void addDebugVisualModeItems(Menu* menu, ComputerscareDebug* debug) {
+  for (int mode = 0; mode < 3; mode++) {
+    DebugVisualParamItem* item = new DebugVisualParamItem();
+    item->text = DebugVisualModeNames[mode];
+    item->debug = debug;
+    item->paramId = ComputerscareDebug::VISUAL_MODE;
+    item->value = mode;
+    menu->addChild(item);
+  }
+}
+
+static void addDebugBarModeItems(Menu* menu, ComputerscareDebug* debug) {
+  for (int mode = 0; mode < 2; mode++) {
+    DebugVisualParamItem* item = new DebugVisualParamItem();
+    item->text = DebugBarModeNames[mode];
+    item->debug = debug;
+    item->paramId = ComputerscareDebug::BAR_MODE;
+    item->value = mode;
+    menu->addChild(item);
+  }
+}
+
+struct DebugLabelHoverButton : ComputerscareBlankButton {
+  ComputerscareDebug* module = nullptr;
+  WeakPtr<ui::MenuOverlay> activeMenuOverlay;
+  ui::Tooltip* hoverTooltip = NULL;
+  int control = 0;
+  int menuFrame = -1;
+  bool hovering = false;
+
+  enum Control { DISPLAY_CONTROL, BAR_STYLE_CONTROL, COLOR_CONTROL };
+
+  DebugLabelHoverButton() {
+    iconUpPos = Vec(0.f, 0.f);
+    iconDownOffset = Vec(0.f, 0.f);
+    box.size = Vec(25.f, 13.f);
+    shadow->opacity = 0.f;
+  }
+
+  ~DebugLabelHoverButton() { destroyHoverTooltip(); }
+
+  void createHoverTooltip() {
+    if (!settings::tooltips || hoverTooltip) {
+      return;
+    }
+
+    hoverTooltip = new ui::Tooltip;
+    APP->scene->addChild(hoverTooltip);
+  }
+
+  void updateHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    hoverTooltip->text = tooltipText();
+  }
+
+  void destroyHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    APP->scene->removeChild(hoverTooltip);
+    delete hoverTooltip;
+    hoverTooltip = NULL;
+  }
+
+  bool isMenuOpen() {
+    ui::MenuOverlay* overlay = activeMenuOverlay.get();
+    return overlay && !overlay->requestedDelete;
+  }
+
+  bool isShowing() { return isMenuOpen() || hovering; }
+
+  void updateMenuFrame() {
+    int frame = isMenuOpen() ? 1 : 0;
+    if (menuFrame == frame || frame >= (int)frames.size()) {
+      return;
+    }
+
+    sw->setSvg(frames[frame]);
+    fb->setDirty();
+    menuFrame = frame;
+    setIconPressed(frame == 1);
+  }
+
+  void step() override {
+    ComputerscareBlankButton::step();
+    updateMenuFrame();
+    updateHoverTooltip();
+  }
+
+  int currentDisplayMode() const {
+    if (!module) {
+      return ComputerscareDebug::VISUAL_TEXT;
+    }
+    return math::clamp(
+        (int)module->params[ComputerscareDebug::VISUAL_MODE].getValue(), 0, 2);
+  }
+
+  int currentBarMode() const {
+    if (!module) {
+      return ComputerscareDebug::BAR_UNIPOLAR;
+    }
+    return math::clamp(
+        (int)module->params[ComputerscareDebug::BAR_MODE].getValue(), 0, 1);
+  }
+
+  std::string codeText() const {
+    if (control == DISPLAY_CONTROL) {
+      return DebugVisualModeCodes[currentDisplayMode()];
+    }
+    if (control == BAR_STYLE_CONTROL) {
+      return DebugBarModeCodes[currentBarMode()];
+    }
+    return "COL";
+  }
+
+  std::string tooltipText() const {
+    if (control == DISPLAY_CONTROL) {
+      return "Display";
+    }
+    if (control == BAR_STYLE_CONTROL) {
+      return "Bar Style";
+    }
+    return "Color Scheme";
+  }
+
+  void draw(const DrawArgs& args) override {
+    updateMenuFrame();
+    if (!isShowing()) {
+      return;
+    }
+    ComputerscareBlankButton::draw(args);
+    std::shared_ptr<Font> font = APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    if (!font) {
+      return;
+    }
+
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, 9.f);
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgFillColor(args.vg, BLACK);
+    const float textXOffset = isMenuOpen() ? 1.f : 0.f;
+    const float textYOffset = isMenuOpen() ? 1.4f : 0.f;
+    std::string code = codeText();
+    nvgText(args.vg, box.size.x * 0.32f + textXOffset,
+            box.size.y * 0.50f + textYOffset, code.c_str(), NULL);
+  }
+
+  void onDragEnd(const event::DragEnd& e) override {
+    if (e.button == GLFW_MOUSE_BUTTON_LEFT && isMenuOpen()) {
+      updateMenuFrame();
+      return;
+    }
+
+    ComputerscareBlankButton::onDragEnd(e);
+  }
+
+  void onEnter(const event::Enter& e) override {
+    hovering = true;
+    createHoverTooltip();
+    updateHoverTooltip();
+    ComputerscareBlankButton::onEnter(e);
+  }
+
+  void onLeave(const event::Leave& e) override {
+    hovering = false;
+    destroyHoverTooltip();
+    ComputerscareBlankButton::onLeave(e);
+  }
+
+  void onButton(const event::Button& e) override {
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT || e.action != GLFW_PRESS) {
+      ComputerscareBlankButton::onButton(e);
+      return;
+    }
+
+    e.consume(this);
+    destroyHoverTooltip();
+    if (!module) {
+      return;
+    }
+
+    Menu* menu = createMenu();
+    activeMenuOverlay = menu->getAncestorOfType<ui::MenuOverlay>();
+    menu->addChild(createMenuLabel(tooltipText()));
+    if (control == DISPLAY_CONTROL) {
+      addDebugVisualModeItems(menu, module);
+    } else if (control == BAR_STYLE_CONTROL) {
+      addDebugBarModeItems(menu, module);
+    } else {
+      menu->addChild(new MenuParamSlider(
+          module->paramQuantities[ComputerscareDebug::BAR_COLOR_HUE]));
+      menu->addChild(new MenuParamSlider(
+          module->paramQuantities[ComputerscareDebug::TEXT_COLOR_HUE]));
+      menu->addChild(new MenuParamSlider(
+          module->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
+    }
+    updateMenuFrame();
+  }
+};
+
 struct ComputerscareDebugWidget : ModuleWidget {
   ComputerscareDebugWidget(ComputerscareDebug* module) {
     setModule(module);
@@ -518,6 +919,14 @@ struct ComputerscareDebugWidget : ModuleWidget {
       sld->box.size = Vec(28, 20);
       sld->module = module;
       addChild(sld);
+    }
+
+    for (int i = 0; i < 3; i++) {
+      DebugLabelHoverButton* button =
+          createWidget<DebugLabelHoverButton>(Vec(-1.f, 35.2f + 15.08f * i));
+      button->module = module;
+      button->control = i;
+      addChild(button);
     }
 
     StringDisplayWidget3* stringDisplay =
@@ -704,6 +1113,26 @@ void ComputerscareDebugWidget::appendContextMenu(Menu* menu) {
               &DebugOutputRangeItem::outputRangeEnum, i));
         }
       }));
+  menu->addChild(new MenuSeparator);
+  menu->addChild(createSubmenuItem("Visual", "", [=](Menu* visualMenu) {
+    visualMenu->addChild(createSubmenuItem(
+        "Display",
+        DebugVisualModeNames[(int)debug->params[ComputerscareDebug::VISUAL_MODE]
+                                 .getValue()],
+        [=](Menu* submenu) { addDebugVisualModeItems(submenu, debug); }));
+    visualMenu->addChild(createSubmenuItem(
+        "Bar Mode",
+        DebugBarModeNames[(int)debug->params[ComputerscareDebug::BAR_MODE]
+                              .getValue()],
+        [=](Menu* submenu) { addDebugBarModeItems(submenu, debug); }));
+    visualMenu->addChild(new MenuSeparator);
+    visualMenu->addChild(new MenuParamSlider(
+        debug->paramQuantities[ComputerscareDebug::BAR_COLOR_HUE]));
+    visualMenu->addChild(new MenuParamSlider(
+        debug->paramQuantities[ComputerscareDebug::TEXT_COLOR_HUE]));
+    visualMenu->addChild(new MenuParamSlider(
+        debug->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
+  }));
 }
 Model* modelComputerscareDebug =
     createModel<ComputerscareDebug, ComputerscareDebugWidget>(
