@@ -137,11 +137,11 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/moly-patrix.md"
     },
     {
-      "slug": "computerscare-mollys-porridge",
-      "name": "Mollys Porridge",
-      "description": "Polyphonic input processor with 16 insert blocks",
+      "slug": "computerscare-mely-porge",
+      "name": "Mely Porge",
+      "description": "Polyphonic input processor with 16 insert channels",
       "tags": ["Polyphonic", "Utility", "Mixer", "Attenuator"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#mollys-porridge"
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#mely-porge"
     },
     {
       "slug": "computerscare-sloly-pit",

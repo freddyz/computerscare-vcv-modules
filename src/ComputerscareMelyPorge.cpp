@@ -2,18 +2,17 @@
 #include "ComputerscarePolyModule.hpp"
 #include "complex/PolyphonicMapping.hpp"
 
-struct ComputerscareMollysPorridge;
+struct ComputerscareMelyPorge;
 
 static const int MOLLYS_PORRIDGE_BLOCKS = 16;
 
-static const char* MollysPorridgeModeNames[] = {
+static const char* MelyPorgeModeNames[] = {
     "Add", "Insert", "Xfade", "VCA bipolar", "VCA unipolar",
 };
 
-static const char* MollysPorridgeModeCodes[] = {"ADD", "INS", "XFD", "VCB",
-                                                "VCU"};
+static const char* MelyPorgeModeCodes[] = {"ADD", "INS", "XFD", "VCB", "VCU"};
 
-static const char* MollysPorridgeModeDescriptions[] = {
+static const char* MelyPorgeModeDescriptions[] = {
     "Sum the processed main input with the processed channel input.",
     "Pass the main input unless the channel input is patched, then replace it.",
     "Crossfade between main and channel input using the attenuverter knob.",
@@ -22,19 +21,19 @@ static const char* MollysPorridgeModeDescriptions[] = {
     "Use main input as signal and processed channel input floored at zero.",
 };
 
-static const char* MollysPorridgeNormalizationNames[] = {
+static const char* MelyPorgeNormalizationNames[] = {
     "No normalization",
     "Normalize polyphonic",
 };
 
-static const char* MollysPorridgeMainInputMappingNames[] = {
+static const char* MelyPorgeMainInputMappingNames[] = {
     "Standard",
     "Cycle",
     "Zero pad",
     "Stall",
 };
 
-static const char* MollysPorridgeMainInputMappingDescriptions[] = {
+static const char* MelyPorgeMainInputMappingDescriptions[] = {
     "Mono main input is copied to all manual output channels; poly input uses "
     "matching channels.",
     "Main input channels repeat until the manual output channel count is "
@@ -44,7 +43,7 @@ static const char* MollysPorridgeMainInputMappingDescriptions[] = {
     "channel.",
 };
 
-struct ComputerscareMollysPorridge : ComputerscarePolyModule {
+struct ComputerscareMelyPorge : ComputerscarePolyModule {
   enum Mode {
     MODE_ADD,
     MODE_INSERT,
@@ -84,7 +83,7 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
   int insertSourceChannels[MOLLYS_PORRIDGE_BLOCKS] = {};
   bool insertActive[MOLLYS_PORRIDGE_BLOCKS] = {};
 
-  ComputerscareMollysPorridge() {
+  ComputerscareMelyPorge() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
     configParam(GLOBAL_ATTEN, -2.f, 2.f, 1.f, "Input Attenuverter");
@@ -373,7 +372,7 @@ struct ComputerscareMollysPorridge : ComputerscarePolyModule {
   }
 };
 
-struct MollysPorridgePanel : Widget {
+struct MelyPorgePanel : Widget {
   std::string fontPath =
       asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
 
@@ -396,11 +395,11 @@ struct MollysPorridgePanel : Widget {
     nvgFillColor(args.vg, nvgRGB(0xf4, 0xf1, 0xe8));
     nvgFill(args.vg);
 
-    drawLabel(args, Vec(8.f, 18.f), "mollys porridge", 14.f, BLACK);
+    drawLabel(args, Vec(8.f, 18.f), "mely porge", 14.f, BLACK);
   }
 };
 
-struct MollysPorridgeBlockBackground : Widget {
+struct MelyPorgeBlockBackground : Widget {
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
     nvgRoundedRect(args.vg, 0.f, 0.f, box.size.x, box.size.y, 3.f);
@@ -409,7 +408,7 @@ struct MollysPorridgeBlockBackground : Widget {
   }
 };
 
-struct MollysPorridgeBlockNumber : Widget {
+struct MelyPorgeBlockNumber : Widget {
   std::string value;
   std::string fontPath =
       asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
@@ -428,8 +427,8 @@ struct MollysPorridgeBlockNumber : Widget {
   }
 };
 
-struct MollysPorridgeDisableableSmallKnob : ComputerscareRoundKnob {
-  ComputerscareMollysPorridge* module = nullptr;
+struct MelyPorgeDisableableSmallKnob : ComputerscareRoundKnob {
+  ComputerscareMelyPorge* module = nullptr;
   int channel = 0;
   bool disabled = false;
   bool initialized = false;
@@ -439,7 +438,7 @@ struct MollysPorridgeDisableableSmallKnob : ComputerscareRoundKnob {
       pluginInstance,
       "res/components/computerscare-small-knob-effed-disabled.svg"));
 
-  MollysPorridgeDisableableSmallKnob() {
+  MelyPorgeDisableableSmallKnob() {
     setSvg(enabledSvg);
     shadow->opacity = 0.f;
   }
@@ -459,8 +458,8 @@ struct MollysPorridgeDisableableSmallKnob : ComputerscareRoundKnob {
   }
 };
 
-struct MollysPorridgeDisableableSmoothKnob : ComputerscareRoundKnob {
-  ComputerscareMollysPorridge* module = nullptr;
+struct MelyPorgeDisableableSmoothKnob : ComputerscareRoundKnob {
+  ComputerscareMelyPorge* module = nullptr;
   int channel = 0;
   bool disabled = false;
   bool initialized = false;
@@ -469,7 +468,7 @@ struct MollysPorridgeDisableableSmoothKnob : ComputerscareRoundKnob {
   std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance, "res/components/computerscare-medium-knob-disabled.svg"));
 
-  MollysPorridgeDisableableSmoothKnob() {
+  MelyPorgeDisableableSmoothKnob() {
     setSvg(enabledSvg);
     shadow->opacity = 0.f;
   }
@@ -489,15 +488,15 @@ struct MollysPorridgeDisableableSmoothKnob : ComputerscareRoundKnob {
   }
 };
 
-struct MollysPorridgeInsertPort : PointingUpPentagonPort {
+struct MelyPorgeInsertPort : PointingUpPentagonPort {
   int blockIndex = 0;
 
   void step() override {
-    ComputerscareMollysPorridge* molly =
-        dynamic_cast<ComputerscareMollysPorridge*>(module);
-    engine::PortInfo* portInfo = molly ? getPortInfo() : nullptr;
+    ComputerscareMelyPorge* mely =
+        dynamic_cast<ComputerscareMelyPorge*>(module);
+    engine::PortInfo* portInfo = mely ? getPortInfo() : nullptr;
     if (portInfo) {
-      int sourceIndex = molly->getNormalizedSourceBlock(blockIndex);
+      int sourceIndex = mely->getNormalizedSourceBlock(blockIndex);
       if (sourceIndex >= 0) {
         int sourceChannel = blockIndex - sourceIndex;
         portInfo->description = "Normaled to Insert " +
@@ -512,8 +511,8 @@ struct MollysPorridgeInsertPort : PointingUpPentagonPort {
   }
 };
 
-struct MollysPorridgeNormalizationOverlay : Widget {
-  ComputerscareMollysPorridge* module = nullptr;
+struct MelyPorgeNormalizationOverlay : Widget {
+  ComputerscareMelyPorge* module = nullptr;
 
   static constexpr float startY = 52.f;
   static constexpr float rowSpacing = 41.f;
@@ -597,15 +596,14 @@ struct MollysPorridgeNormalizationOverlay : Widget {
 
   void draw(const DrawArgs& args) override {
     if (!module || module->normalizationMode !=
-                       ComputerscareMollysPorridge::NORMALIZATION_POLY) {
+                       ComputerscareMelyPorge::NORMALIZATION_POLY) {
       return;
     }
 
     int runIndex = 0;
     for (int sourceIndex = 0; sourceIndex < MOLLYS_PORRIDGE_BLOCKS;
          sourceIndex++) {
-      if (!module
-               ->inputs[ComputerscareMollysPorridge::BLOCK_INPUT + sourceIndex]
+      if (!module->inputs[ComputerscareMelyPorge::BLOCK_INPUT + sourceIndex]
                .isConnected()) {
         continue;
       }
@@ -621,8 +619,7 @@ struct MollysPorridgeNormalizationOverlay : Widget {
 
       if (sourceIndex < 8) {
         int sourceChannels =
-            module
-                ->inputs[ComputerscareMollysPorridge::BLOCK_INPUT + sourceIndex]
+            module->inputs[ComputerscareMelyPorge::BLOCK_INPUT + sourceIndex]
                 .getChannels();
         if (sourceIndex + sourceChannels > 8) {
           int rightRunEndIndex =
@@ -638,8 +635,8 @@ struct MollysPorridgeNormalizationOverlay : Widget {
   }
 };
 
-struct MollysPorridgeModeItem : MenuItem {
-  ComputerscareMollysPorridge* module = nullptr;
+struct MelyPorgeModeItem : MenuItem {
+  ComputerscareMelyPorge* module = nullptr;
   int blockIndex = 0;
   int mode = 0;
   bool setAll = false;
@@ -678,7 +675,7 @@ struct MollysPorridgeModeItem : MenuItem {
     NVGcolor descriptionColor = state == BND_DEFAULT
                                     ? theme->menuTheme.textColor
                                     : theme->menuTheme.textSelectedColor;
-    const char* description = MollysPorridgeModeDescriptions[mode];
+    const char* description = MelyPorgeModeDescriptions[mode];
 
     bndIconLabelValue(args.vg, 0.f, 3.f, box.size.x, 18.f, -1, nameColor,
                       BND_LEFT, BND_LABEL_FONT_SIZE, text.c_str(), NULL);
@@ -699,15 +696,15 @@ struct MollysPorridgeModeItem : MenuItem {
         CHECKMARK(module && !setAll && module->blockModes[blockIndex] == mode);
     box.size.x = std::max(bndLabelWidth(APP->window->vg, -1, text.c_str()),
                           bndLabelWidth(APP->window->vg, -1,
-                                        MollysPorridgeModeDescriptions[mode])) +
+                                        MelyPorgeModeDescriptions[mode])) +
                  34.f;
     box.size.y = 42.f;
     Widget::step();
   }
 };
 
-struct MollysPorridgeSimpleModeItem : MenuItem {
-  ComputerscareMollysPorridge* module = nullptr;
+struct MelyPorgeSimpleModeItem : MenuItem {
+  ComputerscareMelyPorge* module = nullptr;
   int blockIndex = 0;
   int mode = 0;
 
@@ -723,8 +720,8 @@ struct MollysPorridgeSimpleModeItem : MenuItem {
   }
 };
 
-struct MollysPorridgeNormalizationItem : MenuItem {
-  ComputerscareMollysPorridge* module = nullptr;
+struct MelyPorgeNormalizationItem : MenuItem {
+  ComputerscareMelyPorge* module = nullptr;
   int normalizationMode = 0;
 
   void onAction(const event::Action& e) override {
@@ -740,8 +737,8 @@ struct MollysPorridgeNormalizationItem : MenuItem {
   }
 };
 
-struct MollysPorridgeMainInputMappingItem : MenuItem {
-  ComputerscareMollysPorridge* module = nullptr;
+struct MelyPorgeMainInputMappingItem : MenuItem {
+  ComputerscareMelyPorge* module = nullptr;
   int mappingMode = 0;
 
   void onAction(const event::Action& e) override {
@@ -771,7 +768,7 @@ struct MollysPorridgeMainInputMappingItem : MenuItem {
                                     ? theme->menuTheme.textColor
                                     : theme->menuTheme.textSelectedColor;
     const char* description =
-        MollysPorridgeMainInputMappingDescriptions[mappingMode];
+        MelyPorgeMainInputMappingDescriptions[mappingMode];
 
     bndIconLabelValue(args.vg, 0.f, 3.f, box.size.x, 18.f, -1, nameColor,
                       BND_LEFT, BND_LABEL_FONT_SIZE, text.c_str(), NULL);
@@ -791,59 +788,55 @@ struct MollysPorridgeMainInputMappingItem : MenuItem {
     rightText =
         CHECKMARK(module && module->mainInputMappingMode == mappingMode);
     box.size.x =
-        std::max(bndLabelWidth(APP->window->vg, -1, text.c_str()),
-                 bndLabelWidth(
-                     APP->window->vg, -1,
-                     MollysPorridgeMainInputMappingDescriptions[mappingMode])) +
+        std::max(
+            bndLabelWidth(APP->window->vg, -1, text.c_str()),
+            bndLabelWidth(APP->window->vg, -1,
+                          MelyPorgeMainInputMappingDescriptions[mappingMode])) +
         34.f;
     box.size.y = 42.f;
     Widget::step();
   }
 };
 
-static void addMollysPorridgeNormalizationItems(
-    Menu* menu, ComputerscareMollysPorridge* module) {
-  for (int mode = 0;
-       mode < ComputerscareMollysPorridge::NUM_NORMALIZATION_MODES; mode++) {
-    MollysPorridgeNormalizationItem* item =
-        new MollysPorridgeNormalizationItem();
-    item->text = MollysPorridgeNormalizationNames[mode];
+static void addMelyPorgeNormalizationItems(Menu* menu,
+                                           ComputerscareMelyPorge* module) {
+  for (int mode = 0; mode < ComputerscareMelyPorge::NUM_NORMALIZATION_MODES;
+       mode++) {
+    MelyPorgeNormalizationItem* item = new MelyPorgeNormalizationItem();
+    item->text = MelyPorgeNormalizationNames[mode];
     item->module = module;
     item->normalizationMode = mode;
     menu->addChild(item);
   }
 }
 
-static void addMollysPorridgeMainInputMappingItems(
-    Menu* menu, ComputerscareMollysPorridge* module) {
+static void addMelyPorgeMainInputMappingItems(Menu* menu,
+                                              ComputerscareMelyPorge* module) {
   for (int mode = cpx::polyphonic::firstMappingModeValue;
        mode <= cpx::polyphonic::lastMappingModeValue; mode++) {
-    MollysPorridgeMainInputMappingItem* item =
-        new MollysPorridgeMainInputMappingItem();
-    item->text = MollysPorridgeMainInputMappingNames[mode];
+    MelyPorgeMainInputMappingItem* item = new MelyPorgeMainInputMappingItem();
+    item->text = MelyPorgeMainInputMappingNames[mode];
     item->module = module;
     item->mappingMode = mode;
     menu->addChild(item);
   }
 }
 
-static void addMollysPorridgeModeItems(Menu* menu,
-                                       ComputerscareMollysPorridge* module,
-                                       int blockIndex, bool setAll,
-                                       bool showDescriptions) {
-  for (int mode = 0; mode < ComputerscareMollysPorridge::NUM_MODES; mode++) {
+static void addMelyPorgeModeItems(Menu* menu, ComputerscareMelyPorge* module,
+                                  int blockIndex, bool setAll,
+                                  bool showDescriptions) {
+  for (int mode = 0; mode < ComputerscareMelyPorge::NUM_MODES; mode++) {
     if (showDescriptions) {
-      MollysPorridgeModeItem* modeItem = new MollysPorridgeModeItem();
-      modeItem->text = MollysPorridgeModeNames[mode];
+      MelyPorgeModeItem* modeItem = new MelyPorgeModeItem();
+      modeItem->text = MelyPorgeModeNames[mode];
       modeItem->module = module;
       modeItem->blockIndex = blockIndex;
       modeItem->mode = mode;
       modeItem->setAll = setAll;
       menu->addChild(modeItem);
     } else {
-      MollysPorridgeSimpleModeItem* simpleItem =
-          new MollysPorridgeSimpleModeItem();
-      simpleItem->text = MollysPorridgeModeNames[mode];
+      MelyPorgeSimpleModeItem* simpleItem = new MelyPorgeSimpleModeItem();
+      simpleItem->text = MelyPorgeModeNames[mode];
       simpleItem->module = module;
       simpleItem->blockIndex = blockIndex;
       simpleItem->mode = mode;
@@ -852,20 +845,20 @@ static void addMollysPorridgeModeItems(Menu* menu,
   }
 }
 
-struct MollysPorridgeModeButton : ComputerscareBlankButton {
-  ComputerscareMollysPorridge* module = nullptr;
+struct MelyPorgeModeButton : ComputerscareBlankButton {
+  ComputerscareMelyPorge* module = nullptr;
   WeakPtr<ui::MenuOverlay> activeMenuOverlay;
   ui::Tooltip* hoverTooltip = NULL;
   int blockIndex = 0;
   int menuFrame = -1;
 
-  MollysPorridgeModeButton() {
+  MelyPorgeModeButton() {
     iconUpPos = Vec(0.f, 0.f);
     iconDownOffset = Vec(0.f, 0.f);
     box.size.x *= 0.74f;
   }
 
-  ~MollysPorridgeModeButton() { destroyHoverTooltip(); }
+  ~MelyPorgeModeButton() { destroyHoverTooltip(); }
 
   void createHoverTooltip() {
     if (!settings::tooltips || hoverTooltip) {
@@ -882,8 +875,8 @@ struct MollysPorridgeModeButton : ComputerscareBlankButton {
     }
 
     int mode = currentMode();
-    hoverTooltip->text = std::string(MollysPorridgeModeNames[mode]) + "\n" +
-                         MollysPorridgeModeDescriptions[mode];
+    hoverTooltip->text = std::string(MelyPorgeModeNames[mode]) + "\n" +
+                         MelyPorgeModeDescriptions[mode];
   }
 
   void destroyHoverTooltip() {
@@ -921,10 +914,10 @@ struct MollysPorridgeModeButton : ComputerscareBlankButton {
 
   int currentMode() const {
     if (!module) {
-      return ComputerscareMollysPorridge::MODE_INSERT;
+      return ComputerscareMelyPorge::MODE_INSERT;
     }
     return math::clamp(module->blockModes[blockIndex], 0,
-                       (int)ComputerscareMollysPorridge::NUM_MODES - 1);
+                       (int)ComputerscareMelyPorge::NUM_MODES - 1);
   }
 
   void draw(const DrawArgs& args) override {
@@ -942,8 +935,8 @@ struct MollysPorridgeModeButton : ComputerscareBlankButton {
     float textXOffset = isMenuOpen() ? 1.5f : 0.f;
     float textYOffset = isMenuOpen() ? 2.9f : 0.f;
     nvgText(args.vg, box.size.x * 0.5f + textXOffset,
-            box.size.y * 0.48f + textYOffset,
-            MollysPorridgeModeCodes[currentMode()], NULL);
+            box.size.y * 0.48f + textYOffset, MelyPorgeModeCodes[currentMode()],
+            NULL);
   }
 
   void onDragEnd(const event::DragEnd& e) override {
@@ -982,24 +975,24 @@ struct MollysPorridgeModeButton : ComputerscareBlankButton {
     activeMenuOverlay = menu->getAncestorOfType<ui::MenuOverlay>();
     menu->addChild(
         createMenuLabel("Channel " + std::to_string(blockIndex + 1) + " mode"));
-    addMollysPorridgeModeItems(menu, module, blockIndex, false, false);
+    addMelyPorgeModeItems(menu, module, blockIndex, false, false);
     updateMenuFrame();
   }
 };
 
-struct ComputerscareMollysPorridgeWidget : ModuleWidget {
-  ComputerscareMollysPorridgeWidget(ComputerscareMollysPorridge* module) {
+struct ComputerscareMelyPorgeWidget : ModuleWidget {
+  ComputerscareMelyPorgeWidget(ComputerscareMelyPorge* module) {
     setModule(module);
     box.size = Vec(12 * 15, 380);
 
-    MollysPorridgePanel* panel = new MollysPorridgePanel();
+    MelyPorgePanel* panel = new MelyPorgePanel();
     panel->box.size = box.size;
     addChild(panel);
 
     addChild(new PolyOutputChannelsWidget(
-        Vec(118.f, 4.f), module, ComputerscareMollysPorridge::POLY_CHANNELS));
+        Vec(118.f, 4.f), module, ComputerscareMelyPorge::POLY_CHANNELS));
     addOutput(createOutput<InPort>(Vec(148.f, 5.f), module,
-                                   ComputerscareMollysPorridge::POLY_OUTPUT));
+                                   ComputerscareMelyPorge::POLY_OUTPUT));
 
     addMainInputRow(module, 8.f, 17.f);
 
@@ -1015,8 +1008,8 @@ struct ComputerscareMollysPorridgeWidget : ModuleWidget {
       addBlockBackground(x, y, 76.f, 36.f);
     }
 
-    MollysPorridgeNormalizationOverlay* normalizationOverlay =
-        createWidget<MollysPorridgeNormalizationOverlay>(Vec(0.f, 0.f));
+    MelyPorgeNormalizationOverlay* normalizationOverlay =
+        createWidget<MelyPorgeNormalizationOverlay>(Vec(0.f, 0.f));
     normalizationOverlay->box.size = box.size;
     normalizationOverlay->module = module;
     addChild(normalizationOverlay);
@@ -1031,82 +1024,80 @@ struct ComputerscareMollysPorridgeWidget : ModuleWidget {
   }
 
   void addBlockBackground(float x, float y, float blockW, float blockH) {
-    MollysPorridgeBlockBackground* background =
-        createWidget<MollysPorridgeBlockBackground>(Vec(x, y));
+    MelyPorgeBlockBackground* background =
+        createWidget<MelyPorgeBlockBackground>(Vec(x, y));
     background->box.size = Vec(blockW, blockH);
     addChild(background);
   }
 
-  void addMainInputRow(ComputerscareMollysPorridge* module, float x, float y) {
+  void addMainInputRow(ComputerscareMelyPorge* module, float x, float y) {
     addInput(createInput<PointingUpPentagonPort>(
-        Vec(x, y), module, ComputerscareMollysPorridge::POLY_INPUT));
+        Vec(x, y), module, ComputerscareMelyPorge::POLY_INPUT));
     addParam(createParam<SmallKnob>(Vec(x + 30.f, y + 3.f), module,
-                                    ComputerscareMollysPorridge::GLOBAL_ATTEN));
-    addParam(
-        createParam<SmoothKnob>(Vec(x + 51.f, y - 2.f), module,
-                                ComputerscareMollysPorridge::GLOBAL_OFFSET));
+                                    ComputerscareMelyPorge::GLOBAL_ATTEN));
+    addParam(createParam<SmoothKnob>(Vec(x + 51.f, y - 2.f), module,
+                                     ComputerscareMelyPorge::GLOBAL_OFFSET));
   }
 
-  void addBlockControls(ComputerscareMollysPorridge* module, int blockIndex,
-                        float x, float y) {
+  void addBlockControls(ComputerscareMelyPorge* module, int blockIndex, float x,
+                        float y) {
     const float jackX = x + 2.f;
     const float jackY = y + 13.f;
 
-    MollysPorridgeInsertPort* inputPort = createInput<MollysPorridgeInsertPort>(
+    MelyPorgeInsertPort* inputPort = createInput<MelyPorgeInsertPort>(
         Vec(jackX, jackY), module,
-        ComputerscareMollysPorridge::BLOCK_INPUT + blockIndex);
+        ComputerscareMelyPorge::BLOCK_INPUT + blockIndex);
     inputPort->blockIndex = blockIndex;
     addInput(inputPort);
-    MollysPorridgeDisableableSmallKnob* attenKnob =
-        createParam<MollysPorridgeDisableableSmallKnob>(
+    MelyPorgeDisableableSmallKnob* attenKnob =
+        createParam<MelyPorgeDisableableSmallKnob>(
             Vec(x + 32.f, y + 7.f), module,
-            ComputerscareMollysPorridge::BLOCK_ATTEN + blockIndex);
+            ComputerscareMelyPorge::BLOCK_ATTEN + blockIndex);
     attenKnob->module = module;
     attenKnob->channel = blockIndex;
     addParam(attenKnob);
-    MollysPorridgeModeButton* button =
-        createWidget<MollysPorridgeModeButton>(Vec(x + 27.f, y + 25.f));
+    MelyPorgeModeButton* button =
+        createWidget<MelyPorgeModeButton>(Vec(x + 27.f, y + 25.f));
     button->module = module;
     button->blockIndex = blockIndex;
     addChild(button);
 
-    MollysPorridgeDisableableSmoothKnob* offsetKnob =
-        createParam<MollysPorridgeDisableableSmoothKnob>(
+    MelyPorgeDisableableSmoothKnob* offsetKnob =
+        createParam<MelyPorgeDisableableSmoothKnob>(
             Vec(x + 56.f, y + 14.f), module,
-            ComputerscareMollysPorridge::BLOCK_OFFSET + blockIndex);
+            ComputerscareMelyPorge::BLOCK_OFFSET + blockIndex);
     offsetKnob->module = module;
     offsetKnob->channel = blockIndex;
     addParam(offsetKnob);
 
-    MollysPorridgeBlockNumber* label =
-        createWidget<MollysPorridgeBlockNumber>(Vec(jackX - 11.f, jackY - 5.f));
+    MelyPorgeBlockNumber* label =
+        createWidget<MelyPorgeBlockNumber>(Vec(jackX - 11.f, jackY - 5.f));
     label->box.size = Vec(16.f, 9.f);
     label->value = std::to_string(blockIndex + 1);
     addChild(label);
   }
 
   void appendContextMenu(Menu* menu) override {
-    ComputerscareMollysPorridge* molly =
-        dynamic_cast<ComputerscareMollysPorridge*>(module);
-    if (!molly) {
+    ComputerscareMelyPorge* mely =
+        dynamic_cast<ComputerscareMelyPorge*>(module);
+    if (!mely) {
       return;
     }
 
     menu->addChild(new MenuSeparator);
     menu->addChild(createSubmenuItem("Set all to", "", [=](Menu* submenu) {
-      addMollysPorridgeModeItems(submenu, molly, 0, true, true);
+      addMelyPorgeModeItems(submenu, mely, 0, true, true);
     }));
-    menu->addChild(
-        createSubmenuItem("Insert normalization", "", [=](Menu* submenu) {
-          addMollysPorridgeNormalizationItems(submenu, molly);
-        }));
+    menu->addChild(createSubmenuItem(
+        "Insert normalization", "",
+        [=](Menu* submenu) { addMelyPorgeNormalizationItems(submenu, mely); }));
     menu->addChild(createSubmenuItem(
         "Main Input Polyphonic Mapping", "", [=](Menu* submenu) {
-          addMollysPorridgeMainInputMappingItems(submenu, molly);
+          addMelyPorgeMainInputMappingItems(submenu, mely);
         }));
   }
 };
 
-Model* modelComputerscareMollysPorridge =
-    createModel<ComputerscareMollysPorridge, ComputerscareMollysPorridgeWidget>(
-        "computerscare-mollys-porridge");
+Model* modelComputerscareMelyPorge =
+    createModel<ComputerscareMelyPorge, ComputerscareMelyPorgeWidget>(
+        "computerscare-mely-porge");
