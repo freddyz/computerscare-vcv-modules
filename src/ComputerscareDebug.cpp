@@ -22,6 +22,39 @@ static const char* DebugVisualModeNames[3] = {"Text", "Bars", "Text + Bars"};
 static const char* DebugVisualModeCodes[3] = {"TXT", "BAR", "T+B"};
 static const char* DebugBarModeNames[2] = {"Unipolar", "Bipolar"};
 static const char* DebugBarModeCodes[2] = {"UNI", "BI"};
+static const char* DebugBipolarColorModeNames[3] = {"Different", "Color 1",
+                                                    "Color 2"};
+
+struct DebugTheme {
+  const char* name;
+  NVGcolor background;
+  NVGcolor text;
+  NVGcolor positive;
+  NVGcolor negative;
+};
+
+static const DebugTheme DebugThemes[] = {
+    {"Classic", nvgRGB(0x10, 0x00, 0x10), nvgRGB(0xC0, 0xE7, 0xDE),
+     nvgRGBA(0x24, 0xC9, 0xA6, 0x98), COLOR_COMPUTERSCARE_PINK},
+    {"Poloneck", nvgRGB(0x00, 0x06, 0x0d), nvgRGB(0xB9, 0xF1, 0xFF),
+     nvgRGBA(0xA6, 0xED, 0xFF, 0x98), nvgRGBA(0x34, 0x6E, 0xD8, 0x98)},
+    {"Hut", nvgRGB(0x10, 0x0b, 0x05), nvgRGB(0xFF, 0xDF, 0xB5),
+     nvgRGBA(0xF6, 0xEE, 0xD8, 0xB8), nvgRGBA(0xD9, 0x4F, 0x2E, 0x98)},
+    {"Typhus", nvgRGB(0x00, 0x00, 0x00), nvgRGB(0xD0, 0xEA, 0xD7),
+     nvgRGBA(0x9B, 0xE5, 0x6F, 0x98), nvgRGBA(0x30, 0x8E, 0x73, 0x98)},
+    {"Opuses", nvgRGB(0x00, 0x00, 0x00), nvgRGB(0xE6, 0xD7, 0xFF),
+     nvgRGBA(0x6E, 0x35, 0xD8, 0x98), nvgRGBA(0xE8, 0xD2, 0x2A, 0x98)},
+    {"Check", nvgRGB(0x0d, 0x0d, 0x0d), nvgRGB(0xF2, 0xF2, 0xF2),
+     nvgRGBA(0xFF, 0xFF, 0xFF, 0xE0), nvgRGBA(0x67, 0x67, 0x67, 0xD0)},
+    {"Gratings", nvgRGB(0x00, 0x00, 0x00), nvgRGB(0xD8, 0xDE, 0xE4),
+     nvgRGBA(0xA9, 0xB5, 0xC2, 0x98), nvgRGBA(0x58, 0x64, 0x70, 0x98)},
+    {"Reams", nvgRGB(0x00, 0x00, 0x00), nvgRGB(0xC9, 0xF2, 0xE7),
+     nvgRGBA(0x37, 0xF0, 0xC0, 0x98), nvgRGBA(0x1E, 0x6E, 0xD6, 0x98)},
+    {"Jiffy", nvgRGB(0x00, 0x00, 0x00), nvgRGB(0xFF, 0xF0, 0xA8),
+     nvgRGBA(0xFF, 0xD1, 0x23, 0x98), nvgRGBA(0xFF, 0x5C, 0x7A, 0x98)}};
+
+static const int DEBUG_THEME_COUNT =
+    sizeof(DebugThemes) / sizeof(DebugThemes[0]);
 
 struct ComputerscareDebug;
 
@@ -52,9 +85,9 @@ struct ComputerscareDebug : Module {
     TRIGGER_BLINKERS,
     VISUAL_MODE,
     BAR_MODE,
-    BAR_COLOR_HUE,
-    TEXT_COLOR_HUE,
+    THEME,
     TEXT_OPACITY,
+    BIPOLAR_COLOR_MODE,
     NUM_PARAMS
   };
   enum InputIds { VAL_INPUT, TRG_INPUT, CLR_INPUT, NUM_INPUTS };
@@ -94,6 +127,11 @@ struct ComputerscareDebug : Module {
   enum clockAndInputModes { SINGLE_MODE, INTERNAL_MODE, POLY_MODE };
   enum VisualMode { VISUAL_TEXT, VISUAL_BARS, VISUAL_TEXT_BARS };
   enum BarMode { BAR_UNIPOLAR, BAR_BIPOLAR };
+  enum BipolarColorMode {
+    BIPOLAR_COLORS_DIFFERENT,
+    BIPOLAR_COLORS_COLOR_1,
+    BIPOLAR_COLORS_COLOR_2
+  };
 
   ComputerscareDebug() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -109,9 +147,10 @@ struct ComputerscareDebug : Module {
                  {"Text", "Bars", "Text + Bars"});
     configSwitch(BAR_MODE, 0.f, 1.f, BAR_UNIPOLAR, "Bar Mode",
                  {"Unipolar", "Bipolar"});
-    configParam(BAR_COLOR_HUE, 0.f, 9.f, 0.f, "Bar Color Scheme");
-    configParam(TEXT_COLOR_HUE, 0.f, 9.f, 0.f, "Text Color Hue");
+    configSwitch(THEME, 0.f, DEBUG_THEME_COUNT - 1, 0.f, "Theme");
     configParam(TEXT_OPACITY, 0.15f, 1.f, 1.f, "Text Opacity");
+    configSwitch(BIPOLAR_COLOR_MODE, 0.f, 2.f, BIPOLAR_COLORS_DIFFERENT,
+                 "Bipolar Colors", {"Different", "Color 1", "Color 2"});
     configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
     configParam(INPUT_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Input Channel Selector");
 
@@ -144,9 +183,13 @@ struct ComputerscareDebug : Module {
     getParamQuantity(TRIGGER_BLINKERS)->randomizeEnabled = false;
     getParamQuantity(VISUAL_MODE)->randomizeEnabled = false;
     getParamQuantity(BAR_MODE)->randomizeEnabled = false;
+    getParamQuantity(THEME)->randomizeEnabled = false;
     getParamQuantity(TEXT_OPACITY)->randomizeEnabled = false;
+    getParamQuantity(BIPOLAR_COLOR_MODE)->randomizeEnabled = false;
     getParamQuantity(VISUAL_MODE)->resetEnabled = false;
     getParamQuantity(BAR_MODE)->resetEnabled = false;
+    getParamQuantity(THEME)->resetEnabled = false;
+    getParamQuantity(BIPOLAR_COLOR_MODE)->resetEnabled = false;
     getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
     getParamQuantity(INPUT_CHANNEL_FOCUS)->randomizeEnabled = false;
 
@@ -195,12 +238,13 @@ struct ComputerscareDebug : Module {
                         json_integer((int)params[VISUAL_MODE].getValue()));
     json_object_set_new(rootJ, "barMode",
                         json_integer((int)params[BAR_MODE].getValue()));
-    json_object_set_new(rootJ, "barColorHue",
-                        json_real(params[BAR_COLOR_HUE].getValue()));
-    json_object_set_new(rootJ, "textColorHue",
-                        json_real(params[TEXT_COLOR_HUE].getValue()));
+    json_object_set_new(rootJ, "theme",
+                        json_integer((int)params[THEME].getValue()));
     json_object_set_new(rootJ, "textOpacity",
                         json_real(params[TEXT_OPACITY].getValue()));
+    json_object_set_new(
+        rootJ, "bipolarColorMode",
+        json_integer((int)params[BIPOLAR_COLOR_MODE].getValue()));
 
     json_t* sequencesJ = json_array();
 
@@ -236,22 +280,22 @@ struct ComputerscareDebug : Module {
           math::clamp((int)json_integer_value(barModeJ), 0, 1));
     }
 
-    json_t* barColorHueJ = json_object_get(rootJ, "barColorHue");
-    if (barColorHueJ) {
-      params[BAR_COLOR_HUE].setValue(
-          math::clamp((float)json_number_value(barColorHueJ), 0.f, 9.f));
-    }
-
-    json_t* textColorHueJ = json_object_get(rootJ, "textColorHue");
-    if (textColorHueJ) {
-      params[TEXT_COLOR_HUE].setValue(
-          math::clamp((float)json_number_value(textColorHueJ), 0.f, 9.f));
+    json_t* themeJ = json_object_get(rootJ, "theme");
+    if (themeJ) {
+      params[THEME].setValue(math::clamp((int)json_integer_value(themeJ), 0,
+                                         DEBUG_THEME_COUNT - 1));
     }
 
     json_t* textOpacityJ = json_object_get(rootJ, "textOpacity");
     if (textOpacityJ) {
       params[TEXT_OPACITY].setValue(
           math::clamp((float)json_number_value(textOpacityJ), 0.15f, 1.f));
+    }
+
+    json_t* bipolarColorModeJ = json_object_get(rootJ, "bipolarColorMode");
+    if (bipolarColorModeJ) {
+      params[BIPOLAR_COLOR_MODE].setValue(
+          math::clamp((int)json_integer_value(bipolarColorModeJ), 0, 2));
     }
 
     json_t* sequencesJ = json_object_get(rootJ, "lines");
@@ -465,34 +509,37 @@ struct StringDisplayWidget3 : Widget {
 
   StringDisplayWidget3() {};
 
-  float hueParam(float value) const {
-    if (value <= 0.f) return -1.f;
-    return std::fmod(value / 9.f, 1.f);
+  int themeIndex() const {
+    if (!module) {
+      return 0;
+    }
+    return math::clamp(
+        (int)module->params[ComputerscareDebug::THEME].getValue(), 0,
+        DEBUG_THEME_COUNT - 1);
   }
+
+  const DebugTheme& theme() const { return DebugThemes[themeIndex()]; }
 
   NVGcolor textColor(float alpha = 1.f) const {
-    const float hue = hueParam(
-        module ? module->params[ComputerscareDebug::TEXT_COLOR_HUE].getValue()
-               : 0.f);
-    if (hue < 0.f) return nvgRGBA(0xC0, 0xE7, 0xDE, (int)(alpha * 255.f));
-    return nvgHSLA(hue, 0.86f, 0.76f, (int)(alpha * 255.f));
+    NVGcolor color = theme().text;
+    color.a *= alpha;
+    return color;
   }
 
-  NVGcolor barColor(float voltage) const {
-    const float hue = hueParam(
-        module ? module->params[ComputerscareDebug::BAR_COLOR_HUE].getValue()
-               : 0.f);
-    if (hue < 0.f) {
-      return voltage >= 0.f ? nvgRGBA(0x24, 0xC9, 0xA6, 0x98)
-                            : COLOR_COMPUTERSCARE_PINK;
+  NVGcolor barColor(float voltage, int barMode) const {
+    if (module && barMode == ComputerscareDebug::BAR_BIPOLAR) {
+      int bipolarColorMode = math::clamp(
+          (int)module->params[ComputerscareDebug::BIPOLAR_COLOR_MODE]
+              .getValue(),
+          0, 2);
+      if (bipolarColorMode == ComputerscareDebug::BIPOLAR_COLORS_COLOR_1) {
+        return theme().positive;
+      }
+      if (bipolarColorMode == ComputerscareDebug::BIPOLAR_COLORS_COLOR_2) {
+        return theme().negative;
+      }
     }
-
-    const float signOffset = voltage >= 0.f ? 0.05f : 0.57f;
-    const float wobble = voltage >= 0.f ? 0.13f : 0.31f;
-    const float h = std::fmod(hue * 1.37f + signOffset + wobble, 1.f);
-    const float sat = voltage >= 0.f ? 0.88f : 0.96f;
-    const float lum = voltage >= 0.f ? 0.56f : 0.52f;
-    return nvgHSLA(h, sat, lum, 0x98);
+    return voltage >= 0.f ? theme().positive : theme().negative;
   }
 
   void drawBar(NVGcontext* vg, float y, float voltage) {
@@ -519,7 +566,7 @@ struct StringDisplayWidget3 : Widget {
 
     nvgBeginPath(vg);
     nvgRoundedRect(vg, barX, y - height * 0.5f, barWidth, height, 2.f);
-    nvgFillColor(vg, barColor(voltage));
+    nvgFillColor(vg, barColor(voltage, barMode));
     nvgFill(vg);
   }
 
@@ -553,7 +600,7 @@ struct StringDisplayWidget3 : Widget {
 
   void draw(const DrawArgs& ctx) override {
     // Background
-    NVGcolor backgroundColor = nvgRGB(0x10, 0x00, 0x10);
+    NVGcolor backgroundColor = theme().background;
     NVGcolor StrokeColor = nvgRGB(0xC0, 0xC7, 0xDE);
     nvgBeginPath(ctx.vg);
     nvgRoundedRect(ctx.vg, -1.0, -1.0, box.size.x + 2, box.size.y + 2, 4.0);
@@ -585,7 +632,7 @@ struct StringDisplayWidget3 : Widget {
       // text
       nvgFontSize(args.vg, 15);
       nvgFontFaceId(args.vg, font->handle);
-      nvgTextLetterSpacing(args.vg, 2.2);
+      nvgTextLetterSpacing(args.vg, 2.5);
 
       std::string textToDraw = module ? module->strValue : noModuleStringValue;
       Vec textPos = Vec(5.0f, 12.0f);
@@ -678,6 +725,9 @@ static void addDebugVisualModeItems(Menu* menu, ComputerscareDebug* debug) {
   }
 }
 
+static void addDebugBipolarColorModeItems(Menu* menu,
+                                          ComputerscareDebug* debug);
+
 static void addDebugBarModeItems(Menu* menu, ComputerscareDebug* debug) {
   for (int mode = 0; mode < 2; mode++) {
     DebugVisualParamItem* item = new DebugVisualParamItem();
@@ -685,6 +735,148 @@ static void addDebugBarModeItems(Menu* menu, ComputerscareDebug* debug) {
     item->debug = debug;
     item->paramId = ComputerscareDebug::BAR_MODE;
     item->value = mode;
+    menu->addChild(item);
+  }
+  menu->addChild(new MenuSeparator);
+  menu->addChild(createSubmenuItem(
+      "Bipolar Colors",
+      DebugBipolarColorModeNames
+          [(int)debug->params[ComputerscareDebug::BIPOLAR_COLOR_MODE]
+               .getValue()],
+      [=](Menu* submenu) { addDebugBipolarColorModeItems(submenu, debug); }));
+}
+
+static void addDebugBipolarColorModeItems(Menu* menu,
+                                          ComputerscareDebug* debug) {
+  for (int mode = 0; mode < 3; mode++) {
+    DebugVisualParamItem* item = new DebugVisualParamItem();
+    item->text = DebugBipolarColorModeNames[mode];
+    item->debug = debug;
+    item->paramId = ComputerscareDebug::BIPOLAR_COLOR_MODE;
+    item->value = mode;
+    menu->addChild(item);
+  }
+}
+
+static void addDebugQuickVisualSettingsItems(Menu* menu,
+                                             ComputerscareDebug* debug) {
+  menu->addChild(createSubmenuItem(
+      "Bar Mode",
+      DebugBarModeNames[(int)debug->params[ComputerscareDebug::BAR_MODE]
+                            .getValue()],
+      [=](Menu* submenu) { addDebugBarModeItems(submenu, debug); }));
+  menu->addChild(new MenuSeparator);
+  menu->addChild(new MenuParamSlider(
+      debug->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
+}
+
+static void addDebugOpacitySettingItem(Menu* menu, ComputerscareDebug* debug) {
+  menu->addChild(new MenuParamSlider(
+      debug->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
+}
+
+struct DebugThemeMenuItem : MenuItem {
+  ComputerscareDebug* debug = nullptr;
+  int themeIndex = 0;
+  float previewValue = 0.f;
+
+  DebugThemeMenuItem() {
+    previewValue = -10.f + 20.f * random::uniform();
+    box.size.y = 46.f;
+  }
+
+  void onAction(const event::Action& e) override {
+    if (debug) {
+      debug->params[ComputerscareDebug::THEME].setValue(themeIndex);
+    }
+  }
+
+  void draw(const DrawArgs& args) override {
+    BNDwidgetState state = BND_DEFAULT;
+    if (APP->event->hoveredWidget == this) state = BND_HOVER;
+
+    const BNDtheme* rackTheme = bndGetTheme();
+    if (state != BND_DEFAULT) {
+      bndInnerBox(args.vg, 0.0, 0.0, box.size.x, box.size.y, 0, 0, 0, 0,
+                  bndOffsetColor(rackTheme->menuItemTheme.innerSelectedColor,
+                                 rackTheme->menuItemTheme.shadeTop),
+                  bndOffsetColor(rackTheme->menuItemTheme.innerSelectedColor,
+                                 rackTheme->menuItemTheme.shadeDown));
+      state = BND_ACTIVE;
+    }
+
+    const DebugTheme& theme = DebugThemes[themeIndex];
+    NVGcolor textColor = bndTextColor(&rackTheme->menuItemTheme, state);
+    bndIconLabelValue(args.vg, 0.f, 3.f, box.size.x, 16.f, -1, textColor,
+                      BND_LEFT, BND_LABEL_FONT_SIZE, text.c_str(), NULL);
+
+    const float x = 8.f;
+    const float y = 29.f;
+    const float width = std::max(100.f, box.size.x - 34.f);
+    const float height = 13.f;
+    const float centerX = x + width * 0.5f;
+    const float radius = 2.f;
+
+    nvgBeginPath(args.vg);
+    nvgRoundedRect(args.vg, x, y - height * 0.5f, width, height, radius);
+    nvgFillColor(args.vg, theme.background);
+    nvgFill(args.vg);
+
+    nvgSave(args.vg);
+    nvgIntersectScissor(args.vg, x, y - height * 0.5f, width * 0.5f, height);
+    nvgBeginPath(args.vg);
+    nvgRoundedRect(args.vg, x, y - height * 0.5f, width, height, radius);
+    nvgFillColor(args.vg, theme.negative);
+    nvgFill(args.vg);
+    nvgRestore(args.vg);
+
+    nvgSave(args.vg);
+    nvgIntersectScissor(args.vg, centerX, y - height * 0.5f, width * 0.5f,
+                        height);
+    nvgBeginPath(args.vg);
+    nvgRoundedRect(args.vg, x, y - height * 0.5f, width, height, radius);
+    nvgFillColor(args.vg, theme.positive);
+    nvgFill(args.vg);
+    nvgRestore(args.vg);
+
+    nvgBeginPath(args.vg);
+    nvgMoveTo(args.vg, centerX, y - 6.f);
+    nvgLineTo(args.vg, centerX, y + 6.f);
+    nvgStrokeColor(args.vg, theme.text);
+    nvgStrokeWidth(args.vg, 1.f);
+    nvgStroke(args.vg);
+
+    std::string previewText = formatDebugVoltage(previewValue);
+    nvgFontSize(args.vg, 10.f);
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgFillColor(args.vg, theme.text);
+    nvgText(args.vg, centerX, y, previewText.c_str(), NULL);
+
+    if (!rightText.empty()) {
+      float checkX = box.size.x - bndLabelWidth(args.vg, -1, rightText.c_str());
+      bndIconLabelValue(args.vg, checkX, 0.f, box.size.x, box.size.y, -1,
+                        textColor, BND_LEFT, BND_LABEL_FONT_SIZE,
+                        rightText.c_str(), NULL);
+    }
+  }
+
+  void step() override {
+    rightText = CHECKMARK(
+        debug &&
+        (int)debug->params[ComputerscareDebug::THEME].getValue() == themeIndex);
+    box.size.x = std::max(
+        150.f, bndLabelWidth(APP->window->vg, -1, text.c_str()) + 34.f);
+    box.size.y = 46.f;
+    Widget::step();
+  }
+};
+
+static void addDebugThemeItems(Menu* menu, ComputerscareDebug* debug) {
+  for (int i = 0; i < DEBUG_THEME_COUNT; i++) {
+    DebugThemeMenuItem* item = new DebugThemeMenuItem();
+    item->text = DebugThemes[i].name;
+    item->debug = debug;
+    item->themeIndex = i;
     menu->addChild(item);
   }
 }
@@ -697,7 +889,12 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
   int menuFrame = -1;
   bool hovering = false;
 
-  enum Control { DISPLAY_CONTROL, BAR_STYLE_CONTROL, COLOR_CONTROL };
+  enum Control {
+    DISPLAY_CONTROL,
+    BAR_STYLE_CONTROL,
+    VISUAL_SETTINGS_CONTROL,
+    THEME_CONTROL
+  };
 
   DebugLabelHoverButton() {
     iconUpPos = Vec(0.f, 0.f);
@@ -783,7 +980,10 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
     if (control == BAR_STYLE_CONTROL) {
       return DebugBarModeCodes[currentBarMode()];
     }
-    return "COL";
+    if (control == VISUAL_SETTINGS_CONTROL) {
+      return "SVL";
+    }
+    return "Thm";
   }
 
   std::string tooltipText() const {
@@ -793,7 +993,10 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
     if (control == BAR_STYLE_CONTROL) {
       return "Bar Style";
     }
-    return "Color Scheme";
+    if (control == VISUAL_SETTINGS_CONTROL) {
+      return "Visual";
+    }
+    return "Theme";
   }
 
   void draw(const DrawArgs& args) override {
@@ -860,13 +1063,10 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
       addDebugVisualModeItems(menu, module);
     } else if (control == BAR_STYLE_CONTROL) {
       addDebugBarModeItems(menu, module);
+    } else if (control == VISUAL_SETTINGS_CONTROL) {
+      addDebugOpacitySettingItem(menu, module);
     } else {
-      menu->addChild(new MenuParamSlider(
-          module->paramQuantities[ComputerscareDebug::BAR_COLOR_HUE]));
-      menu->addChild(new MenuParamSlider(
-          module->paramQuantities[ComputerscareDebug::TEXT_COLOR_HUE]));
-      menu->addChild(new MenuParamSlider(
-          module->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
+      addDebugThemeItems(menu, module);
     }
     updateMenuFrame();
   }
@@ -921,7 +1121,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
       addChild(sld);
     }
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 4; i++) {
       DebugLabelHoverButton* button =
           createWidget<DebugLabelHoverButton>(Vec(-1.f, 35.2f + 15.08f * i));
       button->module = module;
@@ -1115,24 +1315,13 @@ void ComputerscareDebugWidget::appendContextMenu(Menu* menu) {
       }));
   menu->addChild(new MenuSeparator);
   menu->addChild(createSubmenuItem("Visual", "", [=](Menu* visualMenu) {
-    visualMenu->addChild(createSubmenuItem(
-        "Display",
-        DebugVisualModeNames[(int)debug->params[ComputerscareDebug::VISUAL_MODE]
-                                 .getValue()],
-        [=](Menu* submenu) { addDebugVisualModeItems(submenu, debug); }));
-    visualMenu->addChild(createSubmenuItem(
-        "Bar Mode",
-        DebugBarModeNames[(int)debug->params[ComputerscareDebug::BAR_MODE]
-                              .getValue()],
-        [=](Menu* submenu) { addDebugBarModeItems(submenu, debug); }));
-    visualMenu->addChild(new MenuSeparator);
-    visualMenu->addChild(new MenuParamSlider(
-        debug->paramQuantities[ComputerscareDebug::BAR_COLOR_HUE]));
-    visualMenu->addChild(new MenuParamSlider(
-        debug->paramQuantities[ComputerscareDebug::TEXT_COLOR_HUE]));
-    visualMenu->addChild(new MenuParamSlider(
-        debug->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
+    addDebugQuickVisualSettingsItems(visualMenu, debug);
   }));
+  menu->addChild(createSubmenuItem(
+      "Theme",
+      DebugThemes[(int)debug->params[ComputerscareDebug::THEME].getValue()]
+          .name,
+      [=](Menu* submenu) { addDebugThemeItems(submenu, debug); }));
 }
 Model* modelComputerscareDebug =
     createModel<ComputerscareDebug, ComputerscareDebugWidget>(
