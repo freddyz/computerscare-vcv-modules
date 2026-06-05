@@ -76,7 +76,7 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
   enum LightIds { NUM_LIGHTS };
 
   int blockModes[MOLLYS_PORRIDGE_BLOCKS] = {};
-  int normalizationMode = NORMALIZATION_NONE;
+  int normalizationMode = NORMALIZATION_POLY;
   int mainInputMappingMode = cpx::polyphonic::defaultMappingModeValue;
   int numInputChannels = 0;
   int insertSourceBlocks[MOLLYS_PORRIDGE_BLOCKS] = {};

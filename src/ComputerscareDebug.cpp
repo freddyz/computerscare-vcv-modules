@@ -25,6 +25,18 @@ static const char* DebugBarModeCodes[2] = {"UNI", "BI"};
 static const char* DebugBipolarColorModeNames[3] = {"Different", "Color 1",
                                                     "Color 2"};
 
+static const float DEBUG_DISPLAY_X = 15.f;
+static const float DEBUG_DISPLAY_Y = 34.f;
+static const float DEBUG_ROW_PITCH = 15.18f;
+static const float DEBUG_TEXT_BASELINE_Y = 12.f;
+static const float DEBUG_BAR_CENTER_Y = DEBUG_TEXT_BASELINE_Y - 4.5f;
+static const float DEBUG_LABEL_X = -4.f;
+static const float DEBUG_LABEL_Y =
+    DEBUG_DISPLAY_Y + DEBUG_TEXT_BASELINE_Y - 12.f;
+static const float DEBUG_LABEL_MENU_X = -1.f;
+static const float DEBUG_LABEL_MENU_Y =
+    DEBUG_DISPLAY_Y + DEBUG_TEXT_BASELINE_Y - 10.8f;
+
 struct DebugTheme {
   const char* name;
   NVGcolor background;
@@ -44,7 +56,7 @@ static const DebugTheme DebugThemes[] = {
      nvgRGBA(0x9B, 0xE5, 0x6F, 0x98), nvgRGBA(0x30, 0x8E, 0x73, 0x98)},
     {"Opuses", nvgRGB(0x00, 0x00, 0x00), nvgRGB(0xE6, 0xD7, 0xFF),
      nvgRGBA(0x6E, 0x35, 0xD8, 0x98), nvgRGBA(0xE8, 0xD2, 0x2A, 0x98)},
-    {"Check", nvgRGB(0x0d, 0x0d, 0x0d), nvgRGB(0xF2, 0xF2, 0xF2),
+    {"Check", nvgRGB(0x0d, 0x0d, 0x0d), nvgRGB(0xB8, 0xB8, 0xB8),
      nvgRGBA(0xFF, 0xFF, 0xFF, 0xE0), nvgRGBA(0x67, 0x67, 0x67, 0xD0)},
     {"Gratings", nvgRGB(0x00, 0x00, 0x00), nvgRGB(0xD8, 0xDE, 0xE4),
      nvgRGBA(0xA9, 0xB5, 0xC2, 0x98), nvgRGBA(0x58, 0x64, 0x70, 0x98)},
@@ -69,8 +81,9 @@ static std::string formatDebugVoltage(float value) {
   }
 
   std::ostringstream stream;
-  stream << (value < 0.f ? "-" : "+") << std::fixed << std::setprecision(6)
-         << std::fabs(value);
+  float magnitude = std::fabs(value);
+  stream << (value < 0.f ? "-" : "+") << std::fixed
+         << std::setprecision(magnitude >= 10.f ? 5 : 6) << magnitude;
   return stream.str();
 }
 
@@ -351,6 +364,39 @@ struct ComputerscareDebug : Module {
   }
 };
 
+struct DebugPreviewState {
+  int themeIndex = 0;
+  int visualMode = ComputerscareDebug::VISUAL_TEXT;
+  int barMode = ComputerscareDebug::BAR_UNIPOLAR;
+  int activeChannels = NUM_LINES;
+  float values[NUM_LINES] = {};
+  std::string text;
+
+  DebugPreviewState() { randomize(); }
+
+  void randomize() {
+    themeIndex =
+        math::clamp((int)std::floor(random::uniform() * DEBUG_THEME_COUNT), 0,
+                    DEBUG_THEME_COUNT - 1);
+    visualMode = math::clamp((int)std::floor(random::uniform() * 3.f), 0, 2);
+    barMode = random::uniform() < 0.5f ? ComputerscareDebug::BAR_UNIPOLAR
+                                       : ComputerscareDebug::BAR_BIPOLAR;
+    activeChannels = math::clamp(
+        1 + (int)std::floor(random::uniform() * NUM_LINES), 1, NUM_LINES);
+
+    text.clear();
+    for (int i = 0; i < NUM_LINES; i++) {
+      values[i] = -10.f + 20.f * random::uniform();
+      if (i > 0) {
+        text += "\n";
+      }
+      if (i < activeChannels) {
+        text += formatDebugVoltage(values[i]);
+      }
+    }
+  }
+};
+
 void ComputerscareDebug::process(const ProcessArgs& args) {
   std::string thisVal;
 
@@ -496,7 +542,7 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
   void draw(const DrawArgs& args) override {
     if (module
             ? (hackIndex == 0 ? module->clockMode == 0 : module->inputMode == 0)
-            : true) {
+            : false) {
       Widget::draw(args);
     }
   };
@@ -505,13 +551,14 @@ struct HidableSmallSnapKnob : SmallSnapKnob {
 struct StringDisplayWidget3 : Widget {
   std::string value;
   std::string fontPath = "res/fonts/Oswald-Regular.ttf";
-  ComputerscareDebug* module;
+  ComputerscareDebug* module = nullptr;
+  DebugPreviewState* preview = nullptr;
 
   StringDisplayWidget3() {};
 
   int themeIndex() const {
     if (!module) {
-      return 0;
+      return preview ? preview->themeIndex : 0;
     }
     return math::clamp(
         (int)module->params[ComputerscareDebug::THEME].getValue(), 0,
@@ -542,15 +589,30 @@ struct StringDisplayWidget3 : Widget {
     return voltage >= 0.f ? theme().positive : theme().negative;
   }
 
+  int currentVisualMode() const {
+    if (module) {
+      return math::clamp(
+          (int)module->params[ComputerscareDebug::VISUAL_MODE].getValue(), 0,
+          2);
+    }
+    return preview ? preview->visualMode : ComputerscareDebug::VISUAL_TEXT;
+  }
+
+  int currentBarMode() const {
+    if (module) {
+      return math::clamp(
+          (int)module->params[ComputerscareDebug::BAR_MODE].getValue(), 0, 1);
+    }
+    return preview ? preview->barMode : ComputerscareDebug::BAR_UNIPOLAR;
+  }
+
   void drawBar(NVGcontext* vg, float y, float voltage) {
     const float x = 4.f;
     const float width = box.size.x - 8.f;
     const float height = 13.f;
     const float clamped = clamp(std::fabs(voltage) / 10.f, 0.f, 1.f);
     const bool zero = std::fabs(voltage) < 0.0000005f;
-    const int barMode =
-        module ? (int)module->params[ComputerscareDebug::BAR_MODE].getValue()
-               : ComputerscareDebug::BAR_UNIPOLAR;
+    const int barMode = currentBarMode();
 
     float barX = x;
     float barWidth = zero ? 0.f : std::max(0.8f, width * clamped);
@@ -571,19 +633,19 @@ struct StringDisplayWidget3 : Widget {
   }
 
   void drawBars(NVGcontext* vg) {
-    if (!module) {
+    if (!module && !preview) {
       return;
     }
 
-    int visualMode =
-        (int)module->params[ComputerscareDebug::VISUAL_MODE].getValue();
+    int visualMode = currentVisualMode();
     if (visualMode != ComputerscareDebug::VISUAL_BARS &&
         visualMode != ComputerscareDebug::VISUAL_TEXT_BARS) {
       return;
     }
 
     int activeChannels =
-        module->outputs[ComputerscareDebug::POLY_OUTPUT].getChannels();
+        module ? module->outputs[ComputerscareDebug::POLY_OUTPUT].getChannels()
+               : preview->activeChannels;
     if (activeChannels <= 0) {
       activeChannels = NUM_LINES;
     }
@@ -592,8 +654,9 @@ struct StringDisplayWidget3 : Widget {
     nvgSave(vg);
     nvgIntersectScissor(vg, 1.f, 1.f, box.size.x - 2.f, box.size.y - 2.f);
     for (int i = 0; i < activeChannels; i++) {
-      float y = 7.5f + 15.08f * i;
-      drawBar(vg, y, module->logLines[i]);
+      float y = DEBUG_BAR_CENTER_Y + DEBUG_ROW_PITCH * i;
+      float value = module ? module->logLines[i] : preview->values[i];
+      drawBar(vg, y, value);
     }
     nvgRestore(vg);
   }
@@ -614,10 +677,7 @@ struct StringDisplayWidget3 : Widget {
   }
   void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
     if (layer == 1) {
-      int visualMode =
-          module
-              ? (int)module->params[ComputerscareDebug::VISUAL_MODE].getValue()
-              : ComputerscareDebug::VISUAL_TEXT;
+      int visualMode = currentVisualMode();
       bool drawText = visualMode == ComputerscareDebug::VISUAL_TEXT ||
                       visualMode == ComputerscareDebug::VISUAL_TEXT_BARS;
 
@@ -633,9 +693,12 @@ struct StringDisplayWidget3 : Widget {
       nvgFontSize(args.vg, 15);
       nvgFontFaceId(args.vg, font->handle);
       nvgTextLetterSpacing(args.vg, 2.5);
+      nvgTextLineHeight(args.vg, DEBUG_ROW_PITCH / 15.f);
 
-      std::string textToDraw = module ? module->strValue : noModuleStringValue;
-      Vec textPos = Vec(5.0f, 12.0f);
+      std::string textToDraw =
+          module ? module->strValue
+                 : (preview ? preview->text : noModuleStringValue);
+      Vec textPos = Vec(5.0f, DEBUG_TEXT_BASELINE_Y);
       float textOpacity =
           module ? module->params[ComputerscareDebug::TEXT_OPACITY].getValue()
                  : 1.f;
@@ -646,7 +709,8 @@ struct StringDisplayWidget3 : Widget {
   }
 };
 struct ConnectedSmallLetter : SmallLetterDisplay {
-  ComputerscareDebug* module;
+  ComputerscareDebug* module = nullptr;
+  DebugPreviewState* preview = nullptr;
   int index;
   ConnectedSmallLetter(int dex) {
     index = dex;
@@ -1073,6 +1137,8 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
 };
 
 struct ComputerscareDebugWidget : ModuleWidget {
+  DebugPreviewState previewState;
+
   ComputerscareDebugWidget(ComputerscareDebug* module) {
     setModule(module);
     setPanel(APP->window->loadSvg(asset::plugin(
@@ -1091,10 +1157,21 @@ struct ComputerscareDebugWidget : ModuleWidget {
     addParam(createParam<ComputerscareResetButton>(
         Vec(32, 324), module, ComputerscareDebug::MANUAL_CLEAR_TRIGGER));
 
-    addParam(createParam<DebugModeSwitch>(Vec(0, 279), module,
-                                          ComputerscareDebug::WHICH_CLOCK));
-    addParam(createParam<DebugModeSwitch>(Vec(58, 279), module,
-                                          ComputerscareDebug::SWITCH_VIEW));
+    DebugModeSwitch* clockModeSwitch = createParam<DebugModeSwitch>(
+        Vec(0, 279), module, ComputerscareDebug::WHICH_CLOCK);
+    if (!module && clockModeSwitch->getParamQuantity()) {
+      clockModeSwitch->getParamQuantity()->setValue(
+          ComputerscareDebug::INTERNAL_MODE);
+    }
+    addParam(clockModeSwitch);
+
+    DebugModeSwitch* inputModeSwitch = createParam<DebugModeSwitch>(
+        Vec(58, 279), module, ComputerscareDebug::SWITCH_VIEW);
+    if (!module && inputModeSwitch->getParamQuantity()) {
+      inputModeSwitch->getParamQuantity()->setValue(
+          ComputerscareDebug::POLY_MODE);
+    }
+    addParam(inputModeSwitch);
 
     HidableSmallSnapKnob* clockKnob = createParam<HidableSmallSnapKnob>(
         Vec(6, 305), module, ComputerscareDebug::CLOCK_CHANNEL_FOCUS);
@@ -1115,24 +1192,26 @@ struct ComputerscareDebugWidget : ModuleWidget {
       ConnectedSmallLetter* sld = new ConnectedSmallLetter(i);
       sld->fontSize = 15;
       sld->textAlign = 1;
-      sld->box.pos = Vec(-4, 33.8 + 15.08 * i);
+      sld->box.pos = Vec(DEBUG_LABEL_X, DEBUG_LABEL_Y + DEBUG_ROW_PITCH * i);
       sld->box.size = Vec(28, 20);
       sld->module = module;
+      sld->preview = module ? nullptr : &previewState;
       addChild(sld);
     }
 
     for (int i = 0; i < 4; i++) {
-      DebugLabelHoverButton* button =
-          createWidget<DebugLabelHoverButton>(Vec(-1.f, 35.2f + 15.08f * i));
+      DebugLabelHoverButton* button = createWidget<DebugLabelHoverButton>(
+          Vec(DEBUG_LABEL_MENU_X, DEBUG_LABEL_MENU_Y + DEBUG_ROW_PITCH * i));
       button->module = module;
       button->control = i;
       addChild(button);
     }
 
-    StringDisplayWidget3* stringDisplay =
-        createWidget<StringDisplayWidget3>(Vec(15, 34));
+    StringDisplayWidget3* stringDisplay = createWidget<StringDisplayWidget3>(
+        Vec(DEBUG_DISPLAY_X, DEBUG_DISPLAY_Y));
     stringDisplay->box.size = Vec(73, 245);
     stringDisplay->module = module;
+    stringDisplay->preview = module ? nullptr : &previewState;
     addChild(stringDisplay);
 
     debug = module;
