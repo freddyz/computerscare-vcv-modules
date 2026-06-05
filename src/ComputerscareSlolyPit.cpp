@@ -1243,7 +1243,7 @@ struct SlolyPitOutputLabels : Widget {
 
   SlolyPitOutputLabels(ComputerscareSlolyPit* module) {
     this->module = module;
-    box.pos = Vec(2, 64);
+    box.pos = Vec(2, 66);
     box.size = Vec(36, rowSpacing * 15 + rowHeight);
   }
 
@@ -2141,7 +2141,7 @@ struct ComputerscareSlolyPitWidget : ModuleWidget {
 
     for (int i = 0; i < 16; i++) {
       addOutput(
-          createOutput<TinyJack>(Vec(41, 62 + i * 19), module,
+          createOutput<TinyJack>(Vec(41, 64 + i * 19), module,
                                  ComputerscareSlolyPit::CHANNEL_OUTPUT + i));
     }
   }
