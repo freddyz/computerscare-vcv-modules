@@ -325,6 +325,8 @@ struct ComputerscarePortaloof : Module {
     CURVES_KNOB,
     CURVES_ATTEN,
     BACKDROP_ALPHA,
+    BACKDROP_DARKEN,
+    BACKDROP_BLUR,
     NUM_PARAMS
   };
 
@@ -446,6 +448,9 @@ struct ComputerscarePortaloof : Module {
     configParam(CURVES_KNOB, -1.f, 1.f, 0.f, "Color Warp");
     configParam(CURVES_ATTEN, -1.f, 1.f, 0.f, "Color Warp CV Atten");
     configParam(BACKDROP_ALPHA, 0.f, 1.f, 0.85f, "Backdrop Alpha");
+    configParam(BACKDROP_DARKEN, 0.f, 1.f, 0.f, "Backdrop Darken", "%", 0.f,
+                100.f);
+    configParam(BACKDROP_BLUR, 0.f, 1.f, 0.f, "Backdrop Blur", "%", 0.f, 100.f);
 
     configInput(HUE_GATE_INPUT, "Hue Gate");
     configInput(INVERT_GATE_INPUT, "Invert Gate");
@@ -590,6 +595,8 @@ struct ComputerscarePortaloof : Module {
       if (id == FREEZE_TOGGLE) continue;
       if (id == INPUT_SOURCE_MIX) continue;
       if (id == BACKDROP_ALPHA) continue;
+      if (id == BACKDROP_DARKEN) continue;
+      if (id == BACKDROP_BLUR) continue;
       paramQuantities[id]->randomize();
     }
     rackSourceModuleId = preservedRackSourceModuleId;

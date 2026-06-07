@@ -1,5 +1,6 @@
 #pragma once
 
+#include "BackdropBlurFBO.hpp"
 #include "PortaloofModule.hpp"
 
 // ─── Backdrop Widget ─────────────────────────────────────────────────────────
@@ -12,6 +13,7 @@ struct PortaloofBackdropWidget : widget::Widget {
   ScreenCapture screenCap;
   ColorTransformFBO colorFBOs[2];
   SourceBlendFBO sourceBlendFBO;
+  PortaloofBackdropBlurFBO blurFBOs[2];
   PortaloofTextureCopyFBO frozenSourceFBOs[2];
   FlowerKaleidFBO flowerKaleidFBOs[2];
   ClassicKaleidFBO classicKaleidFBOs[2];
@@ -91,6 +93,10 @@ struct PortaloofBackdropWidget : widget::Widget {
     if (!doCapture && !hasSource1 && !hasSource2) return;
     if (!hasSource1 && !hasSource2) return;
     float source2Amt = 0.5f * (1.f + module->inputSourceMix);
+    float blurAmt =
+        module->params[ComputerscarePortaloof::BACKDROP_BLUR].getValue();
+    float darkenAmt =
+        module->params[ComputerscarePortaloof::BACKDROP_DARKEN].getValue();
 
     // Transform post: use live params (knobs alter frozen image).
     // Transform pre:  use cached params (knobs only affect next snapshot).
@@ -167,6 +173,11 @@ struct PortaloofBackdropWidget : widget::Widget {
       bool tileOn = module->tileEmptySpace;
       int kaliMode = kaliOn ? (int)kaliV : 0;
       int kaliSegments = std::abs(kaliMode);
+      if (kaliMode == 0 && blurAmt > 0.f) {
+        int blurImg = blurFBOs[renderSourceIndex].apply(args.vg, effectTex, fbW,
+                                                        fbH, blurAmt);
+        if (blurImg >= 0) img = blurImg;
+      }
 
       float absSx = std::max(fabsf(sx), 0.01f);
       float absSy = std::max(fabsf(sy), 0.01f);
@@ -194,6 +205,12 @@ struct PortaloofBackdropWidget : widget::Widget {
             args.vg, effectTex, flowerTargetW, flowerTargetH, kaliSegments,
             rotOn ? rotV : 0.f, kaliTxOff * flowerScaleX,
             kaliTyOff * flowerScaleY, flipInputUV);
+        if (flowerImg >= 0 && blurAmt > 0.f) {
+          int blurImg = blurFBOs[renderSourceIndex].apply(
+              args.vg, flowerKaleidFBOs[renderSourceIndex].outTex,
+              flowerTargetW, flowerTargetH, blurAmt);
+          if (blurImg >= 0) flowerImg = blurImg;
+        }
         if (flowerImg >= 0) {
           if (tileOn) {
             float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
@@ -261,6 +278,12 @@ struct PortaloofBackdropWidget : widget::Widget {
             args.vg, effectTex, classicTargetW, classicTargetH, kaliSegments,
             rotOn ? rotV : 0.f, kaliTxOff * classicScaleX,
             kaliTyOff * classicScaleY, flipInputUV);
+        if (classicImg >= 0 && blurAmt > 0.f) {
+          int blurImg = blurFBOs[renderSourceIndex].apply(
+              args.vg, classicKaleidFBOs[renderSourceIndex].outTex,
+              classicTargetW, classicTargetH, blurAmt);
+          if (blurImg >= 0) classicImg = blurImg;
+        }
 
         float pcx = -(txOn && !module->translateFirst ? nvgTx : 0.f);
         float pcy = -(tyOn && !module->translateFirst ? nvgTy : 0.f);
@@ -356,6 +379,17 @@ struct PortaloofBackdropWidget : widget::Widget {
         }
       }
 
+      nvgRestore(args.vg);
+    }
+
+    if (darkenAmt > 0.f) {
+      nvgSave(args.vg);
+      nvgScissor(args.vg, vpX, vpY, vpW, vpH);
+      nvgBeginPath(args.vg);
+      nvgRect(args.vg, vpX, vpY, vpW, vpH);
+      nvgFillColor(args.vg,
+                   nvgRGBAf(0.f, 0.f, 0.f, clamp(darkenAmt, 0.f, 1.f)));
+      nvgFill(args.vg);
       nvgRestore(args.vg);
     }
   }

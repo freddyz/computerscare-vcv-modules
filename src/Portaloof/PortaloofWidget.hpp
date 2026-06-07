@@ -1248,6 +1248,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       menu->addChild(sliderSpacer);
       menu->addChild(new MenuParamSlider(
           m->paramQuantities[ComputerscarePortaloof::BACKDROP_ALPHA]));
+      menu->addChild(new MenuParamSlider(
+          m->paramQuantities[ComputerscarePortaloof::BACKDROP_DARKEN]));
+      menu->addChild(new MenuParamSlider(
+          m->paramQuantities[ComputerscarePortaloof::BACKDROP_BLUR]));
     }));
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {
       menu->addChild(
