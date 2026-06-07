@@ -10,7 +10,7 @@ static const char* MelyPorgeModeNames[] = {
     "Add", "Insert", "Xfade", "VCA bipolar", "VCA unipolar",
 };
 
-static const char* MelyPorgeModeCodes[] = {"ADD", "INS", "XFD", "VCB", "VCU"};
+static const char* MelyPorgeModeCodes[] = {"ADD", "INS", "XFD", "VCAB", "VCA"};
 
 static const char* MelyPorgeModeDescriptions[] = {
     "Sum the processed main input with the processed channel input.",
@@ -83,6 +83,14 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
   int insertSourceChannels[MOLLYS_PORRIDGE_BLOCKS] = {};
   bool insertActive[MOLLYS_PORRIDGE_BLOCKS] = {};
 
+  struct BlockAttenParamQuantity : ParamQuantity {
+    std::string getLabel() override;
+  };
+
+  struct BlockOffsetParamQuantity : ParamQuantity {
+    std::string getLabel() override;
+  };
+
   ComputerscareMelyPorge() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
@@ -103,10 +111,12 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
       blockModes[i] = MODE_INSERT;
       insertSourceBlocks[i] = -1;
       insertSourceChannels[i] = -1;
-      configParam(BLOCK_ATTEN + i, -1.f, 1.f, 1.f,
-                  "Channel " + std::to_string(i + 1) + " Attenuverter");
-      configParam(BLOCK_OFFSET + i, -10.f, 10.f, 0.f,
-                  "Channel " + std::to_string(i + 1) + " Offset", " volts");
+      configParam<BlockAttenParamQuantity>(
+          BLOCK_ATTEN + i, -1.f, 1.f, 1.f,
+          "Channel " + std::to_string(i + 1) + " Attenuversion");
+      configParam<BlockOffsetParamQuantity>(
+          BLOCK_OFFSET + i, -10.f, 10.f, 0.f,
+          "Channel " + std::to_string(i + 1) + " Offset", " volts");
       configInput(BLOCK_INPUT + i, "Channel " + std::to_string(i + 1));
     }
   }
@@ -371,6 +381,36 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
     }
   }
 };
+
+std::string ComputerscareMelyPorge::BlockAttenParamQuantity::getLabel() {
+  auto* mely = dynamic_cast<ComputerscareMelyPorge*>(module);
+  int blockIndex = paramId - BLOCK_ATTEN;
+  if (!mely || blockIndex < 0 || blockIndex >= MOLLYS_PORRIDGE_BLOCKS) {
+    return ParamQuantity::getLabel();
+  }
+
+  int mode = math::clamp(mely->blockModes[blockIndex], 0, (int)NUM_MODES - 1);
+  std::string prefix = "Channel " + std::to_string(blockIndex + 1) + " ";
+  if (mode == MODE_XFADE) {
+    return prefix + "Crossfade Amount";
+  }
+  return prefix + "Attenuversion";
+}
+
+std::string ComputerscareMelyPorge::BlockOffsetParamQuantity::getLabel() {
+  auto* mely = dynamic_cast<ComputerscareMelyPorge*>(module);
+  int blockIndex = paramId - BLOCK_OFFSET;
+  if (!mely || blockIndex < 0 || blockIndex >= MOLLYS_PORRIDGE_BLOCKS) {
+    return ParamQuantity::getLabel();
+  }
+
+  int mode = math::clamp(mely->blockModes[blockIndex], 0, (int)NUM_MODES - 1);
+  std::string prefix = "Channel " + std::to_string(blockIndex + 1) + " ";
+  if (mode == MODE_VCA_BIPOLAR || mode == MODE_VCA_UNIPOLAR) {
+    return prefix + "VCA Amplitude Offset";
+  }
+  return prefix + "Offset";
+}
 
 struct MelyPorgePanel : Widget {
   std::string fontPath =
@@ -825,7 +865,16 @@ static void addMelyPorgeMainInputMappingItems(Menu* menu,
 static void addMelyPorgeModeItems(Menu* menu, ComputerscareMelyPorge* module,
                                   int blockIndex, bool setAll,
                                   bool showDescriptions) {
-  for (int mode = 0; mode < ComputerscareMelyPorge::NUM_MODES; mode++) {
+  static const int modeOrder[] = {
+      ComputerscareMelyPorge::MODE_ADD,
+      ComputerscareMelyPorge::MODE_INSERT,
+      ComputerscareMelyPorge::MODE_XFADE,
+      ComputerscareMelyPorge::MODE_VCA_UNIPOLAR,
+      ComputerscareMelyPorge::MODE_VCA_BIPOLAR,
+  };
+
+  for (int i = 0; i < (int)(sizeof(modeOrder) / sizeof(modeOrder[0])); i++) {
+    int mode = modeOrder[i];
     if (showDescriptions) {
       MelyPorgeModeItem* modeItem = new MelyPorgeModeItem();
       modeItem->text = MelyPorgeModeNames[mode];
