@@ -75,6 +75,7 @@ struct PortaloofPanelWidget : widget::Widget {
     if (svgW <= 0 || svgH <= 0) return;
     float drawW = minimized ? RACK_GRID_WIDTH : CONTROLS_WIDTH;
     nvgSave(args.vg);
+    nvgScissor(args.vg, 0.f, 0.f, drawW, RACK_GRID_HEIGHT);
     nvgScale(args.vg, drawW / svgW, RACK_GRID_HEIGHT / svgH);
     window::svgDraw(args.vg, svg->handle);
     nvgRestore(args.vg);
