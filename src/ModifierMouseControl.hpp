@@ -109,7 +109,7 @@ struct ComputerscareModifierMouseControl {
     nvgSave(args.vg);
     if (isActive) {
       nvgBeginPath(args.vg);
-      nvgRect(args.vg, panelRect.pos.x, panelRect.pos.y, 8.f, panelRect.size.y);
+      nvgRect(args.vg, panelRect.pos.x, panelRect.pos.y, 3.f, panelRect.size.y);
       nvgFillColor(args.vg, accent);
       nvgFill(args.vg);
     }

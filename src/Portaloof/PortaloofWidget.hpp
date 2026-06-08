@@ -75,6 +75,7 @@ struct PortaloofPanelWidget : widget::Widget {
     if (svgW <= 0 || svgH <= 0) return;
     float drawW = minimized ? RACK_GRID_WIDTH : CONTROLS_WIDTH;
     nvgSave(args.vg);
+    nvgScissor(args.vg, 0.f, 0.f, drawW, RACK_GRID_HEIGHT);
     nvgScale(args.vg, drawW / svgW, RACK_GRID_HEIGHT / svgH);
     window::svgDraw(args.vg, svg->handle);
     nvgRestore(args.vg);
@@ -255,7 +256,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     addChild(bgPanel);
 
     panelSvg = APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/panels/portaloof-panel.svg"));
+        asset::plugin(pluginInstance, "res/panels/Portaloof-Panel.svg"));
     minimizedPanelSvg = APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/panels/Portaloof-Minimized.svg"));
     tinyJackSvg = APP->window->loadSvg(
@@ -444,7 +445,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     }
 
     headerSvg = APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/panels/portaloof-header.svg"));
+        asset::plugin(pluginInstance, "res/panels/Portaloof-Header.svg"));
   }
 
   void trackInputPort(PortWidget* port) {
@@ -515,6 +516,42 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     nvgFillPaint(args.vg, nvgBoxGradient(args.vg, RECT_ARGS(shadowBox), c, r,
                                          shadowColor, transparentColor));
     nvgFill(args.vg);
+  }
+
+  void drawPanelSvg(const DrawArgs& args, bool minimized, bool applyRoomTint) {
+    std::shared_ptr<window::Svg> svg = minimized ? minimizedPanelSvg : panelSvg;
+    if (!svg || !svg->handle) return;
+    float svgW = svg->handle->width;
+    float svgH = svg->handle->height;
+    if (svgW <= 0.f || svgH <= 0.f) return;
+
+    float drawW = minimized ? RACK_GRID_WIDTH : CONTROLS_WIDTH;
+    nvgSave(args.vg);
+    if (applyRoomTint) {
+      float b = math::clamp(rack::settings::rackBrightness, 0.f, 1.f);
+      nvgGlobalTint(args.vg, nvgRGBAf(b, b, b, 1.f));
+    }
+    nvgScale(args.vg, drawW / svgW, RACK_GRID_HEIGHT / svgH);
+    window::svgDraw(args.vg, svg->handle);
+    nvgRestore(args.vg);
+  }
+
+  void drawNormalControlsAbovePanel(const DrawArgs& args) {
+    for (Widget* child : children) {
+      if (!child->isVisible()) continue;
+      if (child == panelWidget || child == bgPanel) continue;
+      if (!args.clipBox.intersects(child->box)) continue;
+      drawChild(child, args, 0);
+    }
+  }
+
+  void drawPanelAndControlsOverlay(const DrawArgs& args, bool minimized) {
+    nvgSave(args.vg);
+    float b = math::clamp(rack::settings::rackBrightness, 0.f, 1.f);
+    nvgGlobalTint(args.vg, nvgRGBAf(b, b, b, 1.f));
+    drawPanelSvg(args, minimized, false);
+    drawNormalControlsAbovePanel(args);
+    nvgRestore(args.vg);
   }
 
   float getHiddenWidth(ComputerscarePortaloof* m) const {
@@ -593,8 +630,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       // Narrow bgPanel to controls only so the display area stays transparent,
       // letting the kaleidoscope show through when we redraw the panel on top.
       bgPanel->box.size.x = 0;
-      drawBrowserPreview(args);  // kaleidoscope goes down first
-      ModuleWidget::draw(args);  // controls + narrow bg drawn on top
+      drawBrowserPreview(args);
     } else {
       ModuleWidget::draw(args);
     }
@@ -1048,26 +1084,16 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         }
         nvgRestore(args.vg);
 
-        // Redraw SVG panel clipped to the overlap strip
-        // (DISPLAY_X–CONTROLS_WIDTH) so the display peeks under the panel
-        // without covering the controls.
-        if (!hideUi && panelSvg && panelSvg->handle) {
-          float svgW = panelSvg->handle->width;
-          float svgH = panelSvg->handle->height;
-          if (svgW > 0.f && svgH > 0.f) {
-            nvgSave(args.vg);
-            nvgScissor(args.vg, DISPLAY_X - 1.f, 0.f,
-                       CONTROLS_WIDTH - DISPLAY_X + 1.f, RACK_GRID_HEIGHT);
-            float b = math::clamp(rack::settings::rackBrightness, 0.f, 1.f);
-            nvgGlobalTint(args.vg, nvgRGBAf(b, b, b, 1.f));
-            nvgScale(args.vg, CONTROLS_WIDTH / svgW, RACK_GRID_HEIGHT / svgH);
-            window::svgDraw(args.vg, panelSvg->handle);
-            nvgRestore(args.vg);
-          }
-        }
+        // Panel/control overlay is drawn once below, after all visual paths.
       }
     }
 
+    if (layer == 1 && !hideUi) {
+      // Draw the full controls panel over the visual, then redraw controls.
+      // This preserves the intentional panel/display overlap without a
+      // clipped SVG strip or second browser-panel pass that can show a stitch.
+      drawPanelAndControlsOverlay(args, false);
+    }
     if (!hideUi) ModuleWidget::drawLayer(args, layer);
     if (layer == 1) {
       if (!hideUi)
@@ -1248,6 +1274,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       menu->addChild(sliderSpacer);
       menu->addChild(new MenuParamSlider(
           m->paramQuantities[ComputerscarePortaloof::BACKDROP_ALPHA]));
+      menu->addChild(new MenuParamSlider(
+          m->paramQuantities[ComputerscarePortaloof::BACKDROP_DARKEN]));
+      menu->addChild(new MenuParamSlider(
+          m->paramQuantities[ComputerscarePortaloof::BACKDROP_BLUR]));
     }));
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* menu) {
       menu->addChild(

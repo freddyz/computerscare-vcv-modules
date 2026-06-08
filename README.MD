@@ -21,6 +21,7 @@
 - [Moly Patrix](./doc/moly-patrix.md): Polyphonic matrix mixer
 - [Goly Penerator](./doc/goly-penerator.md): Generate constant polyphonic CV via various algorithms
 - [Sloly Pit](./doc/sloly-pit.md): Split and route a polyphonic input to 16 outputs
+- [Mely Porge](./doc/mely-porge.md): Polyphonic merge / insert / vca utility
 
 ## Visualization
 
