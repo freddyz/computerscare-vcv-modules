@@ -34,10 +34,9 @@ static const char* MelyPorgeMainInputMappingNames[] = {
 };
 
 static const char* MelyPorgeMainInputMappingDescriptions[] = {
-    "Mono main input is copied to all manual output channels; poly input uses "
+    "Mono main input is copied to all output channels; poly input uses "
     "matching channels.",
-    "Main input channels repeat until the manual output channel count is "
-    "filled.",
+    "Main input channels repeat until the output channel count is filled.",
     "Channels past the main input channel count are padded with 0V.",
     "Channels past the main input channel count use the final main input "
     "channel.",
@@ -78,6 +77,7 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
   int blockModes[MOLLYS_PORRIDGE_BLOCKS] = {};
   int normalizationMode = NORMALIZATION_POLY;
   int mainInputMappingMode = cpx::polyphonic::defaultMappingModeValue;
+  bool multipleInsertsBreakNormalization = false;
   int numInputChannels = 0;
   int insertSourceBlocks[MOLLYS_PORRIDGE_BLOCKS] = {};
   int insertSourceChannels[MOLLYS_PORRIDGE_BLOCKS] = {};
@@ -132,6 +132,8 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
                         json_integer(normalizationMode));
     json_object_set_new(rootJ, "mainInputMappingMode",
                         json_integer(mainInputMappingMode));
+    json_object_set_new(rootJ, "multipleInsertsBreakNormalization",
+                        json_boolean(multipleInsertsBreakNormalization));
     return rootJ;
   }
 
@@ -148,6 +150,12 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
           math::clamp((int)json_integer_value(mainInputMappingJ),
                       cpx::polyphonic::firstMappingModeValue,
                       cpx::polyphonic::lastMappingModeValue);
+    }
+
+    json_t* multipleInsertsBreakJ =
+        json_object_get(rootJ, "multipleInsertsBreakNormalization");
+    if (multipleInsertsBreakJ) {
+      multipleInsertsBreakNormalization = json_is_true(multipleInsertsBreakJ);
     }
 
     json_t* modesJ = json_object_get(rootJ, "blockModes");
@@ -168,13 +176,24 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
   void checkPoly() override {
     numInputChannels = inputs[POLY_INPUT].getChannels();
     int knobSetting = (int)params[POLY_CHANNELS].getValue();
-    if (numInputChannels > 0) {
-      polyChannels = knobSetting == 0 ? numInputChannels : knobSetting;
-    } else {
-      polyChannels = knobSetting == 0 ? 16 : knobSetting;
-    }
-    outputs[POLY_OUTPUT].setChannels(polyChannels);
     updateInsertNormalizationCache();
+    polyChannels = knobSetting == 0 ? getAutoPolyChannels() : knobSetting;
+    outputs[POLY_OUTPUT].setChannels(polyChannels);
+  }
+
+  int getAutoPolyChannels() {
+    int channels = numInputChannels;
+    for (int blockIndex = 0; blockIndex < MOLLYS_PORRIDGE_BLOCKS;
+         blockIndex++) {
+      if (insertActive[blockIndex]) {
+        channels = std::max(channels, blockIndex + 1);
+      }
+    }
+
+    if (channels <= 0) {
+      return 16;
+    }
+    return math::clamp(channels, 1, 16);
   }
 
   float getMainVoltage(int channel) {
@@ -189,10 +208,8 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
     }
 
     int knobSetting = (int)params[POLY_CHANNELS].getValue();
-    if (knobSetting == 0) {
-      return channel < numInputChannels
-                 ? inputs[POLY_INPUT].getPolyVoltage(channel)
-                 : 0.f;
+    if (knobSetting == 0 && channel < numInputChannels) {
+      return inputs[POLY_INPUT].getPolyVoltage(channel);
     }
 
     int inputChannel = cpx::polyphonic::inputChannelForOutputChannel(
@@ -231,7 +248,9 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
       if (blockIndex - sourceIndex < sourceChannels) {
         return sourceIndex;
       }
-      return -1;
+      if (multipleInsertsBreakNormalization) {
+        return -1;
+      }
     }
 
     if (blockIndex >= 8) {
@@ -244,6 +263,9 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
 
         if (blockIndex - sourceIndex < sourceChannels) {
           return sourceIndex;
+        }
+        if (multipleInsertsBreakNormalization) {
+          return -1;
         }
       }
     }
@@ -412,42 +434,6 @@ std::string ComputerscareMelyPorge::BlockOffsetParamQuantity::getLabel() {
   return prefix + "Offset";
 }
 
-struct MelyPorgePanel : Widget {
-  std::string fontPath =
-      asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
-
-  void drawLabel(const DrawArgs& args, Vec pos, const char* text, float size,
-                 NVGcolor color, int align = NVG_ALIGN_LEFT) {
-    std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
-    if (!font) {
-      return;
-    }
-    nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, size);
-    nvgTextAlign(args.vg, align | NVG_ALIGN_BASELINE);
-    nvgFillColor(args.vg, color);
-    nvgText(args.vg, pos.x, pos.y, text, NULL);
-  }
-
-  void draw(const DrawArgs& args) override {
-    nvgBeginPath(args.vg);
-    nvgRect(args.vg, 0.f, 0.f, box.size.x, box.size.y);
-    nvgFillColor(args.vg, nvgRGB(0xf4, 0xf1, 0xe8));
-    nvgFill(args.vg);
-
-    drawLabel(args, Vec(8.f, 18.f), "mely porge", 14.f, BLACK);
-  }
-};
-
-struct MelyPorgeBlockBackground : Widget {
-  void draw(const DrawArgs& args) override {
-    nvgBeginPath(args.vg);
-    nvgRoundedRect(args.vg, 0.f, 0.f, box.size.x, box.size.y, 3.f);
-    nvgFillColor(args.vg, nvgRGBA(0xff, 0xff, 0xff, 0x28));
-    nvgFill(args.vg);
-  }
-};
-
 struct MelyPorgeBlockNumber : Widget {
   std::string value;
   std::string fontPath =
@@ -480,7 +466,20 @@ struct MelyPorgeDisableableSmallKnob : ComputerscareRoundKnob {
 
   MelyPorgeDisableableSmallKnob() {
     setSvg(enabledSvg);
+    shadow->box.size = math::Vec(0, 0);
     shadow->opacity = 0.f;
+  }
+
+  void draw(const DrawArgs& args) override {
+    if (disabled) {
+      nvgSave(args.vg);
+      nvgGlobalAlpha(args.vg, 0.55f);
+      ComputerscareRoundKnob::draw(args);
+      nvgRestore(args.vg);
+      return;
+    }
+
+    ComputerscareRoundKnob::draw(args);
   }
 
   void step() override {
@@ -510,6 +509,7 @@ struct MelyPorgeDisableableSmoothKnob : ComputerscareRoundKnob {
 
   MelyPorgeDisableableSmoothKnob() {
     setSvg(enabledSvg);
+    shadow->box.size = math::Vec(0, 0);
     shadow->opacity = 0.f;
   }
 
@@ -555,9 +555,11 @@ struct MelyPorgeNormalizationOverlay : Widget {
   ComputerscareMelyPorge* module = nullptr;
 
   static constexpr float startY = 52.f;
-  static constexpr float rowSpacing = 41.f;
+  static constexpr float rowSpacing = 39.f;
   static constexpr float leftX = 4.f;
-  static constexpr float rightX = 94.f;
+  static constexpr float rightX = 91.f;
+  static constexpr float leftColumnYOffset = 11.f;
+  static constexpr float rightColumnYOffset = 0.f;
   static constexpr float blockW = 76.f;
   static constexpr float blockH = 36.f;
 
@@ -570,13 +572,14 @@ struct MelyPorgeNormalizationOverlay : Widget {
   }
 
   void drawRun(const DrawArgs& args, int sourceIndex, int segmentStartIndex,
-               int runEndIndex, int runIndex) {
+               int runEndIndex) {
     int row = segmentStartIndex % 8;
     int lastRow = (runEndIndex - 1) % 8;
     bool rightColumn = segmentStartIndex >= 8;
     float x = (rightColumn ? rightX : leftX) - 12.f;
-    float y = startY + row * rowSpacing + 5.f;
-    float bottom = startY + lastRow * rowSpacing + 40.f;
+    float columnYOffset = rightColumn ? rightColumnYOffset : leftColumnYOffset;
+    float y = startY + columnYOffset + row * rowSpacing + 5.f;
+    float bottom = startY + columnYOffset + lastRow * rowSpacing + 40.f;
     float height = bottom - y;
     float width = 40.f;
     float wiggle = 4.0f;
@@ -608,11 +611,11 @@ struct MelyPorgeNormalizationOverlay : Widget {
             y + height * 0.18f + runNoise(segmentStartIndex, 23) * wiggle),
     };
 
-    bool dark = runIndex % 2 == 1;
+    bool dark = sourceIndex % 2 == 1;
     int baseRed = 0x24;
     int baseGreen = dark ? 0x86 : 0xc9;
     int baseBlue = dark ? 0x73 : 0xa6;
-    float randomDarkness = (runNoise(segmentStartIndex, 24) + 1.f) * 12.f;
+    float randomDarkness = (runNoise(sourceIndex, 24) + 1.f) * 12.f;
     int red = clamp((int)(baseRed - randomDarkness), 0, 255);
     int green = clamp((int)(baseGreen - randomDarkness), 0, 255);
     int blue = clamp((int)(baseBlue - randomDarkness), 0, 255);
@@ -640,38 +643,40 @@ struct MelyPorgeNormalizationOverlay : Widget {
       return;
     }
 
-    int runIndex = 0;
-    for (int sourceIndex = 0; sourceIndex < MOLLYS_PORRIDGE_BLOCKS;
-         sourceIndex++) {
-      if (!module->inputs[ComputerscareMelyPorge::BLOCK_INPUT + sourceIndex]
-               .isConnected()) {
-        continue;
-      }
-
-      int runEndIndex =
-          module->getNormalizationSegmentEnd(sourceIndex, sourceIndex);
-      if (runEndIndex <= sourceIndex) {
-        continue;
-      }
-
-      int currentRunIndex = runIndex;
-      drawRun(args, sourceIndex, sourceIndex, runEndIndex, currentRunIndex);
-
-      if (sourceIndex < 8) {
-        int sourceChannels =
-            module->inputs[ComputerscareMelyPorge::BLOCK_INPUT + sourceIndex]
-                .getChannels();
-        if (sourceIndex + sourceChannels > 8) {
-          int rightRunEndIndex =
-              module->getNormalizationSegmentEnd(sourceIndex, 8);
-          if (rightRunEndIndex > 8) {
-            drawRun(args, sourceIndex, 8, rightRunEndIndex, currentRunIndex);
-          }
+    for (int columnStart = 0; columnStart < MOLLYS_PORRIDGE_BLOCKS;
+         columnStart += 8) {
+      int columnEnd = columnStart + 8;
+      int blockIndex = columnStart;
+      while (blockIndex < columnEnd) {
+        int sourceIndex = sourceForBlock(blockIndex);
+        if (sourceIndex < 0) {
+          blockIndex++;
+          continue;
         }
-      }
 
-      runIndex++;
+        int runStartIndex = blockIndex;
+        blockIndex++;
+        while (blockIndex < columnEnd &&
+               sourceForBlock(blockIndex) == sourceIndex) {
+          blockIndex++;
+        }
+
+        drawRun(args, sourceIndex, runStartIndex, blockIndex);
+      }
     }
+  }
+
+  int sourceForBlock(int blockIndex) {
+    if (blockIndex < 0 || blockIndex >= MOLLYS_PORRIDGE_BLOCKS) {
+      return -1;
+    }
+
+    Input& input =
+        module->inputs[ComputerscareMelyPorge::BLOCK_INPUT + blockIndex];
+    if (input.isConnected() && input.getChannels() > 0) {
+      return blockIndex;
+    }
+    return module->getNormalizedSourceBlock(blockIndex);
   }
 };
 
@@ -848,6 +853,10 @@ static void addMelyPorgeNormalizationItems(Menu* menu,
     item->normalizationMode = mode;
     menu->addChild(item);
   }
+  menu->addChild(new MenuSeparator);
+  menu->addChild(
+      createBoolPtrMenuItem("Multiple inserts break normalization", "",
+                            &module->multipleInsertsBreakNormalization));
 }
 
 static void addMelyPorgeMainInputMappingItems(Menu* menu,
@@ -904,7 +913,7 @@ struct MelyPorgeModeButton : ComputerscareBlankButton {
   MelyPorgeModeButton() {
     iconUpPos = Vec(0.f, 0.f);
     iconDownOffset = Vec(0.f, 0.f);
-    box.size.x *= 0.74f;
+    box.size.x *= 0.82f;
   }
 
   ~MelyPorgeModeButton() { destroyHoverTooltip(); }
@@ -971,7 +980,10 @@ struct MelyPorgeModeButton : ComputerscareBlankButton {
 
   void draw(const DrawArgs& args) override {
     updateMenuFrame();
+    nvgSave(args.vg);
+    nvgScale(args.vg, 0.82f, 1.f);
     ComputerscareBlankButton::draw(args);
+    nvgRestore(args.vg);
     std::shared_ptr<Font> font = APP->window->loadFont(
         asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
     if (!font) {
@@ -981,8 +993,8 @@ struct MelyPorgeModeButton : ComputerscareBlankButton {
     nvgFontSize(args.vg, 10.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, BLACK);
-    float textXOffset = isMenuOpen() ? 1.5f : 0.f;
-    float textYOffset = isMenuOpen() ? 2.9f : 0.f;
+    float textXOffset = isMenuOpen() ? 2.3f : -1.2f;
+    float textYOffset = isMenuOpen() ? 3.6f : 0.f;
     nvgText(args.vg, box.size.x * 0.5f + textXOffset,
             box.size.y * 0.48f + textYOffset, MelyPorgeModeCodes[currentMode()],
             NULL);
@@ -1034,28 +1046,25 @@ struct ComputerscareMelyPorgeWidget : ModuleWidget {
     setModule(module);
     box.size = Vec(12 * 15, 380);
 
-    MelyPorgePanel* panel = new MelyPorgePanel();
+    ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
     panel->box.size = box.size;
+    panel->setBackground(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/panels/ComputerscareMelyPorgePanel.svg")));
     addChild(panel);
 
     addChild(new PolyOutputChannelsWidget(
-        Vec(118.f, 4.f), module, ComputerscareMelyPorge::POLY_CHANNELS));
-    addOutput(createOutput<InPort>(Vec(148.f, 5.f), module,
+        Vec(119.f, 4.f), module, ComputerscareMelyPorge::POLY_CHANNELS));
+    addOutput(createOutput<InPort>(Vec(144.f, 3.f), module,
                                    ComputerscareMelyPorge::POLY_OUTPUT));
 
-    addMainInputRow(module, 8.f, 17.f);
+    addMainInputRow(module, 20.f, 23.f);
 
     const float startY = 52.f;
-    const float rowSpacing = 41.f;
+    const float rowSpacing = 39.f;
     const float leftX = 4.f;
-    const float rightX = 94.f;
-    for (int i = 0; i < MOLLYS_PORRIDGE_BLOCKS; i++) {
-      int row = i % 8;
-      bool rightColumn = i >= 8;
-      float x = rightColumn ? rightX : leftX;
-      float y = startY + row * rowSpacing;
-      addBlockBackground(x, y, 76.f, 36.f);
-    }
+    const float rightX = 91.f;
+    const float leftColumnYOffset = 11.f;
+    const float rightColumnYOffset = 0.f;
 
     MelyPorgeNormalizationOverlay* normalizationOverlay =
         createWidget<MelyPorgeNormalizationOverlay>(Vec(0.f, 0.f));
@@ -1067,24 +1076,19 @@ struct ComputerscareMelyPorgeWidget : ModuleWidget {
       int row = i % 8;
       bool rightColumn = i >= 8;
       float x = rightColumn ? rightX : leftX;
-      float y = startY + row * rowSpacing;
+      float y = startY +
+                (rightColumn ? rightColumnYOffset : leftColumnYOffset) +
+                row * rowSpacing;
       addBlockControls(module, i, x, y);
     }
-  }
-
-  void addBlockBackground(float x, float y, float blockW, float blockH) {
-    MelyPorgeBlockBackground* background =
-        createWidget<MelyPorgeBlockBackground>(Vec(x, y));
-    background->box.size = Vec(blockW, blockH);
-    addChild(background);
   }
 
   void addMainInputRow(ComputerscareMelyPorge* module, float x, float y) {
     addInput(createInput<PointingUpPentagonPort>(
         Vec(x, y), module, ComputerscareMelyPorge::POLY_INPUT));
-    addParam(createParam<SmallKnob>(Vec(x + 30.f, y + 3.f), module,
+    addParam(createParam<SmallKnob>(Vec(x + 38.f, y + 4.f), module,
                                     ComputerscareMelyPorge::GLOBAL_ATTEN));
-    addParam(createParam<SmoothKnob>(Vec(x + 51.f, y - 2.f), module,
+    addParam(createParam<SmoothKnob>(Vec(x + 62.f, y + 2.f), module,
                                      ComputerscareMelyPorge::GLOBAL_OFFSET));
   }
 
@@ -1113,7 +1117,7 @@ struct ComputerscareMelyPorgeWidget : ModuleWidget {
 
     MelyPorgeDisableableSmoothKnob* offsetKnob =
         createParam<MelyPorgeDisableableSmoothKnob>(
-            Vec(x + 56.f, y + 14.f), module,
+            Vec(x + 52.f, y + 14.f), module,
             ComputerscareMelyPorge::BLOCK_OFFSET + blockIndex);
     offsetKnob->module = module;
     offsetKnob->channel = blockIndex;
@@ -1141,7 +1145,7 @@ struct ComputerscareMelyPorgeWidget : ModuleWidget {
         "Insert normalization", "",
         [=](Menu* submenu) { addMelyPorgeNormalizationItems(submenu, mely); }));
     menu->addChild(createSubmenuItem(
-        "Main Input Polyphonic Mapping", "", [=](Menu* submenu) {
+        "Main Input Polyphonic Wrap Mode", "", [=](Menu* submenu) {
           addMelyPorgeMainInputMappingItems(submenu, mely);
         }));
   }

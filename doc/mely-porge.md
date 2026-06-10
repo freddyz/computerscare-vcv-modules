@@ -26,11 +26,13 @@ Click a mode button to set a channel mode:
 
 - Set all to: set every channel mode at once
 - Insert Normalization: choose whether insert inputs are independent, or normalized from a patched polyphonic insert input
-- Main Input Polyphonic Mapping: when Polyphony is set explicitly, choose how main input channels are mapped to output channels
+- Main Input Polyphonic Wrap Mode: choose how main input channels are mapped when the output has more channels than the main input
 
 ## Insert Normalization
 
 With Normalize polyphonic enabled, a polyphonic insert patched into one channel can fill following insert channels. A new patched insert starts a new run. The first column normalizes through channels 1-8, and can continue into the second column if the source has enough channels.
+
+When Multiple inserts break normalization is off, a later shorter insert does not stop an earlier longer insert from continuing after the later insert ends. Turn it on to make a patched insert stop earlier normalization past that point.
 
 ### Quirks
 
