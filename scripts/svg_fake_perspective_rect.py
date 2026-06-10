@@ -206,6 +206,7 @@ def build_svg(args):
     c = (top_w, top_h)
     d = (0.0, top_h)
     av = (a[0] + projection[0], a[1] + projection[1])
+    bv = (b[0] + projection[0], b[1] + projection[1])
     cv = (c[0] + projection[0], c[1] + projection[1])
     dv = (d[0] + projection[0], d[1] + projection[1])
 
@@ -214,12 +215,20 @@ def build_svg(args):
     c = wiggle_point(c, point_rand_amount, rng)
     d = wiggle_point(d, point_rand_amount, rng)
     av = wiggle_point(av, point_rand_amount, rng)
+    bv = wiggle_point(bv, point_rand_amount, rng)
     cv = wiggle_point(cv, point_rand_amount, rng)
     dv = wiggle_point(dv, point_rand_amount, rng)
 
     overlap = max(0.35, args.height * 0.003)
-    side_1 = overlap_side([a, d, dv, av], [b, c, cv, b], overlap)
-    side_2 = overlap_side([d, c, cv, dv], [a, b, b, a], overlap)
+    if projection[0] >= 0:
+        side_1 = overlap_side([b, c, cv, bv], [a, d, dv, a], overlap)
+    else:
+        side_1 = overlap_side([a, d, dv, av], [b, c, cv, b], overlap)
+
+    if projection[1] >= 0:
+        side_2 = overlap_side([d, c, cv, dv], [a, b, bv, a], overlap)
+    else:
+        side_2 = overlap_side([a, b, bv, av], [d, c, cv, d], overlap)
 
     faces = [
         ("side-1", side_1, -24.0),
