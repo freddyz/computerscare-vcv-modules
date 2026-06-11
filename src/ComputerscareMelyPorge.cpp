@@ -7,18 +7,17 @@ struct ComputerscareMelyPorge;
 static const int MOLLYS_PORRIDGE_BLOCKS = 16;
 
 static const char* MelyPorgeModeNames[] = {
-    "Add", "Insert", "Xfade", "VCA bipolar", "VCA unipolar",
+    "Add", "Insert", "Crossfade", "VCA bipolar", "VCA unipolar",
 };
 
 static const char* MelyPorgeModeCodes[] = {"ADD", "INS", "XFD", "VCAB", "VCA"};
 
 static const char* MelyPorgeModeDescriptions[] = {
-    "Sum the processed main input with the processed channel input.",
+    "Sum the main input with the channel input.",
     "Pass the main input unless the channel input is patched, then replace it.",
     "Crossfade between main and channel input using the attenuverter knob.",
-    ("Use main input as bipolar signal and processed channel input as "
-     "amplitude."),
-    "Use main input as signal and processed channel input floored at zero.",
+    "Multiplication: Main input is the signal, channel input is bipolar gain",
+    "Multiplication: Main input is the signal, channel input is unipolar gain",
 };
 
 static const char* MelyPorgeNormalizationNames[] = {

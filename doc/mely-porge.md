@@ -16,11 +16,11 @@ Each numbered channel has an insert input, attenuverter, mode button, and offset
 
 Click a mode button to set a channel mode:
 
-- Add: add the processed main input and processed channel input
-- Insert: use the channel input when patched, otherwise pass the main input
-- Xfade: crossfade between the main input and channel input with the attenuverter knob
-- VCA unipolar: use the channel input as a positive amplitude control for the main input
-- VCA bipolar: use the channel input as a bipolar amplitude control for the main input
+- Add: sum the main input with the channel input
+- Insert: pass the main input unless the channel input is patched, then replace it
+- Crossfade: crossfade between the main input and channel input using the attenuverter knob
+- VCA bipolar: multiplication; main input is the signal, channel input is bipolar gain
+- VCA unipolar: multiplication; main input is the signal, channel input is unipolar gain
 
 ## Right-Click Options
 
