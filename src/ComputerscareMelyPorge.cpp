@@ -7,10 +7,12 @@ struct ComputerscareMelyPorge;
 static const int MOLLYS_PORRIDGE_BLOCKS = 16;
 
 static const char* MelyPorgeModeNames[] = {
-    "Add", "Insert", "Crossfade", "VCA bipolar", "VCA unipolar",
+    "Add",          "Insert", "Crossfade", "VCA bipolar",
+    "VCA unipolar", "Min",    "Max",       "Compare",
 };
 
-static const char* MelyPorgeModeCodes[] = {"ADD", "INS", "XFD", "VCAB", "VCA"};
+static const char* MelyPorgeModeCodes[] = {"ADD", "INS", "XFD", "VCAB",
+                                           "VCA", "MIN", "MAX", "COMP"};
 
 static const char* MelyPorgeModeDescriptions[] = {
     "Sum the main input with the channel input.",
@@ -18,6 +20,9 @@ static const char* MelyPorgeModeDescriptions[] = {
     "Crossfade between main and channel input using the attenuverter knob.",
     "Multiplication: Main input is the signal, channel input is bipolar gain",
     "Multiplication: Main input is the signal, channel input is unipolar gain",
+    "Output the lesser of the main input and the channel input.",
+    "Output the greater of the main input and the channel input.",
+    "Output 10V when the main input exceeds the channel input, otherwise 0V.",
 };
 
 static const char* MelyPorgeNormalizationNames[] = {
@@ -48,6 +53,9 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
     MODE_XFADE,
     MODE_VCA_BIPOLAR,
     MODE_VCA_UNIPOLAR,
+    MODE_MIN,
+    MODE_MAX,
+    MODE_COMPARE,
     NUM_MODES
   };
 
@@ -370,10 +378,7 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
         return main + getInsertVoltage(blockIndex, channel);
       case MODE_INSERT:
         if (isInsertActive(blockIndex)) {
-          return getEffectiveBlockPortVoltage(blockIndex, channel) *
-                     params[BLOCK_ATTEN + blockIndex].getValue() +
-                 params[GLOBAL_OFFSET].getValue() +
-                 params[BLOCK_OFFSET + blockIndex].getValue();
+          return getInsertVoltage(blockIndex, channel);
         }
         return main + params[BLOCK_OFFSET + blockIndex].getValue();
       case MODE_XFADE: {
@@ -389,6 +394,12 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
       case MODE_VCA_UNIPOLAR:
         return main * std::max(0.f, getInsertVoltage(blockIndex, channel)) /
                10.f;
+      case MODE_MIN:
+        return std::min(main, getInsertVoltage(blockIndex, channel));
+      case MODE_MAX:
+        return std::max(main, getInsertVoltage(blockIndex, channel));
+      case MODE_COMPARE:
+        return main > getInsertVoltage(blockIndex, channel) ? 10.f : 0.f;
       default:
         return main;
     }
@@ -415,6 +426,9 @@ std::string ComputerscareMelyPorge::BlockAttenParamQuantity::getLabel() {
   if (mode == MODE_XFADE) {
     return prefix + "Crossfade Amount";
   }
+  if (mode == MODE_COMPARE) {
+    return prefix + "Threshold Attenuversion";
+  }
   return prefix + "Attenuversion";
 }
 
@@ -429,6 +443,9 @@ std::string ComputerscareMelyPorge::BlockOffsetParamQuantity::getLabel() {
   std::string prefix = "Channel " + std::to_string(blockIndex + 1) + " ";
   if (mode == MODE_VCA_BIPOLAR || mode == MODE_VCA_UNIPOLAR) {
     return prefix + "VCA Amplitude Offset";
+  }
+  if (mode == MODE_COMPARE) {
+    return prefix + "Threshold Offset";
   }
   return prefix + "Offset";
 }
@@ -879,6 +896,9 @@ static void addMelyPorgeModeItems(Menu* menu, ComputerscareMelyPorge* module,
       ComputerscareMelyPorge::MODE_XFADE,
       ComputerscareMelyPorge::MODE_VCA_UNIPOLAR,
       ComputerscareMelyPorge::MODE_VCA_BIPOLAR,
+      ComputerscareMelyPorge::MODE_MIN,
+      ComputerscareMelyPorge::MODE_MAX,
+      ComputerscareMelyPorge::MODE_COMPARE,
   };
 
   for (int i = 0; i < (int)(sizeof(modeOrder) / sizeof(modeOrder[0])); i++) {
@@ -977,9 +997,16 @@ struct MelyPorgeModeButton : ComputerscareBlankButton {
                        (int)ComputerscareMelyPorge::NUM_MODES - 1);
   }
 
+  bool isDisabled() const {
+    return module && blockIndex > module->polyChannels - 1;
+  }
+
   void draw(const DrawArgs& args) override {
     updateMenuFrame();
     nvgSave(args.vg);
+    if (isDisabled()) {
+      nvgGlobalAlpha(args.vg, 0.45f);
+    }
     nvgScale(args.vg, 0.82f, 1.f);
     ComputerscareBlankButton::draw(args);
     nvgRestore(args.vg);
@@ -991,7 +1018,8 @@ struct MelyPorgeModeButton : ComputerscareBlankButton {
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 10.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    nvgFillColor(args.vg, BLACK);
+    nvgFillColor(args.vg,
+                 isDisabled() ? nvgRGBA(0x00, 0x00, 0x00, 0x80) : BLACK);
     float textXOffset = isMenuOpen() ? 2.3f : -1.2f;
     float textYOffset = isMenuOpen() ? 3.6f : 0.f;
     nvgText(args.vg, box.size.x * 0.5f + textXOffset,

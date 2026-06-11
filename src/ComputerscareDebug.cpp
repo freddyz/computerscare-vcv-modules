@@ -101,6 +101,7 @@ struct ComputerscareDebug : Module {
     THEME,
     TEXT_OPACITY,
     BIPOLAR_COLOR_MODE,
+    BARS_OPACITY,
     NUM_PARAMS
   };
   enum InputIds { VAL_INPUT, TRG_INPUT, CLR_INPUT, NUM_INPUTS };
@@ -162,6 +163,7 @@ struct ComputerscareDebug : Module {
                  {"Unipolar", "Bipolar"});
     configSwitch(THEME, 0.f, DEBUG_THEME_COUNT - 1, 0.f, "Theme");
     configParam(TEXT_OPACITY, 0.15f, 1.f, 1.f, "Text Opacity");
+    configParam(BARS_OPACITY, 0.15f, 1.f, 1.f, "Bars Opacity");
     configSwitch(BIPOLAR_COLOR_MODE, 0.f, 2.f, BIPOLAR_COLORS_DIFFERENT,
                  "Bipolar Colors", {"Different", "Color 1", "Color 2"});
     configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
@@ -198,6 +200,7 @@ struct ComputerscareDebug : Module {
     getParamQuantity(BAR_MODE)->randomizeEnabled = false;
     getParamQuantity(THEME)->randomizeEnabled = false;
     getParamQuantity(TEXT_OPACITY)->randomizeEnabled = false;
+    getParamQuantity(BARS_OPACITY)->randomizeEnabled = false;
     getParamQuantity(BIPOLAR_COLOR_MODE)->randomizeEnabled = false;
     getParamQuantity(VISUAL_MODE)->resetEnabled = false;
     getParamQuantity(BAR_MODE)->resetEnabled = false;
@@ -255,6 +258,8 @@ struct ComputerscareDebug : Module {
                         json_integer((int)params[THEME].getValue()));
     json_object_set_new(rootJ, "textOpacity",
                         json_real(params[TEXT_OPACITY].getValue()));
+    json_object_set_new(rootJ, "barsOpacity",
+                        json_real(params[BARS_OPACITY].getValue()));
     json_object_set_new(
         rootJ, "bipolarColorMode",
         json_integer((int)params[BIPOLAR_COLOR_MODE].getValue()));
@@ -303,6 +308,12 @@ struct ComputerscareDebug : Module {
     if (textOpacityJ) {
       params[TEXT_OPACITY].setValue(
           math::clamp((float)json_number_value(textOpacityJ), 0.15f, 1.f));
+    }
+
+    json_t* barsOpacityJ = json_object_get(rootJ, "barsOpacity");
+    if (barsOpacityJ) {
+      params[BARS_OPACITY].setValue(
+          math::clamp((float)json_number_value(barsOpacityJ), 0.15f, 1.f));
     }
 
     json_t* bipolarColorModeJ = json_object_get(rootJ, "bipolarColorMode");
@@ -573,20 +584,32 @@ struct StringDisplayWidget3 : Widget {
     return color;
   }
 
+  float barsOpacity() const {
+    return module ? module->params[ComputerscareDebug::BARS_OPACITY].getValue()
+                  : 1.f;
+  }
+
   NVGcolor barColor(float voltage, int barMode) const {
+    NVGcolor color;
     if (module && barMode == ComputerscareDebug::BAR_BIPOLAR) {
       int bipolarColorMode = math::clamp(
           (int)module->params[ComputerscareDebug::BIPOLAR_COLOR_MODE]
               .getValue(),
           0, 2);
       if (bipolarColorMode == ComputerscareDebug::BIPOLAR_COLORS_COLOR_1) {
-        return theme().positive;
+        color = theme().positive;
+        color.a *= barsOpacity();
+        return color;
       }
       if (bipolarColorMode == ComputerscareDebug::BIPOLAR_COLORS_COLOR_2) {
-        return theme().negative;
+        color = theme().negative;
+        color.a *= barsOpacity();
+        return color;
       }
     }
-    return voltage >= 0.f ? theme().positive : theme().negative;
+    color = voltage >= 0.f ? theme().positive : theme().negative;
+    color.a *= barsOpacity();
+    return color;
   }
 
   int currentVisualMode() const {
@@ -673,13 +696,14 @@ struct StringDisplayWidget3 : Widget {
     nvgRoundedRect(ctx.vg, 0.0, 0.0, box.size.x, box.size.y, 4.0);
     nvgFillColor(ctx.vg, backgroundColor);
     nvgFill(ctx.vg);
-    drawBars(ctx.vg);
   }
   void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
     if (layer == 1) {
       int visualMode = currentVisualMode();
       bool drawText = visualMode == ComputerscareDebug::VISUAL_TEXT ||
                       visualMode == ComputerscareDebug::VISUAL_TEXT_BARS;
+
+      drawBars(args.vg);
 
       if (!drawText) {
         Widget::drawLayer(args, layer);
@@ -832,11 +856,15 @@ static void addDebugQuickVisualSettingsItems(Menu* menu,
   menu->addChild(new MenuSeparator);
   menu->addChild(new MenuParamSlider(
       debug->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
+  menu->addChild(new MenuParamSlider(
+      debug->paramQuantities[ComputerscareDebug::BARS_OPACITY]));
 }
 
-static void addDebugOpacitySettingItem(Menu* menu, ComputerscareDebug* debug) {
+static void addDebugOpacitySettingItems(Menu* menu, ComputerscareDebug* debug) {
   menu->addChild(new MenuParamSlider(
       debug->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
+  menu->addChild(new MenuParamSlider(
+      debug->paramQuantities[ComputerscareDebug::BARS_OPACITY]));
 }
 
 struct DebugThemeMenuItem : MenuItem {
@@ -1128,7 +1156,7 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
     } else if (control == BAR_STYLE_CONTROL) {
       addDebugBarModeItems(menu, module);
     } else if (control == VISUAL_SETTINGS_CONTROL) {
-      addDebugOpacitySettingItem(menu, module);
+      addDebugOpacitySettingItems(menu, module);
     } else {
       addDebugThemeItems(menu, module);
     }

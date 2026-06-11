@@ -21,6 +21,11 @@ Click a mode button to set a channel mode:
 - Crossfade: crossfade between the main input and channel input using the attenuverter knob
 - VCA bipolar: multiplication; main input is the signal, channel input is bipolar gain
 - VCA unipolar: multiplication; main input is the signal, channel input is unipolar gain
+- Min: output the lesser of the main input and the channel input
+- Max: output the greater of the main input and the channel input
+- Compare: output 10V when the main input exceeds the channel input, otherwise 0V
+
+In Min, Max, and Compare modes, the channel attenuverter and offset shape the channel side of the comparison (`channel input × attenuverter + offset`); the offset is not re-applied to the output. With nothing patched into a channel, the offset knob alone sets a fixed clamp level (Min: ceiling, Max: floor) or comparator threshold. Compare always outputs a clean 0V/10V gate.
 
 ## Right-Click Options
 
@@ -37,4 +42,3 @@ When Multiple inserts break normalization is off, a later shorter insert does no
 ### Quirks
 
 - Mely Porge doesn't clip output voltages.
-- In Insert mode, the global offset still applies when an insert is active.
