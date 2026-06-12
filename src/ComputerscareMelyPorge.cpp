@@ -7,8 +7,8 @@ struct ComputerscareMelyPorge;
 static const int MOLLYS_PORRIDGE_BLOCKS = 16;
 
 static const char* MelyPorgeModeNames[] = {
-    "Add",          "Insert", "Crossfade", "VCA bipolar",
-    "VCA unipolar", "Min",    "Max",       "Compare",
+    "Add",          "Insert",  "Crossfade", "VCA bipolar",
+    "VCA unipolar", "Minimum", "Maximum",   "Compare",
 };
 
 static const char* MelyPorgeModeCodes[] = {"ADD", "INS", "XFD", "VCAB",
@@ -22,7 +22,7 @@ static const char* MelyPorgeModeDescriptions[] = {
     "Multiplication: Main input is the signal, channel input is unipolar gain",
     "Output the lesser of the main input and the channel input.",
     "Output the greater of the main input and the channel input.",
-    "Output 10V when the main input exceeds the channel input, otherwise 0V.",
+    "Output 10V when the channel input exceeds the main input, otherwise 0V.",
 };
 
 static const char* MelyPorgeNormalizationNames[] = {
@@ -399,7 +399,7 @@ struct ComputerscareMelyPorge : ComputerscarePolyModule {
       case MODE_MAX:
         return std::max(main, getInsertVoltage(blockIndex, channel));
       case MODE_COMPARE:
-        return main > getInsertVoltage(blockIndex, channel) ? 10.f : 0.f;
+        return getInsertVoltage(blockIndex, channel) > main ? 10.f : 0.f;
       default:
         return main;
     }
@@ -588,7 +588,7 @@ struct MelyPorgeNormalizationOverlay : Widget {
   }
 
   void drawRun(const DrawArgs& args, int sourceIndex, int segmentStartIndex,
-               int runEndIndex) {
+               int runEndIndex, bool disabled) {
     int row = segmentStartIndex % 8;
     int lastRow = (runEndIndex - 1) % 8;
     bool rightColumn = segmentStartIndex >= 8;
@@ -627,18 +627,24 @@ struct MelyPorgeNormalizationOverlay : Widget {
             y + height * 0.18f + runNoise(segmentStartIndex, 23) * wiggle),
     };
 
-    bool dark = sourceIndex % 2 == 1;
-    int baseRed = 0x24;
-    int baseGreen = dark ? 0x86 : 0xc9;
-    int baseBlue = dark ? 0x73 : 0xa6;
-    float randomDarkness = (runNoise(sourceIndex, 24) + 1.f) * 12.f;
-    int red = clamp((int)(baseRed - randomDarkness), 0, 255);
-    int green = clamp((int)(baseGreen - randomDarkness), 0, 255);
-    int blue = clamp((int)(baseBlue - randomDarkness), 0, 255);
-    NVGcolor fill = nvgRGBA(red, green, blue, 0x90);
-    NVGcolor stroke =
-        nvgRGBA(clamp(red - 18, 0, 255), clamp(green - 18, 0, 255),
-                clamp(blue - 18, 0, 255), 0xd0);
+    NVGcolor fill;
+    NVGcolor stroke;
+    if (disabled) {
+      fill = nvgRGBA(0x86, 0x86, 0x86, 0x78);
+      stroke = nvgRGBA(0x66, 0x66, 0x66, 0xb8);
+    } else {
+      bool dark = sourceIndex % 2 == 1;
+      int baseRed = 0x24;
+      int baseGreen = dark ? 0x86 : 0xc9;
+      int baseBlue = dark ? 0x73 : 0xa6;
+      float randomDarkness = (runNoise(sourceIndex, 24) + 1.f) * 12.f;
+      int red = clamp((int)(baseRed - randomDarkness), 0, 255);
+      int green = clamp((int)(baseGreen - randomDarkness), 0, 255);
+      int blue = clamp((int)(baseBlue - randomDarkness), 0, 255);
+      fill = nvgRGBA(red, green, blue, 0x90);
+      stroke = nvgRGBA(clamp(red - 18, 0, 255), clamp(green - 18, 0, 255),
+                       clamp(blue - 18, 0, 255), 0xd0);
+    }
 
     nvgBeginPath(args.vg);
     nvgMoveTo(args.vg, points[0].x, points[0].y);
@@ -671,15 +677,21 @@ struct MelyPorgeNormalizationOverlay : Widget {
         }
 
         int runStartIndex = blockIndex;
+        bool disabled = isDisabledBlock(blockIndex);
         blockIndex++;
         while (blockIndex < columnEnd &&
-               sourceForBlock(blockIndex) == sourceIndex) {
+               sourceForBlock(blockIndex) == sourceIndex &&
+               isDisabledBlock(blockIndex) == disabled) {
           blockIndex++;
         }
 
-        drawRun(args, sourceIndex, runStartIndex, blockIndex);
+        drawRun(args, sourceIndex, runStartIndex, blockIndex, disabled);
       }
     }
+  }
+
+  bool isDisabledBlock(int blockIndex) {
+    return module && blockIndex > module->polyChannels - 1;
   }
 
   int sourceForBlock(int blockIndex) {
@@ -952,7 +964,8 @@ struct MelyPorgeModeButton : ComputerscareBlankButton {
     }
 
     int mode = currentMode();
-    hoverTooltip->text = std::string(MelyPorgeModeNames[mode]) + "\n" +
+    hoverTooltip->text = "Channel " + std::to_string(blockIndex + 1) +
+                         " Mode:\n" + MelyPorgeModeNames[mode] + "\n" +
                          MelyPorgeModeDescriptions[mode];
   }
 
