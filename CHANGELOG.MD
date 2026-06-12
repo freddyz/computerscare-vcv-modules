@@ -2,10 +2,17 @@
 Sloly Pit:
 - Polyphonic splitter/router, split a poly signal into multiple poly signals
 
+Mely Porge:
+- Polyphonic merge / insert / vca utility / comparison utility
+
 Portaloof:
 - Draw all sources at full alpha
 - Drag/Mouse wheel control
 - Blend modes
+
+Debug:
+- Add "bars" graphic as optional additional visualization
+- Additional visualization settings
 
 Custom Blank:
 - gifs continue animating during crossfade
@@ -15,6 +22,10 @@ Knoly Pobs:
 - Add unipolar/bipolar main knob range option
 
 Father & Son:
+- Performance improvements
+
+Horse a Doodle Doo:
+- "Ch1 triggers all sequences" mode: now emits exact same gates for all channels
 - Performance improvements
 
 
