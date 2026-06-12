@@ -1,3 +1,4 @@
+#include <array>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -38,6 +39,8 @@ struct HorseGateModeParam : SwitchQuantity {
 };
 
 struct HorseSequencer {
+  static const int MAX_STEPS = 64;
+
   float pattern = 0.f;
   int numSteps = 8;
   int currentStep = -1;
@@ -62,12 +65,12 @@ struct HorseSequencer {
                          10939, 22721, 17851, 10163};
   int channel = 0;
 
-  std::vector<int> absoluteSequence;
-  std::vector<float> cvSequence;
-  std::vector<float> cv2Sequence;
-  std::vector<float> gateLengthSequence;
+  std::array<int, MAX_STEPS> absoluteSequence;
+  std::array<float, MAX_STEPS> cvSequence;
+  std::array<float, MAX_STEPS> cv2Sequence;
+  std::array<float, MAX_STEPS> gateLengthSequence;
 
-  std::vector<int> timeToNextStep;
+  std::array<int, MAX_STEPS> timeToNextStep;
 
   HorseSequencer() {}
   HorseSequencer(float patt, int steps, float dens, int ch, float phi,
@@ -79,19 +82,14 @@ struct HorseSequencer {
     phase = phi;
     phase2 = phi2;
     gatePhase = gatePhi;
+    absoluteSequence.fill(0);
+    cvSequence.fill(0.f);
+    cv2Sequence.fill(0.f);
+    gateLengthSequence.fill(0.f);
+    timeToNextStep.fill(0);
     makeAbsolute();
   }
   void makeAbsolute() {
-    std::vector<int> newSeq;
-    std::vector<float> newCV;
-    std::vector<float> newCV2;
-    std::vector<float> newGateLength;
-
-    newSeq.resize(0);
-    newCV.resize(0);
-    newCV2.resize(0);
-    newGateLength.resize(0);
-
     float cvRoot = 0.f;
     float cv2Root = 0.f;
     float trigConst = 2 * M_PI / ((float)numSteps);
@@ -124,18 +122,13 @@ struct HorseSequencer {
         gateLengthVal += std::sin(primes[gateLengthArgIndex] * arg +
                                   otherPrimes[gateThetaIndex] + gatePhase);
       }
-      newSeq.push_back(val < (density - 0.5) * 4 * 2 ? 1 : 0);
-      newCV.push_back(cvRoot + (cvVal + 4) / .8);
-      newCV2.push_back(cv2Root + (cv2Val + 4) / .8);
+      absoluteSequence[i] = val < (density - 0.5) * 4 * 2 ? 1 : 0;
+      cvSequence[i] = cvRoot + (cvVal + 4) / .8;
+      cv2Sequence[i] = cv2Root + (cv2Val + 4) / .8;
 
       // quantized to 16 lengths
-      newGateLength.push_back(std::floor(8 + 2 * gateLengthVal));
+      gateLengthSequence[i] = std::floor(8 + 2 * gateLengthVal);
     }
-    // printVector(newSeq);
-    absoluteSequence = newSeq;
-    cvSequence = newCV;
-    cv2Sequence = newCV2;
-    gateLengthSequence = newGateLength;
 
     setTimeToNextStep();
   }
@@ -164,7 +157,7 @@ struct HorseSequencer {
   }
   void change(float patt, int steps, float dens, float phi, float phi2,
               float gatePhi) {
-    numSteps = std::max(1, steps);
+    numSteps = math::clamp(steps, 1, MAX_STEPS);
     density = std::fmax(0, dens);
     pattern = patt;
     phase = phi;
@@ -185,8 +178,6 @@ struct HorseSequencer {
     }
   }
   void setTimeToNextStep() {
-    timeToNextStep.resize(0);
-    timeToNextStep.resize(numSteps);
     int counter = 0;
     int timeIndex = 0;
     for (unsigned int i = 0; i < (unsigned int)numSteps * 2; i++) {
@@ -294,6 +285,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
   float gateLengthScale = 1.f;
 
   int mode = 1;
+  int gateMode = 1;
 
   int seqVal[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   float cvVal[16] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f,
@@ -571,6 +563,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
     gateLengthScale = params[GATE_LENGTH_SCALE].getValue();
 
     mode = params[MODE_KNOB].getValue();
+    gateMode = params[GATE_MODE].getValue();
     lastStepsKnob = std::floor(params[STEPS_KNOB].getValue());
     lastPolyKnob = std::floor(params[POLY_KNOB].getValue());
 
@@ -613,7 +606,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
       stepsVal += std::floor(params[STEPS_SPREAD].getValue() * i * stepsVal);
       densityVal += params[DENSITY_SPREAD].getValue() * i / 10;
 
-      stepsVal = std::max(2, stepsVal);
+      stepsVal = math::clamp(stepsVal, 2, HorseSequencer::MAX_STEPS);
       densityVal = std::fmax(0, std::fmin(1, densityVal));
 
       seq[i].checkAndArm(patternVal, stepsVal, densityVal, lastPhaseKnob,
@@ -623,8 +616,6 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
   void processChannel(int ch, bool clocked, bool reset, bool clockInputHigh,
                       int overrideMode = 0,
                       bool overriddenTriggerHigh = false) {
-    int gateMode = params[GATE_MODE].getValue();
-
     if (reset) {
       seq[ch].armChange();
     }
@@ -718,13 +709,15 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
     bool currentReset[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     bool isHigh[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
+    int clockProcessChannels =
+        std::max(1, std::min(polyChannels, inputs[CLOCK_INPUT].getChannels()));
+    int resetProcessChannels =
+        std::max(1, std::min(polyChannels, inputs[RESET_INPUT].getChannels()));
+
     float currentSyncTime;
-    for (int i = 0; i < 16; i++) {
+    for (int i = 0; i < clockProcessChannels; i++) {
       currentClock[i] = manualClock || clockInputTrigger[i].process(
                                            inputs[CLOCK_INPUT].getVoltage(i));
-      currentReset[i] =
-          resetInputTrigger[i].process(inputs[RESET_INPUT].getVoltage(i)) ||
-          manualReset;
       isHigh[i] = manualClock || clockInputTrigger[i].isHigh();
 
       currentSyncTime = syncTimer[i].process(args.sampleTime);
@@ -734,9 +727,15 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
       }
     }
 
+    for (int i = 0; i < resetProcessChannels; i++) {
+      currentReset[i] =
+          resetInputTrigger[i].process(inputs[RESET_INPUT].getVoltage(i)) ||
+          manualReset;
+    }
+
     if (mode == 0) {
       // each poly channel processes independent trigger and cv
-      for (int i = 0; i < 16; i++) {
+      for (int i = 0; i < polyChannels; i++) {
         processChannel(i, currentClock[clockChannels[i] - 1],
                        currentReset[resetChannels[i] - 1],
                        isHigh[clockChannels[i] - 1]);
@@ -745,7 +744,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
       // all poly channels 2-16 CV only changes along with channel 1 trigger
       // what to do with the triggers for these channels?
       // force to 1 channel gate output?
-      for (int i = 0; i < 16; i++) {
+      for (int i = 0; i < polyChannels; i++) {
         if (i == 0) {
           processChannel(i, currentClock[clockChannels[i] - 1],
                          currentReset[resetChannels[i] - 1],
@@ -756,9 +755,13 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
                          isHigh[clockChannels[i] - 1], mode, seqVal[0]);
         }
       }
+      float ch1TriggerOutput = outputs[TRIGGER_OUTPUT].getVoltage(0);
+      for (int i = 1; i < polyChannels; i++) {
+        outputs[TRIGGER_OUTPUT].setVoltage(ch1TriggerOutput, i);
+      }
     } else if (mode == 2) {
       // trigger cascade
-      for (int i = 0; i < 16; i++) {
+      for (int i = 0; i < polyChannels; i++) {
         if (i == 0) {
           processChannel(i, currentClock[clockChannels[i] - 1],
                          currentReset[resetChannels[i] - 1],
@@ -771,7 +774,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
       }
     } else if (mode == 3) {
       // eoc cascade: previous channels EOC clocks next channels CV and trigger
-      for (int i = 0; i < 16; i++) {
+      for (int i = 0; i < polyChannels; i++) {
         if (i == 0) {
           processChannel(i, currentClock[clockChannels[i] - 1],
                          currentReset[resetChannels[i] - 1],

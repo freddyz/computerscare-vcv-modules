@@ -40,6 +40,8 @@ Polyphonic voltmeter, sample & hold, and random voltage source.
 
 **Random Generator Range:** Sets the voltage range for Internal input mode and module randomization. Ranges include 0v to +10v, -5v to +5v, 0v to +5v, 0v to +1v, -1v to +1v, -10v to +10v, -2v to +2v, and 0v to +2v.
 
+**Visual:** Sets bar mode, text opacity, and bars opacity.
+
 ### Modes of Operation
 
 There are 3 clock modes and 3 input modes. The clock mode decides when values are updated. The input mode decides where the new values come from. The small channel selector knobs choose the active channel for Single-Channel clock and input modes.
