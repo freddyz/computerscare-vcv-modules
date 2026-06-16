@@ -55,6 +55,9 @@ jobs:
           pushd ${{ env.rack-plugin-toolchain-dir }}
           make plugin-build-${{ matrix.platform }}
 
+      - name: Validate packaged assets
+        run: node "$GITHUB_WORKSPACE/scripts/check-packaged-assets.js" "${{ env.rack-plugin-toolchain-dir }}/plugin-build"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -97,6 +100,9 @@ jobs:
           make -j dep
           make -j dist
 
+      - name: Validate packaged assets
+        run: node scripts/check-packaged-assets.js dist
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -108,6 +114,8 @@ jobs:
     needs: build-mac
     runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v6
+
       - name: Download mac-x64
         uses: actions/download-artifact@v8
         with:
@@ -138,6 +146,9 @@ jobs:
           OUTNAME=$(basename "$X64_PLUGIN" | sed 's/-mac-x64/-mac-universal/')
           tar -cf universal.tar -C x64-unpacked .
           zstd -19 universal.tar -o "$OUTNAME"
+
+      - name: Validate packaged assets
+        run: node scripts/check-packaged-assets.js *.vcvplugin
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
