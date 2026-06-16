@@ -163,6 +163,12 @@
       "description": "Polyphonic input processor with 16 insert channels",
       "tags": ["Polyphonic", "Utility", "Mixer", "Attenuator", "VCA"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#mely-porge"
+    },
+    {
+      "slug": "computerscare-labs",
+      "name": "Labs",
+      "description": "Patch utility experiments",
+      "tags": ["Utility"]
     }
   ]
 }
