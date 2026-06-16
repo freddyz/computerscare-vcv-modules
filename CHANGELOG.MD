@@ -1,4 +1,4 @@
-# 2.3.1
+# 2.3.2
 Sloly Pit:
 - Polyphonic splitter/router, split a poly signal into multiple poly signals
 
