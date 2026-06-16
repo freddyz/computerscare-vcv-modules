@@ -56,7 +56,7 @@ jobs:
           make plugin-build-${{ matrix.platform }}
 
       - name: Validate packaged assets
-        run: node "$GITHUB_WORKSPACE/scripts/check-packaged-assets.js" "${{ env.rack-plugin-toolchain-dir }}/plugin-build"
+        run: python3 "$GITHUB_WORKSPACE/scripts/check-packaged-assets.py" "${{ env.rack-plugin-toolchain-dir }}/plugin-build"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -101,7 +101,7 @@ jobs:
           make -j dist
 
       - name: Validate packaged assets
-        run: node scripts/check-packaged-assets.js dist
+        run: python3 scripts/check-packaged-assets.py dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -148,7 +148,7 @@ jobs:
           zstd -19 universal.tar -o "$OUTNAME"
 
       - name: Validate packaged assets
-        run: node scripts/check-packaged-assets.js *.vcvplugin
+        run: python3 scripts/check-packaged-assets.py *.vcvplugin
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
