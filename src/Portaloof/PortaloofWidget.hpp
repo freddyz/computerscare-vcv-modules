@@ -255,10 +255,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     bgPanel->box.size = Vec(box.size.x - DISPLAY_X, box.size.y);
     addChild(bgPanel);
 
-    panelSvg = APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/panels/Portaloof-Panel.svg"));
-    minimizedPanelSvg = APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/panels/Portaloof-Minimized.svg"));
+    panelSvg = APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/panels/ComputerscarePortaloofPanel.svg"));
+    minimizedPanelSvg = APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/panels/ComputerscarePortaloofMinimized.svg"));
     tinyJackSvg = APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/components/tiny-jack.svg"));
     {
@@ -444,8 +444,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       }
     }
 
-    headerSvg = APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/panels/Portaloof-Header.svg"));
+    headerSvg = APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/panels/ComputerscarePortaloofHeader.svg"));
   }
 
   void trackInputPort(PortWidget* port) {
