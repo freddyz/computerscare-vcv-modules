@@ -55,9 +55,6 @@ jobs:
           pushd ${{ env.rack-plugin-toolchain-dir }}
           make plugin-build-${{ matrix.platform }}
 
-      - name: Validate packaged assets
-        run: python3 "$GITHUB_WORKSPACE/scripts/check-packaged-assets.py" "${{ env.rack-plugin-toolchain-dir }}/plugin-build"
-
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -99,9 +96,6 @@ jobs:
           export CROSS_COMPILE=$CROSS_COMPILE_TARGET_${{ matrix.config.arch }}
           make -j dep
           make -j dist
-
-      - name: Validate packaged assets
-        run: python3 scripts/check-packaged-assets.py dist
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -147,21 +141,32 @@ jobs:
           tar -cf universal.tar -C x64-unpacked .
           zstd -19 universal.tar -o "$OUTNAME"
 
-      - name: Validate packaged assets
-        run: python3 scripts/check-packaged-assets.py *.vcvplugin
-
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           path: "*.vcvplugin"
           name: mac-universal
 
+  validate-packaged-assets:
+    name: Validate packaged assets
+    needs: [build, build-mac, mac-universal]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: _artifacts
+
+      - name: Validate packaged assets
+        run: python3 scripts/check-packaged-assets.py _artifacts
+
   # Only runs when a v* tag is pushed. Verifies plugin.json version matches the tag,
   # then creates a GitHub Release with lin, win, and mac-universal .vcvplugin files.
   publish:
     name: Publish
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [build, build-mac, mac-universal]
+    needs: [build, build-mac, mac-universal, validate-packaged-assets]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
