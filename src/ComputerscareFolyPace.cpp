@@ -437,6 +437,7 @@ struct FolyPaceWidget : ModuleWidget {
 
   void appendContextMenu(Menu* menu) override {
     FolyPace* module = dynamic_cast<FolyPace*>(this->module);
+    if (!module) return;
 
     menu->addChild(new MenuSeparator);
 

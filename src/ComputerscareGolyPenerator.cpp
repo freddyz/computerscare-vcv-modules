@@ -247,6 +247,7 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
   void appendContextMenu(Menu* menu) override {
     ComputerscareGolyPenerator* penerator =
         dynamic_cast<ComputerscareGolyPenerator*>(this->module);
+    if (!penerator) return;
 
     menu->addChild(new MenuParamSlider(
         penerator->paramQuantities[ComputerscareGolyPenerator::COLOR]));

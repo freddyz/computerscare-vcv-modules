@@ -362,6 +362,7 @@ struct StolyFickPigureWidget : ModuleWidget {
 
   void appendContextMenu(Menu* menu) override {
     StolyFickPigure* module = dynamic_cast<StolyFickPigure*>(this->module);
+    if (!module) return;
 
     menu->addChild(new MenuSeparator);
 

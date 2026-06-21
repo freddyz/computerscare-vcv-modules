@@ -606,6 +606,7 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
   void appendContextMenu(Menu* menu) override {
     ComputerscareLaundrySoup* module =
         dynamic_cast<ComputerscareLaundrySoup*>(this->laundry);
+    if (!module) return;
 
     menu->addChild(new MenuEntry);
 
