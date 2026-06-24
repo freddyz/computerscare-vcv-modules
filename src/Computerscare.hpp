@@ -38,7 +38,6 @@ extern Model* modelComputerscareDrolyPaw;
 extern Model* modelComputerscareTolyPoolsV2;
 extern Model* modelComputerscarePortaloof;
 
-extern Model* modelComputerscareNomplexPumbers;
 extern Model* modelComputerscareCompolyLane;
 extern Model* modelComputerscareComplexGenerator;
 extern Model* modelComputerscareComplexTransformer;

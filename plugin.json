@@ -146,18 +146,10 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/portaloof.md"
     },
     {
-      "slug": "computerscare-nomplex-pumbers",
-      "name": "Nomplex Pumbers",
-      "description": "Complex Number Generator",
-      "tags": ["Utility", "Polyphonic"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/nomplex-pumbers.md"
-    },
-    {
       "slug": "computerscare-compoly-lane",
       "name": "Compoly Lane",
       "description": "Two scaled and offset CV lanes converted to compoly output",
-      "tags": ["Utility", "Polyphonic"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/nomplex-pumbers.md"
+      "tags": ["Utility", "Polyphonic"]
     },
     {
       "slug": "computerscare-complex-generator",

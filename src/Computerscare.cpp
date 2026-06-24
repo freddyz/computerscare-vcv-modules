@@ -33,7 +33,6 @@ void init(Plugin* p) {
   p->addModel(modelComputerscareTolyPoolsV2);
   p->addModel(modelComputerscarePortaloof);
 
-  p->addModel(modelComputerscareNomplexPumbers);
   p->addModel(modelComputerscareCompolyLane);
   p->addModel(modelComputerscareComplexGenerator);
   p->addModel(modelComputerscareComplexTransformer);
