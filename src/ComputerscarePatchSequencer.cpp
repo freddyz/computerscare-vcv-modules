@@ -563,7 +563,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
     NumberDisplayWidget3* display = new NumberDisplayWidget3();
     display->box.pos = Vec(56, 40);
     display->box.size = Vec(50, 20);
-    display->value = &module->addressPlusOne;
+    display->value = module ? &module->addressPlusOne : nullptr;
     display->module = module;
     addChild(display);
 
@@ -572,7 +572,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
     stepsDisplay->box.pos = Vec(150, 40);
     stepsDisplay->box.size = Vec(50, 20);
     stepsDisplay->module = module;
-    stepsDisplay->value = &module->numAddresses;
+    stepsDisplay->value = module ? &module->numAddresses : nullptr;
     addChild(stepsDisplay);
 
     // number-of-steps dial.   Discrete, 16 positions
@@ -593,7 +593,7 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
     displayEdit->box.pos = Vec(246, 40);
     displayEdit->box.size = Vec(50, 20);
     displayEdit->module = module;
-    displayEdit->value = &module->editAddressPlusOne;
+    displayEdit->value = module ? &module->editAddressPlusOne : nullptr;
     addChild(displayEdit);
     fatherSon = module;
   }
@@ -679,6 +679,7 @@ struct FatherSonChannelsItem : MenuItem {
 void ComputerscarePatchSequencerWidget::appendContextMenu(Menu* menu) {
   ComputerscarePatchSequencer* patchSequencer =
       dynamic_cast<ComputerscarePatchSequencer*>(this->module);
+  if (!patchSequencer) return;
 
   MenuLabel* spacerLabel = new MenuLabel();
   menu->addChild(spacerLabel);

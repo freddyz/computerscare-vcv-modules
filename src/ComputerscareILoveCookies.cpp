@@ -734,6 +734,7 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 void ComputerscareILoveCookiesWidget::appendContextMenu(Menu* menu) {
   ComputerscareILoveCookies* cookiesModule =
       dynamic_cast<ComputerscareILoveCookies*>(this->module);
+  if (!cookiesModule) return;
 
   MenuLabel* spacerLabel = new MenuLabel();
   menu->addChild(spacerLabel);

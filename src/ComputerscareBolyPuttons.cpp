@@ -306,6 +306,7 @@ struct MomentaryModeMenuItem : MenuItem {
 void ComputerscareBolyPuttonsWidget::appendContextMenu(Menu* menu) {
   ComputerscareBolyPuttons* bolyPuttons =
       dynamic_cast<ComputerscareBolyPuttons*>(this->module);
+  if (!bolyPuttons) return;
 
   menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
   menu->addChild(

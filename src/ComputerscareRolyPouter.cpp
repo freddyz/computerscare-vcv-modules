@@ -257,6 +257,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
   void appendContextMenu(Menu* menu) override {
     ComputerscareRolyPouter* module =
         dynamic_cast<ComputerscareRolyPouter*>(this->module);
+    if (!module) return;
 
     struct ssmi : MenuItem {
       ComputerscareRolyPouter* pouter;

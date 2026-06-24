@@ -285,6 +285,8 @@ struct PoolsModeItem : MenuItem {
 void ComputerscareTolyPoolsWidgetV2::appendContextMenu(Menu* menu) {
   ComputerscareTolyPoolsV2* pools =
       dynamic_cast<ComputerscareTolyPoolsV2*>(this->module);
+  if (!pools) return;
+
   menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
   menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Rotation Mode"));

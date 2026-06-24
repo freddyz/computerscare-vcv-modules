@@ -1114,6 +1114,7 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
   void appendContextMenu(Menu* menu) override {
     ComputerscareHorseADoodleDoo* horse =
         dynamic_cast<ComputerscareHorseADoodleDoo*>(this->module);
+    if (!horse) return;
 
     struct CV1Submenu : MenuItem {
       ComputerscareHorseADoodleDoo* module;

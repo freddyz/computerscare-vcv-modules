@@ -1305,8 +1305,8 @@ struct GiantFrameDisplay : TransparentWidget {
 struct ComputerscareBlankWidget : ModuleWidget {
   ComputerscareBlankWidget(ComputerscareBlank* blankModule) {
     setModule(blankModule);
+    this->blankModule = blankModule;
     if (blankModule) {
-      this->blankModule = blankModule;
       box.size = Vec(blankModule->width, blankModule->height);
     } else {
       box.size = Vec(8 * 15, 380);
@@ -1339,6 +1339,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
 
     ComputerscareResizeHandle* rightHandle = new ComputerscareResizeHandle();
     rightHandle->right = true;
+    this->leftHandle = leftHandle;
     this->rightHandle = rightHandle;
     addChild(leftHandle);
     addChild(rightHandle);
@@ -1356,6 +1357,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
   void appendContextMenu(Menu* menu) override {
     ComputerscareBlank* blank =
         dynamic_cast<ComputerscareBlank*>(this->blankModule);
+    if (!blank) return;
 
     menu->addChild(new MenuEntry);
 
@@ -1502,6 +1504,10 @@ struct ComputerscareBlankWidget : ModuleWidget {
     }
   };
   void onHoverKey(const event::HoverKey& e) override {
+    if (!blankModule) {
+      ModuleWidget::onHoverKey(e);
+      return;
+    }
     float dZoom = 0.05;
     float dPosition = 10.f;
     if (e.isConsumed()) return;
@@ -1619,14 +1625,14 @@ struct ComputerscareBlankWidget : ModuleWidget {
     ModuleWidget::onPathDrop(e);
   }
 
-  ComputerscareBlank* blankModule;
-  PNGDisplay* pngDisplay;
-  ComputerscareSVGPanel* panel;
-  BGPanel* bgPanel;
-  TransparentWidget* display;
-  ComputerscareResizeHandle* leftHandle;
-  ComputerscareResizeHandle* rightHandle;
-  GiantFrameDisplay* frameDisplay;
+  ComputerscareBlank* blankModule = nullptr;
+  PNGDisplay* pngDisplay = nullptr;
+  ComputerscareSVGPanel* panel = nullptr;
+  BGPanel* bgPanel = nullptr;
+  TransparentWidget* display = nullptr;
+  ComputerscareResizeHandle* leftHandle = nullptr;
+  ComputerscareResizeHandle* rightHandle = nullptr;
+  GiantFrameDisplay* frameDisplay = nullptr;
 };
 
 Model* modelComputerscareBlank =
