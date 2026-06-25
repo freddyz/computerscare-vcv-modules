@@ -43,8 +43,8 @@ struct ComputerscareTheHumors : ComputerscarePolyModule {
 
     configSwitch(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels",
                  polyChannelLabels(false));
-    configParam(PROGRAM_KNOB, 0.f, 10.f, 0.f, "Pattern");
-    configInput(PROGRAM_CV_INPUT, "Pattern CV");
+    configParam(PROGRAM_KNOB, 0.f, 10.f, 0.f, "Program");
+    configInput(PROGRAM_CV_INPUT, "Program CV");
 
     configInput(CLOCK_INPUT, "Clock");
     configInput(RHYTHM_INPUT, "Rhythm");
@@ -108,9 +108,10 @@ struct ComputerscareTheHumorsWidget : ModuleWidget {
     addChild(new PolyOutputChannelsWidget(
         Vec(202, 24), module, ComputerscareTheHumors::POLY_CHANNELS));
 
-    addParam(createParam<ScrambleKnob>(Vec(104, 25), module,
+    addChild(new TheHumorsLabel("Program", Vec(111, 18), 15.f, BLACK, 2, 82.f));
+    addParam(createParam<ScrambleKnob>(Vec(126, 34), module,
                                        ComputerscareTheHumors::PROGRAM_KNOB));
-    addInput(createInput<InPort>(Vec(145, 25), module,
+    addInput(createInput<InPort>(Vec(160, 28), module,
                                  ComputerscareTheHumors::PROGRAM_CV_INPUT));
 
     const std::string humorLabels[HUMORS_COUNT] = {"Blood", "Yellow Bile",
@@ -124,7 +125,7 @@ struct ComputerscareTheHumorsWidget : ModuleWidget {
                                   19.f, BLACK, 2, 112.f));
       addParam(createParam<BigSmoothKnob>(
           Vec(knobX, knobY), module, ComputerscareTheHumors::HUMOR_KNOB + i));
-      addParam(createParam<SmallKnob>(Vec(controlX + 20, controlY + 64), module,
+      addParam(createParam<SmallKnob>(Vec(controlX + 20, controlY + 66), module,
                                       ComputerscareTheHumors::HUMOR_ATTEN + i));
       addInput(createInput<InPort>(Vec(controlX + 49, controlY + 62), module,
                                    ComputerscareTheHumors::HUMOR_CV_INPUT + i));
@@ -136,12 +137,12 @@ struct ComputerscareTheHumorsWidget : ModuleWidget {
       const float inputX = 28.f + (i % 2) * 44.f;
       const float outputX = 136.f + (i % 2) * 44.f;
       const float y = (i / 2 == 0) ? 300.f : 344.f;
-      addChild(new TheHumorsLabel(ioLabels[i], Vec(inputX - 18, y - 14), 13.f,
-                                  BLACK, 2, 64.f));
+      addChild(new TheHumorsLabel(ioLabels[i], Vec(inputX - 29.5f, y - 14),
+                                  13.f, BLACK, 2, 74.f));
       addInput(createInput<InPort>(Vec(inputX, y), module,
                                    ComputerscareTheHumors::CLOCK_INPUT + i));
-      addChild(new TheHumorsLabel(ioLabels[i], Vec(outputX - 18, y - 14), 13.f,
-                                  BLACK, 2, 64.f));
+      addChild(new TheHumorsLabel(ioLabels[i], Vec(outputX - 29.5f, y - 14),
+                                  13.f, BLACK, 2, 74.f));
       addOutput(createOutput<InPort>(Vec(outputX, y), module,
                                      ComputerscareTheHumors::CLOCK_OUTPUT + i));
     }
