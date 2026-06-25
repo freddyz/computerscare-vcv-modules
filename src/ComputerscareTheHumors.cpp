@@ -83,13 +83,14 @@ struct ComputerscareTheHumors : ComputerscarePolyModule {
 
 struct TheHumorsLabel : SmallLetterDisplay {
   TheHumorsLabel(const std::string& label, Vec pos, float size = 14.f,
-                 NVGcolor color = BLACK) {
+                 NVGcolor color = BLACK, int align = 1, float rowWidth = 82.f) {
     box.pos = pos;
-    box.size = Vec(82, 12);
+    box.size = Vec(rowWidth, 12);
     fontSize = size;
     value = label;
-    textAlign = 1;
+    textAlign = align;
     textColor = color;
+    breakRowWidth = rowWidth;
   }
 };
 
@@ -107,22 +108,25 @@ struct ComputerscareTheHumorsWidget : ModuleWidget {
     addChild(new PolyOutputChannelsWidget(
         Vec(202, 24), module, ComputerscareTheHumors::POLY_CHANNELS));
 
-    addParam(createParam<ScrambleKnob>(Vec(104, 20), module,
+    addParam(createParam<ScrambleKnob>(Vec(104, 25), module,
                                        ComputerscareTheHumors::PROGRAM_KNOB));
-    addInput(createInput<InPort>(Vec(149, 25), module,
+    addInput(createInput<InPort>(Vec(145, 25), module,
                                  ComputerscareTheHumors::PROGRAM_CV_INPUT));
 
     const std::string humorLabels[HUMORS_COUNT] = {"Blood", "Yellow Bile",
                                                    "Black Bile", "Phlegm"};
     for (int i = 0; i < HUMORS_COUNT; i++) {
-      const float x = (i % 2 == 0) ? 36.f : 126.f;
-      const float y = (i / 2 == 0) ? 92.f : 208.f;
-      addChild(new TheHumorsLabel(humorLabels[i], Vec(x - 2, y - 22), 19.f));
+      const float controlX = (i % 2 == 0) ? 20.f : 130.f;
+      const float controlY = (i / 2 == 0) ? 72.f : 190.f;
+      const float knobX = controlX + 26.f;
+      const float knobY = controlY + 20.f;
+      addChild(new TheHumorsLabel(humorLabels[i], Vec(knobX - 42, knobY - 22),
+                                  19.f, BLACK, 2, 112.f));
       addParam(createParam<BigSmoothKnob>(
-          Vec(x, y), module, ComputerscareTheHumors::HUMOR_KNOB + i));
-      addParam(createParam<SmallKnob>(Vec(x + 15, y + 58), module,
+          Vec(knobX, knobY), module, ComputerscareTheHumors::HUMOR_KNOB + i));
+      addParam(createParam<SmallKnob>(Vec(controlX + 20, controlY + 64), module,
                                       ComputerscareTheHumors::HUMOR_ATTEN + i));
-      addInput(createInput<InPort>(Vec(x + 48, y + 56), module,
+      addInput(createInput<InPort>(Vec(controlX + 49, controlY + 62), module,
                                    ComputerscareTheHumors::HUMOR_CV_INPUT + i));
     }
 
@@ -131,13 +135,15 @@ struct ComputerscareTheHumorsWidget : ModuleWidget {
     for (int i = 0; i < HUMORS_COUNT; i++) {
       const float inputX = 28.f + (i % 2) * 44.f;
       const float outputX = 136.f + (i % 2) * 44.f;
-      const float y = 304.f + (i / 2) * 36.f;
-      addChild(new TheHumorsLabel(ioLabels[i], Vec(inputX - 2, y - 14), 13.f));
+      const float y = (i / 2 == 0) ? 300.f : 344.f;
+      addChild(new TheHumorsLabel(ioLabels[i], Vec(inputX - 18, y - 14), 13.f,
+                                  BLACK, 2, 64.f));
       addInput(createInput<InPort>(Vec(inputX, y), module,
                                    ComputerscareTheHumors::CLOCK_INPUT + i));
-      addChild(new TheHumorsLabel(ioLabels[i], Vec(outputX - 2, y - 14), 13.f));
-      addOutput(createOutput<OutPort>(
-          Vec(outputX, y), module, ComputerscareTheHumors::CLOCK_OUTPUT + i));
+      addChild(new TheHumorsLabel(ioLabels[i], Vec(outputX - 18, y - 14), 13.f,
+                                  BLACK, 2, 64.f));
+      addOutput(createOutput<InPort>(Vec(outputX, y), module,
+                                     ComputerscareTheHumors::CLOCK_OUTPUT + i));
     }
   }
 };
