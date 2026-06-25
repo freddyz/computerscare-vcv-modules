@@ -163,6 +163,13 @@
       "description": "Polyphonic input processor with 16 insert channels",
       "tags": ["Polyphonic", "Utility", "Mixer", "Attenuator", "VCA"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#mely-porge"
+    },
+    {
+      "slug": "computerscare-the-humors",
+      "name": "The Humors",
+      "description": "Four-humor pass-through utility scaffold",
+      "tags": ["Polyphonic", "Utility", "Quad"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/README.MD"
     }
   ]
 }
