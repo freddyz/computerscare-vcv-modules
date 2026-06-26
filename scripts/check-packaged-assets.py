@@ -24,7 +24,6 @@ SOURCE_EXTENSIONS = {
     ".hpp",
     ".hh",
     ".json",
-    ".md",
 }
 
 
@@ -48,6 +47,8 @@ def source_files():
 
 
 def add_ref(refs, asset, rel_file):
+    if asset.endswith("/"):
+        return
     refs.setdefault(asset, [])
     if rel_file not in refs[asset]:
         refs[asset].append(rel_file)

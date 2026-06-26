@@ -46,7 +46,6 @@
       "tags": ["Polyphonic", "Utility", "Sequencer", "Switch"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/father-and-son.md"
     },
-
     {
       "slug": "computerscare-laundry-soup",
       "name": "Laundry Soup",
@@ -54,7 +53,6 @@
       "tags": ["Sequencer", "Clock modulator", "Random", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/laundry-soup.md"
     },
-
     {
       "slug": "computerscare-i-love-cookies",
       "name": "I Love Cookies",
@@ -62,7 +60,6 @@
       "tags": ["Sequencer", "Utility", "Random", "Polyphonic", "Switch"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/i-love-cookies.md"
     },
-
     {
       "slug": "computerscare-roly-pouter",
       "name": "Roly Pouter",
@@ -70,7 +67,6 @@
       "tags": ["Polyphonic", "Utility"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#roly-pouter"
     },
-
     {
       "slug": "computerscare-toly-pools",
       "name": "Toly Pools",
@@ -86,7 +82,6 @@
       "tags": ["Polyphonic", "Utility", "Attenuator"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#toly-pools"
     },
-
     {
       "slug": "computerscare-soly-pequencer",
       "name": "Soly Pequencer",
@@ -149,6 +144,32 @@
       "description": "Visual experimentation.  A Kaleidoscopic mirror pointed back at your Rack, and yourself.",
       "tags": ["Visual"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/portaloof.md"
+    },
+    {
+      "slug": "computerscare-compoly-lane",
+      "name": "Compoly Lane",
+      "description": "Two scaled and offset CV lanes converted to compoly output",
+      "tags": ["Utility", "Polyphonic"]
+    },
+    {
+      "slug": "computerscare-complex-generator",
+      "name": "Complex Generator",
+      "description": "Complex Number Generator",
+      "tags": ["Utility", "Polyphonic"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/complex-generator.md"
+    },
+    {
+      "slug": "computerscare-complex-transformer",
+      "name": "Complex Transformer",
+      "description": "Complex Number Transformer",
+      "tags": ["Utility", "Polyphonic"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/complex-transformer.md"
+    },
+    {
+      "slug": "computerscare-nudiebug",
+      "name": "Nudiebug",
+      "description": "Resizable compoly debugger with voltage text and visualizations",
+      "tags": ["Utility", "Polyphonic", "Visual"]
     },
     {
       "slug": "computerscare-sloly-pit",

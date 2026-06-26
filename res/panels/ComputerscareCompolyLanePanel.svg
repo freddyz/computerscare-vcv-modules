@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="380" viewBox="0 0 180 380">
+  <rect width="180" height="380" fill="#c0e7de"/>
+  <rect x="0" y="0" width="180" height="24" fill="#24c9a6"/>
+  <rect x="0" y="356" width="180" height="24" fill="#24c9a6"/>
+  <text x="90" y="374" font-family="sans-serif" font-size="11" text-anchor="middle" fill="#101000">Compoly Lane</text>
+  <path d="M87 35v242" stroke="#186d5b" stroke-width="1.5" opacity="0.65"/>
+</svg>

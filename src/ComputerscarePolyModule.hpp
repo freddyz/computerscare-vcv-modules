@@ -71,8 +71,68 @@ struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
   }
 };
 
+struct TinyCompolyLanesSnapKnob : ComputerscareRoundKnob {
+  std::shared_ptr<Svg> manualChannelsSetSvg =
+      APP->window->loadSvg(asset::plugin(
+          pluginInstance, "res/components/compoly-lane-count-empty.svg"));
+  std::shared_ptr<Svg> autoChannelsSvg = APP->window->loadSvg(asset::plugin(
+      pluginInstance, "res/components/compoly-lane-count-auto.svg"));
+  int prevSetting = -1;
+  int paramId = -1;
+  bool allowAuto = true;
+  bool hasDoubleClickResetValue = false;
+  float doubleClickResetValue = 0.f;
+
+  ComputerscarePolyModule* module;
+
+  TinyCompolyLanesSnapKnob() {
+    setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/compoly-lane-count-empty.svg")));
+    shadow->opacity = 0.f;
+    snap = true;
+    ComputerscareRoundKnob();
+  }
+  void draw(const DrawArgs& args) override {
+    if (module) {
+      int currentSetting = module->params[paramId].getValue();
+      if (currentSetting != prevSetting) {
+        setSvg(allowAuto && currentSetting == 0 ? autoChannelsSvg
+                                                : manualChannelsSetSvg);
+        prevSetting = currentSetting;
+      }
+    }
+    ComputerscareRoundKnob::draw(args);
+  }
+
+  void onDoubleClick(const DoubleClickEvent& e) override {
+    if (!hasDoubleClickResetValue) {
+      ComputerscareRoundKnob::onDoubleClick(e);
+      return;
+    }
+
+    engine::ParamQuantity* pq = getParamQuantity();
+    if (!pq || !pq->isBounded()) return;
+
+    float oldValue = pq->getValue();
+    float newValue = std::max(
+        pq->getMinValue(), std::min(pq->getMaxValue(), doubleClickResetValue));
+    pq->setValue(newValue);
+
+    if (module && oldValue != newValue) {
+      history::ParamChange* h = new history::ParamChange;
+      h->name = "Reset parameter";
+      h->moduleId = module->id;
+      h->paramId = paramId;
+      h->oldValue = oldValue;
+      h->newValue = newValue;
+      APP->history->push(h);
+    }
+  }
+};
+
 struct PolyChannelsDisplay : SmallLetterDisplay {
   ComputerscarePolyModule* module;
+  int* channelCount = NULL;
   bool controlled = false;
   int prevChannels = -1;
   int paramId = -1;
@@ -88,7 +148,7 @@ struct PolyChannelsDisplay : SmallLetterDisplay {
   };
   void draw(const DrawArgs& args) {
     if (module) {
-      int newChannels = module->polyChannels;
+      int newChannels = channelCount ? *channelCount : module->polyChannels;
       if (newChannels != prevChannels) {
         std::string str = std::to_string(newChannels);
         value = str;
@@ -106,7 +166,7 @@ struct PolyOutputChannelsWidget : Widget {
   PolyChannelsDisplay* channelCountDisplay;
   TinyChannelsSnapKnob* channelsKnob;
   PolyOutputChannelsWidget(math::Vec pos, ComputerscarePolyModule* mod,
-                           int paramId) {
+                           int paramId, int* channelCount = NULL) {
     module = mod;
 
     channelsKnob =
@@ -117,8 +177,47 @@ struct PolyOutputChannelsWidget : Widget {
     channelCountDisplay = new PolyChannelsDisplay(pos);
 
     channelCountDisplay->module = module;
+    channelCountDisplay->channelCount = channelCount;
 
     addChild(channelsKnob);
     addChild(channelCountDisplay);
+  }
+};
+
+struct CompolyLaneCountWidget : Widget {
+  ComputerscarePolyModule* module;
+  PolyChannelsDisplay* laneCountDisplay;
+  TinyCompolyLanesSnapKnob* lanesKnob;
+  TransformWidget* lanesKnobTransform;
+  CompolyLaneCountWidget(math::Vec pos, ComputerscarePolyModule* mod,
+                         int paramId, int* laneCount = NULL,
+                         bool allowAuto = true, float knobScale = 1.2f,
+                         float doubleClickResetValue = -1.f) {
+    module = mod;
+
+    lanesKnobTransform = new TransformWidget();
+    lanesKnobTransform->box.pos = pos.plus(Vec(5, 1));
+    lanesKnobTransform->scale(knobScale);
+
+    lanesKnob =
+        createParam<TinyCompolyLanesSnapKnob>(Vec(0, 0), module, paramId);
+    lanesKnob->module = module;
+    lanesKnob->paramId = paramId;
+    lanesKnob->allowAuto = allowAuto;
+    lanesKnob->hasDoubleClickResetValue = doubleClickResetValue >= 0.f;
+    lanesKnob->doubleClickResetValue = doubleClickResetValue;
+    lanesKnobTransform->addChild(lanesKnob);
+
+    constexpr float knobSize = 18.f;
+    Vec knobCenter = lanesKnobTransform->box.pos.plus(
+        Vec(knobSize, knobSize).mult(0.5f * knobScale));
+    Vec displayTextCenter = Vec(16.f, 12.f);
+    laneCountDisplay =
+        new PolyChannelsDisplay(knobCenter.minus(displayTextCenter));
+    laneCountDisplay->module = module;
+    laneCountDisplay->channelCount = laneCount;
+
+    addChild(lanesKnobTransform);
+    addChild(laneCountDisplay);
   }
 };

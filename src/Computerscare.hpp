@@ -38,9 +38,15 @@ extern Model* modelComputerscareDrolyPaw;
 extern Model* modelComputerscareTolyPoolsV2;
 extern Model* modelComputerscarePortaloof;
 
+extern Model* modelComputerscareCompolyLane;
+extern Model* modelComputerscareComplexGenerator;
+extern Model* modelComputerscareComplexTransformer;
+extern Model* modelComputerscareNudiebug;
+
 static const NVGcolor COLOR_COMPUTERSCARE_LIGHT_GREEN =
     nvgRGB(0xC0, 0xE7, 0xDE);
 static const NVGcolor COLOR_COMPUTERSCARE_GREEN = nvgRGB(0x24, 0xc9, 0xa6);
+static const NVGcolor COLOR_COMPUTERSCARE_DARK_GREEN = nvgRGB(0x18, 0x6d, 0x5b);
 static const NVGcolor COLOR_COMPUTERSCARE_RED = nvgRGB(0xC4, 0x34, 0x21);
 static const NVGcolor COLOR_COMPUTERSCARE_YELLOW = nvgRGB(0xE4, 0xC4, 0x21);
 static const NVGcolor COLOR_COMPUTERSCARE_BLUE = nvgRGB(0x24, 0x44, 0xC1);
@@ -354,6 +360,11 @@ struct ComputerscareBlueLight : ModuleLightWidget {
 
 
 */
+template <typename BASE>
+struct MuteLight : BASE {
+  MuteLight() { this->box.size = mm2px(Vec(6.f, 6.f)); }
+};
+
 template <typename BASE>
 struct ComputerscareHugeLight : BASE {
   ComputerscareHugeLight() { this->box.size = mm2px(Vec(8.179, 8.179)); }
@@ -712,5 +723,6 @@ struct SmallLetterDisplay : Widget {
 
 #include "ComputerscarePolyModule.hpp"
 #include "MenuParams.hpp"
+#include "complex/ComputerscareComplexBase.cpp"
 #include "drawFunctions.hpp"
 #include "pointFunctions.hpp"
