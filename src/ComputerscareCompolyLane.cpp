@@ -354,31 +354,66 @@ struct ComputerscareCompolyLane : ComputerscareComplexBase {
     int productOutputMode = params[PRODUCT_OUTPUT_MODE].getValue();
     bool zPolarInput = params[Z_INPUT_MODE].getValue() >= 0.5f;
     bool wPolarInput = params[W_INPUT_MODE].getValue() >= 0.5f;
+    bool zOutputConnected = outputPairConnected(Z_OUTPUT_A);
+    bool wOutputConnected = outputPairConnected(W_OUTPUT_A);
+    bool sumOutputConnected = outputPairConnected(SUM_OUTPUT_A);
+    bool productOutputConnected = outputPairConnected(PRODUCT_OUTPUT_A);
+
+    if (!zOutputConnected && !wOutputConnected && !sumOutputConnected &&
+        !productOutputConnected) {
+      return;
+    }
+
+    int zOutputOperation = params[Z_OUTPUT_OPERATION].getValue();
+    int wOutputOperation = params[W_OUTPUT_OPERATION].getValue();
+    int sumOutputOperation = params[SUM_OUTPUT_OPERATION].getValue();
+    int productOutputOperation = params[PRODUCT_OUTPUT_OPERATION].getValue();
+
+    bool needsZ =
+        (zOutputConnected && operationNeedsZ(zOutputOperation)) ||
+        (wOutputConnected && operationNeedsZ(wOutputOperation)) ||
+        (sumOutputConnected && operationNeedsZ(sumOutputOperation)) ||
+        (productOutputConnected && operationNeedsZ(productOutputOperation));
+    bool needsW =
+        (zOutputConnected && operationNeedsW(zOutputOperation)) ||
+        (wOutputConnected && operationNeedsW(wOutputOperation)) ||
+        (sumOutputConnected && operationNeedsW(sumOutputOperation)) ||
+        (productOutputConnected && operationNeedsW(productOutputOperation));
 
     cpx::complex_math::RectChannels z = {};
     cpx::complex_math::RectChannels w = {};
 
     for (int c = 0; c < compolyChannels; ++c) {
-      readLanePairToRect(A_INPUT, A_SCALE_CV, A_OFFSET_CV, A_SCALE_VAL,
-                         A_SCALE_TRIM, A_OFFSET_VAL, A_OFFSET_TRIM, B_INPUT,
-                         B_SCALE_CV, B_OFFSET_CV, B_SCALE_VAL, B_SCALE_TRIM,
-                         B_OFFSET_VAL, B_OFFSET_TRIM, c, zWrapMode, zPolarInput,
-                         z);
-      readLanePairToRect(C_INPUT, C_SCALE_CV, C_OFFSET_CV, C_SCALE_VAL,
-                         C_SCALE_TRIM, C_OFFSET_VAL, C_OFFSET_TRIM, D_INPUT,
-                         D_SCALE_CV, D_OFFSET_CV, D_SCALE_VAL, D_SCALE_TRIM,
-                         D_OFFSET_VAL, D_OFFSET_TRIM, c, wWrapMode, wPolarInput,
-                         w);
+      if (needsZ) {
+        readLanePairToRect(A_INPUT, A_SCALE_CV, A_OFFSET_CV, A_SCALE_VAL,
+                           A_SCALE_TRIM, A_OFFSET_VAL, A_OFFSET_TRIM, B_INPUT,
+                           B_SCALE_CV, B_OFFSET_CV, B_SCALE_VAL, B_SCALE_TRIM,
+                           B_OFFSET_VAL, B_OFFSET_TRIM, c, zWrapMode,
+                           zPolarInput, z);
+      }
+      if (needsW) {
+        readLanePairToRect(C_INPUT, C_SCALE_CV, C_OFFSET_CV, C_SCALE_VAL,
+                           C_SCALE_TRIM, C_OFFSET_VAL, C_OFFSET_TRIM, D_INPUT,
+                           D_SCALE_CV, D_OFFSET_CV, D_SCALE_VAL, D_SCALE_TRIM,
+                           D_OFFSET_VAL, D_OFFSET_TRIM, c, wWrapMode,
+                           wPolarInput, w);
+      }
     }
 
-    writeOperationOutput(Z_OUTPUT_A, zOutputMode,
-                         params[Z_OUTPUT_OPERATION].getValue(), z, w);
-    writeOperationOutput(W_OUTPUT_A, wOutputMode,
-                         params[W_OUTPUT_OPERATION].getValue(), z, w);
-    writeOperationOutput(SUM_OUTPUT_A, sumOutputMode,
-                         params[SUM_OUTPUT_OPERATION].getValue(), z, w);
-    writeOperationOutput(PRODUCT_OUTPUT_A, productOutputMode,
-                         params[PRODUCT_OUTPUT_OPERATION].getValue(), z, w);
+    if (zOutputConnected) {
+      writeOperationOutput(Z_OUTPUT_A, zOutputMode, zOutputOperation, z, w);
+    }
+    if (wOutputConnected) {
+      writeOperationOutput(W_OUTPUT_A, wOutputMode, wOutputOperation, z, w);
+    }
+    if (sumOutputConnected) {
+      writeOperationOutput(SUM_OUTPUT_A, sumOutputMode, sumOutputOperation, z,
+                           w);
+    }
+    if (productOutputConnected) {
+      writeOperationOutput(PRODUCT_OUTPUT_A, productOutputMode,
+                           productOutputOperation, z, w);
+    }
   }
 
   int detectedPairCompolyChannels(int firstInputId, int secondInputId) {
@@ -444,6 +479,20 @@ struct ComputerscareCompolyLane : ComputerscareComplexBase {
         return divideChannels(z, w);
     }
     return z;
+  }
+
+  bool operationNeedsZ(int operation) {
+    return operation == OP_Z || operation == OP_Z_PLUS_W ||
+           operation == OP_Z_MINUS_W || operation == OP_W_MINUS_Z ||
+           operation == OP_Z_TIMES_W || operation == OP_W_DIVIDE_Z ||
+           operation == OP_Z_DIVIDE_W;
+  }
+
+  bool operationNeedsW(int operation) {
+    return operation == OP_W || operation == OP_Z_PLUS_W ||
+           operation == OP_Z_MINUS_W || operation == OP_W_MINUS_Z ||
+           operation == OP_Z_TIMES_W || operation == OP_W_DIVIDE_Z ||
+           operation == OP_Z_DIVIDE_W;
   }
 
   cpx::complex_math::RectChannels subtractChannels(

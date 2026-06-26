@@ -236,28 +236,10 @@ struct ComputerscareComplexGenerator : ComputerscareComplexBase {
   }
   json_t* dataToJson() override {
     json_t* rootJ = json_object();
-    json_object_set_new(rootJ, "pentagonDisplaySize",
-                        json_integer(pentagonSettings.size));
-    json_object_set_new(rootJ, "pentagonColorVariation",
-                        json_integer(pentagonSettings.colorVariation));
     return rootJ;
   }
 
   void dataFromJson(json_t* rootJ) override {
-    json_t* pentagonDisplaySizeJ =
-        json_object_get(rootJ, "pentagonDisplaySize");
-    if (pentagonDisplaySizeJ) {
-      pentagonSettings.size = cpx::clampPerspectivePentagonSize(
-          json_integer_value(pentagonDisplaySizeJ));
-    }
-    json_t* pentagonColorVariationJ =
-        json_object_get(rootJ, "pentagonColorVariation");
-    if (pentagonColorVariationJ) {
-      pentagonSettings.colorVariation =
-          cpx::clampPerspectivePentagonColorVariation(
-              json_integer_value(pentagonColorVariationJ));
-    }
-
     json_t* laneControlModesJ = json_object_get(rootJ, "laneControlModes");
     if (laneControlModesJ && json_is_array(laneControlModesJ)) {
       for (int i = 0; i < numComplexGeneratorKnobs; i++) {
@@ -320,22 +302,6 @@ struct DisableableSmoothKnob : RoundKnob {
     } else {
     }
     RoundKnob::step();
-  }
-};
-
-struct ComputerscareComplexGeneratorViewMenu : MenuItem {
-  ComputerscareComplexGenerator* generator = nullptr;
-
-  Menu* createChildMenu() override {
-    Menu* menu = new Menu;
-    cpx::addPerspectivePentagonMenuItems(
-        menu, generator ? &generator->pentagonSettings : nullptr);
-    return menu;
-  }
-
-  void step() override {
-    rightText = RIGHT_ARROW;
-    MenuItem::step();
   }
 };
 
@@ -504,7 +470,7 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     control->setDrawParts(true, true);
     control->setContentFillsBox(true);
     control->setHoverHighlightEnabled(true);
-    control->setBaseShades(0x74, 0x78, 0x0a);
+    control->setBaseShades(0xa4, 0xa8, 0x0a);
     control->setArrowDrawingScale(0.76f);
     control->setArrowYOffset(-5.f);
     addChild(control);
@@ -551,9 +517,6 @@ struct ComputerscareComplexGeneratorWidget : ModuleWidget {
     ComputerscareComplexGenerator* generator =
         dynamic_cast<ComputerscareComplexGenerator*>(module);
     menu->addChild(new MenuSeparator);
-    menu->addChild(construct<ComputerscareComplexGeneratorViewMenu>(
-        &MenuItem::text, "View",
-        &ComputerscareComplexGeneratorViewMenu::generator, generator));
     menu->addChild(construct<ComputerscareComplexGeneratorControlsMenu>(
         &MenuItem::text, "Controls",
         &ComputerscareComplexGeneratorControlsMenu::generator, generator));

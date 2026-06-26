@@ -4,16 +4,7 @@
 
 namespace cpx {
 
-enum class PerspectivePentagonSize {
-  Small = 0,
-  Medium = 1,
-  Large = 2,
-};
-
-struct PerspectivePentagonSettings {
-  int size = static_cast<int>(PerspectivePentagonSize::Medium);
-  int colorVariation = 1;
-};
+struct PerspectivePentagonSettings {};
 
 struct PerspectivePentagonGeometry {
   Vec face[5];
@@ -23,38 +14,6 @@ struct PerspectivePentagonGeometry {
   int pointCount = 5;
 };
 
-inline int clampPerspectivePentagonSize(int size) {
-  return std::max(0, std::min(2, size));
-}
-
-inline int clampPerspectivePentagonColorVariation(int variation) {
-  return std::max(0, std::min(4, variation));
-}
-
-inline std::string perspectivePentagonSizeName(int size) {
-  switch (clampPerspectivePentagonSize(size)) {
-    case 0:
-      return "small";
-    case 2:
-      return "large";
-  }
-  return "medium";
-}
-
-inline std::string perspectivePentagonColorVariationName(int variation) {
-  switch (clampPerspectivePentagonColorVariation(variation)) {
-    case 0:
-      return "none";
-    case 2:
-      return "medium";
-    case 3:
-      return "high";
-    case 4:
-      return "wild";
-  }
-  return "low";
-}
-
 struct PerspectivePentagonDisplay : Widget {
   PerspectivePentagonSettings* settings = nullptr;
   int seed = 0;
@@ -62,40 +21,13 @@ struct PerspectivePentagonDisplay : Widget {
   Vec canvasSize = Vec(120.f, 380.f);
   NVGcolor faceColor = nvgRGB(0xa9, 0xad, 0xaa);
   NVGcolor sideColor = nvgRGB(0x69, 0x6e, 0x6b);
-  int baseFaceShade = 0x82;
-  int baseSideShade = 0x5d;
+  int baseFaceShade = 0xb2;
+  int baseSideShade = 0x8a;
   int sideShadeStep = 0x0c;
 
-  int currentSize() const {
-    return settings ? clampPerspectivePentagonSize(settings->size)
-                    : static_cast<int>(PerspectivePentagonSize::Medium);
-  }
+  float contentScale() const { return 0.94f; }
 
-  int currentColorVariation() const {
-    return settings ? clampPerspectivePentagonColorVariation(
-                          settings->colorVariation)
-                    : 1;
-  }
-
-  float contentScale() const {
-    switch (currentSize()) {
-      case 0:
-        return 0.78f;
-      case 2:
-        return 1.08f;
-    }
-    return 0.94f;
-  }
-
-  Vec faceInset() const {
-    switch (currentSize()) {
-      case 0:
-        return Vec(4.5f, 4.5f);
-      case 2:
-        return Vec(1.2f, 1.2f);
-    }
-    return Vec(2.7f, 2.7f);
-  }
+  Vec faceInset() const { return Vec(2.7f, 2.7f); }
 
   float distortion(int point, int axis) const {
     unsigned int x = 2166136261u;
@@ -107,8 +39,8 @@ struct PerspectivePentagonDisplay : Widget {
   }
 
   int shadeOffset(int salt, float multiplier = 1.f) const {
-    static constexpr float ranges[] = {0.f, 8.f, 18.f, 34.f, 78.f};
-    int range = std::round(ranges[currentColorVariation()] * multiplier);
+    constexpr float colorVariationRange = 56.f;
+    int range = std::round(colorVariationRange * multiplier);
     if (range <= 0) return 0;
     return std::round(distortion(seed + salt, 3) * range);
   }
@@ -374,47 +306,6 @@ struct PerspectivePentagonWidget : Widget {
     Widget::onButton(e);
   }
 };
-
-struct PerspectivePentagonMenuItem : MenuItem {
-  int* value = nullptr;
-  int nextValue = 0;
-
-  void onAction(const event::Action& e) override {
-    if (value) *value = nextValue;
-  }
-};
-
-inline void addPerspectivePentagonMenuItems(
-    Menu* menu, PerspectivePentagonSettings* settings) {
-  menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Perspective Display"));
-  menu->addChild(construct<MenuLabel>(
-      &MenuLabel::text,
-      "size: " + perspectivePentagonSizeName(settings ? settings->size : 1)));
-  for (int i = 0; i < 3; i++) {
-    PerspectivePentagonMenuItem* item = new PerspectivePentagonMenuItem();
-    item->text = perspectivePentagonSizeName(i);
-    item->rightText = CHECKMARK(settings && settings->size == i);
-    item->value = settings ? &settings->size : nullptr;
-    item->nextValue = i;
-    menu->addChild(item);
-  }
-
-  menu->addChild(new MenuSeparator);
-  menu->addChild(construct<MenuLabel>(
-      &MenuLabel::text,
-      "color variation: " + perspectivePentagonColorVariationName(
-                                settings ? settings->colorVariation : 1)));
-  for (int i = 0; i < 5; i++) {
-    PerspectivePentagonMenuItem* item = new PerspectivePentagonMenuItem();
-    item->text = perspectivePentagonColorVariationName(i);
-    item->rightText =
-        CHECKMARK(settings && clampPerspectivePentagonColorVariation(
-                                  settings->colorVariation) == i);
-    item->value = settings ? &settings->colorVariation : nullptr;
-    item->nextValue = i;
-    menu->addChild(item);
-  }
-}
 
 struct PerspectiveLabeledSwitchableComplexControl : PerspectivePentagonWidget {
   LabeledSwitchableComplexControl* complexControl = nullptr;

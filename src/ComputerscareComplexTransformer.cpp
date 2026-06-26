@@ -67,7 +67,7 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     configComplexAffineParams(W_SCALE_VAL_AB, W_OFFSET_VAL_AB, W_SCALE_POLAR,
                               W_OFFSET_POLAR, "w");
 
-    configSwitch(COMPOLY_CHANNELS, 0.f, 16.f, 0.f, "Compoly Output Channels",
+    configSwitch(COMPOLY_CHANNELS, 0.f, 16.f, 0.f, "Compoly Lanes",
                  polyChannelLabels(true));
     getParamQuantity(COMPOLY_CHANNELS)->randomizeEnabled = false;
     getParamQuantity(COMPOLY_CHANNELS)->resetEnabled = false;
@@ -209,6 +209,12 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     }
   }
 
+  int inputCompolyChannels(int inputMode, int firstPortId) {
+    return cpx::compoly::compolyLanesForInput(
+        coordinateModeFromParam(inputMode), inputs[firstPortId].getChannels(),
+        inputs[firstPortId + 1].getChannels());
+  }
+
   void process(const ProcessArgs& args) override {
     ComputerscarePolyModule::checkCounter();
 
@@ -217,12 +223,11 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     int wInputMode = params[W_INPUT_MODE].getValue();
     int wrapMode = params[COMPOLY_WRAP_MODE].getValue();
 
-    // + 1%
-    std::vector<std::vector<int>> inputCompolyphony =
-        getInputCompolyphony({Z_INPUT_MODE, W_INPUT_MODE}, {Z_INPUT, W_INPUT});
-
-    compolyChannelsMainOutput =
-        calcOutputCompolyphony(compolyphonyKnobSetting, inputCompolyphony);
+    int zInputCompolyChannels = inputCompolyChannels(zInputMode, Z_INPUT);
+    int wInputCompolyChannels = inputCompolyChannels(wInputMode, W_INPUT);
+    compolyChannelsMainOutput = cpx::compoly::outputCompolyLanes(
+        compolyphonyKnobSetting,
+        std::max(zInputCompolyChannels, wInputCompolyChannels));
     int mainOutputMode = params[MAIN_OUTPUT_MODE].getValue();
     setOutputChannels(COMPOLY_MAIN_OUT_A, mainOutputMode,
                       compolyChannelsMainOutput);
@@ -230,6 +235,10 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     int productOutputMode = params[PRODUCT_OUTPUT_MODE].getValue();
     setOutputChannels(COMPOLY_PRODUCT_OUT_A, productOutputMode,
                       compolyChannelsMainOutput);
+
+    bool mainOutputConnected = outputPairConnected(COMPOLY_MAIN_OUT_A);
+    bool productOutputConnected = outputPairConnected(COMPOLY_PRODUCT_OUT_A);
+    if (!mainOutputConnected && !productOutputConnected) return;
 
     float zx[16] = {};
     float zy[16] = {};
@@ -250,22 +259,38 @@ struct ComputerscareComplexTransformer : ComputerscareComplexBase {
     applyComplexAffine(zx, zy, Z_SCALE_VAL_AB, Z_OFFSET_VAL_AB);
     applyComplexAffine(wx, wy, W_SCALE_VAL_AB, W_OFFSET_VAL_AB);
 
-    for (uint8_t c = 0; c < 16; c += 4) {
-      simd::float_4 zxv = simd::float_4::load(zx + c);
-      simd::float_4 zyv = simd::float_4::load(zy + c);
-      simd::float_4 wxv = simd::float_4::load(wx + c);
-      simd::float_4 wyv = simd::float_4::load(wy + c);
+    if (mainOutputConnected) {
+      for (uint8_t c = 0; c < 16; c += 4) {
+        simd::float_4 zxv = simd::float_4::load(zx + c);
+        simd::float_4 zyv = simd::float_4::load(zy + c);
+        simd::float_4 wxv = simd::float_4::load(wx + c);
+        simd::float_4 wyv = simd::float_4::load(wy + c);
 
-      (zxv + wxv).store(sumx + c);
-      (zyv + wyv).store(sumy + c);
-      (zxv * wxv - zyv * wyv).store(prodx + c);
-      (zxv * wyv + zyv * wxv).store(prody + c);
+        (zxv + wxv).store(sumx + c);
+        (zyv + wyv).store(sumy + c);
+      }
     }
 
-    writeComplexOutputPairFromRect(COMPOLY_MAIN_OUT_A, mainOutputMode, sumx,
-                                   sumy);
-    writeComplexOutputPairFromRect(COMPOLY_PRODUCT_OUT_A, productOutputMode,
-                                   prodx, prody);
+    if (productOutputConnected) {
+      for (uint8_t c = 0; c < 16; c += 4) {
+        simd::float_4 zxv = simd::float_4::load(zx + c);
+        simd::float_4 zyv = simd::float_4::load(zy + c);
+        simd::float_4 wxv = simd::float_4::load(wx + c);
+        simd::float_4 wyv = simd::float_4::load(wy + c);
+
+        (zxv * wxv - zyv * wyv).store(prodx + c);
+        (zxv * wyv + zyv * wxv).store(prody + c);
+      }
+    }
+
+    if (mainOutputConnected) {
+      writeComplexOutputPairFromRect(COMPOLY_MAIN_OUT_A, mainOutputMode, sumx,
+                                     sumy);
+    }
+    if (productOutputConnected) {
+      writeComplexOutputPairFromRect(COMPOLY_PRODUCT_OUT_A, productOutputMode,
+                                     prodx, prody);
+    }
   }
 
   json_t* dataToJson() override {
@@ -339,7 +364,7 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
     }
     channelWidget = new CompolyLaneCountWidget(
         Vec(92, 4), module, ComputerscareComplexTransformer::COMPOLY_CHANNELS,
-        module ? &module->compolyChannelsMainOutput : nullptr);
+        module ? &module->compolyChannelsMainOutput : nullptr, true, 1.2f, 0.f);
 
     // addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 22), module,
     // ComputerscareComplexTransformer::POLY_OUTPUT));
