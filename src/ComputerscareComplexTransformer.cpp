@@ -1,6 +1,7 @@
 #include <array>
 
 #include "Computerscare.hpp"
+#include "complex/PerspectivePentagonWidget.hpp"
 #include "complex/SwitchableComplexControl.hpp"
 #include "complex/math/ComplexMath.hpp"
 
@@ -351,19 +352,18 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
   ComputerscareComplexTransformerWidget(
       ComputerscareComplexTransformer* module) {
     setModule(module);
-    // setPanel(APP->window->loadSvg(asset::plugin(pluginInstance,
-    // "res/panels/ComputerscareComplexTransformerPanel.svg")));
     box.size = Vec(8 * 15, 380);
-    {
-      ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
-      panel->box.size = box.size;
-      panel->setBackground(APP->window->loadSvg(asset::plugin(
-          pluginInstance,
-          "res/panels/ComputerscareComplexTransformerPanel.svg")));
-      addChild(panel);
-    }
+
+    addPerspectiveDisplay(Vec(64.f, -1.f), Vec(54.f, 42.f), 201, true, false);
+    addPerspectiveDisplay(Vec(2.f, -1.f), Vec(58.f, 42.f), 200, true, false);
+    addPerspectiveDisplay(Vec(64.f, -1.f), Vec(54.f, 42.f), 201, false, true);
+    addPerspectiveDisplay(Vec(2.f, -1.f), Vec(58.f, 42.f), 200, false, true);
+
+    addTextDisplay(Vec(7.f, 5.f), Vec(58.f, 24.f), "complex\ntransformer", 10.f,
+                   NVG_ALIGN_LEFT, 64.f);
+
     channelWidget = new CompolyLaneCountWidget(
-        Vec(92, 4), module, ComputerscareComplexTransformer::COMPOLY_CHANNELS,
+        Vec(74, 4), module, ComputerscareComplexTransformer::COMPOLY_CHANNELS,
         module ? &module->compolyChannelsMainOutput : nullptr, true, 1.2f, 0.f);
 
     // addOutput(createOutput<PointingUpPentagonPort>(Vec(30, 22), module,
@@ -371,12 +371,14 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
 
     addChild(channelWidget);
 
+    addPerspectiveBlock(Vec(2.f, 43.f), Vec(116.f, 47.f), 202);
+
     cpx::CompolyPortsWidget* zInput = new cpx::CompolyPortsWidget(
-        Vec(50, 48), module, ComputerscareComplexTransformer::Z_INPUT,
+        Vec(50, 60), module, ComputerscareComplexTransformer::Z_INPUT,
         ComputerscareComplexTransformer::Z_INPUT_MODE, 0.8, false, "z");
     zInput->compolyLabel->box.pos = Vec(18, 6);
     addChild(zInput);
-    addAffineControls("scale", "offset", Vec(6, 95), module,
+    addAffineControls("scale", "offset", Vec(6, 103), module,
                       ComputerscareComplexTransformer::Z_SCALE_VAL_AB,
                       ComputerscareComplexTransformer::Z_SCALE_POLAR,
                       ComputerscareComplexTransformer::Z_SCALE_VIEW_MODE,
@@ -384,12 +386,14 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
                       ComputerscareComplexTransformer::Z_OFFSET_POLAR,
                       ComputerscareComplexTransformer::Z_OFFSET_VIEW_MODE, "z");
 
+    addPerspectiveBlock(Vec(2.f, 151.f), Vec(116.f, 47.f), 203);
+
     cpx::CompolyPortsWidget* wInput = new cpx::CompolyPortsWidget(
-        Vec(50, 155), module, ComputerscareComplexTransformer::W_INPUT,
+        Vec(50, 168), module, ComputerscareComplexTransformer::W_INPUT,
         ComputerscareComplexTransformer::W_INPUT_MODE, 1.f, false, "w");
     wInput->compolyLabel->box.pos = Vec(15, 6);
     addChild(wInput);
-    addAffineControls("scale", "offset", Vec(6, 205), module,
+    addAffineControls("scale", "offset", Vec(6, 211), module,
                       ComputerscareComplexTransformer::W_SCALE_VAL_AB,
                       ComputerscareComplexTransformer::W_SCALE_POLAR,
                       ComputerscareComplexTransformer::W_SCALE_VIEW_MODE,
@@ -402,21 +406,60 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
     // addParam(createParam<NoRandomMediumSmallKnob>(Vec(32, 57), module,
     // ComputerscareComplexTransformer::GLOBAL_OFFSET));
 
+    addPerspectiveBlock(Vec(2.f, 259.f), Vec(116.f, 47.f), 204);
+
     cpx::CompolyPortsWidget* mainOutput = new cpx::CompolyPortsWidget(
-        Vec(50, 285), module,
+        Vec(50, 274), module,
         ComputerscareComplexTransformer::COMPOLY_MAIN_OUT_A,
         ComputerscareComplexTransformer::MAIN_OUTPUT_MODE, 0.7f, true,
         "zplusw");
     mainOutput->compolyLabel->box.pos = Vec(0, 10);
     addChild(mainOutput);
 
+    addPerspectiveBlock(Vec(2.f, 309.f), Vec(116.f, 47.f), 205);
+
     cpx::CompolyPortsWidget* productOutput = new cpx::CompolyPortsWidget(
-        Vec(50, 335), module,
+        Vec(50, 324), module,
         ComputerscareComplexTransformer::COMPOLY_PRODUCT_OUT_A,
         ComputerscareComplexTransformer::PRODUCT_OUTPUT_MODE, 0.7f, true,
         "ztimesw");
     productOutput->compolyLabel->box.pos = Vec(0, 10);
     addChild(productOutput);
+
+    addPerspectiveBlock(Vec(2.f, 359.f), Vec(116.f, 22.f), 206);
+
+    SvgWidget* logo = new SvgWidget();
+    logo->setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/computerscare-logo-light.svg")));
+    logo->box.pos = Vec(27.f, 360.f);
+    logo->box.size = Vec(66.f, 20.f);
+    addChild(logo);
+  }
+
+  void addPerspectiveDisplay(Vec pos, Vec size, int seed, bool drawSides,
+                             bool drawFace) {
+    cpx::PerspectivePentagonWidget* block =
+        new cpx::PerspectivePentagonWidget(nullptr, seed);
+    block->box = Rect(pos, size);
+    block->setDrawParts(drawSides, drawFace);
+    addChild(block);
+  }
+
+  void addPerspectiveBlock(Vec pos, Vec size, int seed) {
+    addPerspectiveDisplay(pos, size, seed, true, false);
+    addPerspectiveDisplay(pos, size, seed, false, true);
+  }
+
+  void addTextDisplay(Vec pos, Vec size, std::string text, float fontSize,
+                      int textAlign, float breakRowWidth) {
+    SmallLetterDisplay* display = new SmallLetterDisplay();
+    display->box = Rect(pos, size);
+    display->value = text;
+    display->fontSize = fontSize;
+    display->letterSpacing = 0.4f;
+    display->textAlign = textAlign;
+    display->breakRowWidth = breakRowWidth;
+    addChild(display);
   }
 
   void addAffineControls(std::string scaleLabel, std::string offsetLabel,
@@ -425,13 +468,14 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
                          int scaleViewModeParamId, int offsetParamId,
                          int offsetPolarParamId, int offsetViewModeParamId,
                          const std::string& inputName) {
-    addModeControl(scaleLabel, pos.x, pos.y, module, scaleParamId,
-                   scalePolarParamId, scaleViewModeParamId,
-                   cpx::ComplexXYMaxMode::Radial, 3.f, inputName + " Scale");
-    addModeControl(offsetLabel, pos.x + 48.f, pos.y, module, offsetParamId,
-                   offsetPolarParamId, offsetViewModeParamId,
+    Vec controlPos = pos.plus(Vec(-2.f, -12.f));
+    addModeControl(offsetLabel, controlPos.x + 56.f, controlPos.y, module,
+                   offsetParamId, offsetPolarParamId, offsetViewModeParamId,
                    cpx::ComplexXYMaxMode::Rectangular, 10.f,
                    inputName + " Offset");
+    addModeControl(scaleLabel, controlPos.x, controlPos.y, module, scaleParamId,
+                   scalePolarParamId, scaleViewModeParamId,
+                   cpx::ComplexXYMaxMode::Radial, 3.f, inputName + " Scale");
   }
 
   void addModeControl(std::string label, float x, float y,
@@ -439,14 +483,19 @@ struct ComputerscareComplexTransformerWidget : ModuleWidget {
                       int polarParamIndex, int modeParamId,
                       cpx::ComplexXYMaxMode arrowMaxMode, float arrowMaxVoltage,
                       const std::string& controlName) {
-    cpx::LabeledSwitchableComplexControl* control =
-        new cpx::LabeledSwitchableComplexControl(
-            module, paramIndex, polarParamIndex, modeParamId, arrowMaxMode,
-            arrowMaxVoltage, label, Vec(32.f, 25.f), Vec(0.f, 0.f),
-            Vec(38.f, 12.f), -1, false, controlName,
-            NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE, Vec(2.f, 12.f));
-    control->box = Rect(Vec(x - 2.f, y - 12.f), Vec(40.f, 37.f));
-    control->setArrowDrawingScale(0.78f);
+    cpx::PerspectiveLabeledSwitchableComplexControl* control =
+        new cpx::PerspectiveLabeledSwitchableComplexControl(
+            nullptr, paramIndex, module, paramIndex, polarParamIndex,
+            modeParamId, arrowMaxMode, arrowMaxVoltage, label, Vec(34.f, 26.f),
+            Vec(17.f, 2.f), Vec(34.f, 10.f), -1, false, controlName,
+            NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE, Vec(11.f, 7.f));
+    control->box = Rect(Vec(x, y), Vec(56.f, 43.f));
+    control->setDrawParts(true, true);
+    control->setContentFillsBox(true);
+    control->setHoverHighlightEnabled(true);
+    control->setBaseShades(0xa4, 0xa8, 0x0a);
+    control->setArrowDrawingScale(0.76f);
+    control->setArrowYOffset(-5.f);
     addChild(control);
   }
 

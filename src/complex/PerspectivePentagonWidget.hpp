@@ -346,10 +346,38 @@ struct PerspectiveLabeledSwitchableComplexControl : PerspectivePentagonWidget {
     module->params[modeParamId].setValue((mode + 1) % 3);
   }
 
+  void createModeMenu() {
+    if (!module || modeParamId < 0 || modeParamId >= (int)module->params.size())
+      return;
+    Menu* menu = createMenu();
+    menu->addChild(construct<MenuLabel>(&MenuLabel::text, "View"));
+
+    static const std::vector<std::string> labels = {"arrow", "xy", "rtheta"};
+    int currentMode = std::round(module->params[modeParamId].getValue());
+    for (int i = 0; i < (int)labels.size(); ++i) {
+      ParamSettingItem* item =
+          new ParamSettingItem(i, &module->params[modeParamId]);
+      item->text = labels[i];
+      item->rightText = CHECKMARK(i == currentMode);
+      menu->addChild(item);
+    }
+  }
+
+  bool isModeSwitchPoint(Vec pos) const {
+    return complexControl && complexControl->modeSwitch &&
+           complexControl->modeSwitch->box.contains(pos);
+  }
+
   void onButton(const event::Button& e) override {
     if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS &&
         (e.mods & RACK_MOD_MASK) == 0 && e.pos.y <= 12.f) {
       cycleControlMode();
+      e.consume(this);
+      return;
+    }
+    if (e.button == GLFW_MOUSE_BUTTON_RIGHT && e.action == GLFW_PRESS &&
+        isModeSwitchPoint(e.pos)) {
+      createModeMenu();
       e.consume(this);
       return;
     }
