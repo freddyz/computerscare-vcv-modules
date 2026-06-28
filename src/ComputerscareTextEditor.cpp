@@ -333,9 +333,10 @@ void ComputerscareTextEditor::drawEditorText(const DrawArgs& args) {
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, BND_LABEL_FONT_SIZE);
 
-    int begin = std::min(cursor, selection);
-    int end =
-        this == APP->event->selectedWidget ? std::max(cursor, selection) : -1;
+    bool hasSelection =
+        this == APP->event->selectedWidget && cursor != selection;
+    int begin = hasSelection ? std::min(cursor, selection) : 0;
+    int end = hasSelection ? std::max(cursor, selection) : -1;
     bndIconLabelCaret(args.vg, 0.f, 0.f, box.size.x, box.size.y, -1,
                       style.textColor, BND_LABEL_FONT_SIZE, text.c_str(),
                       style.selectionColor, begin, end);
@@ -419,10 +420,13 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
   }
 
   float blink = 0.5f + 0.5f * std::sin((float)rack::system::getTime() * 6.f);
-  NVGcolor color = style.textColor;
-  color.a = 0.25f + 0.35f * blink;
+  NVGcolor color = COLOR_COMPUTERSCARE_BLUE;
+  color.r = color.r + (1.f - color.r) * blink * 0.48f;
+  color.g = color.g + (1.f - color.g) * blink * 0.48f;
+  color.b = color.b + (1.f - color.b) * blink * 0.48f;
+  color.a = 0.72f + 0.28f * blink;
   nvgBeginPath(args.vg);
-  nvgRect(args.vg, cursorX, cursorY, 1.2f, metrics.lineHeight - 3.f);
+  nvgRect(args.vg, cursorX, cursorY - 1.f, 1.4f, metrics.lineHeight - 1.f);
   nvgFillColor(args.vg, color);
   nvgFill(args.vg);
 

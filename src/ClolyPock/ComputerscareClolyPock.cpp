@@ -555,8 +555,8 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     title->box.size = Vec(box.size.x, 24.f);
     addChild(title);
 
-    editor = createWidget<ComputerscareTextEditor>(Vec(8.f, 52.f));
-    editor->box.size = Vec(box.size.x - 16.f, 278.f);
+    editor = createWidget<ComputerscareTextEditor>(Vec(3.f, 43.f));
+    editor->box.size = Vec(box.size.x - 6.f, 291.f);
     editor->placeholder = "type a sequence...";
     editor->style.backgroundColor = nvgRGB(0x05, 0x06, 0x08);
     editor->style.borderColor = nvgRGB(0x55, 0x5b, 0x64);
@@ -573,11 +573,11 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     addChild(editor);
 
     addChild(createLight<ComputerscareSmallLight<ComputerscareRedLight>>(
-        Vec(127.f, 18.f), module, ComputerscareClolyPock::SYNTAX_ERROR_LIGHT));
+        Vec(127.f, 10.f), module, ComputerscareClolyPock::SYNTAX_ERROR_LIGHT));
 
-    addInput(createInput<InPort>(Vec(8.f, 18.f), module,
+    addInput(createInput<InPort>(Vec(8.f, 8.f), module,
                                  ComputerscareClolyPock::ADVANCE_INPUT));
-    addParam(createParam<CKSS>(Vec(42.f, 22.f), module,
+    addParam(createParam<CKSS>(Vec(42.f, 12.f), module,
                                ComputerscareClolyPock::AUTO_ADVANCE_PARAM));
 
     addOutput(createOutput<OutPort>(Vec(8.f, 340.f), module,
