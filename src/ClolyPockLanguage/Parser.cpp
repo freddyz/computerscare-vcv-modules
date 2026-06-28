@@ -187,14 +187,17 @@ ParseResult parseClockLiteral(const std::vector<Token>& tokens) {
 
 ClockUnit parseClockUnit(const std::string& unit) {
   std::string lowered = lowerCopy(unit);
-  if (lowered == "bpm") {
+  if (lowered == "bpm" || lowered == "rpm") {
     return ClockUnit::Bpm;
   }
-  if (lowered == "hz") {
+  if (lowered == "hz" || lowered == "cps") {
     return ClockUnit::Hertz;
   }
   if (lowered == "mhz") {
     return ClockUnit::Millihertz;
+  }
+  if (lowered == "khz") {
+    return ClockUnit::Kilohertz;
   }
   if (lowered == "ms") {
     return ClockUnit::Milliseconds;
@@ -203,7 +206,8 @@ ClockUnit parseClockUnit(const std::string& unit) {
       lowered == "seconds") {
     return ClockUnit::Seconds;
   }
-  if (lowered == "min" || lowered == "minute" || lowered == "minutes") {
+  if (lowered == "m" || lowered == "min" || lowered == "mins" ||
+      lowered == "minute" || lowered == "minutes") {
     return ClockUnit::Minutes;
   }
   return ClockUnit::Unknown;
@@ -217,6 +221,8 @@ std::string clockUnitName(ClockUnit unit) {
       return "hz";
     case ClockUnit::Millihertz:
       return "mhz";
+    case ClockUnit::Kilohertz:
+      return "khz";
     case ClockUnit::Milliseconds:
       return "ms";
     case ClockUnit::Seconds:

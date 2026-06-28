@@ -21,6 +21,7 @@ enum class ClockUnit {
   Bpm,
   Hertz,
   Millihertz,
+  Kilohertz,
   Milliseconds,
   Seconds,
   Minutes

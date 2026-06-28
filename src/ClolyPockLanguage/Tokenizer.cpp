@@ -23,9 +23,11 @@ std::vector<Token> tokenize(const std::string& source) {
       continue;
     }
 
-    if (std::isdigit(static_cast<unsigned char>(c)) != 0) {
+    if (std::isdigit(static_cast<unsigned char>(c)) != 0 ||
+        (c == '.' && index + 1 < length &&
+         std::isdigit(static_cast<unsigned char>(source[index + 1])) != 0)) {
       int begin = index;
-      bool sawDot = false;
+      bool sawDot = c == '.';
       index++;
 
       while (index < length) {

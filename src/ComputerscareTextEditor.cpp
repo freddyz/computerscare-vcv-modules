@@ -3,6 +3,13 @@
 #include <algorithm>
 
 namespace {
+enum HighlightDrawMode {
+  HIGHLIGHT_BACKGROUND,
+  HIGHLIGHT_FOREGROUND,
+  HIGHLIGHT_BORDER,
+  HIGHLIGHT_PROGRESS
+};
+
 struct ComputerscareTextEditorMetrics {
   float textX = BND_TEXT_RADIUS;
   float baselineY = BND_WIDGET_HEIGHT - BND_TEXT_PAD_DOWN;
@@ -94,6 +101,7 @@ void ComputerscareTextEditor::drawLayer(const DrawArgs& args, int layer) {
   if (layer == 1) {
     drawEditorText(args);
     drawHighlightForegrounds(args);
+    drawHighlightDecorations(args);
   }
   Widget::drawLayer(args, layer);
 }
@@ -184,6 +192,23 @@ int ComputerscareTextEditor::getCursorLine() const {
   return line;
 }
 
+void ComputerscareTextEditor::setCursorLine(int line) {
+  int targetLine = std::max(0, line);
+  int currentLine = 0;
+  int position = 0;
+
+  while (position < (int)text.size() && currentLine < targetLine) {
+    if (text[position] == '\n') {
+      currentLine++;
+    }
+    position++;
+  }
+
+  cursor = std::max(0, std::min(position, (int)text.size()));
+  selection = cursor;
+  lastSnapshot = captureSnapshot();
+}
+
 ComputerscareTextEditorSnapshot ComputerscareTextEditor::captureSnapshot()
     const {
   ComputerscareTextEditorSnapshot snapshot;
@@ -260,7 +285,7 @@ void ComputerscareTextEditor::drawHighlightBackgrounds(const DrawArgs& args) {
 
   for (const ComputerscareTextHighlight& highlight : state->highlights) {
     if (highlight.hasBackground && highlight.background.a > 0.f) {
-      drawHighlightSpan(args, highlight, false);
+      drawHighlightSpan(args, highlight, HIGHLIGHT_BACKGROUND);
     }
   }
 }
@@ -298,14 +323,29 @@ void ComputerscareTextEditor::drawHighlightForegrounds(const DrawArgs& args) {
 
   for (const ComputerscareTextHighlight& highlight : state->highlights) {
     if (highlight.hasForeground && highlight.foreground.a > 0.f) {
-      drawHighlightSpan(args, highlight, true);
+      drawHighlightSpan(args, highlight, HIGHLIGHT_FOREGROUND);
+    }
+  }
+}
+
+void ComputerscareTextEditor::drawHighlightDecorations(const DrawArgs& args) {
+  if (!state) {
+    return;
+  }
+
+  for (const ComputerscareTextHighlight& highlight : state->highlights) {
+    if (highlight.hasProgress && highlight.progressColor.a > 0.f) {
+      drawHighlightSpan(args, highlight, HIGHLIGHT_PROGRESS);
+    }
+    if (highlight.hasBorder && highlight.border.a > 0.f) {
+      drawHighlightSpan(args, highlight, HIGHLIGHT_BORDER);
     }
   }
 }
 
 void ComputerscareTextEditor::drawHighlightSpan(
     const DrawArgs& args, const ComputerscareTextHighlight& highlight,
-    bool foreground) {
+    int mode) {
   if (text.empty() || highlight.end <= highlight.begin) {
     return;
   }
@@ -352,15 +392,32 @@ void ComputerscareTextEditor::drawHighlightSpan(
                                 rowX + row.maxx);
     float topY = rowY - metrics.lineHeight - metrics.desc;
 
-    if (foreground) {
+    if (mode == HIGHLIGHT_FOREGROUND) {
       std::string spanText = text.substr(spanBegin, spanEnd - spanBegin);
       nvgFillColor(args.vg, highlight.foreground);
       nvgText(args.vg, startX, rowY, spanText.c_str(), NULL);
-    } else {
+    } else if (mode == HIGHLIGHT_BACKGROUND) {
       nvgBeginPath(args.vg);
       nvgRoundedRect(args.vg, startX - 1.f, topY, endX - startX + 2.f,
                      metrics.lineHeight + 1.f, 2.f);
       nvgFillColor(args.vg, highlight.background);
+      nvgFill(args.vg);
+    } else if (mode == HIGHLIGHT_BORDER) {
+      nvgBeginPath(args.vg);
+      nvgRoundedRect(args.vg, startX - 1.5f, topY + 0.5f, endX - startX + 3.f,
+                     metrics.lineHeight, 2.f);
+      nvgStrokeColor(args.vg, highlight.border);
+      nvgStrokeWidth(args.vg, 1.2f);
+      nvgStroke(args.vg);
+    } else if (mode == HIGHLIGHT_PROGRESS) {
+      float progress = std::max(0.f, std::min(highlight.progress, 1.f));
+      float width = (endX - startX) * progress;
+      if (width <= 0.f) {
+        continue;
+      }
+      nvgBeginPath(args.vg);
+      nvgRect(args.vg, startX, topY + metrics.lineHeight - 2.f, width, 2.f);
+      nvgFillColor(args.vg, highlight.progressColor);
       nvgFill(args.vg);
     }
   }

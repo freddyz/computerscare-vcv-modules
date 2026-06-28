@@ -15,9 +15,11 @@ struct ComputerscareClolyPock : Module {
 
   ComputerscareTextEditorState editorState;
   float clockPhase = 0.f;
+  float activeClockRamp = 0.f;
   bool clockHigh = false;
   bool syntaxError = false;
   int selectedLine = 0;
+  bool selectedLineDirty = false;
   int checkedLine = -1;
   std::string checkedLineText;
   int activeHighlightBegin = 0;
@@ -40,6 +42,7 @@ struct ComputerscareClolyPock : Module {
     if (clockPhase >= 1.f) {
       clockPhase -= std::floor(clockPhase);
     }
+    activeClockRamp = clockPhase;
     clockHigh = clockPhase < 0.5f;
     outputs[CLOCK_OUTPUT].setVoltage(clockHigh ? 10.f : 0.f);
     outputs[EOC1_OUTPUT].setVoltage(0.f);
@@ -52,6 +55,7 @@ struct ComputerscareClolyPock : Module {
     json_object_set_new(
         rootJ, "text",
         json_stringn(editorState.text.c_str(), editorState.text.size()));
+    json_object_set_new(rootJ, "focusedLine", json_integer(selectedLine));
     return rootJ;
   }
 
@@ -60,6 +64,11 @@ struct ComputerscareClolyPock : Module {
     if (textJ) {
       editorState.text = json_string_value(textJ);
       editorState.dirty = true;
+    }
+    json_t* focusedLineJ = json_object_get(rootJ, "focusedLine");
+    if (focusedLineJ) {
+      selectedLine = json_integer_value(focusedLineJ);
+      selectedLineDirty = true;
     }
   }
 
@@ -87,6 +96,8 @@ struct ComputerscareClolyPock : Module {
 
     syntaxError = false;
     activeClockSpec = eval.spec;
+    clockPhase = 0.f;
+    activeClockRamp = 0.f;
     activeHighlightBegin = lineBegin + parse.ast.range.begin;
     activeHighlightEnd = lineBegin + parse.ast.range.end;
   }
@@ -219,21 +230,28 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     if (editor) {
       ComputerscareTextEditorState* state = nullptr;
       bool blinkHigh = false;
+      float activeProgress = 0.f;
 
       if (clolyPock) {
         state = &clolyPock->editorState;
+        if (clolyPock->selectedLineDirty) {
+          editor->setCursorLine(clolyPock->selectedLine);
+          clolyPock->selectedLineDirty = false;
+        }
         clolyPock->selectedLine = editor->getCursorLine();
         ClolyPockLineInfo lineInfo =
             getLineInfo(state->text, clolyPock->selectedLine);
         clolyPock->setSelectedLineProgram(clolyPock->selectedLine,
                                           lineInfo.begin, lineInfo.text);
         blinkHigh = clolyPock->clockHigh;
+        activeProgress = clolyPock->activeClockRamp;
       } else {
         state = &browserEditorState;
         float browserPhase = std::fmod(
             (float)rack::system::getTime() * ComputerscareClolyPock::CLOCK_HZ,
             1.f);
         blinkHigh = browserPhase < 0.5f;
+        activeProgress = browserPhase;
       }
 
       state->highlights.clear();
@@ -246,19 +264,23 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
         errorHighlight.background = nvgRGBA(0xc4, 0x34, 0x21, 0x35);
         state->highlights.push_back(errorHighlight);
       }
-      if (blinkHigh) {
-        ComputerscareTextHighlight blinkHighlight;
-        if (clolyPock) {
-          blinkHighlight.begin = clolyPock->activeHighlightBegin;
-          blinkHighlight.end = clolyPock->activeHighlightEnd;
-        } else {
-          blinkHighlight.begin = lineInfo.begin;
-          blinkHighlight.end = lineInfo.end;
-        }
-        blinkHighlight.background = nvgRGBA(0xe4, 0xc4, 0x21, 0xd8);
-        if (blinkHighlight.begin < blinkHighlight.end) {
-          state->highlights.push_back(blinkHighlight);
-        }
+      ComputerscareTextHighlight activeHighlight;
+      if (clolyPock) {
+        activeHighlight.begin = clolyPock->activeHighlightBegin;
+        activeHighlight.end = clolyPock->activeHighlightEnd;
+      } else {
+        activeHighlight.begin = lineInfo.begin;
+        activeHighlight.end = lineInfo.end;
+      }
+      activeHighlight.hasBackground = blinkHigh;
+      activeHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, 0x66);
+      activeHighlight.hasBorder = true;
+      activeHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
+      activeHighlight.hasProgress = true;
+      activeHighlight.progress = activeProgress;
+      activeHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
+      if (activeHighlight.begin < activeHighlight.end) {
+        state->highlights.push_back(activeHighlight);
       }
     }
   }

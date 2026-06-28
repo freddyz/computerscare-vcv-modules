@@ -10,8 +10,13 @@ struct ComputerscareTextHighlight {
   int end = 0;
   NVGcolor foreground = nvgRGB(0xd8, 0xf3, 0xec);
   NVGcolor background = nvgRGBA(0x00, 0x00, 0x00, 0x00);
+  NVGcolor border = nvgRGBA(0x00, 0x00, 0x00, 0x00);
+  NVGcolor progressColor = nvgRGBA(0x00, 0x00, 0x00, 0x00);
   bool hasForeground = false;
   bool hasBackground = true;
+  bool hasBorder = false;
+  bool hasProgress = false;
+  float progress = 0.f;
 };
 
 struct ComputerscareTextEditorState {
@@ -53,6 +58,7 @@ struct ComputerscareTextEditor : ui::TextField {
   void onChange(const ChangeEvent& e) override;
   int getTextPosition(Vec mousePos) override;
   int getCursorLine() const;
+  void setCursorLine(int line);
 
  protected:
   bool suppressChangeTracking = false;
@@ -71,7 +77,7 @@ struct ComputerscareTextEditor : ui::TextField {
   void drawHighlightBackgrounds(const DrawArgs& args);
   void drawEditorText(const DrawArgs& args);
   void drawHighlightForegrounds(const DrawArgs& args);
+  void drawHighlightDecorations(const DrawArgs& args);
   void drawHighlightSpan(const DrawArgs& args,
-                         const ComputerscareTextHighlight& highlight,
-                         bool foreground);
+                         const ComputerscareTextHighlight& highlight, int mode);
 };

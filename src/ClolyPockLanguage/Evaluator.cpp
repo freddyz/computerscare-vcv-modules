@@ -53,6 +53,11 @@ EvaluationResult evaluateClockLiteral(const ClockLiteralAst& ast) {
       result.spec.bpm = result.spec.hz * 60.0;
       result.spec.periodSeconds = 1.0 / result.spec.hz;
       break;
+    case ClockUnit::Kilohertz:
+      result.spec.hz = value * 1000.0;
+      result.spec.bpm = result.spec.hz * 60.0;
+      result.spec.periodSeconds = 1.0 / result.spec.hz;
+      break;
     case ClockUnit::Milliseconds:
       setFromPeriodSeconds(result, value / 1000.0);
       break;
