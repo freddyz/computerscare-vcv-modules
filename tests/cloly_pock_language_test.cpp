@@ -96,15 +96,25 @@ void testTokenizer() {
                "21.1hz first token");
   requireToken(tokens[1], lang::TokenType::Identifier, "hz", 4, 6,
                "21.1hz second token");
+
+  tokens = lang::tokenize("500mhz");
+  require(tokens.size() == 3, "500mhz token count");
+  requireToken(tokens[0], lang::TokenType::Number, "500", 0, 3,
+               "500mhz first token");
+  requireToken(tokens[1], lang::TokenType::Identifier, "mhz", 3, 6,
+               "500mhz second token");
 }
 
 void testAst() {
   requireNumericAst("120bpm", 120.0, lang::ClockUnit::Bpm, "120bpm ast");
   requireNumericAst("33Hz", 33.0, lang::ClockUnit::Hertz, "33Hz ast");
   requireNumericAst("21.1hz", 21.1, lang::ClockUnit::Hertz, "21.1hz ast");
+  requireNumericAst("500mhz", 500.0, lang::ClockUnit::Millihertz,
+                    "500mhz ast");
   requireNumericAst("40ms", 40.0, lang::ClockUnit::Milliseconds, "40ms ast");
   requireNumericAst("2.4 seconds", 2.4, lang::ClockUnit::Seconds,
                     "2.4 seconds ast");
+  requireNumericAst("3s", 3.0, lang::ClockUnit::Seconds, "3s ast");
   requireNumericAst("12sec", 12.0, lang::ClockUnit::Seconds, "12sec ast");
   requireColonAst("3:23 minutes", 3, 23, lang::ClockUnit::Minutes,
                   "3:23 minutes ast");
@@ -119,11 +129,18 @@ void testEvaluator() {
   requireNear(spec.hz, 33.0, "33Hz hz");
   requireNear(spec.periodSeconds, 1.0 / 33.0, "33Hz period");
 
+  spec = requireEvaluates("500mhz");
+  requireNear(spec.hz, 0.5, "500mhz hz");
+  requireNear(spec.periodSeconds, 2.0, "500mhz period");
+
   spec = requireEvaluates("40ms");
   requireNear(spec.periodSeconds, 0.04, "40ms period");
 
   spec = requireEvaluates("2.4 seconds");
   requireNear(spec.periodSeconds, 2.4, "2.4 seconds period");
+
+  spec = requireEvaluates("3s");
+  requireNear(spec.periodSeconds, 3.0, "3s period");
 
   spec = requireEvaluates("3:23 minutes");
   requireNear(spec.periodSeconds, 203.0, "3:23 minutes period");

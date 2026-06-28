@@ -193,10 +193,14 @@ ClockUnit parseClockUnit(const std::string& unit) {
   if (lowered == "hz") {
     return ClockUnit::Hertz;
   }
+  if (lowered == "mhz") {
+    return ClockUnit::Millihertz;
+  }
   if (lowered == "ms") {
     return ClockUnit::Milliseconds;
   }
-  if (lowered == "sec" || lowered == "second" || lowered == "seconds") {
+  if (lowered == "s" || lowered == "sec" || lowered == "second" ||
+      lowered == "seconds") {
     return ClockUnit::Seconds;
   }
   if (lowered == "min" || lowered == "minute" || lowered == "minutes") {
@@ -211,6 +215,8 @@ std::string clockUnitName(ClockUnit unit) {
       return "bpm";
     case ClockUnit::Hertz:
       return "hz";
+    case ClockUnit::Millihertz:
+      return "mhz";
     case ClockUnit::Milliseconds:
       return "ms";
     case ClockUnit::Seconds:

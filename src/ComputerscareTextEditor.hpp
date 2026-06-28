@@ -30,9 +30,16 @@ struct ComputerscareTextEditorStyle {
   float cornerRadius = 3.f;
 };
 
+struct ComputerscareTextEditorSnapshot {
+  std::string text;
+  int cursor = 0;
+  int selection = 0;
+};
+
 struct ComputerscareTextEditor : ui::TextField {
   ComputerscareTextEditorState* state = nullptr;
   ComputerscareTextEditorStyle style;
+  size_t maxUndoDepth = 128;
 
   ComputerscareTextEditor();
 
@@ -41,10 +48,25 @@ struct ComputerscareTextEditor : ui::TextField {
   void draw(const DrawArgs& args) override;
   void drawLayer(const DrawArgs& args, int layer) override;
   void onButton(const ButtonEvent& e) override;
+  void onSelectText(const SelectTextEvent& e) override;
+  void onSelectKey(const SelectKeyEvent& e) override;
   void onChange(const ChangeEvent& e) override;
   int getTextPosition(Vec mousePos) override;
+  int getCursorLine() const;
 
  protected:
+  bool suppressChangeTracking = false;
+  bool handlingTrackedInput = false;
+  ComputerscareTextEditorSnapshot lastSnapshot;
+  std::vector<ComputerscareTextEditorSnapshot> undoStack;
+  std::vector<ComputerscareTextEditorSnapshot> redoStack;
+
+  ComputerscareTextEditorSnapshot captureSnapshot() const;
+  void restoreSnapshot(const ComputerscareTextEditorSnapshot& snapshot);
+  void pushUndoSnapshot(const ComputerscareTextEditorSnapshot& snapshot);
+  void clearHistory();
+  void undo();
+  void redo();
   std::shared_ptr<Font> loadEditorFont();
   void drawHighlightBackgrounds(const DrawArgs& args);
   void drawEditorText(const DrawArgs& args);

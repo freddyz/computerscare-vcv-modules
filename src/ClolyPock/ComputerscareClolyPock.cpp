@@ -1,5 +1,7 @@
 #include <cmath>
+#include <string>
 
+#include "../ClolyPockLanguage/ClolyPockLanguage.hpp"
 #include "../ComputerscareTextEditor.hpp"
 
 struct ComputerscareClolyPock : Module {
@@ -8,26 +10,41 @@ struct ComputerscareClolyPock : Module {
 
   enum ParamIds { NUM_PARAMS };
   enum InputIds { NUM_INPUTS };
-  enum OutputIds { CLOCK_OUTPUT, NUM_OUTPUTS };
-  enum LightIds { NUM_LIGHTS };
+  enum OutputIds { CLOCK_OUTPUT, EOC1_OUTPUT, EOC2_OUTPUT, NUM_OUTPUTS };
+  enum LightIds { SYNTAX_ERROR_LIGHT, NUM_LIGHTS };
 
   ComputerscareTextEditorState editorState;
   float clockPhase = 0.f;
   bool clockHigh = false;
+  bool syntaxError = false;
+  int selectedLine = 0;
+  int checkedLine = -1;
+  std::string checkedLineText;
+  int activeHighlightBegin = 0;
+  int activeHighlightEnd = 6;
+  cloly::language::ClockSpec activeClockSpec;
 
   ComputerscareClolyPock() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configOutput(CLOCK_OUTPUT, "Clock");
-    editorState.text = "x\n";
+    configOutput(EOC1_OUTPUT, "EOC 1");
+    configOutput(EOC2_OUTPUT, "EOC 2");
+    editorState.text = "120bpm\n33hz\n40ms\n";
+    activeClockSpec.bpm = CLOCK_BPM;
+    activeClockSpec.hz = CLOCK_HZ;
+    activeClockSpec.periodSeconds = 1.f / CLOCK_HZ;
   }
 
   void process(const ProcessArgs& args) override {
-    clockPhase += args.sampleTime * CLOCK_HZ;
+    clockPhase += args.sampleTime * activeClockSpec.hz;
     if (clockPhase >= 1.f) {
       clockPhase -= std::floor(clockPhase);
     }
     clockHigh = clockPhase < 0.5f;
     outputs[CLOCK_OUTPUT].setVoltage(clockHigh ? 10.f : 0.f);
+    outputs[EOC1_OUTPUT].setVoltage(0.f);
+    outputs[EOC2_OUTPUT].setVoltage(0.f);
+    lights[SYNTAX_ERROR_LIGHT].setBrightness(syntaxError ? 1.f : 0.f);
   }
 
   json_t* dataToJson() override {
@@ -45,6 +62,34 @@ struct ComputerscareClolyPock : Module {
       editorState.dirty = true;
     }
   }
+
+  void setSelectedLineProgram(int line, int lineBegin,
+                              const std::string& lineText) {
+    if (line == checkedLine && lineText == checkedLineText) {
+      return;
+    }
+
+    checkedLine = line;
+    checkedLineText = lineText;
+    cloly::language::ParseResult parse =
+        cloly::language::parseClockLiteral(lineText);
+    if (!parse.ok()) {
+      syntaxError = true;
+      return;
+    }
+
+    cloly::language::EvaluationResult eval =
+        cloly::language::evaluateClockLiteral(parse.ast);
+    if (!eval.ok()) {
+      syntaxError = true;
+      return;
+    }
+
+    syntaxError = false;
+    activeClockSpec = eval.spec;
+    activeHighlightBegin = lineBegin + parse.ast.range.begin;
+    activeHighlightEnd = lineBegin + parse.ast.range.end;
+  }
 };
 
 struct ClolyPockTitle : TransparentWidget {
@@ -57,7 +102,7 @@ struct ClolyPockTitle : TransparentWidget {
 
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 18.f);
-    nvgFillColor(args.vg, nvgRGB(0x07, 0x09, 0x0a));
+    nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
     nvgText(args.vg, box.size.x / 2.f, 0.f, "Cloly Pock", NULL);
   }
@@ -67,20 +112,60 @@ struct ClolyPockPanel : Widget {
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
     nvgRect(args.vg, 0.f, 0.f, box.size.x, box.size.y);
-    nvgFillColor(args.vg, nvgRGB(0xc0, 0xe7, 0xde));
+    nvgFillColor(args.vg, nvgRGB(0xf4, 0xf2, 0xec));
     nvgFill(args.vg);
 
     nvgBeginPath(args.vg);
     nvgRect(args.vg, 0.f, 0.f, box.size.x, 42.f);
-    nvgFillColor(args.vg, nvgRGB(0x24, 0xc9, 0xa6));
+    nvgFillColor(args.vg, nvgRGB(0xff, 0xff, 0xfa));
     nvgFill(args.vg);
 
     nvgBeginPath(args.vg);
-    nvgRect(args.vg, 0.f, 334.f, box.size.x, box.size.y - 334.f);
-    nvgFillColor(args.vg, nvgRGB(0x24, 0x44, 0xc1));
-    nvgFill(args.vg);
+    nvgMoveTo(args.vg, 0.f, 42.f);
+    nvgLineTo(args.vg, box.size.x, 42.f);
+    nvgStrokeColor(args.vg, nvgRGB(0xd6, 0xd2, 0xc8));
+    nvgStrokeWidth(args.vg, 1.f);
+    nvgStroke(args.vg);
   }
 };
+
+struct ClolyPockLineInfo {
+  int begin = 0;
+  int end = 0;
+  std::string text;
+};
+
+static ClolyPockLineInfo getLineInfo(const std::string& text, int line) {
+  ClolyPockLineInfo info;
+  int currentLine = 0;
+  int length = text.size();
+  info.begin = 0;
+
+  for (int i = 0; i < length; i++) {
+    if (currentLine == line) {
+      info.begin = i;
+      break;
+    }
+    if (text[i] == '\n') {
+      currentLine++;
+      info.begin = i + 1;
+    }
+  }
+
+  if (line > currentLine) {
+    info.begin = length;
+  }
+
+  info.end = length;
+  for (int i = info.begin; i < length; i++) {
+    if (text[i] == '\n') {
+      info.end = i;
+      break;
+    }
+  }
+  info.text = text.substr(info.begin, info.end - info.begin);
+  return info;
+}
 
 struct ComputerscareClolyPockWidget : ModuleWidget {
   ComputerscareTextEditor* editor = nullptr;
@@ -88,7 +173,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
 
   ComputerscareClolyPockWidget(ComputerscareClolyPock* module) {
     setModule(module);
-    box.size = Vec(8 * 15.f, 380.f);
+    box.size = Vec(10 * 15.f, 380.f);
 
     ClolyPockPanel* panel = new ClolyPockPanel();
     panel->box.size = box.size;
@@ -100,18 +185,30 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     addChild(title);
 
     editor = createWidget<ComputerscareTextEditor>(Vec(8.f, 52.f));
-    editor->box.size = Vec(box.size.x - 16.f, 258.f);
+    editor->box.size = Vec(box.size.x - 16.f, 278.f);
     editor->placeholder = "type a sequence...";
+    editor->style.backgroundColor = nvgRGB(0x05, 0x06, 0x08);
+    editor->style.borderColor = nvgRGB(0x55, 0x5b, 0x64);
+    editor->style.textColor = nvgRGB(0xee, 0xee, 0xea);
+    editor->style.selectionColor = nvgRGBA(0xe4, 0xc4, 0x21, 0x66);
+    editor->style.placeholderColor = nvgRGBA(0xee, 0xee, 0xea, 0x66);
     if (module) {
       editor->setState(&module->editorState);
     } else {
-      browserEditorState.text = "x\n";
+      browserEditorState.text = "120bpm\n33hz\n40ms\n";
       editor->setState(&browserEditorState);
     }
     addChild(editor);
 
-    addOutput(createOutput<OutPort>(Vec(48.f, 340.f), module,
+    addChild(createLight<ComputerscareSmallLight<ComputerscareRedLight>>(
+        Vec(127.f, 18.f), module, ComputerscareClolyPock::SYNTAX_ERROR_LIGHT));
+
+    addOutput(createOutput<OutPort>(Vec(33.f, 340.f), module,
                                     ComputerscareClolyPock::CLOCK_OUTPUT));
+    addOutput(createOutput<OutPort>(Vec(65.f, 340.f), module,
+                                    ComputerscareClolyPock::EOC1_OUTPUT));
+    addOutput(createOutput<OutPort>(Vec(97.f, 340.f), module,
+                                    ComputerscareClolyPock::EOC2_OUTPUT));
   }
 
   void step() override {
@@ -125,6 +222,11 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
 
       if (clolyPock) {
         state = &clolyPock->editorState;
+        clolyPock->selectedLine = editor->getCursorLine();
+        ClolyPockLineInfo lineInfo =
+            getLineInfo(state->text, clolyPock->selectedLine);
+        clolyPock->setSelectedLineProgram(clolyPock->selectedLine,
+                                          lineInfo.begin, lineInfo.text);
         blinkHigh = clolyPock->clockHigh;
       } else {
         state = &browserEditorState;
@@ -135,12 +237,28 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       }
 
       state->highlights.clear();
-      if (blinkHigh && !state->text.empty()) {
+      int line = editor->getCursorLine();
+      ClolyPockLineInfo lineInfo = getLineInfo(state->text, line);
+      if (clolyPock && clolyPock->syntaxError) {
+        ComputerscareTextHighlight errorHighlight;
+        errorHighlight.begin = lineInfo.begin;
+        errorHighlight.end = std::max(lineInfo.end, lineInfo.begin + 1);
+        errorHighlight.background = nvgRGBA(0xc4, 0x34, 0x21, 0x35);
+        state->highlights.push_back(errorHighlight);
+      }
+      if (blinkHigh) {
         ComputerscareTextHighlight blinkHighlight;
-        blinkHighlight.begin = 0;
-        blinkHighlight.end = 1;
+        if (clolyPock) {
+          blinkHighlight.begin = clolyPock->activeHighlightBegin;
+          blinkHighlight.end = clolyPock->activeHighlightEnd;
+        } else {
+          blinkHighlight.begin = lineInfo.begin;
+          blinkHighlight.end = lineInfo.end;
+        }
         blinkHighlight.background = nvgRGBA(0xe4, 0xc4, 0x21, 0xd8);
-        state->highlights.push_back(blinkHighlight);
+        if (blinkHighlight.begin < blinkHighlight.end) {
+          state->highlights.push_back(blinkHighlight);
+        }
       }
     }
   }

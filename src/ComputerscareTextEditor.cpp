@@ -40,22 +40,31 @@ float xForTextOffset(NVGcontext* vg, const char* label, NVGtextRow& row,
 ComputerscareTextEditor::ComputerscareTextEditor() {
   multiline = true;
   placeholder = "";
+  lastSnapshot = captureSnapshot();
 }
 
 void ComputerscareTextEditor::setState(
     ComputerscareTextEditorState* editorState) {
   state = editorState;
   if (state) {
+    suppressChangeTracking = true;
     setText(state->text);
+    suppressChangeTracking = false;
     state->dirty = false;
+    clearHistory();
+    lastSnapshot = captureSnapshot();
   }
 }
 
 void ComputerscareTextEditor::step() {
   ui::TextField::step();
   if (state && state->dirty) {
+    suppressChangeTracking = true;
     setText(state->text);
+    suppressChangeTracking = false;
     state->dirty = false;
+    clearHistory();
+    lastSnapshot = captureSnapshot();
   }
 }
 
@@ -94,12 +103,60 @@ void ComputerscareTextEditor::onButton(const ButtonEvent& e) {
   if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT) {
     APP->event->setSelectedWidget(this);
   }
+  lastSnapshot = captureSnapshot();
+}
+
+void ComputerscareTextEditor::onSelectText(const SelectTextEvent& e) {
+  ComputerscareTextEditorSnapshot before = captureSnapshot();
+  handlingTrackedInput = true;
+  ui::TextField::onSelectText(e);
+  handlingTrackedInput = false;
+  if (text != before.text) {
+    pushUndoSnapshot(before);
+    redoStack.clear();
+  }
+  lastSnapshot = captureSnapshot();
+}
+
+void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
+  if (e.action == GLFW_PRESS || e.action == GLFW_REPEAT) {
+    int mods = e.mods & RACK_MOD_MASK;
+    bool isZ = e.key == GLFW_KEY_Z || e.keyName == "z";
+    bool isY = e.key == GLFW_KEY_Y || e.keyName == "y";
+    if ((isZ && mods == (RACK_MOD_CTRL | GLFW_MOD_SHIFT)) ||
+        (isY && mods == RACK_MOD_CTRL)) {
+      redo();
+      e.consume(this);
+      return;
+    }
+    if (isZ && mods == RACK_MOD_CTRL) {
+      undo();
+      e.consume(this);
+      return;
+    }
+  }
+
+  ComputerscareTextEditorSnapshot before = captureSnapshot();
+  handlingTrackedInput = true;
+  ui::TextField::onSelectKey(e);
+  handlingTrackedInput = false;
+  if (text != before.text) {
+    pushUndoSnapshot(before);
+    redoStack.clear();
+  }
+  lastSnapshot = captureSnapshot();
 }
 
 void ComputerscareTextEditor::onChange(const ChangeEvent& e) {
+  if (!suppressChangeTracking && !handlingTrackedInput &&
+      text != lastSnapshot.text) {
+    pushUndoSnapshot(lastSnapshot);
+    redoStack.clear();
+  }
   if (state) {
     state->text = text;
   }
+  lastSnapshot = captureSnapshot();
 }
 
 int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
@@ -114,6 +171,77 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
   }
 
   return ui::TextField::getTextPosition(mousePos);
+}
+
+int ComputerscareTextEditor::getCursorLine() const {
+  int line = 0;
+  int cursorLimit = std::max(0, std::min(cursor, (int)text.size()));
+  for (int i = 0; i < cursorLimit; i++) {
+    if (text[i] == '\n') {
+      line++;
+    }
+  }
+  return line;
+}
+
+ComputerscareTextEditorSnapshot ComputerscareTextEditor::captureSnapshot()
+    const {
+  ComputerscareTextEditorSnapshot snapshot;
+  snapshot.text = text;
+  snapshot.cursor = cursor;
+  snapshot.selection = selection;
+  return snapshot;
+}
+
+void ComputerscareTextEditor::restoreSnapshot(
+    const ComputerscareTextEditorSnapshot& snapshot) {
+  suppressChangeTracking = true;
+  text = snapshot.text;
+  cursor = std::max(0, std::min(snapshot.cursor, (int)text.size()));
+  selection = std::max(0, std::min(snapshot.selection, (int)text.size()));
+  if (state) {
+    state->text = text;
+  }
+  suppressChangeTracking = false;
+  lastSnapshot = captureSnapshot();
+}
+
+void ComputerscareTextEditor::pushUndoSnapshot(
+    const ComputerscareTextEditorSnapshot& snapshot) {
+  if (!undoStack.empty() && undoStack.back().text == snapshot.text &&
+      undoStack.back().cursor == snapshot.cursor &&
+      undoStack.back().selection == snapshot.selection) {
+    return;
+  }
+  undoStack.push_back(snapshot);
+  if (undoStack.size() > maxUndoDepth) {
+    undoStack.erase(undoStack.begin());
+  }
+}
+
+void ComputerscareTextEditor::clearHistory() {
+  undoStack.clear();
+  redoStack.clear();
+}
+
+void ComputerscareTextEditor::undo() {
+  if (undoStack.empty()) {
+    return;
+  }
+  redoStack.push_back(captureSnapshot());
+  ComputerscareTextEditorSnapshot snapshot = undoStack.back();
+  undoStack.pop_back();
+  restoreSnapshot(snapshot);
+}
+
+void ComputerscareTextEditor::redo() {
+  if (redoStack.empty()) {
+    return;
+  }
+  undoStack.push_back(captureSnapshot());
+  ComputerscareTextEditorSnapshot snapshot = redoStack.back();
+  redoStack.pop_back();
+  restoreSnapshot(snapshot);
 }
 
 std::shared_ptr<Font> ComputerscareTextEditor::loadEditorFont() {

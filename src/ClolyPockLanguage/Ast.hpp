@@ -16,7 +16,15 @@ struct Diagnostic {
   SourceRange range;
 };
 
-enum class ClockUnit { Unknown, Bpm, Hertz, Milliseconds, Seconds, Minutes };
+enum class ClockUnit {
+  Unknown,
+  Bpm,
+  Hertz,
+  Millihertz,
+  Milliseconds,
+  Seconds,
+  Minutes
+};
 
 enum class ClockLiteralKind { Empty, Numeric, Colon };
 
