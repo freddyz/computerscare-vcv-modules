@@ -158,6 +158,12 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/sloly-pit.md"
     },
     {
+      "slug": "computerscare-cloly-pock",
+      "name": "Cloly Pock",
+      "description": "Text sequencer editor with an internal 120 BPM clock",
+      "tags": ["Sequencer", "Clock modulator"]
+    },
+    {
       "slug": "computerscare-mely-porge",
       "name": "Mely Porge",
       "description": "Polyphonic input processor with 16 insert channels",
