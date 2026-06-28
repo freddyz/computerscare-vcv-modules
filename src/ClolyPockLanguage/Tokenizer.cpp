@@ -79,6 +79,34 @@ std::vector<Token> tokenize(const std::string& source) {
       continue;
     }
 
+    if (c == ',') {
+      tokens.push_back(
+          {TokenType::Comma, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
+    if (c == '@') {
+      tokens.push_back(
+          {TokenType::At, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
+    if (c == '[') {
+      tokens.push_back(
+          {TokenType::LeftBracket, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
+    if (c == ']') {
+      tokens.push_back(
+          {TokenType::RightBracket, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
     tokens.push_back(
         {TokenType::Invalid, source.substr(index, 1), index, index + 1});
     index++;
@@ -96,6 +124,14 @@ std::string tokenTypeName(TokenType type) {
       return "Identifier";
     case TokenType::Colon:
       return "Colon";
+    case TokenType::Comma:
+      return "Comma";
+    case TokenType::At:
+      return "At";
+    case TokenType::LeftBracket:
+      return "LeftBracket";
+    case TokenType::RightBracket:
+      return "RightBracket";
     case TokenType::End:
       return "End";
     case TokenType::Invalid:

@@ -44,8 +44,21 @@ struct ClockLiteralAst {
   std::string secondsLexeme;
 };
 
+struct ClockBlockAst {
+  ClockLiteralAst literal;
+  int repeat = 1;
+  SourceRange range;
+  SourceRange repeatRange;
+};
+
+struct ClockProgramAst {
+  std::vector<ClockBlockAst> blocks;
+  SourceRange range;
+};
+
 struct ParseResult {
   ClockLiteralAst ast;
+  ClockProgramAst program;
   std::vector<Diagnostic> diagnostics;
 
   bool ok() const { return diagnostics.empty(); }

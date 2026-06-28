@@ -57,31 +57,22 @@ class Parser {
     ParseResult result;
 
     if (peek().type == TokenType::End) {
-      addDiagnostic(result, "Expected clock literal", rangeFromToken(peek()));
+      addDiagnostic(result, "Expected clock program", rangeFromToken(peek()));
       return result;
     }
 
-    if (peek().type == TokenType::Invalid) {
-      addDiagnostic(result, "Invalid token", rangeFromToken(peek()));
-      advance();
-      consumeTrailing(result);
-      return result;
+    result.program.range.begin = peek().begin;
+    while (!isAtEnd()) {
+      if (matchSeparator()) {
+        continue;
+      }
+      parseBlock(result, result.program.blocks);
     }
 
-    if (peek().type != TokenType::Number) {
-      addDiagnostic(result, "Expected number", rangeFromToken(peek()));
-      consumeTrailing(result);
-      return result;
+    if (!result.program.blocks.empty()) {
+      result.program.range.end = result.program.blocks.back().range.end;
+      result.ast = result.program.blocks.front().literal;
     }
-
-    Token firstNumber = advance();
-    if (peek().type == TokenType::Colon) {
-      parseColonLiteral(result, firstNumber);
-    } else {
-      parseNumericLiteral(result, firstNumber);
-    }
-
-    consumeTrailing(result);
     return result;
   }
 
@@ -102,75 +93,199 @@ class Parser {
     return previous();
   }
 
-  void parseNumericLiteral(ParseResult& result, const Token& valueToken) {
-    result.ast.kind = ClockLiteralKind::Numeric;
-    result.ast.value = parseDouble(valueToken.lexeme);
-    result.ast.valueLexeme = valueToken.lexeme;
-    result.ast.range.begin = valueToken.begin;
-
-    parseUnit(result);
-    result.ast.range.end = result.ast.unitRange.end > 0
-                               ? result.ast.unitRange.end
-                               : valueToken.end;
+  bool matchSeparator() {
+    if (peek().type == TokenType::Comma) {
+      advance();
+      return true;
+    }
+    return false;
   }
 
-  void parseColonLiteral(ParseResult& result, const Token& minutesToken) {
+  void parseBlock(ParseResult& result, std::vector<ClockBlockAst>& blocks) {
+    if (peek().type == TokenType::Invalid) {
+      addDiagnostic(result, "Invalid token", rangeFromToken(peek()));
+      advance();
+      return;
+    }
+
+    if (peek().type == TokenType::RightBracket) {
+      addDiagnostic(result, "Unexpected ']'", rangeFromToken(peek()));
+      advance();
+      return;
+    }
+
+    if (peek().type == TokenType::LeftBracket) {
+      parseBracketBlock(result, blocks);
+      return;
+    }
+
+    if (peek().type != TokenType::Number) {
+      addDiagnostic(result, "Expected clock literal", rangeFromToken(peek()));
+      advance();
+      return;
+    }
+
+    ClockBlockAst block;
+    block.literal = parseLiteral(result);
+    block.range = block.literal.range;
+    parseRepeat(result, block);
+    blocks.push_back(block);
+  }
+
+  void parseBracketBlock(ParseResult& result,
+                         std::vector<ClockBlockAst>& blocks) {
+    Token leftBracket = advance();
+    std::vector<ClockBlockAst> groupBlocks;
+
+    while (!isAtEnd() && peek().type != TokenType::RightBracket) {
+      if (matchSeparator()) {
+        continue;
+      }
+      parseBlock(result, groupBlocks);
+    }
+
+    Token rightBracket;
+    if (peek().type == TokenType::RightBracket) {
+      rightBracket = advance();
+    } else {
+      addDiagnostic(result, "Expected ']'", rangeFromToken(leftBracket));
+      rightBracket = leftBracket;
+    }
+
+    ClockBlockAst repeatBlock;
+    repeatBlock.range.begin = leftBracket.begin;
+    repeatBlock.range.end = rightBracket.end;
+    parseRepeat(result, repeatBlock);
+
+    if (groupBlocks.empty()) {
+      addDiagnostic(result, "Expected clock literal in brackets",
+                    rangeFromToken(leftBracket));
+      return;
+    }
+
+    for (size_t i = 0; i < groupBlocks.size(); i++) {
+      groupBlocks[i].repeat *= repeatBlock.repeat;
+      if (repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin) {
+        groupBlocks[i].repeatRange = repeatBlock.repeatRange;
+      }
+      blocks.push_back(groupBlocks[i]);
+    }
+  }
+
+  ClockLiteralAst parseLiteral(ParseResult& result) {
+    Token firstNumber = advance();
+    if (peek().type == TokenType::Colon) {
+      return parseColonLiteral(result, firstNumber);
+    }
+    return parseNumericLiteral(result, firstNumber);
+  }
+
+  ClockLiteralAst parseNumericLiteral(ParseResult& result,
+                                      const Token& valueToken) {
+    ClockLiteralAst ast;
+    ast.kind = ClockLiteralKind::Numeric;
+    ast.unit = ClockUnit::Bpm;
+    ast.value = parseDouble(valueToken.lexeme);
+    ast.valueLexeme = valueToken.lexeme;
+    ast.range.begin = valueToken.begin;
+
+    parseOptionalUnit(result, ast);
+    ast.range.end = ast.unitRange.end > 0 ? ast.unitRange.end : valueToken.end;
+    return ast;
+  }
+
+  ClockLiteralAst parseColonLiteral(ParseResult& result,
+                                    const Token& minutesToken) {
     Token colon = advance();
-    result.ast.kind = ClockLiteralKind::Colon;
-    result.ast.minutesLexeme = minutesToken.lexeme;
-    result.ast.range.begin = minutesToken.begin;
+    ClockLiteralAst ast;
+    ast.kind = ClockLiteralKind::Colon;
+    ast.minutesLexeme = minutesToken.lexeme;
+    ast.range.begin = minutesToken.begin;
 
     if (!isIntegerLexeme(minutesToken.lexeme)) {
       addDiagnostic(result, "Colon time minutes must be an integer",
                     rangeFromToken(minutesToken));
     } else {
-      result.ast.minutes = parseInt(minutesToken.lexeme);
+      ast.minutes = parseInt(minutesToken.lexeme);
     }
 
     if (peek().type != TokenType::Number) {
       addDiagnostic(result, "Expected seconds after ':'",
                     rangeFromToken(colon));
-      return;
+      ast.range.end = colon.end;
+      return ast;
     }
 
     Token secondsToken = advance();
-    result.ast.secondsLexeme = secondsToken.lexeme;
+    ast.secondsLexeme = secondsToken.lexeme;
     if (!isIntegerLexeme(secondsToken.lexeme)) {
       addDiagnostic(result, "Colon time seconds must be an integer",
                     rangeFromToken(secondsToken));
     } else {
-      result.ast.seconds = parseInt(secondsToken.lexeme);
-      if (result.ast.seconds >= 60) {
+      ast.seconds = parseInt(secondsToken.lexeme);
+      if (ast.seconds >= 60) {
         addDiagnostic(result, "Colon time seconds must be less than 60",
                       rangeFromToken(secondsToken));
       }
     }
 
-    parseUnit(result);
-    result.ast.range.end = result.ast.unitRange.end > 0
-                               ? result.ast.unitRange.end
-                               : secondsToken.end;
+    parseRequiredUnit(result, ast);
+    ast.range.end =
+        ast.unitRange.end > 0 ? ast.unitRange.end : secondsToken.end;
+    return ast;
   }
 
-  void parseUnit(ParseResult& result) {
+  void parseOptionalUnit(ParseResult& result, ClockLiteralAst& ast) {
+    if (peek().type != TokenType::Identifier) {
+      return;
+    }
+
+    parseUnitToken(result, ast);
+  }
+
+  void parseRequiredUnit(ParseResult& result, ClockLiteralAst& ast) {
     if (peek().type != TokenType::Identifier) {
       addDiagnostic(result, "Expected clock unit", rangeFromToken(peek()));
       return;
     }
 
+    parseUnitToken(result, ast);
+  }
+
+  void parseUnitToken(ParseResult& result, ClockLiteralAst& ast) {
     Token unitToken = advance();
-    result.ast.unit = parseClockUnit(unitToken.lexeme);
-    result.ast.unitRange = rangeFromToken(unitToken);
-    if (result.ast.unit == ClockUnit::Unknown) {
+    ast.unit = parseClockUnit(unitToken.lexeme);
+    ast.unitRange = rangeFromToken(unitToken);
+    if (ast.unit == ClockUnit::Unknown) {
       addDiagnostic(result, "Unknown clock unit", rangeFromToken(unitToken));
     }
   }
 
-  void consumeTrailing(ParseResult& result) {
-    while (!isAtEnd()) {
-      addDiagnostic(result, "Unexpected trailing input",
-                    rangeFromToken(peek()));
-      advance();
+  void parseRepeat(ParseResult& result, ClockBlockAst& block) {
+    if (peek().type != TokenType::At) {
+      return;
+    }
+
+    Token atToken = advance();
+    if (peek().type != TokenType::Number) {
+      addDiagnostic(result, "Expected repeat count after '@'",
+                    rangeFromToken(atToken));
+      return;
+    }
+
+    Token repeatToken = advance();
+    block.repeatRange.begin = atToken.begin;
+    block.repeatRange.end = repeatToken.end;
+    if (!isIntegerLexeme(repeatToken.lexeme)) {
+      addDiagnostic(result, "Repeat count must be an integer",
+                    rangeFromToken(repeatToken));
+      return;
+    }
+
+    block.repeat = parseInt(repeatToken.lexeme);
+    if (block.repeat <= 0) {
+      addDiagnostic(result, "Repeat count must be greater than zero",
+                    rangeFromToken(repeatToken));
     }
   }
 };

@@ -33,6 +33,12 @@ void requireToken(const lang::Token& token, lang::TokenType type,
   require(token.end == end, message);
 }
 
+void requireRange(lang::SourceRange range, int begin, int end,
+                  const char* message) {
+  require(range.begin == begin, message);
+  require(range.end == end, message);
+}
+
 void requireNumericAst(const std::string& source, double value,
                        lang::ClockUnit unit, const char* message) {
   lang::ParseResult result = lang::parseClockLiteral(source);
@@ -110,9 +116,54 @@ void testTokenizer() {
                "500mhz first token");
   requireToken(tokens[1], lang::TokenType::Identifier, "mhz", 3, 6,
                "500mhz second token");
+
+  tokens = lang::tokenize("[120 90]@6");
+  require(tokens.size() == 7, "[120 90]@6 token count");
+  requireToken(tokens[0], lang::TokenType::LeftBracket, "[", 0, 1,
+               "[120 90]@6 token 0");
+  requireToken(tokens[1], lang::TokenType::Number, "120", 1, 4,
+               "[120 90]@6 token 1");
+  requireToken(tokens[2], lang::TokenType::Number, "90", 5, 7,
+               "[120 90]@6 token 2");
+  requireToken(tokens[3], lang::TokenType::RightBracket, "]", 7, 8,
+               "[120 90]@6 token 3");
+  requireToken(tokens[4], lang::TokenType::At, "@", 8, 9,
+               "[120 90]@6 token 4");
+  requireToken(tokens[5], lang::TokenType::Number, "6", 9, 10,
+               "[120 90]@6 token 5");
+
+  tokens = lang::tokenize("[244 [9hz,8hz]]@9");
+  require(tokens.size() == 13, "[244 [9hz,8hz]]@9 token count");
+  requireToken(tokens[0], lang::TokenType::LeftBracket, "[", 0, 1,
+               "[244 [9hz,8hz]]@9 token 0");
+  requireToken(tokens[1], lang::TokenType::Number, "244", 1, 4,
+               "[244 [9hz,8hz]]@9 token 1");
+  requireToken(tokens[2], lang::TokenType::LeftBracket, "[", 5, 6,
+               "[244 [9hz,8hz]]@9 token 2");
+  requireToken(tokens[3], lang::TokenType::Number, "9", 6, 7,
+               "[244 [9hz,8hz]]@9 token 3");
+  requireToken(tokens[4], lang::TokenType::Identifier, "hz", 7, 9,
+               "[244 [9hz,8hz]]@9 token 4");
+  requireToken(tokens[5], lang::TokenType::Comma, ",", 9, 10,
+               "[244 [9hz,8hz]]@9 token 5");
+  requireToken(tokens[6], lang::TokenType::Number, "8", 10, 11,
+               "[244 [9hz,8hz]]@9 token 6");
+  requireToken(tokens[7], lang::TokenType::Identifier, "hz", 11, 13,
+               "[244 [9hz,8hz]]@9 token 7");
+  requireToken(tokens[8], lang::TokenType::RightBracket, "]", 13, 14,
+               "[244 [9hz,8hz]]@9 token 8");
+  requireToken(tokens[9], lang::TokenType::RightBracket, "]", 14, 15,
+               "[244 [9hz,8hz]]@9 token 9");
+  requireToken(tokens[10], lang::TokenType::At, "@", 15, 16,
+               "[244 [9hz,8hz]]@9 token 10");
+  requireToken(tokens[11], lang::TokenType::Number, "9", 16, 17,
+               "[244 [9hz,8hz]]@9 token 11");
+  require(tokens[12].type == lang::TokenType::End,
+          "[244 [9hz,8hz]]@9 end token");
 }
 
 void testAst() {
+  requireNumericAst("120", 120.0, lang::ClockUnit::Bpm, "120 ast");
   requireNumericAst("120bpm", 120.0, lang::ClockUnit::Bpm, "120bpm ast");
   requireNumericAst("45rpm", 45.0, lang::ClockUnit::Bpm, "45rpm ast");
   requireNumericAst("33Hz", 33.0, lang::ClockUnit::Hertz, "33Hz ast");
@@ -133,8 +184,138 @@ void testAst() {
                   "3:23 minutes ast");
 }
 
+void testProgramAst() {
+  lang::ParseResult result = lang::parseClockLiteral("90bpm 55bpm");
+  require(result.ok(), "90bpm 55bpm program parses");
+  require(result.program.blocks.size() == 2, "90bpm 55bpm block count");
+  requireNear(result.program.blocks[0].literal.value, 90.0,
+              "90bpm 55bpm first value");
+  requireNear(result.program.blocks[1].literal.value, 55.0,
+              "90bpm 55bpm second value");
+  require(result.program.blocks[0].repeat == 1, "90bpm repeat");
+  require(result.program.blocks[1].repeat == 1, "55bpm repeat");
+
+  result = lang::parseClockLiteral("90bpm@4 2hz@5");
+  require(result.ok(), "90bpm@4 2hz@5 program parses");
+  require(result.program.blocks.size() == 2, "90bpm@4 2hz@5 block count");
+  require(result.program.blocks[0].repeat == 4, "90bpm@4 repeat");
+  require(result.program.blocks[1].repeat == 5, "2hz@5 repeat");
+  requireRange(result.program.blocks[0].literal.range, 0, 5,
+               "90bpm@4 first literal range");
+  requireRange(result.program.blocks[0].repeatRange, 5, 7,
+               "90bpm@4 first repeat range");
+  requireRange(result.program.blocks[1].literal.range, 8, 11,
+               "2hz@5 second literal range");
+  requireRange(result.program.blocks[1].repeatRange, 11, 13,
+               "2hz@5 second repeat range");
+
+  result = lang::parseClockLiteral("[120 90 133.3]@6");
+  require(result.ok(), "[120 90 133.3]@6 program parses");
+  require(result.program.blocks.size() == 3, "[120 90 133.3]@6 block count");
+  requireNear(result.program.blocks[0].literal.value, 120.0,
+              "[120 90 133.3]@6 first value");
+  requireNear(result.program.blocks[1].literal.value, 90.0,
+              "[120 90 133.3]@6 second value");
+  requireNear(result.program.blocks[2].literal.value, 133.3,
+              "[120 90 133.3]@6 third value");
+  require(result.program.blocks[0].repeat == 6, "[120]@6 repeat");
+  require(result.program.blocks[1].repeat == 6, "[90]@6 repeat");
+  require(result.program.blocks[2].repeat == 6, "[133.3]@6 repeat");
+  requireRange(result.program.blocks[0].literal.range, 1, 4,
+               "[120 90 133.3]@6 first literal range");
+  requireRange(result.program.blocks[1].literal.range, 5, 7,
+               "[120 90 133.3]@6 second literal range");
+  requireRange(result.program.blocks[2].literal.range, 8, 13,
+               "[120 90 133.3]@6 third literal range");
+  requireRange(result.program.blocks[0].repeatRange, 14, 16,
+               "[120 90 133.3]@6 first repeat range");
+  requireRange(result.program.blocks[1].repeatRange, 14, 16,
+               "[120 90 133.3]@6 second repeat range");
+  requireRange(result.program.blocks[2].repeatRange, 14, 16,
+               "[120 90 133.3]@6 third repeat range");
+
+  result = lang::parseClockLiteral("[244 [9hz,8hz]]@9");
+  require(result.ok(), "[244 [9hz,8hz]]@9 program parses");
+  require(result.program.blocks.size() == 3, "[244 [9hz,8hz]]@9 block count");
+  requireNear(result.program.blocks[0].literal.value, 244.0,
+              "[244 [9hz,8hz]]@9 first value");
+  requireNear(result.program.blocks[1].literal.value, 9.0,
+              "[244 [9hz,8hz]]@9 second value");
+  requireNear(result.program.blocks[2].literal.value, 8.0,
+              "[244 [9hz,8hz]]@9 third value");
+  require(result.program.blocks[0].literal.unit == lang::ClockUnit::Bpm,
+          "[244 [9hz,8hz]]@9 first unit defaults bpm");
+  require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
+          "[244 [9hz,8hz]]@9 second unit hz");
+  require(result.program.blocks[2].literal.unit == lang::ClockUnit::Hertz,
+          "[244 [9hz,8hz]]@9 third unit hz");
+  require(result.program.blocks[0].repeat == 9,
+          "[244 [9hz,8hz]]@9 first repeat");
+  require(result.program.blocks[1].repeat == 9,
+          "[244 [9hz,8hz]]@9 second repeat");
+  require(result.program.blocks[2].repeat == 9,
+          "[244 [9hz,8hz]]@9 third repeat");
+  requireRange(result.program.blocks[0].literal.range, 1, 4,
+               "[244 [9hz,8hz]]@9 first literal range");
+  requireRange(result.program.blocks[1].literal.range, 6, 9,
+               "[244 [9hz,8hz]]@9 second literal range");
+  requireRange(result.program.blocks[2].literal.range, 10, 13,
+               "[244 [9hz,8hz]]@9 third literal range");
+  requireRange(result.program.blocks[0].repeatRange, 15, 17,
+               "[244 [9hz,8hz]]@9 first repeat range");
+  requireRange(result.program.blocks[1].repeatRange, 15, 17,
+               "[244 [9hz,8hz]]@9 second repeat range");
+  requireRange(result.program.blocks[2].repeatRange, 15, 17,
+               "[244 [9hz,8hz]]@9 third repeat range");
+}
+
+void testProgramEvaluation() {
+  lang::ParseResult result = lang::parseClockLiteral("90bpm 55bpm");
+  require(result.ok(), "90bpm 55bpm evaluates parse");
+  lang::EvaluationResult eval =
+      lang::evaluateClockLiteral(result.program.blocks[0].literal);
+  require(eval.ok(), "90bpm block evaluates");
+  requireNear(eval.spec.hz, 1.5, "90bpm block hz");
+
+  eval = lang::evaluateClockLiteral(result.program.blocks[1].literal);
+  require(eval.ok(), "55bpm block evaluates");
+  requireNear(eval.spec.hz, 55.0 / 60.0, "55bpm block hz");
+
+  result = lang::parseClockLiteral("[120 90 133.3]@6");
+  require(result.ok(), "[120 90 133.3]@6 evaluates parse");
+  eval = lang::evaluateClockLiteral(result.program.blocks[0].literal);
+  require(eval.ok(), "120 bracket block evaluates");
+  requireNear(eval.spec.hz, 2.0, "120 bracket block hz");
+
+  eval = lang::evaluateClockLiteral(result.program.blocks[1].literal);
+  require(eval.ok(), "90 bracket block evaluates");
+  requireNear(eval.spec.hz, 1.5, "90 bracket block hz");
+
+  eval = lang::evaluateClockLiteral(result.program.blocks[2].literal);
+  require(eval.ok(), "133.3 bracket block evaluates");
+  requireNear(eval.spec.hz, 133.3 / 60.0, "133.3 bracket block hz");
+
+  result = lang::parseClockLiteral("[244 [9hz,8hz]]@9");
+  require(result.ok(), "[244 [9hz,8hz]]@9 evaluates parse");
+  eval = lang::evaluateClockLiteral(result.program.blocks[0].literal);
+  require(eval.ok(), "244 nested block evaluates");
+  requireNear(eval.spec.hz, 244.0 / 60.0, "244 nested block hz");
+
+  eval = lang::evaluateClockLiteral(result.program.blocks[1].literal);
+  require(eval.ok(), "9hz nested block evaluates");
+  requireNear(eval.spec.hz, 9.0, "9hz nested block hz");
+
+  eval = lang::evaluateClockLiteral(result.program.blocks[2].literal);
+  require(eval.ok(), "8hz nested block evaluates");
+  requireNear(eval.spec.hz, 8.0, "8hz nested block hz");
+}
+
 void testEvaluator() {
-  lang::ClockSpec spec = requireEvaluates("120bpm");
+  lang::ClockSpec spec = requireEvaluates("120");
+  requireNear(spec.hz, 2.0, "120 unitless hz");
+  requireNear(spec.periodSeconds, 0.5, "120 unitless period");
+
+  spec = requireEvaluates("120bpm");
   requireNear(spec.hz, 2.0, "120bpm hz");
   requireNear(spec.periodSeconds, 0.5, "120bpm period");
 
@@ -182,19 +363,22 @@ void testEvaluator() {
 }
 
 void testInvalidInputs() {
-  requireInvalid("120", "missing unit invalid");
   requireInvalid("120bananas", "unknown unit invalid");
   requireInvalid("1.2.3hz", "malformed number invalid");
   requireInvalid("3.5:23 minutes", "decimal colon minutes invalid");
   requireInvalid("3:90 minutes", "colon seconds >= 60 invalid");
-  requireInvalid("120bpm extra", "trailing junk invalid");
+  requireInvalid("120bpm !", "trailing junk invalid");
   requireInvalid("hz", "missing number invalid");
+  requireInvalid("120bpm@1.5", "decimal repeat invalid");
+  requireInvalid("[120 90", "missing right bracket invalid");
 }
 }  // namespace
 
 int main() {
   testTokenizer();
   testAst();
+  testProgramAst();
+  testProgramEvaluation();
   testEvaluator();
   testInvalidInputs();
   std::puts("cloly pock language tests passed");

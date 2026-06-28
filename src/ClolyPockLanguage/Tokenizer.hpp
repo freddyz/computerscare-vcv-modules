@@ -8,7 +8,17 @@
 namespace cloly {
 namespace language {
 
-enum class TokenType { Number, Identifier, Colon, End, Invalid };
+enum class TokenType {
+  Number,
+  Identifier,
+  Colon,
+  Comma,
+  At,
+  LeftBracket,
+  RightBracket,
+  End,
+  Invalid
+};
 
 struct Token {
   TokenType type = TokenType::Invalid;

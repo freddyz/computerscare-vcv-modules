@@ -1,8 +1,17 @@
+#include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include "../ClolyPockLanguage/ClolyPockLanguage.hpp"
 #include "../ComputerscareTextEditor.hpp"
+
+struct ClolyPockProgramStep {
+  cloly::language::ClockSpec spec;
+  int repeat = 1;
+  int highlightBegin = 0;
+  int highlightEnd = 0;
+};
 
 struct ComputerscareClolyPock : Module {
   static constexpr float CLOCK_BPM = 120.f;
@@ -25,6 +34,9 @@ struct ComputerscareClolyPock : Module {
   int activeHighlightBegin = 0;
   int activeHighlightEnd = 6;
   cloly::language::ClockSpec activeClockSpec;
+  std::vector<ClolyPockProgramStep> activeProgram;
+  int activeProgramIndex = 0;
+  int activeProgramBeat = 0;
 
   ComputerscareClolyPock() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -39,8 +51,9 @@ struct ComputerscareClolyPock : Module {
 
   void process(const ProcessArgs& args) override {
     clockPhase += args.sampleTime * activeClockSpec.hz;
-    if (clockPhase >= 1.f) {
-      clockPhase -= std::floor(clockPhase);
+    while (clockPhase >= 1.f) {
+      clockPhase -= 1.f;
+      advanceActiveProgram();
     }
     activeClockRamp = clockPhase;
     clockHigh = clockPhase < 0.5f;
@@ -87,19 +100,65 @@ struct ComputerscareClolyPock : Module {
       return;
     }
 
-    cloly::language::EvaluationResult eval =
-        cloly::language::evaluateClockLiteral(parse.ast);
-    if (!eval.ok()) {
+    std::vector<ClolyPockProgramStep> program;
+    for (size_t i = 0; i < parse.program.blocks.size(); i++) {
+      const cloly::language::ClockBlockAst& block = parse.program.blocks[i];
+      cloly::language::EvaluationResult eval =
+          cloly::language::evaluateClockLiteral(block.literal);
+      if (!eval.ok()) {
+        syntaxError = true;
+        return;
+      }
+
+      ClolyPockProgramStep step;
+      step.spec = eval.spec;
+      step.repeat = std::max(1, block.repeat);
+      step.highlightBegin = lineBegin + block.literal.range.begin;
+      step.highlightEnd = lineBegin + block.literal.range.end;
+      program.push_back(step);
+    }
+
+    if (program.empty()) {
       syntaxError = true;
       return;
     }
 
     syntaxError = false;
-    activeClockSpec = eval.spec;
+    activeProgram = program;
+    activeProgramIndex = 0;
+    activeProgramBeat = 0;
     clockPhase = 0.f;
     activeClockRamp = 0.f;
-    activeHighlightBegin = lineBegin + parse.ast.range.begin;
-    activeHighlightEnd = lineBegin + parse.ast.range.end;
+    applyActiveProgramStep();
+  }
+
+  void applyActiveProgramStep() {
+    if (activeProgram.empty()) {
+      return;
+    }
+
+    activeProgramIndex = std::max(
+        0, std::min(activeProgramIndex, (int)activeProgram.size() - 1));
+    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    activeClockSpec = step.spec;
+    activeHighlightBegin = step.highlightBegin;
+    activeHighlightEnd = step.highlightEnd;
+  }
+
+  void advanceActiveProgram() {
+    if (activeProgram.empty()) {
+      return;
+    }
+
+    activeProgramBeat++;
+    if (activeProgramBeat >= activeProgram[activeProgramIndex].repeat) {
+      activeProgramBeat = 0;
+      activeProgramIndex++;
+      if (activeProgramIndex >= (int)activeProgram.size()) {
+        activeProgramIndex = 0;
+      }
+      applyActiveProgramStep();
+    }
   }
 };
 
