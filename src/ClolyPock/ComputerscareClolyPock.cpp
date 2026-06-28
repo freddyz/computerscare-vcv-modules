@@ -1,10 +1,68 @@
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <string>
 #include <vector>
 
 #include "../ClolyPockLanguage/ClolyPockLanguage.hpp"
 #include "../ComputerscareTextEditor.hpp"
+
+struct ClolyPockLineInfo {
+  int begin = 0;
+  int end = 0;
+  std::string text;
+};
+
+static ClolyPockLineInfo getLineInfo(const std::string& text, int line) {
+  ClolyPockLineInfo info;
+  int currentLine = 0;
+  int length = text.size();
+  info.begin = 0;
+
+  for (int i = 0; i < length; i++) {
+    if (currentLine == line) {
+      info.begin = i;
+      break;
+    }
+    if (text[i] == '\n') {
+      currentLine++;
+      info.begin = i + 1;
+    }
+  }
+
+  if (line > currentLine) {
+    info.begin = length;
+  }
+
+  info.end = length;
+  for (int i = info.begin; i < length; i++) {
+    if (text[i] == '\n') {
+      info.end = i;
+      break;
+    }
+  }
+  info.text = text.substr(info.begin, info.end - info.begin);
+  return info;
+}
+
+static int getLineCount(const std::string& text) {
+  int count = 1;
+  for (size_t i = 0; i < text.size(); i++) {
+    if (text[i] == '\n') {
+      count++;
+    }
+  }
+  return count;
+}
+
+static bool isBlankLine(const std::string& text) {
+  for (size_t i = 0; i < text.size(); i++) {
+    if (std::isspace(static_cast<unsigned char>(text[i])) == 0) {
+      return false;
+    }
+  }
+  return true;
+}
 
 struct ClolyPockProgramStep {
   cloly::language::ClockSpec spec;
@@ -18,20 +76,39 @@ struct ComputerscareClolyPock : Module {
   static constexpr float CLOCK_BPM = 120.f;
   static constexpr float CLOCK_HZ = CLOCK_BPM / 60.f;
 
-  enum ParamIds { NUM_PARAMS };
-  enum InputIds { NUM_INPUTS };
-  enum OutputIds { CLOCK_OUTPUT, EOC1_OUTPUT, EOC2_OUTPUT, NUM_OUTPUTS };
+  enum ParamIds { AUTO_ADVANCE_PARAM, NUM_PARAMS };
+  enum InputIds { ADVANCE_INPUT, NUM_INPUTS };
+  enum OutputIds {
+    CLOCK_OUTPUT,
+    EOC1_OUTPUT,
+    EOC2_OUTPUT,
+    EOC3_OUTPUT,
+    NUM_OUTPUTS
+  };
   enum LightIds { SYNTAX_ERROR_LIGHT, NUM_LIGHTS };
 
   ComputerscareTextEditorState editorState;
+  dsp::SchmittTrigger advanceInputTrigger;
+  dsp::PulseGenerator tokenMovePulse;
+  dsp::PulseGenerator lineCyclePulse;
+  dsp::PulseGenerator wrapPulse;
   float clockPhase = 0.f;
   float activeClockRamp = 0.f;
   bool clockHigh = false;
   bool syntaxError = false;
   int selectedLine = 0;
   bool selectedLineDirty = false;
-  int checkedLine = -1;
-  std::string checkedLineText;
+  int activeLine = 0;
+  std::string activeLineText;
+  int pendingLine = -1;
+  std::string pendingLineText;
+  std::vector<ClolyPockProgramStep> pendingProgram;
+  bool viewingPendingLine = true;
+  int errorLine = -1;
+  std::string checkedFocusedLineText;
+  int lastSubmitCount = 0;
+  int lastCancelCount = 0;
+  int lastSwitchViewCount = 0;
   int activeHighlightBegin = 0;
   int activeHighlightEnd = 6;
   cloly::language::ClockSpec activeClockSpec;
@@ -42,26 +119,40 @@ struct ComputerscareClolyPock : Module {
 
   ComputerscareClolyPock() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+    configSwitch(AUTO_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Line advance",
+                 {"Manual", "Automatic"});
+    configInput(ADVANCE_INPUT, "Advance line");
     configOutput(CLOCK_OUTPUT, "Clock");
-    configOutput(EOC1_OUTPUT, "EOC 1");
-    configOutput(EOC2_OUTPUT, "EOC 2");
+    configOutput(EOC1_OUTPUT, "Token move EOC");
+    configOutput(EOC2_OUTPUT, "Line cycle EOC");
+    configOutput(EOC3_OUTPUT, "All lines wrap EOC");
     editorState.text = "120bpm\n33hz\n40ms\n";
     activeClockSpec.bpm = CLOCK_BPM;
     activeClockSpec.hz = CLOCK_HZ;
     activeClockSpec.periodSeconds = 1.f / CLOCK_HZ;
+    commitLine(0, true);
   }
 
   void process(const ProcessArgs& args) override {
+    if (params[AUTO_ADVANCE_PARAM].getValue() <= 0.5f &&
+        advanceInputTrigger.process(inputs[ADVANCE_INPUT].getVoltage())) {
+      moveToNextLine(true);
+    }
+
     clockPhase += args.sampleTime * activeClockSpec.hz;
     while (clockPhase >= 1.f) {
       clockPhase -= 1.f;
-      advanceActiveProgram();
+      advanceActiveProgramBeat();
     }
     activeClockRamp = clockPhase;
     clockHigh = clockPhase < 0.5f;
     outputs[CLOCK_OUTPUT].setVoltage(clockHigh && activeStepPlays ? 10.f : 0.f);
-    outputs[EOC1_OUTPUT].setVoltage(0.f);
-    outputs[EOC2_OUTPUT].setVoltage(0.f);
+    outputs[EOC1_OUTPUT].setVoltage(
+        tokenMovePulse.process(args.sampleTime) ? 10.f : 0.f);
+    outputs[EOC2_OUTPUT].setVoltage(
+        lineCyclePulse.process(args.sampleTime) ? 10.f : 0.f);
+    outputs[EOC3_OUTPUT].setVoltage(wrapPulse.process(args.sampleTime) ? 10.f
+                                                                       : 0.f);
     lights[SYNTAX_ERROR_LIGHT].setBrightness(syntaxError ? 1.f : 0.f);
   }
 
@@ -71,6 +162,7 @@ struct ComputerscareClolyPock : Module {
         rootJ, "text",
         json_stringn(editorState.text.c_str(), editorState.text.size()));
     json_object_set_new(rootJ, "focusedLine", json_integer(selectedLine));
+    json_object_set_new(rootJ, "activeLine", json_integer(activeLine));
     return rootJ;
   }
 
@@ -85,31 +177,29 @@ struct ComputerscareClolyPock : Module {
       selectedLine = json_integer_value(focusedLineJ);
       selectedLineDirty = true;
     }
+    json_t* activeLineJ = json_object_get(rootJ, "activeLine");
+    if (activeLineJ) {
+      activeLine = json_integer_value(activeLineJ);
+      commitLine(activeLine, true);
+    }
   }
 
-  void setSelectedLineProgram(int line, int lineBegin,
-                              const std::string& lineText) {
-    if (line == checkedLine && lineText == checkedLineText) {
-      return;
-    }
-
-    checkedLine = line;
-    checkedLineText = lineText;
+  bool parseLineProgram(int line, int lineBegin, const std::string& lineText,
+                        std::vector<ClolyPockProgramStep>& program) {
     cloly::language::ParseResult parse =
         cloly::language::parseClockLiteral(lineText);
     if (!parse.ok()) {
-      syntaxError = true;
-      return;
+      return false;
     }
 
-    std::vector<ClolyPockProgramStep> program;
+    program.clear();
     for (size_t i = 0; i < parse.program.blocks.size(); i++) {
       const cloly::language::ClockBlockAst& block = parse.program.blocks[i];
       cloly::language::EvaluationResult eval =
           cloly::language::evaluateClockLiteral(block.literal);
       if (!eval.ok()) {
-        syntaxError = true;
-        return;
+        program.clear();
+        return false;
       }
 
       ClolyPockProgramStep step;
@@ -121,18 +211,182 @@ struct ComputerscareClolyPock : Module {
       program.push_back(step);
     }
 
-    if (program.empty()) {
+    return !program.empty();
+  }
+
+  bool commitLine(int line, bool resetPhase) {
+    ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, line);
+    std::vector<ClolyPockProgramStep> program;
+    if (!parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
       syntaxError = true;
-      return;
+      errorLine = line;
+      return false;
     }
 
     syntaxError = false;
+    errorLine = -1;
+    activeLine = line;
+    activeLineText = lineInfo.text;
     activeProgram = program;
     activeProgramIndex = 0;
     activeProgramBeat = 0;
     activeStepPlays = true;
-    clockPhase = 0.f;
-    activeClockRamp = 0.f;
+    if (resetPhase) {
+      clockPhase = 0.f;
+      activeClockRamp = 0.f;
+    }
+    if (pendingLine == line && pendingLineText == lineInfo.text) {
+      clearPendingLine();
+    }
+    applyActiveProgramStep();
+    return true;
+  }
+
+  void clearPendingLine() {
+    pendingLine = -1;
+    pendingLineText.clear();
+    pendingProgram.clear();
+    viewingPendingLine = true;
+  }
+
+  void replaceLineText(int line, const std::string& replacement) {
+    ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, line);
+    editorState.text.replace(lineInfo.begin, lineInfo.end - lineInfo.begin,
+                             replacement);
+    editorState.dirty = true;
+  }
+
+  void cancelPendingLine(int line) {
+    if (pendingLine == line) {
+      if (line == activeLine) {
+        replaceLineText(line, activeLineText);
+      }
+      clearPendingLine();
+    }
+    checkedFocusedLineText = getLineInfo(editorState.text, line).text;
+  }
+
+  void showPendingLine() {
+    if (pendingLine < 0 || pendingLineText.empty()) {
+      return;
+    }
+
+    replaceLineText(pendingLine, pendingLineText);
+    checkedFocusedLineText = pendingLineText;
+    viewingPendingLine = true;
+  }
+
+  void showActiveLineVersion() {
+    if (pendingLine != activeLine) {
+      return;
+    }
+
+    replaceLineText(activeLine, activeLineText);
+    checkedFocusedLineText = activeLineText;
+    viewingPendingLine = false;
+  }
+
+  void togglePendingView() {
+    if (pendingLine != activeLine) {
+      return;
+    }
+
+    if (viewingPendingLine) {
+      showActiveLineVersion();
+    } else {
+      showPendingLine();
+    }
+  }
+
+  void inspectFocusedLine(int line, bool focusChanged) {
+    ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, line);
+    if (line != activeLine) {
+      if (focusChanged || lineInfo.text == checkedFocusedLineText) {
+        checkedFocusedLineText = lineInfo.text;
+        return;
+      }
+
+      checkedFocusedLineText = lineInfo.text;
+      std::vector<ClolyPockProgramStep> program;
+      if (parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
+        pendingLine = line;
+        pendingLineText = lineInfo.text;
+        pendingProgram = program;
+        if (errorLine == line) {
+          errorLine = -1;
+        }
+        syntaxError = false;
+      } else {
+        if (pendingLine == line) {
+          clearPendingLine();
+        }
+        errorLine = line;
+        syntaxError = true;
+      }
+      return;
+    }
+
+    if (lineInfo.text == activeLineText) {
+      if (pendingLine == line && viewingPendingLine) {
+        clearPendingLine();
+      }
+      if (errorLine == line) {
+        errorLine = -1;
+        syntaxError = false;
+      }
+      checkedFocusedLineText = lineInfo.text;
+      return;
+    }
+
+    if (pendingLine == line && lineInfo.text == pendingLineText) {
+      checkedFocusedLineText = lineInfo.text;
+      viewingPendingLine = true;
+      return;
+    }
+
+    if (lineInfo.text == checkedFocusedLineText &&
+        (pendingLine == line || errorLine == line)) {
+      return;
+    }
+
+    checkedFocusedLineText = lineInfo.text;
+    std::vector<ClolyPockProgramStep> program;
+    if (parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
+      pendingLine = line;
+      pendingLineText = lineInfo.text;
+      pendingProgram = program;
+      viewingPendingLine = true;
+      if (errorLine == line) {
+        errorLine = -1;
+      }
+      syntaxError = false;
+    } else {
+      if (pendingLine == line) {
+        clearPendingLine();
+      }
+      errorLine = line;
+      syntaxError = true;
+    }
+  }
+
+  void commitPendingLine(bool resetPhase) {
+    if (pendingLine < 0 || pendingProgram.empty()) {
+      return;
+    }
+
+    activeLine = pendingLine;
+    activeLineText = pendingLineText;
+    activeProgram = pendingProgram;
+    activeProgramIndex = 0;
+    activeProgramBeat = 0;
+    activeStepPlays = true;
+    if (resetPhase) {
+      clockPhase = 0.f;
+      activeClockRamp = 0.f;
+    }
+    clearPendingLine();
+    syntaxError = false;
+    errorLine = -1;
     applyActiveProgramStep();
   }
 
@@ -150,7 +404,7 @@ struct ComputerscareClolyPock : Module {
     chooseActiveStepPlayback();
   }
 
-  void advanceActiveProgram() {
+  void advanceActiveProgramBeat() {
     if (activeProgram.empty()) {
       return;
     }
@@ -158,14 +412,75 @@ struct ComputerscareClolyPock : Module {
     activeProgramBeat++;
     if (activeProgramBeat >= activeProgram[activeProgramIndex].repeat) {
       activeProgramBeat = 0;
+      bool hadMultipleSteps = activeProgram.size() > 1;
       activeProgramIndex++;
       if (activeProgramIndex >= (int)activeProgram.size()) {
         activeProgramIndex = 0;
+        bool movedLine = handleLineCycleEnd();
+        if (movedLine || hadMultipleSteps) {
+          tokenMovePulse.trigger(1e-3f);
+        }
+      } else {
+        applyActiveProgramStep();
+        tokenMovePulse.trigger(1e-3f);
       }
-      applyActiveProgramStep();
     } else {
       chooseActiveStepPlayback();
     }
+  }
+
+  bool handleLineCycleEnd() {
+    lineCyclePulse.trigger(1e-3f);
+    if (params[AUTO_ADVANCE_PARAM].getValue() > 0.5f) {
+      if (!moveToNextLine(false, false)) {
+        applyActiveProgramStep();
+        return false;
+      }
+      return true;
+    }
+
+    applyActiveProgramStep();
+    return false;
+  }
+
+  bool moveToNextLine(bool resetPhase, bool emitTokenMove = true) {
+    int lineCount = getLineCount(editorState.text);
+    if (lineCount <= 0) {
+      return false;
+    }
+
+    bool wrapped = false;
+    int previousLine = activeLine;
+    int previousHighlightBegin = activeHighlightBegin;
+    int previousHighlightEnd = activeHighlightEnd;
+    for (int offset = 1; offset <= lineCount; offset++) {
+      int nextLine = activeLine + offset;
+      if (nextLine >= lineCount) {
+        nextLine -= lineCount;
+        wrapped = true;
+      }
+
+      ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, nextLine);
+      if (isBlankLine(lineInfo.text)) {
+        continue;
+      }
+
+      if (!commitLine(nextLine, resetPhase)) {
+        return false;
+      }
+
+      if (emitTokenMove && (activeLine != previousLine ||
+                            activeHighlightBegin != previousHighlightBegin ||
+                            activeHighlightEnd != previousHighlightEnd)) {
+        tokenMovePulse.trigger(1e-3f);
+      }
+      if (wrapped) {
+        wrapPulse.trigger(1e-3f);
+      }
+      return true;
+    }
+
+    return false;
   }
 
   void chooseActiveStepPlayback() {
@@ -222,47 +537,10 @@ struct ClolyPockPanel : Widget {
   }
 };
 
-struct ClolyPockLineInfo {
-  int begin = 0;
-  int end = 0;
-  std::string text;
-};
-
-static ClolyPockLineInfo getLineInfo(const std::string& text, int line) {
-  ClolyPockLineInfo info;
-  int currentLine = 0;
-  int length = text.size();
-  info.begin = 0;
-
-  for (int i = 0; i < length; i++) {
-    if (currentLine == line) {
-      info.begin = i;
-      break;
-    }
-    if (text[i] == '\n') {
-      currentLine++;
-      info.begin = i + 1;
-    }
-  }
-
-  if (line > currentLine) {
-    info.begin = length;
-  }
-
-  info.end = length;
-  for (int i = info.begin; i < length; i++) {
-    if (text[i] == '\n') {
-      info.end = i;
-      break;
-    }
-  }
-  info.text = text.substr(info.begin, info.end - info.begin);
-  return info;
-}
-
 struct ComputerscareClolyPockWidget : ModuleWidget {
   ComputerscareTextEditor* editor = nullptr;
   ComputerscareTextEditorState browserEditorState;
+  int lastCursorLine = -1;
 
   ComputerscareClolyPockWidget(ComputerscareClolyPock* module) {
     setModule(module);
@@ -285,6 +563,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     editor->style.textColor = nvgRGB(0xee, 0xee, 0xea);
     editor->style.selectionColor = nvgRGBA(0xe4, 0xc4, 0x21, 0x66);
     editor->style.placeholderColor = nvgRGBA(0xee, 0xee, 0xea, 0x66);
+    editor->submitOnEnter = true;
     if (module) {
       editor->setState(&module->editorState);
     } else {
@@ -296,12 +575,19 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     addChild(createLight<ComputerscareSmallLight<ComputerscareRedLight>>(
         Vec(127.f, 18.f), module, ComputerscareClolyPock::SYNTAX_ERROR_LIGHT));
 
-    addOutput(createOutput<OutPort>(Vec(33.f, 340.f), module,
+    addInput(createInput<InPort>(Vec(8.f, 18.f), module,
+                                 ComputerscareClolyPock::ADVANCE_INPUT));
+    addParam(createParam<CKSS>(Vec(42.f, 22.f), module,
+                               ComputerscareClolyPock::AUTO_ADVANCE_PARAM));
+
+    addOutput(createOutput<OutPort>(Vec(8.f, 340.f), module,
                                     ComputerscareClolyPock::CLOCK_OUTPUT));
-    addOutput(createOutput<OutPort>(Vec(65.f, 340.f), module,
+    addOutput(createOutput<OutPort>(Vec(45.f, 340.f), module,
                                     ComputerscareClolyPock::EOC1_OUTPUT));
-    addOutput(createOutput<OutPort>(Vec(97.f, 340.f), module,
+    addOutput(createOutput<OutPort>(Vec(82.f, 340.f), module,
                                     ComputerscareClolyPock::EOC2_OUTPUT));
+    addOutput(createOutput<OutPort>(Vec(119.f, 340.f), module,
+                                    ComputerscareClolyPock::EOC3_OUTPUT));
   }
 
   void step() override {
@@ -321,10 +607,29 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
           clolyPock->selectedLineDirty = false;
         }
         clolyPock->selectedLine = editor->getCursorLine();
-        ClolyPockLineInfo lineInfo =
-            getLineInfo(state->text, clolyPock->selectedLine);
-        clolyPock->setSelectedLineProgram(clolyPock->selectedLine,
-                                          lineInfo.begin, lineInfo.text);
+        bool focusChanged = clolyPock->selectedLine != lastCursorLine;
+        lastCursorLine = clolyPock->selectedLine;
+        clolyPock->inspectFocusedLine(clolyPock->selectedLine, focusChanged);
+        if (state->submitCount != clolyPock->lastSubmitCount) {
+          clolyPock->lastSubmitCount = state->submitCount;
+          if (clolyPock->pendingLine == clolyPock->selectedLine) {
+            clolyPock->commitPendingLine(true);
+          } else {
+            clolyPock->commitLine(clolyPock->selectedLine, true);
+          }
+        }
+        if (state->cancelCount != clolyPock->lastCancelCount) {
+          clolyPock->lastCancelCount = state->cancelCount;
+          clolyPock->cancelPendingLine(clolyPock->selectedLine);
+          if (clolyPock->errorLine == clolyPock->selectedLine) {
+            clolyPock->errorLine = -1;
+            clolyPock->syntaxError = false;
+          }
+        }
+        if (state->switchViewCount != clolyPock->lastSwitchViewCount) {
+          clolyPock->lastSwitchViewCount = state->switchViewCount;
+          clolyPock->togglePendingView();
+        }
         blinkHigh = clolyPock->clockHigh && clolyPock->activeStepPlays;
         activeProgress = clolyPock->activeClockRamp;
       } else {
@@ -339,10 +644,41 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       state->highlights.clear();
       int line = editor->getCursorLine();
       ClolyPockLineInfo lineInfo = getLineInfo(state->text, line);
-      if (clolyPock && clolyPock->syntaxError) {
+      ComputerscareTextHighlight focusHighlight;
+      focusHighlight.begin = lineInfo.begin;
+      focusHighlight.end = std::max(lineInfo.end, lineInfo.begin + 1);
+      focusHighlight.fullLine = true;
+      focusHighlight.background = nvgRGBA(0xff, 0xff, 0xff, 0x12);
+      state->highlights.push_back(focusHighlight);
+      bool showingPendingActiveLine =
+          clolyPock && clolyPock->pendingLine == clolyPock->activeLine &&
+          clolyPock->viewingPendingLine;
+      bool showingActiveVersionOfPending =
+          clolyPock && clolyPock->pendingLine == clolyPock->activeLine &&
+          !clolyPock->viewingPendingLine;
+      if (clolyPock && clolyPock->pendingLine >= 0 &&
+          !showingActiveVersionOfPending) {
+        ClolyPockLineInfo pendingLineInfo =
+            getLineInfo(state->text, clolyPock->pendingLine);
+        float pendingPulse =
+            0.5f + 0.5f * std::sin((float)rack::system::getTime() * 3.5f);
+        ComputerscareTextHighlight pendingHighlight;
+        pendingHighlight.begin = pendingLineInfo.begin;
+        pendingHighlight.end =
+            std::max(pendingLineInfo.end, pendingLineInfo.begin + 1);
+        pendingHighlight.fullLine = true;
+        pendingHighlight.background = nvgRGBA(
+            0x24, 0xc9, 0xa6, (unsigned char)(0x20 + pendingPulse * 0x22));
+        state->highlights.push_back(pendingHighlight);
+      }
+      if (clolyPock && clolyPock->errorLine >= 0) {
+        ClolyPockLineInfo errorLineInfo =
+            getLineInfo(state->text, clolyPock->errorLine);
         ComputerscareTextHighlight errorHighlight;
-        errorHighlight.begin = lineInfo.begin;
-        errorHighlight.end = std::max(lineInfo.end, lineInfo.begin + 1);
+        errorHighlight.begin = errorLineInfo.begin;
+        errorHighlight.end =
+            std::max(errorLineInfo.end, errorLineInfo.begin + 1);
+        errorHighlight.fullLine = true;
         errorHighlight.background = nvgRGBA(0xc4, 0x34, 0x21, 0x35);
         state->highlights.push_back(errorHighlight);
       }
@@ -361,7 +697,8 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       activeHighlight.hasProgress = true;
       activeHighlight.progress = activeProgress;
       activeHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
-      if (activeHighlight.begin < activeHighlight.end) {
+      if (!showingPendingActiveLine &&
+          activeHighlight.begin < activeHighlight.end) {
         state->highlights.push_back(activeHighlight);
       }
     }

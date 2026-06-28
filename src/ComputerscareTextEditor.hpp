@@ -16,12 +16,16 @@ struct ComputerscareTextHighlight {
   bool hasBackground = true;
   bool hasBorder = false;
   bool hasProgress = false;
+  bool fullLine = false;
   float progress = 0.f;
 };
 
 struct ComputerscareTextEditorState {
   std::string text;
   bool dirty = false;
+  int submitCount = 0;
+  int cancelCount = 0;
+  int switchViewCount = 0;
   std::vector<ComputerscareTextHighlight> highlights;
 };
 
@@ -45,6 +49,7 @@ struct ComputerscareTextEditor : ui::TextField {
   ComputerscareTextEditorState* state = nullptr;
   ComputerscareTextEditorStyle style;
   size_t maxUndoDepth = 128;
+  bool submitOnEnter = false;
 
   ComputerscareTextEditor();
 
@@ -78,6 +83,7 @@ struct ComputerscareTextEditor : ui::TextField {
   void drawEditorText(const DrawArgs& args);
   void drawHighlightForegrounds(const DrawArgs& args);
   void drawHighlightDecorations(const DrawArgs& args);
+  void drawCursor(const DrawArgs& args);
   void drawHighlightSpan(const DrawArgs& args,
                          const ComputerscareTextHighlight& highlight, int mode);
 };
