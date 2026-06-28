@@ -9,6 +9,7 @@
 struct ClolyPockProgramStep {
   cloly::language::ClockSpec spec;
   int repeat = 1;
+  int probability = 100;
   int highlightBegin = 0;
   int highlightEnd = 0;
 };
@@ -37,6 +38,7 @@ struct ComputerscareClolyPock : Module {
   std::vector<ClolyPockProgramStep> activeProgram;
   int activeProgramIndex = 0;
   int activeProgramBeat = 0;
+  bool activeStepPlays = true;
 
   ComputerscareClolyPock() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -57,7 +59,7 @@ struct ComputerscareClolyPock : Module {
     }
     activeClockRamp = clockPhase;
     clockHigh = clockPhase < 0.5f;
-    outputs[CLOCK_OUTPUT].setVoltage(clockHigh ? 10.f : 0.f);
+    outputs[CLOCK_OUTPUT].setVoltage(clockHigh && activeStepPlays ? 10.f : 0.f);
     outputs[EOC1_OUTPUT].setVoltage(0.f);
     outputs[EOC2_OUTPUT].setVoltage(0.f);
     lights[SYNTAX_ERROR_LIGHT].setBrightness(syntaxError ? 1.f : 0.f);
@@ -113,6 +115,7 @@ struct ComputerscareClolyPock : Module {
       ClolyPockProgramStep step;
       step.spec = eval.spec;
       step.repeat = std::max(1, block.repeat);
+      step.probability = std::max(0, std::min(100, block.probability));
       step.highlightBegin = lineBegin + block.literal.range.begin;
       step.highlightEnd = lineBegin + block.literal.range.end;
       program.push_back(step);
@@ -127,6 +130,7 @@ struct ComputerscareClolyPock : Module {
     activeProgram = program;
     activeProgramIndex = 0;
     activeProgramBeat = 0;
+    activeStepPlays = true;
     clockPhase = 0.f;
     activeClockRamp = 0.f;
     applyActiveProgramStep();
@@ -143,6 +147,7 @@ struct ComputerscareClolyPock : Module {
     activeClockSpec = step.spec;
     activeHighlightBegin = step.highlightBegin;
     activeHighlightEnd = step.highlightEnd;
+    chooseActiveStepPlayback();
   }
 
   void advanceActiveProgram() {
@@ -158,6 +163,24 @@ struct ComputerscareClolyPock : Module {
         activeProgramIndex = 0;
       }
       applyActiveProgramStep();
+    } else {
+      chooseActiveStepPlayback();
+    }
+  }
+
+  void chooseActiveStepPlayback() {
+    if (activeProgram.empty()) {
+      activeStepPlays = true;
+      return;
+    }
+
+    int probability = activeProgram[activeProgramIndex].probability;
+    if (probability >= 100) {
+      activeStepPlays = true;
+    } else if (probability <= 0) {
+      activeStepPlays = false;
+    } else {
+      activeStepPlays = random::uniform() * 100.f < probability;
     }
   }
 };
@@ -302,7 +325,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
             getLineInfo(state->text, clolyPock->selectedLine);
         clolyPock->setSelectedLineProgram(clolyPock->selectedLine,
                                           lineInfo.begin, lineInfo.text);
-        blinkHigh = clolyPock->clockHigh;
+        blinkHigh = clolyPock->clockHigh && clolyPock->activeStepPlays;
         activeProgress = clolyPock->activeClockRamp;
       } else {
         state = &browserEditorState;

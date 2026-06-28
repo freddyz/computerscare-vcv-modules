@@ -14,6 +14,7 @@ enum class TokenType {
   Colon,
   Comma,
   At,
+  Question,
   LeftBracket,
   RightBracket,
   End,

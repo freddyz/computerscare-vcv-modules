@@ -160,6 +160,15 @@ void testTokenizer() {
                "[244 [9hz,8hz]]@9 token 11");
   require(tokens[12].type == lang::TokenType::End,
           "[244 [9hz,8hz]]@9 end token");
+
+  tokens = lang::tokenize("188?50");
+  require(tokens.size() == 4, "188?50 token count");
+  requireToken(tokens[0], lang::TokenType::Number, "188", 0, 3,
+               "188?50 token 0");
+  requireToken(tokens[1], lang::TokenType::Question, "?", 3, 4,
+               "188?50 token 1");
+  requireToken(tokens[2], lang::TokenType::Number, "50", 4, 6,
+               "188?50 token 2");
 }
 
 void testAst() {
@@ -267,6 +276,32 @@ void testProgramAst() {
                "[244 [9hz,8hz]]@9 second repeat range");
   requireRange(result.program.blocks[2].repeatRange, 15, 17,
                "[244 [9hz,8hz]]@9 third repeat range");
+
+  result = lang::parseClockLiteral("188? 188?50 188?100 188?0");
+  require(result.ok(), "probability program parses");
+  require(result.program.blocks.size() == 4, "probability block count");
+  require(result.program.blocks[0].probability == 50,
+          "bare question probability defaults 50");
+  require(result.program.blocks[1].probability == 50,
+          "explicit probability 50");
+  require(result.program.blocks[2].probability == 100,
+          "explicit probability 100");
+  require(result.program.blocks[3].probability == 0,
+          "explicit probability 0");
+  requireRange(result.program.blocks[0].probabilityRange, 3, 4,
+               "bare question probability range");
+  requireRange(result.program.blocks[1].probabilityRange, 8, 11,
+               "explicit probability range");
+
+  result = lang::parseClockLiteral("[120?50,100?0]@4");
+  require(result.ok(), "bracket probability program parses");
+  require(result.program.blocks.size() == 2, "bracket probability count");
+  require(result.program.blocks[0].probability == 50,
+          "bracket first probability");
+  require(result.program.blocks[1].probability == 0,
+          "bracket second probability");
+  require(result.program.blocks[0].repeat == 4, "bracket first repeat");
+  require(result.program.blocks[1].repeat == 4, "bracket second repeat");
 }
 
 void testProgramEvaluation() {
@@ -370,7 +405,11 @@ void testInvalidInputs() {
   requireInvalid("120bpm !", "trailing junk invalid");
   requireInvalid("hz", "missing number invalid");
   requireInvalid("120bpm@1.5", "decimal repeat invalid");
+  requireInvalid("120?1.5", "decimal probability invalid");
+  requireInvalid("120?101", "probability over 100 invalid");
+  requireInvalid("120?-1", "negative probability invalid");
   requireInvalid("[120 90", "missing right bracket invalid");
+  requireInvalid("[120,100]?50", "group probability invalid");
 }
 }  // namespace
 

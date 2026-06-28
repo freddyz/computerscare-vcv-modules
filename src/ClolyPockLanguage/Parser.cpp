@@ -128,6 +128,7 @@ class Parser {
     ClockBlockAst block;
     block.literal = parseLiteral(result);
     block.range = block.literal.range;
+    parseProbability(result, block);
     parseRepeat(result, block);
     blocks.push_back(block);
   }
@@ -258,6 +259,35 @@ class Parser {
     ast.unitRange = rangeFromToken(unitToken);
     if (ast.unit == ClockUnit::Unknown) {
       addDiagnostic(result, "Unknown clock unit", rangeFromToken(unitToken));
+    }
+  }
+
+  void parseProbability(ParseResult& result, ClockBlockAst& block) {
+    if (peek().type != TokenType::Question) {
+      return;
+    }
+
+    Token questionToken = advance();
+    block.probability = 50;
+    block.probabilityRange.begin = questionToken.begin;
+    block.probabilityRange.end = questionToken.end;
+
+    if (peek().type != TokenType::Number || peek().begin != questionToken.end) {
+      return;
+    }
+
+    Token probabilityToken = advance();
+    block.probabilityRange.end = probabilityToken.end;
+    if (!isIntegerLexeme(probabilityToken.lexeme)) {
+      addDiagnostic(result, "Probability must be an integer",
+                    rangeFromToken(probabilityToken));
+      return;
+    }
+
+    block.probability = parseInt(probabilityToken.lexeme);
+    if (block.probability < 0 || block.probability > 100) {
+      addDiagnostic(result, "Probability must be between 0 and 100",
+                    rangeFromToken(probabilityToken));
     }
   }
 
