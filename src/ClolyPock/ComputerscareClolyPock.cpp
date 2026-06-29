@@ -922,13 +922,24 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       }
 
       state->highlights.clear();
+      int lineCount = getLineCount(state->text);
+      for (int zebraLine = 1; zebraLine < lineCount; zebraLine += 2) {
+        ClolyPockLineInfo zebraLineInfo = getLineInfo(state->text, zebraLine);
+        ComputerscareTextHighlight zebraHighlight;
+        zebraHighlight.begin = zebraLineInfo.begin;
+        zebraHighlight.end =
+            std::max(zebraLineInfo.end, zebraLineInfo.begin + 1);
+        zebraHighlight.fullLine = true;
+        zebraHighlight.background = nvgRGBA(0xff, 0xff, 0xff, 0x16);
+        state->highlights.push_back(zebraHighlight);
+      }
       int line = editor->getCursorLine();
       ClolyPockLineInfo lineInfo = getLineInfo(state->text, line);
       ComputerscareTextHighlight focusHighlight;
       focusHighlight.begin = lineInfo.begin;
       focusHighlight.end = std::max(lineInfo.end, lineInfo.begin + 1);
       focusHighlight.fullLine = true;
-      focusHighlight.background = nvgRGBA(0xff, 0xff, 0xff, 0x12);
+      focusHighlight.background = nvgRGBA(0xb8, 0xb8, 0xb8, 0x42);
       state->highlights.push_back(focusHighlight);
       bool showingPendingActiveLine =
           clolyPock && clolyPock->pendingLine == clolyPock->activeLine &&
