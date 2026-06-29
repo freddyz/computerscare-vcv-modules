@@ -19,7 +19,8 @@ void setFromPeriodSeconds(EvaluationResult& result, double periodSeconds) {
 }
 }  // namespace
 
-EvaluationResult evaluateClockLiteral(const ClockLiteralAst& ast) {
+EvaluationResult evaluateClockLiteralWithValue(const ClockLiteralAst& ast,
+                                               double value) {
   EvaluationResult result;
 
   if (ast.kind == ClockLiteralKind::Empty || ast.unit == ClockUnit::Unknown) {
@@ -27,7 +28,6 @@ EvaluationResult evaluateClockLiteral(const ClockLiteralAst& ast) {
     return result;
   }
 
-  double value = ast.value;
   if (ast.kind == ClockLiteralKind::Colon) {
     value = ast.minutes * 60.0 + ast.seconds;
   }
@@ -78,6 +78,14 @@ EvaluationResult evaluateClockLiteral(const ClockLiteralAst& ast) {
   }
 
   return result;
+}
+
+EvaluationResult evaluateClockLiteral(const ClockLiteralAst& ast) {
+  double value = ast.value;
+  if (ast.kind == ClockLiteralKind::RandomRange) {
+    value = ast.minValue;
+  }
+  return evaluateClockLiteralWithValue(ast, value);
 }
 
 }  // namespace language

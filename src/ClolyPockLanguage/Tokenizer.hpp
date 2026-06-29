@@ -17,6 +17,12 @@ enum class TokenType {
   Question,
   LeftBracket,
   RightBracket,
+  LeftParen,
+  RightParen,
+  LeftBrace,
+  Dash,
+  Pipe,
+  RightBrace,
   End,
   Invalid
 };

@@ -21,6 +21,8 @@ struct EvaluationResult {
 };
 
 EvaluationResult evaluateClockLiteral(const ClockLiteralAst& ast);
+EvaluationResult evaluateClockLiteralWithValue(const ClockLiteralAst& ast,
+                                               double value);
 
 }  // namespace language
 }  // namespace cloly

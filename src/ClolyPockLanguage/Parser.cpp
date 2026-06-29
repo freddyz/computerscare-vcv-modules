@@ -1,5 +1,6 @@
 #include "Parser.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 
@@ -52,6 +53,67 @@ void addDiagnostic(ParseResult& result, const std::string& message,
 bool isDurationUnit(ClockUnit unit) {
   return unit == ClockUnit::Milliseconds || unit == ClockUnit::Seconds ||
          unit == ClockUnit::Minutes;
+}
+
+bool hasExplicitUnit(const ClockLiteralAst& ast) {
+  return ast.unitRange.end > ast.unitRange.begin;
+}
+
+void applyUnitToUnitlessBlock(ClockBlockAst& block, ClockUnit unit,
+                              SourceRange unitRange) {
+  if (!hasExplicitUnit(block.literal)) {
+    block.literal.unit = unit;
+    block.literal.unitRange = unitRange;
+  }
+}
+
+std::vector<ClockBlockAst> interleaveBlocks(
+    const std::vector<ClockBlockAst>& left,
+    const std::vector<ClockBlockAst>& right) {
+  std::vector<std::vector<ClockBlockAst>> lanes;
+  lanes.push_back(left);
+  lanes.push_back(right);
+
+  std::vector<ClockBlockAst> output;
+  std::vector<size_t> indices(lanes.size(), 0);
+  size_t laneIndex = 0;
+  int steps = 0;
+  bool allAtStart = false;
+
+  while (!lanes.empty() && ((!allAtStart && steps < 6000) || steps == 0)) {
+    if (!lanes[laneIndex].empty()) {
+      output.push_back(lanes[laneIndex][indices[laneIndex]]);
+      indices[laneIndex] = (indices[laneIndex] + 1) % lanes[laneIndex].size();
+    }
+    laneIndex = (laneIndex + 1) % lanes.size();
+    steps++;
+    allAtStart = laneIndex == 0;
+    for (size_t i = 0; i < lanes.size(); i++) {
+      allAtStart = allAtStart && indices[i] == 0;
+    }
+  }
+
+  return output;
+}
+
+std::vector<ClockBlockAst> spreadInterleaveLanes(
+    const std::vector<std::vector<ClockBlockAst>>& lanes) {
+  std::vector<ClockBlockAst> output;
+  size_t rowCount = 0;
+  for (size_t i = 0; i < lanes.size(); i++) {
+    rowCount = std::max(rowCount, lanes[i].size());
+  }
+
+  for (size_t row = 0; row < rowCount && row < 6000; row++) {
+    for (size_t laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
+      if (lanes[laneIndex].empty()) {
+        continue;
+      }
+      output.push_back(lanes[laneIndex][row % lanes[laneIndex].size()]);
+    }
+  }
+
+  return output;
 }
 
 class Parser {
@@ -119,12 +181,24 @@ class Parser {
       return;
     }
 
+    if (peek().type == TokenType::RightParen) {
+      addDiagnostic(result, "Unexpected ')'", rangeFromToken(peek()));
+      advance();
+      return;
+    }
+
     if (peek().type == TokenType::LeftBracket) {
       parseBracketBlock(result, blocks);
       return;
     }
 
-    if (peek().type != TokenType::Number) {
+    if (peek().type == TokenType::LeftParen) {
+      parseInterleaveBlock(result, blocks);
+      return;
+    }
+
+    if (peek().type != TokenType::Number &&
+        peek().type != TokenType::LeftBrace) {
       addDiagnostic(result, "Expected clock literal", rangeFromToken(peek()));
       advance();
       return;
@@ -138,17 +212,23 @@ class Parser {
     blocks.push_back(block);
   }
 
+  void parseSequenceUntil(ParseResult& result,
+                          std::vector<ClockBlockAst>& blocks,
+                          TokenType terminator) {
+    while (!isAtEnd() && peek().type != terminator) {
+      if (matchSeparator()) {
+        continue;
+      }
+      parseBlock(result, blocks);
+    }
+  }
+
   void parseBracketBlock(ParseResult& result,
                          std::vector<ClockBlockAst>& blocks) {
     Token leftBracket = advance();
     std::vector<ClockBlockAst> groupBlocks;
 
-    while (!isAtEnd() && peek().type != TokenType::RightBracket) {
-      if (matchSeparator()) {
-        continue;
-      }
-      parseBlock(result, groupBlocks);
-    }
+    parseSequenceUntil(result, groupBlocks, TokenType::RightBracket);
 
     Token rightBracket;
     if (peek().type == TokenType::RightBracket) {
@@ -161,6 +241,8 @@ class Parser {
     ClockBlockAst repeatBlock;
     repeatBlock.range.begin = leftBracket.begin;
     repeatBlock.range.end = rightBracket.end;
+    SourceRange suffixUnitRange;
+    ClockUnit suffixUnit = parseGroupUnitSuffix(result, suffixUnitRange);
     parseRepeat(result, repeatBlock);
 
     if (groupBlocks.empty()) {
@@ -170,6 +252,9 @@ class Parser {
     }
 
     for (size_t i = 0; i < groupBlocks.size(); i++) {
+      if (suffixUnit != ClockUnit::Unknown) {
+        applyUnitToUnitlessBlock(groupBlocks[i], suffixUnit, suffixUnitRange);
+      }
       if (repeatBlock.repeatIsDuration) {
         groupBlocks[i].repeatIsDuration = true;
         groupBlocks[i].repeatDuration = repeatBlock.repeatDuration;
@@ -178,12 +263,159 @@ class Parser {
       }
       if (repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin) {
         groupBlocks[i].repeatRange = repeatBlock.repeatRange;
+        if (!groupBlocks[i].repeatValueIsOwn) {
+          groupBlocks[i].repeatValueRange = repeatBlock.repeatValueRange;
+        }
       }
       blocks.push_back(groupBlocks[i]);
     }
   }
 
+  void parseInterleaveBlock(ParseResult& result,
+                            std::vector<ClockBlockAst>& blocks) {
+    Token leftParen = advance();
+    std::vector<ClockBlockAst> rightLane;
+    std::vector<std::vector<ClockBlockAst>> lanes;
+    parseInterleaveContent(result, rightLane, lanes);
+
+    Token rightParen;
+    if (peek().type == TokenType::RightParen) {
+      rightParen = advance();
+    } else {
+      addDiagnostic(result, "Expected ')'", rangeFromToken(leftParen));
+      rightParen = leftParen;
+    }
+
+    ClockBlockAst repeatBlock;
+    repeatBlock.range.begin = leftParen.begin;
+    repeatBlock.range.end = rightParen.end;
+    SourceRange suffixUnitRange;
+    ClockUnit suffixUnit = parseGroupUnitSuffix(result, suffixUnitRange);
+    parseRepeat(result, repeatBlock);
+    bool hasGroupSuffix =
+        suffixUnit != ClockUnit::Unknown ||
+        repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin;
+
+    if (blocks.empty() || hasGroupSuffix) {
+      std::vector<ClockBlockAst> interleaved = spreadInterleaveLanes(lanes);
+      applyGroupModifiers(result, interleaved, repeatBlock, suffixUnit,
+                          suffixUnitRange);
+      for (size_t i = 0; i < interleaved.size(); i++) {
+        blocks.push_back(interleaved[i]);
+      }
+      return;
+    }
+    if (rightLane.empty()) {
+      addDiagnostic(result, "Expected clock literal in parentheses",
+                    rangeFromToken(leftParen));
+      return;
+    }
+
+    ClockBlockAst leftBlock = blocks.back();
+    blocks.pop_back();
+    std::vector<ClockBlockAst> leftLane;
+    leftLane.push_back(leftBlock);
+    std::vector<ClockBlockAst> interleaved =
+        interleaveBlocks(leftLane, rightLane);
+    for (size_t i = 0; i < interleaved.size(); i++) {
+      blocks.push_back(interleaved[i]);
+    }
+    if (!blocks.empty()) {
+      blocks.back().range.end = rightParen.end;
+    }
+  }
+
+  void parseInterleaveContent(ParseResult& result,
+                              std::vector<ClockBlockAst>& sequence,
+                              std::vector<std::vector<ClockBlockAst>>& lanes) {
+    while (!isAtEnd() && peek().type != TokenType::RightParen) {
+      if (matchSeparator()) {
+        continue;
+      }
+
+      std::vector<ClockBlockAst> lane;
+      if (peek().type == TokenType::LeftParen) {
+        lane = parseParenthesizedSequenceLane(result);
+      } else {
+        parseBlock(result, lane);
+      }
+
+      if (!lane.empty()) {
+        lanes.push_back(lane);
+        for (size_t i = 0; i < lane.size(); i++) {
+          sequence.push_back(lane[i]);
+        }
+      }
+    }
+  }
+
+  std::vector<ClockBlockAst> parseParenthesizedSequenceLane(
+      ParseResult& result) {
+    Token leftParen = advance();
+    std::vector<ClockBlockAst> lane;
+    parseSequenceUntil(result, lane, TokenType::RightParen);
+
+    Token rightParen;
+    if (peek().type == TokenType::RightParen) {
+      rightParen = advance();
+    } else {
+      addDiagnostic(result, "Expected ')'", rangeFromToken(leftParen));
+      rightParen = leftParen;
+    }
+
+    ClockBlockAst repeatBlock;
+    repeatBlock.range.begin = leftParen.begin;
+    repeatBlock.range.end = rightParen.end;
+    SourceRange suffixUnitRange;
+    ClockUnit suffixUnit = parseGroupUnitSuffix(result, suffixUnitRange);
+    parseRepeat(result, repeatBlock);
+    applyGroupModifiers(result, lane, repeatBlock, suffixUnit, suffixUnitRange);
+    return lane;
+  }
+
+  void applyGroupModifiers(ParseResult& result,
+                           std::vector<ClockBlockAst>& groupBlocks,
+                           const ClockBlockAst& repeatBlock,
+                           ClockUnit suffixUnit, SourceRange suffixUnitRange) {
+    (void)result;
+    for (size_t i = 0; i < groupBlocks.size(); i++) {
+      if (suffixUnit != ClockUnit::Unknown) {
+        applyUnitToUnitlessBlock(groupBlocks[i], suffixUnit, suffixUnitRange);
+      }
+      if (repeatBlock.repeatIsDuration) {
+        groupBlocks[i].repeatIsDuration = true;
+        groupBlocks[i].repeatDuration = repeatBlock.repeatDuration;
+      } else {
+        groupBlocks[i].repeat *= repeatBlock.repeat;
+      }
+      if (repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin) {
+        groupBlocks[i].repeatRange = repeatBlock.repeatRange;
+        if (!groupBlocks[i].repeatValueIsOwn) {
+          groupBlocks[i].repeatValueRange = repeatBlock.repeatValueRange;
+        }
+      }
+    }
+  }
+
+  ClockUnit parseGroupUnitSuffix(ParseResult& result, SourceRange& unitRange) {
+    if (peek().type != TokenType::Identifier) {
+      return ClockUnit::Unknown;
+    }
+
+    Token unitToken = advance();
+    unitRange = rangeFromToken(unitToken);
+    ClockUnit unit = parseClockUnit(unitToken.lexeme);
+    if (unit == ClockUnit::Unknown) {
+      addDiagnostic(result, "Unknown clock unit", unitRange);
+    }
+    return unit;
+  }
+
   ClockLiteralAst parseLiteral(ParseResult& result) {
+    if (peek().type == TokenType::LeftBrace) {
+      return parseRandomRangeLiteral(result);
+    }
+
     Token firstNumber = advance();
     if (peek().type == TokenType::Colon) {
       return parseColonLiteral(result, firstNumber);
@@ -203,6 +435,87 @@ class Parser {
     parseOptionalUnit(result, ast);
     ast.range.end = ast.unitRange.end > 0 ? ast.unitRange.end : valueToken.end;
     return ast;
+  }
+
+  ClockLiteralAst parseRandomRangeLiteral(ParseResult& result) {
+    Token leftBrace = advance();
+    ClockLiteralAst ast;
+    ast.kind = ClockLiteralKind::RandomRange;
+    ast.unit = ClockUnit::Bpm;
+    ast.range.begin = leftBrace.begin;
+
+    while (!isAtEnd() && peek().type != TokenType::RightBrace) {
+      if (peek().type != TokenType::Number) {
+        addDiagnostic(result, "Expected random choice number",
+                      rangeFromToken(peek()));
+        ast.range.end = peek().end;
+        advance();
+        return ast;
+      }
+
+      ast.randomChoices.push_back(parseRandomChoice(result));
+      if (peek().type == TokenType::Pipe) {
+        advance();
+        if (peek().type == TokenType::RightBrace) {
+          addDiagnostic(result, "Expected random choice after '|'",
+                        rangeFromToken(peek()));
+          ast.range.end = peek().end;
+          return ast;
+        }
+        continue;
+      }
+
+      if (peek().type != TokenType::RightBrace) {
+        addDiagnostic(result, "Expected '|' or '}' in random literal",
+                      rangeFromToken(peek()));
+        ast.range.end = peek().end;
+        return ast;
+      }
+    }
+
+    if (ast.randomChoices.empty()) {
+      addDiagnostic(result, "Expected random choice after '{'",
+                    rangeFromToken(leftBrace));
+      ast.range.end = leftBrace.end;
+      return ast;
+    }
+
+    Token rightBrace = advance();
+    ast.minValue = ast.randomChoices.front().minValue;
+    ast.maxValue = ast.randomChoices.front().maxValue;
+    ast.minValueLexeme = ast.randomChoices.front().minValueLexeme;
+    ast.maxValueLexeme = ast.randomChoices.front().maxValueLexeme;
+    parseOptionalUnit(result, ast);
+    ast.range.end = ast.unitRange.end > 0 ? ast.unitRange.end : rightBrace.end;
+    return ast;
+  }
+
+  RandomChoiceAst parseRandomChoice(ParseResult& result) {
+    RandomChoiceAst choice;
+    Token minToken = advance();
+    choice.minValue = parseDouble(minToken.lexeme);
+    choice.maxValue = choice.minValue;
+    choice.minValueLexeme = minToken.lexeme;
+    choice.maxValueLexeme = minToken.lexeme;
+    choice.range.begin = minToken.begin;
+    choice.range.end = minToken.end;
+
+    if (peek().type != TokenType::Dash) {
+      return choice;
+    }
+
+    advance();
+    if (peek().type != TokenType::Number) {
+      addDiagnostic(result, "Expected range maximum after '-'",
+                    rangeFromToken(peek()));
+      return choice;
+    }
+
+    Token maxToken = advance();
+    choice.maxValue = parseDouble(maxToken.lexeme);
+    choice.maxValueLexeme = maxToken.lexeme;
+    choice.range.end = maxToken.end;
+    return choice;
   }
 
   ClockLiteralAst parseColonLiteral(ParseResult& result,
@@ -316,6 +629,8 @@ class Parser {
     Token repeatToken = advance();
     block.repeatRange.begin = atToken.begin;
     block.repeatRange.end = repeatToken.end;
+    block.repeatValueRange = rangeFromToken(repeatToken);
+    block.repeatValueIsOwn = true;
 
     if (peek().type == TokenType::Identifier) {
       ClockLiteralAst durationAst;
@@ -328,6 +643,7 @@ class Parser {
                                   ? durationAst.unitRange.end
                                   : repeatToken.end;
       block.repeatRange.end = durationAst.range.end;
+      block.repeatValueRange = durationAst.range;
       block.repeatIsDuration = true;
       block.repeatDuration = durationAst;
       if (!isDurationUnit(durationAst.unit)) {

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../ClolyPockLanguage/ClolyPockLanguage.hpp"
+#include "../ComputerscareResizableHandle.hpp"
 #include "../ComputerscareTextEditor.hpp"
 
 struct ClolyPockLineInfo {
@@ -65,6 +66,7 @@ static bool isBlankLine(const std::string& text) {
 }
 
 struct ClolyPockProgramStep {
+  cloly::language::ClockLiteralAst literal;
   cloly::language::ClockSpec spec;
   int repeat = 1;
   bool hasDuration = false;
@@ -72,13 +74,25 @@ struct ClolyPockProgramStep {
   int probability = 100;
   int highlightBegin = 0;
   int highlightEnd = 0;
+  int repeatHighlightBegin = 0;
+  int repeatHighlightEnd = 0;
+  bool repeatHighlightIsOwn = false;
+  bool hasRandomValue = false;
 };
 
 struct ComputerscareClolyPock : Module {
   static constexpr float CLOCK_BPM = 120.f;
   static constexpr float CLOCK_HZ = CLOCK_BPM / 60.f;
+  static constexpr float MIN_WIDTH = 150.f;
 
-  enum ParamIds { AUTO_ADVANCE_PARAM, NUM_PARAMS };
+  enum ParamIds {
+    AUTO_ADVANCE_PARAM,
+    EDITOR_FONT_SIZE_PARAM,
+    EDITOR_FONT_WIDTH_PARAM,
+    EDITOR_FONT_HEIGHT_PARAM,
+    EDITOR_LETTER_SPACING_PARAM,
+    NUM_PARAMS
+  };
   enum InputIds { ADVANCE_INPUT, NUM_INPUTS };
   enum OutputIds {
     CLOCK_OUTPUT,
@@ -121,11 +135,21 @@ struct ComputerscareClolyPock : Module {
   int activeProgramBeat = 0;
   float activeProgramElapsedSeconds = 0.f;
   bool activeStepPlays = true;
+  float width = MIN_WIDTH;
+  bool editorLineWrapping = true;
 
   ComputerscareClolyPock() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configSwitch(AUTO_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Line advance",
                  {"Manual", "Automatic"});
+    configParam(EDITOR_FONT_SIZE_PARAM, 8.f, 24.f, BND_LABEL_FONT_SIZE,
+                "Editor font size");
+    configParam(EDITOR_FONT_WIDTH_PARAM, -0.35f, 0.75f, 0.f,
+                "Editor font width");
+    configParam(EDITOR_FONT_HEIGHT_PARAM, -0.35f, 0.75f, 0.f,
+                "Editor font height");
+    configParam(EDITOR_LETTER_SPACING_PARAM, -2.f, 4.f, 0.f,
+                "Editor letter spacing");
     configInput(ADVANCE_INPUT, "Advance line");
     configOutput(CLOCK_OUTPUT, "Clock");
     configOutput(EOC1_OUTPUT, "Token move EOC");
@@ -169,6 +193,9 @@ struct ComputerscareClolyPock : Module {
         json_stringn(editorState.text.c_str(), editorState.text.size()));
     json_object_set_new(rootJ, "focusedLine", json_integer(selectedLine));
     json_object_set_new(rootJ, "activeLine", json_integer(activeLine));
+    json_object_set_new(rootJ, "width", json_real(width));
+    json_object_set_new(rootJ, "editorLineWrapping",
+                        json_boolean(editorLineWrapping));
     return rootJ;
   }
 
@@ -187,6 +214,14 @@ struct ComputerscareClolyPock : Module {
     if (activeLineJ) {
       activeLine = json_integer_value(activeLineJ);
       commitLine(activeLine, true);
+    }
+    json_t* widthJ = json_object_get(rootJ, "width");
+    if (widthJ) {
+      width = std::max(MIN_WIDTH, (float)json_number_value(widthJ));
+    }
+    json_t* editorLineWrappingJ = json_object_get(rootJ, "editorLineWrapping");
+    if (editorLineWrappingJ) {
+      editorLineWrapping = json_boolean_value(editorLineWrappingJ);
     }
   }
 
@@ -209,7 +244,27 @@ struct ComputerscareClolyPock : Module {
       }
 
       ClolyPockProgramStep step;
+      step.literal = block.literal;
       step.spec = eval.spec;
+      step.hasRandomValue =
+          block.literal.kind == cloly::language::ClockLiteralKind::RandomRange;
+      if (step.hasRandomValue) {
+        for (size_t choiceIndex = 0;
+             choiceIndex < block.literal.randomChoices.size(); choiceIndex++) {
+          const cloly::language::RandomChoiceAst& choice =
+              block.literal.randomChoices[choiceIndex];
+          cloly::language::EvaluationResult minEval =
+              cloly::language::evaluateClockLiteralWithValue(block.literal,
+                                                             choice.minValue);
+          cloly::language::EvaluationResult maxEval =
+              cloly::language::evaluateClockLiteralWithValue(block.literal,
+                                                             choice.maxValue);
+          if (!minEval.ok() || !maxEval.ok()) {
+            program.clear();
+            return false;
+          }
+        }
+      }
       step.repeat = std::max(1, block.repeat);
       if (block.repeatIsDuration) {
         cloly::language::EvaluationResult durationEval =
@@ -224,6 +279,9 @@ struct ComputerscareClolyPock : Module {
       step.probability = std::max(0, std::min(100, block.probability));
       step.highlightBegin = lineBegin + block.literal.range.begin;
       step.highlightEnd = lineBegin + block.literal.range.end;
+      step.repeatHighlightBegin = lineBegin + block.repeatValueRange.begin;
+      step.repeatHighlightEnd = lineBegin + block.repeatValueRange.end;
+      step.repeatHighlightIsOwn = block.repeatValueIsOwn;
       program.push_back(step);
     }
 
@@ -425,7 +483,7 @@ struct ComputerscareClolyPock : Module {
     activeProgramIndex = std::max(
         0, std::min(activeProgramIndex, (int)activeProgram.size() - 1));
     const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
-    activeClockSpec = step.spec;
+    refreshActiveClockSpecForStep();
     activeHighlightBegin = step.highlightBegin;
     activeHighlightEnd = step.highlightEnd;
     activeProgramElapsedSeconds = 0.f;
@@ -439,6 +497,7 @@ struct ComputerscareClolyPock : Module {
     }
 
     if (activeProgram[activeProgramIndex].hasDuration) {
+      refreshActiveClockSpecForStep();
       chooseActiveStepPlayback();
       return;
     }
@@ -447,6 +506,7 @@ struct ComputerscareClolyPock : Module {
     if (activeProgramBeat >= activeProgram[activeProgramIndex].repeat) {
       advanceActiveProgramStep();
     } else {
+      refreshActiveClockSpecForStep();
       chooseActiveStepPlayback();
     }
   }
@@ -550,6 +610,43 @@ struct ComputerscareClolyPock : Module {
     }
   }
 
+  void refreshActiveClockSpecForStep() {
+    if (activeProgram.empty()) {
+      return;
+    }
+
+    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    if (!step.hasRandomValue) {
+      activeClockSpec = step.spec;
+      return;
+    }
+
+    double minValue = step.literal.minValue;
+    double maxValue = step.literal.maxValue;
+    if (!step.literal.randomChoices.empty()) {
+      size_t choiceIndex = std::min(
+          (size_t)(random::uniform() * step.literal.randomChoices.size()),
+          step.literal.randomChoices.size() - 1);
+      minValue = step.literal.randomChoices[choiceIndex].minValue;
+      maxValue = step.literal.randomChoices[choiceIndex].maxValue;
+    }
+    double lowValue = std::min(minValue, maxValue);
+    double highValue = std::max(minValue, maxValue);
+    double sampledValue = lowValue;
+    if (highValue > lowValue) {
+      sampledValue = lowValue + random::uniform() * (highValue - lowValue);
+    }
+
+    cloly::language::EvaluationResult eval =
+        cloly::language::evaluateClockLiteralWithValue(step.literal,
+                                                       sampledValue);
+    if (eval.ok()) {
+      activeClockSpec = eval.spec;
+    } else {
+      activeClockSpec = step.spec;
+    }
+  }
+
   void scheduleTokenStartTick() {
     clockPhase = 0.f;
     activeClockRamp = 0.f;
@@ -570,6 +667,39 @@ struct ComputerscareClolyPock : Module {
     }
 
     return clockPhase < 0.5f;
+  }
+
+  bool getActiveRepeatProgressHighlight(int& begin, int& end, float& progress) {
+    int unusedSegments = 0;
+    return getActiveRepeatProgressHighlight(begin, end, progress,
+                                            unusedSegments);
+  }
+
+  bool getActiveRepeatProgressHighlight(int& begin, int& end, float& progress,
+                                        int& segments) {
+    if (activeProgram.empty()) {
+      return false;
+    }
+
+    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    if (step.repeatHighlightEnd <= step.repeatHighlightBegin) {
+      return false;
+    }
+
+    begin = step.repeatHighlightBegin;
+    end = step.repeatHighlightEnd;
+    if (step.hasDuration) {
+      segments = 0;
+      progress = step.durationSeconds > 0.f
+                     ? activeProgramElapsedSeconds / step.durationSeconds
+                     : 0.f;
+    } else {
+      segments = std::max(1, step.repeat);
+      progress =
+          step.repeat > 0 ? (float)(activeProgramBeat + 1) / step.repeat : 0.f;
+    }
+    progress = std::max(0.f, std::min(progress, 1.f));
+    return true;
   }
 };
 
@@ -611,19 +741,38 @@ struct ClolyPockPanel : Widget {
 };
 
 struct ComputerscareClolyPockWidget : ModuleWidget {
+  ClolyPockPanel* panel = nullptr;
+  ClolyPockTitle* title = nullptr;
   ComputerscareTextEditor* editor = nullptr;
+  Widget* syntaxErrorLight = nullptr;
+  PortWidget* clockOutput = nullptr;
+  PortWidget* eoc1Output = nullptr;
+  PortWidget* eoc2Output = nullptr;
+  PortWidget* eoc3Output = nullptr;
+  ComputerscareResizeHandle* leftHandle = nullptr;
+  ComputerscareResizeHandle* rightHandle = nullptr;
   ComputerscareTextEditorState browserEditorState;
   int lastCursorLine = -1;
 
   ComputerscareClolyPockWidget(ComputerscareClolyPock* module) {
     setModule(module);
-    box.size = Vec(10 * 15.f, 380.f);
+    box.size =
+        Vec(module ? module->width : ComputerscareClolyPock::MIN_WIDTH, 380.f);
 
-    ClolyPockPanel* panel = new ClolyPockPanel();
+    panel = new ClolyPockPanel();
     panel->box.size = box.size;
     addChild(panel);
 
-    ClolyPockTitle* title = new ClolyPockTitle();
+    leftHandle = new ComputerscareResizeHandle();
+    leftHandle->minWidth = ComputerscareClolyPock::MIN_WIDTH;
+    addChild(leftHandle);
+
+    rightHandle = new ComputerscareResizeHandle();
+    rightHandle->right = true;
+    rightHandle->minWidth = ComputerscareClolyPock::MIN_WIDTH;
+    addChild(rightHandle);
+
+    title = new ClolyPockTitle();
     title->box.pos = Vec(0.f, 11.f);
     title->box.size = Vec(box.size.x, 24.f);
     addChild(title);
@@ -645,35 +794,93 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     }
     addChild(editor);
 
-    addChild(createLight<ComputerscareSmallLight<ComputerscareRedLight>>(
-        Vec(127.f, 10.f), module, ComputerscareClolyPock::SYNTAX_ERROR_LIGHT));
+    syntaxErrorLight =
+        createLight<ComputerscareSmallLight<ComputerscareRedLight>>(
+            Vec(127.f, 10.f), module,
+            ComputerscareClolyPock::SYNTAX_ERROR_LIGHT);
+    addChild(syntaxErrorLight);
 
     addInput(createInput<InPort>(Vec(8.f, 8.f), module,
                                  ComputerscareClolyPock::ADVANCE_INPUT));
     addParam(createParam<CKSS>(Vec(42.f, 12.f), module,
                                ComputerscareClolyPock::AUTO_ADVANCE_PARAM));
 
-    addOutput(createOutput<OutPort>(Vec(8.f, 340.f), module,
-                                    ComputerscareClolyPock::CLOCK_OUTPUT));
-    addOutput(createOutput<OutPort>(Vec(45.f, 340.f), module,
-                                    ComputerscareClolyPock::EOC1_OUTPUT));
-    addOutput(createOutput<OutPort>(Vec(82.f, 340.f), module,
-                                    ComputerscareClolyPock::EOC2_OUTPUT));
-    addOutput(createOutput<OutPort>(Vec(119.f, 340.f), module,
-                                    ComputerscareClolyPock::EOC3_OUTPUT));
+    clockOutput = createOutput<OutPort>(Vec(8.f, 340.f), module,
+                                        ComputerscareClolyPock::CLOCK_OUTPUT);
+    eoc1Output = createOutput<OutPort>(Vec(45.f, 340.f), module,
+                                       ComputerscareClolyPock::EOC1_OUTPUT);
+    eoc2Output = createOutput<OutPort>(Vec(82.f, 340.f), module,
+                                       ComputerscareClolyPock::EOC2_OUTPUT);
+    eoc3Output = createOutput<OutPort>(Vec(119.f, 340.f), module,
+                                       ComputerscareClolyPock::EOC3_OUTPUT);
+    addOutput(clockOutput);
+    addOutput(eoc1Output);
+    addOutput(eoc2Output);
+    addOutput(eoc3Output);
+    applyLayout();
+  }
+
+  void applyLayout() {
+    box.size.x = std::max(box.size.x, ComputerscareClolyPock::MIN_WIDTH);
+    if (panel) {
+      panel->box.size = box.size;
+    }
+    if (title) {
+      title->box.size.x = box.size.x;
+    }
+    if (editor) {
+      editor->box.size.x = box.size.x - 6.f;
+    }
+    if (syntaxErrorLight) {
+      syntaxErrorLight->box.pos.x = box.size.x - 23.f;
+    }
+    if (rightHandle) {
+      rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
+    }
+
+    const float outputY = 340.f;
+    PortWidget* outputs[] = {clockOutput, eoc1Output, eoc2Output, eoc3Output};
+    const float outputXs[] = {8.f, 45.f, 82.f, 119.f};
+    for (int i = 0; i < 4; i++) {
+      if (outputs[i]) {
+        outputs[i]->box.pos = Vec(outputXs[i], outputY);
+      }
+    }
   }
 
   void step() override {
     ModuleWidget::step();
+    box.size.x = std::max(box.size.x, ComputerscareClolyPock::MIN_WIDTH);
 
     ComputerscareClolyPock* clolyPock =
         dynamic_cast<ComputerscareClolyPock*>(module);
+    if (clolyPock) {
+      if (std::fabs(clolyPock->width - box.size.x) > 0.01f) {
+        clolyPock->width = box.size.x;
+      }
+    }
+    applyLayout();
+
     if (editor) {
       ComputerscareTextEditorState* state = nullptr;
       bool blinkHigh = false;
       float activeProgress = 0.f;
 
       if (clolyPock) {
+        editor->style.fontSize =
+            clolyPock->params[ComputerscareClolyPock::EDITOR_FONT_SIZE_PARAM]
+                .getValue();
+        editor->style.fontWidthOffset =
+            clolyPock->params[ComputerscareClolyPock::EDITOR_FONT_WIDTH_PARAM]
+                .getValue();
+        editor->style.fontHeightOffset =
+            clolyPock->params[ComputerscareClolyPock::EDITOR_FONT_HEIGHT_PARAM]
+                .getValue();
+        editor->style.letterSpacing =
+            clolyPock
+                ->params[ComputerscareClolyPock::EDITOR_LETTER_SPACING_PARAM]
+                .getValue();
+        editor->style.lineWrapping = clolyPock->editorLineWrapping;
         state = &clolyPock->editorState;
         if (clolyPock->selectedLineDirty) {
           editor->setCursorLine(clolyPock->selectedLine);
@@ -776,7 +983,50 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
           activeHighlight.begin < activeHighlight.end) {
         state->highlights.push_back(activeHighlight);
       }
+      if (clolyPock && !showingPendingActiveLine && !showingInvalidActiveLine) {
+        int repeatBegin = 0;
+        int repeatEnd = 0;
+        int repeatSegments = 0;
+        float repeatProgress = 0.f;
+        if (clolyPock->getActiveRepeatProgressHighlight(
+                repeatBegin, repeatEnd, repeatProgress, repeatSegments)) {
+          ComputerscareTextHighlight repeatProgressHighlight;
+          repeatProgressHighlight.begin = repeatBegin;
+          repeatProgressHighlight.end = repeatEnd;
+          repeatProgressHighlight.hasBackground = false;
+          repeatProgressHighlight.hasProgress = true;
+          repeatProgressHighlight.progress = repeatProgress;
+          repeatProgressHighlight.progressSegments = repeatSegments;
+          repeatProgressHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
+          state->highlights.push_back(repeatProgressHighlight);
+        }
+      }
     }
+  }
+
+  void appendContextMenu(Menu* menu) override {
+    ComputerscareClolyPock* clolyPock =
+        dynamic_cast<ComputerscareClolyPock*>(module);
+    if (!clolyPock) {
+      return;
+    }
+
+    menu->addChild(new MenuSeparator());
+    menu->addChild(createMenuLabel("Editor"));
+    menu->addChild(new MenuParamSlider(
+        clolyPock
+            ->paramQuantities[ComputerscareClolyPock::EDITOR_FONT_SIZE_PARAM]));
+    menu->addChild(new MenuParamSlider(
+        clolyPock->paramQuantities
+            [ComputerscareClolyPock::EDITOR_FONT_WIDTH_PARAM]));
+    menu->addChild(new MenuParamSlider(
+        clolyPock->paramQuantities
+            [ComputerscareClolyPock::EDITOR_FONT_HEIGHT_PARAM]));
+    menu->addChild(new MenuParamSlider(
+        clolyPock->paramQuantities
+            [ComputerscareClolyPock::EDITOR_LETTER_SPACING_PARAM]));
+    menu->addChild(createBoolPtrMenuItem("Line wrapping", "",
+                                         &clolyPock->editorLineWrapping));
   }
 };
 

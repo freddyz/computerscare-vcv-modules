@@ -58,6 +58,34 @@ void requireColonAst(const std::string& source, int minutes, int seconds,
   require(result.ast.unit == unit, message);
 }
 
+void requireRandomRangeAst(const std::string& source, double minValue,
+                           double maxValue, lang::ClockUnit unit,
+                           const char* message) {
+  lang::ParseResult result = lang::parseClockLiteral(source);
+  require(result.ok(), message);
+  require(result.ast.kind == lang::ClockLiteralKind::RandomRange, message);
+  requireNear(result.ast.minValue, minValue, message);
+  requireNear(result.ast.maxValue, maxValue, message);
+  require(result.ast.unit == unit, message);
+}
+
+void requireRandomChoice(const lang::ClockLiteralAst& ast, size_t index,
+                         double minValue, double maxValue,
+                         const char* message) {
+  require(index < ast.randomChoices.size(), message);
+  requireNear(ast.randomChoices[index].minValue, minValue, message);
+  requireNear(ast.randomChoices[index].maxValue, maxValue, message);
+}
+
+void requireProgramValues(const lang::ParseResult& result,
+                          const std::vector<double>& values,
+                          const char* message) {
+  require(result.program.blocks.size() == values.size(), message);
+  for (size_t i = 0; i < values.size(); i++) {
+    requireNear(result.program.blocks[i].literal.value, values[i], message);
+  }
+}
+
 void requireDurationRepeat(const lang::ClockBlockAst& block, double value,
                            lang::ClockUnit unit, int begin, int end,
                            const char* message) {
@@ -199,6 +227,59 @@ void testTokenizer() {
                "90@3sec token 2");
   requireToken(tokens[7], lang::TokenType::Identifier, "sec", 11, 14,
                "90@3sec token 3");
+
+  tokens = lang::tokenize("2hz (2hz 4hz)");
+  require(tokens.size() == 9, "interleave token count");
+  requireToken(tokens[0], lang::TokenType::Number, "2", 0, 1,
+               "interleave token 0");
+  requireToken(tokens[1], lang::TokenType::Identifier, "hz", 1, 3,
+               "interleave token 1");
+  requireToken(tokens[2], lang::TokenType::LeftParen, "(", 4, 5,
+               "interleave token 2");
+  requireToken(tokens[3], lang::TokenType::Number, "2", 5, 6,
+               "interleave token 3");
+  requireToken(tokens[4], lang::TokenType::Identifier, "hz", 6, 8,
+               "interleave token 4");
+  requireToken(tokens[5], lang::TokenType::Number, "4", 9, 10,
+               "interleave token 5");
+  requireToken(tokens[6], lang::TokenType::Identifier, "hz", 10, 12,
+               "interleave token 6");
+  requireToken(tokens[7], lang::TokenType::RightParen, ")", 12, 13,
+               "interleave token 7");
+
+  tokens = lang::tokenize("{3-5}hz");
+  require(tokens.size() == 7, "random range token count");
+  requireToken(tokens[0], lang::TokenType::LeftBrace, "{", 0, 1,
+               "random range token 0");
+  requireToken(tokens[1], lang::TokenType::Number, "3", 1, 2,
+               "random range token 1");
+  requireToken(tokens[2], lang::TokenType::Dash, "-", 2, 3,
+               "random range token 2");
+  requireToken(tokens[3], lang::TokenType::Number, "5", 3, 4,
+               "random range token 3");
+  requireToken(tokens[4], lang::TokenType::RightBrace, "}", 4, 5,
+               "random range token 4");
+  requireToken(tokens[5], lang::TokenType::Identifier, "hz", 5, 7,
+               "random range token 5");
+
+  tokens = lang::tokenize("{3|2-10}hz");
+  require(tokens.size() == 9, "random choice range token count");
+  requireToken(tokens[0], lang::TokenType::LeftBrace, "{", 0, 1,
+               "random choice range token 0");
+  requireToken(tokens[1], lang::TokenType::Number, "3", 1, 2,
+               "random choice range token 1");
+  requireToken(tokens[2], lang::TokenType::Pipe, "|", 2, 3,
+               "random choice range token 2");
+  requireToken(tokens[3], lang::TokenType::Number, "2", 3, 4,
+               "random choice range token 3");
+  requireToken(tokens[4], lang::TokenType::Dash, "-", 4, 5,
+               "random choice range token 4");
+  requireToken(tokens[5], lang::TokenType::Number, "10", 5, 7,
+               "random choice range token 5");
+  requireToken(tokens[6], lang::TokenType::RightBrace, "}", 7, 8,
+               "random choice range token 6");
+  requireToken(tokens[7], lang::TokenType::Identifier, "hz", 8, 10,
+               "random choice range token 7");
 }
 
 void testAst() {
@@ -221,6 +302,28 @@ void testAst() {
   requireNumericAst("4mins", 4.0, lang::ClockUnit::Minutes, "4mins ast");
   requireColonAst("3:23 minutes", 3, 23, lang::ClockUnit::Minutes,
                   "3:23 minutes ast");
+  requireRandomRangeAst("{3-5}hz", 3.0, 5.0, lang::ClockUnit::Hertz,
+                        "{3-5}hz ast");
+  requireRandomRangeAst("{3-3}", 3.0, 3.0, lang::ClockUnit::Bpm,
+                        "{3-3} ast");
+  requireRandomRangeAst("{4-2}s", 4.0, 2.0, lang::ClockUnit::Seconds,
+                        "{4-2}s ast");
+
+  lang::ParseResult result = lang::parseClockLiteral("{3|2}hz");
+  require(result.ok(), "{3|2}hz ast parses");
+  require(result.ast.kind == lang::ClockLiteralKind::RandomRange,
+          "{3|2}hz random kind");
+  require(result.ast.randomChoices.size() == 2, "{3|2}hz choice count");
+  requireRandomChoice(result.ast, 0, 3.0, 3.0, "{3|2}hz choice 0");
+  requireRandomChoice(result.ast, 1, 2.0, 2.0, "{3|2}hz choice 1");
+  require(result.ast.unit == lang::ClockUnit::Hertz, "{3|2}hz unit");
+
+  result = lang::parseClockLiteral("{3|2-10}hz");
+  require(result.ok(), "{3|2-10}hz ast parses");
+  require(result.ast.randomChoices.size() == 2, "{3|2-10}hz choice count");
+  requireRandomChoice(result.ast, 0, 3.0, 3.0, "{3|2-10}hz choice 0");
+  requireRandomChoice(result.ast, 1, 2.0, 10.0, "{3|2-10}hz choice 1");
+  require(result.ast.unit == lang::ClockUnit::Hertz, "{3|2-10}hz unit");
 }
 
 void testProgramAst() {
@@ -355,6 +458,160 @@ void testProgramAst() {
   requireDurationRepeat(result.program.blocks[1], 2.0,
                         lang::ClockUnit::Seconds, 8, 11,
                         "bracket second duration repeat");
+
+  result = lang::parseClockLiteral("2hz (2hz 4hz)");
+  require(result.ok(), "interleave program parses");
+  requireProgramValues(result, {2.0, 2.0, 2.0, 4.0},
+                       "interleave block values");
+  require(result.program.blocks.size() == 4, "interleave block count");
+  requireNear(result.program.blocks[0].literal.value, 2.0,
+              "interleave block 0 value");
+  requireNear(result.program.blocks[1].literal.value, 2.0,
+              "interleave block 1 value");
+  requireNear(result.program.blocks[2].literal.value, 2.0,
+              "interleave block 2 value");
+  requireNear(result.program.blocks[3].literal.value, 4.0,
+              "interleave block 3 value");
+  requireRange(result.program.blocks[0].literal.range, 0, 3,
+               "interleave block 0 range");
+  requireRange(result.program.blocks[1].literal.range, 5, 8,
+               "interleave block 1 range");
+  requireRange(result.program.blocks[2].literal.range, 0, 3,
+               "interleave block 2 range");
+  requireRange(result.program.blocks[3].literal.range, 9, 12,
+               "interleave block 3 range");
+
+  result = lang::parseClockLiteral("(1hz 2hz)");
+  require(result.ok(), "outer paren group parses");
+  require(result.program.blocks.size() == 2, "outer paren group block count");
+  requireNear(result.program.blocks[0].literal.value, 1.0,
+              "outer paren first value");
+  requireNear(result.program.blocks[1].literal.value, 2.0,
+              "outer paren second value");
+  require(result.program.blocks[0].literal.unit == lang::ClockUnit::Hertz,
+          "outer paren first unit");
+  require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
+          "outer paren second unit");
+
+  result = lang::parseClockLiteral("(2 1)hz");
+  require(result.ok(), "outer paren suffix hz parses");
+  require(result.program.blocks.size() == 2, "outer paren suffix block count");
+  requireNear(result.program.blocks[0].literal.value, 2.0,
+              "outer paren suffix first value");
+  requireNear(result.program.blocks[1].literal.value, 1.0,
+              "outer paren suffix second value");
+  require(result.program.blocks[0].literal.unit == lang::ClockUnit::Hertz,
+          "outer paren suffix first hz");
+  require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
+          "outer paren suffix second hz");
+
+  result = lang::parseClockLiteral("(2 1 (3 2)@2)hz");
+  require(result.ok(), "nested paren suffix repeat parses");
+  requireProgramValues(result, {2.0, 1.0, 3.0, 2.0, 1.0, 2.0},
+                       "nested paren suffix repeat values");
+  requireNear(result.program.blocks[0].literal.value, 2.0,
+              "nested paren suffix repeat block 0 value");
+  requireNear(result.program.blocks[1].literal.value, 1.0,
+              "nested paren suffix repeat block 1 value");
+  requireNear(result.program.blocks[2].literal.value, 3.0,
+              "nested paren suffix repeat block 2 value");
+  requireNear(result.program.blocks[3].literal.value, 2.0,
+              "nested paren suffix repeat block 3 value");
+  requireNear(result.program.blocks[4].literal.value, 1.0,
+              "nested paren suffix repeat block 4 value");
+  requireNear(result.program.blocks[5].literal.value, 2.0,
+              "nested paren suffix repeat block 5 value");
+  require(result.program.blocks[0].literal.unit == lang::ClockUnit::Hertz,
+          "nested paren suffix repeat block 0 hz");
+  require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
+          "nested paren suffix repeat block 1 hz");
+  require(result.program.blocks[2].literal.unit == lang::ClockUnit::Hertz,
+          "nested paren suffix repeat block 2 hz");
+  require(result.program.blocks[3].literal.unit == lang::ClockUnit::Hertz,
+          "nested paren suffix repeat block 3 hz");
+  require(result.program.blocks[4].literal.unit == lang::ClockUnit::Hertz,
+          "nested paren suffix repeat block 4 hz");
+  require(result.program.blocks[5].literal.unit == lang::ClockUnit::Hertz,
+          "nested paren suffix repeat block 5 hz");
+  require(result.program.blocks[2].repeat == 2,
+          "nested paren suffix repeat block 2 repeat");
+  require(result.program.blocks[5].repeat == 2,
+          "nested paren suffix repeat block 5 repeat");
+
+  result = lang::parseClockLiteral("(3 4 (5 4 3))hz");
+  require(result.ok(), "spread interleave parses");
+  requireProgramValues(result, {3.0, 4.0, 5.0, 3.0, 4.0, 4.0, 3.0, 4.0,
+                                3.0},
+                       "spread interleave values");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
+            "spread interleave unit");
+  }
+
+  result = lang::parseClockLiteral("(3 (5 4 3))hz");
+  require(result.ok(), "single lane spread interleave parses");
+  requireProgramValues(result, {3.0, 5.0, 3.0, 4.0, 3.0, 3.0},
+                       "single lane spread interleave values");
+
+  result = lang::parseClockLiteral("((1 2) (3 4 5))hz");
+  require(result.ok(), "two nested lane spread interleave parses");
+  requireProgramValues(result, {1.0, 3.0, 2.0, 4.0, 1.0, 5.0},
+                       "two nested lane spread interleave values");
+
+  result = lang::parseClockLiteral("([1 2] (3 4 5))hz");
+  require(result.ok(), "bracket lane spread interleave parses");
+  requireProgramValues(result, {1.0, 3.0, 2.0, 4.0, 1.0, 5.0},
+                       "bracket lane spread interleave values");
+
+  result = lang::parseClockLiteral("120 (3hz [4hz 5hz])");
+  require(result.ok(), "nested interleave program parses");
+  require(result.program.blocks.size() == 6, "nested interleave block count");
+  requireRange(result.program.blocks[0].literal.range, 0, 3,
+               "nested interleave block 0 range");
+  requireRange(result.program.blocks[1].literal.range, 5, 8,
+               "nested interleave block 1 range");
+  requireRange(result.program.blocks[2].literal.range, 0, 3,
+               "nested interleave block 2 range");
+  requireRange(result.program.blocks[3].literal.range, 10, 13,
+               "nested interleave block 3 range");
+  requireRange(result.program.blocks[4].literal.range, 0, 3,
+               "nested interleave block 4 range");
+  requireRange(result.program.blocks[5].literal.range, 14, 17,
+               "nested interleave block 5 range");
+
+  result = lang::parseClockLiteral("[3 2 1]s");
+  require(result.ok(), "bracket suffix seconds parses");
+  require(result.program.blocks.size() == 3, "bracket suffix count");
+  require(result.program.blocks[0].literal.unit == lang::ClockUnit::Seconds,
+          "bracket suffix first seconds");
+  require(result.program.blocks[1].literal.unit == lang::ClockUnit::Seconds,
+          "bracket suffix second seconds");
+  require(result.program.blocks[2].literal.unit == lang::ClockUnit::Seconds,
+          "bracket suffix third seconds");
+  requireRange(result.program.blocks[0].literal.range, 1, 2,
+               "bracket suffix first range");
+
+  result = lang::parseClockLiteral("[3 2hz 1]s");
+  require(result.ok(), "mixed bracket suffix parses");
+  require(result.program.blocks.size() == 3, "mixed bracket suffix count");
+  require(result.program.blocks[0].literal.unit == lang::ClockUnit::Seconds,
+          "mixed bracket suffix first seconds");
+  require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
+          "mixed bracket suffix explicit hz wins");
+  require(result.program.blocks[2].literal.unit == lang::ClockUnit::Seconds,
+          "mixed bracket suffix third seconds");
+
+  result = lang::parseClockLiteral("[{3-5} 2]hz");
+  require(result.ok(), "bracket suffix random range parses");
+  require(result.program.blocks.size() == 2,
+          "bracket suffix random range count");
+  require(result.program.blocks[0].literal.kind ==
+              lang::ClockLiteralKind::RandomRange,
+          "bracket suffix random range kind");
+  require(result.program.blocks[0].literal.unit == lang::ClockUnit::Hertz,
+          "bracket suffix random range hz");
+  require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
+          "bracket suffix numeric hz");
 }
 
 void testProgramEvaluation() {
@@ -396,6 +653,30 @@ void testProgramEvaluation() {
   eval = lang::evaluateClockLiteral(result.program.blocks[2].literal);
   require(eval.ok(), "8hz nested block evaluates");
   requireNear(eval.spec.hz, 8.0, "8hz nested block hz");
+
+  result = lang::parseClockLiteral("{3-5}hz");
+  require(result.ok(), "{3-5}hz evaluates parse");
+  eval = lang::evaluateClockLiteralWithValue(result.ast, 4.0);
+  require(eval.ok(), "{3-5}hz sampled value evaluates");
+  requireNear(eval.spec.hz, 4.0, "{3-5}hz sampled hz");
+
+  result = lang::parseClockLiteral("{2-4}s");
+  require(result.ok(), "{2-4}s evaluates parse");
+  eval = lang::evaluateClockLiteralWithValue(result.ast, 3.0);
+  require(eval.ok(), "{2-4}s sampled value evaluates");
+  requireNear(eval.spec.periodSeconds, 3.0, "{2-4}s sampled period");
+
+  result = lang::parseClockLiteral("{4-2}s");
+  require(result.ok(), "{4-2}s evaluates parse");
+  eval = lang::evaluateClockLiteralWithValue(result.ast, 3.0);
+  require(eval.ok(), "{4-2}s sampled value evaluates");
+  requireNear(eval.spec.periodSeconds, 3.0, "{4-2}s sampled period");
+
+  result = lang::parseClockLiteral("{3|2-10}hz");
+  require(result.ok(), "{3|2-10}hz evaluates parse");
+  eval = lang::evaluateClockLiteralWithValue(result.ast, 7.0);
+  require(eval.ok(), "{3|2-10}hz sampled value evaluates");
+  requireNear(eval.spec.hz, 7.0, "{3|2-10}hz sampled hz");
 }
 
 void testEvaluator() {
@@ -466,6 +747,14 @@ void testInvalidInputs() {
   requireInvalid("120?-1", "negative probability invalid");
   requireInvalid("[120 90", "missing right bracket invalid");
   requireInvalid("[120,100]?50", "group probability invalid");
+  requireInvalid("[3 2]bananas", "unknown bracket suffix unit invalid");
+  requireInvalid("2hz (2hz 4hz", "missing right paren invalid");
+  requireInvalid("2hz)", "unexpected right paren invalid");
+  requireInvalid("{3-}hz", "range missing maximum invalid");
+  requireInvalid("{3-5hz", "range missing right brace invalid");
+  requireInvalid("{0-3}hz", "range zero endpoint invalid");
+  requireInvalid("{3|}hz", "random choice missing after pipe invalid");
+  requireInvalid("{|3}hz", "random choice missing before pipe invalid");
 }
 }  // namespace
 

@@ -27,7 +27,15 @@ enum class ClockUnit {
   Minutes
 };
 
-enum class ClockLiteralKind { Empty, Numeric, Colon };
+enum class ClockLiteralKind { Empty, Numeric, Colon, RandomRange };
+
+struct RandomChoiceAst {
+  double minValue = 0.0;
+  double maxValue = 0.0;
+  std::string minValueLexeme;
+  std::string maxValueLexeme;
+  SourceRange range;
+};
 
 struct ClockLiteralAst {
   ClockLiteralKind kind = ClockLiteralKind::Empty;
@@ -37,6 +45,11 @@ struct ClockLiteralAst {
 
   double value = 0.0;
   std::string valueLexeme;
+  double minValue = 0.0;
+  double maxValue = 0.0;
+  std::string minValueLexeme;
+  std::string maxValueLexeme;
+  std::vector<RandomChoiceAst> randomChoices;
 
   int minutes = 0;
   int seconds = 0;
@@ -52,6 +65,8 @@ struct ClockBlockAst {
   int probability = 100;
   SourceRange range;
   SourceRange repeatRange;
+  SourceRange repeatValueRange;
+  bool repeatValueIsOwn = false;
   SourceRange probabilityRange;
 };
 

@@ -114,6 +114,48 @@ std::vector<Token> tokenize(const std::string& source) {
       continue;
     }
 
+    if (c == '(') {
+      tokens.push_back(
+          {TokenType::LeftParen, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
+    if (c == ')') {
+      tokens.push_back(
+          {TokenType::RightParen, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
+    if (c == '{') {
+      tokens.push_back(
+          {TokenType::LeftBrace, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
+    if (c == '-') {
+      tokens.push_back(
+          {TokenType::Dash, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
+    if (c == '|') {
+      tokens.push_back(
+          {TokenType::Pipe, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
+    if (c == '}') {
+      tokens.push_back(
+          {TokenType::RightBrace, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
     tokens.push_back(
         {TokenType::Invalid, source.substr(index, 1), index, index + 1});
     index++;
@@ -141,6 +183,18 @@ std::string tokenTypeName(TokenType type) {
       return "LeftBracket";
     case TokenType::RightBracket:
       return "RightBracket";
+    case TokenType::LeftParen:
+      return "LeftParen";
+    case TokenType::RightParen:
+      return "RightParen";
+    case TokenType::LeftBrace:
+      return "LeftBrace";
+    case TokenType::Dash:
+      return "Dash";
+    case TokenType::Pipe:
+      return "Pipe";
+    case TokenType::RightBrace:
+      return "RightBrace";
     case TokenType::End:
       return "End";
     case TokenType::Invalid:

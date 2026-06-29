@@ -18,6 +18,7 @@ struct ComputerscareTextHighlight {
   bool hasProgress = false;
   bool fullLine = false;
   float progress = 0.f;
+  int progressSegments = 0;
 };
 
 struct ComputerscareTextEditorState {
@@ -37,6 +38,11 @@ struct ComputerscareTextEditorStyle {
   NVGcolor selectionColor = nvgRGBA(0x24, 0xc9, 0xa6, 0x85);
   NVGcolor placeholderColor = nvgRGBA(0xd8, 0xf3, 0xec, 0x61);
   float cornerRadius = 3.f;
+  float fontSize = BND_LABEL_FONT_SIZE;
+  float fontWidthOffset = 0.f;
+  float fontHeightOffset = 0.f;
+  float letterSpacing = 0.f;
+  bool lineWrapping = true;
 };
 
 struct ComputerscareTextEditorSnapshot {
@@ -78,7 +84,15 @@ struct ComputerscareTextEditor : ui::TextField {
   void clearHistory();
   void undo();
   void redo();
+  int getLineStartPosition(int line) const;
+  int getLineEndPosition(int line) const;
+  int getCursorColumn() const;
+  void moveCursorToAdjacentLogicalLine(int direction);
   std::shared_ptr<Font> loadEditorFont();
+  float getFontScaleX() const;
+  float getFontScaleY() const;
+  Vec getScaledBoxSize() const;
+  void applyTextStyle(NVGcontext* vg, std::shared_ptr<Font> font);
   void drawHighlightBackgrounds(const DrawArgs& args);
   void drawEditorText(const DrawArgs& args);
   void drawHighlightForegrounds(const DrawArgs& args);
