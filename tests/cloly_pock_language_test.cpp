@@ -58,6 +58,17 @@ void requireColonAst(const std::string& source, int minutes, int seconds,
   require(result.ast.unit == unit, message);
 }
 
+void requireDurationRepeat(const lang::ClockBlockAst& block, double value,
+                           lang::ClockUnit unit, int begin, int end,
+                           const char* message) {
+  require(block.repeatIsDuration, message);
+  require(block.repeatDuration.kind == lang::ClockLiteralKind::Numeric,
+          message);
+  requireNear(block.repeatDuration.value, value, message);
+  require(block.repeatDuration.unit == unit, message);
+  requireRange(block.repeatRange, begin, end, message);
+}
+
 lang::ClockSpec requireEvaluates(const std::string& source) {
   lang::ParseResult parse = lang::parseClockLiteral(source);
   require(parse.ok(), "parse should succeed before evaluation");
@@ -169,6 +180,25 @@ void testTokenizer() {
                "188?50 token 1");
   requireToken(tokens[2], lang::TokenType::Number, "50", 4, 6,
                "188?50 token 2");
+
+  tokens = lang::tokenize("120@2s 90@3sec");
+  require(tokens.size() == 9, "120@2s 90@3sec token count");
+  requireToken(tokens[0], lang::TokenType::Number, "120", 0, 3,
+               "120@2s token 0");
+  requireToken(tokens[1], lang::TokenType::At, "@", 3, 4,
+               "120@2s token 1");
+  requireToken(tokens[2], lang::TokenType::Number, "2", 4, 5,
+               "120@2s token 2");
+  requireToken(tokens[3], lang::TokenType::Identifier, "s", 5, 6,
+               "120@2s token 3");
+  requireToken(tokens[4], lang::TokenType::Number, "90", 7, 9,
+               "90@3sec token 0");
+  requireToken(tokens[5], lang::TokenType::At, "@", 9, 10,
+               "90@3sec token 1");
+  requireToken(tokens[6], lang::TokenType::Number, "3", 10, 11,
+               "90@3sec token 2");
+  requireToken(tokens[7], lang::TokenType::Identifier, "sec", 11, 14,
+               "90@3sec token 3");
 }
 
 void testAst() {
@@ -302,6 +332,29 @@ void testProgramAst() {
           "bracket second probability");
   require(result.program.blocks[0].repeat == 4, "bracket first repeat");
   require(result.program.blocks[1].repeat == 4, "bracket second repeat");
+
+  result = lang::parseClockLiteral("120@2s 90@3sec 60@250ms");
+  require(result.ok(), "duration repeat program parses");
+  require(result.program.blocks.size() == 3, "duration repeat block count");
+  requireDurationRepeat(result.program.blocks[0], 2.0,
+                        lang::ClockUnit::Seconds, 3, 6,
+                        "120@2s duration repeat");
+  requireDurationRepeat(result.program.blocks[1], 3.0,
+                        lang::ClockUnit::Seconds, 9, 14,
+                        "90@3sec duration repeat");
+  requireDurationRepeat(result.program.blocks[2], 250.0,
+                        lang::ClockUnit::Milliseconds, 17, 23,
+                        "60@250ms duration repeat");
+
+  result = lang::parseClockLiteral("[120 90]@2s");
+  require(result.ok(), "bracket duration repeat parses");
+  require(result.program.blocks.size() == 2, "bracket duration repeat count");
+  requireDurationRepeat(result.program.blocks[0], 2.0,
+                        lang::ClockUnit::Seconds, 8, 11,
+                        "bracket first duration repeat");
+  requireDurationRepeat(result.program.blocks[1], 2.0,
+                        lang::ClockUnit::Seconds, 8, 11,
+                        "bracket second duration repeat");
 }
 
 void testProgramEvaluation() {
@@ -405,6 +458,9 @@ void testInvalidInputs() {
   requireInvalid("120bpm !", "trailing junk invalid");
   requireInvalid("hz", "missing number invalid");
   requireInvalid("120bpm@1.5", "decimal repeat invalid");
+  requireInvalid("120bpm@2hz", "frequency repeat duration invalid");
+  requireInvalid("120bpm@2bpm", "bpm repeat duration invalid");
+  requireInvalid("120bpm@0s", "zero repeat duration invalid");
   requireInvalid("120?1.5", "decimal probability invalid");
   requireInvalid("120?101", "probability over 100 invalid");
   requireInvalid("120?-1", "negative probability invalid");

@@ -67,6 +67,8 @@ static bool isBlankLine(const std::string& text) {
 struct ClolyPockProgramStep {
   cloly::language::ClockSpec spec;
   int repeat = 1;
+  bool hasDuration = false;
+  float durationSeconds = 0.f;
   int probability = 100;
   int highlightBegin = 0;
   int highlightEnd = 0;
@@ -95,6 +97,8 @@ struct ComputerscareClolyPock : Module {
   float clockPhase = 0.f;
   float activeClockRamp = 0.f;
   bool clockHigh = false;
+  int clockStartLowSamples = 0;
+  bool clockStartHighPending = false;
   bool syntaxError = false;
   int selectedLine = 0;
   bool selectedLineDirty = false;
@@ -115,6 +119,7 @@ struct ComputerscareClolyPock : Module {
   std::vector<ClolyPockProgramStep> activeProgram;
   int activeProgramIndex = 0;
   int activeProgramBeat = 0;
+  float activeProgramElapsedSeconds = 0.f;
   bool activeStepPlays = true;
 
   ComputerscareClolyPock() {
@@ -144,8 +149,9 @@ struct ComputerscareClolyPock : Module {
       clockPhase -= 1.f;
       advanceActiveProgramBeat();
     }
+    advanceActiveProgramDuration(args.sampleTime);
     activeClockRamp = clockPhase;
-    clockHigh = clockPhase < 0.5f;
+    clockHigh = nextClockGateHigh();
     outputs[CLOCK_OUTPUT].setVoltage(clockHigh && activeStepPlays ? 10.f : 0.f);
     outputs[EOC1_OUTPUT].setVoltage(
         tokenMovePulse.process(args.sampleTime) ? 10.f : 0.f);
@@ -205,6 +211,16 @@ struct ComputerscareClolyPock : Module {
       ClolyPockProgramStep step;
       step.spec = eval.spec;
       step.repeat = std::max(1, block.repeat);
+      if (block.repeatIsDuration) {
+        cloly::language::EvaluationResult durationEval =
+            cloly::language::evaluateClockLiteral(block.repeatDuration);
+        if (!durationEval.ok()) {
+          program.clear();
+          return false;
+        }
+        step.hasDuration = true;
+        step.durationSeconds = std::max(0.0, durationEval.spec.periodSeconds);
+      }
       step.probability = std::max(0, std::min(100, block.probability));
       step.highlightBegin = lineBegin + block.literal.range.begin;
       step.highlightEnd = lineBegin + block.literal.range.end;
@@ -230,6 +246,7 @@ struct ComputerscareClolyPock : Module {
     activeProgram = program;
     activeProgramIndex = 0;
     activeProgramBeat = 0;
+    activeProgramElapsedSeconds = 0.f;
     activeStepPlays = true;
     if (resetPhase) {
       clockPhase = 0.f;
@@ -287,6 +304,15 @@ struct ComputerscareClolyPock : Module {
   }
 
   void togglePendingView() {
+    if (errorLine == activeLine) {
+      replaceLineText(activeLine, activeLineText);
+      checkedFocusedLineText = activeLineText;
+      errorLine = -1;
+      syntaxError = false;
+      viewingPendingLine = false;
+      return;
+    }
+
     if (pendingLine != activeLine) {
       return;
     }
@@ -379,6 +405,7 @@ struct ComputerscareClolyPock : Module {
     activeProgram = pendingProgram;
     activeProgramIndex = 0;
     activeProgramBeat = 0;
+    activeProgramElapsedSeconds = 0.f;
     activeStepPlays = true;
     if (resetPhase) {
       clockPhase = 0.f;
@@ -401,6 +428,8 @@ struct ComputerscareClolyPock : Module {
     activeClockSpec = step.spec;
     activeHighlightBegin = step.highlightBegin;
     activeHighlightEnd = step.highlightEnd;
+    activeProgramElapsedSeconds = 0.f;
+    scheduleTokenStartTick();
     chooseActiveStepPlayback();
   }
 
@@ -409,23 +438,45 @@ struct ComputerscareClolyPock : Module {
       return;
     }
 
+    if (activeProgram[activeProgramIndex].hasDuration) {
+      chooseActiveStepPlayback();
+      return;
+    }
+
     activeProgramBeat++;
     if (activeProgramBeat >= activeProgram[activeProgramIndex].repeat) {
-      activeProgramBeat = 0;
-      bool hadMultipleSteps = activeProgram.size() > 1;
-      activeProgramIndex++;
-      if (activeProgramIndex >= (int)activeProgram.size()) {
-        activeProgramIndex = 0;
-        bool movedLine = handleLineCycleEnd();
-        if (movedLine || hadMultipleSteps) {
-          tokenMovePulse.trigger(1e-3f);
-        }
-      } else {
-        applyActiveProgramStep();
+      advanceActiveProgramStep();
+    } else {
+      chooseActiveStepPlayback();
+    }
+  }
+
+  void advanceActiveProgramDuration(float sampleTime) {
+    if (activeProgram.empty() ||
+        !activeProgram[activeProgramIndex].hasDuration) {
+      return;
+    }
+
+    activeProgramElapsedSeconds += sampleTime;
+    if (activeProgramElapsedSeconds >=
+        activeProgram[activeProgramIndex].durationSeconds) {
+      advanceActiveProgramStep();
+    }
+  }
+
+  void advanceActiveProgramStep() {
+    bool hadMultipleSteps = activeProgram.size() > 1;
+    activeProgramBeat = 0;
+    activeProgramIndex++;
+    if (activeProgramIndex >= (int)activeProgram.size()) {
+      activeProgramIndex = 0;
+      bool movedLine = handleLineCycleEnd();
+      if (movedLine || hadMultipleSteps) {
         tokenMovePulse.trigger(1e-3f);
       }
     } else {
-      chooseActiveStepPlayback();
+      applyActiveProgramStep();
+      tokenMovePulse.trigger(1e-3f);
     }
   }
 
@@ -497,6 +548,28 @@ struct ComputerscareClolyPock : Module {
     } else {
       activeStepPlays = random::uniform() * 100.f < probability;
     }
+  }
+
+  void scheduleTokenStartTick() {
+    clockPhase = 0.f;
+    activeClockRamp = 0.f;
+    clockStartLowSamples = 1;
+    clockStartHighPending = true;
+  }
+
+  bool nextClockGateHigh() {
+    if (clockStartLowSamples > 0) {
+      clockStartLowSamples--;
+      return false;
+    }
+
+    if (clockStartHighPending) {
+      clockStartHighPending = false;
+      clockPhase = 0.f;
+      activeClockRamp = 0.f;
+    }
+
+    return clockPhase < 0.5f;
   }
 };
 
@@ -656,6 +729,8 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       bool showingActiveVersionOfPending =
           clolyPock && clolyPock->pendingLine == clolyPock->activeLine &&
           !clolyPock->viewingPendingLine;
+      bool showingInvalidActiveLine =
+          clolyPock && clolyPock->errorLine == clolyPock->activeLine;
       if (clolyPock && clolyPock->pendingLine >= 0 &&
           !showingActiveVersionOfPending) {
         ClolyPockLineInfo pendingLineInfo =
@@ -697,7 +772,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       activeHighlight.hasProgress = true;
       activeHighlight.progress = activeProgress;
       activeHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
-      if (!showingPendingActiveLine &&
+      if (!showingPendingActiveLine && !showingInvalidActiveLine &&
           activeHighlight.begin < activeHighlight.end) {
         state->highlights.push_back(activeHighlight);
       }

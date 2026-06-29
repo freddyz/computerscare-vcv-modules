@@ -49,6 +49,11 @@ void addDiagnostic(ParseResult& result, const std::string& message,
   result.diagnostics.push_back(diagnostic);
 }
 
+bool isDurationUnit(ClockUnit unit) {
+  return unit == ClockUnit::Milliseconds || unit == ClockUnit::Seconds ||
+         unit == ClockUnit::Minutes;
+}
+
 class Parser {
  public:
   explicit Parser(const std::vector<Token>& tokens) : tokens(tokens) {}
@@ -165,7 +170,12 @@ class Parser {
     }
 
     for (size_t i = 0; i < groupBlocks.size(); i++) {
-      groupBlocks[i].repeat *= repeatBlock.repeat;
+      if (repeatBlock.repeatIsDuration) {
+        groupBlocks[i].repeatIsDuration = true;
+        groupBlocks[i].repeatDuration = repeatBlock.repeatDuration;
+      } else {
+        groupBlocks[i].repeat *= repeatBlock.repeat;
+      }
       if (repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin) {
         groupBlocks[i].repeatRange = repeatBlock.repeatRange;
       }
@@ -306,6 +316,31 @@ class Parser {
     Token repeatToken = advance();
     block.repeatRange.begin = atToken.begin;
     block.repeatRange.end = repeatToken.end;
+
+    if (peek().type == TokenType::Identifier) {
+      ClockLiteralAst durationAst;
+      durationAst.kind = ClockLiteralKind::Numeric;
+      durationAst.value = parseDouble(repeatToken.lexeme);
+      durationAst.valueLexeme = repeatToken.lexeme;
+      durationAst.range.begin = repeatToken.begin;
+      parseUnitToken(result, durationAst);
+      durationAst.range.end = durationAst.unitRange.end > 0
+                                  ? durationAst.unitRange.end
+                                  : repeatToken.end;
+      block.repeatRange.end = durationAst.range.end;
+      block.repeatIsDuration = true;
+      block.repeatDuration = durationAst;
+      if (!isDurationUnit(durationAst.unit)) {
+        addDiagnostic(result, "Repeat duration must use a time unit",
+                      durationAst.unitRange);
+      }
+      if (durationAst.value <= 0.0) {
+        addDiagnostic(result, "Repeat duration must be greater than zero",
+                      rangeFromToken(repeatToken));
+      }
+      return;
+    }
+
     if (!isIntegerLexeme(repeatToken.lexeme)) {
       addDiagnostic(result, "Repeat count must be an integer",
                     rangeFromToken(repeatToken));

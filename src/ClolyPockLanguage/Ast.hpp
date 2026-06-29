@@ -47,6 +47,8 @@ struct ClockLiteralAst {
 struct ClockBlockAst {
   ClockLiteralAst literal;
   int repeat = 1;
+  bool repeatIsDuration = false;
+  ClockLiteralAst repeatDuration;
   int probability = 100;
   SourceRange range;
   SourceRange repeatRange;
