@@ -155,6 +155,10 @@ struct ComputerscareTextEditorLayout {
       return;
     }
 
+    std::vector<bool> hasCaret(rowLength + 1, false);
+    row.carets[0] = row.x;
+    hasCaret[0] = true;
+
     static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
     int glyphCount = nvgTextGlyphPositions(vg, row.x, row.y, rowText.c_str(),
                                            NULL, glyphs, BND_MAX_GLYPHS);
@@ -162,16 +166,30 @@ struct ComputerscareTextEditorLayout {
       int localOffset = glyphs[i].str - rowText.c_str();
       if (localOffset >= 0 && localOffset <= rowLength) {
         row.carets[localOffset] = glyphs[i].x;
-      }
-      if (localOffset + 1 >= 0 && localOffset + 1 <= rowLength) {
-        row.carets[localOffset + 1] = glyphs[i].maxx;
+        hasCaret[localOffset] = true;
       }
     }
 
     float measuredWidth =
         nvgTextBounds(vg, row.x, row.y, rowText.c_str(), NULL, NULL);
-    row.carets[rowLength] =
-        std::max(row.carets[rowLength], row.x + measuredWidth);
+    row.carets[rowLength] = row.x + measuredWidth;
+    hasCaret[rowLength] = true;
+
+    int previousSet = 0;
+    for (int i = 1; i <= rowLength; i++) {
+      if (!hasCaret[i]) {
+        continue;
+      }
+      float previousX = row.carets[previousSet];
+      float currentX = std::max(previousX, row.carets[i]);
+      row.carets[i] = currentX;
+      int span = i - previousSet;
+      for (int j = previousSet + 1; j < i; j++) {
+        float t = (float)(j - previousSet) / (float)span;
+        row.carets[j] = previousX + (currentX - previousX) * t;
+      }
+      previousSet = i;
+    }
   }
 
   int hitTest(Vec mousePos) const {
@@ -439,6 +457,8 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
     NVGcontext* vg = APP->window->vg;
     nvgSave(vg);
     nvgResetTransform(vg);
+    float rackZoom = std::max(0.001f, getAbsoluteZoom());
+    nvgScale(vg, rackZoom, rackZoom);
     applyTextStyle(vg, font);
     Vec scaledBox = getScaledBoxSize();
     Vec scaledMouse(mousePos.x / getFontScaleX(), mousePos.y / getFontScaleY());
@@ -596,12 +616,16 @@ void ComputerscareTextEditor::drawEditorText(const DrawArgs& args) {
   std::shared_ptr<Font> font = loadEditorFont();
   if (font && font->handle >= 0) {
     bndSetFont(font->handle);
+    Vec scaledBox = getScaledBoxSize();
+    nvgSave(args.vg);
+    applyTextStyle(args.vg, font);
+    ComputerscareTextEditorLayout layout =
+        ComputerscareTextEditorLayout::build(args.vg, text, scaledBox, style);
+    nvgRestore(args.vg);
+
     nvgSave(args.vg);
     nvgScale(args.vg, getFontScaleX(), getFontScaleY());
     applyTextStyle(args.vg, font);
-    Vec scaledBox = getScaledBoxSize();
-    ComputerscareTextEditorLayout layout =
-        ComputerscareTextEditorLayout::build(args.vg, text, scaledBox, style);
     bool hasSelection =
         this == APP->event->selectedWidget && cursor != selection;
     int selectionBegin = hasSelection ? std::min(cursor, selection) : 0;
@@ -689,15 +713,18 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
   }
 
   bndSetFont(font->handle);
-  nvgSave(args.vg);
-  nvgScale(args.vg, getFontScaleX(), getFontScaleY());
-  applyTextStyle(args.vg, font);
-
   int cursorOffset = std::max(0, std::min(cursor, (int)text.size()));
+  nvgSave(args.vg);
+  applyTextStyle(args.vg, font);
   ComputerscareTextEditorLayout layout = ComputerscareTextEditorLayout::build(
       args.vg, text, getScaledBoxSize(), style);
   ComputerscareTextEditorCaret caret =
       layout.caretForOffset(text, cursorOffset);
+  nvgRestore(args.vg);
+
+  nvgSave(args.vg);
+  nvgScale(args.vg, getFontScaleX(), getFontScaleY());
+  applyTextStyle(args.vg, font);
 
   float blink = 0.5f + 0.5f * std::sin((float)rack::system::getTime() * 3.f);
   NVGcolor color = COLOR_COMPUTERSCARE_BLUE;
@@ -736,11 +763,14 @@ void ComputerscareTextEditor::drawHighlightSpan(
 
   bndSetFont(font->handle);
   nvgSave(args.vg);
-  nvgScale(args.vg, getFontScaleX(), getFontScaleY());
   applyTextStyle(args.vg, font);
-
   ComputerscareTextEditorLayout layout = ComputerscareTextEditorLayout::build(
       args.vg, text, getScaledBoxSize(), style);
+  nvgRestore(args.vg);
+
+  nvgSave(args.vg);
+  nvgScale(args.vg, getFontScaleX(), getFontScaleY());
+  applyTextStyle(args.vg, font);
 
   if (highlight.fullLine && (text.empty() || begin == end)) {
     float topY = layout.rows.empty() ? 0.f : layout.rows.front().top;
