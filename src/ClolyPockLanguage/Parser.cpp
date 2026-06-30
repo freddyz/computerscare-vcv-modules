@@ -55,6 +55,10 @@ bool isDurationUnit(ClockUnit unit) {
          unit == ClockUnit::Minutes;
 }
 
+bool hasChoiceUnit(const RandomChoiceAst& choice) {
+  return choice.unitRange.end > choice.unitRange.begin;
+}
+
 bool hasExplicitUnit(const ClockLiteralAst& ast) {
   return ast.unitRange.end > ast.unitRange.begin;
 }
@@ -309,7 +313,14 @@ class Parser {
       if (suffixUnit != ClockUnit::Unknown) {
         applyUnitToUnitlessBlock(groupBlocks[i], suffixUnit, suffixUnitRange);
       }
-      if (repeatBlock.repeatIsDuration) {
+      if (repeatBlock.repeatIsRandom) {
+        groupBlocks[i].repeatIsRandom = true;
+        groupBlocks[i].repeatRandom = repeatBlock.repeatRandom;
+        groupBlocks[i].repeatIsDuration = repeatBlock.repeatIsDuration;
+        if (repeatBlock.repeatIsDuration) {
+          groupBlocks[i].repeatDuration = repeatBlock.repeatDuration;
+        }
+      } else if (repeatBlock.repeatIsDuration) {
         groupBlocks[i].repeatIsDuration = true;
         groupBlocks[i].repeatDuration = repeatBlock.repeatDuration;
       } else {
@@ -451,7 +462,14 @@ class Parser {
       if (suffixUnit != ClockUnit::Unknown) {
         applyUnitToUnitlessBlock(groupBlocks[i], suffixUnit, suffixUnitRange);
       }
-      if (repeatBlock.repeatIsDuration) {
+      if (repeatBlock.repeatIsRandom) {
+        groupBlocks[i].repeatIsRandom = true;
+        groupBlocks[i].repeatRandom = repeatBlock.repeatRandom;
+        groupBlocks[i].repeatIsDuration = repeatBlock.repeatIsDuration;
+        if (repeatBlock.repeatIsDuration) {
+          groupBlocks[i].repeatDuration = repeatBlock.repeatDuration;
+        }
+      } else if (repeatBlock.repeatIsDuration) {
         groupBlocks[i].repeatIsDuration = true;
         groupBlocks[i].repeatDuration = repeatBlock.repeatDuration;
       } else {
@@ -485,6 +503,10 @@ class Parser {
     }
     for (size_t i = 0; i < groupBlocks.size(); i++) {
       groupBlocks[i].hasTotalDuration = true;
+      groupBlocks[i].totalDurationIsRandom =
+          totalDurationBlock.totalDurationIsRandom;
+      groupBlocks[i].totalDurationRandom =
+          totalDurationBlock.totalDurationRandom;
       groupBlocks[i].totalDurationIsTickCount =
           totalDurationBlock.totalDurationIsTickCount;
       groupBlocks[i].totalDurationTicks = totalDurationBlock.totalDurationTicks;
@@ -588,6 +610,12 @@ class Parser {
     ast.minValueLexeme = ast.randomChoices.front().minValueLexeme;
     ast.maxValueLexeme = ast.randomChoices.front().maxValueLexeme;
     parseOptionalUnit(result, ast);
+    for (size_t i = 0; i < ast.randomChoices.size(); i++) {
+      if (ast.randomChoices[i].unit == ClockUnit::Unknown) {
+        ast.randomChoices[i].unit = ast.unit;
+        ast.randomChoices[i].unitRange = ast.unitRange;
+      }
+    }
     ast.range.end = ast.unitRange.end > 0 ? ast.unitRange.end : rightBrace.end;
     return ast;
   }
@@ -613,6 +641,7 @@ class Parser {
     choice.range.end = minToken.end;
 
     if (peek().type != TokenType::Dash) {
+      parseRandomChoiceUnit(result, choice);
       choices.push_back(choice);
       return choices;
     }
@@ -629,8 +658,23 @@ class Parser {
     choice.maxValue = parseDouble(maxToken.lexeme);
     choice.maxValueLexeme = maxToken.lexeme;
     choice.range.end = maxToken.end;
+    parseRandomChoiceUnit(result, choice);
     choices.push_back(choice);
     return choices;
+  }
+
+  void parseRandomChoiceUnit(ParseResult& result, RandomChoiceAst& choice) {
+    if (peek().type != TokenType::Identifier) {
+      return;
+    }
+
+    Token unitToken = advance();
+    choice.unit = parseClockUnit(unitToken.lexeme);
+    choice.unitRange = rangeFromToken(unitToken);
+    choice.range.end = unitToken.end;
+    if (choice.unit == ClockUnit::Unknown) {
+      addDiagnostic(result, "Unknown clock unit", choice.unitRange);
+    }
   }
 
   ClockLiteralAst parseColonLiteral(ParseResult& result,
@@ -735,6 +779,30 @@ class Parser {
     }
 
     Token atToken = advance();
+    if (peek().type == TokenType::LeftBrace) {
+      ClockLiteralAst randomAst = parseRandomRangeLiteral(result);
+      block.repeatRange.begin = atToken.begin;
+      block.repeatRange.end = randomAst.range.end;
+      block.repeatValueRange = randomAst.range;
+      block.repeatValueIsOwn = true;
+      block.repeatIsRandom = true;
+      block.repeatRandom = randomAst;
+
+      bool hasUnit = randomAst.unitRange.end > randomAst.unitRange.begin;
+      for (size_t i = 0; i < randomAst.randomChoices.size(); i++) {
+        hasUnit = hasUnit || hasChoiceUnit(randomAst.randomChoices[i]);
+      }
+
+      if (hasUnit) {
+        block.repeatIsDuration = true;
+        block.repeatDuration = randomAst;
+        validateRandomDuration(result, randomAst, "Repeat duration");
+      } else {
+        validateRandomIntegerCount(result, randomAst, "Repeat count");
+      }
+      return;
+    }
+
     if (peek().type != TokenType::Number) {
       addDiagnostic(result, "Expected repeat count after '@'",
                     rangeFromToken(atToken));
@@ -785,12 +853,61 @@ class Parser {
     }
   }
 
+  void validateRandomIntegerCount(ParseResult& result,
+                                  const ClockLiteralAst& ast,
+                                  const std::string& label) {
+    for (size_t i = 0; i < ast.randomChoices.size(); i++) {
+      const RandomChoiceAst& choice = ast.randomChoices[i];
+      if (hasChoiceUnit(choice)) {
+        addDiagnostic(result, label + " must not use a unit", choice.unitRange);
+      }
+      if (!isIntegerLexeme(choice.minValueLexeme) ||
+          !isIntegerLexeme(choice.maxValueLexeme)) {
+        addDiagnostic(result, label + " must be an integer", choice.range);
+      }
+      if (choice.minValue <= 0.0 || choice.maxValue <= 0.0) {
+        addDiagnostic(result, label + " must be greater than zero",
+                      choice.range);
+      }
+    }
+  }
+
+  void validateRandomDuration(ParseResult& result, const ClockLiteralAst& ast,
+                              const std::string& label) {
+    for (size_t i = 0; i < ast.randomChoices.size(); i++) {
+      const RandomChoiceAst& choice = ast.randomChoices[i];
+      ClockUnit unit = hasChoiceUnit(choice) ? choice.unit : ast.unit;
+      SourceRange unitRange =
+          hasChoiceUnit(choice) ? choice.unitRange : ast.unitRange;
+      if (!isDurationUnit(unit)) {
+        addDiagnostic(result, label + " must use a time unit", unitRange);
+      }
+      if (choice.minValue <= 0.0 || choice.maxValue <= 0.0) {
+        addDiagnostic(result, label + " must be greater than zero",
+                      choice.range);
+      }
+    }
+  }
+
   void parseTotalDuration(ParseResult& result, ClockBlockAst& block) {
     if (peek().type != TokenType::Hash) {
       return;
     }
 
     Token hashToken = advance();
+    if (peek().type == TokenType::LeftBrace) {
+      ClockLiteralAst randomAst = parseRandomRangeLiteral(result);
+      block.totalDurationRange.begin = hashToken.begin;
+      block.totalDurationRange.end = randomAst.range.end;
+      block.totalDurationValueRange = randomAst.range;
+      block.totalDurationGroupId = nextTotalDurationGroupId++;
+      block.hasTotalDuration = true;
+      block.totalDurationIsRandom = true;
+      block.totalDurationRandom = randomAst;
+      validateRandomTotalDuration(result, randomAst);
+      return;
+    }
+
     if (peek().type != TokenType::Number) {
       addDiagnostic(result, "Expected total duration after '#'",
                     rangeFromToken(hashToken));
@@ -845,6 +962,34 @@ class Parser {
     if (durationAst.value <= 0.0) {
       addDiagnostic(result, "Total duration must be greater than zero",
                     rangeFromToken(durationToken));
+    }
+  }
+
+  void validateRandomTotalDuration(ParseResult& result,
+                                   const ClockLiteralAst& ast) {
+    for (size_t i = 0; i < ast.randomChoices.size(); i++) {
+      const RandomChoiceAst& choice = ast.randomChoices[i];
+      bool choiceHasUnit = hasChoiceUnit(choice);
+      bool suffixHasUnit = ast.unitRange.end > ast.unitRange.begin;
+      if (choiceHasUnit || suffixHasUnit) {
+        ClockUnit unit = choiceHasUnit ? choice.unit : ast.unit;
+        SourceRange unitRange =
+            choiceHasUnit ? choice.unitRange : ast.unitRange;
+        if (!isDurationUnit(unit)) {
+          addDiagnostic(result, "Total duration must use a time unit",
+                        unitRange);
+        }
+      } else {
+        if (!isIntegerLexeme(choice.minValueLexeme) ||
+            !isIntegerLexeme(choice.maxValueLexeme)) {
+          addDiagnostic(result, "Total tick count must be an integer",
+                        choice.range);
+        }
+      }
+      if (choice.minValue <= 0.0 || choice.maxValue <= 0.0) {
+        addDiagnostic(result, "Total duration must be greater than zero",
+                      choice.range);
+      }
     }
   }
 };

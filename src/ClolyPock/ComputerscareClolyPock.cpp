@@ -65,11 +65,62 @@ static bool isBlankLine(const std::string& text) {
   return true;
 }
 
+static bool choiceHasExplicitUnit(
+    const cloly::language::RandomChoiceAst& choice) {
+  return choice.unitRange.end > choice.unitRange.begin;
+}
+
+static const cloly::language::RandomChoiceAst& chooseRandomChoice(
+    const cloly::language::ClockLiteralAst& ast) {
+  size_t choiceIndex =
+      std::min((size_t)(random::uniform() * ast.randomChoices.size()),
+               ast.randomChoices.size() - 1);
+  return ast.randomChoices[choiceIndex];
+}
+
+static double sampleRandomChoiceValue(
+    const cloly::language::RandomChoiceAst& choice) {
+  double lowValue = std::min(choice.minValue, choice.maxValue);
+  double highValue = std::max(choice.minValue, choice.maxValue);
+  if (highValue <= lowValue) {
+    return lowValue;
+  }
+  return lowValue + random::uniform() * (highValue - lowValue);
+}
+
+static int sampleRandomChoiceInteger(
+    const cloly::language::RandomChoiceAst& choice) {
+  int lowValue = (int)std::min(choice.minValue, choice.maxValue);
+  int highValue = (int)std::max(choice.minValue, choice.maxValue);
+  if (highValue <= lowValue) {
+    return lowValue;
+  }
+  return lowValue +
+         (int)std::floor(random::uniform() * (float)(highValue - lowValue + 1));
+}
+
+static cloly::language::ClockLiteralAst literalForRandomChoice(
+    const cloly::language::ClockLiteralAst& randomAst,
+    const cloly::language::RandomChoiceAst& choice, double value) {
+  cloly::language::ClockLiteralAst literal;
+  literal.kind = cloly::language::ClockLiteralKind::Numeric;
+  literal.value = value;
+  literal.valueLexeme = choice.minValueLexeme;
+  literal.range = choice.range;
+  literal.unit = choiceHasExplicitUnit(choice) ? choice.unit : randomAst.unit;
+  literal.unitRange =
+      choiceHasExplicitUnit(choice) ? choice.unitRange : randomAst.unitRange;
+  return literal;
+}
+
 struct ClolyPockProgramStep {
   cloly::language::ClockLiteralAst literal;
   cloly::language::ClockSpec spec;
   bool isRest = false;
   int repeat = 1;
+  bool repeatIsRandom = false;
+  bool repeatRandomIsDuration = false;
+  cloly::language::ClockLiteralAst repeatRandom;
   bool hasDuration = false;
   float durationSeconds = 0.f;
   int probability = 100;
@@ -82,12 +133,15 @@ struct ClolyPockProgramStep {
   int totalDurationGroupId = -1;
   int totalDurationGroupStart = 0;
   int totalDurationGroupEnd = 0;
+  bool totalDurationIsRandom = false;
+  cloly::language::ClockLiteralAst totalDurationRandom;
   bool totalDurationIsTickCount = false;
   int totalDurationTicks = 0;
   float totalDurationSeconds = 0.f;
   int totalDurationHighlightBegin = 0;
   int totalDurationHighlightEnd = 0;
   bool hasRandomValue = false;
+  int sourceLineBegin = 0;
 };
 
 struct ComputerscareClolyPock : Module {
@@ -258,6 +312,7 @@ struct ComputerscareClolyPock : Module {
       const cloly::language::ClockBlockAst& block = parse.program.blocks[i];
 
       ClolyPockProgramStep step;
+      step.sourceLineBegin = lineBegin;
       step.literal = block.literal;
       step.isRest = block.rest;
       step.spec.bpm = CLOCK_BPM;
@@ -292,7 +347,10 @@ struct ComputerscareClolyPock : Module {
         }
       }
       step.repeat = std::max(1, block.repeat);
-      if (block.repeatIsDuration) {
+      step.repeatIsRandom = block.repeatIsRandom;
+      step.repeatRandomIsDuration = block.repeatIsDuration;
+      step.repeatRandom = block.repeatRandom;
+      if (block.repeatIsDuration && !block.repeatIsRandom) {
         cloly::language::EvaluationResult durationEval =
             cloly::language::evaluateClockLiteral(block.repeatDuration);
         if (!durationEval.ok()) {
@@ -313,10 +371,16 @@ struct ComputerscareClolyPock : Module {
       step.repeatHighlightBegin = lineBegin + block.repeatValueRange.begin;
       step.repeatHighlightEnd = lineBegin + block.repeatValueRange.end;
       step.repeatHighlightIsOwn = block.repeatValueIsOwn;
+      if (block.repeatIsDuration && block.repeatIsRandom) {
+        step.hasDuration = true;
+        step.durationSeconds = 0.f;
+      }
       if (block.hasTotalDuration) {
+        step.totalDurationIsRandom = block.totalDurationIsRandom;
+        step.totalDurationRandom = block.totalDurationRandom;
         step.totalDurationIsTickCount = block.totalDurationIsTickCount;
         step.totalDurationTicks = block.totalDurationTicks;
-        if (!block.totalDurationIsTickCount) {
+        if (!block.totalDurationIsTickCount && !block.totalDurationIsRandom) {
           cloly::language::EvaluationResult totalDurationEval =
               cloly::language::evaluateClockLiteral(block.totalDuration);
           if (!totalDurationEval.ok()) {
@@ -600,6 +664,79 @@ struct ComputerscareClolyPock : Module {
     applyActiveProgramStep();
   }
 
+  void sampleStepRepeatArgument(ClolyPockProgramStep& step) {
+    if (!step.repeatIsRandom || step.repeatRandom.randomChoices.empty()) {
+      return;
+    }
+
+    const cloly::language::RandomChoiceAst& choice =
+        chooseRandomChoice(step.repeatRandom);
+    step.repeatHighlightBegin = step.sourceLineBegin + choice.range.begin;
+    step.repeatHighlightEnd = step.sourceLineBegin + choice.range.end;
+
+    if (!step.repeatRandomIsDuration) {
+      step.hasDuration = false;
+      step.repeat = std::max(1, sampleRandomChoiceInteger(choice));
+      return;
+    }
+
+    double sampledValue = sampleRandomChoiceValue(choice);
+    cloly::language::ClockLiteralAst literal =
+        literalForRandomChoice(step.repeatRandom, choice, sampledValue);
+    cloly::language::EvaluationResult eval =
+        cloly::language::evaluateClockLiteral(literal);
+    if (eval.ok()) {
+      step.hasDuration = true;
+      step.durationSeconds = std::max(0.0, eval.spec.periodSeconds);
+    }
+  }
+
+  void sampleTotalDurationGroup(int stepIndex) {
+    if (activeProgram.empty()) {
+      return;
+    }
+
+    ClolyPockProgramStep& step = activeProgram[stepIndex];
+    if (!step.totalDurationIsRandom ||
+        step.totalDurationRandom.randomChoices.empty()) {
+      return;
+    }
+
+    const cloly::language::RandomChoiceAst& choice =
+        chooseRandomChoice(step.totalDurationRandom);
+    bool suffixHasUnit = step.totalDurationRandom.unitRange.end >
+                         step.totalDurationRandom.unitRange.begin;
+    bool selectedIsDuration = choiceHasExplicitUnit(choice) || suffixHasUnit;
+
+    bool selectedIsTickCount = !selectedIsDuration;
+    int selectedTicks = 1;
+    float selectedSeconds = 0.f;
+    if (selectedIsTickCount) {
+      selectedTicks = std::max(1, sampleRandomChoiceInteger(choice));
+    } else {
+      double sampledValue = sampleRandomChoiceValue(choice);
+      cloly::language::ClockLiteralAst literal = literalForRandomChoice(
+          step.totalDurationRandom, choice, sampledValue);
+      cloly::language::EvaluationResult eval =
+          cloly::language::evaluateClockLiteral(literal);
+      if (eval.ok()) {
+        selectedSeconds = std::max(0.0, eval.spec.periodSeconds);
+      }
+    }
+
+    int begin = step.totalDurationGroupStart;
+    int end = step.totalDurationGroupEnd;
+    for (int i = begin; i < end; i++) {
+      activeProgram[i].totalDurationIsTickCount = selectedIsTickCount;
+      activeProgram[i].totalDurationTicks = selectedTicks;
+      activeProgram[i].totalDurationSeconds = selectedSeconds;
+      activeProgram[i].totalDurationHighlightBegin =
+          activeProgram[i].sourceLineBegin + choice.range.begin;
+      activeProgram[i].totalDurationHighlightEnd =
+          activeProgram[i].sourceLineBegin + choice.range.end;
+    }
+  }
+
   void applyActiveProgramStep() {
     if (activeProgram.empty()) {
       return;
@@ -607,7 +744,8 @@ struct ComputerscareClolyPock : Module {
 
     activeProgramIndex = std::max(
         0, std::min(activeProgramIndex, (int)activeProgram.size() - 1));
-    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    sampleStepRepeatArgument(step);
     refreshActiveClockSpecForStep();
     activeHighlightBegin = step.highlightBegin;
     activeHighlightEnd = step.highlightEnd;
@@ -617,6 +755,7 @@ struct ComputerscareClolyPock : Module {
         activeTotalDurationGroupId = step.totalDurationGroupId;
         activeTotalDurationElapsedSeconds = 0.f;
         activeTotalDurationTicks = 0;
+        sampleTotalDurationGroup(activeProgramIndex);
       }
     } else {
       activeTotalDurationGroupId = -1;

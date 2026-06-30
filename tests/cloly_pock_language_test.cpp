@@ -119,6 +119,12 @@ void requireTotalTickGroup(const lang::ClockBlockAst& block, int groupId,
   requireRange(block.totalDurationRange, begin, end, message);
 }
 
+void requireRandomChoiceUnit(const lang::ClockLiteralAst& ast, size_t index,
+                             lang::ClockUnit unit, const char* message) {
+  require(index < ast.randomChoices.size(), message);
+  require(ast.randomChoices[index].unit == unit, message);
+}
+
 lang::ClockSpec requireEvaluates(const std::string& source) {
   lang::ParseResult parse = lang::parseClockLiteral(source);
   require(parse.ok(), "parse should succeed before evaluation");
@@ -551,6 +557,42 @@ void testProgramAst() {
                           "bracket per-item duration repeat value");
   }
 
+  result = lang::parseClockLiteral("2hz@{5|9}");
+  require(result.ok(), "random repeat count parses");
+  require(result.program.blocks.size() == 1, "random repeat count block count");
+  require(result.program.blocks[0].repeatIsRandom,
+          "random repeat count marked random");
+  require(!result.program.blocks[0].repeatIsDuration,
+          "random repeat count is not duration");
+  requireRange(result.program.blocks[0].repeatRange, 3, 9,
+               "random repeat count range");
+  require(result.program.blocks[0].repeatRandom.randomChoices.size() == 2,
+          "random repeat count choices");
+  requireRandomChoice(result.program.blocks[0].repeatRandom, 0, 5.0, 5.0,
+                      "random repeat count choice 0");
+  requireRandomChoice(result.program.blocks[0].repeatRandom, 1, 9.0, 9.0,
+                      "random repeat count choice 1");
+
+  result = lang::parseClockLiteral("[.4s .7s?]@{2-4}s");
+  require(result.ok(), "random repeat duration parses");
+  require(result.program.blocks.size() == 2,
+          "random repeat duration block count");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    require(result.program.blocks[i].repeatIsRandom,
+            "random repeat duration marked random");
+    require(result.program.blocks[i].repeatIsDuration,
+            "random repeat duration marked duration");
+    requireRange(result.program.blocks[i].repeatRange, 10, 17,
+                 "random repeat duration range");
+    require(result.program.blocks[i].repeatRandom.randomChoices.size() == 1,
+            "random repeat duration choices");
+    requireRandomChoice(result.program.blocks[i].repeatRandom, 0, 2.0, 4.0,
+                        "random repeat duration choice");
+    requireRandomChoiceUnit(result.program.blocks[i].repeatRandom, 0,
+                            lang::ClockUnit::Seconds,
+                            "random repeat duration unit");
+  }
+
   result = lang::parseClockLiteral("[2s 1s .4s .6s]#4s");
   require(result.ok(), "bracket total duration parses");
   require(result.program.blocks.size() == 4, "bracket total duration count");
@@ -615,6 +657,43 @@ void testProgramAst() {
                         "preceded paren total tick count first group");
   requireTotalTickGroup(result.program.blocks[2], 0, 9, 13, 15,
                         "preceded paren total tick count second group");
+
+  result = lang::parseClockLiteral("2hz#{5|9}");
+  require(result.ok(), "random total tick count parses");
+  require(result.program.blocks.size() == 1,
+          "random total tick count block count");
+  require(result.program.blocks[0].totalDurationIsRandom,
+          "random total tick count marked random");
+  require(result.program.blocks[0].totalDurationRandom.randomChoices.size() ==
+              2,
+          "random total tick count choices");
+  requireRange(result.program.blocks[0].totalDurationRange, 3, 9,
+               "random total tick count range");
+  requireRandomChoice(result.program.blocks[0].totalDurationRandom, 0, 5.0,
+                      5.0, "random total tick count choice 0");
+  requireRandomChoice(result.program.blocks[0].totalDurationRandom, 1, 9.0,
+                      9.0, "random total tick count choice 1");
+
+  result = lang::parseClockLiteral("[3hz 2hz]#{9s|14}");
+  require(result.ok(), "mixed random total duration parses");
+  require(result.program.blocks.size() == 2,
+          "mixed random total duration block count");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    require(result.program.blocks[i].totalDurationIsRandom,
+            "mixed random total duration marked random");
+    require(result.program.blocks[i].totalDurationRandom.randomChoices.size() ==
+                2,
+            "mixed random total duration choices");
+    requireRange(result.program.blocks[i].totalDurationRange, 9, 17,
+                 "mixed random total duration range");
+    requireRandomChoice(result.program.blocks[i].totalDurationRandom, 0, 9.0,
+                        9.0, "mixed random total duration seconds choice");
+    requireRandomChoiceUnit(result.program.blocks[i].totalDurationRandom, 0,
+                            lang::ClockUnit::Seconds,
+                            "mixed random total duration seconds unit");
+    requireRandomChoice(result.program.blocks[i].totalDurationRandom, 1, 14.0,
+                        14.0, "mixed random total duration tick choice");
+  }
 
   result = lang::parseClockLiteral("({3|2|{6|9}}hz@7 ~(1 2 3)s)#12s");
   require(result.ok(), "nested random rest total duration parses");
@@ -1003,9 +1082,16 @@ void testInvalidInputs() {
   requireInvalid("120bpm@2hz", "frequency repeat duration invalid");
   requireInvalid("120bpm@2bpm", "bpm repeat duration invalid");
   requireInvalid("120bpm@0s", "zero repeat duration invalid");
+  requireInvalid("120bpm@{1.5|2}", "decimal random repeat count invalid");
+  requireInvalid("120bpm@{0|2}", "zero random repeat count invalid");
+  requireInvalid("120bpm@{2hz|3hz}", "frequency random repeat invalid");
   requireInvalid("(3hz 4hz)#1.5", "decimal total tick count invalid");
   requireInvalid("(3hz 4hz)#0", "zero total tick count invalid");
+  requireInvalid("(3hz 4hz)#{1.5|2}",
+                 "decimal random total tick count invalid");
+  requireInvalid("(3hz 4hz)#{0|2}", "zero random total tick count invalid");
   requireInvalid("(3hz 4hz)#9hz", "frequency total duration invalid");
+  requireInvalid("(3hz 4hz)#{9hz|14}", "frequency random total invalid");
   requireInvalid("(3hz 4hz)#0s", "zero total duration invalid");
   requireInvalid("~@3", "bare count rest invalid");
   requireInvalid("120?1.5", "decimal probability invalid");

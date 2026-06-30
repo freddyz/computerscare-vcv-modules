@@ -34,6 +34,8 @@ struct RandomChoiceAst {
   double maxValue = 0.0;
   std::string minValueLexeme;
   std::string maxValueLexeme;
+  ClockUnit unit = ClockUnit::Unknown;
+  SourceRange unitRange;
   SourceRange range;
 };
 
@@ -62,6 +64,8 @@ struct ClockBlockAst {
   bool rest = false;
   int repeat = 1;
   bool repeatIsDuration = false;
+  bool repeatIsRandom = false;
+  ClockLiteralAst repeatRandom;
   ClockLiteralAst repeatDuration;
   int probability = 100;
   SourceRange range;
@@ -70,6 +74,8 @@ struct ClockBlockAst {
   SourceRange repeatValueRange;
   bool repeatValueIsOwn = false;
   bool hasTotalDuration = false;
+  bool totalDurationIsRandom = false;
+  ClockLiteralAst totalDurationRandom;
   bool totalDurationIsTickCount = false;
   int totalDurationTicks = 0;
   ClockLiteralAst totalDuration;
