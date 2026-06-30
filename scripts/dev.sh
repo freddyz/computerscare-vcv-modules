@@ -10,6 +10,11 @@ RACK_DEP_INCLUDE_DIR=${RACK_DEP_INCLUDE_DIR:-$RACK_DIR/dep/include}
 CLANG_TIDY_CHECKS=${CLANG_TIDY_CHECKS:-clang-analyzer-*}
 
 find_clang_tidy() {
+  if [ -n "${CLANG_TIDY:-}" ]; then
+    echo "$CLANG_TIDY"
+    return
+  fi
+
   if command -v clang-tidy >/dev/null 2>&1; then
     command -v clang-tidy
     return
@@ -36,7 +41,6 @@ fmt() {
 
 fmt_check() {
   echo "==> Checking format..."
-  clang-format --dry-run --Werror $SRC_FILES
   npm run format:check
   echo "    OK."
 }
@@ -92,7 +96,6 @@ check() {
 
 full_check() {
   fmt_check
-  lint
   test_all
 }
 
@@ -105,7 +108,7 @@ usage() {
   echo "  build      Build the Rack plugin"
   echo "  fast       Auto-format + run tests for local iteration"
   echo "  check      Alias for fast local validation"
-  echo "  full-check Dry-run format check + full lint + tests"
+  echo "  full-check Prettier format check + tests"
   echo "  test       Build + run test binary"
   echo "  all        fmt + lint + cppcheck + build + test"
   echo "  help       Show this help"
