@@ -1,8 +1,8 @@
 {
   "private": true,
   "scripts": {
-    "format": "prettier --write \"**/*.{md,json}\"",
-    "format:check": "prettier --check \"**/*.{md,json}\""
+    "format": "prettier --write \"**/*.{md,json,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{md,json,yml,yaml}\""
   },
   "devDependencies": {
     "prettier": "^3.8.3"
