@@ -77,6 +77,7 @@ run_tests() {
   echo "==> Tests..."
   g++ -std=c++17 -o /tmp/cs_test src/test.cpp src/dtpulse.cpp && /tmp/cs_test
   g++ -std=c++11 -I src tests/polyphonic_mapping_test.cpp -o /tmp/cs_polyphonic_mapping_test && /tmp/cs_polyphonic_mapping_test
+  g++ -std=c++11 -I src tests/text_editor_logic_test.cpp -o /tmp/cs_text_editor_logic_test && /tmp/cs_text_editor_logic_test
   g++ -std=c++11 -I src tests/cloly_pock_language_test.cpp src/ClolyPockLanguage/Tokenizer.cpp src/ClolyPockLanguage/Parser.cpp src/ClolyPockLanguage/Evaluator.cpp -o /tmp/cs_cloly_pock_language_test && /tmp/cs_cloly_pock_language_test
   echo "    OK."
 }

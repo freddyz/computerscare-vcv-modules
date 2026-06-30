@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "ComputerscareTextEditorLogic.hpp"
+
 namespace {
 enum HighlightDrawMode {
   HIGHLIGHT_BACKGROUND,
@@ -20,6 +22,26 @@ struct ComputerscareTextEditorMetrics {
   float lineHeight = BND_WIDGET_HEIGHT;
 };
 
+struct ComputerscareTextEditorLayoutRow {
+  int begin = 0;
+  int end = 0;
+  int lineIndex = 0;
+  bool isLineStart = false;
+  bool isLineEnd = false;
+  float x = 0.f;
+  float y = 0.f;
+  float top = 0.f;
+  float bottom = 0.f;
+  std::vector<float> carets;
+};
+
+struct ComputerscareTextEditorCaret {
+  float x = 0.f;
+  float y = 0.f;
+  float top = 0.f;
+  float bottom = 0.f;
+};
+
 ComputerscareTextEditorMetrics getEditorMetrics(
     NVGcontext* vg, Vec boxSize, const ComputerscareTextEditorStyle& style) {
   ComputerscareTextEditorMetrics metrics;
@@ -27,78 +49,6 @@ ComputerscareTextEditorMetrics getEditorMetrics(
   metrics.width = style.lineWrapping ? metrics.visibleWidth : 100000.f;
   nvgTextMetrics(vg, NULL, &metrics.desc, &metrics.lineHeight);
   return metrics;
-}
-
-float xForTextOffset(NVGcontext* vg, const char* label, NVGtextRow& row,
-                     float rowX, float rowY, int offset, float defaultX) {
-  int rowBegin = row.start - label;
-  int rowEnd = row.end - label;
-  int clampedOffset = std::max(rowBegin, std::min(offset, rowEnd));
-  if (clampedOffset <= rowBegin) {
-    return defaultX;
-  }
-  if (clampedOffset >= rowEnd) {
-    return rowX + row.maxx;
-  }
-
-  static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
-  int glyphCount = nvgTextGlyphPositions(vg, rowX, rowY, row.start, row.end,
-                                         glyphs, BND_MAX_GLYPHS);
-  float x = defaultX;
-  for (int i = 0; i < glyphCount; i++) {
-    int glyphOffset = glyphs[i].str - label;
-    x = glyphs[i].x;
-    if (glyphOffset >= clampedOffset) {
-      break;
-    }
-  }
-  return x;
-}
-
-int textOffsetForMouseX(NVGcontext* vg, const char* label, NVGtextRow& row,
-                        float rowX, float rowTop, float rowWidth,
-                        float rowHeight, float fontSize, Vec mousePos) {
-  (void)rowTop;
-  (void)rowWidth;
-  (void)rowHeight;
-  (void)fontSize;
-  int rowBegin = row.start - label;
-  int rowEnd = row.end - label;
-  if (rowEnd <= rowBegin) {
-    return rowBegin;
-  }
-
-  if (mousePos.x <= rowX) {
-    return rowBegin;
-  }
-
-  static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
-  int glyphCount = nvgTextGlyphPositions(vg, rowX, 0.f, row.start, row.end,
-                                         glyphs, BND_MAX_GLYPHS);
-  for (int i = 0; i < glyphCount; i++) {
-    int glyphOffset = glyphs[i].str - label;
-    float midpoint = 0.5f * (glyphs[i].minx + glyphs[i].maxx);
-    if (mousePos.x < midpoint) {
-      return std::max(rowBegin, std::min(glyphOffset, rowEnd));
-    }
-  }
-
-  return rowEnd;
-}
-
-int lineForTextOffset(const std::string& text, int offset) {
-  int line = 0;
-  int cursorLimit = std::max(0, std::min(offset, (int)text.size()));
-  for (int i = 0; i < cursorLimit; i++) {
-    if (text[i] == '\n') {
-      line++;
-    }
-  }
-  return line;
-}
-
-int logicalLineCount(const std::string& text) {
-  return lineForTextOffset(text, text.size()) + 1;
 }
 
 int rowForMouseY(const ComputerscareTextEditorMetrics& metrics, float mouseY,
@@ -109,6 +59,190 @@ int rowForMouseY(const ComputerscareTextEditorMetrics& metrics, float mouseY,
   int row = (int)std::floor(rowFloat);
   return std::max(0, std::min(row, std::max(0, rowCount - 1)));
 }
+
+struct ComputerscareTextEditorLayout {
+  ComputerscareTextEditorMetrics metrics;
+  std::vector<ComputerscareTextEditorLayoutRow> rows;
+
+  static ComputerscareTextEditorLayout build(
+      NVGcontext* vg, const std::string& text, Vec boxSize,
+      const ComputerscareTextEditorStyle& style) {
+    ComputerscareTextEditorLayout layout;
+    layout.metrics = getEditorMetrics(vg, boxSize, style);
+    int visualRowIndex = 0;
+    int logicalLine = 0;
+    int lineStart = 0;
+
+    while (lineStart <= (int)text.size()) {
+      int lineEnd = lineStart;
+      while (lineEnd < (int)text.size() && text[lineEnd] != '\n') {
+        lineEnd++;
+      }
+
+      std::string lineText = text.substr(lineStart, lineEnd - lineStart);
+      if (lineText.empty()) {
+        layout.addEmptyRow(lineStart, logicalLine, visualRowIndex++);
+      } else {
+        static NVGtextRow textRows[BND_MAX_ROWS];
+        int textRowCount =
+            nvgTextBreakLines(vg, lineText.c_str(), NULL, layout.metrics.width,
+                              textRows, BND_MAX_ROWS);
+        for (int textRowIndex = 0; textRowIndex < textRowCount;
+             textRowIndex++) {
+          NVGtextRow& textRow = textRows[textRowIndex];
+          int rowBegin = lineStart + (textRow.start - lineText.c_str());
+          int rowEnd = lineStart + (textRow.end - lineText.c_str());
+          bool isLineStart = rowBegin == lineStart;
+          bool isLineEnd = rowEnd == lineEnd;
+          std::string rowText(textRow.start, textRow.end);
+          layout.addTextRow(vg, rowText, rowBegin, rowEnd, logicalLine,
+                            isLineStart, isLineEnd, visualRowIndex++);
+        }
+      }
+
+      if (lineEnd >= (int)text.size()) {
+        break;
+      }
+      lineStart = lineEnd + 1;
+      logicalLine++;
+    }
+
+    if (layout.rows.empty()) {
+      layout.addEmptyRow(0, 0, 0);
+    }
+    return layout;
+  }
+
+  void addEmptyRow(int offset, int logicalLine, int visualRowIndex) {
+    ComputerscareTextEditorLayoutRow row;
+    row.begin = offset;
+    row.end = offset;
+    row.lineIndex = logicalLine;
+    row.isLineStart = true;
+    row.isLineEnd = true;
+    setRowGeometry(row, visualRowIndex);
+    row.carets.push_back(metrics.textX);
+    rows.push_back(row);
+  }
+
+  void addTextRow(NVGcontext* vg, const std::string& rowText, int begin,
+                  int end, int logicalLine, bool isLineStart, bool isLineEnd,
+                  int visualRowIndex) {
+    ComputerscareTextEditorLayoutRow row;
+    row.begin = begin;
+    row.end = end;
+    row.lineIndex = logicalLine;
+    row.isLineStart = isLineStart;
+    row.isLineEnd = isLineEnd;
+    setRowGeometry(row, visualRowIndex);
+    buildCaretPositions(vg, rowText, row);
+    rows.push_back(row);
+  }
+
+  void setRowGeometry(ComputerscareTextEditorLayoutRow& row,
+                      int visualRowIndex) const {
+    row.x = metrics.textX;
+    row.y = metrics.baselineY + visualRowIndex * metrics.lineHeight;
+    row.top = row.y - metrics.lineHeight - metrics.desc;
+    row.bottom = row.top + metrics.lineHeight + 1.f;
+  }
+
+  void buildCaretPositions(NVGcontext* vg, const std::string& rowText,
+                           ComputerscareTextEditorLayoutRow& row) const {
+    int rowLength = std::max(0, row.end - row.begin);
+    row.carets.assign(rowLength + 1, row.x);
+    if (rowLength <= 0) {
+      return;
+    }
+
+    static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
+    int glyphCount = nvgTextGlyphPositions(vg, row.x, row.y, rowText.c_str(),
+                                           NULL, glyphs, BND_MAX_GLYPHS);
+    for (int i = 0; i < glyphCount; i++) {
+      int localOffset = glyphs[i].str - rowText.c_str();
+      if (localOffset >= 0 && localOffset <= rowLength) {
+        row.carets[localOffset] = glyphs[i].x;
+      }
+      if (localOffset + 1 >= 0 && localOffset + 1 <= rowLength) {
+        row.carets[localOffset + 1] = glyphs[i].maxx;
+      }
+    }
+
+    float measuredWidth =
+        nvgTextBounds(vg, row.x, row.y, rowText.c_str(), NULL, NULL);
+    row.carets[rowLength] =
+        std::max(row.carets[rowLength], row.x + measuredWidth);
+  }
+
+  int hitTest(Vec mousePos) const {
+    if (rows.empty()) {
+      return 0;
+    }
+
+    int rowIndex = rowForMouseY(metrics, mousePos.y, rows.size());
+    const ComputerscareTextEditorLayoutRow& row = rows[rowIndex];
+    if (mousePos.x <= row.x || row.carets.size() <= 1) {
+      return row.begin;
+    }
+
+    int rowLength = row.end - row.begin;
+    for (int i = 0; i < rowLength; i++) {
+      float midpoint = 0.5f * (row.carets[i] + row.carets[i + 1]);
+      if (mousePos.x < midpoint) {
+        return row.begin + i;
+      }
+    }
+    return row.end;
+  }
+
+  ComputerscareTextEditorCaret caretForOffset(const std::string& text,
+                                              int offset) const {
+    ComputerscareTextEditorCaret caret;
+    int textSize = text.size();
+    int clampedOffset = computerscare::text_editor::clampOffset(text, offset);
+
+    const ComputerscareTextEditorLayoutRow* bestRow = nullptr;
+    for (size_t i = 0; i < rows.size(); i++) {
+      const ComputerscareTextEditorLayoutRow& row = rows[i];
+      if (clampedOffset == row.begin && row.isLineStart) {
+        bestRow = &row;
+        break;
+      }
+      if (clampedOffset > row.begin && clampedOffset < row.end) {
+        bestRow = &row;
+        break;
+      }
+      if (clampedOffset == row.end && row.isLineEnd) {
+        bestRow = &row;
+        break;
+      }
+      if (clampedOffset == textSize && clampedOffset == row.end) {
+        bestRow = &row;
+        break;
+      }
+    }
+
+    if (!bestRow) {
+      bestRow = rows.empty() ? nullptr : &rows.front();
+    }
+    if (!bestRow) {
+      caret.x = metrics.textX;
+      caret.y = metrics.baselineY;
+      caret.top = metrics.baselineY - metrics.lineHeight - metrics.desc + 2.f;
+      caret.bottom = caret.top + metrics.lineHeight - 1.f;
+      return caret;
+    }
+
+    int localOffset = std::max(0, std::min(clampedOffset - bestRow->begin,
+                                           (int)bestRow->carets.size() - 1));
+    caret.x =
+        bestRow->carets.empty() ? bestRow->x : bestRow->carets[localOffset];
+    caret.y = bestRow->y;
+    caret.top = bestRow->top + 1.f;
+    caret.bottom = bestRow->bottom - 1.f;
+    return caret;
+  }
+};
 }  // namespace
 
 ComputerscareTextEditor::ComputerscareTextEditor() {
@@ -193,6 +327,8 @@ void ComputerscareTextEditor::onButton(const ButtonEvent& e) {
   ui::TextField::onButton(e);
   if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT) {
     APP->event->setSelectedWidget(this);
+    cursor = selection =
+        std::max(0, std::min(getTextPosition(e.pos), (int)text.size()));
   }
   lastSnapshot = captureSnapshot();
 }
@@ -244,6 +380,20 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
       e.consume(this);
       return;
     }
+    if ((e.key == GLFW_KEY_LEFT || e.key == GLFW_KEY_RIGHT) &&
+        (e.mods & (GLFW_MOD_CONTROL | GLFW_MOD_SUPER | GLFW_MOD_ALT)) == 0) {
+      int nextCursor =
+          e.key == GLFW_KEY_LEFT
+              ? computerscare::text_editor::moveOffsetLeft(text, cursor)
+              : computerscare::text_editor::moveOffsetRight(text, cursor);
+      cursor = nextCursor;
+      if ((e.mods & GLFW_MOD_SHIFT) == 0) {
+        selection = cursor;
+      }
+      lastSnapshot = captureSnapshot();
+      e.consume(this);
+      return;
+    }
     bool isZ = e.key == GLFW_KEY_Z || e.keyName == "z";
     bool isY = e.key == GLFW_KEY_Y || e.keyName == "y";
     if ((isZ && mods == (RACK_MOD_CTRL | GLFW_MOD_SHIFT)) ||
@@ -292,27 +442,9 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
     applyTextStyle(vg, font);
     Vec scaledBox = getScaledBoxSize();
     Vec scaledMouse(mousePos.x / getFontScaleX(), mousePos.y / getFontScaleY());
-    ComputerscareTextEditorMetrics metrics =
-        getEditorMetrics(vg, scaledBox, style);
-    static NVGtextRow rows[BND_MAX_ROWS];
-    int rowCount = nvgTextBreakLines(vg, text.c_str(), NULL, metrics.width,
-                                     rows, BND_MAX_ROWS);
-    int textPos = text.size();
-    int clickableRowCount = std::max(rowCount, logicalLineCount(text));
-    if (clickableRowCount > 0) {
-      int rowIndex = rowForMouseY(metrics, scaledMouse.y, clickableRowCount);
-      if (rowIndex >= rowCount) {
-        textPos = text.size();
-      } else {
-        NVGtextRow& row = rows[rowIndex];
-        const char* label = text.c_str();
-        float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
-        float rowTop = rowY - metrics.lineHeight - metrics.desc;
-        textPos = textOffsetForMouseX(
-            vg, label, row, metrics.textX, rowTop, metrics.visibleWidth,
-            metrics.lineHeight, std::max(6.f, style.fontSize), scaledMouse);
-      }
-    }
+    ComputerscareTextEditorLayout layout =
+        ComputerscareTextEditorLayout::build(vg, text, scaledBox, style);
+    int textPos = layout.hitTest(scaledMouse);
     nvgRestore(vg);
     bndSetFont(APP->window->uiFont->handle);
     return textPos;
@@ -322,29 +454,11 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
 }
 
 int ComputerscareTextEditor::getCursorLine() const {
-  int line = 0;
-  int cursorLimit = std::max(0, std::min(cursor, (int)text.size()));
-  for (int i = 0; i < cursorLimit; i++) {
-    if (text[i] == '\n') {
-      line++;
-    }
-  }
-  return line;
+  return computerscare::text_editor::lineForOffset(text, cursor);
 }
 
 void ComputerscareTextEditor::setCursorLine(int line) {
-  int targetLine = std::max(0, line);
-  int currentLine = 0;
-  int position = 0;
-
-  while (position < (int)text.size() && currentLine < targetLine) {
-    if (text[position] == '\n') {
-      currentLine++;
-    }
-    position++;
-  }
-
-  cursor = std::max(0, std::min(position, (int)text.size()));
+  cursor = computerscare::text_editor::lineStartPosition(text, line);
   selection = cursor;
   lastSnapshot = captureSnapshot();
 }
@@ -410,26 +524,11 @@ void ComputerscareTextEditor::redo() {
 }
 
 int ComputerscareTextEditor::getLineStartPosition(int line) const {
-  int targetLine = std::max(0, line);
-  int currentLine = 0;
-  int position = 0;
-
-  while (position < (int)text.size() && currentLine < targetLine) {
-    if (text[position] == '\n') {
-      currentLine++;
-    }
-    position++;
-  }
-
-  return std::max(0, std::min(position, (int)text.size()));
+  return computerscare::text_editor::lineStartPosition(text, line);
 }
 
 int ComputerscareTextEditor::getLineEndPosition(int line) const {
-  int position = getLineStartPosition(line);
-  while (position < (int)text.size() && text[position] != '\n') {
-    position++;
-  }
-  return position;
+  return computerscare::text_editor::lineEndPosition(text, line);
 }
 
 int ComputerscareTextEditor::getCursorColumn() const {
@@ -501,37 +600,30 @@ void ComputerscareTextEditor::drawEditorText(const DrawArgs& args) {
     nvgScale(args.vg, getFontScaleX(), getFontScaleY());
     applyTextStyle(args.vg, font);
     Vec scaledBox = getScaledBoxSize();
-    ComputerscareTextEditorMetrics metrics =
-        getEditorMetrics(args.vg, scaledBox, style);
-
-    const char* label = text.c_str();
-    static NVGtextRow rows[BND_MAX_ROWS];
-    int rowCount = nvgTextBreakLines(args.vg, label, NULL, metrics.width, rows,
-                                     BND_MAX_ROWS);
+    ComputerscareTextEditorLayout layout =
+        ComputerscareTextEditorLayout::build(args.vg, text, scaledBox, style);
     bool hasSelection =
         this == APP->event->selectedWidget && cursor != selection;
     int selectionBegin = hasSelection ? std::min(cursor, selection) : 0;
     int selectionEnd = hasSelection ? std::max(cursor, selection) : 0;
 
     if (hasSelection) {
-      for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-        NVGtextRow& row = rows[rowIndex];
-        int rowBegin = row.start - label;
-        int rowEnd = row.end - label;
+      for (size_t rowIndex = 0; rowIndex < layout.rows.size(); rowIndex++) {
+        const ComputerscareTextEditorLayoutRow& row = layout.rows[rowIndex];
+        int rowBegin = row.begin;
+        int rowEnd = row.end;
         int spanBegin = std::max(selectionBegin, rowBegin);
         int spanEnd = std::min(selectionEnd, rowEnd);
         if (spanBegin >= spanEnd) {
           continue;
         }
-        float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
-        float startX = xForTextOffset(args.vg, label, row, metrics.textX, rowY,
-                                      spanBegin, metrics.textX + row.minx);
-        float endX = xForTextOffset(args.vg, label, row, metrics.textX, rowY,
-                                    spanEnd, metrics.textX + row.maxx);
-        float topY = rowY - metrics.lineHeight - metrics.desc;
+        int localBegin = spanBegin - row.begin;
+        int localEnd = spanEnd - row.begin;
+        float startX = row.carets[localBegin];
+        float endX = row.carets[localEnd];
         nvgBeginPath(args.vg);
-        nvgRoundedRect(args.vg, startX - 1.f, topY, endX - startX + 2.f,
-                       metrics.lineHeight + 1.f, 2.f);
+        nvgRoundedRect(args.vg, startX - 1.f, row.top, endX - startX + 2.f,
+                       layout.metrics.lineHeight + 1.f, 2.f);
         nvgFillColor(args.vg, style.selectionColor);
         nvgFill(args.vg);
       }
@@ -539,15 +631,18 @@ void ComputerscareTextEditor::drawEditorText(const DrawArgs& args) {
 
     if (!text.empty()) {
       nvgFillColor(args.vg, style.textColor);
-      for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-        float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
-        nvgText(args.vg, metrics.textX, rowY, rows[rowIndex].start,
-                rows[rowIndex].end);
+      for (size_t rowIndex = 0; rowIndex < layout.rows.size(); rowIndex++) {
+        const ComputerscareTextEditorLayoutRow& row = layout.rows[rowIndex];
+        if (row.end <= row.begin) {
+          continue;
+        }
+        nvgText(args.vg, layout.metrics.textX, row.y, text.c_str() + row.begin,
+                text.c_str() + row.end);
       }
     } else if (!placeholder.empty()) {
       nvgFillColor(args.vg, style.placeholderColor);
-      nvgText(args.vg, metrics.textX, metrics.baselineY, placeholder.c_str(),
-              NULL);
+      nvgText(args.vg, layout.metrics.textX, layout.metrics.baselineY,
+              placeholder.c_str(), NULL);
     }
 
     nvgRestore(args.vg);
@@ -598,43 +693,11 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
   nvgScale(args.vg, getFontScaleX(), getFontScaleY());
   applyTextStyle(args.vg, font);
 
-  ComputerscareTextEditorMetrics metrics =
-      getEditorMetrics(args.vg, getScaledBoxSize(), style);
-  float cursorX = metrics.textX;
   int cursorOffset = std::max(0, std::min(cursor, (int)text.size()));
-  int cursorLine = lineForTextOffset(text, cursorOffset);
-  float cursorY = metrics.baselineY + cursorLine * metrics.lineHeight -
-                  metrics.lineHeight - metrics.desc + 2.f;
-  bool cursorStartsLogicalLine =
-      cursorOffset > 0 && text[cursorOffset - 1] == '\n';
-
-  if (!text.empty() && !cursorStartsLogicalLine) {
-    static NVGtextRow rows[BND_MAX_ROWS];
-    int rowCount = nvgTextBreakLines(args.vg, text.c_str(), NULL, metrics.width,
-                                     rows, BND_MAX_ROWS);
-    const char* label = text.c_str();
-    bool foundCursorRow = false;
-    for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-      NVGtextRow& row = rows[rowIndex];
-      int rowBegin = row.start - label;
-      int rowEnd = row.end - label;
-      bool rowContainsCursor =
-          cursorOffset >= rowBegin && cursorOffset <= rowEnd;
-      if (rowContainsCursor) {
-        float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
-        cursorX = xForTextOffset(args.vg, label, row, metrics.textX, rowY,
-                                 cursorOffset, metrics.textX + row.maxx);
-        cursorY = rowY - metrics.lineHeight - metrics.desc + 2.f;
-        foundCursorRow = true;
-        break;
-      }
-    }
-    if (!foundCursorRow) {
-      cursorX = metrics.textX;
-      cursorY = metrics.baselineY + cursorLine * metrics.lineHeight -
-                metrics.lineHeight - metrics.desc + 2.f;
-    }
-  }
+  ComputerscareTextEditorLayout layout = ComputerscareTextEditorLayout::build(
+      args.vg, text, getScaledBoxSize(), style);
+  ComputerscareTextEditorCaret caret =
+      layout.caretForOffset(text, cursorOffset);
 
   float blink = 0.5f + 0.5f * std::sin((float)rack::system::getTime() * 3.f);
   NVGcolor color = COLOR_COMPUTERSCARE_BLUE;
@@ -643,7 +706,7 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
   color.b = color.b + (1.f - color.b) * blink * 0.48f;
   color.a = 0.72f + 0.28f * blink;
   nvgBeginPath(args.vg);
-  nvgRect(args.vg, cursorX, cursorY - 1.f, 2.2f, metrics.lineHeight - 1.f);
+  nvgRect(args.vg, caret.x, caret.top, 2.2f, caret.bottom - caret.top);
   nvgFillColor(args.vg, color);
   nvgFill(args.vg);
 
@@ -676,21 +739,23 @@ void ComputerscareTextEditor::drawHighlightSpan(
   nvgScale(args.vg, getFontScaleX(), getFontScaleY());
   applyTextStyle(args.vg, font);
 
-  ComputerscareTextEditorMetrics metrics =
-      getEditorMetrics(args.vg, getScaledBoxSize(), style);
-  static NVGtextRow rows[BND_MAX_ROWS];
-  int rowCount = nvgTextBreakLines(args.vg, text.c_str(), NULL, metrics.width,
-                                   rows, BND_MAX_ROWS);
-  const char* label = text.c_str();
+  ComputerscareTextEditorLayout layout = ComputerscareTextEditorLayout::build(
+      args.vg, text, getScaledBoxSize(), style);
 
   if (highlight.fullLine && (text.empty() || begin == end)) {
-    int line = lineForTextOffset(text, begin);
-    float topY = metrics.baselineY + line * metrics.lineHeight -
-                 metrics.lineHeight - metrics.desc;
+    float topY = layout.rows.empty() ? 0.f : layout.rows.front().top;
+    for (size_t rowIndex = 0; rowIndex < layout.rows.size(); rowIndex++) {
+      const ComputerscareTextEditorLayoutRow& row = layout.rows[rowIndex];
+      if (row.begin == begin && row.end == begin) {
+        topY = row.top;
+        break;
+      }
+    }
     if (mode == HIGHLIGHT_BACKGROUND) {
       nvgBeginPath(args.vg);
-      nvgRoundedRect(args.vg, metrics.textX - 2.f, topY,
-                     metrics.visibleWidth + 4.f, metrics.lineHeight + 1.f, 2.f);
+      nvgRoundedRect(args.vg, layout.metrics.textX - 2.f, topY,
+                     layout.metrics.visibleWidth + 4.f,
+                     layout.metrics.lineHeight + 1.f, 2.f);
       nvgFillColor(args.vg, highlight.background);
       nvgFill(args.vg);
     }
@@ -704,30 +769,29 @@ void ComputerscareTextEditor::drawHighlightSpan(
     float bottomY = 0.f;
     bool foundRow = false;
 
-    for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-      NVGtextRow& row = rows[rowIndex];
-      int rowBegin = row.start - label;
-      int rowEnd = row.end - label;
-      if (rowEnd <= begin || rowBegin >= end) {
+    for (size_t rowIndex = 0; rowIndex < layout.rows.size(); rowIndex++) {
+      const ComputerscareTextEditorLayoutRow& row = layout.rows[rowIndex];
+      int rowBegin = row.begin;
+      int rowEnd = row.end;
+      bool emptyRowInRange =
+          rowBegin == rowEnd && rowBegin >= begin && rowBegin <= end;
+      if (!emptyRowInRange && (rowEnd <= begin || rowBegin >= end)) {
         continue;
       }
 
-      float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
-      float rowTop = rowY - metrics.lineHeight - metrics.desc;
-      float rowBottom = rowTop + metrics.lineHeight + 1.f;
       if (!foundRow) {
-        topY = rowTop;
-        bottomY = rowBottom;
+        topY = row.top;
+        bottomY = row.bottom;
         foundRow = true;
       } else {
-        topY = std::min(topY, rowTop);
-        bottomY = std::max(bottomY, rowBottom);
+        topY = std::min(topY, row.top);
+        bottomY = std::max(bottomY, row.bottom);
       }
     }
 
     if (foundRow) {
-      float startX = metrics.textX - 2.f;
-      float endX = metrics.textX + metrics.visibleWidth + 2.f;
+      float startX = layout.metrics.textX - 2.f;
+      float endX = layout.metrics.textX + layout.metrics.visibleWidth + 2.f;
       if (mode == HIGHLIGHT_BACKGROUND) {
         nvgBeginPath(args.vg);
         nvgRoundedRect(args.vg, startX - 1.f, topY, endX - startX + 2.f,
@@ -773,44 +837,39 @@ void ComputerscareTextEditor::drawHighlightSpan(
     return;
   }
 
-  for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
-    NVGtextRow& row = rows[rowIndex];
-    float rowX = metrics.textX;
-    float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
-
-    int rowBegin = row.start - label;
-    int rowEnd = row.end - label;
+  for (size_t rowIndex = 0; rowIndex < layout.rows.size(); rowIndex++) {
+    const ComputerscareTextEditorLayoutRow& row = layout.rows[rowIndex];
+    int rowBegin = row.begin;
+    int rowEnd = row.end;
     int spanBegin = std::max(begin, rowBegin);
     int spanEnd = std::min(end, rowEnd);
     if (spanBegin >= spanEnd) {
       continue;
     }
 
-    float startX = xForTextOffset(args.vg, label, row, rowX, rowY, spanBegin,
-                                  rowX + row.minx);
-    float endX = xForTextOffset(args.vg, label, row, rowX, rowY, spanEnd,
-                                rowX + row.maxx);
-    float topY = rowY - metrics.lineHeight - metrics.desc;
+    float startX = row.carets[spanBegin - row.begin];
+    float endX = row.carets[spanEnd - row.begin];
+    float topY = row.top;
 
     if (highlight.fullLine) {
-      startX = metrics.textX - 2.f;
-      endX = metrics.textX + metrics.visibleWidth + 2.f;
+      startX = layout.metrics.textX - 2.f;
+      endX = layout.metrics.textX + layout.metrics.visibleWidth + 2.f;
     }
 
     if (mode == HIGHLIGHT_FOREGROUND) {
       std::string spanText = text.substr(spanBegin, spanEnd - spanBegin);
       nvgFillColor(args.vg, highlight.foreground);
-      nvgText(args.vg, startX, rowY, spanText.c_str(), NULL);
+      nvgText(args.vg, startX, row.y, spanText.c_str(), NULL);
     } else if (mode == HIGHLIGHT_BACKGROUND) {
       nvgBeginPath(args.vg);
       nvgRoundedRect(args.vg, startX - 1.f, topY, endX - startX + 2.f,
-                     metrics.lineHeight + 1.f, 2.f);
+                     layout.metrics.lineHeight + 1.f, 2.f);
       nvgFillColor(args.vg, highlight.background);
       nvgFill(args.vg);
     } else if (mode == HIGHLIGHT_BORDER) {
       nvgBeginPath(args.vg);
       nvgRoundedRect(args.vg, startX - 1.5f, topY + 0.5f, endX - startX + 3.f,
-                     metrics.lineHeight, 2.f);
+                     layout.metrics.lineHeight, 2.f);
       nvgStrokeColor(args.vg, highlight.border);
       nvgStrokeWidth(args.vg, 1.2f);
       nvgStroke(args.vg);
@@ -825,7 +884,8 @@ void ComputerscareTextEditor::drawHighlightSpan(
         float width = segmentWidth * filledSegments;
         if (width > 0.f) {
           nvgBeginPath(args.vg);
-          nvgRect(args.vg, startX, topY + metrics.lineHeight - 2.f, width, 2.f);
+          nvgRect(args.vg, startX, topY + layout.metrics.lineHeight - 2.f,
+                  width, 2.f);
           nvgFillColor(args.vg, highlight.progressColor);
           nvgFill(args.vg);
         }
@@ -835,7 +895,8 @@ void ComputerscareTextEditor::drawHighlightSpan(
           continue;
         }
         nvgBeginPath(args.vg);
-        nvgRect(args.vg, startX, topY + metrics.lineHeight - 2.f, width, 2.f);
+        nvgRect(args.vg, startX, topY + layout.metrics.lineHeight - 2.f, width,
+                2.f);
         nvgFillColor(args.vg, highlight.progressColor);
         nvgFill(args.vg);
       }
