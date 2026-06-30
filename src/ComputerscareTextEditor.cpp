@@ -37,9 +37,12 @@ float xForTextOffset(NVGcontext* vg, const char* label, NVGtextRow& row,
   if (clampedOffset <= rowBegin) {
     return defaultX;
   }
+  if (clampedOffset >= rowEnd) {
+    return rowX + row.maxx;
+  }
 
   static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
-  int glyphCount = nvgTextGlyphPositions(vg, rowX, rowY, row.start, row.end + 1,
+  int glyphCount = nvgTextGlyphPositions(vg, rowX, rowY, row.start, row.end,
                                          glyphs, BND_MAX_GLYPHS);
   float x = defaultX;
   for (int i = 0; i < glyphCount; i++) {
@@ -55,18 +58,32 @@ float xForTextOffset(NVGcontext* vg, const char* label, NVGtextRow& row,
 int textOffsetForMouseX(NVGcontext* vg, const char* label, NVGtextRow& row,
                         float rowX, float rowTop, float rowWidth,
                         float rowHeight, float fontSize, Vec mousePos) {
+  (void)rowTop;
+  (void)rowWidth;
+  (void)rowHeight;
+  (void)fontSize;
   int rowBegin = row.start - label;
   int rowEnd = row.end - label;
   if (rowEnd <= rowBegin) {
     return rowBegin;
   }
 
-  std::string rowText(row.start, row.end);
-  int rowOffset = bndIconLabelTextPosition(
-      vg, rowX, rowTop, rowWidth, rowHeight, -1, fontSize, rowText.c_str(),
-      (int)std::round(mousePos.x), (int)std::round(mousePos.y));
-  rowOffset = std::max(0, std::min(rowOffset, rowEnd - rowBegin));
-  return rowBegin + rowOffset;
+  if (mousePos.x <= rowX) {
+    return rowBegin;
+  }
+
+  static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
+  int glyphCount = nvgTextGlyphPositions(vg, rowX, 0.f, row.start, row.end,
+                                         glyphs, BND_MAX_GLYPHS);
+  for (int i = 0; i < glyphCount; i++) {
+    int glyphOffset = glyphs[i].str - label;
+    float midpoint = 0.5f * (glyphs[i].minx + glyphs[i].maxx);
+    if (mousePos.x < midpoint) {
+      return std::max(rowBegin, std::min(glyphOffset, rowEnd));
+    }
+  }
+
+  return rowEnd;
 }
 
 int lineForTextOffset(const std::string& text, int offset) {
@@ -602,8 +619,7 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
       int rowBegin = row.start - label;
       int rowEnd = row.end - label;
       bool rowContainsCursor =
-          cursorOffset >= rowBegin &&
-          (cursorOffset < rowEnd || rowIndex == rowCount - 1);
+          cursorOffset >= rowBegin && cursorOffset <= rowEnd;
       if (rowContainsCursor) {
         float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
         cursorX = xForTextOffset(args.vg, label, row, metrics.textX, rowY,

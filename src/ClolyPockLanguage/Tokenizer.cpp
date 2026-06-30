@@ -93,6 +93,13 @@ std::vector<Token> tokenize(const std::string& source) {
       continue;
     }
 
+    if (c == '#') {
+      tokens.push_back(
+          {TokenType::Hash, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
     if (c == '?') {
       tokens.push_back(
           {TokenType::Question, source.substr(index, 1), index, index + 1});
@@ -184,6 +191,8 @@ std::string tokenTypeName(TokenType type) {
       return "Comma";
     case TokenType::At:
       return "At";
+    case TokenType::Hash:
+      return "Hash";
     case TokenType::Question:
       return "Question";
     case TokenType::Tilde:

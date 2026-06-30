@@ -97,6 +97,28 @@ void requireDurationRepeat(const lang::ClockBlockAst& block, double value,
   requireRange(block.repeatRange, begin, end, message);
 }
 
+void requireTotalDurationGroup(const lang::ClockBlockAst& block, int groupId,
+                               double value, lang::ClockUnit unit, int begin,
+                               int end, const char* message) {
+  require(block.hasTotalDuration, message);
+  require(block.totalDurationGroupId == groupId, message);
+  require(block.totalDuration.kind == lang::ClockLiteralKind::Numeric,
+          message);
+  requireNear(block.totalDuration.value, value, message);
+  require(block.totalDuration.unit == unit, message);
+  requireRange(block.totalDurationRange, begin, end, message);
+}
+
+void requireTotalTickGroup(const lang::ClockBlockAst& block, int groupId,
+                           int ticks, int begin, int end,
+                           const char* message) {
+  require(block.hasTotalDuration, message);
+  require(block.totalDurationIsTickCount, message);
+  require(block.totalDurationGroupId == groupId, message);
+  require(block.totalDurationTicks == ticks, message);
+  requireRange(block.totalDurationRange, begin, end, message);
+}
+
 lang::ClockSpec requireEvaluates(const std::string& source) {
   lang::ParseResult parse = lang::parseClockLiteral(source);
   require(parse.ok(), "parse should succeed before evaluation");
@@ -228,6 +250,27 @@ void testTokenizer() {
   requireToken(tokens[7], lang::TokenType::Identifier, "sec", 11, 14,
                "90@3sec token 3");
 
+  tokens = lang::tokenize("(3hz 4hz)#9s");
+  require(tokens.size() == 10, "total duration token count");
+  requireToken(tokens[0], lang::TokenType::LeftParen, "(", 0, 1,
+               "total duration token 0");
+  requireToken(tokens[1], lang::TokenType::Number, "3", 1, 2,
+               "total duration token 1");
+  requireToken(tokens[2], lang::TokenType::Identifier, "hz", 2, 4,
+               "total duration token 2");
+  requireToken(tokens[3], lang::TokenType::Number, "4", 5, 6,
+               "total duration token 3");
+  requireToken(tokens[4], lang::TokenType::Identifier, "hz", 6, 8,
+               "total duration token 4");
+  requireToken(tokens[5], lang::TokenType::RightParen, ")", 8, 9,
+               "total duration token 5");
+  requireToken(tokens[6], lang::TokenType::Hash, "#", 9, 10,
+               "total duration token 6");
+  requireToken(tokens[7], lang::TokenType::Number, "9", 10, 11,
+               "total duration token 7");
+  requireToken(tokens[8], lang::TokenType::Identifier, "s", 11, 12,
+               "total duration token 8");
+
   tokens = lang::tokenize("2hz@4 ~3hz@4 ~@3s");
   require(tokens.size() == 14, "rest token count");
   requireToken(tokens[0], lang::TokenType::Number, "2", 0, 1,
@@ -291,6 +334,19 @@ void testTokenizer() {
                "random choice range token 6");
   requireToken(tokens[7], lang::TokenType::Identifier, "hz", 8, 10,
                "random choice range token 7");
+
+  tokens = lang::tokenize("{3|2|{6|9}}hz");
+  require(tokens.size() == 13, "nested random choice token count");
+  requireToken(tokens[0], lang::TokenType::LeftBrace, "{", 0, 1,
+               "nested random choice token 0");
+  requireToken(tokens[4], lang::TokenType::Pipe, "|", 4, 5,
+               "nested random choice token 4");
+  requireToken(tokens[5], lang::TokenType::LeftBrace, "{", 5, 6,
+               "nested random choice token 5");
+  requireToken(tokens[10], lang::TokenType::RightBrace, "}", 10, 11,
+               "nested random choice token 10");
+  requireToken(tokens[11], lang::TokenType::Identifier, "hz", 11, 13,
+               "nested random choice token 11");
 }
 
 void testAst() {
@@ -335,6 +391,21 @@ void testAst() {
   requireRandomChoice(result.ast, 0, 3.0, 3.0, "{3|2-10}hz choice 0");
   requireRandomChoice(result.ast, 1, 2.0, 10.0, "{3|2-10}hz choice 1");
   require(result.ast.unit == lang::ClockUnit::Hertz, "{3|2-10}hz unit");
+
+  result = lang::parseClockLiteral("{3|2|{6|9}}hz");
+  require(result.ok(), "{3|2|{6|9}}hz ast parses");
+  require(result.ast.randomChoices.size() == 4,
+          "{3|2|{6|9}}hz choice count");
+  requireRandomChoice(result.ast, 0, 3.0, 3.0,
+                      "{3|2|{6|9}}hz choice 0");
+  requireRandomChoice(result.ast, 1, 2.0, 2.0,
+                      "{3|2|{6|9}}hz choice 1");
+  requireRandomChoice(result.ast, 2, 6.0, 6.0,
+                      "{3|2|{6|9}}hz choice 2");
+  requireRandomChoice(result.ast, 3, 9.0, 9.0,
+                      "{3|2|{6|9}}hz choice 3");
+  require(result.ast.unit == lang::ClockUnit::Hertz,
+          "{3|2|{6|9}}hz unit");
 }
 
 void testProgramAst() {
@@ -470,6 +541,91 @@ void testProgramAst() {
                         lang::ClockUnit::Seconds, 8, 11,
                         "bracket second duration repeat");
 
+  result = lang::parseClockLiteral("[2s 1s .4s .6s]@4s");
+  require(result.ok(), "bracket per-item duration repeat parses");
+  require(result.program.blocks.size() == 4,
+          "bracket per-item duration repeat count");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    requireDurationRepeat(result.program.blocks[i], 4.0,
+                          lang::ClockUnit::Seconds, 15, 18,
+                          "bracket per-item duration repeat value");
+  }
+
+  result = lang::parseClockLiteral("[2s 1s .4s .6s]#4s");
+  require(result.ok(), "bracket total duration parses");
+  require(result.program.blocks.size() == 4, "bracket total duration count");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    requireTotalDurationGroup(result.program.blocks[i], 0, 4.0,
+                              lang::ClockUnit::Seconds, 15, 18,
+                              "bracket total duration group");
+    require(!result.program.blocks[i].repeatIsDuration,
+            "bracket total duration keeps child duration");
+  }
+
+  result = lang::parseClockLiteral("(3hz 4hz)#9s");
+  require(result.ok(), "paren total duration parses");
+  require(result.program.blocks.size() == 2, "paren total duration count");
+  requireNear(result.program.blocks[0].literal.value, 3.0,
+              "paren total duration first value");
+  requireNear(result.program.blocks[1].literal.value, 4.0,
+              "paren total duration second value");
+  requireTotalDurationGroup(result.program.blocks[0], 0, 9.0,
+                            lang::ClockUnit::Seconds, 9, 12,
+                            "paren total duration first group");
+  requireTotalDurationGroup(result.program.blocks[1], 0, 9.0,
+                            lang::ClockUnit::Seconds, 9, 12,
+                            "paren total duration second group");
+  require(!result.program.blocks[0].repeatIsDuration,
+          "paren total duration first keeps normal timing");
+  require(!result.program.blocks[1].repeatIsDuration,
+          "paren total duration second keeps normal timing");
+
+  result = lang::parseClockLiteral("2hz (3hz 4hz)#9s");
+  require(result.ok(), "preceded paren total duration parses");
+  requireProgramValues(result, {2.0, 3.0, 4.0},
+                       "preceded paren total duration values");
+  require(!result.program.blocks[0].hasTotalDuration,
+          "preceded paren total duration first outside group");
+  requireTotalDurationGroup(result.program.blocks[1], 0, 9.0,
+                            lang::ClockUnit::Seconds, 13, 16,
+                            "preceded paren total duration first group");
+  requireTotalDurationGroup(result.program.blocks[2], 0, 9.0,
+                            lang::ClockUnit::Seconds, 13, 16,
+                            "preceded paren total duration second group");
+
+  result = lang::parseClockLiteral("(3hz 4hz)#9");
+  require(result.ok(), "paren total tick count parses");
+  require(result.program.blocks.size() == 2, "paren total tick count count");
+  requireTotalTickGroup(result.program.blocks[0], 0, 9, 9, 11,
+                        "paren total tick count first group");
+  requireTotalTickGroup(result.program.blocks[1], 0, 9, 9, 11,
+                        "paren total tick count second group");
+  require(!result.program.blocks[0].repeatIsDuration,
+          "paren total tick count first keeps normal timing");
+  require(!result.program.blocks[1].repeatIsDuration,
+          "paren total tick count second keeps normal timing");
+
+  result = lang::parseClockLiteral("2hz (3hz 4hz)#9");
+  require(result.ok(), "preceded paren total tick count parses");
+  requireProgramValues(result, {2.0, 3.0, 4.0},
+                       "preceded paren total tick count values");
+  require(!result.program.blocks[0].hasTotalDuration,
+          "preceded paren total tick count first outside group");
+  requireTotalTickGroup(result.program.blocks[1], 0, 9, 13, 15,
+                        "preceded paren total tick count first group");
+  requireTotalTickGroup(result.program.blocks[2], 0, 9, 13, 15,
+                        "preceded paren total tick count second group");
+
+  result = lang::parseClockLiteral("({3|2|{6|9}}hz@7 ~(1 2 3)s)#12s");
+  require(result.ok(), "nested random rest total duration parses");
+  require(result.program.blocks.size() == 6,
+          "nested random rest total duration count");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    requireTotalDurationGroup(result.program.blocks[i], 0, 12.0,
+                              lang::ClockUnit::Seconds, 27, 31,
+                              "nested random rest total duration group");
+  }
+
   result = lang::parseClockLiteral("2hz@4 ~3hz@4 ~@3s");
   require(result.ok(), "rest program parses");
   require(result.program.blocks.size() == 3, "rest block count");
@@ -495,6 +651,28 @@ void testProgramAst() {
   require(result.program.blocks[1].rest, "rest bracket second block");
   require(result.program.blocks[0].repeat == 2, "rest bracket first repeat");
   require(result.program.blocks[1].repeat == 2, "rest bracket second repeat");
+
+  result = lang::parseClockLiteral("({3|2|{6|9}}hz@7 ~(1 2 3)s)");
+  require(result.ok(), "nested random rest interleave parses");
+  require(result.program.blocks.size() == 6,
+          "nested random rest interleave block count");
+  for (size_t i = 0; i < result.program.blocks.size(); i += 2) {
+    require(result.program.blocks[i].literal.kind ==
+                lang::ClockLiteralKind::RandomRange,
+            "nested random rest interleave random kind");
+    require(result.program.blocks[i].literal.randomChoices.size() == 4,
+            "nested random rest interleave random choices");
+    require(result.program.blocks[i].repeat == 7,
+            "nested random rest interleave repeat");
+    require(!result.program.blocks[i].rest,
+            "nested random rest interleave random not rest");
+  }
+  for (size_t i = 1; i < result.program.blocks.size(); i += 2) {
+    require(result.program.blocks[i].rest,
+            "nested random rest interleave rest block");
+    require(result.program.blocks[i].literal.unit == lang::ClockUnit::Seconds,
+            "nested random rest interleave rest seconds");
+  }
 
   result = lang::parseClockLiteral("2hz (2hz 4hz)");
   require(result.ok(), "interleave program parses");
@@ -825,6 +1003,10 @@ void testInvalidInputs() {
   requireInvalid("120bpm@2hz", "frequency repeat duration invalid");
   requireInvalid("120bpm@2bpm", "bpm repeat duration invalid");
   requireInvalid("120bpm@0s", "zero repeat duration invalid");
+  requireInvalid("(3hz 4hz)#1.5", "decimal total tick count invalid");
+  requireInvalid("(3hz 4hz)#0", "zero total tick count invalid");
+  requireInvalid("(3hz 4hz)#9hz", "frequency total duration invalid");
+  requireInvalid("(3hz 4hz)#0s", "zero total duration invalid");
   requireInvalid("~@3", "bare count rest invalid");
   requireInvalid("120?1.5", "decimal probability invalid");
   requireInvalid("120?101", "probability over 100 invalid");
@@ -839,6 +1021,7 @@ void testInvalidInputs() {
   requireInvalid("{0-3}hz", "range zero endpoint invalid");
   requireInvalid("{3|}hz", "random choice missing after pipe invalid");
   requireInvalid("{|3}hz", "random choice missing before pipe invalid");
+  requireInvalid("{3|{}}hz", "nested random empty choice invalid");
 }
 }  // namespace
 

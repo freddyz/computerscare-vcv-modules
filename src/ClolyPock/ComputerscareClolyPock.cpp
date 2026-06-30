@@ -78,6 +78,15 @@ struct ClolyPockProgramStep {
   int repeatHighlightBegin = 0;
   int repeatHighlightEnd = 0;
   bool repeatHighlightIsOwn = false;
+  bool hasTotalDurationGroup = false;
+  int totalDurationGroupId = -1;
+  int totalDurationGroupStart = 0;
+  int totalDurationGroupEnd = 0;
+  bool totalDurationIsTickCount = false;
+  int totalDurationTicks = 0;
+  float totalDurationSeconds = 0.f;
+  int totalDurationHighlightBegin = 0;
+  int totalDurationHighlightEnd = 0;
   bool hasRandomValue = false;
 };
 
@@ -142,6 +151,9 @@ struct ComputerscareClolyPock : Module {
   int activeProgramIndex = 0;
   int activeProgramBeat = 0;
   float activeProgramElapsedSeconds = 0.f;
+  int activeTotalDurationGroupId = -1;
+  float activeTotalDurationElapsedSeconds = 0.f;
+  int activeTotalDurationTicks = 0;
   bool activeStepPlays = true;
   float width = MIN_WIDTH;
   bool editorLineWrapping = true;
@@ -179,7 +191,9 @@ struct ComputerscareClolyPock : Module {
       clockPhase -= 1.f;
       advanceActiveProgramBeat();
     }
-    advanceActiveProgramDuration(args.sampleTime);
+    if (!advanceActiveTotalDuration(args.sampleTime)) {
+      advanceActiveProgramDuration(args.sampleTime);
+    }
     activeClockRamp = clockPhase;
     clockHigh = nextClockGateHigh();
     outputs[CLOCK_OUTPUT].setVoltage(clockHigh && activeStepPlays ? 10.f : 0.f);
@@ -299,7 +313,49 @@ struct ComputerscareClolyPock : Module {
       step.repeatHighlightBegin = lineBegin + block.repeatValueRange.begin;
       step.repeatHighlightEnd = lineBegin + block.repeatValueRange.end;
       step.repeatHighlightIsOwn = block.repeatValueIsOwn;
+      if (block.hasTotalDuration) {
+        step.totalDurationIsTickCount = block.totalDurationIsTickCount;
+        step.totalDurationTicks = block.totalDurationTicks;
+        if (!block.totalDurationIsTickCount) {
+          cloly::language::EvaluationResult totalDurationEval =
+              cloly::language::evaluateClockLiteral(block.totalDuration);
+          if (!totalDurationEval.ok()) {
+            program.clear();
+            return false;
+          }
+          step.totalDurationSeconds =
+              std::max(0.0, totalDurationEval.spec.periodSeconds);
+        }
+        step.hasTotalDurationGroup = true;
+        step.totalDurationGroupId = block.totalDurationGroupId;
+        step.totalDurationHighlightBegin =
+            lineBegin + block.totalDurationValueRange.begin;
+        step.totalDurationHighlightEnd =
+            lineBegin + block.totalDurationValueRange.end;
+      }
       program.push_back(step);
+    }
+
+    for (size_t i = 0; i < program.size(); i++) {
+      if (!program[i].hasTotalDurationGroup) {
+        continue;
+      }
+
+      int groupId = program[i].totalDurationGroupId;
+      int begin = (int)i;
+      while (begin > 0 && program[begin - 1].hasTotalDurationGroup &&
+             program[begin - 1].totalDurationGroupId == groupId) {
+        begin--;
+      }
+
+      int end = (int)i + 1;
+      while (end < (int)program.size() && program[end].hasTotalDurationGroup &&
+             program[end].totalDurationGroupId == groupId) {
+        end++;
+      }
+
+      program[i].totalDurationGroupStart = begin;
+      program[i].totalDurationGroupEnd = end;
     }
 
     return !program.empty();
@@ -321,6 +377,9 @@ struct ComputerscareClolyPock : Module {
     activeProgramIndex = 0;
     activeProgramBeat = 0;
     activeProgramElapsedSeconds = 0.f;
+    activeTotalDurationGroupId = -1;
+    activeTotalDurationElapsedSeconds = 0.f;
+    activeTotalDurationTicks = 0;
     activeStepPlays = true;
     if (resetPhase) {
       clockPhase = 0.f;
@@ -508,6 +567,9 @@ struct ComputerscareClolyPock : Module {
     activeProgramIndex = 0;
     activeProgramBeat = 0;
     activeProgramElapsedSeconds = 0.f;
+    activeTotalDurationGroupId = -1;
+    activeTotalDurationElapsedSeconds = 0.f;
+    activeTotalDurationTicks = 0;
     activeStepPlays = true;
     if (resetPhase) {
       clockPhase = 0.f;
@@ -527,6 +589,9 @@ struct ComputerscareClolyPock : Module {
     activeProgramIndex = 0;
     activeProgramBeat = 0;
     activeProgramElapsedSeconds = 0.f;
+    activeTotalDurationGroupId = -1;
+    activeTotalDurationElapsedSeconds = 0.f;
+    activeTotalDurationTicks = 0;
     activeStepPlays = true;
     if (resetPhase) {
       clockPhase = 0.f;
@@ -547,12 +612,27 @@ struct ComputerscareClolyPock : Module {
     activeHighlightBegin = step.highlightBegin;
     activeHighlightEnd = step.highlightEnd;
     activeProgramElapsedSeconds = 0.f;
+    if (step.hasTotalDurationGroup) {
+      if (activeTotalDurationGroupId != step.totalDurationGroupId) {
+        activeTotalDurationGroupId = step.totalDurationGroupId;
+        activeTotalDurationElapsedSeconds = 0.f;
+        activeTotalDurationTicks = 0;
+      }
+    } else {
+      activeTotalDurationGroupId = -1;
+      activeTotalDurationElapsedSeconds = 0.f;
+      activeTotalDurationTicks = 0;
+    }
     scheduleTokenStartTick();
     chooseActiveStepPlayback();
   }
 
   void advanceActiveProgramBeat() {
     if (activeProgram.empty()) {
+      return;
+    }
+
+    if (advanceActiveTotalTickCount()) {
       return;
     }
 
@@ -584,10 +664,82 @@ struct ComputerscareClolyPock : Module {
     }
   }
 
+  bool advanceActiveTotalDuration(float sampleTime) {
+    if (activeProgram.empty()) {
+      return false;
+    }
+
+    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    if (!step.hasTotalDurationGroup || step.totalDurationIsTickCount) {
+      return false;
+    }
+
+    activeTotalDurationElapsedSeconds += sampleTime;
+    if (activeTotalDurationElapsedSeconds < step.totalDurationSeconds) {
+      return false;
+    }
+
+    activeProgramBeat = 0;
+    activeProgramIndex = step.totalDurationGroupEnd;
+    activeTotalDurationGroupId = -1;
+    activeTotalDurationElapsedSeconds = 0.f;
+    activeTotalDurationTicks = 0;
+    finishActiveTotalDurationGroup();
+    return true;
+  }
+
+  bool advanceActiveTotalTickCount() {
+    if (activeProgram.empty()) {
+      return false;
+    }
+
+    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    if (!step.hasTotalDurationGroup || !step.totalDurationIsTickCount) {
+      return false;
+    }
+
+    activeTotalDurationTicks++;
+    if (activeTotalDurationTicks < step.totalDurationTicks) {
+      return false;
+    }
+
+    activeProgramBeat = 0;
+    activeProgramIndex = step.totalDurationGroupEnd;
+    activeTotalDurationGroupId = -1;
+    activeTotalDurationElapsedSeconds = 0.f;
+    activeTotalDurationTicks = 0;
+    finishActiveTotalDurationGroup();
+    return true;
+  }
+
+  void finishActiveTotalDurationGroup() {
+    if (activeProgramIndex >= (int)activeProgram.size()) {
+      activeProgramIndex = 0;
+      bool movedLine = handleLineCycleEnd();
+      if (movedLine || activeProgram.size() > 1) {
+        tokenMovePulse.trigger(1e-3f);
+      }
+    } else {
+      applyActiveProgramStep();
+      tokenMovePulse.trigger(1e-3f);
+    }
+  }
+
   void advanceActiveProgramStep() {
     bool hadMultipleSteps = activeProgram.size() > 1;
+    const ClolyPockProgramStep& currentStep = activeProgram[activeProgramIndex];
     activeProgramBeat = 0;
     activeProgramIndex++;
+    if (currentStep.hasTotalDurationGroup &&
+        activeProgramIndex >= currentStep.totalDurationGroupEnd) {
+      activeProgramIndex = currentStep.totalDurationGroupStart;
+      applyActiveProgramStep();
+      if (hadMultipleSteps) {
+        tokenMovePulse.trigger(1e-3f);
+      }
+      return;
+    }
+
     if (activeProgramIndex >= (int)activeProgram.size()) {
       activeProgramIndex = 0;
       bool movedLine = handleLineCycleEnd();
@@ -744,6 +896,30 @@ struct ComputerscareClolyPock : Module {
     }
 
     const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    if (step.hasTotalDurationGroup) {
+      if (step.totalDurationHighlightEnd <= step.totalDurationHighlightBegin) {
+        return false;
+      }
+
+      begin = step.totalDurationHighlightBegin;
+      end = step.totalDurationHighlightEnd;
+      if (step.totalDurationIsTickCount) {
+        segments = std::max(1, step.totalDurationTicks);
+        progress = step.totalDurationTicks > 0
+                       ? (float)(activeTotalDurationTicks + 1) /
+                             step.totalDurationTicks
+                       : 0.f;
+      } else {
+        segments = 0;
+        progress =
+            step.totalDurationSeconds > 0.f
+                ? activeTotalDurationElapsedSeconds / step.totalDurationSeconds
+                : 0.f;
+      }
+      progress = std::max(0.f, std::min(progress, 1.f));
+      return true;
+    }
+
     if (step.repeatHighlightEnd <= step.repeatHighlightBegin) {
       return false;
     }

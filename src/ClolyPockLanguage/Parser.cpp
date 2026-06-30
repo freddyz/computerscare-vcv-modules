@@ -146,6 +146,7 @@ class Parser {
  private:
   const std::vector<Token>& tokens;
   size_t current = 0;
+  int nextTotalDurationGroupId = 0;
 
   const Token& peek() const { return tokens[current]; }
 
@@ -214,6 +215,7 @@ class Parser {
     block.range = block.literal.range;
     parseProbability(result, block);
     parseRepeat(result, block);
+    parseTotalDuration(result, block);
     blocks.push_back(block);
   }
 
@@ -294,6 +296,8 @@ class Parser {
     SourceRange suffixUnitRange;
     ClockUnit suffixUnit = parseGroupUnitSuffix(result, suffixUnitRange);
     parseRepeat(result, repeatBlock);
+    ClockBlockAst totalDurationBlock;
+    parseTotalDuration(result, totalDurationBlock);
 
     if (groupBlocks.empty()) {
       addDiagnostic(result, "Expected clock literal in brackets",
@@ -317,6 +321,10 @@ class Parser {
           groupBlocks[i].repeatValueRange = repeatBlock.repeatValueRange;
         }
       }
+    }
+
+    applyTotalDurationGroup(groupBlocks, totalDurationBlock);
+    for (size_t i = 0; i < groupBlocks.size(); i++) {
       blocks.push_back(groupBlocks[i]);
     }
   }
@@ -343,15 +351,20 @@ class Parser {
     ClockUnit suffixUnit = parseGroupUnitSuffix(result, suffixUnitRange);
     parseProbability(result, repeatBlock);
     parseRepeat(result, repeatBlock);
+    ClockBlockAst totalDurationBlock;
+    parseTotalDuration(result, totalDurationBlock);
     bool hasGroupSuffix =
         suffixUnit != ClockUnit::Unknown ||
         repeatBlock.probabilityRange.end > repeatBlock.probabilityRange.begin ||
-        repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin;
+        repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin ||
+        totalDurationBlock.totalDurationRange.end >
+            totalDurationBlock.totalDurationRange.begin;
 
     if (blocks.empty() || hasGroupSuffix) {
       std::vector<ClockBlockAst> interleaved = spreadInterleaveLanes(lanes);
       applyGroupModifiers(result, interleaved, repeatBlock, suffixUnit,
                           suffixUnitRange);
+      applyTotalDurationGroup(interleaved, totalDurationBlock);
       for (size_t i = 0; i < interleaved.size(); i++) {
         blocks.push_back(interleaved[i]);
       }
@@ -422,7 +435,10 @@ class Parser {
     ClockUnit suffixUnit = parseGroupUnitSuffix(result, suffixUnitRange);
     parseProbability(result, repeatBlock);
     parseRepeat(result, repeatBlock);
+    ClockBlockAst totalDurationBlock;
+    parseTotalDuration(result, totalDurationBlock);
     applyGroupModifiers(result, lane, repeatBlock, suffixUnit, suffixUnitRange);
+    applyTotalDurationGroup(lane, totalDurationBlock);
     return lane;
   }
 
@@ -454,6 +470,29 @@ class Parser {
         groupBlocks[i].probability = repeatBlock.probability;
         groupBlocks[i].probabilityRange = repeatBlock.probabilityRange;
       }
+    }
+  }
+
+  void applyTotalDurationGroup(std::vector<ClockBlockAst>& groupBlocks,
+                               const ClockBlockAst& totalDurationBlock) {
+    if (!totalDurationBlock.hasTotalDuration || groupBlocks.empty()) {
+      return;
+    }
+
+    int groupId = totalDurationBlock.totalDurationGroupId;
+    if (groupId < 0) {
+      groupId = nextTotalDurationGroupId++;
+    }
+    for (size_t i = 0; i < groupBlocks.size(); i++) {
+      groupBlocks[i].hasTotalDuration = true;
+      groupBlocks[i].totalDurationIsTickCount =
+          totalDurationBlock.totalDurationIsTickCount;
+      groupBlocks[i].totalDurationTicks = totalDurationBlock.totalDurationTicks;
+      groupBlocks[i].totalDuration = totalDurationBlock.totalDuration;
+      groupBlocks[i].totalDurationGroupId = groupId;
+      groupBlocks[i].totalDurationRange = totalDurationBlock.totalDurationRange;
+      groupBlocks[i].totalDurationValueRange =
+          totalDurationBlock.totalDurationValueRange;
     }
   }
 
@@ -505,7 +544,8 @@ class Parser {
     ast.range.begin = leftBrace.begin;
 
     while (!isAtEnd() && peek().type != TokenType::RightBrace) {
-      if (peek().type != TokenType::Number) {
+      if (peek().type != TokenType::Number &&
+          peek().type != TokenType::LeftBrace) {
         addDiagnostic(result, "Expected random choice number",
                       rangeFromToken(peek()));
         ast.range.end = peek().end;
@@ -513,7 +553,9 @@ class Parser {
         return ast;
       }
 
-      ast.randomChoices.push_back(parseRandomChoice(result));
+      std::vector<RandomChoiceAst> choices = parseRandomChoice(result);
+      ast.randomChoices.insert(ast.randomChoices.end(), choices.begin(),
+                               choices.end());
       if (peek().type == TokenType::Pipe) {
         advance();
         if (peek().type == TokenType::RightBrace) {
@@ -550,7 +592,17 @@ class Parser {
     return ast;
   }
 
-  RandomChoiceAst parseRandomChoice(ParseResult& result) {
+  std::vector<RandomChoiceAst> parseRandomChoice(ParseResult& result) {
+    if (peek().type == TokenType::LeftBrace) {
+      ClockLiteralAst nested = parseRandomRangeLiteral(result);
+      for (size_t i = 0; i < nested.randomChoices.size(); i++) {
+        nested.randomChoices[i].range.begin = nested.range.begin;
+        nested.randomChoices[i].range.end = nested.range.end;
+      }
+      return nested.randomChoices;
+    }
+
+    std::vector<RandomChoiceAst> choices;
     RandomChoiceAst choice;
     Token minToken = advance();
     choice.minValue = parseDouble(minToken.lexeme);
@@ -561,21 +613,24 @@ class Parser {
     choice.range.end = minToken.end;
 
     if (peek().type != TokenType::Dash) {
-      return choice;
+      choices.push_back(choice);
+      return choices;
     }
 
     advance();
     if (peek().type != TokenType::Number) {
       addDiagnostic(result, "Expected range maximum after '-'",
                     rangeFromToken(peek()));
-      return choice;
+      choices.push_back(choice);
+      return choices;
     }
 
     Token maxToken = advance();
     choice.maxValue = parseDouble(maxToken.lexeme);
     choice.maxValueLexeme = maxToken.lexeme;
     choice.range.end = maxToken.end;
-    return choice;
+    choices.push_back(choice);
+    return choices;
   }
 
   ClockLiteralAst parseColonLiteral(ParseResult& result,
@@ -727,6 +782,69 @@ class Parser {
     if (block.repeat <= 0) {
       addDiagnostic(result, "Repeat count must be greater than zero",
                     rangeFromToken(repeatToken));
+    }
+  }
+
+  void parseTotalDuration(ParseResult& result, ClockBlockAst& block) {
+    if (peek().type != TokenType::Hash) {
+      return;
+    }
+
+    Token hashToken = advance();
+    if (peek().type != TokenType::Number) {
+      addDiagnostic(result, "Expected total duration after '#'",
+                    rangeFromToken(hashToken));
+      return;
+    }
+
+    Token durationToken = advance();
+    block.totalDurationRange.begin = hashToken.begin;
+    block.totalDurationRange.end = durationToken.end;
+    block.totalDurationValueRange = rangeFromToken(durationToken);
+    block.totalDurationGroupId = nextTotalDurationGroupId++;
+
+    if (peek().type != TokenType::Identifier) {
+      if (!isIntegerLexeme(durationToken.lexeme)) {
+        addDiagnostic(result, "Total tick count must be an integer",
+                      rangeFromToken(durationToken));
+        return;
+      }
+
+      int ticks = parseInt(durationToken.lexeme);
+      if (ticks <= 0) {
+        addDiagnostic(result, "Total tick count must be greater than zero",
+                      rangeFromToken(durationToken));
+        return;
+      }
+
+      block.hasTotalDuration = true;
+      block.totalDurationIsTickCount = true;
+      block.totalDurationTicks = ticks;
+      return;
+    }
+
+    ClockLiteralAst durationAst;
+    durationAst.kind = ClockLiteralKind::Numeric;
+    durationAst.value = parseDouble(durationToken.lexeme);
+    durationAst.valueLexeme = durationToken.lexeme;
+    durationAst.range.begin = durationToken.begin;
+
+    parseUnitToken(result, durationAst);
+    durationAst.range.end = durationAst.unitRange.end > 0
+                                ? durationAst.unitRange.end
+                                : durationToken.end;
+    block.totalDurationRange.end = durationAst.range.end;
+    block.totalDurationValueRange = durationAst.range;
+    block.hasTotalDuration = true;
+    block.totalDuration = durationAst;
+
+    if (!isDurationUnit(durationAst.unit)) {
+      addDiagnostic(result, "Total duration must use a time unit",
+                    durationAst.unitRange);
+    }
+    if (durationAst.value <= 0.0) {
+      addDiagnostic(result, "Total duration must be greater than zero",
+                    rangeFromToken(durationToken));
     }
   }
 };

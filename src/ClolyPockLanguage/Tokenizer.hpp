@@ -14,6 +14,7 @@ enum class TokenType {
   Colon,
   Comma,
   At,
+  Hash,
   Question,
   Tilde,
   LeftBracket,

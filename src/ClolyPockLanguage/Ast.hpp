@@ -69,6 +69,13 @@ struct ClockBlockAst {
   SourceRange repeatRange;
   SourceRange repeatValueRange;
   bool repeatValueIsOwn = false;
+  bool hasTotalDuration = false;
+  bool totalDurationIsTickCount = false;
+  int totalDurationTicks = 0;
+  ClockLiteralAst totalDuration;
+  int totalDurationGroupId = -1;
+  SourceRange totalDurationRange;
+  SourceRange totalDurationValueRange;
   SourceRange probabilityRange;
 };
 
