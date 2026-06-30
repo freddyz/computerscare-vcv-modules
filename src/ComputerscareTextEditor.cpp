@@ -80,6 +80,10 @@ int lineForTextOffset(const std::string& text, int offset) {
   return line;
 }
 
+int logicalLineCount(const std::string& text) {
+  return lineForTextOffset(text, text.size()) + 1;
+}
+
 int rowForMouseY(const ComputerscareTextEditorMetrics& metrics, float mouseY,
                  int rowCount) {
   float rowFloat =
@@ -277,15 +281,20 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
     int rowCount = nvgTextBreakLines(vg, text.c_str(), NULL, metrics.width,
                                      rows, BND_MAX_ROWS);
     int textPos = text.size();
-    if (rowCount > 0) {
-      int rowIndex = rowForMouseY(metrics, scaledMouse.y, rowCount);
-      NVGtextRow& row = rows[rowIndex];
-      const char* label = text.c_str();
-      float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
-      float rowTop = rowY - metrics.lineHeight - metrics.desc;
-      textPos = textOffsetForMouseX(vg, label, row, metrics.textX, rowTop,
-                                    metrics.visibleWidth, metrics.lineHeight,
-                                    std::max(6.f, style.fontSize), scaledMouse);
+    int clickableRowCount = std::max(rowCount, logicalLineCount(text));
+    if (clickableRowCount > 0) {
+      int rowIndex = rowForMouseY(metrics, scaledMouse.y, clickableRowCount);
+      if (rowIndex >= rowCount) {
+        textPos = text.size();
+      } else {
+        NVGtextRow& row = rows[rowIndex];
+        const char* label = text.c_str();
+        float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
+        float rowTop = rowY - metrics.lineHeight - metrics.desc;
+        textPos = textOffsetForMouseX(
+            vg, label, row, metrics.textX, rowTop, metrics.visibleWidth,
+            metrics.lineHeight, std::max(6.f, style.fontSize), scaledMouse);
+      }
     }
     nvgRestore(vg);
     bndSetFont(APP->window->uiFont->handle);
@@ -579,12 +588,15 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
   int cursorLine = lineForTextOffset(text, cursorOffset);
   float cursorY = metrics.baselineY + cursorLine * metrics.lineHeight -
                   metrics.lineHeight - metrics.desc + 2.f;
+  bool cursorStartsLogicalLine =
+      cursorOffset > 0 && text[cursorOffset - 1] == '\n';
 
-  if (!text.empty()) {
+  if (!text.empty() && !cursorStartsLogicalLine) {
     static NVGtextRow rows[BND_MAX_ROWS];
     int rowCount = nvgTextBreakLines(args.vg, text.c_str(), NULL, metrics.width,
                                      rows, BND_MAX_ROWS);
     const char* label = text.c_str();
+    bool foundCursorRow = false;
     for (int rowIndex = 0; rowIndex < rowCount; rowIndex++) {
       NVGtextRow& row = rows[rowIndex];
       int rowBegin = row.start - label;
@@ -597,8 +609,14 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
         cursorX = xForTextOffset(args.vg, label, row, metrics.textX, rowY,
                                  cursorOffset, metrics.textX + row.maxx);
         cursorY = rowY - metrics.lineHeight - metrics.desc + 2.f;
+        foundCursorRow = true;
         break;
       }
+    }
+    if (!foundCursorRow) {
+      cursorX = metrics.textX;
+      cursorY = metrics.baselineY + cursorLine * metrics.lineHeight -
+                metrics.lineHeight - metrics.desc + 2.f;
     }
   }
 
