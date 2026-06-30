@@ -64,6 +64,8 @@ struct ComputerscareTextEditor : ui::TextField {
   void step() override;
   void draw(const DrawArgs& args) override;
   void drawLayer(const DrawArgs& args, int layer) override;
+  void onEnter(const EnterEvent& e) override;
+  void onLeave(const LeaveEvent& e) override;
   void onButton(const ButtonEvent& e) override;
   void onSelectText(const SelectTextEvent& e) override;
   void onSelectKey(const SelectKeyEvent& e) override;

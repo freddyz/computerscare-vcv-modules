@@ -31,6 +31,13 @@ ComputerscareTextEditorMetrics getEditorMetrics(
 
 float xForTextOffset(NVGcontext* vg, const char* label, NVGtextRow& row,
                      float rowX, float rowY, int offset, float defaultX) {
+  int rowBegin = row.start - label;
+  int rowEnd = row.end - label;
+  int clampedOffset = std::max(rowBegin, std::min(offset, rowEnd));
+  if (clampedOffset <= rowBegin) {
+    return defaultX;
+  }
+
   static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
   int glyphCount = nvgTextGlyphPositions(vg, rowX, rowY, row.start, row.end + 1,
                                          glyphs, BND_MAX_GLYPHS);
@@ -38,7 +45,7 @@ float xForTextOffset(NVGcontext* vg, const char* label, NVGtextRow& row,
   for (int i = 0; i < glyphCount; i++) {
     int glyphOffset = glyphs[i].str - label;
     x = glyphs[i].x;
-    if (glyphOffset >= offset) {
+    if (glyphOffset >= clampedOffset) {
       break;
     }
   }
@@ -46,21 +53,20 @@ float xForTextOffset(NVGcontext* vg, const char* label, NVGtextRow& row,
 }
 
 int textOffsetForMouseX(NVGcontext* vg, const char* label, NVGtextRow& row,
-                        float rowX, float rowY, float mouseX) {
-  static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
-  int glyphCount = nvgTextGlyphPositions(vg, rowX, rowY, row.start, row.end + 1,
-                                         glyphs, BND_MAX_GLYPHS);
-  int column = 0;
-  int position = row.start - label;
-  for (; column < glyphCount && glyphs[column].x < mouseX; column++) {
-    position = glyphs[column].str - label;
+                        float rowX, float rowTop, float rowWidth,
+                        float rowHeight, float fontSize, Vec mousePos) {
+  int rowBegin = row.start - label;
+  int rowEnd = row.end - label;
+  if (rowEnd <= rowBegin) {
+    return rowBegin;
   }
-  if (column > 0 && column < glyphCount &&
-      glyphs[column].x - mouseX < mouseX - glyphs[column - 1].x) {
-    position = glyphs[column].str - label;
-  }
-  return std::max((int)(row.start - label),
-                  std::min(position, (int)(row.end - label)));
+
+  std::string rowText(row.start, row.end);
+  int rowOffset = bndIconLabelTextPosition(
+      vg, rowX, rowTop, rowWidth, rowHeight, -1, fontSize, rowText.c_str(),
+      (int)std::round(mousePos.x), (int)std::round(mousePos.y));
+  rowOffset = std::max(0, std::min(rowOffset, rowEnd - rowBegin));
+  return rowBegin + rowOffset;
 }
 
 int lineForTextOffset(const std::string& text, int offset) {
@@ -146,6 +152,20 @@ void ComputerscareTextEditor::drawLayer(const DrawArgs& args, int layer) {
     drawCursor(args);
   }
   Widget::drawLayer(args, layer);
+}
+
+void ComputerscareTextEditor::onEnter(const EnterEvent& e) {
+  ui::TextField::onEnter(e);
+  static GLFWcursor* editorCursor = nullptr;
+  if (!editorCursor) {
+    editorCursor = glfwCreateStandardCursor(GLFW_IBEAM_CURSOR);
+  }
+  glfwSetCursor(APP->window->win, editorCursor);
+}
+
+void ComputerscareTextEditor::onLeave(const LeaveEvent& e) {
+  ui::TextField::onLeave(e);
+  glfwSetCursor(APP->window->win, nullptr);
 }
 
 void ComputerscareTextEditor::onButton(const ButtonEvent& e) {
@@ -262,8 +282,10 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
       NVGtextRow& row = rows[rowIndex];
       const char* label = text.c_str();
       float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
-      textPos = textOffsetForMouseX(vg, label, row, metrics.textX, rowY,
-                                    scaledMouse.x);
+      float rowTop = rowY - metrics.lineHeight - metrics.desc;
+      textPos = textOffsetForMouseX(vg, label, row, metrics.textX, rowTop,
+                                    metrics.visibleWidth, metrics.lineHeight,
+                                    std::max(6.f, style.fontSize), scaledMouse);
     }
     nvgRestore(vg);
     bndSetFont(APP->window->uiFont->handle);
