@@ -60,6 +60,7 @@ struct ComputerscareTextEditor : ui::TextField {
   ComputerscareTextEditor();
 
   void setState(ComputerscareTextEditorState* editorState);
+  void syncFromState();
   void step() override;
   void draw(const DrawArgs& args) override;
   void drawLayer(const DrawArgs& args, int layer) override;

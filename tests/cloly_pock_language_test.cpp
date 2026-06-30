@@ -548,6 +548,52 @@ void testProgramAst() {
             "spread interleave unit");
   }
 
+  result = lang::parseClockLiteral("(3 3 (2 1 5))hz?69");
+  require(result.ok(), "spread interleave suffix probability parses");
+  requireProgramValues(result, {3.0, 3.0, 2.0, 3.0, 3.0, 1.0, 3.0, 3.0,
+                                5.0},
+                       "spread interleave suffix probability values");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
+            "spread interleave suffix probability unit");
+    require(result.program.blocks[i].probability == 69,
+            "spread interleave suffix probability value");
+    requireRange(result.program.blocks[i].probabilityRange, 15, 18,
+                 "spread interleave suffix probability range");
+  }
+
+  result = lang::parseClockLiteral("(3@2 (3 1)@2 (2 1 5))hz?80");
+  require(result.ok(), "spread interleave suffix probability parses");
+  requireProgramValues(result, {3.0, 3.0, 2.0, 3.0, 1.0, 1.0, 3.0, 3.0,
+                                5.0},
+                       "spread interleave suffix probability values");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
+            "spread interleave suffix probability unit");
+    require(result.program.blocks[i].probability == 80,
+            "spread interleave suffix probability value");
+    requireRange(result.program.blocks[i].probabilityRange, 23, 26,
+                 "spread interleave suffix probability range");
+  }
+  require(result.program.blocks[0].repeat == 2,
+          "spread interleave suffix probability block 0 repeat");
+  require(result.program.blocks[1].repeat == 2,
+          "spread interleave suffix probability block 1 repeat");
+  require(result.program.blocks[2].repeat == 1,
+          "spread interleave suffix probability block 2 repeat");
+  require(result.program.blocks[3].repeat == 2,
+          "spread interleave suffix probability block 3 repeat");
+  require(result.program.blocks[4].repeat == 2,
+          "spread interleave suffix probability block 4 repeat");
+  require(result.program.blocks[5].repeat == 1,
+          "spread interleave suffix probability block 5 repeat");
+  require(result.program.blocks[6].repeat == 2,
+          "spread interleave suffix probability block 6 repeat");
+  require(result.program.blocks[7].repeat == 2,
+          "spread interleave suffix probability block 7 repeat");
+  require(result.program.blocks[8].repeat == 1,
+          "spread interleave suffix probability block 8 repeat");
+
   result = lang::parseClockLiteral("(3 (5 4 3))hz");
   require(result.ok(), "single lane spread interleave parses");
   requireProgramValues(result, {3.0, 5.0, 3.0, 4.0, 3.0, 3.0},

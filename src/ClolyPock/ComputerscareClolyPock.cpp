@@ -93,7 +93,13 @@ struct ComputerscareClolyPock : Module {
     EDITOR_LETTER_SPACING_PARAM,
     NUM_PARAMS
   };
-  enum InputIds { ADVANCE_INPUT, NUM_INPUTS };
+  enum InputIds {
+    ADVANCE_INPUT,
+    ADVANCE_TOKEN_INPUT,
+    ADVANCE_LINE_INPUT,
+    RESET_INPUT,
+    NUM_INPUTS
+  };
   enum OutputIds {
     CLOCK_OUTPUT,
     EOC1_OUTPUT,
@@ -104,7 +110,6 @@ struct ComputerscareClolyPock : Module {
   enum LightIds { SYNTAX_ERROR_LIGHT, NUM_LIGHTS };
 
   ComputerscareTextEditorState editorState;
-  dsp::SchmittTrigger advanceInputTrigger;
   dsp::PulseGenerator tokenMovePulse;
   dsp::PulseGenerator lineCyclePulse;
   dsp::PulseGenerator wrapPulse;
@@ -123,6 +128,8 @@ struct ComputerscareClolyPock : Module {
   std::vector<ClolyPockProgramStep> pendingProgram;
   bool viewingPendingLine = true;
   int errorLine = -1;
+  int errorLineRevertLine = -1;
+  std::string errorLineRevertText;
   std::string checkedFocusedLineText;
   int lastSubmitCount = 0;
   int lastCancelCount = 0;
@@ -150,7 +157,10 @@ struct ComputerscareClolyPock : Module {
                 "Editor font height");
     configParam(EDITOR_LETTER_SPACING_PARAM, -2.f, 4.f, 0.f,
                 "Editor letter spacing");
-    configInput(ADVANCE_INPUT, "Advance line");
+    configInput(ADVANCE_INPUT, "Advance");
+    configInput(ADVANCE_TOKEN_INPUT, "Advance token");
+    configInput(ADVANCE_LINE_INPUT, "Advance line");
+    configInput(RESET_INPUT, "Reset");
     configOutput(CLOCK_OUTPUT, "Clock");
     configOutput(EOC1_OUTPUT, "Token move EOC");
     configOutput(EOC2_OUTPUT, "Line cycle EOC");
@@ -163,11 +173,6 @@ struct ComputerscareClolyPock : Module {
   }
 
   void process(const ProcessArgs& args) override {
-    if (params[AUTO_ADVANCE_PARAM].getValue() <= 0.5f &&
-        advanceInputTrigger.process(inputs[ADVANCE_INPUT].getVoltage())) {
-      moveToNextLine(true);
-    }
-
     clockPhase += args.sampleTime * activeClockSpec.hz;
     while (clockPhase >= 1.f) {
       clockPhase -= 1.f;
@@ -292,13 +297,12 @@ struct ComputerscareClolyPock : Module {
     ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, line);
     std::vector<ClolyPockProgramStep> program;
     if (!parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
-      syntaxError = true;
-      errorLine = line;
+      setSyntaxError(
+          line, line == activeLine ? activeLineText : checkedFocusedLineText);
       return false;
     }
 
-    syntaxError = false;
-    errorLine = -1;
+    clearSyntaxError();
     activeLine = line;
     activeLineText = lineInfo.text;
     activeProgram = program;
@@ -332,6 +336,24 @@ struct ComputerscareClolyPock : Module {
   }
 
   void cancelPendingLine(int line) {
+    if (errorLine == line) {
+      std::string revertText;
+      if (line == activeLine) {
+        revertText = activeLineText;
+      } else if (pendingLine == line && !pendingLineText.empty()) {
+        revertText = pendingLineText;
+      } else if (errorLineRevertLine == line) {
+        revertText = errorLineRevertText;
+      }
+      replaceLineText(line, revertText);
+      if (pendingLine == line && line == activeLine) {
+        clearPendingLine();
+      }
+      checkedFocusedLineText = getLineInfo(editorState.text, line).text;
+      clearSyntaxError();
+      return;
+    }
+
     if (pendingLine == line) {
       if (line == activeLine) {
         replaceLineText(line, activeLineText);
@@ -365,8 +387,7 @@ struct ComputerscareClolyPock : Module {
     if (errorLine == activeLine) {
       replaceLineText(activeLine, activeLineText);
       checkedFocusedLineText = activeLineText;
-      errorLine = -1;
-      syntaxError = false;
+      clearSyntaxError();
       viewingPendingLine = false;
       return;
     }
@@ -384,6 +405,7 @@ struct ComputerscareClolyPock : Module {
 
   void inspectFocusedLine(int line, bool focusChanged) {
     ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, line);
+    std::string previousCheckedLineText = checkedFocusedLineText;
     if (line != activeLine) {
       if (focusChanged || lineInfo.text == checkedFocusedLineText) {
         checkedFocusedLineText = lineInfo.text;
@@ -397,15 +419,14 @@ struct ComputerscareClolyPock : Module {
         pendingLineText = lineInfo.text;
         pendingProgram = program;
         if (errorLine == line) {
-          errorLine = -1;
+          clearSyntaxError();
         }
         syntaxError = false;
       } else {
-        if (pendingLine == line) {
-          clearPendingLine();
-        }
-        errorLine = line;
-        syntaxError = true;
+        std::string revertText = pendingLine == line && !pendingLineText.empty()
+                                     ? pendingLineText
+                                     : previousCheckedLineText;
+        setSyntaxError(line, revertText);
       }
       return;
     }
@@ -415,8 +436,7 @@ struct ComputerscareClolyPock : Module {
         clearPendingLine();
       }
       if (errorLine == line) {
-        errorLine = -1;
-        syntaxError = false;
+        clearSyntaxError();
       }
       checkedFocusedLineText = lineInfo.text;
       return;
@@ -441,16 +461,28 @@ struct ComputerscareClolyPock : Module {
       pendingProgram = program;
       viewingPendingLine = true;
       if (errorLine == line) {
-        errorLine = -1;
+        clearSyntaxError();
       }
       syntaxError = false;
     } else {
-      if (pendingLine == line) {
-        clearPendingLine();
-      }
-      errorLine = line;
-      syntaxError = true;
+      setSyntaxError(line, activeLineText);
     }
+  }
+
+  void setSyntaxError(int line, const std::string& revertText) {
+    if (errorLine != line || errorLineRevertLine != line) {
+      errorLineRevertLine = line;
+      errorLineRevertText = revertText;
+    }
+    errorLine = line;
+    syntaxError = true;
+  }
+
+  void clearSyntaxError() {
+    errorLine = -1;
+    errorLineRevertLine = -1;
+    errorLineRevertText.clear();
+    syntaxError = false;
   }
 
   void commitPendingLine(bool resetPhase) {
@@ -470,8 +502,24 @@ struct ComputerscareClolyPock : Module {
       activeClockRamp = 0.f;
     }
     clearPendingLine();
-    syntaxError = false;
-    errorLine = -1;
+    clearSyntaxError();
+    applyActiveProgramStep();
+  }
+
+  void resetActiveProgram(bool resetPhase) {
+    if (activeProgram.empty()) {
+      commitLine(activeLine, resetPhase);
+      return;
+    }
+
+    activeProgramIndex = 0;
+    activeProgramBeat = 0;
+    activeProgramElapsedSeconds = 0.f;
+    activeStepPlays = true;
+    if (resetPhase) {
+      clockPhase = 0.f;
+      activeClockRamp = 0.f;
+    }
     applyActiveProgramStep();
   }
 
@@ -745,6 +793,10 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
   ClolyPockTitle* title = nullptr;
   ComputerscareTextEditor* editor = nullptr;
   Widget* syntaxErrorLight = nullptr;
+  PortWidget* advanceInput = nullptr;
+  PortWidget* advanceTokenInput = nullptr;
+  PortWidget* advanceLineInput = nullptr;
+  PortWidget* resetInput = nullptr;
   PortWidget* clockOutput = nullptr;
   PortWidget* eoc1Output = nullptr;
   PortWidget* eoc2Output = nullptr;
@@ -778,7 +830,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     addChild(title);
 
     editor = createWidget<ComputerscareTextEditor>(Vec(3.f, 43.f));
-    editor->box.size = Vec(box.size.x - 6.f, 291.f);
+    editor->box.size = Vec(box.size.x - 6.f, 265.f);
     editor->placeholder = "type a sequence...";
     editor->style.backgroundColor = nvgRGB(0x05, 0x06, 0x08);
     editor->style.borderColor = nvgRGB(0x55, 0x5b, 0x64);
@@ -800,19 +852,30 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
             ComputerscareClolyPock::SYNTAX_ERROR_LIGHT);
     addChild(syntaxErrorLight);
 
-    addInput(createInput<InPort>(Vec(8.f, 8.f), module,
-                                 ComputerscareClolyPock::ADVANCE_INPUT));
     addParam(createParam<CKSS>(Vec(42.f, 12.f), module,
                                ComputerscareClolyPock::AUTO_ADVANCE_PARAM));
 
-    clockOutput = createOutput<OutPort>(Vec(8.f, 340.f), module,
-                                        ComputerscareClolyPock::CLOCK_OUTPUT);
-    eoc1Output = createOutput<OutPort>(Vec(45.f, 340.f), module,
-                                       ComputerscareClolyPock::EOC1_OUTPUT);
-    eoc2Output = createOutput<OutPort>(Vec(82.f, 340.f), module,
-                                       ComputerscareClolyPock::EOC2_OUTPUT);
-    eoc3Output = createOutput<OutPort>(Vec(119.f, 340.f), module,
-                                       ComputerscareClolyPock::EOC3_OUTPUT);
+    advanceInput = createInput<PointingUpPentagonPort>(
+        Vec(7.f, 315.f), module, ComputerscareClolyPock::ADVANCE_INPUT);
+    advanceTokenInput = createInput<PointingUpPentagonPort>(
+        Vec(42.f, 315.f), module, ComputerscareClolyPock::ADVANCE_TOKEN_INPUT);
+    advanceLineInput = createInput<PointingUpPentagonPort>(
+        Vec(77.f, 315.f), module, ComputerscareClolyPock::ADVANCE_LINE_INPUT);
+    resetInput = createInput<PointingUpPentagonPort>(
+        Vec(112.f, 315.f), module, ComputerscareClolyPock::RESET_INPUT);
+    addInput(advanceInput);
+    addInput(advanceTokenInput);
+    addInput(advanceLineInput);
+    addInput(resetInput);
+
+    clockOutput = createOutput<InPort>(Vec(7.f, 340.f), module,
+                                       ComputerscareClolyPock::CLOCK_OUTPUT);
+    eoc1Output = createOutput<InPort>(Vec(42.f, 340.f), module,
+                                      ComputerscareClolyPock::EOC1_OUTPUT);
+    eoc2Output = createOutput<InPort>(Vec(77.f, 340.f), module,
+                                      ComputerscareClolyPock::EOC2_OUTPUT);
+    eoc3Output = createOutput<InPort>(Vec(112.f, 340.f), module,
+                                      ComputerscareClolyPock::EOC3_OUTPUT);
     addOutput(clockOutput);
     addOutput(eoc1Output);
     addOutput(eoc2Output);
@@ -838,12 +901,18 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
     }
 
+    const float inputY = 315.f;
     const float outputY = 340.f;
+    PortWidget* inputs[] = {advanceInput, advanceTokenInput, advanceLineInput,
+                            resetInput};
     PortWidget* outputs[] = {clockOutput, eoc1Output, eoc2Output, eoc3Output};
-    const float outputXs[] = {8.f, 45.f, 82.f, 119.f};
+    const float jackXs[] = {7.f, 42.f, 77.f, 112.f};
     for (int i = 0; i < 4; i++) {
+      if (inputs[i]) {
+        inputs[i]->box.pos = Vec(jackXs[i], inputY);
+      }
       if (outputs[i]) {
-        outputs[i]->box.pos = Vec(outputXs[i], outputY);
+        outputs[i]->box.pos = Vec(jackXs[i], outputY);
       }
     }
   }
@@ -901,10 +970,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
         if (state->cancelCount != clolyPock->lastCancelCount) {
           clolyPock->lastCancelCount = state->cancelCount;
           clolyPock->cancelPendingLine(clolyPock->selectedLine);
-          if (clolyPock->errorLine == clolyPock->selectedLine) {
-            clolyPock->errorLine = -1;
-            clolyPock->syntaxError = false;
-          }
+          editor->syncFromState();
         }
         if (state->switchViewCount != clolyPock->lastSwitchViewCount) {
           clolyPock->lastSwitchViewCount = state->switchViewCount;
@@ -967,12 +1033,15 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       if (clolyPock && clolyPock->errorLine >= 0) {
         ClolyPockLineInfo errorLineInfo =
             getLineInfo(state->text, clolyPock->errorLine);
+        float errorPulse =
+            0.5f + 0.5f * std::sin((float)rack::system::getTime() * 4.25f);
         ComputerscareTextHighlight errorHighlight;
         errorHighlight.begin = errorLineInfo.begin;
         errorHighlight.end =
             std::max(errorLineInfo.end, errorLineInfo.begin + 1);
         errorHighlight.fullLine = true;
-        errorHighlight.background = nvgRGBA(0xc4, 0x34, 0x21, 0x35);
+        errorHighlight.background = nvgRGBA(
+            0xc4, 0x34, 0x21, (unsigned char)(0x2c + errorPulse * 0x24));
         state->highlights.push_back(errorHighlight);
       }
       ComputerscareTextHighlight activeHighlight;

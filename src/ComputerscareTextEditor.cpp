@@ -37,14 +37,30 @@ float xForTextOffset(NVGcontext* vg, const char* label, NVGtextRow& row,
   float x = defaultX;
   for (int i = 0; i < glyphCount; i++) {
     int glyphOffset = glyphs[i].str - label;
-    if (glyphOffset <= offset) {
-      x = glyphs[i].x;
-    }
+    x = glyphs[i].x;
     if (glyphOffset >= offset) {
-      return glyphs[i].x;
+      break;
     }
   }
   return x;
+}
+
+int textOffsetForMouseX(NVGcontext* vg, const char* label, NVGtextRow& row,
+                        float rowX, float rowY, float mouseX) {
+  static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
+  int glyphCount = nvgTextGlyphPositions(vg, rowX, rowY, row.start, row.end + 1,
+                                         glyphs, BND_MAX_GLYPHS);
+  int column = 0;
+  int position = row.start - label;
+  for (; column < glyphCount && glyphs[column].x < mouseX; column++) {
+    position = glyphs[column].str - label;
+  }
+  if (column > 0 && column < glyphCount &&
+      glyphs[column].x - mouseX < mouseX - glyphs[column - 1].x) {
+    position = glyphs[column].str - label;
+  }
+  return std::max((int)(row.start - label),
+                  std::min(position, (int)(row.end - label)));
 }
 
 int lineForTextOffset(const std::string& text, int offset) {
@@ -77,25 +93,26 @@ ComputerscareTextEditor::ComputerscareTextEditor() {
 void ComputerscareTextEditor::setState(
     ComputerscareTextEditorState* editorState) {
   state = editorState;
-  if (state) {
-    suppressChangeTracking = true;
-    setText(state->text);
-    suppressChangeTracking = false;
-    state->dirty = false;
-    clearHistory();
-    lastSnapshot = captureSnapshot();
+  syncFromState();
+}
+
+void ComputerscareTextEditor::syncFromState() {
+  if (!state) {
+    return;
   }
+
+  suppressChangeTracking = true;
+  setText(state->text);
+  suppressChangeTracking = false;
+  state->dirty = false;
+  clearHistory();
+  lastSnapshot = captureSnapshot();
 }
 
 void ComputerscareTextEditor::step() {
   ui::TextField::step();
   if (state && state->dirty) {
-    suppressChangeTracking = true;
-    setText(state->text);
-    suppressChangeTracking = false;
-    state->dirty = false;
-    clearHistory();
-    lastSnapshot = captureSnapshot();
+    syncFromState();
   }
 }
 
@@ -229,6 +246,8 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
   if (font && font->handle >= 0) {
     bndSetFont(font->handle);
     NVGcontext* vg = APP->window->vg;
+    nvgSave(vg);
+    nvgResetTransform(vg);
     applyTextStyle(vg, font);
     Vec scaledBox = getScaledBoxSize();
     Vec scaledMouse(mousePos.x / getFontScaleX(), mousePos.y / getFontScaleY());
@@ -242,18 +261,11 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
       int rowIndex = rowForMouseY(metrics, scaledMouse.y, rowCount);
       NVGtextRow& row = rows[rowIndex];
       const char* label = text.c_str();
-      static NVGglyphPosition glyphs[BND_MAX_GLYPHS];
-      int glyphCount = nvgTextGlyphPositions(
-          vg, metrics.textX, metrics.baselineY + rowIndex * metrics.lineHeight,
-          row.start, row.end + 1, glyphs, BND_MAX_GLYPHS);
-      textPos = row.end - label;
-      for (int i = 0; i < glyphCount; i++) {
-        if (scaledMouse.x <= glyphs[i].x) {
-          textPos = glyphs[i].str - label;
-          break;
-        }
-      }
+      float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
+      textPos = textOffsetForMouseX(vg, label, row, metrics.textX, rowY,
+                                    scaledMouse.x);
     }
+    nvgRestore(vg);
     bndSetFont(APP->window->uiFont->handle);
     return textPos;
   }

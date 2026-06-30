@@ -291,9 +291,11 @@ class Parser {
     repeatBlock.range.end = rightParen.end;
     SourceRange suffixUnitRange;
     ClockUnit suffixUnit = parseGroupUnitSuffix(result, suffixUnitRange);
+    parseProbability(result, repeatBlock);
     parseRepeat(result, repeatBlock);
     bool hasGroupSuffix =
         suffixUnit != ClockUnit::Unknown ||
+        repeatBlock.probabilityRange.end > repeatBlock.probabilityRange.begin ||
         repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin;
 
     if (blocks.empty() || hasGroupSuffix) {
@@ -368,6 +370,7 @@ class Parser {
     repeatBlock.range.end = rightParen.end;
     SourceRange suffixUnitRange;
     ClockUnit suffixUnit = parseGroupUnitSuffix(result, suffixUnitRange);
+    parseProbability(result, repeatBlock);
     parseRepeat(result, repeatBlock);
     applyGroupModifiers(result, lane, repeatBlock, suffixUnit, suffixUnitRange);
     return lane;
@@ -393,6 +396,13 @@ class Parser {
         if (!groupBlocks[i].repeatValueIsOwn) {
           groupBlocks[i].repeatValueRange = repeatBlock.repeatValueRange;
         }
+      }
+      if (repeatBlock.probabilityRange.end >
+              repeatBlock.probabilityRange.begin &&
+          groupBlocks[i].probabilityRange.end <=
+              groupBlocks[i].probabilityRange.begin) {
+        groupBlocks[i].probability = repeatBlock.probability;
+        groupBlocks[i].probabilityRange = repeatBlock.probabilityRange;
       }
     }
   }
