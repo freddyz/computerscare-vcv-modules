@@ -100,6 +100,13 @@ std::vector<Token> tokenize(const std::string& source) {
       continue;
     }
 
+    if (c == '~') {
+      tokens.push_back(
+          {TokenType::Tilde, source.substr(index, 1), index, index + 1});
+      index++;
+      continue;
+    }
+
     if (c == '[') {
       tokens.push_back(
           {TokenType::LeftBracket, source.substr(index, 1), index, index + 1});
@@ -179,6 +186,8 @@ std::string tokenTypeName(TokenType type) {
       return "At";
     case TokenType::Question:
       return "Question";
+    case TokenType::Tilde:
+      return "Tilde";
     case TokenType::LeftBracket:
       return "LeftBracket";
     case TokenType::RightBracket:

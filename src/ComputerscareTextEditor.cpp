@@ -589,7 +589,10 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
       NVGtextRow& row = rows[rowIndex];
       int rowBegin = row.start - label;
       int rowEnd = row.end - label;
-      if (cursorOffset >= rowBegin && cursorOffset <= rowEnd) {
+      bool rowContainsCursor =
+          cursorOffset >= rowBegin &&
+          (cursorOffset < rowEnd || rowIndex == rowCount - 1);
+      if (rowContainsCursor) {
         float rowY = metrics.baselineY + rowIndex * metrics.lineHeight;
         cursorX = xForTextOffset(args.vg, label, row, metrics.textX, rowY,
                                  cursorOffset, metrics.textX + row.maxx);
@@ -599,14 +602,14 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
     }
   }
 
-  float blink = 0.5f + 0.5f * std::sin((float)rack::system::getTime() * 6.f);
+  float blink = 0.5f + 0.5f * std::sin((float)rack::system::getTime() * 3.f);
   NVGcolor color = COLOR_COMPUTERSCARE_BLUE;
   color.r = color.r + (1.f - color.r) * blink * 0.48f;
   color.g = color.g + (1.f - color.g) * blink * 0.48f;
   color.b = color.b + (1.f - color.b) * blink * 0.48f;
   color.a = 0.72f + 0.28f * blink;
   nvgBeginPath(args.vg);
-  nvgRect(args.vg, cursorX, cursorY - 1.f, 1.4f, metrics.lineHeight - 1.f);
+  nvgRect(args.vg, cursorX, cursorY - 1.f, 2.2f, metrics.lineHeight - 1.f);
   nvgFillColor(args.vg, color);
   nvgFill(args.vg);
 
@@ -617,7 +620,8 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
 void ComputerscareTextEditor::drawHighlightSpan(
     const DrawArgs& args, const ComputerscareTextHighlight& highlight,
     int mode) {
-  if (highlight.end <= highlight.begin) {
+  if (highlight.end < highlight.begin ||
+      (highlight.end == highlight.begin && !highlight.fullLine)) {
     return;
   }
 

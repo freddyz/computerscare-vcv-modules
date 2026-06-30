@@ -228,6 +228,17 @@ void testTokenizer() {
   requireToken(tokens[7], lang::TokenType::Identifier, "sec", 11, 14,
                "90@3sec token 3");
 
+  tokens = lang::tokenize("2hz@4 ~3hz@4 ~@3s");
+  require(tokens.size() == 14, "rest token count");
+  requireToken(tokens[0], lang::TokenType::Number, "2", 0, 1,
+               "rest token 0");
+  requireToken(tokens[4], lang::TokenType::Tilde, "~", 6, 7,
+               "rest token 4");
+  requireToken(tokens[9], lang::TokenType::Tilde, "~", 13, 14,
+               "rest token 9");
+  requireToken(tokens[10], lang::TokenType::At, "@", 14, 15,
+               "rest token 10");
+
   tokens = lang::tokenize("2hz (2hz 4hz)");
   require(tokens.size() == 9, "interleave token count");
   requireToken(tokens[0], lang::TokenType::Number, "2", 0, 1,
@@ -458,6 +469,32 @@ void testProgramAst() {
   requireDurationRepeat(result.program.blocks[1], 2.0,
                         lang::ClockUnit::Seconds, 8, 11,
                         "bracket second duration repeat");
+
+  result = lang::parseClockLiteral("2hz@4 ~3hz@4 ~@3s");
+  require(result.ok(), "rest program parses");
+  require(result.program.blocks.size() == 3, "rest block count");
+  require(!result.program.blocks[0].rest, "first block is not rest");
+  require(result.program.blocks[1].rest, "clocked rest block");
+  require(result.program.blocks[1].repeat == 4, "clocked rest repeat");
+  requireRange(result.program.blocks[1].restRange, 6, 7,
+               "clocked rest range");
+  requireRange(result.program.blocks[1].range, 6, 12,
+               "clocked rest block range");
+  require(result.program.blocks[2].rest, "duration-only rest block");
+  require(result.program.blocks[2].literal.kind ==
+              lang::ClockLiteralKind::Empty,
+          "duration-only rest has no literal");
+  requireDurationRepeat(result.program.blocks[2], 3.0,
+                        lang::ClockUnit::Seconds, 14, 17,
+                        "duration-only rest duration");
+
+  result = lang::parseClockLiteral("~[120 90]@2");
+  require(result.ok(), "rest bracket parses");
+  require(result.program.blocks.size() == 2, "rest bracket count");
+  require(result.program.blocks[0].rest, "rest bracket first block");
+  require(result.program.blocks[1].rest, "rest bracket second block");
+  require(result.program.blocks[0].repeat == 2, "rest bracket first repeat");
+  require(result.program.blocks[1].repeat == 2, "rest bracket second repeat");
 
   result = lang::parseClockLiteral("2hz (2hz 4hz)");
   require(result.ok(), "interleave program parses");
@@ -788,6 +825,7 @@ void testInvalidInputs() {
   requireInvalid("120bpm@2hz", "frequency repeat duration invalid");
   requireInvalid("120bpm@2bpm", "bpm repeat duration invalid");
   requireInvalid("120bpm@0s", "zero repeat duration invalid");
+  requireInvalid("~@3", "bare count rest invalid");
   requireInvalid("120?1.5", "decimal probability invalid");
   requireInvalid("120?101", "probability over 100 invalid");
   requireInvalid("120?-1", "negative probability invalid");

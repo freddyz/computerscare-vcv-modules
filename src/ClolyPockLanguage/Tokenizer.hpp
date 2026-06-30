@@ -15,6 +15,7 @@ enum class TokenType {
   Comma,
   At,
   Question,
+  Tilde,
   LeftBracket,
   RightBracket,
   LeftParen,

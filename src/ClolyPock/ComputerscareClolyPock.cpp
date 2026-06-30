@@ -68,6 +68,7 @@ static bool isBlankLine(const std::string& text) {
 struct ClolyPockProgramStep {
   cloly::language::ClockLiteralAst literal;
   cloly::language::ClockSpec spec;
+  bool isRest = false;
   int repeat = 1;
   bool hasDuration = false;
   float durationSeconds = 0.f;
@@ -241,16 +242,22 @@ struct ComputerscareClolyPock : Module {
     program.clear();
     for (size_t i = 0; i < parse.program.blocks.size(); i++) {
       const cloly::language::ClockBlockAst& block = parse.program.blocks[i];
-      cloly::language::EvaluationResult eval =
-          cloly::language::evaluateClockLiteral(block.literal);
-      if (!eval.ok()) {
-        program.clear();
-        return false;
-      }
 
       ClolyPockProgramStep step;
       step.literal = block.literal;
-      step.spec = eval.spec;
+      step.isRest = block.rest;
+      step.spec.bpm = CLOCK_BPM;
+      step.spec.hz = CLOCK_HZ;
+      step.spec.periodSeconds = 1.f / CLOCK_HZ;
+      if (block.literal.kind != cloly::language::ClockLiteralKind::Empty) {
+        cloly::language::EvaluationResult eval =
+            cloly::language::evaluateClockLiteral(block.literal);
+        if (!eval.ok()) {
+          program.clear();
+          return false;
+        }
+        step.spec = eval.spec;
+      }
       step.hasRandomValue =
           block.literal.kind == cloly::language::ClockLiteralKind::RandomRange;
       if (step.hasRandomValue) {
@@ -282,8 +289,13 @@ struct ComputerscareClolyPock : Module {
         step.durationSeconds = std::max(0.0, durationEval.spec.periodSeconds);
       }
       step.probability = std::max(0, std::min(100, block.probability));
-      step.highlightBegin = lineBegin + block.literal.range.begin;
-      step.highlightEnd = lineBegin + block.literal.range.end;
+      if (block.rest && block.range.end > block.range.begin) {
+        step.highlightBegin = lineBegin + block.range.begin;
+        step.highlightEnd = lineBegin + block.range.end;
+      } else {
+        step.highlightBegin = lineBegin + block.literal.range.begin;
+        step.highlightEnd = lineBegin + block.literal.range.end;
+      }
       step.repeatHighlightBegin = lineBegin + block.repeatValueRange.begin;
       step.repeatHighlightEnd = lineBegin + block.repeatValueRange.end;
       step.repeatHighlightIsOwn = block.repeatValueIsOwn;
@@ -649,7 +661,9 @@ struct ComputerscareClolyPock : Module {
     }
 
     int probability = activeProgram[activeProgramIndex].probability;
-    if (probability >= 100) {
+    if (activeProgram[activeProgramIndex].isRest) {
+      activeStepPlays = false;
+    } else if (probability >= 100) {
       activeStepPlays = true;
     } else if (probability <= 0) {
       activeStepPlays = false;
@@ -993,8 +1007,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
         ClolyPockLineInfo zebraLineInfo = getLineInfo(state->text, zebraLine);
         ComputerscareTextHighlight zebraHighlight;
         zebraHighlight.begin = zebraLineInfo.begin;
-        zebraHighlight.end =
-            std::max(zebraLineInfo.end, zebraLineInfo.begin + 1);
+        zebraHighlight.end = zebraLineInfo.end;
         zebraHighlight.fullLine = true;
         zebraHighlight.background = nvgRGBA(0xff, 0xff, 0xff, 0x16);
         state->highlights.push_back(zebraHighlight);
@@ -1003,7 +1016,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       ClolyPockLineInfo lineInfo = getLineInfo(state->text, line);
       ComputerscareTextHighlight focusHighlight;
       focusHighlight.begin = lineInfo.begin;
-      focusHighlight.end = std::max(lineInfo.end, lineInfo.begin + 1);
+      focusHighlight.end = lineInfo.end;
       focusHighlight.fullLine = true;
       focusHighlight.background = nvgRGBA(0xb8, 0xb8, 0xb8, 0x42);
       state->highlights.push_back(focusHighlight);
@@ -1023,8 +1036,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
             0.5f + 0.5f * std::sin((float)rack::system::getTime() * 3.5f);
         ComputerscareTextHighlight pendingHighlight;
         pendingHighlight.begin = pendingLineInfo.begin;
-        pendingHighlight.end =
-            std::max(pendingLineInfo.end, pendingLineInfo.begin + 1);
+        pendingHighlight.end = pendingLineInfo.end;
         pendingHighlight.fullLine = true;
         pendingHighlight.background = nvgRGBA(
             0x24, 0xc9, 0xa6, (unsigned char)(0x20 + pendingPulse * 0x22));
@@ -1037,8 +1049,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
             0.5f + 0.5f * std::sin((float)rack::system::getTime() * 4.25f);
         ComputerscareTextHighlight errorHighlight;
         errorHighlight.begin = errorLineInfo.begin;
-        errorHighlight.end =
-            std::max(errorLineInfo.end, errorLineInfo.begin + 1);
+        errorHighlight.end = errorLineInfo.end;
         errorHighlight.fullLine = true;
         errorHighlight.background = nvgRGBA(
             0xc4, 0x34, 0x21, (unsigned char)(0x2c + errorPulse * 0x24));

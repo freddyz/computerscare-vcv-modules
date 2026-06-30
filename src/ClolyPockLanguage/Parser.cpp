@@ -175,6 +175,11 @@ class Parser {
       return;
     }
 
+    if (peek().type == TokenType::Tilde) {
+      parseRestBlock(result, blocks);
+      return;
+    }
+
     if (peek().type == TokenType::RightBracket) {
       addDiagnostic(result, "Unexpected ']'", rangeFromToken(peek()));
       advance();
@@ -210,6 +215,51 @@ class Parser {
     parseProbability(result, block);
     parseRepeat(result, block);
     blocks.push_back(block);
+  }
+
+  void parseRestBlock(ParseResult& result, std::vector<ClockBlockAst>& blocks) {
+    Token restToken = advance();
+    SourceRange restRange = rangeFromToken(restToken);
+    if (peek().type == TokenType::At) {
+      ClockBlockAst block;
+      block.rest = true;
+      block.restRange = restRange;
+      block.range.begin = restToken.begin;
+      block.literal.kind = ClockLiteralKind::Empty;
+      block.literal.range = restRange;
+      parseRepeat(result, block);
+      if (block.repeatRange.end <= block.repeatRange.begin) {
+        addDiagnostic(result, "Expected rest duration after '~'",
+                      rangeFromToken(restToken));
+        block.range.end = restToken.end;
+      } else {
+        block.range.end = block.repeatRange.end;
+      }
+      if (!block.repeatIsDuration) {
+        addDiagnostic(result, "Rest duration requires a time unit",
+                      block.repeatValueRange);
+      }
+      blocks.push_back(block);
+      return;
+    }
+
+    size_t blockBegin = blocks.size();
+    parseBlock(result, blocks);
+    if (blocks.size() == blockBegin) {
+      addDiagnostic(result, "Expected rest target after '~'", restRange);
+      return;
+    }
+
+    for (size_t i = blockBegin; i < blocks.size(); i++) {
+      blocks[i].rest = true;
+      blocks[i].restRange = restRange;
+      if (i == blockBegin) {
+        blocks[i].range.begin = restToken.begin;
+      }
+      if (blocks[i].repeatRange.end > blocks[i].range.end) {
+        blocks[i].range.end = blocks[i].repeatRange.end;
+      }
+    }
   }
 
   void parseSequenceUntil(ParseResult& result,
