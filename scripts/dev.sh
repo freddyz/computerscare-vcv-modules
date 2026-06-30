@@ -2,7 +2,30 @@
 set -e
 
 SRC_FILES=$(find src -name "*.cpp" -o -name "*.hpp")
-CMD=${1:-all}
+CPP_FILES=$(find src -name "*.cpp")
+CMD=${1:-fast}
+RACK_DIR=${RACK_DIR:-$HOME/dev/VCV-Rack/Rack}
+RACK_INCLUDE_DIR=${RACK_INCLUDE_DIR:-$RACK_DIR/include}
+RACK_DEP_INCLUDE_DIR=${RACK_DEP_INCLUDE_DIR:-$RACK_DIR/dep/include}
+CLANG_TIDY_CHECKS=${CLANG_TIDY_CHECKS:-clang-analyzer-*}
+
+find_clang_tidy() {
+  if command -v clang-tidy >/dev/null 2>&1; then
+    command -v clang-tidy
+    return
+  fi
+
+  for candidate in \
+    /opt/homebrew/opt/llvm/bin/clang-tidy \
+    /usr/local/opt/llvm/bin/clang-tidy; do
+    if [ -x "$candidate" ]; then
+      echo "$candidate"
+      return
+    fi
+  done
+
+  echo ""
+}
 
 fmt() {
   echo "==> Formatting..."
@@ -20,22 +43,30 @@ fmt_check() {
 
 lint() {
   echo "==> Linting..."
-  clang-tidy $SRC_FILES -- -std=c++17 -I./src -I${RACK_DIR:-../../Rack}/include
+  CLANG_TIDY=$(find_clang_tidy)
+  if [ -z "$CLANG_TIDY" ]; then
+    echo "clang-tidy not found. Install it with: brew install llvm" >&2
+    exit 1
+  fi
+
+  "$CLANG_TIDY" --checks="$CLANG_TIDY_CHECKS" $CPP_FILES -- \
+    -std=c++17 -I./src -I"$RACK_INCLUDE_DIR" -I"$RACK_DEP_INCLUDE_DIR"
   echo "    OK."
 }
 
 cppcheck_run() {
   echo "==> cppcheck..."
   cppcheck --enable=unusedFunction --suppress=missingIncludeSystem \
-    -I./src -I${RACK_DIR:-../../Rack}/include \
-    --suppress="*:${RACK_DIR:-../../Rack}/include/*" \
+    -I./src -I"$RACK_INCLUDE_DIR" -I"$RACK_DEP_INCLUDE_DIR" \
+    --suppress="*:$RACK_INCLUDE_DIR/*" \
+    --suppress="*:$RACK_DEP_INCLUDE_DIR/*" \
     --max-configs=1 --error-exitcode=1 src/
   echo "    OK."
 }
 
 build() {
   echo "==> Building..."
-  (cd /Users/adammalone/dev/VCV-Rack/Rack/plugins/computerscare-vcv-modules && make)
+  make
 }
 
 run_tests() {
@@ -45,23 +76,54 @@ run_tests() {
   echo "    OK."
 }
 
+test_all() {
+  build
+  run_tests
+}
+
+fast() {
+  fmt
+  test_all
+}
+
+check() {
+  fast
+}
+
+full_check() {
+  fmt_check
+  lint
+  test_all
+}
+
+usage() {
+  echo "Usage: $0 [fmt|lint|cppcheck|build|fast|check|full-check|test|all|help]"
+  echo ""
+  echo "  fmt        Auto-format all src files in place"
+  echo "  lint       Run clang-tidy static analysis"
+  echo "  cppcheck   Run cppcheck unused-function analysis"
+  echo "  build      Build the Rack plugin"
+  echo "  fast       Auto-format + run tests for local iteration"
+  echo "  check      Alias for fast local validation"
+  echo "  full-check Dry-run format check + full lint + tests"
+  echo "  test       Build + run test binary"
+  echo "  all        fmt + lint + cppcheck + build + test"
+  echo "  help       Show this help"
+}
+
 case $CMD in
   fmt)      fmt ;;
   lint)     lint ;;
   cppcheck) cppcheck_run ;;
   build)    build ;;
-  check)    fmt_check && lint && build ;;
-  test)     build && run_tests ;;
-  all)      fmt && lint && build && run_tests ;;
+  fast)     fast ;;
+  check)    check ;;
+  full-check) full_check ;;
+  test)     test_all ;;
+  all)      fmt && lint && cppcheck_run && test_all ;;
+  help)     usage ;;
   *)
-    echo "Usage: $0 [fmt|lint|check|test|all]"
-    echo ""
-    echo "  fmt      Auto-format all src files in place"
-    echo "  lint     Run clang-tidy static analysis"
-    echo "  cppcheck Run cppcheck unused-function analysis"
-    echo "  check    Dry-run format check + lint + cppcheck + build"
-    echo "  test     Build + run test binary"
-    echo "  all      fmt + lint + cppcheck + build + test (default)"
+    usage
     exit 1
     ;;
 esac

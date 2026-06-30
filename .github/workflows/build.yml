@@ -22,6 +22,34 @@ defaults:
     shell: bash
 
 jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install validation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format clang-tidy g++ jq unzip
+          npm ci
+
+      - name: Get Rack SDK
+        run: |
+          pushd "$HOME"
+          curl -Lo Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-lin-x64.zip
+          unzip Rack-SDK.zip
+
+      - name: Full check
+        run: RACK_DIR="$HOME/Rack-SDK" scripts/dev.sh full-check
+
   # Win and Linux use the rack-plugin-toolchain container, which cross-compiles against
   # a fixed older glibc (avoiding GLIBC compatibility issues) and a consistent MinGW toolchain.
   build:
