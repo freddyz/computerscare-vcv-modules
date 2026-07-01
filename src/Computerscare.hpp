@@ -31,7 +31,7 @@ extern Model* modelComputerscareGolyPenerator;
 extern Model* modelComputerscareMolyPatrix;
 extern Model* modelComputerscareMelyPorge;
 extern Model* modelComputerscareSlolyPit;
-extern Model* modelComputerscareClolyPock;
+extern Model* modelComputerscareBlunch;
 
 extern Model* modelComputerscareHorseADoodleDoo;
 extern Model* modelComputerscareDrolyPaw;

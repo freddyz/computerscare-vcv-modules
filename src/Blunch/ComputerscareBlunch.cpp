@@ -4,18 +4,18 @@
 #include <string>
 #include <vector>
 
-#include "../ClolyPockLanguage/ClolyPockLanguage.hpp"
+#include "../BlunchLanguage/BlunchLanguage.hpp"
 #include "../ComputerscareResizableHandle.hpp"
 #include "../ComputerscareTextEditor.hpp"
 
-struct ClolyPockLineInfo {
+struct BlunchLineInfo {
   int begin = 0;
   int end = 0;
   std::string text;
 };
 
-static ClolyPockLineInfo getLineInfo(const std::string& text, int line) {
-  ClolyPockLineInfo info;
+static BlunchLineInfo getLineInfo(const std::string& text, int line) {
+  BlunchLineInfo info;
   int currentLine = 0;
   int length = text.size();
   info.begin = 0;
@@ -66,12 +66,12 @@ static bool isBlankLine(const std::string& text) {
 }
 
 static bool choiceHasExplicitUnit(
-    const cloly::language::RandomChoiceAst& choice) {
+    const blunch::language::RandomChoiceAst& choice) {
   return choice.unitRange.end > choice.unitRange.begin;
 }
 
-static const cloly::language::RandomChoiceAst& chooseRandomChoice(
-    const cloly::language::ClockLiteralAst& ast) {
+static const blunch::language::RandomChoiceAst& chooseRandomChoice(
+    const blunch::language::ClockLiteralAst& ast) {
   size_t choiceIndex =
       std::min((size_t)(random::uniform() * ast.randomChoices.size()),
                ast.randomChoices.size() - 1);
@@ -79,7 +79,7 @@ static const cloly::language::RandomChoiceAst& chooseRandomChoice(
 }
 
 static double sampleRandomChoiceValue(
-    const cloly::language::RandomChoiceAst& choice) {
+    const blunch::language::RandomChoiceAst& choice) {
   double lowValue = std::min(choice.minValue, choice.maxValue);
   double highValue = std::max(choice.minValue, choice.maxValue);
   if (highValue <= lowValue) {
@@ -89,7 +89,7 @@ static double sampleRandomChoiceValue(
 }
 
 static int sampleRandomChoiceInteger(
-    const cloly::language::RandomChoiceAst& choice) {
+    const blunch::language::RandomChoiceAst& choice) {
   int lowValue = (int)std::min(choice.minValue, choice.maxValue);
   int highValue = (int)std::max(choice.minValue, choice.maxValue);
   if (highValue <= lowValue) {
@@ -99,11 +99,11 @@ static int sampleRandomChoiceInteger(
          (int)std::floor(random::uniform() * (float)(highValue - lowValue + 1));
 }
 
-static cloly::language::ClockLiteralAst literalForRandomChoice(
-    const cloly::language::ClockLiteralAst& randomAst,
-    const cloly::language::RandomChoiceAst& choice, double value) {
-  cloly::language::ClockLiteralAst literal;
-  literal.kind = cloly::language::ClockLiteralKind::Numeric;
+static blunch::language::ClockLiteralAst literalForRandomChoice(
+    const blunch::language::ClockLiteralAst& randomAst,
+    const blunch::language::RandomChoiceAst& choice, double value) {
+  blunch::language::ClockLiteralAst literal;
+  literal.kind = blunch::language::ClockLiteralKind::Numeric;
   literal.value = value;
   literal.valueLexeme = choice.minValueLexeme;
   literal.range = choice.range;
@@ -113,15 +113,15 @@ static cloly::language::ClockLiteralAst literalForRandomChoice(
   return literal;
 }
 
-struct ClolyPockProgramStep {
-  cloly::language::ClockLiteralAst literal;
-  cloly::language::ClockSpec spec;
+struct BlunchProgramStep {
+  blunch::language::ClockLiteralAst literal;
+  blunch::language::ClockSpec spec;
   bool isRest = false;
   int externalClockInput = -1;
   int repeat = 1;
   bool repeatIsRandom = false;
   bool repeatRandomIsDuration = false;
-  cloly::language::ClockLiteralAst repeatRandom;
+  blunch::language::ClockLiteralAst repeatRandom;
   bool hasDuration = false;
   float durationSeconds = 0.f;
   int probability = 100;
@@ -135,7 +135,7 @@ struct ClolyPockProgramStep {
   int totalDurationGroupStart = 0;
   int totalDurationGroupEnd = 0;
   bool totalDurationIsRandom = false;
-  cloly::language::ClockLiteralAst totalDurationRandom;
+  blunch::language::ClockLiteralAst totalDurationRandom;
   bool totalDurationIsTickCount = false;
   int totalDurationTicks = 0;
   float totalDurationSeconds = 0.f;
@@ -145,7 +145,7 @@ struct ClolyPockProgramStep {
   int sourceLineBegin = 0;
 };
 
-struct ComputerscareClolyPock : Module {
+struct ComputerscareBlunch : Module {
   static constexpr float CLOCK_BPM = 120.f;
   static constexpr float CLOCK_HZ = CLOCK_BPM / 60.f;
   static constexpr float MIN_WIDTH = 150.f;
@@ -195,7 +195,7 @@ struct ComputerscareClolyPock : Module {
   std::string activeLineText;
   int pendingLine = -1;
   std::string pendingLineText;
-  std::vector<ClolyPockProgramStep> pendingProgram;
+  std::vector<BlunchProgramStep> pendingProgram;
   bool viewingPendingLine = true;
   int errorLine = -1;
   int errorLineRevertLine = -1;
@@ -206,8 +206,8 @@ struct ComputerscareClolyPock : Module {
   int lastSwitchViewCount = 0;
   int activeHighlightBegin = 0;
   int activeHighlightEnd = 6;
-  cloly::language::ClockSpec activeClockSpec;
-  std::vector<ClolyPockProgramStep> activeProgram;
+  blunch::language::ClockSpec activeClockSpec;
+  std::vector<BlunchProgramStep> activeProgram;
   int activeProgramIndex = 0;
   int activeProgramBeat = 0;
   float activeProgramElapsedSeconds = 0.f;
@@ -220,7 +220,7 @@ struct ComputerscareClolyPock : Module {
   float width = MIN_WIDTH;
   bool editorLineWrapping = true;
 
-  ComputerscareClolyPock() {
+  ComputerscareBlunch() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configSwitch(AUTO_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Line advance",
                  {"Manual", "Automatic"});
@@ -339,18 +339,18 @@ struct ComputerscareClolyPock : Module {
   }
 
   bool parseLineProgram(int line, int lineBegin, const std::string& lineText,
-                        std::vector<ClolyPockProgramStep>& program) {
-    cloly::language::ParseResult parse =
-        cloly::language::parseClockLiteral(lineText);
+                        std::vector<BlunchProgramStep>& program) {
+    blunch::language::ParseResult parse =
+        blunch::language::parseClockLiteral(lineText);
     if (!parse.ok()) {
       return false;
     }
 
     program.clear();
     for (size_t i = 0; i < parse.program.blocks.size(); i++) {
-      const cloly::language::ClockBlockAst& block = parse.program.blocks[i];
+      const blunch::language::ClockBlockAst& block = parse.program.blocks[i];
 
-      ClolyPockProgramStep step;
+      BlunchProgramStep step;
       step.sourceLineBegin = lineBegin;
       step.literal = block.literal;
       step.isRest = block.rest;
@@ -358,13 +358,13 @@ struct ComputerscareClolyPock : Module {
       step.spec.hz = CLOCK_HZ;
       step.spec.periodSeconds = 1.f / CLOCK_HZ;
       if (block.literal.kind ==
-          cloly::language::ClockLiteralKind::ExternalClock) {
+          blunch::language::ClockLiteralKind::ExternalClock) {
         step.externalClockInput =
             externalClockInputIndex(block.literal.externalClock);
       } else if (block.literal.kind !=
-                 cloly::language::ClockLiteralKind::Empty) {
-        cloly::language::EvaluationResult eval =
-            cloly::language::evaluateClockLiteral(block.literal);
+                 blunch::language::ClockLiteralKind::Empty) {
+        blunch::language::EvaluationResult eval =
+            blunch::language::evaluateClockLiteral(block.literal);
         if (!eval.ok()) {
           program.clear();
           return false;
@@ -372,18 +372,18 @@ struct ComputerscareClolyPock : Module {
         step.spec = eval.spec;
       }
       step.hasRandomValue =
-          block.literal.kind == cloly::language::ClockLiteralKind::RandomRange;
+          block.literal.kind == blunch::language::ClockLiteralKind::RandomRange;
       if (step.hasRandomValue) {
         for (size_t choiceIndex = 0;
              choiceIndex < block.literal.randomChoices.size(); choiceIndex++) {
-          const cloly::language::RandomChoiceAst& choice =
+          const blunch::language::RandomChoiceAst& choice =
               block.literal.randomChoices[choiceIndex];
-          cloly::language::EvaluationResult minEval =
-              cloly::language::evaluateClockLiteralWithValue(block.literal,
-                                                             choice.minValue);
-          cloly::language::EvaluationResult maxEval =
-              cloly::language::evaluateClockLiteralWithValue(block.literal,
-                                                             choice.maxValue);
+          blunch::language::EvaluationResult minEval =
+              blunch::language::evaluateClockLiteralWithValue(block.literal,
+                                                              choice.minValue);
+          blunch::language::EvaluationResult maxEval =
+              blunch::language::evaluateClockLiteralWithValue(block.literal,
+                                                              choice.maxValue);
           if (!minEval.ok() || !maxEval.ok()) {
             program.clear();
             return false;
@@ -395,8 +395,8 @@ struct ComputerscareClolyPock : Module {
       step.repeatRandomIsDuration = block.repeatIsDuration;
       step.repeatRandom = block.repeatRandom;
       if (block.repeatIsDuration && !block.repeatIsRandom) {
-        cloly::language::EvaluationResult durationEval =
-            cloly::language::evaluateClockLiteral(block.repeatDuration);
+        blunch::language::EvaluationResult durationEval =
+            blunch::language::evaluateClockLiteral(block.repeatDuration);
         if (!durationEval.ok()) {
           program.clear();
           return false;
@@ -425,8 +425,8 @@ struct ComputerscareClolyPock : Module {
         step.totalDurationIsTickCount = block.totalDurationIsTickCount;
         step.totalDurationTicks = block.totalDurationTicks;
         if (!block.totalDurationIsTickCount && !block.totalDurationIsRandom) {
-          cloly::language::EvaluationResult totalDurationEval =
-              cloly::language::evaluateClockLiteral(block.totalDuration);
+          blunch::language::EvaluationResult totalDurationEval =
+              blunch::language::evaluateClockLiteral(block.totalDuration);
           if (!totalDurationEval.ok()) {
             program.clear();
             return false;
@@ -470,8 +470,8 @@ struct ComputerscareClolyPock : Module {
   }
 
   bool commitLine(int line, bool resetPhase) {
-    ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, line);
-    std::vector<ClolyPockProgramStep> program;
+    BlunchLineInfo lineInfo = getLineInfo(editorState.text, line);
+    std::vector<BlunchProgramStep> program;
     if (!parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
       setSyntaxError(
           line, line == activeLine ? activeLineText : checkedFocusedLineText);
@@ -508,7 +508,7 @@ struct ComputerscareClolyPock : Module {
   }
 
   void replaceLineText(int line, const std::string& replacement) {
-    ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, line);
+    BlunchLineInfo lineInfo = getLineInfo(editorState.text, line);
     editorState.text.replace(lineInfo.begin, lineInfo.end - lineInfo.begin,
                              replacement);
     editorState.dirty = true;
@@ -583,7 +583,7 @@ struct ComputerscareClolyPock : Module {
   }
 
   void inspectFocusedLine(int line, bool focusChanged) {
-    ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, line);
+    BlunchLineInfo lineInfo = getLineInfo(editorState.text, line);
     std::string previousCheckedLineText = checkedFocusedLineText;
     if (line != activeLine) {
       if (focusChanged || lineInfo.text == checkedFocusedLineText) {
@@ -592,7 +592,7 @@ struct ComputerscareClolyPock : Module {
       }
 
       checkedFocusedLineText = lineInfo.text;
-      std::vector<ClolyPockProgramStep> program;
+      std::vector<BlunchProgramStep> program;
       if (parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
         pendingLine = line;
         pendingLineText = lineInfo.text;
@@ -633,7 +633,7 @@ struct ComputerscareClolyPock : Module {
     }
 
     checkedFocusedLineText = lineInfo.text;
-    std::vector<ClolyPockProgramStep> program;
+    std::vector<BlunchProgramStep> program;
     if (parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
       pendingLine = line;
       pendingLineText = lineInfo.text;
@@ -708,12 +708,12 @@ struct ComputerscareClolyPock : Module {
     applyActiveProgramStep();
   }
 
-  void sampleStepRepeatArgument(ClolyPockProgramStep& step) {
+  void sampleStepRepeatArgument(BlunchProgramStep& step) {
     if (!step.repeatIsRandom || step.repeatRandom.randomChoices.empty()) {
       return;
     }
 
-    const cloly::language::RandomChoiceAst& choice =
+    const blunch::language::RandomChoiceAst& choice =
         chooseRandomChoice(step.repeatRandom);
     step.repeatHighlightBegin = step.sourceLineBegin + choice.range.begin;
     step.repeatHighlightEnd = step.sourceLineBegin + choice.range.end;
@@ -725,10 +725,10 @@ struct ComputerscareClolyPock : Module {
     }
 
     double sampledValue = sampleRandomChoiceValue(choice);
-    cloly::language::ClockLiteralAst literal =
+    blunch::language::ClockLiteralAst literal =
         literalForRandomChoice(step.repeatRandom, choice, sampledValue);
-    cloly::language::EvaluationResult eval =
-        cloly::language::evaluateClockLiteral(literal);
+    blunch::language::EvaluationResult eval =
+        blunch::language::evaluateClockLiteral(literal);
     if (eval.ok()) {
       step.hasDuration = true;
       step.durationSeconds = std::max(0.0, eval.spec.periodSeconds);
@@ -740,13 +740,13 @@ struct ComputerscareClolyPock : Module {
       return;
     }
 
-    ClolyPockProgramStep& step = activeProgram[stepIndex];
+    BlunchProgramStep& step = activeProgram[stepIndex];
     if (!step.totalDurationIsRandom ||
         step.totalDurationRandom.randomChoices.empty()) {
       return;
     }
 
-    const cloly::language::RandomChoiceAst& choice =
+    const blunch::language::RandomChoiceAst& choice =
         chooseRandomChoice(step.totalDurationRandom);
     bool suffixHasUnit = step.totalDurationRandom.unitRange.end >
                          step.totalDurationRandom.unitRange.begin;
@@ -759,10 +759,10 @@ struct ComputerscareClolyPock : Module {
       selectedTicks = std::max(1, sampleRandomChoiceInteger(choice));
     } else {
       double sampledValue = sampleRandomChoiceValue(choice);
-      cloly::language::ClockLiteralAst literal = literalForRandomChoice(
+      blunch::language::ClockLiteralAst literal = literalForRandomChoice(
           step.totalDurationRandom, choice, sampledValue);
-      cloly::language::EvaluationResult eval =
-          cloly::language::evaluateClockLiteral(literal);
+      blunch::language::EvaluationResult eval =
+          blunch::language::evaluateClockLiteral(literal);
       if (eval.ok()) {
         selectedSeconds = std::max(0.0, eval.spec.periodSeconds);
       }
@@ -788,7 +788,7 @@ struct ComputerscareClolyPock : Module {
 
     activeProgramIndex = std::max(
         0, std::min(activeProgramIndex, (int)activeProgram.size() - 1));
-    ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    BlunchProgramStep& step = activeProgram[activeProgramIndex];
     sampleStepRepeatArgument(step);
     refreshActiveClockSpecForStep();
     activeHighlightBegin = step.highlightBegin;
@@ -878,7 +878,7 @@ struct ComputerscareClolyPock : Module {
       return false;
     }
 
-    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    const BlunchProgramStep& step = activeProgram[activeProgramIndex];
     if (!step.hasTotalDurationGroup || step.totalDurationIsTickCount) {
       return false;
     }
@@ -902,7 +902,7 @@ struct ComputerscareClolyPock : Module {
       return false;
     }
 
-    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    const BlunchProgramStep& step = activeProgram[activeProgramIndex];
     if (!step.hasTotalDurationGroup || !step.totalDurationIsTickCount) {
       return false;
     }
@@ -936,7 +936,7 @@ struct ComputerscareClolyPock : Module {
 
   void advanceActiveProgramStep() {
     bool hadMultipleSteps = activeProgram.size() > 1;
-    const ClolyPockProgramStep& currentStep = activeProgram[activeProgramIndex];
+    const BlunchProgramStep& currentStep = activeProgram[activeProgramIndex];
     activeProgramBeat = 0;
     activeProgramIndex++;
     if (currentStep.hasTotalDurationGroup &&
@@ -992,7 +992,7 @@ struct ComputerscareClolyPock : Module {
         wrapped = true;
       }
 
-      ClolyPockLineInfo lineInfo = getLineInfo(editorState.text, nextLine);
+      BlunchLineInfo lineInfo = getLineInfo(editorState.text, nextLine);
       if (isBlankLine(lineInfo.text)) {
         continue;
       }
@@ -1038,7 +1038,7 @@ struct ComputerscareClolyPock : Module {
       return;
     }
 
-    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    const BlunchProgramStep& step = activeProgram[activeProgramIndex];
     if (!step.hasRandomValue) {
       activeClockSpec = step.spec;
       return;
@@ -1060,9 +1060,9 @@ struct ComputerscareClolyPock : Module {
       sampledValue = lowValue + random::uniform() * (highValue - lowValue);
     }
 
-    cloly::language::EvaluationResult eval =
-        cloly::language::evaluateClockLiteralWithValue(step.literal,
-                                                       sampledValue);
+    blunch::language::EvaluationResult eval =
+        blunch::language::evaluateClockLiteralWithValue(step.literal,
+                                                        sampledValue);
     if (eval.ok()) {
       activeClockSpec = eval.spec;
     } else {
@@ -1110,7 +1110,7 @@ struct ComputerscareClolyPock : Module {
       return false;
     }
 
-    const ClolyPockProgramStep& step = activeProgram[activeProgramIndex];
+    const BlunchProgramStep& step = activeProgram[activeProgramIndex];
     if (step.hasTotalDurationGroup) {
       if (step.totalDurationHighlightEnd <= step.totalDurationHighlightBegin) {
         return false;
@@ -1156,7 +1156,7 @@ struct ComputerscareClolyPock : Module {
   }
 };
 
-struct ClolyPockTitle : TransparentWidget {
+struct BlunchTitle : TransparentWidget {
   void draw(const DrawArgs& args) override {
     std::shared_ptr<Font> font = APP->window->loadFont(
         asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
@@ -1167,12 +1167,12 @@ struct ClolyPockTitle : TransparentWidget {
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 18.f);
     nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
-    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
-    nvgText(args.vg, box.size.x / 2.f, 0.f, "Cloly Pock", NULL);
+    nvgTextAlign(args.vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
+    nvgText(args.vg, box.size.x - 8.f, 0.f, "Blunch", NULL);
   }
 };
 
-struct ClolyPockExternalClockLabels : TransparentWidget {
+struct BlunchExternalClockLabels : TransparentWidget {
   void draw(const DrawArgs& args) override {
     std::shared_ptr<Font> font = APP->window->loadFont(
         asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
@@ -1193,7 +1193,7 @@ struct ClolyPockExternalClockLabels : TransparentWidget {
   }
 };
 
-struct ClolyPockPanel : Widget {
+struct BlunchPanel : Widget {
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
     nvgRect(args.vg, 0.f, 0.f, box.size.x, box.size.y);
@@ -1214,10 +1214,10 @@ struct ClolyPockPanel : Widget {
   }
 };
 
-struct ComputerscareClolyPockWidget : ModuleWidget {
-  ClolyPockPanel* panel = nullptr;
-  ClolyPockTitle* title = nullptr;
-  ClolyPockExternalClockLabels* externalClockLabels = nullptr;
+struct ComputerscareBlunchWidget : ModuleWidget {
+  BlunchPanel* panel = nullptr;
+  BlunchTitle* title = nullptr;
+  BlunchExternalClockLabels* externalClockLabels = nullptr;
   ComputerscareTextEditor* editor = nullptr;
   Widget* syntaxErrorLight = nullptr;
   PortWidget* externalClockWInput = nullptr;
@@ -1237,30 +1237,30 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
   ComputerscareTextEditorState browserEditorState;
   int lastCursorLine = -1;
 
-  ComputerscareClolyPockWidget(ComputerscareClolyPock* module) {
+  ComputerscareBlunchWidget(ComputerscareBlunch* module) {
     setModule(module);
     box.size =
-        Vec(module ? module->width : ComputerscareClolyPock::MIN_WIDTH, 380.f);
+        Vec(module ? module->width : ComputerscareBlunch::MIN_WIDTH, 380.f);
 
-    panel = new ClolyPockPanel();
+    panel = new BlunchPanel();
     panel->box.size = box.size;
     addChild(panel);
 
     leftHandle = new ComputerscareResizeHandle();
-    leftHandle->minWidth = ComputerscareClolyPock::MIN_WIDTH;
+    leftHandle->minWidth = ComputerscareBlunch::MIN_WIDTH;
     addChild(leftHandle);
 
     rightHandle = new ComputerscareResizeHandle();
     rightHandle->right = true;
-    rightHandle->minWidth = ComputerscareClolyPock::MIN_WIDTH;
+    rightHandle->minWidth = ComputerscareBlunch::MIN_WIDTH;
     addChild(rightHandle);
 
-    title = new ClolyPockTitle();
+    title = new BlunchTitle();
     title->box.pos = Vec(0.f, 11.f);
     title->box.size = Vec(box.size.x, 24.f);
     addChild(title);
 
-    externalClockLabels = new ClolyPockExternalClockLabels();
+    externalClockLabels = new BlunchExternalClockLabels();
     externalClockLabels->box.pos = Vec(0.f, 282.f);
     externalClockLabels->box.size = Vec(box.size.x, 12.f);
     addChild(externalClockLabels);
@@ -1284,51 +1284,46 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
 
     syntaxErrorLight =
         createLight<ComputerscareSmallLight<ComputerscareRedLight>>(
-            Vec(127.f, 10.f), module,
-            ComputerscareClolyPock::SYNTAX_ERROR_LIGHT);
+            Vec(127.f, 10.f), module, ComputerscareBlunch::SYNTAX_ERROR_LIGHT);
     addChild(syntaxErrorLight);
 
     addParam(createParam<CKSS>(Vec(42.f, 12.f), module,
-                               ComputerscareClolyPock::AUTO_ADVANCE_PARAM));
+                               ComputerscareBlunch::AUTO_ADVANCE_PARAM));
 
     externalClockWInput = createInput<PointingUpPentagonPort>(
-        Vec(7.f, 295.f), module,
-        ComputerscareClolyPock::EXTERNAL_CLOCK_W_INPUT);
+        Vec(7.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_W_INPUT);
     externalClockXInput = createInput<PointingUpPentagonPort>(
-        Vec(42.f, 295.f), module,
-        ComputerscareClolyPock::EXTERNAL_CLOCK_X_INPUT);
+        Vec(42.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_X_INPUT);
     externalClockYInput = createInput<PointingUpPentagonPort>(
-        Vec(77.f, 295.f), module,
-        ComputerscareClolyPock::EXTERNAL_CLOCK_Y_INPUT);
+        Vec(77.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_Y_INPUT);
     externalClockZInput = createInput<PointingUpPentagonPort>(
-        Vec(112.f, 295.f), module,
-        ComputerscareClolyPock::EXTERNAL_CLOCK_Z_INPUT);
+        Vec(112.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_Z_INPUT);
     addInput(externalClockWInput);
     addInput(externalClockXInput);
     addInput(externalClockYInput);
     addInput(externalClockZInput);
 
     advanceInput = createInput<PointingUpPentagonPort>(
-        Vec(7.f, 322.f), module, ComputerscareClolyPock::ADVANCE_INPUT);
+        Vec(7.f, 322.f), module, ComputerscareBlunch::ADVANCE_INPUT);
     advanceTokenInput = createInput<PointingUpPentagonPort>(
-        Vec(42.f, 322.f), module, ComputerscareClolyPock::ADVANCE_TOKEN_INPUT);
+        Vec(42.f, 322.f), module, ComputerscareBlunch::ADVANCE_TOKEN_INPUT);
     advanceLineInput = createInput<PointingUpPentagonPort>(
-        Vec(77.f, 322.f), module, ComputerscareClolyPock::ADVANCE_LINE_INPUT);
+        Vec(77.f, 322.f), module, ComputerscareBlunch::ADVANCE_LINE_INPUT);
     resetInput = createInput<PointingUpPentagonPort>(
-        Vec(112.f, 322.f), module, ComputerscareClolyPock::RESET_INPUT);
+        Vec(112.f, 322.f), module, ComputerscareBlunch::RESET_INPUT);
     addInput(advanceInput);
     addInput(advanceTokenInput);
     addInput(advanceLineInput);
     addInput(resetInput);
 
     clockOutput = createOutput<InPort>(Vec(7.f, 350.f), module,
-                                       ComputerscareClolyPock::CLOCK_OUTPUT);
+                                       ComputerscareBlunch::CLOCK_OUTPUT);
     eoc1Output = createOutput<InPort>(Vec(42.f, 350.f), module,
-                                      ComputerscareClolyPock::EOC1_OUTPUT);
+                                      ComputerscareBlunch::EOC1_OUTPUT);
     eoc2Output = createOutput<InPort>(Vec(77.f, 350.f), module,
-                                      ComputerscareClolyPock::EOC2_OUTPUT);
+                                      ComputerscareBlunch::EOC2_OUTPUT);
     eoc3Output = createOutput<InPort>(Vec(112.f, 350.f), module,
-                                      ComputerscareClolyPock::EOC3_OUTPUT);
+                                      ComputerscareBlunch::EOC3_OUTPUT);
     addOutput(clockOutput);
     addOutput(eoc1Output);
     addOutput(eoc2Output);
@@ -1337,7 +1332,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
   }
 
   void applyLayout() {
-    box.size.x = std::max(box.size.x, ComputerscareClolyPock::MIN_WIDTH);
+    box.size.x = std::max(box.size.x, ComputerscareBlunch::MIN_WIDTH);
     if (panel) {
       panel->box.size = box.size;
     }
@@ -1381,13 +1376,12 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
 
   void step() override {
     ModuleWidget::step();
-    box.size.x = std::max(box.size.x, ComputerscareClolyPock::MIN_WIDTH);
+    box.size.x = std::max(box.size.x, ComputerscareBlunch::MIN_WIDTH);
 
-    ComputerscareClolyPock* clolyPock =
-        dynamic_cast<ComputerscareClolyPock*>(module);
-    if (clolyPock) {
-      if (std::fabs(clolyPock->width - box.size.x) > 0.01f) {
-        clolyPock->width = box.size.x;
+    ComputerscareBlunch* blunch = dynamic_cast<ComputerscareBlunch*>(module);
+    if (blunch) {
+      if (std::fabs(blunch->width - box.size.x) > 0.01f) {
+        blunch->width = box.size.x;
       }
     }
     applyLayout();
@@ -1397,53 +1391,52 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       bool blinkHigh = false;
       float activeProgress = 0.f;
 
-      if (clolyPock) {
+      if (blunch) {
         editor->style.fontSize =
-            clolyPock->params[ComputerscareClolyPock::EDITOR_FONT_SIZE_PARAM]
+            blunch->params[ComputerscareBlunch::EDITOR_FONT_SIZE_PARAM]
                 .getValue();
         editor->style.fontWidthOffset =
-            clolyPock->params[ComputerscareClolyPock::EDITOR_FONT_WIDTH_PARAM]
+            blunch->params[ComputerscareBlunch::EDITOR_FONT_WIDTH_PARAM]
                 .getValue();
         editor->style.fontHeightOffset =
-            clolyPock->params[ComputerscareClolyPock::EDITOR_FONT_HEIGHT_PARAM]
+            blunch->params[ComputerscareBlunch::EDITOR_FONT_HEIGHT_PARAM]
                 .getValue();
         editor->style.letterSpacing =
-            clolyPock
-                ->params[ComputerscareClolyPock::EDITOR_LETTER_SPACING_PARAM]
+            blunch->params[ComputerscareBlunch::EDITOR_LETTER_SPACING_PARAM]
                 .getValue();
-        editor->style.lineWrapping = clolyPock->editorLineWrapping;
-        state = &clolyPock->editorState;
-        if (clolyPock->selectedLineDirty) {
-          editor->setCursorLine(clolyPock->selectedLine);
-          clolyPock->selectedLineDirty = false;
+        editor->style.lineWrapping = blunch->editorLineWrapping;
+        state = &blunch->editorState;
+        if (blunch->selectedLineDirty) {
+          editor->setCursorLine(blunch->selectedLine);
+          blunch->selectedLineDirty = false;
         }
-        clolyPock->selectedLine = editor->getCursorLine();
-        bool focusChanged = clolyPock->selectedLine != lastCursorLine;
-        lastCursorLine = clolyPock->selectedLine;
-        clolyPock->inspectFocusedLine(clolyPock->selectedLine, focusChanged);
-        if (state->submitCount != clolyPock->lastSubmitCount) {
-          clolyPock->lastSubmitCount = state->submitCount;
-          if (clolyPock->pendingLine == clolyPock->selectedLine) {
-            clolyPock->commitPendingLine(true);
+        blunch->selectedLine = editor->getCursorLine();
+        bool focusChanged = blunch->selectedLine != lastCursorLine;
+        lastCursorLine = blunch->selectedLine;
+        blunch->inspectFocusedLine(blunch->selectedLine, focusChanged);
+        if (state->submitCount != blunch->lastSubmitCount) {
+          blunch->lastSubmitCount = state->submitCount;
+          if (blunch->pendingLine == blunch->selectedLine) {
+            blunch->commitPendingLine(true);
           } else {
-            clolyPock->commitLine(clolyPock->selectedLine, true);
+            blunch->commitLine(blunch->selectedLine, true);
           }
         }
-        if (state->cancelCount != clolyPock->lastCancelCount) {
-          clolyPock->lastCancelCount = state->cancelCount;
-          clolyPock->cancelPendingLine(clolyPock->selectedLine);
+        if (state->cancelCount != blunch->lastCancelCount) {
+          blunch->lastCancelCount = state->cancelCount;
+          blunch->cancelPendingLine(blunch->selectedLine);
           editor->syncFromState();
         }
-        if (state->switchViewCount != clolyPock->lastSwitchViewCount) {
-          clolyPock->lastSwitchViewCount = state->switchViewCount;
-          clolyPock->togglePendingView();
+        if (state->switchViewCount != blunch->lastSwitchViewCount) {
+          blunch->lastSwitchViewCount = state->switchViewCount;
+          blunch->togglePendingView();
         }
-        blinkHigh = clolyPock->activeClockOutputHigh;
-        activeProgress = clolyPock->activeClockRamp;
+        blinkHigh = blunch->activeClockOutputHigh;
+        activeProgress = blunch->activeClockRamp;
       } else {
         state = &browserEditorState;
         float browserPhase = std::fmod(
-            (float)rack::system::getTime() * ComputerscareClolyPock::CLOCK_HZ,
+            (float)rack::system::getTime() * ComputerscareBlunch::CLOCK_HZ,
             1.f);
         blinkHigh = browserPhase < 0.5f;
         activeProgress = browserPhase;
@@ -1452,7 +1445,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       state->highlights.clear();
       int lineCount = getLineCount(state->text);
       for (int zebraLine = 1; zebraLine < lineCount; zebraLine += 2) {
-        ClolyPockLineInfo zebraLineInfo = getLineInfo(state->text, zebraLine);
+        BlunchLineInfo zebraLineInfo = getLineInfo(state->text, zebraLine);
         ComputerscareTextHighlight zebraHighlight;
         zebraHighlight.begin = zebraLineInfo.begin;
         zebraHighlight.end = zebraLineInfo.end;
@@ -1461,7 +1454,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
         state->highlights.push_back(zebraHighlight);
       }
       int line = editor->getCursorLine();
-      ClolyPockLineInfo lineInfo = getLineInfo(state->text, line);
+      BlunchLineInfo lineInfo = getLineInfo(state->text, line);
       ComputerscareTextHighlight focusHighlight;
       focusHighlight.begin = lineInfo.begin;
       focusHighlight.end = lineInfo.end;
@@ -1469,17 +1462,17 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       focusHighlight.background = nvgRGBA(0xb8, 0xb8, 0xb8, 0x42);
       state->highlights.push_back(focusHighlight);
       bool showingPendingActiveLine =
-          clolyPock && clolyPock->pendingLine == clolyPock->activeLine &&
-          clolyPock->viewingPendingLine;
+          blunch && blunch->pendingLine == blunch->activeLine &&
+          blunch->viewingPendingLine;
       bool showingActiveVersionOfPending =
-          clolyPock && clolyPock->pendingLine == clolyPock->activeLine &&
-          !clolyPock->viewingPendingLine;
+          blunch && blunch->pendingLine == blunch->activeLine &&
+          !blunch->viewingPendingLine;
       bool showingInvalidActiveLine =
-          clolyPock && clolyPock->errorLine == clolyPock->activeLine;
-      if (clolyPock && clolyPock->pendingLine >= 0 &&
+          blunch && blunch->errorLine == blunch->activeLine;
+      if (blunch && blunch->pendingLine >= 0 &&
           !showingActiveVersionOfPending) {
-        ClolyPockLineInfo pendingLineInfo =
-            getLineInfo(state->text, clolyPock->pendingLine);
+        BlunchLineInfo pendingLineInfo =
+            getLineInfo(state->text, blunch->pendingLine);
         float pendingPulse =
             0.5f + 0.5f * std::sin((float)rack::system::getTime() * 3.5f);
         ComputerscareTextHighlight pendingHighlight;
@@ -1490,9 +1483,9 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
             0x24, 0xc9, 0xa6, (unsigned char)(0x20 + pendingPulse * 0x22));
         state->highlights.push_back(pendingHighlight);
       }
-      if (clolyPock && clolyPock->errorLine >= 0) {
-        ClolyPockLineInfo errorLineInfo =
-            getLineInfo(state->text, clolyPock->errorLine);
+      if (blunch && blunch->errorLine >= 0) {
+        BlunchLineInfo errorLineInfo =
+            getLineInfo(state->text, blunch->errorLine);
         float errorPulse =
             0.5f + 0.5f * std::sin((float)rack::system::getTime() * 4.25f);
         ComputerscareTextHighlight errorHighlight;
@@ -1504,9 +1497,9 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
         state->highlights.push_back(errorHighlight);
       }
       ComputerscareTextHighlight activeHighlight;
-      if (clolyPock) {
-        activeHighlight.begin = clolyPock->activeHighlightBegin;
-        activeHighlight.end = clolyPock->activeHighlightEnd;
+      if (blunch) {
+        activeHighlight.begin = blunch->activeHighlightBegin;
+        activeHighlight.end = blunch->activeHighlightEnd;
       } else {
         activeHighlight.begin = lineInfo.begin;
         activeHighlight.end = lineInfo.end;
@@ -1516,19 +1509,19 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       activeHighlight.hasBorder = true;
       activeHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
       activeHighlight.hasProgress =
-          !(clolyPock && clolyPock->activeStepUsesExternalClock());
+          !(blunch && blunch->activeStepUsesExternalClock());
       activeHighlight.progress = activeProgress;
       activeHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
       if (!showingPendingActiveLine && !showingInvalidActiveLine &&
           activeHighlight.begin < activeHighlight.end) {
         state->highlights.push_back(activeHighlight);
       }
-      if (clolyPock && !showingPendingActiveLine && !showingInvalidActiveLine) {
+      if (blunch && !showingPendingActiveLine && !showingInvalidActiveLine) {
         int repeatBegin = 0;
         int repeatEnd = 0;
         int repeatSegments = 0;
         float repeatProgress = 0.f;
-        if (clolyPock->getActiveRepeatProgressHighlight(
+        if (blunch->getActiveRepeatProgressHighlight(
                 repeatBegin, repeatEnd, repeatProgress, repeatSegments)) {
           ComputerscareTextHighlight repeatProgressHighlight;
           repeatProgressHighlight.begin = repeatBegin;
@@ -1545,31 +1538,28 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
   }
 
   void appendContextMenu(Menu* menu) override {
-    ComputerscareClolyPock* clolyPock =
-        dynamic_cast<ComputerscareClolyPock*>(module);
-    if (!clolyPock) {
+    ComputerscareBlunch* blunch = dynamic_cast<ComputerscareBlunch*>(module);
+    if (!blunch) {
       return;
     }
 
     menu->addChild(new MenuSeparator());
     menu->addChild(createMenuLabel("Editor"));
     menu->addChild(new MenuParamSlider(
-        clolyPock
-            ->paramQuantities[ComputerscareClolyPock::EDITOR_FONT_SIZE_PARAM]));
+        blunch->paramQuantities[ComputerscareBlunch::EDITOR_FONT_SIZE_PARAM]));
     menu->addChild(new MenuParamSlider(
-        clolyPock->paramQuantities
-            [ComputerscareClolyPock::EDITOR_FONT_WIDTH_PARAM]));
+        blunch->paramQuantities[ComputerscareBlunch::EDITOR_FONT_WIDTH_PARAM]));
     menu->addChild(new MenuParamSlider(
-        clolyPock->paramQuantities
-            [ComputerscareClolyPock::EDITOR_FONT_HEIGHT_PARAM]));
+        blunch
+            ->paramQuantities[ComputerscareBlunch::EDITOR_FONT_HEIGHT_PARAM]));
     menu->addChild(new MenuParamSlider(
-        clolyPock->paramQuantities
-            [ComputerscareClolyPock::EDITOR_LETTER_SPACING_PARAM]));
+        blunch->paramQuantities
+            [ComputerscareBlunch::EDITOR_LETTER_SPACING_PARAM]));
     menu->addChild(createBoolPtrMenuItem("Line wrapping", "",
-                                         &clolyPock->editorLineWrapping));
+                                         &blunch->editorLineWrapping));
   }
 };
 
-Model* modelComputerscareClolyPock =
-    createModel<ComputerscareClolyPock, ComputerscareClolyPockWidget>(
-        "computerscare-cloly-pock");
+Model* modelComputerscareBlunch =
+    createModel<ComputerscareBlunch, ComputerscareBlunchWidget>(
+        "computerscare-blunch");

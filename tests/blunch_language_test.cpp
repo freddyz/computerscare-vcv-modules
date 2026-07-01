@@ -1,4 +1,4 @@
-#include "ClolyPockLanguage/ClolyPockLanguage.hpp"
+#include "BlunchLanguage/BlunchLanguage.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace lang = cloly::language;
+namespace lang = blunch::language;
 
 namespace {
 void require(bool condition, const char* message) {
@@ -1173,6 +1173,6 @@ int main() {
   testProgramEvaluation();
   testEvaluator();
   testInvalidInputs();
-  std::puts("cloly pock language tests passed");
+  std::puts("blunch language tests passed");
   return 0;
 }

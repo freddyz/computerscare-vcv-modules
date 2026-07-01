@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace cloly {
+namespace blunch {
 namespace language {
 
 struct SourceRange {
@@ -108,4 +108,4 @@ struct ParseResult {
 std::string clockUnitName(ClockUnit unit);
 
 }  // namespace language
-}  // namespace cloly
+}  // namespace blunch

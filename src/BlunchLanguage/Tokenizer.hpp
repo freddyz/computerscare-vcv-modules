@@ -5,7 +5,7 @@
 
 #include "Ast.hpp"
 
-namespace cloly {
+namespace blunch {
 namespace language {
 
 enum class TokenType {
@@ -44,4 +44,4 @@ std::vector<Token> tokenize(const std::string& source);
 std::string tokenTypeName(TokenType type);
 
 }  // namespace language
-}  // namespace cloly
+}  // namespace blunch

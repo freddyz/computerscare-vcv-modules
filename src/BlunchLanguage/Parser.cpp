@@ -4,7 +4,7 @@
 #include <cctype>
 #include <cstdlib>
 
-namespace cloly {
+namespace blunch {
 namespace language {
 
 namespace {
@@ -1079,4 +1079,4 @@ std::string clockUnitName(ClockUnit unit) {
 }
 
 }  // namespace language
-}  // namespace cloly
+}  // namespace blunch

@@ -2,7 +2,7 @@
 
 #include <cctype>
 
-namespace cloly {
+namespace blunch {
 namespace language {
 
 namespace {
@@ -222,4 +222,4 @@ std::string tokenTypeName(TokenType type) {
 }
 
 }  // namespace language
-}  // namespace cloly
+}  // namespace blunch

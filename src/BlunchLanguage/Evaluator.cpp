@@ -1,6 +1,6 @@
 #include "Evaluator.hpp"
 
-namespace cloly {
+namespace blunch {
 namespace language {
 
 namespace {
@@ -91,4 +91,4 @@ EvaluationResult evaluateClockLiteral(const ClockLiteralAst& ast) {
 }
 
 }  // namespace language
-}  // namespace cloly
+}  // namespace blunch

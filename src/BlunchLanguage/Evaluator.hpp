@@ -4,7 +4,7 @@
 
 #include "Ast.hpp"
 
-namespace cloly {
+namespace blunch {
 namespace language {
 
 struct ClockSpec {
@@ -25,4 +25,4 @@ EvaluationResult evaluateClockLiteralWithValue(const ClockLiteralAst& ast,
                                                double value);
 
 }  // namespace language
-}  // namespace cloly
+}  // namespace blunch
