@@ -839,7 +839,8 @@ class Parser {
     block.repeatValueRange = rangeFromToken(repeatToken);
     block.repeatValueIsOwn = true;
 
-    if (peek().type == TokenType::Identifier) {
+    if (peek().type == TokenType::Identifier &&
+        !isExternalClockIdentifier(peek().lexeme)) {
       ClockLiteralAst durationAst;
       durationAst.kind = ClockLiteralKind::Numeric;
       durationAst.value = parseDouble(repeatToken.lexeme);

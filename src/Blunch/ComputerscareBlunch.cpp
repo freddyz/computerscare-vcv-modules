@@ -113,6 +113,20 @@ static blunch::language::ClockLiteralAst literalForRandomChoice(
   return literal;
 }
 
+struct BlunchSpeedOfTimeParamQuantity : ParamQuantity {
+  std::string getDisplayValueString() override {
+    float exponent = getValue();
+    float factor = std::pow(2.f, exponent);
+    if (std::fabs(factor - 1.f) < 0.0001f) {
+      return "*1";
+    }
+    if (factor > 1.f) {
+      return string::f("*%.3g", factor);
+    }
+    return string::f("/%.3g", 1.f / factor);
+  }
+};
+
 struct BlunchProgramStep {
   blunch::language::ClockLiteralAst literal;
   blunch::language::ClockSpec spec;
@@ -151,6 +165,7 @@ struct ComputerscareBlunch : Module {
   static constexpr float MIN_WIDTH = 150.f;
 
   enum ParamIds {
+    SPEED_OF_TIME_PARAM,
     AUTO_ADVANCE_PARAM,
     EDITOR_FONT_SIZE_PARAM,
     EDITOR_FONT_WIDTH_PARAM,
@@ -222,6 +237,8 @@ struct ComputerscareBlunch : Module {
 
   ComputerscareBlunch() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
+    configParam<BlunchSpeedOfTimeParamQuantity>(SPEED_OF_TIME_PARAM, -5.f, 5.f,
+                                                0.f, "Speed of time");
     configSwitch(AUTO_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Line advance",
                  {"Manual", "Automatic"});
     configParam(EDITOR_FONT_SIZE_PARAM, 8.f, 24.f, BND_LABEL_FONT_SIZE,
@@ -252,6 +269,8 @@ struct ComputerscareBlunch : Module {
   }
 
   void process(const ProcessArgs& args) override {
+    float timeScale = getTimeScale();
+    float scaledSampleTime = args.sampleTime * timeScale;
     bool externalClockEdges[4] = {false, false, false, false};
     for (int i = 0; i < 4; i++) {
       float voltage = inputs[EXTERNAL_CLOCK_W_INPUT + i].getVoltage();
@@ -261,8 +280,8 @@ struct ComputerscareBlunch : Module {
 
     int activeExternalClock = activeExternalClockInput();
     if (activeExternalClock >= 0) {
-      if (!advanceActiveTotalDuration(args.sampleTime)) {
-        advanceActiveProgramDuration(args.sampleTime);
+      if (!advanceActiveTotalDuration(scaledSampleTime)) {
+        advanceActiveProgramDuration(scaledSampleTime);
       }
       activeExternalClock = activeExternalClockInput();
       activeClockRamp =
@@ -270,13 +289,13 @@ struct ComputerscareBlunch : Module {
               ? (externalClockHigh[activeExternalClock] ? 1.f : 0.f)
               : clockPhase;
     } else {
-      clockPhase += args.sampleTime * activeClockSpec.hz;
+      clockPhase += scaledSampleTime * activeClockSpec.hz;
       while (clockPhase >= 1.f) {
         clockPhase -= 1.f;
         advanceActiveProgramBeat();
       }
-      if (!advanceActiveTotalDuration(args.sampleTime)) {
-        advanceActiveProgramDuration(args.sampleTime);
+      if (!advanceActiveTotalDuration(scaledSampleTime)) {
+        advanceActiveProgramDuration(scaledSampleTime);
       }
       activeClockRamp = clockPhase;
     }
@@ -836,6 +855,10 @@ struct ComputerscareBlunch : Module {
     return activeExternalClockInput() >= 0;
   }
 
+  float getTimeScale() {
+    return std::pow(2.f, params[SPEED_OF_TIME_PARAM].getValue());
+  }
+
   void advanceActiveProgramBeat() {
     if (activeProgram.empty()) {
       return;
@@ -1138,6 +1161,9 @@ struct ComputerscareBlunch : Module {
     if (step.repeatHighlightEnd <= step.repeatHighlightBegin) {
       return false;
     }
+    if (step.externalClockInput >= 0 && !step.hasDuration) {
+      return false;
+    }
 
     begin = step.repeatHighlightBegin;
     end = step.repeatHighlightEnd;
@@ -1193,6 +1219,22 @@ struct BlunchExternalClockLabels : TransparentWidget {
   }
 };
 
+struct BlunchSpeedOfTimeLabel : TransparentWidget {
+  void draw(const DrawArgs& args) override {
+    std::shared_ptr<Font> font = APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    if (!font || font->handle < 0) {
+      return;
+    }
+
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, 8.f);
+    nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+    nvgText(args.vg, box.size.x * 0.5f, 0.f, "time", NULL);
+  }
+};
+
 struct BlunchPanel : Widget {
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
@@ -1217,6 +1259,7 @@ struct BlunchPanel : Widget {
 struct ComputerscareBlunchWidget : ModuleWidget {
   BlunchPanel* panel = nullptr;
   BlunchTitle* title = nullptr;
+  BlunchSpeedOfTimeLabel* speedOfTimeLabel = nullptr;
   BlunchExternalClockLabels* externalClockLabels = nullptr;
   ComputerscareTextEditor* editor = nullptr;
   Widget* syntaxErrorLight = nullptr;
@@ -1259,6 +1302,14 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     title->box.pos = Vec(0.f, 11.f);
     title->box.size = Vec(box.size.x, 24.f);
     addChild(title);
+
+    speedOfTimeLabel = new BlunchSpeedOfTimeLabel();
+    speedOfTimeLabel->box.pos = Vec(4.f, 4.f);
+    speedOfTimeLabel->box.size = Vec(28.f, 9.f);
+    addChild(speedOfTimeLabel);
+
+    addParam(createParam<SmallKnob>(Vec(8.f, 14.f), module,
+                                    ComputerscareBlunch::SPEED_OF_TIME_PARAM));
 
     externalClockLabels = new BlunchExternalClockLabels();
     externalClockLabels->box.pos = Vec(0.f, 282.f);
@@ -1338,6 +1389,9 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     }
     if (title) {
       title->box.size.x = box.size.x;
+    }
+    if (speedOfTimeLabel) {
+      speedOfTimeLabel->box.pos = Vec(4.f, 4.f);
     }
     if (externalClockLabels) {
       externalClockLabels->box.size.x = box.size.x;

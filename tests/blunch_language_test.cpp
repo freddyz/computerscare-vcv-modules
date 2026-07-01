@@ -978,7 +978,7 @@ void testProgramAst() {
   require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
           "bracket suffix numeric hz");
 
-  result = lang::parseClockLiteral("[x y]@5");
+  result = lang::parseClockLiteral("[x y]@8");
   require(result.ok(), "external clock bracket parses");
   require(result.program.blocks.size() == 2, "external clock block count");
   require(result.program.blocks[0].literal.kind ==
@@ -986,13 +986,13 @@ void testProgramAst() {
           "external clock first kind");
   require(result.program.blocks[0].literal.externalClock == 'x',
           "external clock first id");
-  require(result.program.blocks[0].repeat == 5, "external clock first repeat");
+  require(result.program.blocks[0].repeat == 8, "external clock first repeat");
   require(result.program.blocks[1].literal.kind ==
               lang::ClockLiteralKind::ExternalClock,
           "external clock second kind");
   require(result.program.blocks[1].literal.externalClock == 'y',
           "external clock second id");
-  require(result.program.blocks[1].repeat == 5, "external clock second repeat");
+  require(result.program.blocks[1].repeat == 8, "external clock second repeat");
 
   result = lang::parseClockLiteral("x@3s");
   require(result.ok(), "external clock duration repeat parses");
@@ -1006,6 +1006,26 @@ void testProgramAst() {
   requireDurationRepeat(result.program.blocks[0], 3.0,
                         lang::ClockUnit::Seconds, 1, 4,
                         "external clock duration repeat range");
+
+  result = lang::parseClockLiteral("x@5 y@3s");
+  require(result.ok(), "external clock count then duration parses");
+  require(result.program.blocks.size() == 2,
+          "external clock count then duration block count");
+  require(result.program.blocks[0].literal.kind ==
+              lang::ClockLiteralKind::ExternalClock,
+          "external clock count then duration first kind");
+  require(result.program.blocks[0].literal.externalClock == 'x',
+          "external clock count then duration first id");
+  require(result.program.blocks[0].repeat == 5,
+          "external clock count then duration first repeat");
+  require(result.program.blocks[1].literal.kind ==
+              lang::ClockLiteralKind::ExternalClock,
+          "external clock count then duration second kind");
+  require(result.program.blocks[1].literal.externalClock == 'y',
+          "external clock count then duration second id");
+  requireDurationRepeat(result.program.blocks[1], 3.0,
+                        lang::ClockUnit::Seconds, 5, 8,
+                        "external clock count then duration second repeat");
 }
 
 void testProgramEvaluation() {
