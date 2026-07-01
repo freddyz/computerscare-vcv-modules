@@ -133,6 +133,14 @@ void requireRandomChoiceUnit(const lang::ClockLiteralAst& ast, size_t index,
   require(ast.randomChoices[index].unit == unit, message);
 }
 
+void requireRandomChoiceExternalClock(const lang::ClockLiteralAst& ast,
+                                      size_t index, char clock,
+                                      const char* message) {
+  require(index < ast.randomChoices.size(), message);
+  require(ast.randomChoices[index].externalClockChoice, message);
+  require(ast.randomChoices[index].externalClock == clock, message);
+}
+
 lang::ClockSpec requireEvaluates(const std::string& source) {
   lang::ParseResult parse = lang::parseClockLiteral(source);
   require(parse.ok(), "parse should succeed before evaluation");
@@ -423,6 +431,28 @@ void testAst() {
   requireRandomChoice(result.ast, 1, 2.0, 10.0, "{3|2-10}hz choice 1");
   require(result.ast.unit == lang::ClockUnit::Hertz, "{3|2-10}hz unit");
 
+  result = lang::parseClockLiteral("{211ms|3hz}");
+  require(result.ok(), "{211ms|3hz} ast parses");
+  require(result.ast.randomChoices.size() == 2, "{211ms|3hz} choice count");
+  requireRandomChoice(result.ast, 0, 211.0, 211.0,
+                      "{211ms|3hz} choice 0");
+  requireRandomChoiceUnit(result.ast, 0, lang::ClockUnit::Milliseconds,
+                          "{211ms|3hz} choice 0 unit");
+  requireRandomChoice(result.ast, 1, 3.0, 3.0, "{211ms|3hz} choice 1");
+  requireRandomChoiceUnit(result.ast, 1, lang::ClockUnit::Hertz,
+                          "{211ms|3hz} choice 1 unit");
+
+  result = lang::parseClockLiteral("{.211s|3hz}");
+  require(result.ok(), "{.211s|3hz} ast parses");
+  require(result.ast.randomChoices.size() == 2, "{.211s|3hz} choice count");
+  requireRandomChoice(result.ast, 0, 0.211, 0.211,
+                      "{.211s|3hz} choice 0");
+  requireRandomChoiceUnit(result.ast, 0, lang::ClockUnit::Seconds,
+                          "{.211s|3hz} choice 0 unit");
+  requireRandomChoice(result.ast, 1, 3.0, 3.0, "{.211s|3hz} choice 1");
+  requireRandomChoiceUnit(result.ast, 1, lang::ClockUnit::Hertz,
+                          "{.211s|3hz} choice 1 unit");
+
   result = lang::parseClockLiteral("{3|2|{6|9}}hz");
   require(result.ok(), "{3|2|{6|9}}hz ast parses");
   require(result.ast.randomChoices.size() == 4,
@@ -437,6 +467,14 @@ void testAst() {
                       "{3|2|{6|9}}hz choice 3");
   require(result.ast.unit == lang::ClockUnit::Hertz,
           "{3|2|{6|9}}hz unit");
+
+  result = lang::parseClockLiteral("{x|y}@4");
+  require(result.ok(), "{x|y}@4 ast parses");
+  require(result.ast.kind == lang::ClockLiteralKind::RandomRange,
+          "{x|y}@4 random kind");
+  require(result.ast.randomChoices.size() == 2, "{x|y}@4 choice count");
+  requireRandomChoiceExternalClock(result.ast, 0, 'x', "{x|y}@4 choice 0");
+  requireRandomChoiceExternalClock(result.ast, 1, 'y', "{x|y}@4 choice 1");
 }
 
 void testProgramAst() {
@@ -1026,6 +1064,134 @@ void testProgramAst() {
   requireDurationRepeat(result.program.blocks[1], 3.0,
                         lang::ClockUnit::Seconds, 5, 8,
                         "external clock count then duration second repeat");
+
+  result = lang::parseClockLiteral("3hz@6x");
+  require(result.ok(), "repeat counted by external clock parses");
+  require(result.program.blocks.size() == 1,
+          "repeat counted by external clock block count");
+  requireNear(result.program.blocks[0].literal.value, 3.0,
+              "repeat counted by external clock value");
+  require(result.program.blocks[0].literal.unit == lang::ClockUnit::Hertz,
+          "repeat counted by external clock unit");
+  require(result.program.blocks[0].repeat == 6,
+          "repeat counted by external clock repeat");
+  require(result.program.blocks[0].repeatUsesExternalClock,
+          "repeat counted by external clock flag");
+  require(result.program.blocks[0].repeatExternalClock == 'x',
+          "repeat counted by external clock id");
+  requireRange(result.program.blocks[0].repeatRange, 3, 6,
+               "repeat counted by external clock range");
+
+  result = lang::parseClockLiteral("x@3x");
+  require(result.ok(), "external literal counted by external clock parses");
+  require(result.program.blocks.size() == 1,
+          "external literal counted by external clock block count");
+  require(result.program.blocks[0].literal.kind ==
+              lang::ClockLiteralKind::ExternalClock,
+          "external literal counted by external clock kind");
+  require(result.program.blocks[0].literal.externalClock == 'x',
+          "external literal counted by external clock literal id");
+  require(result.program.blocks[0].repeat == 3,
+          "external literal counted by external clock repeat");
+  require(result.program.blocks[0].repeatUsesExternalClock,
+          "external literal counted by external clock flag");
+  require(result.program.blocks[0].repeatExternalClock == 'x',
+          "external literal counted by external clock repeat id");
+  requireRange(result.program.blocks[0].repeatRange, 1, 4,
+               "external literal counted by external clock repeat range");
+
+  result = lang::parseClockLiteral("3hz@x");
+  require(result.ok(), "bare external repeat clock parses");
+  require(result.program.blocks.size() == 1,
+          "bare external repeat clock block count");
+  require(result.program.blocks[0].repeat == 1,
+          "bare external repeat clock repeat");
+  require(result.program.blocks[0].repeatUsesExternalClock,
+          "bare external repeat clock flag");
+  require(result.program.blocks[0].repeatExternalClock == 'x',
+          "bare external repeat clock id");
+  requireRange(result.program.blocks[0].repeatRange, 3, 5,
+               "bare external repeat clock range");
+
+  result = lang::parseClockLiteral("3hz#3y");
+  require(result.ok(), "total counted by external clock parses");
+  require(result.program.blocks.size() == 1,
+          "total counted by external clock block count");
+  require(result.program.blocks[0].hasTotalDuration,
+          "total counted by external clock total flag");
+  require(result.program.blocks[0].totalDurationIsTickCount,
+          "total counted by external clock tick flag");
+  require(result.program.blocks[0].totalDurationTicks == 3,
+          "total counted by external clock ticks");
+  require(result.program.blocks[0].totalDurationUsesExternalClock,
+          "total counted by external clock flag");
+  require(result.program.blocks[0].totalDurationExternalClock == 'y',
+          "total counted by external clock id");
+  requireRange(result.program.blocks[0].totalDurationRange, 3, 6,
+               "total counted by external clock range");
+
+  result = lang::parseClockLiteral("3hz#y");
+  require(result.ok(), "bare external total clock parses");
+  require(result.program.blocks.size() == 1,
+          "bare external total clock block count");
+  require(result.program.blocks[0].hasTotalDuration,
+          "bare external total clock total flag");
+  require(result.program.blocks[0].totalDurationIsTickCount,
+          "bare external total clock tick flag");
+  require(result.program.blocks[0].totalDurationTicks == 1,
+          "bare external total clock ticks");
+  require(result.program.blocks[0].totalDurationUsesExternalClock,
+          "bare external total clock flag");
+  require(result.program.blocks[0].totalDurationExternalClock == 'y',
+          "bare external total clock id");
+  requireRange(result.program.blocks[0].totalDurationRange, 3, 5,
+               "bare external total clock range");
+
+  result = lang::parseClockLiteral("[w 122bpm]@3z");
+  require(result.ok(), "group repeat counted by external clock parses");
+  require(result.program.blocks.size() == 2,
+          "group repeat counted by external clock block count");
+  require(result.program.blocks[0].literal.kind ==
+              lang::ClockLiteralKind::ExternalClock,
+          "group repeat counted by external clock first kind");
+  require(result.program.blocks[0].literal.externalClock == 'w',
+          "group repeat counted by external clock first id");
+  requireNear(result.program.blocks[1].literal.value, 122.0,
+              "group repeat counted by external clock second value");
+  for (int i = 0; i < 2; i++) {
+    require(result.program.blocks[i].repeat == 3,
+            "group repeat counted by external clock repeat");
+    require(result.program.blocks[i].repeatUsesExternalClock,
+            "group repeat counted by external clock flag");
+    require(result.program.blocks[i].repeatExternalClock == 'z',
+            "group repeat counted by external clock id");
+  }
+
+  result = lang::parseClockLiteral("[w 122bpm]@z");
+  require(result.ok(), "group bare repeat counted by external clock parses");
+  require(result.program.blocks.size() == 2,
+          "group bare repeat counted by external clock block count");
+  for (int i = 0; i < 2; i++) {
+    require(result.program.blocks[i].repeat == 1,
+            "group bare repeat counted by external clock repeat");
+    require(result.program.blocks[i].repeatUsesExternalClock,
+            "group bare repeat counted by external clock flag");
+    require(result.program.blocks[i].repeatExternalClock == 'z',
+            "group bare repeat counted by external clock id");
+  }
+
+  result = lang::parseClockLiteral("{x|y}@4");
+  require(result.ok(), "external clock random parses");
+  require(result.program.blocks.size() == 1, "external clock random count");
+  require(result.program.blocks[0].literal.kind ==
+              lang::ClockLiteralKind::RandomRange,
+          "external clock random kind");
+  requireRandomChoiceExternalClock(result.program.blocks[0].literal, 0, 'x',
+                                   "external clock random first choice");
+  requireRandomChoiceExternalClock(result.program.blocks[0].literal, 1, 'y',
+                                   "external clock random second choice");
+  require(result.program.blocks[0].repeat == 4,
+          "external clock random repeat");
 }
 
 void testProgramEvaluation() {
@@ -1182,6 +1348,7 @@ void testInvalidInputs() {
   requireInvalid("{3|}hz", "random choice missing after pipe invalid");
   requireInvalid("{|3}hz", "random choice missing before pipe invalid");
   requireInvalid("{3|{}}hz", "nested random empty choice invalid");
+  requireInvalid("{x-y}", "external clock random range invalid");
   requireInvalid("q", "unknown bare identifier invalid");
 }
 }  // namespace

@@ -36,6 +36,8 @@ enum class ClockLiteralKind {
 };
 
 struct RandomChoiceAst {
+  bool externalClockChoice = false;
+  char externalClock = '\0';
   double minValue = 0.0;
   double maxValue = 0.0;
   std::string minValueLexeme;
@@ -74,6 +76,8 @@ struct ClockBlockAst {
   bool repeatIsRandom = false;
   ClockLiteralAst repeatRandom;
   ClockLiteralAst repeatDuration;
+  bool repeatUsesExternalClock = false;
+  char repeatExternalClock = '\0';
   int probability = 100;
   SourceRange range;
   SourceRange restRange;
@@ -85,6 +89,8 @@ struct ClockBlockAst {
   ClockLiteralAst totalDurationRandom;
   bool totalDurationIsTickCount = false;
   int totalDurationTicks = 0;
+  bool totalDurationUsesExternalClock = false;
+  char totalDurationExternalClock = '\0';
   ClockLiteralAst totalDuration;
   int totalDurationGroupId = -1;
   SourceRange totalDurationRange;

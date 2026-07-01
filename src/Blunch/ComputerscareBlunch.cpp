@@ -70,6 +70,11 @@ static bool choiceHasExplicitUnit(
   return choice.unitRange.end > choice.unitRange.begin;
 }
 
+static bool choiceIsExternalClock(
+    const blunch::language::RandomChoiceAst& choice) {
+  return choice.externalClockChoice;
+}
+
 static const blunch::language::RandomChoiceAst& chooseRandomChoice(
     const blunch::language::ClockLiteralAst& ast) {
   size_t choiceIndex =
@@ -103,6 +108,13 @@ static blunch::language::ClockLiteralAst literalForRandomChoice(
     const blunch::language::ClockLiteralAst& randomAst,
     const blunch::language::RandomChoiceAst& choice, double value) {
   blunch::language::ClockLiteralAst literal;
+  if (choiceIsExternalClock(choice)) {
+    literal.kind = blunch::language::ClockLiteralKind::ExternalClock;
+    literal.externalClock = choice.externalClock;
+    literal.range = choice.range;
+    return literal;
+  }
+
   literal.kind = blunch::language::ClockLiteralKind::Numeric;
   literal.value = value;
   literal.valueLexeme = choice.minValueLexeme;
@@ -136,6 +148,7 @@ struct BlunchProgramStep {
   bool repeatIsRandom = false;
   bool repeatRandomIsDuration = false;
   blunch::language::ClockLiteralAst repeatRandom;
+  int repeatExternalClockInput = -1;
   bool hasDuration = false;
   float durationSeconds = 0.f;
   int probability = 100;
@@ -152,6 +165,7 @@ struct BlunchProgramStep {
   blunch::language::ClockLiteralAst totalDurationRandom;
   bool totalDurationIsTickCount = false;
   int totalDurationTicks = 0;
+  int totalDurationExternalClockInput = -1;
   float totalDurationSeconds = 0.f;
   int totalDurationHighlightBegin = 0;
   int totalDurationHighlightEnd = 0;
@@ -279,11 +293,15 @@ struct ComputerscareBlunch : Module {
     }
 
     int activeExternalClock = activeExternalClockInput();
+    int activeRepeatClock = activeRepeatExternalClockInput();
+    int activeTotalTickClock = activeTotalDurationExternalClockInput();
     if (activeExternalClock >= 0) {
       if (!advanceActiveTotalDuration(scaledSampleTime)) {
         advanceActiveProgramDuration(scaledSampleTime);
       }
       activeExternalClock = activeExternalClockInput();
+      activeRepeatClock = activeRepeatExternalClockInput();
+      activeTotalTickClock = activeTotalDurationExternalClockInput();
       activeClockRamp =
           activeExternalClock >= 0
               ? (externalClockHigh[activeExternalClock] ? 1.f : 0.f)
@@ -292,11 +310,18 @@ struct ComputerscareBlunch : Module {
       clockPhase += scaledSampleTime * activeClockSpec.hz;
       while (clockPhase >= 1.f) {
         clockPhase -= 1.f;
-        advanceActiveProgramBeat();
+        if (activeRepeatClock < 0) {
+          advanceActiveProgramBeat(activeTotalTickClock < 0);
+          activeRepeatClock = activeRepeatExternalClockInput();
+          activeTotalTickClock = activeTotalDurationExternalClockInput();
+        }
       }
       if (!advanceActiveTotalDuration(scaledSampleTime)) {
         advanceActiveProgramDuration(scaledSampleTime);
       }
+      activeExternalClock = activeExternalClockInput();
+      activeRepeatClock = activeRepeatExternalClockInput();
+      activeTotalTickClock = activeTotalDurationExternalClockInput();
       activeClockRamp = clockPhase;
     }
     clockHigh = nextClockGateHigh();
@@ -313,8 +338,15 @@ struct ComputerscareBlunch : Module {
                                                                        : 0.f);
     lights[SYNTAX_ERROR_LIGHT].setBrightness(syntaxError ? 1.f : 0.f);
 
-    if (activeExternalClock >= 0 && externalClockEdges[activeExternalClock]) {
-      advanceActiveProgramBeat();
+    bool externalTotalTickAdvanced = false;
+    if (activeTotalTickClock >= 0 && externalClockEdges[activeTotalTickClock]) {
+      externalTotalTickAdvanced = advanceActiveTotalTickCount();
+      activeRepeatClock = activeRepeatExternalClockInput();
+    }
+
+    if (!externalTotalTickAdvanced && activeRepeatClock >= 0 &&
+        externalClockEdges[activeRepeatClock]) {
+      advanceActiveProgramBeat(activeTotalDurationExternalClockInput() < 0);
     }
   }
 
@@ -380,6 +412,38 @@ struct ComputerscareBlunch : Module {
           blunch::language::ClockLiteralKind::ExternalClock) {
         step.externalClockInput =
             externalClockInputIndex(block.literal.externalClock);
+      } else if (block.literal.kind ==
+                 blunch::language::ClockLiteralKind::RandomRange) {
+        bool hasNumericChoice = false;
+        for (size_t choiceIndex = 0;
+             choiceIndex < block.literal.randomChoices.size(); choiceIndex++) {
+          if (!choiceIsExternalClock(
+                  block.literal.randomChoices[choiceIndex])) {
+            hasNumericChoice = true;
+            break;
+          }
+        }
+        if (hasNumericChoice) {
+          for (size_t choiceIndex = 0;
+               choiceIndex < block.literal.randomChoices.size();
+               choiceIndex++) {
+            const blunch::language::RandomChoiceAst& choice =
+                block.literal.randomChoices[choiceIndex];
+            if (choiceIsExternalClock(choice)) {
+              continue;
+            }
+            blunch::language::ClockLiteralAst literal =
+                literalForRandomChoice(block.literal, choice, choice.minValue);
+            blunch::language::EvaluationResult eval =
+                blunch::language::evaluateClockLiteral(literal);
+            if (!eval.ok()) {
+              program.clear();
+              return false;
+            }
+            step.spec = eval.spec;
+            break;
+          }
+        }
       } else if (block.literal.kind !=
                  blunch::language::ClockLiteralKind::Empty) {
         blunch::language::EvaluationResult eval =
@@ -397,12 +461,17 @@ struct ComputerscareBlunch : Module {
              choiceIndex < block.literal.randomChoices.size(); choiceIndex++) {
           const blunch::language::RandomChoiceAst& choice =
               block.literal.randomChoices[choiceIndex];
+          if (choiceIsExternalClock(choice)) {
+            continue;
+          }
+          blunch::language::ClockLiteralAst minLiteral =
+              literalForRandomChoice(block.literal, choice, choice.minValue);
+          blunch::language::ClockLiteralAst maxLiteral =
+              literalForRandomChoice(block.literal, choice, choice.maxValue);
           blunch::language::EvaluationResult minEval =
-              blunch::language::evaluateClockLiteralWithValue(block.literal,
-                                                              choice.minValue);
+              blunch::language::evaluateClockLiteral(minLiteral);
           blunch::language::EvaluationResult maxEval =
-              blunch::language::evaluateClockLiteralWithValue(block.literal,
-                                                              choice.maxValue);
+              blunch::language::evaluateClockLiteral(maxLiteral);
           if (!minEval.ok() || !maxEval.ok()) {
             program.clear();
             return false;
@@ -413,6 +482,10 @@ struct ComputerscareBlunch : Module {
       step.repeatIsRandom = block.repeatIsRandom;
       step.repeatRandomIsDuration = block.repeatIsDuration;
       step.repeatRandom = block.repeatRandom;
+      if (block.repeatUsesExternalClock) {
+        step.repeatExternalClockInput =
+            externalClockInputIndex(block.repeatExternalClock);
+      }
       if (block.repeatIsDuration && !block.repeatIsRandom) {
         blunch::language::EvaluationResult durationEval =
             blunch::language::evaluateClockLiteral(block.repeatDuration);
@@ -443,6 +516,10 @@ struct ComputerscareBlunch : Module {
         step.totalDurationRandom = block.totalDurationRandom;
         step.totalDurationIsTickCount = block.totalDurationIsTickCount;
         step.totalDurationTicks = block.totalDurationTicks;
+        if (block.totalDurationUsesExternalClock) {
+          step.totalDurationExternalClockInput =
+              externalClockInputIndex(block.totalDurationExternalClock);
+        }
         if (!block.totalDurationIsTickCount && !block.totalDurationIsRandom) {
           blunch::language::EvaluationResult totalDurationEval =
               blunch::language::evaluateClockLiteral(block.totalDuration);
@@ -851,6 +928,28 @@ struct ComputerscareBlunch : Module {
     return activeProgram[activeProgramIndex].externalClockInput;
   }
 
+  int activeRepeatExternalClockInput() const {
+    if (activeProgram.empty()) {
+      return -1;
+    }
+    const BlunchProgramStep& step = activeProgram[activeProgramIndex];
+    if (step.repeatExternalClockInput >= 0) {
+      return step.repeatExternalClockInput;
+    }
+    return step.externalClockInput;
+  }
+
+  int activeTotalDurationExternalClockInput() const {
+    if (activeProgram.empty()) {
+      return -1;
+    }
+    const BlunchProgramStep& step = activeProgram[activeProgramIndex];
+    if (!step.hasTotalDurationGroup || !step.totalDurationIsTickCount) {
+      return -1;
+    }
+    return step.totalDurationExternalClockInput;
+  }
+
   bool activeStepUsesExternalClock() const {
     return activeExternalClockInput() >= 0;
   }
@@ -859,12 +958,12 @@ struct ComputerscareBlunch : Module {
     return std::pow(2.f, params[SPEED_OF_TIME_PARAM].getValue());
   }
 
-  void advanceActiveProgramBeat() {
+  void advanceActiveProgramBeat(bool countTotalTick = true) {
     if (activeProgram.empty()) {
       return;
     }
 
-    if (advanceActiveTotalTickCount()) {
+    if (countTotalTick && advanceActiveTotalTickCount()) {
       return;
     }
 
@@ -1061,18 +1160,30 @@ struct ComputerscareBlunch : Module {
       return;
     }
 
-    const BlunchProgramStep& step = activeProgram[activeProgramIndex];
+    BlunchProgramStep& step = activeProgram[activeProgramIndex];
     if (!step.hasRandomValue) {
       activeClockSpec = step.spec;
       return;
     }
 
+    const blunch::language::RandomChoiceAst* selectedChoice = NULL;
     double minValue = step.literal.minValue;
     double maxValue = step.literal.maxValue;
     if (!step.literal.randomChoices.empty()) {
       size_t choiceIndex = std::min(
           (size_t)(random::uniform() * step.literal.randomChoices.size()),
           step.literal.randomChoices.size() - 1);
+      const blunch::language::RandomChoiceAst& choice =
+          step.literal.randomChoices[choiceIndex];
+      selectedChoice = &choice;
+      step.highlightBegin = step.sourceLineBegin + choice.range.begin;
+      step.highlightEnd = step.sourceLineBegin + choice.range.end;
+      if (choiceIsExternalClock(choice)) {
+        step.externalClockInput = externalClockInputIndex(choice.externalClock);
+        activeClockSpec = step.spec;
+        return;
+      }
+      step.externalClockInput = -1;
       minValue = step.literal.randomChoices[choiceIndex].minValue;
       maxValue = step.literal.randomChoices[choiceIndex].maxValue;
     }
@@ -1083,9 +1194,14 @@ struct ComputerscareBlunch : Module {
       sampledValue = lowValue + random::uniform() * (highValue - lowValue);
     }
 
+    blunch::language::ClockLiteralAst sampledLiteral =
+        selectedChoice ? literalForRandomChoice(step.literal, *selectedChoice,
+                                                sampledValue)
+                       : step.literal;
     blunch::language::EvaluationResult eval =
-        blunch::language::evaluateClockLiteralWithValue(step.literal,
-                                                        sampledValue);
+        selectedChoice ? blunch::language::evaluateClockLiteral(sampledLiteral)
+                       : blunch::language::evaluateClockLiteralWithValue(
+                             sampledLiteral, sampledValue);
     if (eval.ok()) {
       activeClockSpec = eval.spec;
     } else {
@@ -1161,10 +1277,6 @@ struct ComputerscareBlunch : Module {
     if (step.repeatHighlightEnd <= step.repeatHighlightBegin) {
       return false;
     }
-    if (step.externalClockInput >= 0 && !step.hasDuration) {
-      return false;
-    }
-
     begin = step.repeatHighlightBegin;
     end = step.repeatHighlightEnd;
     if (step.hasDuration) {

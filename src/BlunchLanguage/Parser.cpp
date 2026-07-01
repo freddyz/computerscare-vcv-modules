@@ -68,6 +68,10 @@ bool isExternalClockIdentifier(const std::string& value) {
   return lowered == "w" || lowered == "x" || lowered == "y" || lowered == "z";
 }
 
+char externalClockFromIdentifier(const std::string& value) {
+  return lowerCopy(value)[0];
+}
+
 void applyUnitToUnitlessBlock(ClockBlockAst& block, ClockUnit unit,
                               SourceRange unitRange) {
   if (!hasExplicitUnit(block.literal)) {
@@ -333,6 +337,10 @@ class Parser {
       } else {
         groupBlocks[i].repeat *= repeatBlock.repeat;
       }
+      if (repeatBlock.repeatUsesExternalClock) {
+        groupBlocks[i].repeatUsesExternalClock = true;
+        groupBlocks[i].repeatExternalClock = repeatBlock.repeatExternalClock;
+      }
       if (repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin) {
         groupBlocks[i].repeatRange = repeatBlock.repeatRange;
         if (!groupBlocks[i].repeatValueIsOwn) {
@@ -482,6 +490,10 @@ class Parser {
       } else {
         groupBlocks[i].repeat *= repeatBlock.repeat;
       }
+      if (repeatBlock.repeatUsesExternalClock) {
+        groupBlocks[i].repeatUsesExternalClock = true;
+        groupBlocks[i].repeatExternalClock = repeatBlock.repeatExternalClock;
+      }
       if (repeatBlock.repeatRange.end > repeatBlock.repeatRange.begin) {
         groupBlocks[i].repeatRange = repeatBlock.repeatRange;
         if (!groupBlocks[i].repeatValueIsOwn) {
@@ -517,6 +529,10 @@ class Parser {
       groupBlocks[i].totalDurationIsTickCount =
           totalDurationBlock.totalDurationIsTickCount;
       groupBlocks[i].totalDurationTicks = totalDurationBlock.totalDurationTicks;
+      groupBlocks[i].totalDurationUsesExternalClock =
+          totalDurationBlock.totalDurationUsesExternalClock;
+      groupBlocks[i].totalDurationExternalClock =
+          totalDurationBlock.totalDurationExternalClock;
       groupBlocks[i].totalDuration = totalDurationBlock.totalDuration;
       groupBlocks[i].totalDurationGroupId = groupId;
       groupBlocks[i].totalDurationRange = totalDurationBlock.totalDurationRange;
@@ -591,9 +607,10 @@ class Parser {
 
     while (!isAtEnd() && peek().type != TokenType::RightBrace) {
       if (peek().type != TokenType::Number &&
-          peek().type != TokenType::LeftBrace) {
-        addDiagnostic(result, "Expected random choice number",
-                      rangeFromToken(peek()));
+          peek().type != TokenType::LeftBrace &&
+          !(peek().type == TokenType::Identifier &&
+            isExternalClockIdentifier(peek().lexeme))) {
+        addDiagnostic(result, "Expected random choice", rangeFromToken(peek()));
         ast.range.end = peek().end;
         advance();
         return ast;
@@ -635,6 +652,9 @@ class Parser {
     ast.maxValueLexeme = ast.randomChoices.front().maxValueLexeme;
     parseOptionalUnit(result, ast);
     for (size_t i = 0; i < ast.randomChoices.size(); i++) {
+      if (ast.randomChoices[i].externalClockChoice) {
+        continue;
+      }
       if (ast.randomChoices[i].unit == ClockUnit::Unknown) {
         ast.randomChoices[i].unit = ast.unit;
         ast.randomChoices[i].unitRange = ast.unitRange;
@@ -656,6 +676,18 @@ class Parser {
 
     std::vector<RandomChoiceAst> choices;
     RandomChoiceAst choice;
+    if (peek().type == TokenType::Identifier &&
+        isExternalClockIdentifier(peek().lexeme)) {
+      Token clockToken = advance();
+      choice.externalClockChoice = true;
+      choice.externalClock = externalClockFromIdentifier(clockToken.lexeme);
+      choice.minValueLexeme = clockToken.lexeme;
+      choice.maxValueLexeme = clockToken.lexeme;
+      choice.range = rangeFromToken(clockToken);
+      choices.push_back(choice);
+      return choices;
+    }
+
     Token minToken = advance();
     choice.minValue = parseDouble(minToken.lexeme);
     choice.maxValue = choice.minValue;
@@ -803,6 +835,20 @@ class Parser {
     }
 
     Token atToken = advance();
+    if (peek().type == TokenType::Identifier &&
+        isExternalClockIdentifier(peek().lexeme)) {
+      Token clockToken = advance();
+      block.repeatRange.begin = atToken.begin;
+      block.repeatRange.end = clockToken.end;
+      block.repeatValueRange = rangeFromToken(clockToken);
+      block.repeatValueIsOwn = true;
+      block.repeat = 1;
+      block.repeatUsesExternalClock = true;
+      block.repeatExternalClock =
+          externalClockFromIdentifier(clockToken.lexeme);
+      return;
+    }
+
     if (peek().type == TokenType::LeftBrace) {
       ClockLiteralAst randomAst = parseRandomRangeLiteral(result);
       block.repeatRange.begin = atToken.begin;
@@ -838,6 +884,18 @@ class Parser {
     block.repeatRange.end = repeatToken.end;
     block.repeatValueRange = rangeFromToken(repeatToken);
     block.repeatValueIsOwn = true;
+
+    if (peek().type == TokenType::Identifier &&
+        peek().begin == repeatToken.end &&
+        isExternalClockIdentifier(peek().lexeme)) {
+      Token clockToken = advance();
+      block.repeatRange.end = clockToken.end;
+      block.repeatValueRange.begin = repeatToken.begin;
+      block.repeatValueRange.end = clockToken.end;
+      block.repeatUsesExternalClock = true;
+      block.repeatExternalClock =
+          externalClockFromIdentifier(clockToken.lexeme);
+    }
 
     if (peek().type == TokenType::Identifier &&
         !isExternalClockIdentifier(peek().lexeme)) {
@@ -920,6 +978,22 @@ class Parser {
     }
 
     Token hashToken = advance();
+    if (peek().type == TokenType::Identifier &&
+        isExternalClockIdentifier(peek().lexeme)) {
+      Token clockToken = advance();
+      block.totalDurationRange.begin = hashToken.begin;
+      block.totalDurationRange.end = clockToken.end;
+      block.totalDurationValueRange = rangeFromToken(clockToken);
+      block.totalDurationGroupId = nextTotalDurationGroupId++;
+      block.hasTotalDuration = true;
+      block.totalDurationIsTickCount = true;
+      block.totalDurationTicks = 1;
+      block.totalDurationUsesExternalClock = true;
+      block.totalDurationExternalClock =
+          externalClockFromIdentifier(clockToken.lexeme);
+      return;
+    }
+
     if (peek().type == TokenType::LeftBrace) {
       ClockLiteralAst randomAst = parseRandomRangeLiteral(result);
       block.totalDurationRange.begin = hashToken.begin;
@@ -944,6 +1018,35 @@ class Parser {
     block.totalDurationRange.end = durationToken.end;
     block.totalDurationValueRange = rangeFromToken(durationToken);
     block.totalDurationGroupId = nextTotalDurationGroupId++;
+
+    if (peek().type == TokenType::Identifier &&
+        peek().begin == durationToken.end &&
+        isExternalClockIdentifier(peek().lexeme)) {
+      Token clockToken = advance();
+      block.totalDurationRange.end = clockToken.end;
+      block.totalDurationValueRange.begin = durationToken.begin;
+      block.totalDurationValueRange.end = clockToken.end;
+      if (!isIntegerLexeme(durationToken.lexeme)) {
+        addDiagnostic(result, "Total tick count must be an integer",
+                      rangeFromToken(durationToken));
+        return;
+      }
+
+      int ticks = parseInt(durationToken.lexeme);
+      if (ticks <= 0) {
+        addDiagnostic(result, "Total tick count must be greater than zero",
+                      rangeFromToken(durationToken));
+        return;
+      }
+
+      block.hasTotalDuration = true;
+      block.totalDurationIsTickCount = true;
+      block.totalDurationTicks = ticks;
+      block.totalDurationUsesExternalClock = true;
+      block.totalDurationExternalClock =
+          externalClockFromIdentifier(clockToken.lexeme);
+      return;
+    }
 
     if (peek().type != TokenType::Identifier) {
       if (!isIntegerLexeme(durationToken.lexeme)) {
