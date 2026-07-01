@@ -69,6 +69,14 @@ void requireRandomRangeAst(const std::string& source, double minValue,
   require(result.ast.unit == unit, message);
 }
 
+void requireExternalClockAst(const std::string& source, char clock,
+                             const char* message) {
+  lang::ParseResult result = lang::parseClockLiteral(source);
+  require(result.ok(), message);
+  require(result.ast.kind == lang::ClockLiteralKind::ExternalClock, message);
+  require(result.ast.externalClock == clock, message);
+}
+
 void requireRandomChoice(const lang::ClockLiteralAst& ast, size_t index,
                          double minValue, double maxValue,
                          const char* message) {
@@ -183,6 +191,21 @@ void testTokenizer() {
                "500mhz first token");
   requireToken(tokens[1], lang::TokenType::Identifier, "mhz", 3, 6,
                "500mhz second token");
+
+  tokens = lang::tokenize("[x y]@5");
+  require(tokens.size() == 7, "[x y]@5 token count");
+  requireToken(tokens[0], lang::TokenType::LeftBracket, "[", 0, 1,
+               "[x y]@5 token 0");
+  requireToken(tokens[1], lang::TokenType::Identifier, "x", 1, 2,
+               "[x y]@5 token 1");
+  requireToken(tokens[2], lang::TokenType::Identifier, "y", 3, 4,
+               "[x y]@5 token 2");
+  requireToken(tokens[3], lang::TokenType::RightBracket, "]", 4, 5,
+               "[x y]@5 token 3");
+  requireToken(tokens[4], lang::TokenType::At, "@", 5, 6,
+               "[x y]@5 token 4");
+  requireToken(tokens[5], lang::TokenType::Number, "5", 6, 7,
+               "[x y]@5 token 5");
 
   tokens = lang::tokenize("[120 90]@6");
   require(tokens.size() == 7, "[120 90]@6 token count");
@@ -381,6 +404,8 @@ void testAst() {
                         "{3-3} ast");
   requireRandomRangeAst("{4-2}s", 4.0, 2.0, lang::ClockUnit::Seconds,
                         "{4-2}s ast");
+  requireExternalClockAst("x", 'x', "x external clock ast");
+  requireExternalClockAst("W", 'w', "W external clock ast");
 
   lang::ParseResult result = lang::parseClockLiteral("{3|2}hz");
   require(result.ok(), "{3|2}hz ast parses");
@@ -952,6 +977,35 @@ void testProgramAst() {
           "bracket suffix random range hz");
   require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
           "bracket suffix numeric hz");
+
+  result = lang::parseClockLiteral("[x y]@5");
+  require(result.ok(), "external clock bracket parses");
+  require(result.program.blocks.size() == 2, "external clock block count");
+  require(result.program.blocks[0].literal.kind ==
+              lang::ClockLiteralKind::ExternalClock,
+          "external clock first kind");
+  require(result.program.blocks[0].literal.externalClock == 'x',
+          "external clock first id");
+  require(result.program.blocks[0].repeat == 5, "external clock first repeat");
+  require(result.program.blocks[1].literal.kind ==
+              lang::ClockLiteralKind::ExternalClock,
+          "external clock second kind");
+  require(result.program.blocks[1].literal.externalClock == 'y',
+          "external clock second id");
+  require(result.program.blocks[1].repeat == 5, "external clock second repeat");
+
+  result = lang::parseClockLiteral("x@3s");
+  require(result.ok(), "external clock duration repeat parses");
+  require(result.program.blocks.size() == 1,
+          "external clock duration repeat block count");
+  require(result.program.blocks[0].literal.kind ==
+              lang::ClockLiteralKind::ExternalClock,
+          "external clock duration repeat kind");
+  require(result.program.blocks[0].literal.externalClock == 'x',
+          "external clock duration repeat id");
+  requireDurationRepeat(result.program.blocks[0], 3.0,
+                        lang::ClockUnit::Seconds, 1, 4,
+                        "external clock duration repeat range");
 }
 
 void testProgramEvaluation() {
@@ -1108,6 +1162,7 @@ void testInvalidInputs() {
   requireInvalid("{3|}hz", "random choice missing after pipe invalid");
   requireInvalid("{|3}hz", "random choice missing before pipe invalid");
   requireInvalid("{3|{}}hz", "nested random empty choice invalid");
+  requireInvalid("q", "unknown bare identifier invalid");
 }
 }  // namespace
 

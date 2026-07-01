@@ -23,7 +23,9 @@ EvaluationResult evaluateClockLiteralWithValue(const ClockLiteralAst& ast,
                                                double value) {
   EvaluationResult result;
 
-  if (ast.kind == ClockLiteralKind::Empty || ast.unit == ClockUnit::Unknown) {
+  if (ast.kind == ClockLiteralKind::Empty ||
+      ast.kind == ClockLiteralKind::ExternalClock ||
+      ast.unit == ClockUnit::Unknown) {
     addDiagnostic(result, "Cannot evaluate invalid clock literal", ast.range);
     return result;
   }

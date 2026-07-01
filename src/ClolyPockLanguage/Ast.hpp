@@ -27,7 +27,13 @@ enum class ClockUnit {
   Minutes
 };
 
-enum class ClockLiteralKind { Empty, Numeric, Colon, RandomRange };
+enum class ClockLiteralKind {
+  Empty,
+  Numeric,
+  Colon,
+  RandomRange,
+  ExternalClock
+};
 
 struct RandomChoiceAst {
   double minValue = 0.0;
@@ -52,6 +58,7 @@ struct ClockLiteralAst {
   std::string minValueLexeme;
   std::string maxValueLexeme;
   std::vector<RandomChoiceAst> randomChoices;
+  char externalClock = '\0';
 
   int minutes = 0;
   int seconds = 0;

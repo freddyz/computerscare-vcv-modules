@@ -117,6 +117,7 @@ struct ClolyPockProgramStep {
   cloly::language::ClockLiteralAst literal;
   cloly::language::ClockSpec spec;
   bool isRest = false;
+  int externalClockInput = -1;
   int repeat = 1;
   bool repeatIsRandom = false;
   bool repeatRandomIsDuration = false;
@@ -158,6 +159,10 @@ struct ComputerscareClolyPock : Module {
     NUM_PARAMS
   };
   enum InputIds {
+    EXTERNAL_CLOCK_W_INPUT,
+    EXTERNAL_CLOCK_X_INPUT,
+    EXTERNAL_CLOCK_Y_INPUT,
+    EXTERNAL_CLOCK_Z_INPUT,
     ADVANCE_INPUT,
     ADVANCE_TOKEN_INPUT,
     ADVANCE_LINE_INPUT,
@@ -177,6 +182,7 @@ struct ComputerscareClolyPock : Module {
   dsp::PulseGenerator tokenMovePulse;
   dsp::PulseGenerator lineCyclePulse;
   dsp::PulseGenerator wrapPulse;
+  dsp::SchmittTrigger externalClockTriggers[4];
   float clockPhase = 0.f;
   float activeClockRamp = 0.f;
   bool clockHigh = false;
@@ -209,6 +215,8 @@ struct ComputerscareClolyPock : Module {
   float activeTotalDurationElapsedSeconds = 0.f;
   int activeTotalDurationTicks = 0;
   bool activeStepPlays = true;
+  bool activeClockOutputHigh = false;
+  bool externalClockHigh[4] = {false, false, false, false};
   float width = MIN_WIDTH;
   bool editorLineWrapping = true;
 
@@ -228,6 +236,10 @@ struct ComputerscareClolyPock : Module {
     configInput(ADVANCE_TOKEN_INPUT, "Advance token");
     configInput(ADVANCE_LINE_INPUT, "Advance line");
     configInput(RESET_INPUT, "Reset");
+    configInput(EXTERNAL_CLOCK_W_INPUT, "External clock W");
+    configInput(EXTERNAL_CLOCK_X_INPUT, "External clock X");
+    configInput(EXTERNAL_CLOCK_Y_INPUT, "External clock Y");
+    configInput(EXTERNAL_CLOCK_Z_INPUT, "External clock Z");
     configOutput(CLOCK_OUTPUT, "Clock");
     configOutput(EOC1_OUTPUT, "Token move EOC");
     configOutput(EOC2_OUTPUT, "Line cycle EOC");
@@ -240,17 +252,40 @@ struct ComputerscareClolyPock : Module {
   }
 
   void process(const ProcessArgs& args) override {
-    clockPhase += args.sampleTime * activeClockSpec.hz;
-    while (clockPhase >= 1.f) {
-      clockPhase -= 1.f;
-      advanceActiveProgramBeat();
+    bool externalClockEdges[4] = {false, false, false, false};
+    for (int i = 0; i < 4; i++) {
+      float voltage = inputs[EXTERNAL_CLOCK_W_INPUT + i].getVoltage();
+      externalClockEdges[i] = externalClockTriggers[i].process(voltage);
+      externalClockHigh[i] = externalClockTriggers[i].isHigh();
     }
-    if (!advanceActiveTotalDuration(args.sampleTime)) {
-      advanceActiveProgramDuration(args.sampleTime);
+
+    int activeExternalClock = activeExternalClockInput();
+    if (activeExternalClock >= 0) {
+      if (!advanceActiveTotalDuration(args.sampleTime)) {
+        advanceActiveProgramDuration(args.sampleTime);
+      }
+      activeExternalClock = activeExternalClockInput();
+      activeClockRamp =
+          activeExternalClock >= 0
+              ? (externalClockHigh[activeExternalClock] ? 1.f : 0.f)
+              : clockPhase;
+    } else {
+      clockPhase += args.sampleTime * activeClockSpec.hz;
+      while (clockPhase >= 1.f) {
+        clockPhase -= 1.f;
+        advanceActiveProgramBeat();
+      }
+      if (!advanceActiveTotalDuration(args.sampleTime)) {
+        advanceActiveProgramDuration(args.sampleTime);
+      }
+      activeClockRamp = clockPhase;
     }
-    activeClockRamp = clockPhase;
     clockHigh = nextClockGateHigh();
-    outputs[CLOCK_OUTPUT].setVoltage(clockHigh && activeStepPlays ? 10.f : 0.f);
+    bool outputClockHigh = activeExternalClock >= 0
+                               ? externalClockHigh[activeExternalClock]
+                               : clockHigh;
+    activeClockOutputHigh = outputClockHigh && activeStepPlays;
+    outputs[CLOCK_OUTPUT].setVoltage(activeClockOutputHigh ? 10.f : 0.f);
     outputs[EOC1_OUTPUT].setVoltage(
         tokenMovePulse.process(args.sampleTime) ? 10.f : 0.f);
     outputs[EOC2_OUTPUT].setVoltage(
@@ -258,6 +293,10 @@ struct ComputerscareClolyPock : Module {
     outputs[EOC3_OUTPUT].setVoltage(wrapPulse.process(args.sampleTime) ? 10.f
                                                                        : 0.f);
     lights[SYNTAX_ERROR_LIGHT].setBrightness(syntaxError ? 1.f : 0.f);
+
+    if (activeExternalClock >= 0 && externalClockEdges[activeExternalClock]) {
+      advanceActiveProgramBeat();
+    }
   }
 
   json_t* dataToJson() override {
@@ -318,7 +357,12 @@ struct ComputerscareClolyPock : Module {
       step.spec.bpm = CLOCK_BPM;
       step.spec.hz = CLOCK_HZ;
       step.spec.periodSeconds = 1.f / CLOCK_HZ;
-      if (block.literal.kind != cloly::language::ClockLiteralKind::Empty) {
+      if (block.literal.kind ==
+          cloly::language::ClockLiteralKind::ExternalClock) {
+        step.externalClockInput =
+            externalClockInputIndex(block.literal.externalClock);
+      } else if (block.literal.kind !=
+                 cloly::language::ClockLiteralKind::Empty) {
         cloly::language::EvaluationResult eval =
             cloly::language::evaluateClockLiteral(block.literal);
         if (!eval.ok()) {
@@ -766,6 +810,32 @@ struct ComputerscareClolyPock : Module {
     chooseActiveStepPlayback();
   }
 
+  int externalClockInputIndex(char clock) const {
+    switch (clock) {
+      case 'w':
+        return 0;
+      case 'x':
+        return 1;
+      case 'y':
+        return 2;
+      case 'z':
+        return 3;
+      default:
+        return -1;
+    }
+  }
+
+  int activeExternalClockInput() const {
+    if (activeProgram.empty()) {
+      return -1;
+    }
+    return activeProgram[activeProgramIndex].externalClockInput;
+  }
+
+  bool activeStepUsesExternalClock() const {
+    return activeExternalClockInput() >= 0;
+  }
+
   void advanceActiveProgramBeat() {
     if (activeProgram.empty()) {
       return;
@@ -1008,6 +1078,12 @@ struct ComputerscareClolyPock : Module {
   }
 
   bool nextClockGateHigh() {
+    if (activeExternalClockInput() >= 0) {
+      clockStartLowSamples = 0;
+      clockStartHighPending = false;
+      return false;
+    }
+
     if (clockStartLowSamples > 0) {
       clockStartLowSamples--;
       return false;
@@ -1096,6 +1172,27 @@ struct ClolyPockTitle : TransparentWidget {
   }
 };
 
+struct ClolyPockExternalClockLabels : TransparentWidget {
+  void draw(const DrawArgs& args) override {
+    std::shared_ptr<Font> font = APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    if (!font || font->handle < 0) {
+      return;
+    }
+
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, 14.f);
+    nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+
+    const char* labels[] = {"w", "x", "y", "z"};
+    const float jackCenters[] = {13.f, 48.f, 83.f, 118.f};
+    for (int i = 0; i < 4; i++) {
+      nvgText(args.vg, jackCenters[i], 2.f, labels[i], NULL);
+    }
+  }
+};
+
 struct ClolyPockPanel : Widget {
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
@@ -1120,8 +1217,13 @@ struct ClolyPockPanel : Widget {
 struct ComputerscareClolyPockWidget : ModuleWidget {
   ClolyPockPanel* panel = nullptr;
   ClolyPockTitle* title = nullptr;
+  ClolyPockExternalClockLabels* externalClockLabels = nullptr;
   ComputerscareTextEditor* editor = nullptr;
   Widget* syntaxErrorLight = nullptr;
+  PortWidget* externalClockWInput = nullptr;
+  PortWidget* externalClockXInput = nullptr;
+  PortWidget* externalClockYInput = nullptr;
+  PortWidget* externalClockZInput = nullptr;
   PortWidget* advanceInput = nullptr;
   PortWidget* advanceTokenInput = nullptr;
   PortWidget* advanceLineInput = nullptr;
@@ -1158,8 +1260,13 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     title->box.size = Vec(box.size.x, 24.f);
     addChild(title);
 
+    externalClockLabels = new ClolyPockExternalClockLabels();
+    externalClockLabels->box.pos = Vec(0.f, 282.f);
+    externalClockLabels->box.size = Vec(box.size.x, 12.f);
+    addChild(externalClockLabels);
+
     editor = createWidget<ComputerscareTextEditor>(Vec(3.f, 43.f));
-    editor->box.size = Vec(box.size.x - 6.f, 265.f);
+    editor->box.size = Vec(box.size.x - 6.f, 245.f);
     editor->placeholder = "type a sequence...";
     editor->style.backgroundColor = nvgRGB(0x05, 0x06, 0x08);
     editor->style.borderColor = nvgRGB(0x55, 0x5b, 0x64);
@@ -1184,26 +1291,43 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     addParam(createParam<CKSS>(Vec(42.f, 12.f), module,
                                ComputerscareClolyPock::AUTO_ADVANCE_PARAM));
 
+    externalClockWInput = createInput<PointingUpPentagonPort>(
+        Vec(7.f, 295.f), module,
+        ComputerscareClolyPock::EXTERNAL_CLOCK_W_INPUT);
+    externalClockXInput = createInput<PointingUpPentagonPort>(
+        Vec(42.f, 295.f), module,
+        ComputerscareClolyPock::EXTERNAL_CLOCK_X_INPUT);
+    externalClockYInput = createInput<PointingUpPentagonPort>(
+        Vec(77.f, 295.f), module,
+        ComputerscareClolyPock::EXTERNAL_CLOCK_Y_INPUT);
+    externalClockZInput = createInput<PointingUpPentagonPort>(
+        Vec(112.f, 295.f), module,
+        ComputerscareClolyPock::EXTERNAL_CLOCK_Z_INPUT);
+    addInput(externalClockWInput);
+    addInput(externalClockXInput);
+    addInput(externalClockYInput);
+    addInput(externalClockZInput);
+
     advanceInput = createInput<PointingUpPentagonPort>(
-        Vec(7.f, 315.f), module, ComputerscareClolyPock::ADVANCE_INPUT);
+        Vec(7.f, 322.f), module, ComputerscareClolyPock::ADVANCE_INPUT);
     advanceTokenInput = createInput<PointingUpPentagonPort>(
-        Vec(42.f, 315.f), module, ComputerscareClolyPock::ADVANCE_TOKEN_INPUT);
+        Vec(42.f, 322.f), module, ComputerscareClolyPock::ADVANCE_TOKEN_INPUT);
     advanceLineInput = createInput<PointingUpPentagonPort>(
-        Vec(77.f, 315.f), module, ComputerscareClolyPock::ADVANCE_LINE_INPUT);
+        Vec(77.f, 322.f), module, ComputerscareClolyPock::ADVANCE_LINE_INPUT);
     resetInput = createInput<PointingUpPentagonPort>(
-        Vec(112.f, 315.f), module, ComputerscareClolyPock::RESET_INPUT);
+        Vec(112.f, 322.f), module, ComputerscareClolyPock::RESET_INPUT);
     addInput(advanceInput);
     addInput(advanceTokenInput);
     addInput(advanceLineInput);
     addInput(resetInput);
 
-    clockOutput = createOutput<InPort>(Vec(7.f, 340.f), module,
+    clockOutput = createOutput<InPort>(Vec(7.f, 350.f), module,
                                        ComputerscareClolyPock::CLOCK_OUTPUT);
-    eoc1Output = createOutput<InPort>(Vec(42.f, 340.f), module,
+    eoc1Output = createOutput<InPort>(Vec(42.f, 350.f), module,
                                       ComputerscareClolyPock::EOC1_OUTPUT);
-    eoc2Output = createOutput<InPort>(Vec(77.f, 340.f), module,
+    eoc2Output = createOutput<InPort>(Vec(77.f, 350.f), module,
                                       ComputerscareClolyPock::EOC2_OUTPUT);
-    eoc3Output = createOutput<InPort>(Vec(112.f, 340.f), module,
+    eoc3Output = createOutput<InPort>(Vec(112.f, 350.f), module,
                                       ComputerscareClolyPock::EOC3_OUTPUT);
     addOutput(clockOutput);
     addOutput(eoc1Output);
@@ -1220,6 +1344,9 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     if (title) {
       title->box.size.x = box.size.x;
     }
+    if (externalClockLabels) {
+      externalClockLabels->box.size.x = box.size.x;
+    }
     if (editor) {
       editor->box.size.x = box.size.x - 6.f;
     }
@@ -1230,8 +1357,11 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
     }
 
-    const float inputY = 315.f;
-    const float outputY = 340.f;
+    const float externalInputY = 295.f;
+    const float inputY = 322.f;
+    const float outputY = 350.f;
+    PortWidget* externalInputs[] = {externalClockWInput, externalClockXInput,
+                                    externalClockYInput, externalClockZInput};
     PortWidget* inputs[] = {advanceInput, advanceTokenInput, advanceLineInput,
                             resetInput};
     PortWidget* outputs[] = {clockOutput, eoc1Output, eoc2Output, eoc3Output};
@@ -1239,6 +1369,9 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
     for (int i = 0; i < 4; i++) {
       if (inputs[i]) {
         inputs[i]->box.pos = Vec(jackXs[i], inputY);
+      }
+      if (externalInputs[i]) {
+        externalInputs[i]->box.pos = Vec(jackXs[i], externalInputY);
       }
       if (outputs[i]) {
         outputs[i]->box.pos = Vec(jackXs[i], outputY);
@@ -1305,7 +1438,7 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
           clolyPock->lastSwitchViewCount = state->switchViewCount;
           clolyPock->togglePendingView();
         }
-        blinkHigh = clolyPock->clockHigh && clolyPock->activeStepPlays;
+        blinkHigh = clolyPock->activeClockOutputHigh;
         activeProgress = clolyPock->activeClockRamp;
       } else {
         state = &browserEditorState;
@@ -1382,7 +1515,8 @@ struct ComputerscareClolyPockWidget : ModuleWidget {
       activeHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, 0x66);
       activeHighlight.hasBorder = true;
       activeHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
-      activeHighlight.hasProgress = true;
+      activeHighlight.hasProgress =
+          !(clolyPock && clolyPock->activeStepUsesExternalClock());
       activeHighlight.progress = activeProgress;
       activeHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
       if (!showingPendingActiveLine && !showingInvalidActiveLine &&

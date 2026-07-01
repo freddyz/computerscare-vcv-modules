@@ -63,6 +63,11 @@ bool hasExplicitUnit(const ClockLiteralAst& ast) {
   return ast.unitRange.end > ast.unitRange.begin;
 }
 
+bool isExternalClockIdentifier(const std::string& value) {
+  std::string lowered = lowerCopy(value);
+  return lowered == "w" || lowered == "x" || lowered == "y" || lowered == "z";
+}
+
 void applyUnitToUnitlessBlock(ClockBlockAst& block, ClockUnit unit,
                               SourceRange unitRange) {
   if (!hasExplicitUnit(block.literal)) {
@@ -208,7 +213,9 @@ class Parser {
     }
 
     if (peek().type != TokenType::Number &&
-        peek().type != TokenType::LeftBrace) {
+        peek().type != TokenType::LeftBrace &&
+        !(peek().type == TokenType::Identifier &&
+          isExternalClockIdentifier(peek().lexeme))) {
       addDiagnostic(result, "Expected clock literal", rangeFromToken(peek()));
       advance();
       return;
@@ -536,12 +543,29 @@ class Parser {
     if (peek().type == TokenType::LeftBrace) {
       return parseRandomRangeLiteral(result);
     }
+    if (peek().type == TokenType::Identifier) {
+      return parseExternalClockLiteral(result);
+    }
 
     Token firstNumber = advance();
     if (peek().type == TokenType::Colon) {
       return parseColonLiteral(result, firstNumber);
     }
     return parseNumericLiteral(result, firstNumber);
+  }
+
+  ClockLiteralAst parseExternalClockLiteral(ParseResult& result) {
+    Token clockToken = advance();
+    ClockLiteralAst ast;
+    ast.kind = ClockLiteralKind::ExternalClock;
+    ast.range = rangeFromToken(clockToken);
+    std::string lowered = lowerCopy(clockToken.lexeme);
+    if (!isExternalClockIdentifier(lowered)) {
+      addDiagnostic(result, "Expected external clock w, x, y, or z", ast.range);
+      return ast;
+    }
+    ast.externalClock = lowered[0];
+    return ast;
   }
 
   ClockLiteralAst parseNumericLiteral(ParseResult& result,
