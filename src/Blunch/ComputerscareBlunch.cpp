@@ -186,6 +186,7 @@ struct ComputerscareBlunch : Module {
     EDITOR_FONT_HEIGHT_PARAM,
     EDITOR_LETTER_SPACING_PARAM,
     AUTO_BLOCK_ADVANCE_PARAM,
+    RUN_PARAM,
     NUM_PARAMS
   };
   enum InputIds {
@@ -262,6 +263,7 @@ struct ComputerscareBlunch : Module {
                  {"Manual", "Automatic"});
     configSwitch(AUTO_BLOCK_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Block advance",
                  {"Manual", "Automatic"});
+    configSwitch(RUN_PARAM, 0.f, 1.f, 1.f, "Run", {"Stopped", "Running"});
     configParam(EDITOR_FONT_SIZE_PARAM, 8.f, 24.f, BND_LABEL_FONT_SIZE,
                 "Editor font size");
     configParam(EDITOR_FONT_WIDTH_PARAM, -0.35f, 0.75f, 0.f,
@@ -273,6 +275,7 @@ struct ComputerscareBlunch : Module {
     getParamQuantity(SPEED_OF_TIME_PARAM)->randomizeEnabled = false;
     getParamQuantity(AUTO_ADVANCE_PARAM)->randomizeEnabled = false;
     getParamQuantity(AUTO_BLOCK_ADVANCE_PARAM)->randomizeEnabled = false;
+    getParamQuantity(RUN_PARAM)->randomizeEnabled = false;
     getParamQuantity(EDITOR_FONT_SIZE_PARAM)->randomizeEnabled = false;
     getParamQuantity(EDITOR_FONT_WIDTH_PARAM)->randomizeEnabled = false;
     getParamQuantity(EDITOR_FONT_HEIGHT_PARAM)->randomizeEnabled = false;
@@ -309,40 +312,49 @@ struct ComputerscareBlunch : Module {
     int activeExternalClock = activeExternalClockInput();
     int activeRepeatClock = activeRepeatExternalClockInput();
     int activeTotalTickClock = activeTotalDurationExternalClockInput();
-    if (activeExternalClock >= 0) {
-      if (!advanceActiveTotalDuration(scaledSampleTime)) {
-        advanceActiveProgramDuration(scaledSampleTime);
+    bool running = params[RUN_PARAM].getValue() > 0.5f;
+    if (running) {
+      if (activeExternalClock >= 0) {
+        if (!advanceActiveTotalDuration(scaledSampleTime)) {
+          advanceActiveProgramDuration(scaledSampleTime);
+        }
+        activeExternalClock = activeExternalClockInput();
+        activeRepeatClock = activeRepeatExternalClockInput();
+        activeTotalTickClock = activeTotalDurationExternalClockInput();
+        activeClockRamp =
+            activeExternalClock >= 0
+                ? (externalClockHigh[activeExternalClock] ? 1.f : 0.f)
+                : clockPhase;
+      } else {
+        clockPhase += scaledSampleTime * activeClockSpec.hz;
+        while (clockPhase >= 1.f) {
+          clockPhase -= 1.f;
+          if (activeRepeatClock < 0) {
+            advanceActiveProgramBeat(activeTotalTickClock < 0);
+            activeRepeatClock = activeRepeatExternalClockInput();
+            activeTotalTickClock = activeTotalDurationExternalClockInput();
+          }
+        }
+        if (!advanceActiveTotalDuration(scaledSampleTime)) {
+          advanceActiveProgramDuration(scaledSampleTime);
+        }
+        activeExternalClock = activeExternalClockInput();
+        activeRepeatClock = activeRepeatExternalClockInput();
+        activeTotalTickClock = activeTotalDurationExternalClockInput();
+        activeClockRamp = clockPhase;
       }
-      activeExternalClock = activeExternalClockInput();
-      activeRepeatClock = activeRepeatExternalClockInput();
-      activeTotalTickClock = activeTotalDurationExternalClockInput();
+      clockHigh = nextClockGateHigh();
+    } else {
       activeClockRamp =
           activeExternalClock >= 0
               ? (externalClockHigh[activeExternalClock] ? 1.f : 0.f)
               : clockPhase;
-    } else {
-      clockPhase += scaledSampleTime * activeClockSpec.hz;
-      while (clockPhase >= 1.f) {
-        clockPhase -= 1.f;
-        if (activeRepeatClock < 0) {
-          advanceActiveProgramBeat(activeTotalTickClock < 0);
-          activeRepeatClock = activeRepeatExternalClockInput();
-          activeTotalTickClock = activeTotalDurationExternalClockInput();
-        }
-      }
-      if (!advanceActiveTotalDuration(scaledSampleTime)) {
-        advanceActiveProgramDuration(scaledSampleTime);
-      }
-      activeExternalClock = activeExternalClockInput();
-      activeRepeatClock = activeRepeatExternalClockInput();
-      activeTotalTickClock = activeTotalDurationExternalClockInput();
-      activeClockRamp = clockPhase;
+      clockHigh = false;
     }
-    clockHigh = nextClockGateHigh();
     bool outputClockHigh = activeExternalClock >= 0
                                ? externalClockHigh[activeExternalClock]
                                : clockHigh;
-    activeClockOutputHigh = outputClockHigh && activeStepPlays;
+    activeClockOutputHigh = running && outputClockHigh && activeStepPlays;
     outputs[CLOCK_OUTPUT].setVoltage(activeClockOutputHigh ? 10.f : 0.f);
     outputs[EOC1_OUTPUT].setVoltage(
         tokenMovePulse.process(args.sampleTime) ? 10.f : 0.f);
@@ -353,12 +365,13 @@ struct ComputerscareBlunch : Module {
     lights[SYNTAX_ERROR_LIGHT].setBrightness(syntaxError ? 1.f : 0.f);
 
     bool externalTotalTickAdvanced = false;
-    if (activeTotalTickClock >= 0 && externalClockEdges[activeTotalTickClock]) {
+    if (running && activeTotalTickClock >= 0 &&
+        externalClockEdges[activeTotalTickClock]) {
       externalTotalTickAdvanced = advanceActiveTotalTickCount();
       activeRepeatClock = activeRepeatExternalClockInput();
     }
 
-    if (!externalTotalTickAdvanced && activeRepeatClock >= 0 &&
+    if (running && !externalTotalTickAdvanced && activeRepeatClock >= 0 &&
         externalClockEdges[activeRepeatClock]) {
       advanceActiveProgramBeat(activeTotalDurationExternalClockInput() < 0);
     }
@@ -1526,15 +1539,20 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             Vec(127.f, 10.f), module, ComputerscareBlunch::SYNTAX_ERROR_LIGHT);
     addChild(syntaxErrorLight);
 
+    BlunchAdvanceModeButton* runButton = createParam<BlunchAdvanceModeButton>(
+        Vec(36.f, 8.f), module, ComputerscareBlunch::RUN_PARAM);
+    runButton->label = "Run";
+    addParam(runButton);
+
     BlunchAdvanceModeButton* lineAdvanceButton =
         createParam<BlunchAdvanceModeButton>(
-            Vec(42.f, 8.f), module, ComputerscareBlunch::AUTO_ADVANCE_PARAM);
+            Vec(66.f, 8.f), module, ComputerscareBlunch::AUTO_ADVANCE_PARAM);
     lineAdvanceButton->label = "Line";
     addParam(lineAdvanceButton);
 
     BlunchAdvanceModeButton* blockAdvanceButton =
         createParam<BlunchAdvanceModeButton>(
-            Vec(72.f, 8.f), module,
+            Vec(96.f, 8.f), module,
             ComputerscareBlunch::AUTO_BLOCK_ADVANCE_PARAM);
     blockAdvanceButton->label = "Block";
     addParam(blockAdvanceButton);

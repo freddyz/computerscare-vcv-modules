@@ -90,7 +90,7 @@ struct ComputerscareTextEditor : ui::TextField {
   int getLineStartPosition(int line) const;
   int getLineEndPosition(int line) const;
   int getCursorColumn() const;
-  void moveCursorToAdjacentLogicalLine(int direction);
+  void moveCursorToAdjacentLogicalLine(int direction, bool extendSelection);
   std::shared_ptr<Font> loadEditorFont();
   float getFontScaleX() const;
   float getFontScaleY() const;

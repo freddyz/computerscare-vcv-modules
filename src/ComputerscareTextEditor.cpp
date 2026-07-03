@@ -389,12 +389,12 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
       return;
     }
     if (e.key == GLFW_KEY_UP) {
-      moveCursorToAdjacentLogicalLine(-1);
+      moveCursorToAdjacentLogicalLine(-1, (e.mods & GLFW_MOD_SHIFT) != 0);
       e.consume(this);
       return;
     }
     if (e.key == GLFW_KEY_DOWN) {
-      moveCursorToAdjacentLogicalLine(1);
+      moveCursorToAdjacentLogicalLine(1, (e.mods & GLFW_MOD_SHIFT) != 0);
       e.consume(this);
       return;
     }
@@ -558,7 +558,8 @@ int ComputerscareTextEditor::getCursorColumn() const {
   return std::max(0, cursorPosition - lineStart);
 }
 
-void ComputerscareTextEditor::moveCursorToAdjacentLogicalLine(int direction) {
+void ComputerscareTextEditor::moveCursorToAdjacentLogicalLine(
+    int direction, bool extendSelection) {
   int currentLine = getCursorLine();
   int targetLine = std::max(0, currentLine + direction);
   int targetStart = getLineStartPosition(targetLine);
@@ -566,7 +567,9 @@ void ComputerscareTextEditor::moveCursorToAdjacentLogicalLine(int direction) {
   int column = getCursorColumn();
 
   cursor = std::max(targetStart, std::min(targetStart + column, targetEnd));
-  selection = cursor;
+  if (!extendSelection) {
+    selection = cursor;
+  }
   lastSnapshot = captureSnapshot();
 }
 
