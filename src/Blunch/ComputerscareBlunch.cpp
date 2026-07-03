@@ -185,6 +185,7 @@ struct ComputerscareBlunch : Module {
     EDITOR_FONT_WIDTH_PARAM,
     EDITOR_FONT_HEIGHT_PARAM,
     EDITOR_LETTER_SPACING_PARAM,
+    AUTO_BLOCK_ADVANCE_PARAM,
     NUM_PARAMS
   };
   enum InputIds {
@@ -212,6 +213,10 @@ struct ComputerscareBlunch : Module {
   dsp::PulseGenerator lineCyclePulse;
   dsp::PulseGenerator wrapPulse;
   dsp::SchmittTrigger externalClockTriggers[4];
+  dsp::SchmittTrigger advanceTrigger;
+  dsp::SchmittTrigger advanceTokenTrigger;
+  dsp::SchmittTrigger advanceLineTrigger;
+  dsp::SchmittTrigger resetTrigger;
   float clockPhase = 0.f;
   float activeClockRamp = 0.f;
   bool clockHigh = false;
@@ -255,6 +260,8 @@ struct ComputerscareBlunch : Module {
                                                 0.f, "Speed of time");
     configSwitch(AUTO_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Line advance",
                  {"Manual", "Automatic"});
+    configSwitch(AUTO_BLOCK_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Block advance",
+                 {"Manual", "Automatic"});
     configParam(EDITOR_FONT_SIZE_PARAM, 8.f, 24.f, BND_LABEL_FONT_SIZE,
                 "Editor font size");
     configParam(EDITOR_FONT_WIDTH_PARAM, -0.35f, 0.75f, 0.f,
@@ -263,6 +270,13 @@ struct ComputerscareBlunch : Module {
                 "Editor font height");
     configParam(EDITOR_LETTER_SPACING_PARAM, -2.f, 4.f, 0.f,
                 "Editor letter spacing");
+    getParamQuantity(SPEED_OF_TIME_PARAM)->randomizeEnabled = false;
+    getParamQuantity(AUTO_ADVANCE_PARAM)->randomizeEnabled = false;
+    getParamQuantity(AUTO_BLOCK_ADVANCE_PARAM)->randomizeEnabled = false;
+    getParamQuantity(EDITOR_FONT_SIZE_PARAM)->randomizeEnabled = false;
+    getParamQuantity(EDITOR_FONT_WIDTH_PARAM)->randomizeEnabled = false;
+    getParamQuantity(EDITOR_FONT_HEIGHT_PARAM)->randomizeEnabled = false;
+    getParamQuantity(EDITOR_LETTER_SPACING_PARAM)->randomizeEnabled = false;
     configInput(ADVANCE_INPUT, "Advance");
     configInput(ADVANCE_TOKEN_INPUT, "Advance token");
     configInput(ADVANCE_LINE_INPUT, "Advance line");
@@ -347,6 +361,17 @@ struct ComputerscareBlunch : Module {
     if (!externalTotalTickAdvanced && activeRepeatClock >= 0 &&
         externalClockEdges[activeRepeatClock]) {
       advanceActiveProgramBeat(activeTotalDurationExternalClockInput() < 0);
+    }
+
+    if (resetTrigger.process(inputs[RESET_INPUT].getVoltage())) {
+      resetActiveProgram(true);
+    }
+    if (advanceLineTrigger.process(inputs[ADVANCE_LINE_INPUT].getVoltage())) {
+      moveToNextLine(false);
+    }
+    if (advanceTokenTrigger.process(inputs[ADVANCE_TOKEN_INPUT].getVoltage()) ||
+        advanceTrigger.process(inputs[ADVANCE_INPUT].getVoltage())) {
+      advanceActiveProgramStep(true);
     }
   }
 
@@ -1056,7 +1081,26 @@ struct ComputerscareBlunch : Module {
     }
   }
 
-  void advanceActiveProgramStep() {
+  bool autoBlockAdvanceEnabled() {
+    return params[AUTO_BLOCK_ADVANCE_PARAM].getValue() > 0.5f;
+  }
+
+  void repeatActiveProgramStep() {
+    activeProgramBeat = 0;
+    activeProgramElapsedSeconds = 0.f;
+    applyActiveProgramStep();
+  }
+
+  void advanceActiveProgramStep(bool forceAdvance = false) {
+    if (activeProgram.empty()) {
+      return;
+    }
+
+    if (!forceAdvance && !autoBlockAdvanceEnabled()) {
+      repeatActiveProgramStep();
+      return;
+    }
+
     bool hadMultipleSteps = activeProgram.size() > 1;
     const BlunchProgramStep& currentStep = activeProgram[activeProgramIndex];
     activeProgramBeat = 0;
@@ -1347,6 +1391,38 @@ struct BlunchSpeedOfTimeLabel : TransparentWidget {
   }
 };
 
+struct BlunchAdvanceModeButton : ComputerscareBlankButton {
+  static constexpr float DRAW_SCALE_X = 0.72f;
+  std::string label = "Line";
+
+  BlunchAdvanceModeButton() {
+    momentary = false;
+    box.size.x *= DRAW_SCALE_X;
+  }
+
+  void draw(const DrawArgs& args) override {
+    nvgSave(args.vg);
+    nvgScale(args.vg, DRAW_SCALE_X, 1.f);
+    ComputerscareBlankButton::draw(args);
+    nvgRestore(args.vg);
+
+    std::shared_ptr<Font> font = APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    if (!font || font->handle < 0) {
+      return;
+    }
+
+    ParamQuantity* quantity = getParamQuantity();
+    bool pressed = quantity && quantity->getValue() > 0.5f;
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, label.size() > 4 ? 9.5f : 10.5f);
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
+    nvgText(args.vg, box.size.x * 0.5f + (pressed ? 2.1f : -1.1f),
+            box.size.y * 0.48f + (pressed ? 3.3f : 0.f), label.c_str(), NULL);
+  }
+};
+
 struct BlunchPanel : Widget {
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
@@ -1450,8 +1526,18 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             Vec(127.f, 10.f), module, ComputerscareBlunch::SYNTAX_ERROR_LIGHT);
     addChild(syntaxErrorLight);
 
-    addParam(createParam<CKSS>(Vec(42.f, 12.f), module,
-                               ComputerscareBlunch::AUTO_ADVANCE_PARAM));
+    BlunchAdvanceModeButton* lineAdvanceButton =
+        createParam<BlunchAdvanceModeButton>(
+            Vec(42.f, 8.f), module, ComputerscareBlunch::AUTO_ADVANCE_PARAM);
+    lineAdvanceButton->label = "Line";
+    addParam(lineAdvanceButton);
+
+    BlunchAdvanceModeButton* blockAdvanceButton =
+        createParam<BlunchAdvanceModeButton>(
+            Vec(72.f, 8.f), module,
+            ComputerscareBlunch::AUTO_BLOCK_ADVANCE_PARAM);
+    blockAdvanceButton->label = "Block";
+    addParam(blockAdvanceButton);
 
     externalClockWInput = createInput<PointingUpPentagonPort>(
         Vec(7.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_W_INPUT);
@@ -1710,19 +1796,22 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     }
 
     menu->addChild(new MenuSeparator());
-    menu->addChild(createMenuLabel("Editor"));
-    menu->addChild(new MenuParamSlider(
-        blunch->paramQuantities[ComputerscareBlunch::EDITOR_FONT_SIZE_PARAM]));
-    menu->addChild(new MenuParamSlider(
-        blunch->paramQuantities[ComputerscareBlunch::EDITOR_FONT_WIDTH_PARAM]));
-    menu->addChild(new MenuParamSlider(
-        blunch
-            ->paramQuantities[ComputerscareBlunch::EDITOR_FONT_HEIGHT_PARAM]));
-    menu->addChild(new MenuParamSlider(
-        blunch->paramQuantities
-            [ComputerscareBlunch::EDITOR_LETTER_SPACING_PARAM]));
-    menu->addChild(createBoolPtrMenuItem("Line wrapping", "",
-                                         &blunch->editorLineWrapping));
+    menu->addChild(createSubmenuItem("Editor", "", [=](Menu* submenu) {
+      submenu->addChild(new MenuParamSlider(
+          blunch
+              ->paramQuantities[ComputerscareBlunch::EDITOR_FONT_SIZE_PARAM]));
+      submenu->addChild(new MenuParamSlider(
+          blunch
+              ->paramQuantities[ComputerscareBlunch::EDITOR_FONT_WIDTH_PARAM]));
+      submenu->addChild(new MenuParamSlider(
+          blunch->paramQuantities
+              [ComputerscareBlunch::EDITOR_FONT_HEIGHT_PARAM]));
+      submenu->addChild(new MenuParamSlider(
+          blunch->paramQuantities
+              [ComputerscareBlunch::EDITOR_LETTER_SPACING_PARAM]));
+      submenu->addChild(createBoolPtrMenuItem("Line wrapping", "",
+                                              &blunch->editorLineWrapping));
+    }));
   }
 };
 
