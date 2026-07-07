@@ -40,7 +40,9 @@ Polyphonic voltmeter, sample & hold, and random voltage source.
 
 **Random Generator Range:** Sets the voltage range for Internal input mode and module randomization. Ranges include 0v to +10v, -5v to +5v, 0v to +5v, 0v to +1v, -1v to +1v, -10v to +10v, -2v to +2v, and 0v to +2v.
 
-**Visual:** Sets bar mode, text opacity, bars opacity, and whether text displays voltages or notes with sharps/flats and cents offsets.
+**Visual:** Sets bar mode, text opacity, and bars opacity.
+
+**Text:** Sets whether text displays voltages, notes with sharps/flats, or MIDI note numbers with cents offsets.
 
 ### Modes of Operation
 
