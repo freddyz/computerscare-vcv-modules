@@ -69,6 +69,9 @@ struct ComputerscareTextEditor : ui::TextField {
   void onEnter(const EnterEvent& e) override;
   void onLeave(const LeaveEvent& e) override;
   void onButton(const ButtonEvent& e) override;
+  void onDoubleClick(const DoubleClickEvent& e) override;
+  void onDragHover(const DragHoverEvent& e) override;
+  void onDragEnd(const DragEndEvent& e) override;
   void onSelectText(const SelectTextEvent& e) override;
   void onSelectKey(const SelectKeyEvent& e) override;
   void onChange(const ChangeEvent& e) override;
@@ -80,6 +83,8 @@ struct ComputerscareTextEditor : ui::TextField {
  protected:
   bool suppressChangeTracking = false;
   bool handlingTrackedInput = false;
+  bool lockingWordSelection = false;
+  Vec lastPrimaryClickPos = Vec(0.f, 0.f);
   ComputerscareTextEditorSnapshot lastSnapshot;
   std::vector<ComputerscareTextEditorSnapshot> undoStack;
   std::vector<ComputerscareTextEditorSnapshot> redoStack;
@@ -90,6 +95,7 @@ struct ComputerscareTextEditor : ui::TextField {
   void clearHistory();
   void undo();
   void redo();
+  void selectWordAtPosition(int position);
   int getLineStartPosition(int line) const;
   int getLineEndPosition(int line) const;
   int getCursorColumn() const;

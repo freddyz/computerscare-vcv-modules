@@ -46,6 +46,30 @@ int main() {
   require(te::clampOffset(twoLines, 100) == (int)twoLines.size(),
           "large offsets clamp to end");
 
+  std::string bracketedNumbers = "[1423 23]";
+  te::SelectionRange range = te::wordRangeAtOffset(bracketedNumbers, 2);
+  require(range.begin == 1 && range.end == 5,
+          "double-clicking inside bracketed number selects number only");
+  range = te::wordRangeAtOffset(bracketedNumbers, 5);
+  require(range.begin == 1 && range.end == 5,
+          "double-clicking just after a word selects previous word");
+  range = te::wordRangeAtOffset(bracketedNumbers, 6);
+  require(range.begin == 6 && range.end == 8,
+          "double-clicking second bracketed number selects second number");
+  range = te::wordRangeAtOffset(bracketedNumbers, 0);
+  require(range.begin == 0 && range.end == 0,
+          "double-clicking punctuation leaves empty word selection");
+
+  std::string wordCharacters = "abc_123!";
+  range = te::wordRangeAtOffset(wordCharacters, 4);
+  require(range.begin == 0 && range.end == 7,
+          "word selection includes letters numbers and underscores");
+
+  std::string tempo = "135bpm";
+  range = te::wordRangeAtOffset(tempo, 2);
+  require(range.begin == 0 && range.end == 6,
+          "double-clicking between digits in tempo selects whole tempo word");
+
   std::puts("text editor logic tests passed");
   return 0;
 }

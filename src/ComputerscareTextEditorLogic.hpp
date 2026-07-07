@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <string>
 
 namespace computerscare {
@@ -54,6 +55,46 @@ inline int moveOffsetLeft(const std::string& text, int offset) {
 
 inline int moveOffsetRight(const std::string& text, int offset) {
   return clampOffset(text, offset + 1);
+}
+
+struct SelectionRange {
+  int begin = 0;
+  int end = 0;
+};
+
+inline bool isWordCharacter(char c) {
+  unsigned char value = static_cast<unsigned char>(c);
+  return std::isalnum(value) || c == '_';
+}
+
+inline SelectionRange wordRangeAtOffset(const std::string& text, int offset) {
+  SelectionRange range;
+  if (text.empty()) {
+    return range;
+  }
+
+  int position = clampOffset(text, offset);
+  if (position == (int)text.size() || !isWordCharacter(text[position])) {
+    if (position == 0 || !isWordCharacter(text[position - 1])) {
+      range.begin = range.end = position;
+      return range;
+    }
+    position--;
+  }
+
+  int begin = position;
+  while (begin > 0 && isWordCharacter(text[begin - 1])) {
+    begin--;
+  }
+
+  int end = position + 1;
+  while (end < (int)text.size() && isWordCharacter(text[end])) {
+    end++;
+  }
+
+  range.begin = begin;
+  range.end = end;
+  return range;
 }
 
 }  // namespace text_editor

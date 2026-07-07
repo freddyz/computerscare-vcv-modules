@@ -349,13 +349,48 @@ void ComputerscareTextEditor::onLeave(const LeaveEvent& e) {
 }
 
 void ComputerscareTextEditor::onButton(const ButtonEvent& e) {
-  ui::TextField::onButton(e);
   if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT) {
     APP->event->setSelectedWidget(this);
-    cursor = selection =
+    int position =
         std::max(0, std::min(getTextPosition(e.pos), (int)text.size()));
+    lockingWordSelection = false;
+    cursor = selection = position;
+    lastPrimaryClickPos = e.pos;
+    if (state) {
+      state->cursor = cursor;
+      state->selection = selection;
+    }
+    e.consume(this);
+    lastSnapshot = captureSnapshot();
+    return;
+  }
+  ui::TextField::onButton(e);
+  lastSnapshot = captureSnapshot();
+}
+
+void ComputerscareTextEditor::onDoubleClick(const DoubleClickEvent& e) {
+  selectWordAtPosition(std::max(
+      0, std::min(getTextPosition(lastPrimaryClickPos), (int)text.size())));
+  lockingWordSelection = true;
+  if (state) {
+    state->cursor = cursor;
+    state->selection = selection;
   }
   lastSnapshot = captureSnapshot();
+  e.consume(this);
+}
+
+void ComputerscareTextEditor::onDragHover(const DragHoverEvent& e) {
+  if (lockingWordSelection && e.origin == this) {
+    e.consume(this);
+    return;
+  }
+  ui::TextField::onDragHover(e);
+}
+
+void ComputerscareTextEditor::onDragEnd(const DragEndEvent& e) {
+  lockingWordSelection = false;
+  ui::TextField::onDragEnd(e);
 }
 
 void ComputerscareTextEditor::onSelectText(const SelectTextEvent& e) {
@@ -575,6 +610,13 @@ void ComputerscareTextEditor::redo() {
   ComputerscareTextEditorSnapshot snapshot = redoStack.back();
   redoStack.pop_back();
   restoreSnapshot(snapshot);
+}
+
+void ComputerscareTextEditor::selectWordAtPosition(int position) {
+  computerscare::text_editor::SelectionRange range =
+      computerscare::text_editor::wordRangeAtOffset(text, position);
+  selection = range.begin;
+  cursor = range.end;
 }
 
 int ComputerscareTextEditor::getLineStartPosition(int line) const {
