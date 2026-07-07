@@ -19,11 +19,12 @@ static const char* DebugOutputRangeLabels[8] = {
     "  0v ... +10v", " -5v ...  +5v", "  0v ...  +5v", "  0v ...  +1v",
     " -1v ...  +1v", "-10v ... +10v", " -2v ...  +2v", "  0v ...  +2v"};
 static const char* DebugVisualModeNames[3] = {"Text", "Bars", "Text + Bars"};
-static const char* DebugVisualModeCodes[3] = {"TXT", "BAR", "T+B"};
 static const char* DebugBarModeNames[2] = {"Unipolar", "Bipolar"};
 static const char* DebugBarModeCodes[2] = {"UNI", "BI"};
 static const char* DebugBipolarColorModeNames[3] = {"Different", "Color 1",
                                                     "Color 2"};
+static const char* DebugTextModeNames[4] = {"Voltage", "Notes Sharps",
+                                            "Notes Flats", "MIDI Note Number"};
 
 static const float DEBUG_DISPLAY_X = 15.f;
 static const float DEBUG_DISPLAY_Y = 34.f;
@@ -87,6 +88,62 @@ static std::string formatDebugVoltage(float value) {
   return stream.str();
 }
 
+struct DebugPitchDisplay {
+  int nearestSemitone = 0;
+  int cents = 0;
+  int midiNote = 60;
+};
+
+static DebugPitchDisplay getDebugPitchDisplay(float value) {
+  float exactSemitone = value * 12.f;
+  DebugPitchDisplay pitchDisplay;
+  pitchDisplay.nearestSemitone = (int)std::round(exactSemitone);
+  pitchDisplay.cents =
+      (int)std::round((exactSemitone - pitchDisplay.nearestSemitone) * 100.f);
+  if (std::abs(pitchDisplay.cents) <= 1) {
+    pitchDisplay.cents = 0;
+  }
+  pitchDisplay.midiNote = pitchDisplay.nearestSemitone + 60;
+  return pitchDisplay;
+}
+
+static void appendDebugCents(std::string& text, int cents) {
+  if (cents == 0) {
+    return;
+  }
+
+  int centsPadding = std::max(1, 4 - (int)text.size());
+  text += std::string(centsPadding, ' ') +
+          string::f("%s %i", cents > 0 ? "+" : "-", std::abs(cents));
+}
+
+static std::string formatDebugNote(float value, bool preferFlats) {
+  static const char* sharpNoteNames[12] = {"C",  "C#", "D",  "D#", "E",  "F",
+                                           "F#", "G",  "G#", "A",  "A#", "B"};
+  static const char* flatNoteNames[12] = {"C",  "Db", "D",  "Eb", "E",  "F",
+                                          "Gb", "G",  "Ab", "A",  "Bb", "B"};
+
+  DebugPitchDisplay pitchDisplay = getDebugPitchDisplay(value);
+  int midiNote = pitchDisplay.midiNote;
+  int noteIndex = midiNote % 12;
+  if (noteIndex < 0) {
+    noteIndex += 12;
+  }
+  int octave = (midiNote - noteIndex) / 12 - 1;
+
+  const char** noteNames = preferFlats ? flatNoteNames : sharpNoteNames;
+  std::string note = string::f("%s%i", noteNames[noteIndex], octave);
+  appendDebugCents(note, pitchDisplay.cents);
+  return note;
+}
+
+static std::string formatDebugMidiNote(float value) {
+  DebugPitchDisplay pitchDisplay = getDebugPitchDisplay(value);
+  std::string note = string::f("%i", pitchDisplay.midiNote);
+  appendDebugCents(note, pitchDisplay.cents);
+  return note;
+}
+
 struct ComputerscareDebug : Module {
   enum ParamIds {
     MANUAL_TRIGGER,
@@ -102,6 +159,7 @@ struct ComputerscareDebug : Module {
     TEXT_OPACITY,
     BIPOLAR_COLOR_MODE,
     BARS_OPACITY,
+    TEXT_MODE,
     NUM_PARAMS
   };
   enum InputIds { VAL_INPUT, TRG_INPUT, CLR_INPUT, NUM_INPUTS };
@@ -141,6 +199,12 @@ struct ComputerscareDebug : Module {
   enum clockAndInputModes { SINGLE_MODE, INTERNAL_MODE, POLY_MODE };
   enum VisualMode { VISUAL_TEXT, VISUAL_BARS, VISUAL_TEXT_BARS };
   enum BarMode { BAR_UNIPOLAR, BAR_BIPOLAR };
+  enum TextMode {
+    TEXT_VOLTAGE,
+    TEXT_NOTES_SHARPS,
+    TEXT_NOTES_FLATS,
+    TEXT_MIDI_NOTE
+  };
   enum BipolarColorMode {
     BIPOLAR_COLORS_DIFFERENT,
     BIPOLAR_COLORS_COLOR_1,
@@ -164,6 +228,9 @@ struct ComputerscareDebug : Module {
     configSwitch(THEME, 0.f, DEBUG_THEME_COUNT - 1, 0.f, "Theme");
     configParam(TEXT_OPACITY, 0.15f, 1.f, 1.f, "Text Opacity");
     configParam(BARS_OPACITY, 0.15f, 1.f, 1.f, "Bars Opacity");
+    configSwitch(
+        TEXT_MODE, 0.f, 3.f, TEXT_VOLTAGE, "Text",
+        {"Voltage", "Notes Sharps", "Notes Flats", "MIDI Note Number"});
     configSwitch(BIPOLAR_COLOR_MODE, 0.f, 2.f, BIPOLAR_COLORS_DIFFERENT,
                  "Bipolar Colors", {"Different", "Color 1", "Color 2"});
     configParam(CLOCK_CHANNEL_FOCUS, 0.f, 15.f, 0.f, "Clock Channel Selector");
@@ -201,9 +268,11 @@ struct ComputerscareDebug : Module {
     getParamQuantity(THEME)->randomizeEnabled = false;
     getParamQuantity(TEXT_OPACITY)->randomizeEnabled = false;
     getParamQuantity(BARS_OPACITY)->randomizeEnabled = false;
+    getParamQuantity(TEXT_MODE)->randomizeEnabled = false;
     getParamQuantity(BIPOLAR_COLOR_MODE)->randomizeEnabled = false;
     getParamQuantity(VISUAL_MODE)->resetEnabled = false;
     getParamQuantity(BAR_MODE)->resetEnabled = false;
+    getParamQuantity(TEXT_MODE)->resetEnabled = false;
     getParamQuantity(THEME)->resetEnabled = false;
     getParamQuantity(BIPOLAR_COLOR_MODE)->resetEnabled = false;
     getParamQuantity(CLOCK_CHANNEL_FOCUS)->randomizeEnabled = false;
@@ -260,6 +329,8 @@ struct ComputerscareDebug : Module {
                         json_real(params[TEXT_OPACITY].getValue()));
     json_object_set_new(rootJ, "barsOpacity",
                         json_real(params[BARS_OPACITY].getValue()));
+    json_object_set_new(rootJ, "textMode",
+                        json_integer((int)params[TEXT_MODE].getValue()));
     json_object_set_new(
         rootJ, "bipolarColorMode",
         json_integer((int)params[BIPOLAR_COLOR_MODE].getValue()));
@@ -314,6 +385,12 @@ struct ComputerscareDebug : Module {
     if (barsOpacityJ) {
       params[BARS_OPACITY].setValue(
           math::clamp((float)json_number_value(barsOpacityJ), 0.15f, 1.f));
+    }
+
+    json_t* textModeJ = json_object_get(rootJ, "textMode");
+    if (textModeJ) {
+      params[TEXT_MODE].setValue(
+          math::clamp((int)json_integer_value(textModeJ), 0, 3));
     }
 
     json_t* bipolarColorModeJ = json_object_get(rootJ, "bipolarColorMode");
@@ -379,6 +456,7 @@ struct DebugPreviewState {
   int themeIndex = 0;
   int visualMode = ComputerscareDebug::VISUAL_TEXT;
   int barMode = ComputerscareDebug::BAR_UNIPOLAR;
+  int textMode = ComputerscareDebug::TEXT_VOLTAGE;
   int activeChannels = NUM_LINES;
   float values[NUM_LINES] = {};
   std::string text;
@@ -392,6 +470,7 @@ struct DebugPreviewState {
     visualMode = math::clamp((int)std::floor(random::uniform() * 3.f), 0, 2);
     barMode = random::uniform() < 0.5f ? ComputerscareDebug::BAR_UNIPOLAR
                                        : ComputerscareDebug::BAR_BIPOLAR;
+    textMode = math::clamp((int)std::floor(random::uniform() * 4.f), 0, 3);
     activeChannels = math::clamp(
         1 + (int)std::floor(random::uniform() * NUM_LINES), 1, NUM_LINES);
 
@@ -402,7 +481,14 @@ struct DebugPreviewState {
         text += "\n";
       }
       if (i < activeChannels) {
-        text += formatDebugVoltage(values[i]);
+        if (textMode == ComputerscareDebug::TEXT_VOLTAGE) {
+          text += formatDebugVoltage(values[i]);
+        } else if (textMode == ComputerscareDebug::TEXT_MIDI_NOTE) {
+          text += formatDebugMidiNote(values[i]);
+        } else {
+          text += formatDebugNote(
+              values[i], textMode == ComputerscareDebug::TEXT_NOTES_FLATS);
+        }
       }
     }
   }
@@ -629,6 +715,42 @@ struct StringDisplayWidget3 : Widget {
     return preview ? preview->barMode : ComputerscareDebug::BAR_UNIPOLAR;
   }
 
+  int currentTextMode() const {
+    if (module) {
+      return math::clamp(
+          (int)module->params[ComputerscareDebug::TEXT_MODE].getValue(), 0, 3);
+    }
+    return preview ? preview->textMode : ComputerscareDebug::TEXT_VOLTAGE;
+  }
+
+  std::string displayText() const {
+    if (!module) {
+      return preview ? preview->text : noModuleStringValue;
+    }
+    if (currentTextMode() == ComputerscareDebug::TEXT_VOLTAGE) {
+      return module->strValue;
+    }
+
+    int textMode = currentTextMode();
+    bool preferFlats = textMode == ComputerscareDebug::TEXT_NOTES_FLATS;
+    std::istringstream voltageLines(module->strValue);
+
+    std::string text;
+    for (int i = 0; i < NUM_LINES; i++) {
+      if (i > 0) {
+        text += "\n";
+      }
+      std::string voltageLine;
+      std::getline(voltageLines, voltageLine);
+      if (!voltageLine.empty()) {
+        text += textMode == ComputerscareDebug::TEXT_MIDI_NOTE
+                    ? formatDebugMidiNote(module->logLines[i])
+                    : formatDebugNote(module->logLines[i], preferFlats);
+      }
+    }
+    return text;
+  }
+
   void drawBar(NVGcontext* vg, float y, float voltage) {
     const float x = 4.f;
     const float width = box.size.x - 8.f;
@@ -719,9 +841,7 @@ struct StringDisplayWidget3 : Widget {
       nvgTextLetterSpacing(args.vg, 2.5);
       nvgTextLineHeight(args.vg, DEBUG_ROW_PITCH / 15.f);
 
-      std::string textToDraw =
-          module ? module->strValue
-                 : (preview ? preview->text : noModuleStringValue);
+      std::string textToDraw = displayText();
       Vec textPos = Vec(5.0f, DEBUG_TEXT_BASELINE_Y);
       float textOpacity =
           module ? module->params[ComputerscareDebug::TEXT_OPACITY].getValue()
@@ -851,6 +971,17 @@ static void addDebugBipolarColorModeItems(Menu* menu,
   }
 }
 
+static void addDebugTextModeItems(Menu* menu, ComputerscareDebug* debug) {
+  for (int mode = 0; mode < 4; mode++) {
+    DebugVisualParamItem* item = new DebugVisualParamItem();
+    item->text = DebugTextModeNames[mode];
+    item->debug = debug;
+    item->paramId = ComputerscareDebug::TEXT_MODE;
+    item->value = mode;
+    menu->addChild(item);
+  }
+}
+
 static void addDebugQuickVisualSettingsItems(Menu* menu,
                                              ComputerscareDebug* debug) {
   menu->addChild(createSubmenuItem(
@@ -859,13 +990,6 @@ static void addDebugQuickVisualSettingsItems(Menu* menu,
                             .getValue()],
       [=](Menu* submenu) { addDebugBarModeItems(submenu, debug); }));
   menu->addChild(new MenuSeparator);
-  menu->addChild(new MenuParamSlider(
-      debug->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
-  menu->addChild(new MenuParamSlider(
-      debug->paramQuantities[ComputerscareDebug::BARS_OPACITY]));
-}
-
-static void addDebugOpacitySettingItems(Menu* menu, ComputerscareDebug* debug) {
   menu->addChild(new MenuParamSlider(
       debug->paramQuantities[ComputerscareDebug::TEXT_OPACITY]));
   menu->addChild(new MenuParamSlider(
@@ -990,7 +1114,8 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
     DISPLAY_CONTROL,
     BAR_STYLE_CONTROL,
     VISUAL_SETTINGS_CONTROL,
-    THEME_CONTROL
+    THEME_CONTROL,
+    TEXT_CONTROL
   };
 
   DebugLabelHoverButton() {
@@ -1054,14 +1179,6 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
     updateHoverTooltip();
   }
 
-  int currentDisplayMode() const {
-    if (!module) {
-      return ComputerscareDebug::VISUAL_TEXT;
-    }
-    return math::clamp(
-        (int)module->params[ComputerscareDebug::VISUAL_MODE].getValue(), 0, 2);
-  }
-
   int currentBarMode() const {
     if (!module) {
       return ComputerscareDebug::BAR_UNIPOLAR;
@@ -1072,13 +1189,16 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
 
   std::string codeText() const {
     if (control == DISPLAY_CONTROL) {
-      return DebugVisualModeCodes[currentDisplayMode()];
+      return "DSP";
     }
     if (control == BAR_STYLE_CONTROL) {
       return DebugBarModeCodes[currentBarMode()];
     }
     if (control == VISUAL_SETTINGS_CONTROL) {
       return "SVL";
+    }
+    if (control == TEXT_CONTROL) {
+      return "Txt";
     }
     return "Thm";
   }
@@ -1092,6 +1212,9 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
     }
     if (control == VISUAL_SETTINGS_CONTROL) {
       return "Visual";
+    }
+    if (control == TEXT_CONTROL) {
+      return "Text";
     }
     return "Theme";
   }
@@ -1161,7 +1284,9 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
     } else if (control == BAR_STYLE_CONTROL) {
       addDebugBarModeItems(menu, module);
     } else if (control == VISUAL_SETTINGS_CONTROL) {
-      addDebugOpacitySettingItems(menu, module);
+      addDebugQuickVisualSettingsItems(menu, module);
+    } else if (control == TEXT_CONTROL) {
+      addDebugTextModeItems(menu, module);
     } else {
       addDebugThemeItems(menu, module);
     }
@@ -1232,7 +1357,7 @@ struct ComputerscareDebugWidget : ModuleWidget {
       addChild(sld);
     }
 
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
       DebugLabelHoverButton* button = createWidget<DebugLabelHoverButton>(
           Vec(DEBUG_LABEL_MENU_X, DEBUG_LABEL_MENU_Y + DEBUG_ROW_PITCH * i));
       button->module = module;
@@ -1429,6 +1554,11 @@ void ComputerscareDebugWidget::appendContextMenu(Menu* menu) {
   menu->addChild(createSubmenuItem("Visual", "", [=](Menu* visualMenu) {
     addDebugQuickVisualSettingsItems(visualMenu, debug);
   }));
+  menu->addChild(createSubmenuItem(
+      "Text",
+      DebugTextModeNames[(int)debug->params[ComputerscareDebug::TEXT_MODE]
+                             .getValue()],
+      [=](Menu* textMenu) { addDebugTextModeItems(textMenu, debug); }));
   menu->addChild(createSubmenuItem(
       "Theme",
       DebugThemes[(int)debug->params[ComputerscareDebug::THEME].getValue()]

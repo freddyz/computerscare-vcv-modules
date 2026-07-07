@@ -42,6 +42,8 @@ Polyphonic voltmeter, sample & hold, and random voltage source.
 
 **Visual:** Sets bar mode, text opacity, and bars opacity.
 
+**Text:** Sets whether text displays voltages, notes with sharps/flats, or MIDI note numbers with cents offsets.
+
 ### Modes of Operation
 
 There are 3 clock modes and 3 input modes. The clock mode decides when values are updated. The input mode decides where the new values come from. The small channel selector knobs choose the active channel for Single-Channel clock and input modes.
