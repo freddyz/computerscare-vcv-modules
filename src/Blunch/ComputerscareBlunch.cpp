@@ -1729,21 +1729,21 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         bool focusChanged = blunch->selectedLine != lastCursorLine;
         lastCursorLine = blunch->selectedLine;
         blunch->inspectFocusedLine(blunch->selectedLine, focusChanged);
-        if (state->submitCount != blunch->lastSubmitCount) {
-          blunch->lastSubmitCount = state->submitCount;
+        if (editor->commands.submitCount != blunch->lastSubmitCount) {
+          blunch->lastSubmitCount = editor->commands.submitCount;
           if (blunch->pendingLine == blunch->selectedLine) {
             blunch->commitPendingLine(true);
           } else {
             blunch->commitLine(blunch->selectedLine, true);
           }
         }
-        if (state->cancelCount != blunch->lastCancelCount) {
-          blunch->lastCancelCount = state->cancelCount;
+        if (editor->commands.cancelCount != blunch->lastCancelCount) {
+          blunch->lastCancelCount = editor->commands.cancelCount;
           blunch->cancelPendingLine(blunch->selectedLine);
           editor->syncFromState();
         }
-        if (state->switchViewCount != blunch->lastSwitchViewCount) {
-          blunch->lastSwitchViewCount = state->switchViewCount;
+        if (editor->commands.switchViewCount() != blunch->lastSwitchViewCount) {
+          blunch->lastSwitchViewCount = editor->commands.switchViewCount();
           blunch->togglePendingView();
         }
         blinkHigh = blunch->activeClockOutputHigh;
