@@ -283,6 +283,10 @@ void ComputerscareTextEditor::syncFromState() {
   suppressChangeTracking = true;
   setText(state->text);
   suppressChangeTracking = false;
+  cursor = std::max(0, std::min(state->cursor, (int)text.size()));
+  selection = std::max(0, std::min(state->selection, (int)text.size()));
+  state->cursor = cursor;
+  state->selection = selection;
   state->dirty = false;
   clearHistory();
   lastSnapshot = captureSnapshot();
@@ -292,6 +296,9 @@ void ComputerscareTextEditor::step() {
   ui::TextField::step();
   if (state && state->dirty) {
     syncFromState();
+  } else if (state) {
+    state->cursor = cursor;
+    state->selection = selection;
   }
 }
 
@@ -390,11 +397,19 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
     }
     if (e.key == GLFW_KEY_UP) {
       moveCursorToAdjacentLogicalLine(-1, (e.mods & GLFW_MOD_SHIFT) != 0);
+      if (state) {
+        state->cursor = cursor;
+        state->selection = selection;
+      }
       e.consume(this);
       return;
     }
     if (e.key == GLFW_KEY_DOWN) {
       moveCursorToAdjacentLogicalLine(1, (e.mods & GLFW_MOD_SHIFT) != 0);
+      if (state) {
+        state->cursor = cursor;
+        state->selection = selection;
+      }
       e.consume(this);
       return;
     }
@@ -407,6 +422,10 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
       cursor = nextCursor;
       if ((e.mods & GLFW_MOD_SHIFT) == 0) {
         selection = cursor;
+      }
+      if (state) {
+        state->cursor = cursor;
+        state->selection = selection;
       }
       lastSnapshot = captureSnapshot();
       e.consume(this);
@@ -446,6 +465,8 @@ void ComputerscareTextEditor::onChange(const ChangeEvent& e) {
   }
   if (state) {
     state->text = text;
+    state->cursor = cursor;
+    state->selection = selection;
   }
   lastSnapshot = captureSnapshot();
 }
@@ -478,8 +499,19 @@ int ComputerscareTextEditor::getCursorLine() const {
 }
 
 void ComputerscareTextEditor::setCursorLine(int line) {
+  setCursorLineEdge(line, false);
+}
+
+void ComputerscareTextEditor::setCursorLineEdge(int line, bool end) {
   cursor = computerscare::text_editor::lineStartPosition(text, line);
+  if (end) {
+    cursor = computerscare::text_editor::lineEndPosition(text, line);
+  }
   selection = cursor;
+  if (state) {
+    state->cursor = cursor;
+    state->selection = selection;
+  }
   lastSnapshot = captureSnapshot();
 }
 
@@ -500,6 +532,8 @@ void ComputerscareTextEditor::restoreSnapshot(
   selection = std::max(0, std::min(snapshot.selection, (int)text.size()));
   if (state) {
     state->text = text;
+    state->cursor = cursor;
+    state->selection = selection;
   }
   suppressChangeTracking = false;
   lastSnapshot = captureSnapshot();

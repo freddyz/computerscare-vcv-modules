@@ -26,6 +26,8 @@ int main() {
           "first line ends at newline offset");
   require(te::lineEndPosition(twoLines, 1) == 7,
           "second line ends at text end");
+  require(te::lineForOffset(twoLines, 3) == 0,
+          "first line end offset maps to first line");
   require(te::moveOffsetRight(twoLines, 3) == 4,
           "right from first line end moves to second line start");
   require(te::moveOffsetLeft(twoLines, 5) == 4,

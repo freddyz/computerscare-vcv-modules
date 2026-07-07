@@ -24,6 +24,8 @@ struct ComputerscareTextHighlight {
 struct ComputerscareTextEditorState {
   std::string text;
   bool dirty = false;
+  int cursor = 0;
+  int selection = 0;
   int submitCount = 0;
   int cancelCount = 0;
   int switchViewCount = 0;
@@ -73,6 +75,7 @@ struct ComputerscareTextEditor : ui::TextField {
   int getTextPosition(Vec mousePos) override;
   int getCursorLine() const;
   void setCursorLine(int line);
+  void setCursorLineEdge(int line, bool end);
 
  protected:
   bool suppressChangeTracking = false;

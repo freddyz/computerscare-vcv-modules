@@ -1,4 +1,5 @@
 #include "BlunchLanguage/BlunchLanguage.hpp"
+#include "Blunch/BlunchRandomProgram.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -1351,6 +1352,17 @@ void testInvalidInputs() {
   requireInvalid("{x-y}", "external clock random range invalid");
   requireInvalid("q", "unknown bare identifier invalid");
 }
+
+void testRandomProgramGenerator() {
+  for (unsigned int entropy = 0; entropy < 128; entropy++) {
+    std::string program =
+        blunch::random_program::generateMusicalClockProgram(entropy);
+    lang::ParseResult result = lang::parseClockLiteral(program);
+    require(result.ok(), "generated musical clock program parses");
+    require(!result.program.blocks.empty(),
+            "generated musical clock program has blocks");
+  }
+}
 }  // namespace
 
 int main() {
@@ -1360,6 +1372,7 @@ int main() {
   testProgramEvaluation();
   testEvaluator();
   testInvalidInputs();
+  testRandomProgramGenerator();
   std::puts("blunch language tests passed");
   return 0;
 }

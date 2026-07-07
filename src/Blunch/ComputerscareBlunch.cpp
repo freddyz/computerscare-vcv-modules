@@ -7,6 +7,7 @@
 #include "../BlunchLanguage/BlunchLanguage.hpp"
 #include "../ComputerscareResizableHandle.hpp"
 #include "../ComputerscareTextEditor.hpp"
+#include "BlunchRandomProgram.hpp"
 
 struct BlunchLineInfo {
   int begin = 0;
@@ -226,6 +227,9 @@ struct ComputerscareBlunch : Module {
   bool syntaxError = false;
   int selectedLine = 0;
   bool selectedLineDirty = false;
+  bool randomizeCursorRestorePending = false;
+  int randomizeCursorRestoreLine = 0;
+  bool randomizeCursorRestoreAtEnd = false;
   int activeLine = 0;
   std::string activeLineText;
   int pendingLine = -1;
@@ -426,6 +430,8 @@ struct ComputerscareBlunch : Module {
       editorLineWrapping = json_boolean_value(editorLineWrappingJ);
     }
   }
+
+  void onRandomize() override { randomizeSelectedLine(); }
 
   bool parseLineProgram(int line, int lineBegin, const std::string& lineText,
                         std::vector<BlunchProgramStep>& program) {
@@ -646,6 +652,40 @@ struct ComputerscareBlunch : Module {
     editorState.text.replace(lineInfo.begin, lineInfo.end - lineInfo.begin,
                              replacement);
     editorState.dirty = true;
+  }
+
+  void randomizeSelectedLine() {
+    unsigned int entropy =
+        (unsigned int)std::floor(random::uniform() * 4294967295.f);
+    std::string program =
+        blunch::random_program::generateMusicalClockProgram(entropy);
+    int line =
+        std::max(0, std::min(selectedLine, getLineCount(editorState.text) - 1));
+    BlunchLineInfo oldLineInfo = getLineInfo(editorState.text, line);
+    bool cursorWasAtEnd = editorState.cursor >= oldLineInfo.end;
+    replaceLineText(line, program);
+    selectedLine = line;
+    BlunchLineInfo newLineInfo = getLineInfo(editorState.text, line);
+    editorState.cursor = cursorWasAtEnd ? newLineInfo.end : newLineInfo.begin;
+    editorState.selection = editorState.cursor;
+    randomizeCursorRestorePending = true;
+    randomizeCursorRestoreLine = line;
+    randomizeCursorRestoreAtEnd = cursorWasAtEnd;
+    checkedFocusedLineText = program;
+    clearSyntaxError();
+    if (line == activeLine) {
+      clearPendingLine();
+      commitLine(line, true);
+      return;
+    }
+
+    std::vector<BlunchProgramStep> parsedProgram;
+    if (parseLineProgram(line, newLineInfo.begin, program, parsedProgram)) {
+      pendingLine = line;
+      pendingLineText = program;
+      pendingProgram = parsedProgram;
+      viewingPendingLine = true;
+    }
   }
 
   void cancelPendingLine(int line) {
@@ -1679,6 +1719,11 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         if (blunch->selectedLineDirty) {
           editor->setCursorLine(blunch->selectedLine);
           blunch->selectedLineDirty = false;
+        }
+        if (blunch->randomizeCursorRestorePending) {
+          editor->setCursorLineEdge(blunch->randomizeCursorRestoreLine,
+                                    blunch->randomizeCursorRestoreAtEnd);
+          blunch->randomizeCursorRestorePending = false;
         }
         blunch->selectedLine = editor->getCursorLine();
         bool focusChanged = blunch->selectedLine != lastCursorLine;
