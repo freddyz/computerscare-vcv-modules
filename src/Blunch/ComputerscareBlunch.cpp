@@ -5,6 +5,8 @@
 #include <vector>
 
 #include "../BlunchLanguage/BlunchLanguage.hpp"
+#include "../Computerscare.hpp"
+#include "../ComputerscarePolyModule.hpp"
 #include "../ComputerscareResizableHandle.hpp"
 #include "../ComputerscareTextEditor.hpp"
 #include "BlunchEditorViews.hpp"
@@ -143,7 +145,7 @@ struct BlunchSpeedOfTimeParamQuantity : ParamQuantity {
   }
 };
 
-struct ComputerscareBlunch : Module {
+struct ComputerscareBlunch : ComputerscarePolyModule {
   static constexpr float CLOCK_BPM = 120.f;
   static constexpr float CLOCK_HZ = CLOCK_BPM / 60.f;
   static constexpr float MIN_WIDTH = 150.f;
@@ -151,6 +153,7 @@ struct ComputerscareBlunch : Module {
 
   enum ParamIds {
     SPEED_OF_TIME_PARAM,
+    POLY_CHANNELS_PARAM,
     AUTO_ADVANCE_PARAM,
     EDITOR_FONT_SIZE_PARAM,
     EDITOR_FONT_WIDTH_PARAM,
@@ -182,9 +185,9 @@ struct ComputerscareBlunch : Module {
 
   ComputerscareTextEditorState sequenceEditorStates[MAX_POLY_CHANNELS];
   ComputerscareTextEditorState channelsEditorState;
-  dsp::PulseGenerator tokenMovePulse;
-  dsp::PulseGenerator lineCyclePulse;
-  dsp::PulseGenerator wrapPulse;
+  dsp::PulseGenerator tokenMovePulses[MAX_POLY_CHANNELS];
+  dsp::PulseGenerator lineCyclePulses[MAX_POLY_CHANNELS];
+  dsp::PulseGenerator wrapPulses[MAX_POLY_CHANNELS];
   dsp::SchmittTrigger externalClockTriggers[4];
   dsp::SchmittTrigger advanceTrigger;
   dsp::SchmittTrigger advanceTokenTrigger;
@@ -258,6 +261,14 @@ struct ComputerscareBlunch : Module {
     return showingChannelsView() ? channelsEditorState : sequenceEditorState();
   }
 
+  bool commitLineForChannel(int channel, int line, bool resetPhase) {
+    int previousFocusedChannel = focusedChannel;
+    focusedChannel = std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
+    bool committed = commitLine(line, resetPhase);
+    focusedChannel = previousFocusedChannel;
+    return committed;
+  }
+
   void refreshChannelsEditorState() {
     channelsEditorState.text =
         buildBlunchChannelsViewText(sequencers, MAX_POLY_CHANNELS);
@@ -311,10 +322,55 @@ struct ComputerscareBlunch : Module {
     sequencerForChannel(channel).running = true;
   }
 
+  bool channelHasFormula(int channel) const {
+    return !sequencerForChannel(channel).activeProgram.empty();
+  }
+
+  bool channelLabelIsActive(int channel) const {
+    return channelHasFormula(channel);
+  }
+
+  int automaticOutputChannelCount() const {
+    int count = 1;
+    for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
+      if (channelHasFormula(channel)) {
+        count = channel + 1;
+      }
+    }
+    return count;
+  }
+
+  int selectedOutputChannelCount() {
+    int knobValue = (int)std::round(params[POLY_CHANNELS_PARAM].getValue());
+    if (knobValue <= 0) {
+      return automaticOutputChannelCount();
+    }
+    return std::max(1, std::min(knobValue, MAX_POLY_CHANNELS));
+  }
+
+  void triggerTokenMovePulse() {
+    tokenMovePulses[std::max(0,
+                             std::min(focusedChannel, MAX_POLY_CHANNELS - 1))]
+        .trigger(1e-3f);
+  }
+
+  void triggerLineCyclePulse() {
+    lineCyclePulses[std::max(0,
+                             std::min(focusedChannel, MAX_POLY_CHANNELS - 1))]
+        .trigger(1e-3f);
+  }
+
+  void triggerWrapPulse() {
+    wrapPulses[std::max(0, std::min(focusedChannel, MAX_POLY_CHANNELS - 1))]
+        .trigger(1e-3f);
+  }
+
   ComputerscareBlunch() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
     configParam<BlunchSpeedOfTimeParamQuantity>(SPEED_OF_TIME_PARAM, -5.f, 5.f,
                                                 0.f, "Speed of time");
+    configSwitch(POLY_CHANNELS_PARAM, 0.f, 16.f, 0.f, "Poly Channels",
+                 polyChannelLabels(true));
     configSwitch(AUTO_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Line advance",
                  {"Manual", "Automatic"});
     configSwitch(AUTO_BLOCK_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Block advance",
@@ -329,6 +385,8 @@ struct ComputerscareBlunch : Module {
     configParam(EDITOR_LETTER_SPACING_PARAM, -2.f, 4.f, 0.f,
                 "Editor letter spacing");
     getParamQuantity(SPEED_OF_TIME_PARAM)->randomizeEnabled = false;
+    getParamQuantity(POLY_CHANNELS_PARAM)->randomizeEnabled = false;
+    getParamQuantity(POLY_CHANNELS_PARAM)->resetEnabled = false;
     getParamQuantity(AUTO_ADVANCE_PARAM)->randomizeEnabled = false;
     getParamQuantity(AUTO_BLOCK_ADVANCE_PARAM)->randomizeEnabled = false;
     getParamQuantity(RUN_PARAM)->randomizeEnabled = false;
@@ -357,27 +415,16 @@ struct ComputerscareBlunch : Module {
     commitLine(0, true);
   }
 
-  void process(const ProcessArgs& args) override {
-    BlunchSequencerRuntime& seq = sequencerForChannel(playbackChannel);
-    float timeScale = getTimeScale();
-    float scaledSampleTime = args.sampleTime * timeScale;
-    bool externalClockEdges[4] = {false, false, false, false};
-    for (int i = 0; i < 4; i++) {
-      float voltage = inputs[EXTERNAL_CLOCK_W_INPUT + i].getVoltage();
-      externalClockEdges[i] = externalClockTriggers[i].process(voltage);
-      externalClockHigh[i] = externalClockTriggers[i].isHigh();
-    }
-
+  void processSequencerChannel(int channel, float scaledSampleTime,
+                               const bool externalClockEdges[4], bool runHigh,
+                               bool resetPressed, bool advanceLinePressed,
+                               bool advanceTokenPressed) {
+    int previousFocusedChannel = focusedChannel;
+    focusedChannel = std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
+    BlunchSequencerRuntime& seq = activeSequencer();
     int activeExternalClock = activeExternalClockInput(seq);
     int activeRepeatClock = activeRepeatExternalClockInput(seq);
     int activeTotalTickClock = activeTotalDurationExternalClockInput(seq);
-    bool runHigh = params[RUN_PARAM].getValue() > 0.5f;
-    if (runHigh && !lastRunHigh) {
-      for (BlunchSequencerRuntime& channelSequencer : sequencers) {
-        channelSequencer.running = true;
-      }
-    }
-    lastRunHigh = runHigh;
     bool running = runHigh && seq.running;
     if (running) {
       if (activeExternalClock >= 0) {
@@ -422,14 +469,8 @@ struct ComputerscareBlunch : Module {
                                : seq.clockHigh;
     seq.activeClockOutputHigh =
         running && outputClockHigh && seq.activeStepPlays;
-    outputs[CLOCK_OUTPUT].setVoltage(seq.activeClockOutputHigh ? 10.f : 0.f);
-    outputs[EOC1_OUTPUT].setVoltage(
-        tokenMovePulse.process(args.sampleTime) ? 10.f : 0.f);
-    outputs[EOC2_OUTPUT].setVoltage(
-        lineCyclePulse.process(args.sampleTime) ? 10.f : 0.f);
-    outputs[EOC3_OUTPUT].setVoltage(wrapPulse.process(args.sampleTime) ? 10.f
-                                                                       : 0.f);
-    lights[SYNTAX_ERROR_LIGHT].setBrightness(syntaxError ? 1.f : 0.f);
+    outputs[CLOCK_OUTPUT].setVoltage(seq.activeClockOutputHigh ? 10.f : 0.f,
+                                     channel);
 
     bool externalTotalTickAdvanced = false;
     if (running && activeTotalTickClock >= 0 &&
@@ -444,16 +485,72 @@ struct ComputerscareBlunch : Module {
                                activeTotalDurationExternalClockInput(seq) < 0);
     }
 
-    if (resetTrigger.process(inputs[RESET_INPUT].getVoltage())) {
+    if (resetPressed) {
       resetActiveProgram(true);
     }
-    if (advanceLineTrigger.process(inputs[ADVANCE_LINE_INPUT].getVoltage())) {
+    if (advanceLinePressed) {
       moveToNextLine(false);
     }
-    if (advanceTokenTrigger.process(inputs[ADVANCE_TOKEN_INPUT].getVoltage()) ||
-        advanceTrigger.process(inputs[ADVANCE_INPUT].getVoltage())) {
+    if (advanceTokenPressed) {
       advanceActiveProgramStep(seq, true);
     }
+
+    focusedChannel = previousFocusedChannel;
+  }
+
+  void process(const ProcessArgs& args) override {
+    float timeScale = getTimeScale();
+    float scaledSampleTime = args.sampleTime * timeScale;
+    bool externalClockEdges[4] = {false, false, false, false};
+    for (int i = 0; i < 4; i++) {
+      float voltage = inputs[EXTERNAL_CLOCK_W_INPUT + i].getVoltage();
+      externalClockEdges[i] = externalClockTriggers[i].process(voltage);
+      externalClockHigh[i] = externalClockTriggers[i].isHigh();
+    }
+
+    bool runHigh = params[RUN_PARAM].getValue() > 0.5f;
+    if (runHigh && !lastRunHigh) {
+      for (BlunchSequencerRuntime& channelSequencer : sequencers) {
+        channelSequencer.running = true;
+      }
+    }
+    lastRunHigh = runHigh;
+    bool resetPressed = resetTrigger.process(inputs[RESET_INPUT].getVoltage());
+    bool advanceLinePressed =
+        advanceLineTrigger.process(inputs[ADVANCE_LINE_INPUT].getVoltage());
+    bool advanceTokenPressed =
+        advanceTokenTrigger.process(inputs[ADVANCE_TOKEN_INPUT].getVoltage()) ||
+        advanceTrigger.process(inputs[ADVANCE_INPUT].getVoltage());
+
+    polyChannels = selectedOutputChannelCount();
+    outputs[CLOCK_OUTPUT].setChannels(polyChannels);
+    outputs[EOC1_OUTPUT].setChannels(polyChannels);
+    outputs[EOC2_OUTPUT].setChannels(polyChannels);
+    outputs[EOC3_OUTPUT].setChannels(polyChannels);
+    for (int channel = 0; channel < polyChannels; channel++) {
+      processSequencerChannel(channel, scaledSampleTime, externalClockEdges,
+                              runHigh, resetPressed, advanceLinePressed,
+                              advanceTokenPressed);
+    }
+    for (int channel = polyChannels; channel < MAX_POLY_CHANNELS; channel++) {
+      sequencers[channel].activeClockOutputHigh = false;
+    }
+    for (int channel = 0; channel < polyChannels; channel++) {
+      outputs[EOC1_OUTPUT].setVoltage(
+          tokenMovePulses[channel].process(args.sampleTime) ? 10.f : 0.f,
+          channel);
+      outputs[EOC2_OUTPUT].setVoltage(
+          lineCyclePulses[channel].process(args.sampleTime) ? 10.f : 0.f,
+          channel);
+      outputs[EOC3_OUTPUT].setVoltage(
+          wrapPulses[channel].process(args.sampleTime) ? 10.f : 0.f, channel);
+    }
+    for (int channel = polyChannels; channel < MAX_POLY_CHANNELS; channel++) {
+      tokenMovePulses[channel].process(args.sampleTime);
+      lineCyclePulses[channel].process(args.sampleTime);
+      wrapPulses[channel].process(args.sampleTime);
+    }
+    lights[SYNTAX_ERROR_LIGHT].setBrightness(syntaxError ? 1.f : 0.f);
   }
 
   json_t* dataToJson() override {
@@ -468,6 +565,12 @@ struct ComputerscareBlunch : Module {
     json_object_set_new(rootJ, "text",
                         json_stringn(sequenceEditorStates[0].text.c_str(),
                                      sequenceEditorStates[0].text.size()));
+    json_t* activeLinesJ = json_array();
+    for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
+      json_array_append_new(activeLinesJ,
+                            json_integer(sequencers[channel].activeLine));
+    }
+    json_object_set_new(rootJ, "activeLines", activeLinesJ);
     json_object_set_new(rootJ, "focusedLine", json_integer(selectedLine));
     json_object_set_new(rootJ, "focusedChannel", json_integer(focusedChannel));
     json_object_set_new(rootJ, "playbackChannel",
@@ -521,11 +624,36 @@ struct ComputerscareBlunch : Module {
           std::max(0, std::min((int)json_integer_value(playbackChannelJ),
                                MAX_POLY_CHANNELS - 1));
     }
-    json_t* activeLineJ = json_object_get(rootJ, "activeLine");
-    if (activeLineJ) {
-      activeSequencer().activeLine = json_integer_value(activeLineJ);
-      commitLine(activeSequencer().activeLine, true);
+    json_t* activeLinesJ = json_object_get(rootJ, "activeLines");
+    if (activeLinesJ) {
+      size_t index;
+      json_t* activeLineJ;
+      json_array_foreach(activeLinesJ, index, activeLineJ) {
+        if (index >= MAX_POLY_CHANNELS) {
+          break;
+        }
+        if (json_is_integer(activeLineJ)) {
+          sequencers[index].activeLine = json_integer_value(activeLineJ);
+        }
+      }
     }
+    json_t* activeLineJ = json_object_get(rootJ, "activeLine");
+    if (activeLineJ && !activeLinesJ) {
+      activeSequencer().activeLine = json_integer_value(activeLineJ);
+    }
+    int previousFocusedChannel = focusedChannel;
+    for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
+      if (sequenceEditorStates[channel].text.empty()) {
+        continue;
+      }
+      focusedChannel = channel;
+      int line = std::max(
+          0, std::min(sequencers[channel].activeLine,
+                      getLineCount(sequenceEditorStates[channel].text) - 1));
+      sequencers[channel].activeLine = line;
+      commitLine(line, true);
+    }
+    focusedChannel = previousFocusedChannel;
     json_t* editorViewModeJ = json_object_get(rootJ, "editorViewMode");
     if (editorViewModeJ) {
       std::string mode = json_string_value(editorViewModeJ);
@@ -1159,11 +1287,11 @@ struct ComputerscareBlunch : Module {
       seq.activeProgramIndex = 0;
       bool movedLine = handleLineCycleEnd();
       if (movedLine || seq.activeProgram.size() > 1) {
-        tokenMovePulse.trigger(1e-3f);
+        triggerTokenMovePulse();
       }
     } else {
       applyActiveProgramStep(seq);
-      tokenMovePulse.trigger(1e-3f);
+      triggerTokenMovePulse();
     }
   }
 
@@ -1197,7 +1325,7 @@ struct ComputerscareBlunch : Module {
       seq.activeProgramIndex = currentStep.totalDurationGroupStart;
       applyActiveProgramStep(seq);
       if (hadMultipleSteps) {
-        tokenMovePulse.trigger(1e-3f);
+        triggerTokenMovePulse();
       }
       return;
     }
@@ -1206,16 +1334,16 @@ struct ComputerscareBlunch : Module {
       seq.activeProgramIndex = 0;
       bool movedLine = handleLineCycleEnd();
       if (movedLine || hadMultipleSteps) {
-        tokenMovePulse.trigger(1e-3f);
+        triggerTokenMovePulse();
       }
     } else {
       applyActiveProgramStep(seq);
-      tokenMovePulse.trigger(1e-3f);
+      triggerTokenMovePulse();
     }
   }
 
   bool handleLineCycleEnd() {
-    lineCyclePulse.trigger(1e-3f);
+    triggerLineCyclePulse();
     if (params[AUTO_ADVANCE_PARAM].getValue() > 0.5f) {
       if (!moveToNextLine(false, false)) {
         applyActiveProgramStep(activeSequencer());
@@ -1259,10 +1387,10 @@ struct ComputerscareBlunch : Module {
           (activeSequencer().activeLine != previousLine ||
            activeSequencer().activeHighlightBegin != previousHighlightBegin ||
            activeSequencer().activeHighlightEnd != previousHighlightEnd)) {
-        tokenMovePulse.trigger(1e-3f);
+        triggerTokenMovePulse();
       }
       if (wrapped) {
-        wrapPulse.trigger(1e-3f);
+        triggerWrapPulse();
       }
       return true;
     }
@@ -1469,6 +1597,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   BlunchPanel* panel = nullptr;
   BlunchTitle* title = nullptr;
   BlunchSpeedOfTimeLabel* speedOfTimeLabel = nullptr;
+  PolyOutputChannelsWidget* polyChannelsWidget = nullptr;
   BlunchExternalClockLabels* externalClockLabels = nullptr;
   ComputerscareTextEditor* editor = nullptr;
   Widget* syntaxErrorLight = nullptr;
@@ -1544,7 +1673,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
 
     syntaxErrorLight =
         createLight<ComputerscareSmallLight<ComputerscareRedLight>>(
-            Vec(127.f, 10.f), module, ComputerscareBlunch::SYNTAX_ERROR_LIGHT);
+            Vec(137.f, 31.f), module, ComputerscareBlunch::SYNTAX_ERROR_LIGHT);
     addChild(syntaxErrorLight);
 
     BlunchAdvanceModeButton* runButton = createParam<BlunchAdvanceModeButton>(
@@ -1564,6 +1693,11 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             ComputerscareBlunch::AUTO_BLOCK_ADVANCE_PARAM);
     blockAdvanceButton->label = "Block";
     addParam(blockAdvanceButton);
+
+    polyChannelsWidget =
+        new PolyOutputChannelsWidget(Vec(box.size.x - 27.f, 4.f), module,
+                                     ComputerscareBlunch::POLY_CHANNELS_PARAM);
+    addChild(polyChannelsWidget);
 
     externalClockWInput = createInput<PointingUpPentagonPort>(
         Vec(7.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_W_INPUT);
@@ -1624,7 +1758,17 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       editor->box.size.x = box.size.x - 6.f;
     }
     if (syntaxErrorLight) {
-      syntaxErrorLight->box.pos.x = box.size.x - 23.f;
+      syntaxErrorLight->box.pos = Vec(box.size.x - 13.f, 31.f);
+    }
+    if (polyChannelsWidget) {
+      polyChannelsWidget->box.pos = Vec(0.f, 0.f);
+      if (polyChannelsWidget->channelCountDisplay) {
+        polyChannelsWidget->channelCountDisplay->box.pos =
+            Vec(box.size.x - 27.f, 4.f);
+      }
+      if (polyChannelsWidget->channelsKnob) {
+        polyChannelsWidget->channelsKnob->box.pos = Vec(box.size.x - 20.f, 7.f);
+      }
     }
     if (rightHandle) {
       rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
@@ -1711,6 +1855,24 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             blunch->stopSequencer(blunch->focusedChannel);
           }
         }
+        if (editor->commands.submitCount != blunch->lastSubmitCount &&
+            blunch->showingChannelsView()) {
+          blunch->lastSubmitCount = editor->commands.submitCount;
+          if (editor->state == &blunch->channelsEditorState) {
+            blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
+                editor->getCursorLine(),
+                ComputerscareBlunch::MAX_POLY_CHANNELS);
+          }
+          int previousFocusedChannel = blunch->focusedChannel;
+          blunch->focusedChannel = blunch->channelsCursorChannel;
+          bool committed =
+              blunch->commitLine(blunch->activeSequencer().activeLine, true);
+          if (committed) {
+            blunch->startSequencer(blunch->focusedChannel);
+            blunch->refreshChannelsEditorState();
+          }
+          blunch->focusedChannel = previousFocusedChannel;
+        }
         if (blunch->showingChannelsView()) {
           if (editor->state == &blunch->channelsEditorState) {
             blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
@@ -1759,7 +1921,6 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             editor->syncFromState();
           }
         } else {
-          blunch->lastSubmitCount = editor->commands.submitCount;
           blunch->lastCancelCount = editor->commands.cancelCount;
           blunch->lastOpenCount = editor->commands.openCount;
           blunch->lastStopCount = editor->commands.stopCount;
@@ -1848,11 +2009,30 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           const BlunchSequencerRuntime& channelSequencer =
               blunch->sequencerForChannel(channel);
           BlunchLineInfo channelLineInfo = getLineInfo(state->text, channel);
+          BlunchLineInfo sourceLineInfo =
+              getLineInfo(blunch->sequenceEditorStates[channel].text,
+                          channelSequencer.activeLine);
+          ComputerscareTextHighlight channelLabelHighlight;
+          channelLabelHighlight.begin = channelLineInfo.begin;
+          channelLabelHighlight.end =
+              std::min(channelLineInfo.begin + 2, channelLineInfo.end);
+          channelLabelHighlight.hasBackground = false;
+          channelLabelHighlight.hasForeground = true;
+          channelLabelHighlight.foreground =
+              blunch->channelLabelIsActive(channel)
+                  ? nvgRGB(0xee, 0xee, 0xea)
+                  : nvgRGBA(0xee, 0xee, 0xea, 0x6a);
+          if (channelLabelHighlight.begin < channelLabelHighlight.end) {
+            state->highlights.push_back(channelLabelHighlight);
+          }
+
           ComputerscareTextHighlight channelHighlight;
-          int tokenBegin =
-              channelLineInfo.begin + 3 + channelSequencer.activeHighlightBegin;
-          int tokenEnd =
-              channelLineInfo.begin + 3 + channelSequencer.activeHighlightEnd;
+          int relativeHighlightBegin =
+              channelSequencer.activeHighlightBegin - sourceLineInfo.begin;
+          int relativeHighlightEnd =
+              channelSequencer.activeHighlightEnd - sourceLineInfo.begin;
+          int tokenBegin = channelLineInfo.begin + 3 + relativeHighlightBegin;
+          int tokenEnd = channelLineInfo.begin + 3 + relativeHighlightEnd;
           channelHighlight.begin =
               std::max(channelLineInfo.begin + 3,
                        std::min(tokenBegin, channelLineInfo.end));
@@ -1865,6 +2045,33 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           channelHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
           if (channelHighlight.begin < channelHighlight.end) {
             state->highlights.push_back(channelHighlight);
+          }
+
+          blunch::sequencer::RepeatProgress channelProgress;
+          if (blunch::sequencer::getActiveRepeatProgressHighlight(
+                  channelSequencer, channelProgress)) {
+            int relativeProgressBegin =
+                channelProgress.begin - sourceLineInfo.begin;
+            int relativeProgressEnd =
+                channelProgress.end - sourceLineInfo.begin;
+            ComputerscareTextHighlight channelProgressHighlight;
+            channelProgressHighlight.begin = std::max(
+                channelLineInfo.begin + 3,
+                std::min(channelLineInfo.begin + 3 + relativeProgressBegin,
+                         channelLineInfo.end));
+            channelProgressHighlight.end = std::max(
+                channelProgressHighlight.begin,
+                std::min(channelLineInfo.begin + 3 + relativeProgressEnd,
+                         channelLineInfo.end));
+            channelProgressHighlight.hasBackground = false;
+            channelProgressHighlight.hasProgress = true;
+            channelProgressHighlight.progress = channelProgress.progress;
+            channelProgressHighlight.progressSegments =
+                channelProgress.segments;
+            channelProgressHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
+            if (channelProgressHighlight.begin < channelProgressHighlight.end) {
+              state->highlights.push_back(channelProgressHighlight);
+            }
           }
         }
         activeHighlight.begin = 0;
