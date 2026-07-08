@@ -20,11 +20,11 @@ int main() {
   channels[1].activeLineText = "33hz";
 
   require(buildBlunchChannelsViewText(channels, 3) ==
-              "01 120bpm\n02 33hz\n03 ",
+              "120bpm\n33hz\n",
           "channels view lists one active line per channel");
   channels[1].activeLineText = "48bpm";
   require(buildBlunchChannelsViewText(channels, 3) ==
-              "01 120bpm\n02 48bpm\n03 ",
+              "120bpm\n48bpm\n",
           "channels view reflects each channel active line text");
   require(blunchChannelForChannelsViewLine(-1, 3) == 0,
           "negative channels view line clamps to first channel");

@@ -1,13 +1,6 @@
 #include "BlunchEditorViews.hpp"
 
 #include <algorithm>
-#include <cstdio>
-
-static std::string blunchChannelLabel(int channel) {
-  char label[4];
-  std::snprintf(label, sizeof(label), "%02d ", channel + 1);
-  return std::string(label);
-}
 
 std::string buildBlunchChannelsViewText(const BlunchSequencerRuntime* channels,
                                         int channelCount) {
@@ -16,7 +9,6 @@ std::string buildBlunchChannelsViewText(const BlunchSequencerRuntime* channels,
     if (channel > 0) {
       text += "\n";
     }
-    text += blunchChannelLabel(channel);
     if (channels) {
       text += channels[channel].activeLineText;
     }

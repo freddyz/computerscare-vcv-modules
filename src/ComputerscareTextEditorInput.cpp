@@ -68,6 +68,10 @@ void ComputerscareTextEditor::onSelectText(const SelectTextEvent& e) {
     e.consume(this);
     return;
   }
+  if (readOnly) {
+    e.consume(this);
+    return;
+  }
 
   ComputerscareTextEditorSnapshot before = captureSnapshot();
   handlingTrackedInput = true;
@@ -157,6 +161,10 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
         state->selection = selection;
       }
       lastSnapshot = captureSnapshot();
+      e.consume(this);
+      return;
+    }
+    if (readOnly) {
       e.consume(this);
       return;
     }

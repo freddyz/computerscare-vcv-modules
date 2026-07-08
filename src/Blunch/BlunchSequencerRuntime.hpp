@@ -62,6 +62,17 @@ struct BlunchSequencerRuntime {
   bool activeClockOutputHigh = false;
   bool running = true;
 
+  void stopPlayback() {
+    running = false;
+    clockHigh = false;
+    activeClockOutputHigh = false;
+    clockStartLowSamples = 0;
+    clockStartHighPending = false;
+    activeHighlightBegin = 0;
+    activeHighlightEnd = 0;
+    resetActiveProgramState(true);
+  }
+
   void resetActiveProgramState(bool resetPhase) {
     activeProgramIndex = 0;
     activeProgramBeat = 0;

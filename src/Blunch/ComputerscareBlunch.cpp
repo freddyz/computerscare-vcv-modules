@@ -73,6 +73,60 @@ static bool isBlankLine(const std::string& text) {
   return true;
 }
 
+static int mapBlunchSourceOffsetToVisibleLine(const BlunchLineInfo& sourceLine,
+                                              const BlunchLineInfo& visibleLine,
+                                              int sourceOffset) {
+  int relativeOffset = sourceOffset - sourceLine.begin;
+  return std::max(
+      visibleLine.begin,
+      std::min(visibleLine.begin + relativeOffset, visibleLine.end));
+}
+
+static void addBlunchSequencerHighlights(
+    std::vector<ComputerscareTextHighlight>& highlights,
+    const BlunchSequencerRuntime& seq, const BlunchLineInfo& sourceLine,
+    const BlunchLineInfo& visibleLine, bool includeClockProgress) {
+  ComputerscareTextHighlight tokenHighlight;
+  tokenHighlight.begin = mapBlunchSourceOffsetToVisibleLine(
+      sourceLine, visibleLine, seq.activeHighlightBegin);
+  tokenHighlight.end =
+      std::max(tokenHighlight.begin,
+               mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
+                                                  seq.activeHighlightEnd));
+  tokenHighlight.hasBackground = seq.activeClockOutputHigh;
+  tokenHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, 0x66);
+  tokenHighlight.hasBorder = true;
+  tokenHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
+  tokenHighlight.hasProgress =
+      includeClockProgress && seq.running &&
+      !blunch::sequencer::activeStepUsesExternalClock(seq);
+  tokenHighlight.progress = seq.activeClockRamp;
+  tokenHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
+  if (tokenHighlight.begin < tokenHighlight.end) {
+    highlights.push_back(tokenHighlight);
+  }
+
+  blunch::sequencer::RepeatProgress repeatProgress;
+  if (blunch::sequencer::getActiveRepeatProgressHighlight(seq,
+                                                          repeatProgress)) {
+    ComputerscareTextHighlight repeatProgressHighlight;
+    repeatProgressHighlight.begin = mapBlunchSourceOffsetToVisibleLine(
+        sourceLine, visibleLine, repeatProgress.begin);
+    repeatProgressHighlight.end =
+        std::max(repeatProgressHighlight.begin,
+                 mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
+                                                    repeatProgress.end));
+    repeatProgressHighlight.hasBackground = false;
+    repeatProgressHighlight.hasProgress = true;
+    repeatProgressHighlight.progress = repeatProgress.progress;
+    repeatProgressHighlight.progressSegments = repeatProgress.segments;
+    repeatProgressHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
+    if (repeatProgressHighlight.begin < repeatProgressHighlight.end) {
+      highlights.push_back(repeatProgressHighlight);
+    }
+  }
+}
+
 static bool choiceHasExplicitUnit(
     const blunch::language::RandomChoiceAst& choice) {
   return choice.unitRange.end > choice.unitRange.begin;
@@ -267,6 +321,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     return editorViewMode == BlunchEditorViewMode::Channels;
   }
 
+  bool autoLineAdvanceEnabled() {
+    return params[AUTO_ADVANCE_PARAM].getValue() > 0.5f;
+  }
+
+  bool channelsEditorEditingEnabled() { return !autoLineAdvanceEnabled(); }
+
   ComputerscareTextEditorState& visibleEditorState() {
     return showingChannelsView() ? channelsEditorState : sequenceEditorState();
   }
@@ -279,16 +339,60 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     return committed;
   }
 
-  void refreshChannelsEditorState() {
-    channelsEditorState.text =
+  void refreshChannelsEditorState(bool preserveCursor = false) {
+    int cursorColumn = 0;
+    int selectionColumn = 0;
+    if (preserveCursor) {
+      int cursorCurrentLine = 0;
+      int selectionCurrentLine = 0;
+      for (int i = 0; i < channelsEditorState.cursor &&
+                      i < (int)channelsEditorState.text.size();
+           i++) {
+        if (channelsEditorState.text[i] == '\n') {
+          cursorCurrentLine++;
+          cursorColumn = 0;
+        } else {
+          cursorColumn++;
+        }
+      }
+      for (int i = 0; i < channelsEditorState.selection &&
+                      i < (int)channelsEditorState.text.size();
+           i++) {
+        if (channelsEditorState.text[i] == '\n') {
+          selectionCurrentLine++;
+          selectionColumn = 0;
+        } else {
+          selectionColumn++;
+        }
+      }
+      if (cursorCurrentLine != selectionCurrentLine) {
+        selectionColumn = cursorColumn;
+      }
+    }
+
+    std::string nextText =
         buildBlunchChannelsViewText(sequencers, MAX_POLY_CHANNELS);
-    channelsEditorState.dirty = true;
+    bool textChanged = channelsEditorState.text != nextText;
+    if (textChanged) {
+      channelsEditorState.text = nextText;
+      channelsEditorState.dirty = true;
+    }
     int channelLine =
         std::max(0, std::min(channelsCursorChannel, MAX_POLY_CHANNELS - 1));
-    channelsEditorState.cursor =
-        getLineInfo(channelsEditorState.text, channelLine).begin;
-    channelsEditorState.selection = channelsEditorState.cursor;
-    editorViewDirty = true;
+    BlunchLineInfo channelLineInfo =
+        getLineInfo(channelsEditorState.text, channelLine);
+    if (preserveCursor) {
+      channelsEditorState.cursor =
+          std::min(channelLineInfo.begin + cursorColumn, channelLineInfo.end);
+      channelsEditorState.selection = std::min(
+          channelLineInfo.begin + selectionColumn, channelLineInfo.end);
+    } else {
+      channelsEditorState.cursor = channelLineInfo.begin;
+      channelsEditorState.selection = channelsEditorState.cursor;
+    }
+    if (!preserveCursor || textChanged) {
+      editorViewDirty = true;
+    }
   }
 
   void switchEditorView() {
@@ -328,11 +432,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
   void stopSequencer(int channel) {
     BlunchSequencerRuntime& seq = sequencerForChannel(channel);
-    seq.running = false;
-    seq.clockHigh = false;
-    seq.activeClockOutputHigh = false;
-    seq.clockStartLowSamples = 0;
-    seq.clockStartHighPending = false;
+    seq.stopPlayback();
   }
 
   void startSequencer(int channel) {
@@ -532,6 +632,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     if (runHigh && !lastRunHigh) {
       for (BlunchSequencerRuntime& channelSequencer : sequencers) {
         channelSequencer.running = true;
+        if (!channelSequencer.activeProgram.empty()) {
+          applyActiveProgramStep(channelSequencer);
+        }
       }
     }
     lastRunHigh = runHigh;
@@ -691,7 +794,13 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
   }
 
-  void onRandomize() override { randomizeSelectedLine(); }
+  void onRandomize() override {
+    if (showingChannelsView()) {
+      randomizeActiveChannelsLine();
+    } else {
+      randomizeSelectedLine();
+    }
+  }
 
   bool parseLineProgram(int line, int lineBegin, const std::string& lineText,
                         std::vector<BlunchProgramStep>& program) {
@@ -903,30 +1012,75 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     sequenceEditorState().dirty = true;
   }
 
-  void randomizeSelectedLine() {
+  void replaceLineTextForChannel(int channel, int line,
+                                 const std::string& replacement) {
+    channel = clampChannel(channel);
+    BlunchLineInfo lineInfo =
+        getLineInfo(sequenceEditorStates[channel].text, line);
+    sequenceEditorStates[channel].text.replace(
+        lineInfo.begin, lineInfo.end - lineInfo.begin, replacement);
+    sequenceEditorStates[channel].dirty = true;
+  }
+
+  void syncChannelsEditorEdit(int channel) {
+    if (!channelsEditorEditingEnabled()) {
+      return;
+    }
+    if (channelsEditorState.text.empty()) {
+      return;
+    }
+    channel = clampChannel(channel);
+    if (channel >= getLineCount(channelsEditorState.text)) {
+      return;
+    }
+
+    BlunchSequencerRuntime& seq = sequencerForChannel(channel);
+    BlunchLineInfo rowInfo = getLineInfo(channelsEditorState.text, channel);
+    if (rowInfo.text == seq.activeLineText) {
+      return;
+    }
+
+    int activeLine = std::max(
+        0, std::min(seq.activeLine,
+                    getLineCount(sequenceEditorStates[channel].text) - 1));
+    replaceLineTextForChannel(channel, activeLine, rowInfo.text);
+    seq.activeLine = activeLine;
+    seq.activeLineText = rowInfo.text;
+    if (isBlankLine(rowInfo.text)) {
+      seq.activeProgram.clear();
+      seq.activeClockOutputHigh = false;
+      seq.clockHigh = false;
+    }
+  }
+
+  void randomizeLineForChannel(int channel, int line, bool restoreCursor) {
+    int previousFocusedChannel = focusedChannel;
+    focusedChannel = clampChannel(channel);
     unsigned int entropy =
         (unsigned int)std::floor(random::uniform() * 4294967295.f);
     std::string program =
         blunch::random_program::generateMusicalClockProgram(entropy);
-    int line = std::max(
-        0,
-        std::min(selectedLine, getLineCount(sequenceEditorState().text) - 1));
+    line = std::max(
+        0, std::min(line, getLineCount(sequenceEditorState().text) - 1));
     BlunchLineInfo oldLineInfo = getLineInfo(sequenceEditorState().text, line);
     bool cursorWasAtEnd = sequenceEditorState().cursor >= oldLineInfo.end;
     replaceLineText(line, program);
     selectedLine = line;
     BlunchLineInfo newLineInfo = getLineInfo(sequenceEditorState().text, line);
-    sequenceEditorState().cursor =
-        cursorWasAtEnd ? newLineInfo.end : newLineInfo.begin;
-    sequenceEditorState().selection = sequenceEditorState().cursor;
-    randomizeCursorRestorePending = true;
-    randomizeCursorRestoreLine = line;
-    randomizeCursorRestoreAtEnd = cursorWasAtEnd;
+    if (restoreCursor) {
+      sequenceEditorState().cursor =
+          cursorWasAtEnd ? newLineInfo.end : newLineInfo.begin;
+      sequenceEditorState().selection = sequenceEditorState().cursor;
+      randomizeCursorRestorePending = true;
+      randomizeCursorRestoreLine = line;
+      randomizeCursorRestoreAtEnd = cursorWasAtEnd;
+    }
     checkedFocusedLineText = program;
     clearSyntaxError();
     if (line == activeSequencer().activeLine) {
       clearPendingLine();
       commitLine(line, true);
+      focusedChannel = previousFocusedChannel;
       return;
     }
 
@@ -937,6 +1091,18 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       pendingProgram = parsedProgram;
       viewingPendingLine = true;
     }
+    focusedChannel = previousFocusedChannel;
+  }
+
+  void randomizeSelectedLine() {
+    randomizeLineForChannel(focusedChannel, selectedLine, true);
+  }
+
+  void randomizeActiveChannelsLine() {
+    int channel = clampChannel(channelsCursorChannel);
+    randomizeLineForChannel(channel, sequencerForChannel(channel).activeLine,
+                            false);
+    refreshChannelsEditorState(true);
   }
 
   void cancelPendingLine(int line) {
@@ -1580,7 +1746,9 @@ struct BlunchChannelLabel : TransparentWidget {
     nvgFontSize(args.vg, 13.f);
     nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
-    std::string label = "Ch. " + std::to_string(channel + 1);
+    std::string label = module && module->showingChannelsView()
+                            ? "All - Ch" + std::to_string(channel + 1)
+                            : "Ch." + std::to_string(channel + 1) + " Sequence";
     nvgText(args.vg, box.size.x * 0.5f, 0.f, label.c_str(), NULL);
   }
 };
@@ -1888,8 +2056,17 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             blunch->showingSequenceView() && blunch->editorLineWrapping;
         editor->openOnEnter = blunch->showingChannelsView();
         editor->stopOnSemicolon = true;
+        editor->readOnly = blunch->showingChannelsView() &&
+                           !blunch->channelsEditorEditingEnabled();
         if (editor->commands.switchViewCount() != blunch->lastSwitchViewCount) {
           blunch->lastSwitchViewCount = editor->commands.switchViewCount();
+          if (blunch->showingChannelsView() &&
+              editor->state == &blunch->channelsEditorState) {
+            blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
+                editor->getCursorLine(),
+                ComputerscareBlunch::MAX_POLY_CHANNELS);
+            blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
+          }
           blunch->switchEditorView();
         }
         if (editor->commands.openCount != blunch->lastOpenCount) {
@@ -1898,6 +2075,9 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
                 editor->getCursorLine(),
                 ComputerscareBlunch::MAX_POLY_CHANNELS);
+            if (editor->state == &blunch->channelsEditorState) {
+              blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
+            }
             blunch->openFocusedChannelEditPage();
           }
         }
@@ -1907,6 +2087,9 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
                 editor->getCursorLine(),
                 ComputerscareBlunch::MAX_POLY_CHANNELS);
+            if (editor->state == &blunch->channelsEditorState) {
+              blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
+            }
             blunch->stopSequencer(blunch->channelsCursorChannel);
             blunch->refreshChannelsEditorState();
           } else {
@@ -1920,6 +2103,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
                 editor->getCursorLine(),
                 ComputerscareBlunch::MAX_POLY_CHANNELS);
+            blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
           }
           int previousFocusedChannel = blunch->focusedChannel;
           blunch->focusedChannel = blunch->channelsCursorChannel;
@@ -1938,11 +2122,13 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                             ComputerscareBlunch::MAX_POLY_CHANNELS - 1));
             blunch->forcedChannelsCursorChannel = -1;
           } else if (editor->state == &blunch->channelsEditorState) {
+            blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
             blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
                 editor->getCursorLine(),
                 ComputerscareBlunch::MAX_POLY_CHANNELS);
+            blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
           }
-          blunch->refreshChannelsEditorState();
+          blunch->refreshChannelsEditorState(true);
         }
         state = &blunch->visibleEditorState();
         if (editor->state != state || blunch->editorViewDirty) {
@@ -2002,6 +2188,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       } else {
         editor->openOnEnter = false;
         editor->stopOnSemicolon = false;
+        editor->readOnly = false;
         state = &browserEditorState;
         float browserPhase = std::fmod(
             (float)rack::system::getTime() * ComputerscareBlunch::CLOCK_HZ,
@@ -2068,7 +2255,6 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             0xc4, 0x34, 0x21, (unsigned char)(0x2c + errorPulse * 0x24));
         state->highlights.push_back(errorHighlight);
       }
-      ComputerscareTextHighlight activeHighlight;
       if (blunch && blunch->showingChannelsView()) {
         for (int channel = 0; channel < ComputerscareBlunch::MAX_POLY_CHANNELS;
              channel++) {
@@ -2078,106 +2264,31 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           BlunchLineInfo sourceLineInfo =
               getLineInfo(blunch->sequenceEditorStates[channel].text,
                           channelSequencer.activeLine);
-          ComputerscareTextHighlight channelLabelHighlight;
-          channelLabelHighlight.begin = channelLineInfo.begin;
-          channelLabelHighlight.end =
-              std::min(channelLineInfo.begin + 2, channelLineInfo.end);
-          channelLabelHighlight.hasBackground = false;
-          channelLabelHighlight.hasForeground = true;
-          channelLabelHighlight.foreground =
-              blunch->channelLabelIsActive(channel) ? nvgRGB(0xee, 0xee, 0xea)
-                                                    : nvgRGB(0x78, 0x7d, 0x84);
-          if (channelLabelHighlight.begin < channelLabelHighlight.end) {
-            state->highlights.push_back(channelLabelHighlight);
-          }
-
-          ComputerscareTextHighlight channelHighlight;
-          int relativeHighlightBegin =
-              channelSequencer.activeHighlightBegin - sourceLineInfo.begin;
-          int relativeHighlightEnd =
-              channelSequencer.activeHighlightEnd - sourceLineInfo.begin;
-          int tokenBegin = channelLineInfo.begin + 3 + relativeHighlightBegin;
-          int tokenEnd = channelLineInfo.begin + 3 + relativeHighlightEnd;
-          channelHighlight.begin =
-              std::max(channelLineInfo.begin + 3,
-                       std::min(tokenBegin, channelLineInfo.end));
-          channelHighlight.end = std::max(
-              channelHighlight.begin, std::min(tokenEnd, channelLineInfo.end));
-          channelHighlight.hasBackground =
-              channelSequencer.activeClockOutputHigh;
-          channelHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, 0x66);
-          channelHighlight.hasBorder = true;
-          channelHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
-          if (channelHighlight.begin < channelHighlight.end) {
-            state->highlights.push_back(channelHighlight);
-          }
-
-          blunch::sequencer::RepeatProgress channelProgress;
-          if (blunch::sequencer::getActiveRepeatProgressHighlight(
-                  channelSequencer, channelProgress)) {
-            int relativeProgressBegin =
-                channelProgress.begin - sourceLineInfo.begin;
-            int relativeProgressEnd =
-                channelProgress.end - sourceLineInfo.begin;
-            ComputerscareTextHighlight channelProgressHighlight;
-            channelProgressHighlight.begin = std::max(
-                channelLineInfo.begin + 3,
-                std::min(channelLineInfo.begin + 3 + relativeProgressBegin,
-                         channelLineInfo.end));
-            channelProgressHighlight.end = std::max(
-                channelProgressHighlight.begin,
-                std::min(channelLineInfo.begin + 3 + relativeProgressEnd,
-                         channelLineInfo.end));
-            channelProgressHighlight.hasBackground = false;
-            channelProgressHighlight.hasProgress = true;
-            channelProgressHighlight.progress = channelProgress.progress;
-            channelProgressHighlight.progressSegments =
-                channelProgress.segments;
-            channelProgressHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
-            if (channelProgressHighlight.begin < channelProgressHighlight.end) {
-              state->highlights.push_back(channelProgressHighlight);
-            }
-          }
+          addBlunchSequencerHighlights(state->highlights, channelSequencer,
+                                       sourceLineInfo, channelLineInfo, true);
         }
-        activeHighlight.begin = 0;
-        activeHighlight.end = 0;
       } else if (blunch) {
-        activeHighlight.begin = blunch->activeSequencer().activeHighlightBegin;
-        activeHighlight.end = blunch->activeSequencer().activeHighlightEnd;
+        BlunchLineInfo sourceLineInfo =
+            getLineInfo(blunch->sequenceEditorState().text,
+                        blunch->activeSequencer().activeLine);
+        if (!showingPendingActiveLine && !showingInvalidActiveLine) {
+          addBlunchSequencerHighlights(state->highlights,
+                                       blunch->activeSequencer(),
+                                       sourceLineInfo, sourceLineInfo, true);
+        }
       } else {
+        ComputerscareTextHighlight activeHighlight;
         activeHighlight.begin = lineInfo.begin;
         activeHighlight.end = lineInfo.end;
-      }
-      activeHighlight.hasBackground = blinkHigh;
-      activeHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, 0x66);
-      activeHighlight.hasBorder = true;
-      activeHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
-      activeHighlight.hasProgress =
-          showingSequenceView &&
-          !(blunch && blunch->activeStepUsesExternalClock());
-      activeHighlight.progress = activeProgress;
-      activeHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
-      if (!showingPendingActiveLine && !showingInvalidActiveLine &&
-          activeHighlight.begin < activeHighlight.end) {
-        state->highlights.push_back(activeHighlight);
-      }
-      if (blunch && showingSequenceView && !showingPendingActiveLine &&
-          !showingInvalidActiveLine) {
-        int repeatBegin = 0;
-        int repeatEnd = 0;
-        int repeatSegments = 0;
-        float repeatProgress = 0.f;
-        if (blunch->getActiveRepeatProgressHighlight(
-                repeatBegin, repeatEnd, repeatProgress, repeatSegments)) {
-          ComputerscareTextHighlight repeatProgressHighlight;
-          repeatProgressHighlight.begin = repeatBegin;
-          repeatProgressHighlight.end = repeatEnd;
-          repeatProgressHighlight.hasBackground = false;
-          repeatProgressHighlight.hasProgress = true;
-          repeatProgressHighlight.progress = repeatProgress;
-          repeatProgressHighlight.progressSegments = repeatSegments;
-          repeatProgressHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
-          state->highlights.push_back(repeatProgressHighlight);
+        activeHighlight.hasBackground = blinkHigh;
+        activeHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, 0x66);
+        activeHighlight.hasBorder = true;
+        activeHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
+        activeHighlight.hasProgress = showingSequenceView;
+        activeHighlight.progress = activeProgress;
+        activeHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
+        if (activeHighlight.begin < activeHighlight.end) {
+          state->highlights.push_back(activeHighlight);
         }
       }
     }

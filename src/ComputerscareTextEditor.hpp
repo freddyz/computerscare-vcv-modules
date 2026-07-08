@@ -13,6 +13,7 @@ struct ComputerscareTextEditor : ui::TextField {
   bool submitOnEnter = false;
   bool openOnEnter = false;
   bool stopOnSemicolon = false;
+  bool readOnly = false;
 
   ComputerscareTextEditor();
 

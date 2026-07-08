@@ -61,6 +61,32 @@ int main() {
   require(runtime.clockPhase == 0.f, "phase reset clears clock phase");
   require(runtime.activeClockRamp == 0.f, "phase reset clears clock ramp");
 
+  runtime.running = true;
+  runtime.clockHigh = true;
+  runtime.activeClockOutputHigh = true;
+  runtime.clockStartLowSamples = 2;
+  runtime.clockStartHighPending = true;
+  runtime.activeHighlightBegin = 3;
+  runtime.activeHighlightEnd = 9;
+  runtime.activeProgramIndex = 4;
+  runtime.activeProgramBeat = 3;
+  runtime.activeProgramElapsedSeconds = 1.f;
+  runtime.stopPlayback();
+  require(!runtime.running, "stop clears running state");
+  require(!runtime.clockHigh, "stop clears internal clock gate");
+  require(!runtime.activeClockOutputHigh, "stop clears output gate state");
+  require(runtime.clockStartLowSamples == 0,
+          "stop clears pending low samples");
+  require(!runtime.clockStartHighPending,
+          "stop clears pending high edge");
+  require(runtime.activeHighlightBegin == 0 && runtime.activeHighlightEnd == 0,
+          "stop clears active highlight range");
+  require(runtime.activeProgramIndex == 0,
+          "stop resets active program index");
+  require(runtime.activeProgramBeat == 0, "stop resets active program beat");
+  require(runtime.activeProgramElapsedSeconds == 0.f,
+          "stop resets active program elapsed time");
+
   std::vector<BlunchProgramStep> program(2);
   program[0].repeat = 4;
   program[1].probability = 25;

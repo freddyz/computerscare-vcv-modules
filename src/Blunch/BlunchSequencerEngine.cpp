@@ -146,6 +146,10 @@ bool advanceTotalTickCount(BlunchSequencerRuntime& seq) {
 
 bool getActiveRepeatProgressHighlight(const BlunchSequencerRuntime& seq,
                                       RepeatProgress& highlight) {
+  if (!seq.running) {
+    return false;
+  }
+
   const BlunchProgramStep* step = activeStep(seq);
   if (!step) {
     return false;

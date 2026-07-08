@@ -137,6 +137,9 @@ int main() {
   require(highlight.segments == 4, "repeat progress segments by repeat count");
   requireNear(highlight.progress, 0.5f,
               "repeat progress uses one-based current beat");
+  progress.running = false;
+  require(!engine::getActiveRepeatProgressHighlight(progress, highlight),
+          "stopped runtime does not expose repeat progress");
 
   std::puts("blunch sequencer engine tests passed");
   return 0;
