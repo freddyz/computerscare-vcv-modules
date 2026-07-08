@@ -20,6 +20,8 @@ struct BlunchLineInfo {
   std::string text;
 };
 
+static thread_local int blunchProcessingChannel = -1;
+
 static BlunchLineInfo getLineInfo(const std::string& text, int line) {
   BlunchLineInfo info;
   int currentLine = 0;
@@ -217,36 +219,44 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   int focusedChannel = 0;
   int playbackChannel = 0;
   int channelsCursorChannel = 0;
+  int forcedChannelsCursorChannel = -1;
   bool editorViewDirty = true;
   bool lastRunHigh = true;
   bool externalClockHigh[4] = {false, false, false, false};
   float width = MIN_WIDTH;
   bool editorLineWrapping = true;
 
+  int clampChannel(int channel) const {
+    return std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
+  }
+
+  int activeContextChannel() const {
+    return blunchProcessingChannel >= 0 ? clampChannel(blunchProcessingChannel)
+                                        : clampChannel(focusedChannel);
+  }
+
   BlunchSequencerRuntime& activeSequencer() {
-    return sequencerForChannel(focusedChannel);
+    return sequencerForChannel(activeContextChannel());
   }
 
   const BlunchSequencerRuntime& activeSequencer() const {
-    return sequencerForChannel(focusedChannel);
+    return sequencerForChannel(activeContextChannel());
   }
 
   BlunchSequencerRuntime& sequencerForChannel(int channel) {
-    return sequencers[std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1))];
+    return sequencers[clampChannel(channel)];
   }
 
   const BlunchSequencerRuntime& sequencerForChannel(int channel) const {
-    return sequencers[std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1))];
+    return sequencers[clampChannel(channel)];
   }
 
   ComputerscareTextEditorState& sequenceEditorState() {
-    return sequenceEditorStates[std::max(
-        0, std::min(focusedChannel, MAX_POLY_CHANNELS - 1))];
+    return sequenceEditorStates[activeContextChannel()];
   }
 
   const ComputerscareTextEditorState& sequenceEditorState() const {
-    return sequenceEditorStates[std::max(
-        0, std::min(focusedChannel, MAX_POLY_CHANNELS - 1))];
+    return sequenceEditorStates[activeContextChannel()];
   }
 
   bool showingSequenceView() const {
@@ -307,6 +317,15 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     editorViewDirty = true;
   }
 
+  void returnToChannelsView() {
+    channelsCursorChannel =
+        std::max(0, std::min(focusedChannel, MAX_POLY_CHANNELS - 1));
+    forcedChannelsCursorChannel = channelsCursorChannel;
+    editorViewMode = BlunchEditorViewMode::Channels;
+    editorViewDirty = true;
+    refreshChannelsEditorState();
+  }
+
   void stopSequencer(int channel) {
     BlunchSequencerRuntime& seq = sequencerForChannel(channel);
     seq.running = false;
@@ -324,10 +343,6 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
   bool channelHasFormula(int channel) const {
     return !sequencerForChannel(channel).activeProgram.empty();
-  }
-
-  bool channelLabelIsActive(int channel) const {
-    return channelHasFormula(channel);
   }
 
   int automaticOutputChannelCount() const {
@@ -348,22 +363,19 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     return std::max(1, std::min(knobValue, MAX_POLY_CHANNELS));
   }
 
+  bool channelLabelIsActive(int channel) {
+    return channel >= 0 && channel < selectedOutputChannelCount();
+  }
+
   void triggerTokenMovePulse() {
-    tokenMovePulses[std::max(0,
-                             std::min(focusedChannel, MAX_POLY_CHANNELS - 1))]
-        .trigger(1e-3f);
+    tokenMovePulses[activeContextChannel()].trigger(1e-3f);
   }
 
   void triggerLineCyclePulse() {
-    lineCyclePulses[std::max(0,
-                             std::min(focusedChannel, MAX_POLY_CHANNELS - 1))]
-        .trigger(1e-3f);
+    lineCyclePulses[activeContextChannel()].trigger(1e-3f);
   }
 
-  void triggerWrapPulse() {
-    wrapPulses[std::max(0, std::min(focusedChannel, MAX_POLY_CHANNELS - 1))]
-        .trigger(1e-3f);
-  }
+  void triggerWrapPulse() { wrapPulses[activeContextChannel()].trigger(1e-3f); }
 
   ComputerscareBlunch() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -386,7 +398,6 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                 "Editor letter spacing");
     getParamQuantity(SPEED_OF_TIME_PARAM)->randomizeEnabled = false;
     getParamQuantity(POLY_CHANNELS_PARAM)->randomizeEnabled = false;
-    getParamQuantity(POLY_CHANNELS_PARAM)->resetEnabled = false;
     getParamQuantity(AUTO_ADVANCE_PARAM)->randomizeEnabled = false;
     getParamQuantity(AUTO_BLOCK_ADVANCE_PARAM)->randomizeEnabled = false;
     getParamQuantity(RUN_PARAM)->randomizeEnabled = false;
@@ -419,9 +430,18 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                                const bool externalClockEdges[4], bool runHigh,
                                bool resetPressed, bool advanceLinePressed,
                                bool advanceTokenPressed) {
-    int previousFocusedChannel = focusedChannel;
-    focusedChannel = std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
+    int previousProcessingChannel = blunchProcessingChannel;
+    blunchProcessingChannel = clampChannel(channel);
     BlunchSequencerRuntime& seq = activeSequencer();
+    if (seq.activeProgram.empty()) {
+      seq.clockHigh = false;
+      seq.activeClockOutputHigh = false;
+      seq.clockStartLowSamples = 0;
+      seq.clockStartHighPending = false;
+      outputs[CLOCK_OUTPUT].setVoltage(0.f, channel);
+      blunchProcessingChannel = previousProcessingChannel;
+      return;
+    }
     int activeExternalClock = activeExternalClockInput(seq);
     int activeRepeatClock = activeRepeatExternalClockInput(seq);
     int activeTotalTickClock = activeTotalDurationExternalClockInput(seq);
@@ -495,7 +515,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       advanceActiveProgramStep(seq, true);
     }
 
-    focusedChannel = previousFocusedChannel;
+    blunchProcessingChannel = previousProcessingChannel;
   }
 
   void process(const ProcessArgs& args) override {
@@ -1496,7 +1516,7 @@ struct BlunchTitle : TransparentWidget {
     }
 
     nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, 18.f);
+    nvgFontSize(args.vg, 15.f);
     nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
     nvgTextAlign(args.vg, NVG_ALIGN_RIGHT | NVG_ALIGN_TOP);
     nvgText(args.vg, box.size.x - 8.f, 0.f, "Blunch", NULL);
@@ -1537,6 +1557,31 @@ struct BlunchSpeedOfTimeLabel : TransparentWidget {
     nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
     nvgText(args.vg, box.size.x * 0.5f, 0.f, "time", NULL);
+  }
+};
+
+struct BlunchChannelLabel : TransparentWidget {
+  ComputerscareBlunch* module = nullptr;
+
+  void draw(const DrawArgs& args) override {
+    std::shared_ptr<Font> font = APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    if (!font || font->handle < 0) {
+      return;
+    }
+
+    int channel = 0;
+    if (module) {
+      channel = module->showingChannelsView() ? module->channelsCursorChannel
+                                              : module->focusedChannel;
+    }
+
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, 13.f);
+    nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+    std::string label = "Ch. " + std::to_string(channel + 1);
+    nvgText(args.vg, box.size.x * 0.5f, 0.f, label.c_str(), NULL);
   }
 };
 
@@ -1597,6 +1642,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   BlunchPanel* panel = nullptr;
   BlunchTitle* title = nullptr;
   BlunchSpeedOfTimeLabel* speedOfTimeLabel = nullptr;
+  BlunchChannelLabel* channelLabel = nullptr;
   PolyOutputChannelsWidget* polyChannelsWidget = nullptr;
   BlunchExternalClockLabels* externalClockLabels = nullptr;
   ComputerscareTextEditor* editor = nullptr;
@@ -1637,14 +1683,20 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     addChild(rightHandle);
 
     title = new BlunchTitle();
-    title->box.pos = Vec(0.f, 11.f);
-    title->box.size = Vec(box.size.x, 24.f);
+    title->box.pos = Vec(0.f, 1.f);
+    title->box.size = Vec(box.size.x, 18.f);
     addChild(title);
 
     speedOfTimeLabel = new BlunchSpeedOfTimeLabel();
     speedOfTimeLabel->box.pos = Vec(4.f, 4.f);
     speedOfTimeLabel->box.size = Vec(28.f, 9.f);
     addChild(speedOfTimeLabel);
+
+    channelLabel = new BlunchChannelLabel();
+    channelLabel->module = module;
+    channelLabel->box.pos = Vec(0.f, 30.f);
+    channelLabel->box.size = Vec(box.size.x, 13.f);
+    addChild(channelLabel);
 
     addParam(createParam<SmallKnob>(Vec(8.f, 14.f), module,
                                     ComputerscareBlunch::SPEED_OF_TIME_PARAM));
@@ -1683,19 +1735,19 @@ struct ComputerscareBlunchWidget : ModuleWidget {
 
     BlunchAdvanceModeButton* lineAdvanceButton =
         createParam<BlunchAdvanceModeButton>(
-            Vec(66.f, 8.f), module, ComputerscareBlunch::AUTO_ADVANCE_PARAM);
+            Vec(58.f, 8.f), module, ComputerscareBlunch::AUTO_ADVANCE_PARAM);
     lineAdvanceButton->label = "Line";
     addParam(lineAdvanceButton);
 
     BlunchAdvanceModeButton* blockAdvanceButton =
         createParam<BlunchAdvanceModeButton>(
-            Vec(96.f, 8.f), module,
+            Vec(80.f, 8.f), module,
             ComputerscareBlunch::AUTO_BLOCK_ADVANCE_PARAM);
     blockAdvanceButton->label = "Block";
     addParam(blockAdvanceButton);
 
     polyChannelsWidget =
-        new PolyOutputChannelsWidget(Vec(box.size.x - 27.f, 4.f), module,
+        new PolyOutputChannelsWidget(Vec(box.size.x - 27.f, 18.f), module,
                                      ComputerscareBlunch::POLY_CHANNELS_PARAM);
     addChild(polyChannelsWidget);
 
@@ -1746,10 +1798,15 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       panel->box.size = box.size;
     }
     if (title) {
+      title->box.pos = Vec(0.f, 1.f);
       title->box.size.x = box.size.x;
     }
     if (speedOfTimeLabel) {
       speedOfTimeLabel->box.pos = Vec(4.f, 4.f);
+    }
+    if (channelLabel) {
+      channelLabel->box.pos = Vec(0.f, 30.f);
+      channelLabel->box.size.x = box.size.x;
     }
     if (externalClockLabels) {
       externalClockLabels->box.size.x = box.size.x;
@@ -1764,10 +1821,11 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       polyChannelsWidget->box.pos = Vec(0.f, 0.f);
       if (polyChannelsWidget->channelCountDisplay) {
         polyChannelsWidget->channelCountDisplay->box.pos =
-            Vec(box.size.x - 27.f, 4.f);
+            Vec(box.size.x - 27.f, 18.f);
       }
       if (polyChannelsWidget->channelsKnob) {
-        polyChannelsWidget->channelsKnob->box.pos = Vec(box.size.x - 20.f, 7.f);
+        polyChannelsWidget->channelsKnob->box.pos =
+            Vec(box.size.x - 20.f, 21.f);
       }
     }
     if (rightHandle) {
@@ -1874,7 +1932,12 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           blunch->focusedChannel = previousFocusedChannel;
         }
         if (blunch->showingChannelsView()) {
-          if (editor->state == &blunch->channelsEditorState) {
+          if (blunch->forcedChannelsCursorChannel >= 0) {
+            blunch->channelsCursorChannel = std::max(
+                0, std::min(blunch->forcedChannelsCursorChannel,
+                            ComputerscareBlunch::MAX_POLY_CHANNELS - 1));
+            blunch->forcedChannelsCursorChannel = -1;
+          } else if (editor->state == &blunch->channelsEditorState) {
             blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
                 editor->getCursorLine(),
                 ComputerscareBlunch::MAX_POLY_CHANNELS);
@@ -1918,7 +1981,10 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           if (editor->commands.cancelCount != blunch->lastCancelCount) {
             blunch->lastCancelCount = editor->commands.cancelCount;
             blunch->cancelPendingLine(blunch->selectedLine);
+            blunch->returnToChannelsView();
+            editor->state = &blunch->channelsEditorState;
             editor->syncFromState();
+            lastCursorLine = editor->getCursorLine();
           }
         } else {
           blunch->lastCancelCount = editor->commands.cancelCount;
@@ -2019,9 +2085,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           channelLabelHighlight.hasBackground = false;
           channelLabelHighlight.hasForeground = true;
           channelLabelHighlight.foreground =
-              blunch->channelLabelIsActive(channel)
-                  ? nvgRGB(0xee, 0xee, 0xea)
-                  : nvgRGBA(0xee, 0xee, 0xea, 0x6a);
+              blunch->channelLabelIsActive(channel) ? nvgRGB(0xee, 0xee, 0xea)
+                                                    : nvgRGB(0x78, 0x7d, 0x84);
           if (channelLabelHighlight.begin < channelLabelHighlight.end) {
             state->highlights.push_back(channelLabelHighlight);
           }
