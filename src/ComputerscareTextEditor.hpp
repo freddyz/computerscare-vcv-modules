@@ -11,6 +11,8 @@ struct ComputerscareTextEditor : ui::TextField {
   ComputerscareTextEditorStyle style;
   size_t maxUndoDepth = 128;
   bool submitOnEnter = false;
+  bool openOnEnter = false;
+  bool stopOnSemicolon = false;
 
   ComputerscareTextEditor();
 

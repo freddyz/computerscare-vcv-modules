@@ -24,6 +24,8 @@ struct ComputerscareTextHighlight {
 struct ComputerscareTextEditorCommands {
   int submitCount = 0;
   int cancelCount = 0;
+  int openCount = 0;
+  int stopCount = 0;
   int switchViewForwardCount = 0;
   int switchViewBackwardCount = 0;
 

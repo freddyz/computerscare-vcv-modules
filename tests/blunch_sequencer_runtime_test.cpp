@@ -28,6 +28,7 @@ int main() {
           "runtime starts outside total-duration group");
   require(runtime.activeStepPlays, "runtime starts with playable step");
   require(!runtime.activeClockOutputHigh, "runtime clock output starts low");
+  require(runtime.running, "runtime starts armed to run");
 
   runtime.clockPhase = 0.75f;
   runtime.activeClockRamp = 0.5f;

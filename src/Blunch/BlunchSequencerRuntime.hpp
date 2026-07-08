@@ -60,6 +60,7 @@ struct BlunchSequencerRuntime {
   int activeTotalDurationTicks = 0;
   bool activeStepPlays = true;
   bool activeClockOutputHigh = false;
+  bool running = true;
 
   void resetActiveProgramState(bool resetPhase) {
     activeProgramIndex = 0;

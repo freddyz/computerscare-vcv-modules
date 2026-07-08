@@ -63,6 +63,12 @@ void ComputerscareTextEditor::onDragEnd(const DragEndEvent& e) {
 }
 
 void ComputerscareTextEditor::onSelectText(const SelectTextEvent& e) {
+  if (stopOnSemicolon && e.codepoint == ';') {
+    commands.stopCount++;
+    e.consume(this);
+    return;
+  }
+
   ComputerscareTextEditorSnapshot before = captureSnapshot();
   handlingTrackedInput = true;
   ui::TextField::onSelectText(e);
@@ -78,6 +84,13 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
   if (e.action == GLFW_PRESS || e.action == GLFW_REPEAT) {
     int mods = e.mods & RACK_MOD_MASK;
     bool isEnter = e.key == GLFW_KEY_ENTER || e.key == GLFW_KEY_KP_ENTER;
+    if (openOnEnter && isEnter && mods == 0) {
+      if (e.action == GLFW_PRESS) {
+        commands.openCount++;
+      }
+      e.consume(this);
+      return;
+    }
     if (submitOnEnter && isEnter && mods == RACK_MOD_CTRL) {
       if (e.action == GLFW_PRESS) {
         commands.submitCount++;
@@ -88,6 +101,14 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
     if (e.key == GLFW_KEY_ESCAPE) {
       if (e.action == GLFW_PRESS) {
         commands.cancelCount++;
+      }
+      e.consume(this);
+      return;
+    }
+    bool isSemicolon = e.key == GLFW_KEY_SEMICOLON || e.keyName == ";";
+    if (stopOnSemicolon && isSemicolon && mods == 0) {
+      if (e.action == GLFW_PRESS) {
+        commands.stopCount++;
       }
       e.consume(this);
       return;
