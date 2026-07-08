@@ -128,6 +128,19 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
       e.consume(this);
       return;
     }
+    bool isLeftBracket = e.key == GLFW_KEY_LEFT_BRACKET || e.keyName == "[";
+    bool isRightBracket = e.key == GLFW_KEY_RIGHT_BRACKET || e.keyName == "]";
+    if ((isLeftBracket || isRightBracket) && mods == RACK_MOD_CTRL) {
+      if (e.action == GLFW_PRESS) {
+        if (isLeftBracket) {
+          commands.navigateChannelBackwardCount++;
+        } else {
+          commands.navigateChannelForwardCount++;
+        }
+      }
+      e.consume(this);
+      return;
+    }
     if (e.key == GLFW_KEY_UP) {
       moveCursorToAdjacentLogicalLine(-1, (e.mods & GLFW_MOD_SHIFT) != 0);
       if (state) {

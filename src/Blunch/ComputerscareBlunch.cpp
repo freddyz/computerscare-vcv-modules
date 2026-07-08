@@ -269,6 +269,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   int lastOpenCount = 0;
   int lastStopCount = 0;
   int lastSwitchViewCount = 0;
+  int lastNavigateChannelCount = 0;
   BlunchEditorViewMode editorViewMode = BlunchEditorViewMode::Sequence;
   int focusedChannel = 0;
   int playbackChannel = 0;
@@ -421,6 +422,22 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     editorViewDirty = true;
   }
 
+  void navigateFocusedChannel(int direction) {
+    int previousFocusedChannel = focusedChannel;
+    focusedChannel =
+        (focusedChannel + direction + MAX_POLY_CHANNELS) % MAX_POLY_CHANNELS;
+    if (focusedChannel != previousFocusedChannel) {
+      clearPendingLine();
+      clearSyntaxError();
+      checkedFocusedLineText.clear();
+      randomizeCursorRestorePending = false;
+    }
+    selectedLine = activeSequencer().activeLine;
+    selectedLineDirty = true;
+    editorViewMode = BlunchEditorViewMode::Sequence;
+    editorViewDirty = true;
+  }
+
   void returnToChannelsView() {
     channelsCursorChannel =
         std::max(0, std::min(focusedChannel, MAX_POLY_CHANNELS - 1));
@@ -433,6 +450,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   void stopSequencer(int channel) {
     BlunchSequencerRuntime& seq = sequencerForChannel(channel);
     seq.stopPlayback();
+  }
+
+  void hardStopAllSequencers() {
+    for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
+      stopSequencer(channel);
+    }
   }
 
   void startSequencer(int channel) {
@@ -605,13 +628,13 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                                activeTotalDurationExternalClockInput(seq) < 0);
     }
 
-    if (resetPressed) {
+    if (runHigh && resetPressed) {
       resetActiveProgram(true);
     }
-    if (advanceLinePressed) {
+    if (runHigh && advanceLinePressed) {
       moveToNextLine(false);
     }
-    if (advanceTokenPressed) {
+    if (runHigh && advanceTokenPressed) {
       advanceActiveProgramStep(seq, true);
     }
 
@@ -629,7 +652,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
 
     bool runHigh = params[RUN_PARAM].getValue() > 0.5f;
-    if (runHigh && !lastRunHigh) {
+    if (!runHigh) {
+      hardStopAllSequencers();
+    } else if (!lastRunHigh) {
       for (BlunchSequencerRuntime& channelSequencer : sequencers) {
         channelSequencer.running = true;
         if (!channelSequencer.activeProgram.empty()) {
@@ -1814,7 +1839,6 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   PolyOutputChannelsWidget* polyChannelsWidget = nullptr;
   BlunchExternalClockLabels* externalClockLabels = nullptr;
   ComputerscareTextEditor* editor = nullptr;
-  Widget* syntaxErrorLight = nullptr;
   PortWidget* externalClockWInput = nullptr;
   PortWidget* externalClockXInput = nullptr;
   PortWidget* externalClockYInput = nullptr;
@@ -1890,11 +1914,6 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       editor->setState(&browserEditorState);
     }
     addChild(editor);
-
-    syntaxErrorLight =
-        createLight<ComputerscareSmallLight<ComputerscareRedLight>>(
-            Vec(137.f, 31.f), module, ComputerscareBlunch::SYNTAX_ERROR_LIGHT);
-    addChild(syntaxErrorLight);
 
     BlunchAdvanceModeButton* runButton = createParam<BlunchAdvanceModeButton>(
         Vec(36.f, 8.f), module, ComputerscareBlunch::RUN_PARAM);
@@ -1982,9 +2001,6 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     if (editor) {
       editor->box.size.x = box.size.x - 6.f;
     }
-    if (syntaxErrorLight) {
-      syntaxErrorLight->box.pos = Vec(box.size.x - 13.f, 31.f);
-    }
     if (polyChannelsWidget) {
       polyChannelsWidget->box.pos = Vec(0.f, 0.f);
       if (polyChannelsWidget->channelCountDisplay) {
@@ -2068,6 +2084,19 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
           }
           blunch->switchEditorView();
+        }
+        if (editor->commands.navigateChannelCount() !=
+            blunch->lastNavigateChannelCount) {
+          blunch->lastNavigateChannelCount =
+              editor->commands.navigateChannelCount();
+          if (blunch->showingSequenceView()) {
+            int direction =
+                editor->commands.navigateChannelForwardCount >=
+                        editor->commands.navigateChannelBackwardCount
+                    ? 1
+                    : -1;
+            blunch->navigateFocusedChannel(direction);
+          }
         }
         if (editor->commands.openCount != blunch->lastOpenCount) {
           blunch->lastOpenCount = editor->commands.openCount;

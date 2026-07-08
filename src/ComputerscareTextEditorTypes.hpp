@@ -28,9 +28,15 @@ struct ComputerscareTextEditorCommands {
   int stopCount = 0;
   int switchViewForwardCount = 0;
   int switchViewBackwardCount = 0;
+  int navigateChannelForwardCount = 0;
+  int navigateChannelBackwardCount = 0;
 
   int switchViewCount() const {
     return switchViewForwardCount + switchViewBackwardCount;
+  }
+
+  int navigateChannelCount() const {
+    return navigateChannelForwardCount + navigateChannelBackwardCount;
   }
 };
 
