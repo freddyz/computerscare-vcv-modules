@@ -1,5 +1,6 @@
 #include <algorithm>
 
+#include "Blunch/BlunchKeyboardShortcuts.hpp"
 #include "ComputerscareTextEditor.hpp"
 #include "ComputerscareTextEditorLogic.hpp"
 
@@ -82,72 +83,12 @@ void ComputerscareTextEditor::onSelectText(const SelectTextEvent& e) {
 void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
   if (e.action == GLFW_PRESS || e.action == GLFW_REPEAT) {
     int mods = e.mods & RACK_MOD_MASK;
-    bool isEnter = e.key == GLFW_KEY_ENTER || e.key == GLFW_KEY_KP_ENTER;
-    if (openOnEnter && isEnter && mods == 0) {
-      if (e.action == GLFW_PRESS) {
-        commands.openCount++;
-      }
-      e.consume(this);
-      return;
-    }
-    if (submitOnEnter && isEnter && mods == GLFW_MOD_CONTROL) {
-      if (e.action == GLFW_PRESS) {
-        commands.submitCount++;
-      }
-      e.consume(this);
-      return;
-    }
-    if (e.key == GLFW_KEY_ESCAPE) {
-      if (e.action == GLFW_PRESS) {
-        commands.cancelCount++;
-      }
-      e.consume(this);
-      return;
-    }
-    bool isComma = e.key == GLFW_KEY_COMMA || e.keyName == ",";
-    if (stopShortcutEnabled && isComma && mods == GLFW_MOD_CONTROL) {
-      if (e.action == GLFW_PRESS) {
-        commands.stopCount++;
-      }
-      e.consume(this);
-      return;
-    }
-    if (e.key == GLFW_KEY_TAB) {
-      if (e.action == GLFW_PRESS) {
-        if ((e.mods & GLFW_MOD_SHIFT) != 0) {
-          commands.switchViewBackwardCount++;
-        } else {
-          commands.switchViewForwardCount++;
-        }
-      }
-      e.consume(this);
-      return;
-    }
-    if (e.key == GLFW_KEY_SPACE && mods == GLFW_MOD_CONTROL) {
-      if (e.action == GLFW_PRESS) {
-        commands.startAllCount++;
-      }
-      e.consume(this);
-      return;
-    }
-    bool isPeriod = e.key == GLFW_KEY_PERIOD || e.keyName == ".";
-    if (isPeriod && mods == GLFW_MOD_CONTROL) {
-      if (e.action == GLFW_PRESS) {
-        commands.hardStopCount++;
-      }
-      e.consume(this);
-      return;
-    }
-    bool isLeftBracket = e.key == GLFW_KEY_LEFT_BRACKET || e.keyName == "[";
-    bool isRightBracket = e.key == GLFW_KEY_RIGHT_BRACKET || e.keyName == "]";
-    if ((isLeftBracket || isRightBracket) && mods == GLFW_MOD_CONTROL) {
-      if (e.action == GLFW_PRESS) {
-        if (isLeftBracket) {
-          commands.navigateChannelBackwardCount++;
-        } else {
-          commands.navigateChannelForwardCount++;
-        }
-      }
+    computerscare::blunch::KeyboardShortcutOptions shortcutOptions;
+    shortcutOptions.submitOnEnter = submitOnEnter;
+    shortcutOptions.openOnEnter = openOnEnter;
+    shortcutOptions.stopShortcutEnabled = stopShortcutEnabled;
+    if (computerscare::blunch::handleKeyboardShortcut(
+            e.key, e.keyName, e.mods, e.action, shortcutOptions, commands)) {
       e.consume(this);
       return;
     }

@@ -10,6 +10,7 @@
 #include "../ComputerscareResizableHandle.hpp"
 #include "../ComputerscareTextEditor.hpp"
 #include "BlunchEditorViews.hpp"
+#include "BlunchKeyboardShortcuts.hpp"
 #include "BlunchRandomProgram.hpp"
 #include "BlunchSequencerEngine.hpp"
 #include "BlunchSequencerRuntime.hpp"
@@ -2341,8 +2342,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   }
 
   void onHoverKey(const HoverKeyEvent& e) override {
-    bool isPeriod = e.key == GLFW_KEY_PERIOD || e.keyName == ".";
-    if (isPeriod && (e.mods & RACK_MOD_MASK) == GLFW_MOD_CONTROL) {
+    if (computerscare::blunch::isHardStopShortcut(e.key, e.keyName, e.mods)) {
       if (e.action == GLFW_PRESS) {
         ComputerscareBlunch* blunch =
             dynamic_cast<ComputerscareBlunch*>(module);
