@@ -268,6 +268,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   int lastCancelCount = 0;
   int lastOpenCount = 0;
   int lastStopCount = 0;
+  int lastHardStopCount = 0;
+  int lastStartAllCount = 0;
+  bool startAllRequested = false;
   int lastSwitchViewCount = 0;
   int lastNavigateChannelCount = 0;
   BlunchEditorViewMode editorViewMode = BlunchEditorViewMode::Sequence;
@@ -462,6 +465,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     channel = std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
     playbackChannel = channel;
     sequencerForChannel(channel).running = true;
+    params[RUN_PARAM].setValue(1.f);
   }
 
   bool channelHasFormula(int channel) const {
@@ -652,15 +656,20 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
 
     bool runHigh = params[RUN_PARAM].getValue() > 0.5f;
-    if (!runHigh) {
-      hardStopAllSequencers();
-    } else if (!lastRunHigh) {
+    bool startAllNow = startAllRequested;
+    startAllRequested = false;
+    if (startAllNow) {
+      params[RUN_PARAM].setValue(1.f);
+      runHigh = true;
       for (BlunchSequencerRuntime& channelSequencer : sequencers) {
         channelSequencer.running = true;
         if (!channelSequencer.activeProgram.empty()) {
           applyActiveProgramStep(channelSequencer);
         }
       }
+    }
+    if (!runHigh && lastRunHigh) {
+      hardStopAllSequencers();
     }
     lastRunHigh = runHigh;
     bool resetPressed = resetTrigger.process(inputs[RESET_INPUT].getVoltage());
@@ -2071,7 +2080,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         editor->style.lineWrapping =
             blunch->showingSequenceView() && blunch->editorLineWrapping;
         editor->openOnEnter = blunch->showingChannelsView();
-        editor->stopOnSemicolon = true;
+        editor->stopShortcutEnabled = true;
         editor->readOnly = blunch->showingChannelsView() &&
                            !blunch->channelsEditorEditingEnabled();
         if (editor->commands.switchViewCount() != blunch->lastSwitchViewCount) {
@@ -2109,6 +2118,14 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             }
             blunch->openFocusedChannelEditPage();
           }
+        }
+        if (editor->commands.startAllCount != blunch->lastStartAllCount) {
+          blunch->lastStartAllCount = editor->commands.startAllCount;
+          blunch->startAllRequested = true;
+        }
+        if (editor->commands.hardStopCount != blunch->lastHardStopCount) {
+          blunch->lastHardStopCount = editor->commands.hardStopCount;
+          blunch->params[ComputerscareBlunch::RUN_PARAM].setValue(0.f);
         }
         if (editor->commands.stopCount != blunch->lastStopCount) {
           blunch->lastStopCount = editor->commands.stopCount;
@@ -2216,7 +2233,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         activeProgress = visibleSequencer.activeClockRamp;
       } else {
         editor->openOnEnter = false;
-        editor->stopOnSemicolon = false;
+        editor->stopShortcutEnabled = false;
         editor->readOnly = false;
         state = &browserEditorState;
         float browserPhase = std::fmod(
@@ -2321,6 +2338,22 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         }
       }
     }
+  }
+
+  void onHoverKey(const HoverKeyEvent& e) override {
+    bool isPeriod = e.key == GLFW_KEY_PERIOD || e.keyName == ".";
+    if (isPeriod && (e.mods & RACK_MOD_MASK) == GLFW_MOD_CONTROL) {
+      if (e.action == GLFW_PRESS) {
+        ComputerscareBlunch* blunch =
+            dynamic_cast<ComputerscareBlunch*>(module);
+        if (blunch) {
+          blunch->params[ComputerscareBlunch::RUN_PARAM].setValue(0.f);
+        }
+      }
+      e.consume(this);
+      return;
+    }
+    ModuleWidget::onHoverKey(e);
   }
 
   void appendContextMenu(Menu* menu) override {

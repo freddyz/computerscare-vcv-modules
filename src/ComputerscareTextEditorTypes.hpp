@@ -26,6 +26,8 @@ struct ComputerscareTextEditorCommands {
   int cancelCount = 0;
   int openCount = 0;
   int stopCount = 0;
+  int hardStopCount = 0;
+  int startAllCount = 0;
   int switchViewForwardCount = 0;
   int switchViewBackwardCount = 0;
   int navigateChannelForwardCount = 0;

@@ -63,11 +63,6 @@ void ComputerscareTextEditor::onDragEnd(const DragEndEvent& e) {
 }
 
 void ComputerscareTextEditor::onSelectText(const SelectTextEvent& e) {
-  if (stopOnSemicolon && e.codepoint == ';') {
-    commands.stopCount++;
-    e.consume(this);
-    return;
-  }
   if (readOnly) {
     e.consume(this);
     return;
@@ -95,7 +90,7 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
       e.consume(this);
       return;
     }
-    if (submitOnEnter && isEnter && mods == RACK_MOD_CTRL) {
+    if (submitOnEnter && isEnter && mods == GLFW_MOD_CONTROL) {
       if (e.action == GLFW_PRESS) {
         commands.submitCount++;
       }
@@ -109,8 +104,8 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
       e.consume(this);
       return;
     }
-    bool isSemicolon = e.key == GLFW_KEY_SEMICOLON || e.keyName == ";";
-    if (stopOnSemicolon && isSemicolon && mods == 0) {
+    bool isComma = e.key == GLFW_KEY_COMMA || e.keyName == ",";
+    if (stopShortcutEnabled && isComma && mods == GLFW_MOD_CONTROL) {
       if (e.action == GLFW_PRESS) {
         commands.stopCount++;
       }
@@ -128,9 +123,24 @@ void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
       e.consume(this);
       return;
     }
+    if (e.key == GLFW_KEY_SPACE && mods == GLFW_MOD_CONTROL) {
+      if (e.action == GLFW_PRESS) {
+        commands.startAllCount++;
+      }
+      e.consume(this);
+      return;
+    }
+    bool isPeriod = e.key == GLFW_KEY_PERIOD || e.keyName == ".";
+    if (isPeriod && mods == GLFW_MOD_CONTROL) {
+      if (e.action == GLFW_PRESS) {
+        commands.hardStopCount++;
+      }
+      e.consume(this);
+      return;
+    }
     bool isLeftBracket = e.key == GLFW_KEY_LEFT_BRACKET || e.keyName == "[";
     bool isRightBracket = e.key == GLFW_KEY_RIGHT_BRACKET || e.keyName == "]";
-    if ((isLeftBracket || isRightBracket) && mods == RACK_MOD_CTRL) {
+    if ((isLeftBracket || isRightBracket) && mods == GLFW_MOD_CONTROL) {
       if (e.action == GLFW_PRESS) {
         if (isLeftBracket) {
           commands.navigateChannelBackwardCount++;
