@@ -54,9 +54,9 @@ struct BlunchSequencerRuntime {
   std::vector<BlunchProgramStep> activeProgram;
   int activeProgramIndex = 0;
   int activeProgramBeat = 0;
-  float activeProgramElapsedSeconds = 0.f;
+  double activeProgramElapsedSeconds = 0.0;
   int activeTotalDurationGroupId = -1;
-  float activeTotalDurationElapsedSeconds = 0.f;
+  double activeTotalDurationElapsedSeconds = 0.0;
   int activeTotalDurationTicks = 0;
   bool activeStepPlays = true;
   bool activeClockOutputHigh = false;
@@ -76,9 +76,9 @@ struct BlunchSequencerRuntime {
   void resetActiveProgramState(bool resetPhase) {
     activeProgramIndex = 0;
     activeProgramBeat = 0;
-    activeProgramElapsedSeconds = 0.f;
+    activeProgramElapsedSeconds = 0.0;
     activeTotalDurationGroupId = -1;
-    activeTotalDurationElapsedSeconds = 0.f;
+    activeTotalDurationElapsedSeconds = 0.0;
     activeTotalDurationTicks = 0;
     activeStepPlays = true;
     if (resetPhase) {

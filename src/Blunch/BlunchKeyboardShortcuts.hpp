@@ -4,7 +4,8 @@
 
 #include "../ComputerscareTextEditorTypes.hpp"
 
-namespace computerscare::blunch {
+namespace computerscare {
+namespace blunch {
 
 struct KeyboardShortcutOptions {
   bool submitOnEnter = false;
@@ -17,4 +18,5 @@ bool handleKeyboardShortcut(int key, const std::string& keyName, int mods,
                             ComputerscareTextEditorCommands& commands);
 bool isHardStopShortcut(int key, const std::string& keyName, int mods);
 
-}  // namespace computerscare::blunch
+}  // namespace blunch
+}  // namespace computerscare

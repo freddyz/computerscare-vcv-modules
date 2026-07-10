@@ -21,6 +21,14 @@ void requireNear(float actual, float expected, const char* message) {
   }
 }
 
+void requireNearDouble(double actual, double expected, const char* message) {
+  if (std::fabs(actual - expected) > 0.000001) {
+    std::fprintf(stderr, "FAIL: %s expected %.6f got %.6f\n", message,
+                 expected, actual);
+    std::exit(1);
+  }
+}
+
 BlunchSequencerRuntime runtimeWithSteps(int count) {
   BlunchSequencerRuntime seq;
   seq.activeProgram.resize(count);
@@ -98,6 +106,16 @@ int main() {
           "duration does not complete before threshold");
   require(engine::advanceProgramDuration(duration, 0.25f),
           "duration completes at threshold");
+  requireNearDouble(duration.activeProgramElapsedSeconds, 0.0,
+                    "exact duration boundary has no elapsed carry");
+
+  BlunchSequencerRuntime durationCarry = runtimeWithSteps(1);
+  durationCarry.activeProgram[0].hasDuration = true;
+  durationCarry.activeProgram[0].durationSeconds = 0.5f;
+  require(engine::advanceProgramDuration(durationCarry, 0.75f),
+          "duration completes with oversized sample");
+  requireNearDouble(durationCarry.activeProgramElapsedSeconds, 0.25,
+                    "duration preserves elapsed carry at boundary");
 
   BlunchSequencerRuntime totalSeconds = runtimeWithSteps(2);
   totalSeconds.activeProgram[0].hasTotalDurationGroup = true;
@@ -111,6 +129,17 @@ int main() {
           "total duration jumps to group end");
   require(totalSeconds.activeTotalDurationGroupId == -1,
           "total duration clears active group");
+  requireNearDouble(totalSeconds.activeTotalDurationElapsedSeconds, 0.0,
+                    "exact total duration boundary has no elapsed carry");
+
+  BlunchSequencerRuntime totalSecondsCarry = runtimeWithSteps(2);
+  totalSecondsCarry.activeProgram[0].hasTotalDurationGroup = true;
+  totalSecondsCarry.activeProgram[0].totalDurationSeconds = 1.f;
+  totalSecondsCarry.activeProgram[0].totalDurationGroupEnd = 2;
+  require(engine::advanceTotalDuration(totalSecondsCarry, 1.25f),
+          "total duration completes with oversized sample");
+  requireNearDouble(totalSecondsCarry.activeTotalDurationElapsedSeconds, 0.25,
+                    "total duration preserves elapsed carry at boundary");
 
   BlunchSequencerRuntime totalTicks = runtimeWithSteps(2);
   totalTicks.activeProgram[0].hasTotalDurationGroup = true;

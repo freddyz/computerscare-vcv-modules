@@ -2,7 +2,8 @@
 
 #include "../Computerscare.hpp"
 
-namespace computerscare::blunch {
+namespace computerscare {
+namespace blunch {
 
 namespace {
 
@@ -93,9 +94,9 @@ bool handleKeyboardShortcut(int key, const std::string& keyName, int mods,
   if ((isLeftBracket || isRightBracket) && rackMods == GLFW_MOD_CONTROL) {
     if (action == GLFW_PRESS) {
       if (isLeftBracket) {
-        commands.navigateChannelBackwardCount++;
-      } else {
         commands.navigateChannelForwardCount++;
+      } else {
+        commands.navigateChannelBackwardCount++;
       }
     }
     return true;
@@ -109,4 +110,5 @@ bool isHardStopShortcut(int key, const std::string& keyName, int mods) {
          (mods & RACK_MOD_MASK) == GLFW_MOD_CONTROL;
 }
 
-}  // namespace computerscare::blunch
+}  // namespace blunch
+}  // namespace computerscare

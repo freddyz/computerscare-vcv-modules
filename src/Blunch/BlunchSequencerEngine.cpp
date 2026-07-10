@@ -92,7 +92,7 @@ bool nextClockGateHigh(BlunchSequencerRuntime& seq, bool usesExternalClock) {
 
 void repeatProgramStep(BlunchSequencerRuntime& seq) {
   seq.activeProgramBeat = 0;
-  seq.activeProgramElapsedSeconds = 0.f;
+  seq.activeProgramElapsedSeconds = 0.0;
 }
 
 bool advanceProgramDuration(BlunchSequencerRuntime& seq, float sampleTime) {
@@ -102,7 +102,12 @@ bool advanceProgramDuration(BlunchSequencerRuntime& seq, float sampleTime) {
   }
 
   seq.activeProgramElapsedSeconds += sampleTime;
-  return seq.activeProgramElapsedSeconds >= step->durationSeconds;
+  if (seq.activeProgramElapsedSeconds < step->durationSeconds) {
+    return false;
+  }
+
+  seq.activeProgramElapsedSeconds -= step->durationSeconds;
+  return true;
 }
 
 bool advanceTotalDuration(BlunchSequencerRuntime& seq, float sampleTime) {
@@ -116,10 +121,10 @@ bool advanceTotalDuration(BlunchSequencerRuntime& seq, float sampleTime) {
     return false;
   }
 
+  seq.activeTotalDurationElapsedSeconds -= step->totalDurationSeconds;
   seq.activeProgramBeat = 0;
   seq.activeProgramIndex = step->totalDurationGroupEnd;
   seq.activeTotalDurationGroupId = -1;
-  seq.activeTotalDurationElapsedSeconds = 0.f;
   seq.activeTotalDurationTicks = 0;
   return true;
 }
@@ -139,7 +144,7 @@ bool advanceTotalTickCount(BlunchSequencerRuntime& seq) {
   seq.activeProgramBeat = 0;
   seq.activeProgramIndex = step->totalDurationGroupEnd;
   seq.activeTotalDurationGroupId = -1;
-  seq.activeTotalDurationElapsedSeconds = 0.f;
+  seq.activeTotalDurationElapsedSeconds = 0.0;
   seq.activeTotalDurationTicks = 0;
   return true;
 }

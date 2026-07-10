@@ -225,10 +225,13 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     EXTERNAL_CLOCK_X_INPUT,
     EXTERNAL_CLOCK_Y_INPUT,
     EXTERNAL_CLOCK_Z_INPUT,
-    ADVANCE_INPUT,
     ADVANCE_TOKEN_INPUT,
+    ADVANCE_INPUT = ADVANCE_TOKEN_INPUT,
     ADVANCE_LINE_INPUT,
-    RESET_INPUT,
+    RESET_BLOCK_INPUT,
+    RESET_INPUT = RESET_BLOCK_INPUT,
+    RESET_LINE_INPUT,
+    RESET_SEQUENCE_INPUT,
     NUM_INPUTS
   };
   enum OutputIds {
@@ -246,10 +249,11 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   dsp::PulseGenerator lineCyclePulses[MAX_POLY_CHANNELS];
   dsp::PulseGenerator wrapPulses[MAX_POLY_CHANNELS];
   dsp::SchmittTrigger externalClockTriggers[4];
-  dsp::SchmittTrigger advanceTrigger;
   dsp::SchmittTrigger advanceTokenTrigger;
   dsp::SchmittTrigger advanceLineTrigger;
-  dsp::SchmittTrigger resetTrigger;
+  dsp::SchmittTrigger resetBlockTrigger;
+  dsp::SchmittTrigger resetLineTrigger;
+  dsp::SchmittTrigger resetSequenceTrigger;
   BlunchSequencerRuntime sequencers[MAX_POLY_CHANNELS];
   bool syntaxError = false;
   int selectedLine = 0;
@@ -274,6 +278,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   bool startAllRequested = false;
   int lastSwitchViewCount = 0;
   int lastNavigateChannelCount = 0;
+  int lastNavigateChannelForwardCount = 0;
+  int lastNavigateChannelBackwardCount = 0;
   BlunchEditorViewMode editorViewMode = BlunchEditorViewMode::Sequence;
   int focusedChannel = 0;
   int playbackChannel = 0;
@@ -533,10 +539,11 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     getParamQuantity(EDITOR_FONT_WIDTH_PARAM)->randomizeEnabled = false;
     getParamQuantity(EDITOR_FONT_HEIGHT_PARAM)->randomizeEnabled = false;
     getParamQuantity(EDITOR_LETTER_SPACING_PARAM)->randomizeEnabled = false;
-    configInput(ADVANCE_INPUT, "Advance");
     configInput(ADVANCE_TOKEN_INPUT, "Advance token");
     configInput(ADVANCE_LINE_INPUT, "Advance line");
-    configInput(RESET_INPUT, "Reset");
+    configInput(RESET_BLOCK_INPUT, "Reset block");
+    configInput(RESET_LINE_INPUT, "Reset line");
+    configInput(RESET_SEQUENCE_INPUT, "Reset sequence");
     configInput(EXTERNAL_CLOCK_W_INPUT, "External clock W");
     configInput(EXTERNAL_CLOCK_X_INPUT, "External clock X");
     configInput(EXTERNAL_CLOCK_Y_INPUT, "External clock Y");
@@ -556,7 +563,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
   void processSequencerChannel(int channel, float scaledSampleTime,
                                const bool externalClockEdges[4], bool runHigh,
-                               bool resetPressed, bool advanceLinePressed,
+                               bool resetBlockPressed, bool resetLinePressed,
+                               bool resetSequencePressed,
+                               bool advanceLinePressed,
                                bool advanceTokenPressed) {
     int previousProcessingChannel = blunchProcessingChannel;
     blunchProcessingChannel = clampChannel(channel);
@@ -633,8 +642,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                                activeTotalDurationExternalClockInput(seq) < 0);
     }
 
-    if (runHigh && resetPressed) {
+    if (runHigh && resetSequencePressed) {
+      resetActiveSequence(true);
+    } else if (runHigh && resetLinePressed) {
       resetActiveProgram(true);
+    } else if (runHigh && resetBlockPressed) {
+      resetActiveBlock(true);
     }
     if (runHigh && advanceLinePressed) {
       moveToNextLine(false);
@@ -673,12 +686,16 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       hardStopAllSequencers();
     }
     lastRunHigh = runHigh;
-    bool resetPressed = resetTrigger.process(inputs[RESET_INPUT].getVoltage());
+    bool resetBlockPressed =
+        resetBlockTrigger.process(inputs[RESET_BLOCK_INPUT].getVoltage());
+    bool resetLinePressed =
+        resetLineTrigger.process(inputs[RESET_LINE_INPUT].getVoltage());
+    bool resetSequencePressed =
+        resetSequenceTrigger.process(inputs[RESET_SEQUENCE_INPUT].getVoltage());
     bool advanceLinePressed =
         advanceLineTrigger.process(inputs[ADVANCE_LINE_INPUT].getVoltage());
     bool advanceTokenPressed =
-        advanceTokenTrigger.process(inputs[ADVANCE_TOKEN_INPUT].getVoltage()) ||
-        advanceTrigger.process(inputs[ADVANCE_INPUT].getVoltage());
+        advanceTokenTrigger.process(inputs[ADVANCE_TOKEN_INPUT].getVoltage());
 
     polyChannels = selectedOutputChannelCount();
     outputs[CLOCK_OUTPUT].setChannels(polyChannels);
@@ -687,7 +704,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     outputs[EOC3_OUTPUT].setChannels(polyChannels);
     for (int channel = 0; channel < polyChannels; channel++) {
       processSequencerChannel(channel, scaledSampleTime, externalClockEdges,
-                              runHigh, resetPressed, advanceLinePressed,
+                              runHigh, resetBlockPressed, resetLinePressed,
+                              resetSequencePressed, advanceLinePressed,
                               advanceTokenPressed);
     }
     for (int channel = polyChannels; channel < MAX_POLY_CHANNELS; channel++) {
@@ -1315,6 +1333,44 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     applyActiveProgramStep(activeSequencer());
   }
 
+  void resetActiveBlock(bool resetPhase) {
+    BlunchSequencerRuntime& seq = activeSequencer();
+    if (seq.activeProgram.empty()) {
+      commitLine(seq.activeLine, resetPhase);
+      return;
+    }
+
+    seq.activeProgramIndex = std::max(
+        0, std::min(seq.activeProgramIndex, (int)seq.activeProgram.size() - 1));
+    const BlunchProgramStep& step = seq.activeProgram[seq.activeProgramIndex];
+    if (step.hasTotalDurationGroup) {
+      seq.activeProgramIndex = step.totalDurationGroupStart;
+    }
+    seq.activeProgramBeat = 0;
+    seq.activeProgramElapsedSeconds = 0.0;
+    seq.activeTotalDurationGroupId = -1;
+    seq.activeTotalDurationElapsedSeconds = 0.0;
+    seq.activeTotalDurationTicks = 0;
+    if (resetPhase) {
+      seq.clockPhase = 0.f;
+      seq.activeClockRamp = 0.f;
+    }
+    applyActiveProgramStep(seq);
+  }
+
+  void resetActiveSequence(bool resetPhase) {
+    int lineCount = getLineCount(sequenceEditorState().text);
+    for (int line = 0; line < lineCount; line++) {
+      BlunchLineInfo lineInfo = getLineInfo(sequenceEditorState().text, line);
+      if (isBlankLine(lineInfo.text)) {
+        continue;
+      }
+      commitLine(line, resetPhase);
+      return;
+    }
+    resetActiveProgram(resetPhase);
+  }
+
   void sampleStepRepeatArgument(BlunchProgramStep& step) {
     if (!step.repeatIsRandom || step.repeatRandom.randomChoices.empty()) {
       return;
@@ -1400,17 +1456,17 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     refreshActiveClockSpecForStep(seq);
     seq.activeHighlightBegin = step.highlightBegin;
     seq.activeHighlightEnd = step.highlightEnd;
-    seq.activeProgramElapsedSeconds = 0.f;
+    seq.activeProgramElapsedSeconds = 0.0;
     if (step.hasTotalDurationGroup) {
       if (seq.activeTotalDurationGroupId != step.totalDurationGroupId) {
         seq.activeTotalDurationGroupId = step.totalDurationGroupId;
-        seq.activeTotalDurationElapsedSeconds = 0.f;
+        seq.activeTotalDurationElapsedSeconds = 0.0;
         seq.activeTotalDurationTicks = 0;
         sampleTotalDurationGroup(seq, seq.activeProgramIndex);
       }
     } else {
       seq.activeTotalDurationGroupId = -1;
-      seq.activeTotalDurationElapsedSeconds = 0.f;
+      seq.activeTotalDurationElapsedSeconds = 0.0;
       seq.activeTotalDurationTicks = 0;
     }
     scheduleTokenStartTick(seq);
@@ -1482,7 +1538,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   void advanceActiveProgramDuration(BlunchSequencerRuntime& seq,
                                     float sampleTime) {
     if (blunch::sequencer::advanceProgramDuration(seq, sampleTime)) {
+      double elapsedCarry = seq.activeProgramElapsedSeconds;
       advanceActiveProgramStep(seq);
+      seq.activeProgramElapsedSeconds += elapsedCarry;
     }
   }
 
@@ -1491,7 +1549,14 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     if (!blunch::sequencer::advanceTotalDuration(seq, sampleTime)) {
       return false;
     }
+    double elapsedCarry = seq.activeTotalDurationElapsedSeconds;
     finishActiveTotalDurationGroup(seq);
+    if (!seq.activeProgram.empty() && seq.activeProgramIndex >= 0 &&
+        seq.activeProgramIndex < (int)seq.activeProgram.size() &&
+        seq.activeProgram[seq.activeProgramIndex].hasTotalDurationGroup &&
+        !seq.activeProgram[seq.activeProgramIndex].totalDurationIsTickCount) {
+      seq.activeTotalDurationElapsedSeconds += elapsedCarry;
+    }
     return true;
   }
 
@@ -1738,7 +1803,7 @@ struct BlunchExternalClockLabels : TransparentWidget {
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
 
     const char* labels[] = {"w", "x", "y", "z"};
-    const float jackCenters[] = {13.f, 48.f, 83.f, 118.f};
+    const float jackCenters[] = {14.f, 44.f, 74.f, 104.f};
     for (int i = 0; i < 4; i++) {
       nvgText(args.vg, jackCenters[i], 2.f, labels[i], NULL);
     }
@@ -1853,10 +1918,11 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   PortWidget* externalClockXInput = nullptr;
   PortWidget* externalClockYInput = nullptr;
   PortWidget* externalClockZInput = nullptr;
-  PortWidget* advanceInput = nullptr;
   PortWidget* advanceTokenInput = nullptr;
   PortWidget* advanceLineInput = nullptr;
-  PortWidget* resetInput = nullptr;
+  PortWidget* resetBlockInput = nullptr;
+  PortWidget* resetLineInput = nullptr;
+  PortWidget* resetSequenceInput = nullptr;
   PortWidget* clockOutput = nullptr;
   PortWidget* eoc1Output = nullptr;
   PortWidget* eoc2Output = nullptr;
@@ -1904,7 +1970,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                                     ComputerscareBlunch::SPEED_OF_TIME_PARAM));
 
     externalClockLabels = new BlunchExternalClockLabels();
-    externalClockLabels->box.pos = Vec(0.f, 282.f);
+    externalClockLabels->box.pos = Vec(0.f, 278.f);
     externalClockLabels->box.size = Vec(box.size.x, 12.f);
     addChild(externalClockLabels);
 
@@ -1949,38 +2015,41 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     addChild(polyChannelsWidget);
 
     externalClockWInput = createInput<PointingUpPentagonPort>(
-        Vec(7.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_W_INPUT);
+        Vec(8.f, 290.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_W_INPUT);
     externalClockXInput = createInput<PointingUpPentagonPort>(
-        Vec(42.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_X_INPUT);
+        Vec(38.f, 290.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_X_INPUT);
     externalClockYInput = createInput<PointingUpPentagonPort>(
-        Vec(77.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_Y_INPUT);
+        Vec(68.f, 290.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_Y_INPUT);
     externalClockZInput = createInput<PointingUpPentagonPort>(
-        Vec(112.f, 295.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_Z_INPUT);
+        Vec(98.f, 290.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_Z_INPUT);
     addInput(externalClockWInput);
     addInput(externalClockXInput);
     addInput(externalClockYInput);
     addInput(externalClockZInput);
 
-    advanceInput = createInput<PointingUpPentagonPort>(
-        Vec(7.f, 322.f), module, ComputerscareBlunch::ADVANCE_INPUT);
     advanceTokenInput = createInput<PointingUpPentagonPort>(
-        Vec(42.f, 322.f), module, ComputerscareBlunch::ADVANCE_TOKEN_INPUT);
+        Vec(38.f, 314.f), module, ComputerscareBlunch::ADVANCE_TOKEN_INPUT);
     advanceLineInput = createInput<PointingUpPentagonPort>(
-        Vec(77.f, 322.f), module, ComputerscareBlunch::ADVANCE_LINE_INPUT);
-    resetInput = createInput<PointingUpPentagonPort>(
-        Vec(112.f, 322.f), module, ComputerscareBlunch::RESET_INPUT);
-    addInput(advanceInput);
+        Vec(68.f, 314.f), module, ComputerscareBlunch::ADVANCE_LINE_INPUT);
+    resetBlockInput = createInput<PointingUpPentagonPort>(
+        Vec(38.f, 335.f), module, ComputerscareBlunch::RESET_BLOCK_INPUT);
+    resetLineInput = createInput<PointingUpPentagonPort>(
+        Vec(68.f, 335.f), module, ComputerscareBlunch::RESET_LINE_INPUT);
+    resetSequenceInput = createInput<PointingUpPentagonPort>(
+        Vec(98.f, 335.f), module, ComputerscareBlunch::RESET_SEQUENCE_INPUT);
     addInput(advanceTokenInput);
     addInput(advanceLineInput);
-    addInput(resetInput);
+    addInput(resetBlockInput);
+    addInput(resetLineInput);
+    addInput(resetSequenceInput);
 
-    clockOutput = createOutput<InPort>(Vec(7.f, 350.f), module,
+    clockOutput = createOutput<InPort>(Vec(8.f, 356.f), module,
                                        ComputerscareBlunch::CLOCK_OUTPUT);
-    eoc1Output = createOutput<InPort>(Vec(42.f, 350.f), module,
+    eoc1Output = createOutput<InPort>(Vec(38.f, 356.f), module,
                                       ComputerscareBlunch::EOC1_OUTPUT);
-    eoc2Output = createOutput<InPort>(Vec(77.f, 350.f), module,
+    eoc2Output = createOutput<InPort>(Vec(68.f, 356.f), module,
                                       ComputerscareBlunch::EOC2_OUTPUT);
-    eoc3Output = createOutput<InPort>(Vec(112.f, 350.f), module,
+    eoc3Output = createOutput<InPort>(Vec(98.f, 356.f), module,
                                       ComputerscareBlunch::EOC3_OUTPUT);
     addOutput(clockOutput);
     addOutput(eoc1Output);
@@ -2026,24 +2095,33 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
     }
 
-    const float externalInputY = 295.f;
-    const float inputY = 322.f;
-    const float outputY = 350.f;
+    const float externalInputY = 290.f;
+    const float advanceInputY = 314.f;
+    const float resetInputY = 335.f;
+    const float outputY = 356.f;
     PortWidget* externalInputs[] = {externalClockWInput, externalClockXInput,
                                     externalClockYInput, externalClockZInput};
-    PortWidget* inputs[] = {advanceInput, advanceTokenInput, advanceLineInput,
-                            resetInput};
+    PortWidget* advanceInputs[] = {advanceTokenInput, advanceLineInput};
+    PortWidget* resetInputs[] = {resetBlockInput, resetLineInput,
+                                 resetSequenceInput};
     PortWidget* outputs[] = {clockOutput, eoc1Output, eoc2Output, eoc3Output};
-    const float jackXs[] = {7.f, 42.f, 77.f, 112.f};
+    const float jackXs[] = {8.f, 38.f, 68.f, 98.f};
     for (int i = 0; i < 4; i++) {
-      if (inputs[i]) {
-        inputs[i]->box.pos = Vec(jackXs[i], inputY);
-      }
       if (externalInputs[i]) {
         externalInputs[i]->box.pos = Vec(jackXs[i], externalInputY);
       }
       if (outputs[i]) {
         outputs[i]->box.pos = Vec(jackXs[i], outputY);
+      }
+    }
+    for (int i = 0; i < 2; i++) {
+      if (advanceInputs[i]) {
+        advanceInputs[i]->box.pos = Vec(jackXs[i + 1], advanceInputY);
+      }
+    }
+    for (int i = 0; i < 3; i++) {
+      if (resetInputs[i]) {
+        resetInputs[i]->box.pos = Vec(jackXs[i + 1], resetInputY);
       }
     }
   }
@@ -2097,14 +2175,18 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         }
         if (editor->commands.navigateChannelCount() !=
             blunch->lastNavigateChannelCount) {
+          int forwardDelta = editor->commands.navigateChannelForwardCount -
+                             blunch->lastNavigateChannelForwardCount;
+          int backwardDelta = editor->commands.navigateChannelBackwardCount -
+                              blunch->lastNavigateChannelBackwardCount;
           blunch->lastNavigateChannelCount =
               editor->commands.navigateChannelCount();
+          blunch->lastNavigateChannelForwardCount =
+              editor->commands.navigateChannelForwardCount;
+          blunch->lastNavigateChannelBackwardCount =
+              editor->commands.navigateChannelBackwardCount;
           if (blunch->showingSequenceView()) {
-            int direction =
-                editor->commands.navigateChannelForwardCount >=
-                        editor->commands.navigateChannelBackwardCount
-                    ? 1
-                    : -1;
+            int direction = forwardDelta > backwardDelta ? 1 : -1;
             blunch->navigateFocusedChannel(direction);
           }
         }
