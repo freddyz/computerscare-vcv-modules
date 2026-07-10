@@ -248,12 +248,14 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   dsp::PulseGenerator tokenMovePulses[MAX_POLY_CHANNELS];
   dsp::PulseGenerator lineCyclePulses[MAX_POLY_CHANNELS];
   dsp::PulseGenerator wrapPulses[MAX_POLY_CHANNELS];
+  dsp::PulseGenerator clockOutputPulses[MAX_POLY_CHANNELS];
   dsp::SchmittTrigger externalClockTriggers[4];
   dsp::SchmittTrigger advanceTokenTrigger;
   dsp::SchmittTrigger advanceLineTrigger;
   dsp::SchmittTrigger resetBlockTrigger;
   dsp::SchmittTrigger resetLineTrigger;
   dsp::SchmittTrigger resetSequenceTrigger;
+  dsp::Timer resetClockIgnoreTimer;
   BlunchSequencerRuntime sequencers[MAX_POLY_CHANNELS];
   bool syntaxError = false;
   int selectedLine = 0;
@@ -287,6 +289,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   int forcedChannelsCursorChannel = -1;
   bool editorViewDirty = true;
   bool lastRunHigh = true;
+  bool resetClockIgnoreActive = false;
   bool externalClockHigh[4] = {false, false, false, false};
   float width = MIN_WIDTH;
   bool editorLineWrapping = true;
@@ -460,6 +463,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   void stopSequencer(int channel) {
     BlunchSequencerRuntime& seq = sequencerForChannel(channel);
     seq.stopPlayback();
+    clockOutputPulses[clampChannel(channel)].reset();
   }
 
   void hardStopAllSequencers() {
@@ -575,7 +579,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       seq.activeClockOutputHigh = false;
       seq.clockStartLowSamples = 0;
       seq.clockStartHighPending = false;
-      outputs[CLOCK_OUTPUT].setVoltage(0.f, channel);
+      clockOutputPulses[channel].reset();
       blunchProcessingChannel = previousProcessingChannel;
       return;
     }
@@ -583,6 +587,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     int activeRepeatClock = activeRepeatExternalClockInput(seq);
     int activeTotalTickClock = activeTotalDurationExternalClockInput(seq);
     bool running = runHigh && seq.running;
+    bool previousClockHigh = seq.clockHigh;
     if (running) {
       if (activeExternalClock >= 0) {
         if (!advanceActiveTotalDuration(seq, scaledSampleTime)) {
@@ -624,10 +629,15 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     bool outputClockHigh = activeExternalClock >= 0
                                ? externalClockHigh[activeExternalClock]
                                : seq.clockHigh;
-    seq.activeClockOutputHigh =
-        running && outputClockHigh && seq.activeStepPlays;
-    outputs[CLOCK_OUTPUT].setVoltage(seq.activeClockOutputHigh ? 10.f : 0.f,
-                                     channel);
+    bool outputClockTriggered = activeExternalClock >= 0
+                                    ? externalClockEdges[activeExternalClock]
+                                    : (!previousClockHigh && outputClockHigh);
+    bool resetPressed =
+        resetBlockPressed || resetLinePressed || resetSequencePressed;
+    if (running && !resetPressed && outputClockTriggered &&
+        seq.activeStepPlays) {
+      clockOutputPulses[channel].trigger(1e-3f);
+    }
 
     bool externalTotalTickAdvanced = false;
     if (running && activeTotalTickClock >= 0 &&
@@ -692,10 +702,31 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         resetLineTrigger.process(inputs[RESET_LINE_INPUT].getVoltage());
     bool resetSequencePressed =
         resetSequenceTrigger.process(inputs[RESET_SEQUENCE_INPUT].getVoltage());
+    bool resetPressed =
+        resetBlockPressed || resetLinePressed || resetSequencePressed;
+    if (resetPressed) {
+      resetClockIgnoreTimer.reset();
+      resetClockIgnoreActive = true;
+    }
+    float resetClockIgnoreElapsed =
+        resetClockIgnoreActive ? resetClockIgnoreTimer.process(args.sampleTime)
+                               : 1e-3f;
+    bool ignoreClockInputs =
+        resetClockIgnoreActive && resetClockIgnoreElapsed <= 1e-3f;
+    if (resetClockIgnoreElapsed > 1e-3f) {
+      resetClockIgnoreActive = false;
+    }
+    if (ignoreClockInputs) {
+      for (int i = 0; i < 4; i++) {
+        externalClockEdges[i] = false;
+      }
+    }
     bool advanceLinePressed =
-        advanceLineTrigger.process(inputs[ADVANCE_LINE_INPUT].getVoltage());
+        advanceLineTrigger.process(inputs[ADVANCE_LINE_INPUT].getVoltage()) &&
+        !ignoreClockInputs;
     bool advanceTokenPressed =
-        advanceTokenTrigger.process(inputs[ADVANCE_TOKEN_INPUT].getVoltage());
+        advanceTokenTrigger.process(inputs[ADVANCE_TOKEN_INPUT].getVoltage()) &&
+        !ignoreClockInputs;
 
     polyChannels = selectedOutputChannelCount();
     outputs[CLOCK_OUTPUT].setChannels(polyChannels);
@@ -712,6 +743,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       sequencers[channel].activeClockOutputHigh = false;
     }
     for (int channel = 0; channel < polyChannels; channel++) {
+      bool clockPulseHigh = clockOutputPulses[channel].process(args.sampleTime);
+      sequencers[channel].activeClockOutputHigh = clockPulseHigh;
+      outputs[CLOCK_OUTPUT].setVoltage(clockPulseHigh ? 10.f : 0.f, channel);
       outputs[EOC1_OUTPUT].setVoltage(
           tokenMovePulses[channel].process(args.sampleTime) ? 10.f : 0.f,
           channel);
@@ -722,6 +756,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
           wrapPulses[channel].process(args.sampleTime) ? 10.f : 0.f, channel);
     }
     for (int channel = polyChannels; channel < MAX_POLY_CHANNELS; channel++) {
+      clockOutputPulses[channel].process(args.sampleTime);
       tokenMovePulses[channel].process(args.sampleTime);
       lineCyclePulses[channel].process(args.sampleTime);
       wrapPulses[channel].process(args.sampleTime);
