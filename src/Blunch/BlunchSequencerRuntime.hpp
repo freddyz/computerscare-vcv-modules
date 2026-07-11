@@ -60,12 +60,16 @@ struct BlunchSequencerRuntime {
   int activeTotalDurationTicks = 0;
   bool activeStepPlays = true;
   bool activeClockOutputHigh = false;
+  float activeClockDisplayPulse = 0.f;
+  float activeExternalTimingDisplayPulse = 0.f;
   bool running = true;
 
   void stopPlayback() {
     running = false;
     clockHigh = false;
     activeClockOutputHigh = false;
+    activeClockDisplayPulse = 0.f;
+    activeExternalTimingDisplayPulse = 0.f;
     clockStartLowSamples = 0;
     clockStartHighPending = false;
     activeHighlightBegin = 0;

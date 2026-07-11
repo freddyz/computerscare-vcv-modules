@@ -164,6 +164,10 @@ bool getActiveRepeatProgressHighlight(const BlunchSequencerRuntime& seq,
     if (step->totalDurationHighlightEnd <= step->totalDurationHighlightBegin) {
       return false;
     }
+    if (step->totalDurationIsTickCount && step->totalDurationTicks <= 1 &&
+        step->totalDurationExternalClockInput >= 0) {
+      return false;
+    }
 
     highlight.begin = step->totalDurationHighlightBegin;
     highlight.end = step->totalDurationHighlightEnd;
@@ -185,6 +189,10 @@ bool getActiveRepeatProgressHighlight(const BlunchSequencerRuntime& seq,
   }
 
   if (step->repeatHighlightEnd <= step->repeatHighlightBegin) {
+    return false;
+  }
+  if (!step->hasDuration && step->repeat <= 1 &&
+      step->repeatExternalClockInput >= 0) {
     return false;
   }
 

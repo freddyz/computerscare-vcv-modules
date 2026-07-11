@@ -170,6 +170,46 @@ int main() {
   require(!engine::getActiveRepeatProgressHighlight(progress, highlight),
           "stopped runtime does not expose repeat progress");
 
+  BlunchSequencerRuntime singleExternalRepeat = runtimeWithSteps(1);
+  singleExternalRepeat.activeProgram[0].repeat = 1;
+  singleExternalRepeat.activeProgram[0].repeatExternalClockInput = 1;
+  singleExternalRepeat.activeProgram[0].repeatHighlightBegin = 10;
+  singleExternalRepeat.activeProgram[0].repeatHighlightEnd = 12;
+  require(!engine::getActiveRepeatProgressHighlight(singleExternalRepeat,
+                                                    highlight),
+          "single external repeat does not show repeat progress");
+
+  BlunchSequencerRuntime multiExternalRepeat = runtimeWithSteps(1);
+  multiExternalRepeat.activeProgram[0].repeat = 2;
+  multiExternalRepeat.activeProgram[0].repeatExternalClockInput = 1;
+  multiExternalRepeat.activeProgram[0].repeatHighlightBegin = 10;
+  multiExternalRepeat.activeProgram[0].repeatHighlightEnd = 12;
+  require(engine::getActiveRepeatProgressHighlight(multiExternalRepeat,
+                                                   highlight),
+          "multi external repeat shows repeat progress");
+
+  BlunchSequencerRuntime singleExternalTotal = runtimeWithSteps(1);
+  singleExternalTotal.activeProgram[0].hasTotalDurationGroup = true;
+  singleExternalTotal.activeProgram[0].totalDurationIsTickCount = true;
+  singleExternalTotal.activeProgram[0].totalDurationTicks = 1;
+  singleExternalTotal.activeProgram[0].totalDurationExternalClockInput = 2;
+  singleExternalTotal.activeProgram[0].totalDurationHighlightBegin = 20;
+  singleExternalTotal.activeProgram[0].totalDurationHighlightEnd = 22;
+  require(!engine::getActiveRepeatProgressHighlight(singleExternalTotal,
+                                                    highlight),
+          "single external total duration does not show repeat progress");
+
+  BlunchSequencerRuntime multiExternalTotal = runtimeWithSteps(1);
+  multiExternalTotal.activeProgram[0].hasTotalDurationGroup = true;
+  multiExternalTotal.activeProgram[0].totalDurationIsTickCount = true;
+  multiExternalTotal.activeProgram[0].totalDurationTicks = 2;
+  multiExternalTotal.activeProgram[0].totalDurationExternalClockInput = 2;
+  multiExternalTotal.activeProgram[0].totalDurationHighlightBegin = 20;
+  multiExternalTotal.activeProgram[0].totalDurationHighlightEnd = 22;
+  require(engine::getActiveRepeatProgressHighlight(multiExternalTotal,
+                                                   highlight),
+          "multi external total duration shows repeat progress");
+
   std::puts("blunch sequencer engine tests passed");
   return 0;
 }

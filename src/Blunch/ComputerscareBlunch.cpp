@@ -94,8 +94,10 @@ static void addBlunchSequencerHighlights(
       std::max(tokenHighlight.begin,
                mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
                                                   seq.activeHighlightEnd));
-  tokenHighlight.hasBackground = seq.activeClockOutputHigh;
-  tokenHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, 0x66);
+  tokenHighlight.hasBackground = seq.activeClockDisplayPulse > 0.001f;
+  unsigned char pulseAlpha = (unsigned char)std::min(
+      0xbb, 0x30 + (int)(seq.activeClockDisplayPulse * 0x75));
+  tokenHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, pulseAlpha);
   tokenHighlight.hasBorder = true;
   tokenHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
   tokenHighlight.hasProgress =
@@ -105,6 +107,42 @@ static void addBlunchSequencerHighlights(
   tokenHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
   if (tokenHighlight.begin < tokenHighlight.end) {
     highlights.push_back(tokenHighlight);
+  }
+
+  if (!seq.activeProgram.empty() && seq.activeProgramIndex >= 0 &&
+      seq.activeProgramIndex < (int)seq.activeProgram.size() &&
+      seq.activeExternalTimingDisplayPulse > 0.001f) {
+    const BlunchProgramStep& step = seq.activeProgram[seq.activeProgramIndex];
+    int externalTimingBegin = 0;
+    int externalTimingEnd = 0;
+    if (step.hasTotalDurationGroup && step.totalDurationIsTickCount &&
+        step.totalDurationTicks <= 1 &&
+        step.totalDurationExternalClockInput >= 0) {
+      externalTimingBegin = step.totalDurationHighlightBegin;
+      externalTimingEnd = step.totalDurationHighlightEnd;
+    } else if (!step.hasDuration && step.repeat <= 1 &&
+               step.repeatExternalClockInput >= 0) {
+      externalTimingBegin = step.repeatHighlightBegin;
+      externalTimingEnd = step.repeatHighlightEnd;
+    }
+
+    if (externalTimingEnd > externalTimingBegin) {
+      ComputerscareTextHighlight externalTimingHighlight;
+      externalTimingHighlight.begin = mapBlunchSourceOffsetToVisibleLine(
+          sourceLine, visibleLine, externalTimingBegin);
+      externalTimingHighlight.end =
+          std::max(externalTimingHighlight.begin,
+                   mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
+                                                      externalTimingEnd));
+      externalTimingHighlight.hasBackground = true;
+      unsigned char externalTimingAlpha = (unsigned char)std::min(
+          0xbb, 0x30 + (int)(seq.activeExternalTimingDisplayPulse * 0x75));
+      externalTimingHighlight.background =
+          nvgRGBA(0xc8, 0x9f, 0x16, externalTimingAlpha);
+      if (externalTimingHighlight.begin < externalTimingHighlight.end) {
+        highlights.push_back(externalTimingHighlight);
+      }
+    }
   }
 
   blunch::sequencer::RepeatProgress repeatProgress;
@@ -577,6 +615,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     if (seq.activeProgram.empty()) {
       seq.clockHigh = false;
       seq.activeClockOutputHigh = false;
+      seq.activeClockDisplayPulse = 0.f;
+      seq.activeExternalTimingDisplayPulse = 0.f;
       seq.clockStartLowSamples = 0;
       seq.clockStartHighPending = false;
       clockOutputPulses[channel].reset();
@@ -632,11 +672,22 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     bool outputClockTriggered = activeExternalClock >= 0
                                     ? externalClockEdges[activeExternalClock]
                                     : (!previousClockHigh && outputClockHigh);
+    bool externalTimingClockTriggered =
+        (activeRepeatClock >= 0 && externalClockEdges[activeRepeatClock]) ||
+        (activeTotalTickClock >= 0 && externalClockEdges[activeTotalTickClock]);
     bool resetPressed =
         resetBlockPressed || resetLinePressed || resetSequencePressed;
     if (running && !resetPressed && outputClockTriggered &&
         seq.activeStepPlays) {
       clockOutputPulses[channel].trigger(1e-3f);
+    }
+    if (running && !resetPressed &&
+        ((outputClockTriggered && seq.activeStepPlays) ||
+         externalTimingClockTriggered)) {
+      seq.activeClockDisplayPulse = 1.f;
+    }
+    if (running && !resetPressed && externalTimingClockTriggered) {
+      seq.activeExternalTimingDisplayPulse = 1.f;
     }
 
     bool externalTotalTickAdvanced = false;
@@ -745,6 +796,16 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     for (int channel = 0; channel < polyChannels; channel++) {
       bool clockPulseHigh = clockOutputPulses[channel].process(args.sampleTime);
       sequencers[channel].activeClockOutputHigh = clockPulseHigh;
+      sequencers[channel].activeClockDisplayPulse *=
+          std::max(0.f, 1.f - args.sampleTime * 5.f);
+      if (sequencers[channel].activeClockDisplayPulse < 0.001f) {
+        sequencers[channel].activeClockDisplayPulse = 0.f;
+      }
+      sequencers[channel].activeExternalTimingDisplayPulse *=
+          std::max(0.f, 1.f - args.sampleTime * 5.f);
+      if (sequencers[channel].activeExternalTimingDisplayPulse < 0.001f) {
+        sequencers[channel].activeExternalTimingDisplayPulse = 0.f;
+      }
       outputs[CLOCK_OUTPUT].setVoltage(clockPulseHigh ? 10.f : 0.f, channel);
       outputs[EOC1_OUTPUT].setVoltage(
           tokenMovePulses[channel].process(args.sampleTime) ? 10.f : 0.f,
@@ -757,6 +818,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
     for (int channel = polyChannels; channel < MAX_POLY_CHANNELS; channel++) {
       clockOutputPulses[channel].process(args.sampleTime);
+      sequencers[channel].activeClockDisplayPulse = 0.f;
+      sequencers[channel].activeExternalTimingDisplayPulse = 0.f;
       tokenMovePulses[channel].process(args.sampleTime);
       lineCyclePulses[channel].process(args.sampleTime);
       wrapPulses[channel].process(args.sampleTime);
