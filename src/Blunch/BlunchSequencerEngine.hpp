@@ -17,6 +17,8 @@ int activeRepeatExternalClockInput(const BlunchSequencerRuntime& seq);
 int activeTotalDurationExternalClockInput(const BlunchSequencerRuntime& seq);
 bool activeStepUsesExternalClock(const BlunchSequencerRuntime& seq);
 
+float seededRandomFloat(float seed, int channel, int line, int stepIndex,
+                        int role, int eventIndex, int drawIndex);
 void chooseStepPlayback(BlunchSequencerRuntime& seq, float randomValue);
 bool nextClockGateHigh(BlunchSequencerRuntime& seq, bool usesExternalClock);
 

@@ -29,6 +29,14 @@ void requireNearDouble(double actual, double expected, const char* message) {
   }
 }
 
+void requireDifferent(float left, float right, const char* message) {
+  if (std::fabs(left - right) <= 0.000001f) {
+    std::fprintf(stderr, "FAIL: %s expected different values got %.6f\n",
+                 message, left);
+    std::exit(1);
+  }
+}
+
 BlunchSequencerRuntime runtimeWithSteps(int count) {
   BlunchSequencerRuntime seq;
   seq.activeProgram.resize(count);
@@ -39,6 +47,17 @@ BlunchSequencerRuntime runtimeWithSteps(int count) {
 
 int main() {
   namespace engine = blunch::sequencer;
+
+  float seededA = engine::seededRandomFloat(1.0f, 2, 3, 4, 5, 6, 7);
+  float seededB = engine::seededRandomFloat(1.0f, 2, 3, 4, 5, 6, 7);
+  requireNear(seededA, seededB, "seeded random is stable");
+  require(seededA >= 0.f && seededA < 1.f, "seeded random is in range");
+  requireDifferent(seededA,
+                   engine::seededRandomFloat(1.001f, 2, 3, 4, 5, 6, 7),
+                   "small seed changes produce different patterns");
+  requireDifferent(seededA,
+                   engine::seededRandomFloat(1.0f, 2, 3, 4, 5, 6, 8),
+                   "seeded random draw index changes output");
 
   BlunchSequencerRuntime empty;
   require(engine::activeExternalClockInput(empty) == -1,

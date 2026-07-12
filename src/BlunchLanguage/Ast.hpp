@@ -45,6 +45,22 @@ struct RandomChoiceAst {
   ClockUnit unit = ClockUnit::Unknown;
   SourceRange unitRange;
   SourceRange range;
+  bool hasRepeatModifier = false;
+  int repeat = 1;
+  bool repeatIsDuration = false;
+  double repeatDurationSeconds = 0.0;
+  bool repeatUsesExternalClock = false;
+  char repeatExternalClock = '\0';
+  SourceRange repeatRange;
+  SourceRange repeatValueRange;
+  bool hasTotalDurationModifier = false;
+  bool totalDurationIsTickCount = false;
+  int totalDurationTicks = 0;
+  double totalDurationSeconds = 0.0;
+  bool totalDurationUsesExternalClock = false;
+  char totalDurationExternalClock = '\0';
+  SourceRange totalDurationRange;
+  SourceRange totalDurationValueRange;
 };
 
 struct ClockLiteralAst {

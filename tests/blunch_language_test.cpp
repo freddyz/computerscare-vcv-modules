@@ -476,6 +476,37 @@ void testAst() {
   require(result.ast.randomChoices.size() == 2, "{x|y}@4 choice count");
   requireRandomChoiceExternalClock(result.ast, 0, 'x', "{x|y}@4 choice 0");
   requireRandomChoiceExternalClock(result.ast, 1, 'y', "{x|y}@4 choice 1");
+
+  result = lang::parseClockLiteral("{295bpm#3|195bpm@1s}");
+  require(result.ok(), "{295bpm#3|195bpm@1s} ast parses");
+  require(result.ast.kind == lang::ClockLiteralKind::RandomRange,
+          "{295bpm#3|195bpm@1s} random kind");
+  require(result.ast.randomChoices.size() == 2,
+          "{295bpm#3|195bpm@1s} choice count");
+  requireRandomChoice(result.ast, 0, 295.0, 295.0,
+                      "{295bpm#3|195bpm@1s} choice 0");
+  requireRandomChoiceUnit(result.ast, 0, lang::ClockUnit::Bpm,
+                          "{295bpm#3|195bpm@1s} choice 0 unit");
+  require(result.ast.randomChoices[0].hasTotalDurationModifier,
+          "{295bpm#3|195bpm@1s} choice 0 total");
+  require(result.ast.randomChoices[0].totalDurationIsTickCount,
+          "{295bpm#3|195bpm@1s} choice 0 total ticks");
+  require(result.ast.randomChoices[0].totalDurationTicks == 3,
+          "{295bpm#3|195bpm@1s} choice 0 total count");
+  requireRange(result.ast.randomChoices[0].totalDurationRange, 7, 9,
+               "{295bpm#3|195bpm@1s} choice 0 total range");
+  requireRandomChoice(result.ast, 1, 195.0, 195.0,
+                      "{295bpm#3|195bpm@1s} choice 1");
+  requireRandomChoiceUnit(result.ast, 1, lang::ClockUnit::Bpm,
+                          "{295bpm#3|195bpm@1s} choice 1 unit");
+  require(result.ast.randomChoices[1].hasRepeatModifier,
+          "{295bpm#3|195bpm@1s} choice 1 repeat");
+  require(result.ast.randomChoices[1].repeatIsDuration,
+          "{295bpm#3|195bpm@1s} choice 1 repeat duration");
+  requireNear(result.ast.randomChoices[1].repeatDurationSeconds, 1.0,
+              "{295bpm#3|195bpm@1s} choice 1 duration seconds");
+  requireRange(result.ast.randomChoices[1].repeatRange, 16, 19,
+               "{295bpm#3|195bpm@1s} choice 1 repeat range");
 }
 
 void testProgramAst() {
@@ -1350,6 +1381,8 @@ void testInvalidInputs() {
   requireInvalid("{|3}hz", "random choice missing before pipe invalid");
   requireInvalid("{3|{}}hz", "nested random empty choice invalid");
   requireInvalid("{x-y}", "external clock random range invalid");
+  requireInvalid("{120bpm@0s|90bpm}", "zero random choice repeat invalid");
+  requireInvalid("{120bpm#0s|90bpm}", "zero random choice total invalid");
   requireInvalid("q", "unknown bare identifier invalid");
 }
 

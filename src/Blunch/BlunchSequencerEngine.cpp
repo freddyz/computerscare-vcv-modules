@@ -1,6 +1,8 @@
 #include "BlunchSequencerEngine.hpp"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 
 namespace blunch {
 namespace sequencer {
@@ -48,6 +50,31 @@ int activeTotalDurationExternalClockInput(const BlunchSequencerRuntime& seq) {
 
 bool activeStepUsesExternalClock(const BlunchSequencerRuntime& seq) {
   return activeExternalClockInput(seq) >= 0;
+}
+
+static uint32_t mixSeed(uint32_t hash, uint32_t value) {
+  hash ^= value + 0x9e3779b9u + (hash << 6) + (hash >> 2);
+  hash ^= hash >> 16;
+  hash *= 0x7feb352du;
+  hash ^= hash >> 15;
+  hash *= 0x846ca68bu;
+  hash ^= hash >> 16;
+  return hash;
+}
+
+float seededRandomFloat(float seed, int channel, int line, int stepIndex,
+                        int role, int eventIndex, int drawIndex) {
+  uint32_t seedBits = 0;
+  std::memcpy(&seedBits, &seed, sizeof(seedBits));
+  uint32_t hash = 0x811c9dc5u;
+  hash = mixSeed(hash, seedBits);
+  hash = mixSeed(hash, (uint32_t)channel);
+  hash = mixSeed(hash, (uint32_t)line);
+  hash = mixSeed(hash, (uint32_t)stepIndex);
+  hash = mixSeed(hash, (uint32_t)role);
+  hash = mixSeed(hash, (uint32_t)eventIndex);
+  hash = mixSeed(hash, (uint32_t)drawIndex);
+  return (hash >> 8) * (1.f / 16777216.f);
 }
 
 void chooseStepPlayback(BlunchSequencerRuntime& seq, float randomValue) {
