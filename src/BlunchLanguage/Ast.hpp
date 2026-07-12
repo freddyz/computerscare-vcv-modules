@@ -36,6 +36,8 @@ enum class ClockLiteralKind {
 };
 
 struct RandomChoiceAst {
+  bool restChoice = false;
+  SourceRange restRange;
   bool externalClockChoice = false;
   char externalClock = '\0';
   double minValue = 0.0;

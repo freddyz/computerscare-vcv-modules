@@ -10,6 +10,7 @@ struct BlunchProgramStep {
   blunch::language::ClockLiteralAst literal;
   blunch::language::ClockSpec spec;
   bool isRest = false;
+  bool baseIsRest = false;
   int externalClockInput = -1;
   int repeat = 1;
   int baseRepeat = 1;

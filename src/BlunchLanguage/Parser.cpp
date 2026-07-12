@@ -229,6 +229,12 @@ class Parser {
       return;
     }
 
+    if (peek().type == TokenType::LeftBrace &&
+        nextTokenStartsRandomSequenceChoice()) {
+      parseRandomSequenceBlock(result, blocks);
+      return;
+    }
+
     if (peek().type != TokenType::Number &&
         peek().type != TokenType::LeftBrace &&
         !(peek().type == TokenType::Identifier &&
@@ -245,6 +251,18 @@ class Parser {
     parseRepeat(result, block);
     parseTotalDuration(result, block);
     blocks.push_back(block);
+  }
+
+  bool nextTokenStartsRandomSequenceChoice() const {
+    if (current + 1 >= tokens.size()) {
+      return false;
+    }
+    if (tokens[current + 1].type == TokenType::LeftParen) {
+      return true;
+    }
+    return tokens[current + 1].type == TokenType::Tilde &&
+           current + 2 < tokens.size() &&
+           tokens[current + 2].type == TokenType::LeftParen;
   }
 
   void parseRestBlock(ParseResult& result, std::vector<ClockBlockAst>& blocks) {
@@ -290,6 +308,152 @@ class Parser {
         blocks[i].range.end = blocks[i].repeatRange.end;
       }
     }
+  }
+
+  void parseRandomSequenceBlock(ParseResult& result,
+                                std::vector<ClockBlockAst>& blocks) {
+    Token leftBrace = advance();
+    std::vector<std::vector<ClockBlockAst>> lanes;
+
+    while (!isAtEnd() && peek().type != TokenType::RightBrace) {
+      bool restLane = false;
+      SourceRange restRange;
+      if (peek().type == TokenType::Tilde) {
+        Token restToken = advance();
+        restLane = true;
+        restRange = rangeFromToken(restToken);
+      }
+
+      if (peek().type != TokenType::LeftParen) {
+        addDiagnostic(result, "Expected random sequence choice",
+                      rangeFromToken(peek()));
+        return;
+      }
+
+      std::vector<ClockBlockAst> lane = parseParenthesizedSequenceLane(result);
+      if (restLane) {
+        for (size_t i = 0; i < lane.size(); i++) {
+          lane[i].rest = true;
+          lane[i].restRange = restRange;
+          if (i == 0) {
+            lane[i].range.begin = restRange.begin;
+          }
+        }
+      }
+      lanes.push_back(lane);
+
+      if (peek().type == TokenType::Pipe) {
+        advance();
+        if (peek().type == TokenType::RightBrace) {
+          addDiagnostic(result, "Expected random sequence choice after '|'",
+                        rangeFromToken(peek()));
+          return;
+        }
+        continue;
+      }
+
+      if (peek().type != TokenType::RightBrace) {
+        addDiagnostic(result, "Expected '|' or '}' in random sequence",
+                      rangeFromToken(peek()));
+        return;
+      }
+    }
+
+    Token rightBrace;
+    if (peek().type == TokenType::RightBrace) {
+      rightBrace = advance();
+    } else {
+      addDiagnostic(result, "Expected '}'", rangeFromToken(leftBrace));
+      rightBrace = leftBrace;
+    }
+
+    std::vector<ClockBlockAst> groupBlocks = buildRandomSequenceBlocks(
+        result, lanes, leftBrace.begin, rightBrace.end);
+
+    ClockBlockAst repeatBlock;
+    repeatBlock.range.begin = leftBrace.begin;
+    repeatBlock.range.end = rightBrace.end;
+    SourceRange suffixUnitRange;
+    ClockUnit suffixUnit = parseGroupUnitSuffix(result, suffixUnitRange);
+    parseProbability(result, repeatBlock);
+    parseRepeat(result, repeatBlock);
+    ClockBlockAst totalDurationBlock;
+    parseTotalDuration(result, totalDurationBlock);
+    applyGroupModifiers(result, groupBlocks, repeatBlock, suffixUnit,
+                        suffixUnitRange);
+    applyTotalDurationGroup(groupBlocks, totalDurationBlock);
+    for (size_t i = 0; i < groupBlocks.size(); i++) {
+      blocks.push_back(groupBlocks[i]);
+    }
+  }
+
+  std::vector<ClockBlockAst> buildRandomSequenceBlocks(
+      ParseResult& result, const std::vector<std::vector<ClockBlockAst>>& lanes,
+      int begin, int end) {
+    std::vector<ClockBlockAst> blocks;
+    size_t rowCount = 0;
+    for (size_t i = 0; i < lanes.size(); i++) {
+      rowCount = std::max(rowCount, lanes[i].size());
+    }
+
+    for (size_t row = 0; row < rowCount && row < 6000; row++) {
+      ClockBlockAst block;
+      block.range.begin = begin;
+      block.range.end = end;
+      block.literal.kind = ClockLiteralKind::RandomRange;
+      block.literal.unit = ClockUnit::Bpm;
+      block.literal.range.begin = begin;
+      block.literal.range.end = end;
+      for (size_t laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
+        if (lanes[laneIndex].empty()) {
+          continue;
+        }
+        RandomChoiceAst choice;
+        if (blockToRandomChoice(result,
+                                lanes[laneIndex][row % lanes[laneIndex].size()],
+                                choice)) {
+          block.literal.randomChoices.push_back(choice);
+        }
+      }
+      if (block.literal.randomChoices.empty()) {
+        continue;
+      }
+      block.literal.minValue = block.literal.randomChoices.front().minValue;
+      block.literal.maxValue = block.literal.randomChoices.front().maxValue;
+      block.literal.minValueLexeme =
+          block.literal.randomChoices.front().minValueLexeme;
+      block.literal.maxValueLexeme =
+          block.literal.randomChoices.front().maxValueLexeme;
+      blocks.push_back(block);
+    }
+    return blocks;
+  }
+
+  bool blockToRandomChoice(ParseResult& result, const ClockBlockAst& block,
+                           RandomChoiceAst& choice) {
+    choice.restChoice = block.rest;
+    choice.restRange = block.restRange;
+    choice.range = block.range;
+    if (block.literal.kind == ClockLiteralKind::ExternalClock) {
+      choice.externalClockChoice = true;
+      choice.externalClock = block.literal.externalClock;
+      choice.minValueLexeme = block.literal.valueLexeme;
+      choice.maxValueLexeme = block.literal.valueLexeme;
+      return true;
+    }
+    if (block.literal.kind != ClockLiteralKind::Numeric) {
+      addDiagnostic(result, "Random sequence choices must be clock literals",
+                    block.literal.range);
+      return false;
+    }
+
+    choice.minValue = block.literal.value;
+    choice.maxValue = block.literal.value;
+    choice.minValueLexeme = block.literal.valueLexeme;
+    choice.maxValueLexeme = block.literal.valueLexeme;
+    choice.unit = block.literal.unit;
+    choice.unitRange = block.literal.unitRange;
+    return true;
   }
 
   void parseSequenceUntil(ParseResult& result,
@@ -621,6 +785,7 @@ class Parser {
     while (!isAtEnd() && peek().type != TokenType::RightBrace) {
       if (peek().type != TokenType::Number &&
           peek().type != TokenType::LeftBrace &&
+          peek().type != TokenType::Tilde &&
           !(peek().type == TokenType::Identifier &&
             isExternalClockIdentifier(peek().lexeme))) {
         addDiagnostic(result, "Expected random choice", rangeFromToken(peek()));
@@ -678,10 +843,24 @@ class Parser {
   }
 
   std::vector<RandomChoiceAst> parseRandomChoice(ParseResult& result) {
+    bool restChoice = false;
+    SourceRange restRange;
+    if (peek().type == TokenType::Tilde) {
+      Token restToken = advance();
+      restChoice = true;
+      restRange = rangeFromToken(restToken);
+    }
+
     if (peek().type == TokenType::LeftBrace) {
       ClockLiteralAst nested = parseRandomRangeLiteral(result);
       for (size_t i = 0; i < nested.randomChoices.size(); i++) {
-        nested.randomChoices[i].range.begin = nested.range.begin;
+        nested.randomChoices[i].restChoice =
+            restChoice || nested.randomChoices[i].restChoice;
+        if (restChoice) {
+          nested.randomChoices[i].restRange = restRange;
+        }
+        nested.randomChoices[i].range.begin =
+            restChoice ? restRange.begin : nested.range.begin;
         nested.randomChoices[i].range.end = nested.range.end;
       }
       return nested.randomChoices;
@@ -693,21 +872,34 @@ class Parser {
         isExternalClockIdentifier(peek().lexeme)) {
       Token clockToken = advance();
       choice.externalClockChoice = true;
+      choice.restChoice = restChoice;
+      choice.restRange = restRange;
       choice.externalClock = externalClockFromIdentifier(clockToken.lexeme);
       choice.minValueLexeme = clockToken.lexeme;
       choice.maxValueLexeme = clockToken.lexeme;
       choice.range = rangeFromToken(clockToken);
+      if (restChoice) {
+        choice.range.begin = restRange.begin;
+      }
       parseRandomChoiceModifiers(result, choice);
       choices.push_back(choice);
       return choices;
     }
 
+    if (peek().type != TokenType::Number) {
+      addDiagnostic(result, "Expected random choice after '~'",
+                    restChoice ? restRange : rangeFromToken(peek()));
+      return choices;
+    }
+
     Token minToken = advance();
+    choice.restChoice = restChoice;
+    choice.restRange = restRange;
     choice.minValue = parseDouble(minToken.lexeme);
     choice.maxValue = choice.minValue;
     choice.minValueLexeme = minToken.lexeme;
     choice.maxValueLexeme = minToken.lexeme;
-    choice.range.begin = minToken.begin;
+    choice.range.begin = restChoice ? restRange.begin : minToken.begin;
     choice.range.end = minToken.end;
 
     if (peek().type != TokenType::Dash) {

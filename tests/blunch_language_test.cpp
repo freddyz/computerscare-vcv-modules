@@ -142,6 +142,12 @@ void requireRandomChoiceExternalClock(const lang::ClockLiteralAst& ast,
   require(ast.randomChoices[index].externalClock == clock, message);
 }
 
+void requireRandomChoiceRest(const lang::ClockLiteralAst& ast, size_t index,
+                             const char* message) {
+  require(index < ast.randomChoices.size(), message);
+  require(ast.randomChoices[index].restChoice, message);
+}
+
 lang::ClockSpec requireEvaluates(const std::string& source) {
   lang::ParseResult parse = lang::parseClockLiteral(source);
   require(parse.ok(), "parse should succeed before evaluation");
@@ -507,6 +513,26 @@ void testAst() {
               "{295bpm#3|195bpm@1s} choice 1 duration seconds");
   requireRange(result.ast.randomChoices[1].repeatRange, 16, 19,
                "{295bpm#3|195bpm@1s} choice 1 repeat range");
+
+  result = lang::parseClockLiteral("{1.33hz|~2.0hz|4.25hz}");
+  require(result.ok(), "{1.33hz|~2.0hz|4.25hz} ast parses");
+  require(result.ast.randomChoices.size() == 3,
+          "{1.33hz|~2.0hz|4.25hz} choice count");
+  requireRandomChoice(result.ast, 1, 2.0, 2.0,
+                      "{1.33hz|~2.0hz|4.25hz} rest choice value");
+  requireRandomChoiceUnit(result.ast, 1, lang::ClockUnit::Hertz,
+                          "{1.33hz|~2.0hz|4.25hz} rest choice unit");
+  requireRandomChoiceRest(result.ast, 1,
+                          "{1.33hz|~2.0hz|4.25hz} rest choice");
+
+  result = lang::parseClockLiteral(
+      "{{3.3333hz|~4.hz}|{1.0hz|1.75hz|3.333333hz}|{1.75hz|~1.5hz|"
+      "4.25hz}}");
+  require(result.ok(), "nested random rest choices parse");
+  require(result.ast.randomChoices.size() == 8,
+          "nested random rest choice count");
+  requireRandomChoiceRest(result.ast, 1, "nested random first rest choice");
+  requireRandomChoiceRest(result.ast, 6, "nested random second rest choice");
 }
 
 void testProgramAst() {
@@ -1047,6 +1073,34 @@ void testProgramAst() {
           "bracket suffix random range hz");
   require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
           "bracket suffix numeric hz");
+
+  result = lang::parseClockLiteral(
+      "[{(1.75 ~4.66 1.33 ~3. 2.666666 ~5)|(~4.75 ~2 ~1 "
+      "1.75)}]hz#7");
+  require(result.ok(), "random sequence choices parse");
+  require(result.program.blocks.size() == 6,
+          "random sequence choice block count");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    require(result.program.blocks[i].literal.kind ==
+                lang::ClockLiteralKind::RandomRange,
+            "random sequence choice literal kind");
+    require(result.program.blocks[i].literal.randomChoices.size() == 2,
+            "random sequence choice count");
+    require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
+            "random sequence choice suffix unit");
+    requireTotalTickGroup(result.program.blocks[i], 0, 7, 58, 60,
+                          "random sequence total tick group");
+  }
+  requireRandomChoice(result.program.blocks[0].literal, 0, 1.75, 1.75,
+                      "random sequence row 0 choice 0");
+  requireRandomChoice(result.program.blocks[0].literal, 1, 4.75, 4.75,
+                      "random sequence row 0 choice 1");
+  requireRandomChoiceRest(result.program.blocks[0].literal, 1,
+                          "random sequence row 0 rest choice");
+  requireRandomChoice(result.program.blocks[4].literal, 0, 2.666666,
+                      2.666666, "random sequence row 4 choice 0");
+  requireRandomChoice(result.program.blocks[4].literal, 1, 4.75, 4.75,
+                      "random sequence row 4 wrapped choice 1");
 
   result = lang::parseClockLiteral("[x y]@8");
   require(result.ok(), "external clock bracket parses");

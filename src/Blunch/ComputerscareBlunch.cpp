@@ -1188,6 +1188,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void captureBaseStepState(BlunchProgramStep& step) {
+    step.baseIsRest = step.isRest;
     step.baseRepeat = step.repeat;
     step.baseRepeatExternalClockInput = step.repeatExternalClockInput;
     step.baseHasDuration = step.hasDuration;
@@ -1210,6 +1211,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void restoreBaseStepState(BlunchProgramStep& step) {
+    step.isRest = step.baseIsRest;
     step.repeat = step.baseRepeat;
     step.repeatExternalClockInput = step.baseRepeatExternalClockInput;
     step.hasDuration = step.baseHasDuration;
@@ -2088,6 +2090,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       const blunch::language::RandomChoiceAst& choice =
           step.literal.randomChoices[choiceIndex];
       selectedChoice = &choice;
+      step.isRest = step.baseIsRest || choice.restChoice;
       step.highlightBegin = step.sourceLineBegin + choice.range.begin;
       step.highlightEnd = step.sourceLineBegin + choice.range.end;
       if (choiceIsExternalClock(choice)) {
