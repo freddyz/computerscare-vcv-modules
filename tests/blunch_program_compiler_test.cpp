@@ -78,6 +78,16 @@ int main() {
   requireNear(compiled[0].spec.hz, 1.33,
               "compiled random step uses first numeric choice as base spec");
 
+  compiled = requireCompiles("{~4?|~5?86}");
+  require(compiled.size() == 1,
+          "random rest choice probability compiles to one step");
+  require(compiled[0].literal.randomChoices.size() == 2,
+          "random rest choice probabilities are preserved");
+  require(compiled[0].literal.randomChoices[0].probability == 50,
+          "bare random choice question defaults to 50 percent");
+  require(compiled[0].literal.randomChoices[1].probability == 86,
+          "explicit random choice probability is preserved");
+
   compiled = requireCompiles(
       "{{3.3333hz|~4.hz}|{1.0hz|1.75hz|3.333333hz}|"
       "{1.75hz|~1.5hz|4.25hz}}");

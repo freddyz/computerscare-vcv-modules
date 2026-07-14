@@ -250,7 +250,7 @@ std::vector<TimingScopeProgress> getActiveTimingScopeProgressHighlights(
 
   if (step->hasTotalDurationGroup) {
     if (step->totalDurationHighlightEnd > step->totalDurationHighlightBegin &&
-        !(step->totalDurationIsTickCount && step->totalDurationTicks <= 1 &&
+        !(step->totalDurationIsTickCount &&
           step->totalDurationExternalClockInput >= 0)) {
       TimingScopeKind kind = step->totalDurationBranchLocal
                                  ? TimingScopeKind::BranchLocalTotalDuration
@@ -291,8 +291,7 @@ std::vector<TimingScopeProgress> getActiveTimingScopeProgressHighlights(
   if (step->repeatHighlightEnd <= step->repeatHighlightBegin) {
     return highlights;
   }
-  if (!step->hasDuration && step->repeat <= 1 &&
-      step->repeatExternalClockInput >= 0) {
+  if (!step->hasDuration && step->repeatExternalClockInput >= 0) {
     return highlights;
   }
 

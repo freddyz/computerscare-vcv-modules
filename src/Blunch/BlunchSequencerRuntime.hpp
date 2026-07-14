@@ -24,6 +24,7 @@ struct BlunchProgramStep {
   float durationSeconds = 0.f;
   float baseDurationSeconds = 0.f;
   int probability = 100;
+  int baseProbability = 100;
   int highlightBegin = 0;
   int highlightEnd = 0;
   int repeatHighlightBegin = 0;

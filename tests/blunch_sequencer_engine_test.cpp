@@ -297,9 +297,9 @@ int main() {
   multiExternalRepeat.activeProgram[0].repeatExternalClockInput = 1;
   multiExternalRepeat.activeProgram[0].repeatHighlightBegin = 10;
   multiExternalRepeat.activeProgram[0].repeatHighlightEnd = 12;
-  require(engine::getActiveRepeatProgressHighlight(multiExternalRepeat,
-                                                   highlight),
-          "multi external repeat shows repeat progress");
+  require(!engine::getActiveRepeatProgressHighlight(multiExternalRepeat,
+                                                    highlight),
+          "multi external repeat does not show repeat progress");
 
   BlunchSequencerRuntime singleExternalTotal = runtimeWithSteps(1);
   singleExternalTotal.activeProgram[0].hasTotalDurationGroup = true;
@@ -319,15 +319,13 @@ int main() {
   multiExternalTotal.activeProgram[0].totalDurationExternalClockInput = 2;
   multiExternalTotal.activeProgram[0].totalDurationHighlightBegin = 20;
   multiExternalTotal.activeProgram[0].totalDurationHighlightEnd = 22;
-  require(engine::getActiveRepeatProgressHighlight(multiExternalTotal,
-                                                   highlight),
-          "multi external total duration shows repeat progress");
+  require(!engine::getActiveRepeatProgressHighlight(multiExternalTotal,
+                                                    highlight),
+          "multi external total duration does not show repeat progress");
   scopeHighlights =
       engine::getActiveTimingScopeProgressHighlights(multiExternalTotal);
-  require(scopeHighlights.size() == 1,
-          "external total duration has one active timing scope");
-  require(scopeHighlights[0].kind == engine::TimingScopeKind::TotalDuration,
-          "external total duration scope kind is total duration");
+  require(scopeHighlights.empty(),
+          "external total duration has no held timing scope");
 
   BlunchSequencerRuntime repeatedTotalProgress = runtimeWithSteps(1);
   repeatedTotalProgress.activeProgram[0].hasTotalDurationGroup = true;

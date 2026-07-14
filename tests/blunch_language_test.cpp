@@ -148,6 +148,15 @@ void requireRandomChoiceRest(const lang::ClockLiteralAst& ast, size_t index,
   require(ast.randomChoices[index].restChoice, message);
 }
 
+void requireRandomChoiceProbability(const lang::ClockLiteralAst& ast,
+                                    size_t index, int probability,
+                                    int begin, int end,
+                                    const char* message) {
+  require(index < ast.randomChoices.size(), message);
+  require(ast.randomChoices[index].probability == probability, message);
+  requireRange(ast.randomChoices[index].probabilityRange, begin, end, message);
+}
+
 lang::ClockSpec requireEvaluates(const std::string& source) {
   lang::ParseResult parse = lang::parseClockLiteral(source);
   require(parse.ok(), "parse should succeed before evaluation");
@@ -524,6 +533,19 @@ void testAst() {
                           "{1.33hz|~2.0hz|4.25hz} rest choice unit");
   requireRandomChoiceRest(result.ast, 1,
                           "{1.33hz|~2.0hz|4.25hz} rest choice");
+
+  result = lang::parseClockLiteral("{~4?|~5?86}");
+  require(result.ok(), "{~4?|~5?86} ast parses");
+  require(result.ast.randomChoices.size() == 2,
+          "{~4?|~5?86} choice count");
+  requireRandomChoice(result.ast, 0, 4.0, 4.0, "{~4?|~5?86} choice 0");
+  requireRandomChoiceRest(result.ast, 0, "{~4?|~5?86} rest choice 0");
+  requireRandomChoiceProbability(result.ast, 0, 50, 3, 4,
+                                 "{~4?|~5?86} choice 0 probability");
+  requireRandomChoice(result.ast, 1, 5.0, 5.0, "{~4?|~5?86} choice 1");
+  requireRandomChoiceRest(result.ast, 1, "{~4?|~5?86} rest choice 1");
+  requireRandomChoiceProbability(result.ast, 1, 86, 7, 10,
+                                 "{~4?|~5?86} choice 1 probability");
 
   result = lang::parseClockLiteral(
       "{{3.3333hz|~4.hz}|{1.0hz|1.75hz|3.333333hz}|{1.75hz|~1.5hz|"
@@ -1423,6 +1445,8 @@ void testInvalidInputs() {
   requireInvalid("120?1.5", "decimal probability invalid");
   requireInvalid("120?101", "probability over 100 invalid");
   requireInvalid("120?-1", "negative probability invalid");
+  requireInvalid("{120?1.5|90}", "decimal random choice probability invalid");
+  requireInvalid("{120?101|90}", "random choice probability over 100 invalid");
   requireInvalid("[120 90", "missing right bracket invalid");
   requireInvalid("[120,100]?50", "group probability invalid");
   requireInvalid("[3 2]bananas", "unknown bracket suffix unit invalid");

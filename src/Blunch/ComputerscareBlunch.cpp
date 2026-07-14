@@ -23,6 +23,7 @@ struct BlunchLineInfo {
 };
 
 static thread_local int blunchProcessingChannel = -1;
+static const float EXTERNAL_TIMING_DISPLAY_PULSE_SECONDS = 0.14f;
 
 static BlunchLineInfo getLineInfo(const std::string& text, int line) {
   BlunchLineInfo info;
@@ -137,12 +138,10 @@ static void addBlunchSequencerHighlights(
     int externalTimingBegin = 0;
     int externalTimingEnd = 0;
     if (step.hasTotalDurationGroup && step.totalDurationIsTickCount &&
-        step.totalDurationTicks <= 1 &&
         step.totalDurationExternalClockInput >= 0) {
       externalTimingBegin = step.totalDurationHighlightBegin;
       externalTimingEnd = step.totalDurationHighlightEnd;
-    } else if (!step.hasDuration && step.repeat <= 1 &&
-               step.repeatExternalClockInput >= 0) {
+    } else if (!step.hasDuration && step.repeatExternalClockInput >= 0) {
       externalTimingBegin = step.repeatHighlightBegin;
       externalTimingEnd = step.repeatHighlightEnd;
     }
@@ -156,8 +155,12 @@ static void addBlunchSequencerHighlights(
                    mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
                                                       externalTimingEnd));
       externalTimingHighlight.hasBackground = true;
-      unsigned char externalTimingAlpha = (unsigned char)std::min(
-          0xbb, 0x30 + (int)(seq.activeExternalTimingDisplayPulse * 0x75));
+      float externalTimingFade =
+          std::max(0.f, std::min(seq.activeExternalTimingDisplayPulse /
+                                     EXTERNAL_TIMING_DISPLAY_PULSE_SECONDS,
+                                 1.f));
+      unsigned char externalTimingAlpha =
+          (unsigned char)(0xbb * externalTimingFade);
       externalTimingHighlight.background =
           nvgRGBA(0xc8, 0x9f, 0x16, externalTimingAlpha);
       if (externalTimingHighlight.begin < externalTimingHighlight.end) {
@@ -706,7 +709,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       seq.activeClockDisplayPulse = 1.f;
     }
     if (running && !resetPressed && externalTimingClockTriggered) {
-      seq.activeExternalTimingDisplayPulse = 1.f;
+      seq.activeExternalTimingDisplayPulse =
+          EXTERNAL_TIMING_DISPLAY_PULSE_SECONDS;
     }
 
     bool externalTotalTickAdvanced = false;
@@ -745,8 +749,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     bool externalClockEdges[4] = {false, false, false, false};
     for (int i = 0; i < 4; i++) {
       float voltage = inputs[EXTERNAL_CLOCK_W_INPUT + i].getVoltage();
-      externalClockEdges[i] = externalClockTriggers[i].process(voltage);
+      bool wasHigh = externalClockHigh[i];
+      externalClockTriggers[i].process(voltage);
       externalClockHigh[i] = externalClockTriggers[i].isHigh();
+      externalClockEdges[i] = externalClockHigh[i] && !wasHigh;
     }
 
     bool runHigh = params[RUN_PARAM].getValue() > 0.5f;
@@ -827,9 +833,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       if (sequencers[channel].activeClockDisplayPulse < 0.001f) {
         sequencers[channel].activeClockDisplayPulse = 0.f;
       }
-      sequencers[channel].activeExternalTimingDisplayPulse *=
-          std::max(0.f, 1.f - args.sampleTime * 5.f);
-      if (sequencers[channel].activeExternalTimingDisplayPulse < 0.001f) {
+      sequencers[channel].activeExternalTimingDisplayPulse -= args.sampleTime;
+      if (sequencers[channel].activeExternalTimingDisplayPulse <= 0.f) {
         sequencers[channel].activeExternalTimingDisplayPulse = 0.f;
       }
       outputs[CLOCK_OUTPUT].setVoltage(clockPulseHigh ? 10.f : 0.f, channel);
@@ -1872,6 +1877,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
           step.literal.randomChoices[choiceIndex];
       selectedChoice = &choice;
       step.isRest = step.baseIsRest || choice.restChoice;
+      if (choice.probabilityRange.end > choice.probabilityRange.begin) {
+        step.probability = std::max(0, std::min(100, choice.probability));
+      }
       step.highlightBegin = step.sourceLineBegin + choice.range.begin;
       step.highlightEnd = step.sourceLineBegin + choice.range.end;
       if (blunch::program::randomChoiceIsExternalClock(choice)) {

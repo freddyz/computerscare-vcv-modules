@@ -40,6 +40,8 @@ struct RandomChoiceAst {
   SourceRange restRange;
   bool externalClockChoice = false;
   char externalClock = '\0';
+  int probability = 100;
+  SourceRange probabilityRange;
   double minValue = 0.0;
   double maxValue = 0.0;
   std::string minValueLexeme;

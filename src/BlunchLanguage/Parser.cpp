@@ -433,6 +433,8 @@ class Parser {
                            RandomChoiceAst& choice) {
     choice.restChoice = block.rest;
     choice.restRange = block.restRange;
+    choice.probability = block.probability;
+    choice.probabilityRange = block.probabilityRange;
     choice.range = block.range;
     if (block.literal.kind == ClockLiteralKind::ExternalClock) {
       choice.externalClockChoice = true;
@@ -881,6 +883,7 @@ class Parser {
       if (restChoice) {
         choice.range.begin = restRange.begin;
       }
+      parseRandomChoiceProbability(result, choice);
       parseRandomChoiceModifiers(result, choice);
       choices.push_back(choice);
       return choices;
@@ -904,6 +907,7 @@ class Parser {
 
     if (peek().type != TokenType::Dash) {
       parseRandomChoiceUnit(result, choice);
+      parseRandomChoiceProbability(result, choice);
       parseRandomChoiceModifiers(result, choice);
       choices.push_back(choice);
       return choices;
@@ -922,6 +926,7 @@ class Parser {
     choice.maxValueLexeme = maxToken.lexeme;
     choice.range.end = maxToken.end;
     parseRandomChoiceUnit(result, choice);
+    parseRandomChoiceProbability(result, choice);
     parseRandomChoiceModifiers(result, choice);
     choices.push_back(choice);
     return choices;
@@ -938,6 +943,38 @@ class Parser {
     choice.range.end = unitToken.end;
     if (choice.unit == ClockUnit::Unknown) {
       addDiagnostic(result, "Unknown clock unit", choice.unitRange);
+    }
+  }
+
+  void parseRandomChoiceProbability(ParseResult& result,
+                                    RandomChoiceAst& choice) {
+    if (peek().type != TokenType::Question) {
+      return;
+    }
+
+    Token questionToken = advance();
+    choice.probability = 50;
+    choice.probabilityRange.begin = questionToken.begin;
+    choice.probabilityRange.end = questionToken.end;
+    choice.range.end = questionToken.end;
+
+    if (peek().type != TokenType::Number || peek().begin != questionToken.end) {
+      return;
+    }
+
+    Token probabilityToken = advance();
+    choice.probabilityRange.end = probabilityToken.end;
+    choice.range.end = probabilityToken.end;
+    if (!isIntegerLexeme(probabilityToken.lexeme)) {
+      addDiagnostic(result, "Probability must be an integer",
+                    rangeFromToken(probabilityToken));
+      return;
+    }
+
+    choice.probability = parseInt(probabilityToken.lexeme);
+    if (choice.probability < 0 || choice.probability > 100) {
+      addDiagnostic(result, "Probability must be between 0 and 100",
+                    rangeFromToken(probabilityToken));
     }
   }
 

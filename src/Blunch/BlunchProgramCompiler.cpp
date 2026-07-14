@@ -56,6 +56,7 @@ void captureBaseStepState(BlunchProgramStep& step) {
   step.baseRepeatExternalClockInput = step.repeatExternalClockInput;
   step.baseHasDuration = step.hasDuration;
   step.baseDurationSeconds = step.durationSeconds;
+  step.baseProbability = step.probability;
   step.baseRepeatHighlightBegin = step.repeatHighlightBegin;
   step.baseRepeatHighlightEnd = step.repeatHighlightEnd;
   step.baseRepeatHighlightIsOwn = step.repeatHighlightIsOwn;
@@ -80,6 +81,7 @@ void restoreBaseStepState(BlunchProgramStep& step) {
   step.repeatExternalClockInput = step.baseRepeatExternalClockInput;
   step.hasDuration = step.baseHasDuration;
   step.durationSeconds = step.baseDurationSeconds;
+  step.probability = step.baseProbability;
   step.repeatHighlightBegin = step.baseRepeatHighlightBegin;
   step.repeatHighlightEnd = step.baseRepeatHighlightEnd;
   step.repeatHighlightIsOwn = step.baseRepeatHighlightIsOwn;
