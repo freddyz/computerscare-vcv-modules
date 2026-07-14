@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 namespace {
 
@@ -140,6 +141,7 @@ int main() {
   totalSeconds.activeProgram[0].hasTotalDurationGroup = true;
   totalSeconds.activeProgram[0].totalDurationSeconds = 1.f;
   totalSeconds.activeProgram[0].totalDurationGroupEnd = 2;
+  totalSeconds.activeTotalDurationBranchLocal = true;
   require(!engine::advanceTotalDuration(totalSeconds, 0.5f),
           "total duration waits before threshold");
   require(engine::advanceTotalDuration(totalSeconds, 0.5f),
@@ -148,6 +150,8 @@ int main() {
           "total duration jumps to group end");
   require(totalSeconds.activeTotalDurationGroupId == -1,
           "total duration clears active group");
+  require(!totalSeconds.activeTotalDurationBranchLocal,
+          "total duration clears active branch-local group");
   requireNearDouble(totalSeconds.activeTotalDurationElapsedSeconds, 0.0,
                     "exact total duration boundary has no elapsed carry");
 
@@ -160,26 +164,116 @@ int main() {
   requireNearDouble(totalSecondsCarry.activeTotalDurationElapsedSeconds, 0.25,
                     "total duration preserves elapsed carry at boundary");
 
+  BlunchSequencerRuntime repeatedTotalSeconds = runtimeWithSteps(2);
+  repeatedTotalSeconds.activeProgram[0].hasTotalDurationGroup = true;
+  repeatedTotalSeconds.activeProgram[0].totalDurationSeconds = 1.f;
+  repeatedTotalSeconds.activeProgram[0].totalDurationGroupStart = 0;
+  repeatedTotalSeconds.activeProgram[0].totalDurationGroupEnd = 2;
+  repeatedTotalSeconds.activeProgram[0].repeat = 2;
+  require(engine::advanceTotalDuration(repeatedTotalSeconds, 1.f),
+          "repeated total duration first cycle completes");
+  require(repeatedTotalSeconds.activeProgramIndex == 0,
+          "repeated total duration loops to group start");
+  require(repeatedTotalSeconds.activeProgramBeat == 1,
+          "repeated total duration increments cycle counter");
+  require(engine::advanceTotalDuration(repeatedTotalSeconds, 1.f),
+          "repeated total duration second cycle completes");
+  require(repeatedTotalSeconds.activeProgramIndex == 2,
+          "repeated total duration advances after final cycle");
+  require(repeatedTotalSeconds.activeProgramBeat == 0,
+          "repeated total duration clears cycle counter after final cycle");
+
   BlunchSequencerRuntime totalTicks = runtimeWithSteps(2);
   totalTicks.activeProgram[0].hasTotalDurationGroup = true;
   totalTicks.activeProgram[0].totalDurationIsTickCount = true;
   totalTicks.activeProgram[0].totalDurationTicks = 2;
   totalTicks.activeProgram[0].totalDurationGroupEnd = 2;
+  totalTicks.activeTotalDurationBranchLocal = true;
+  require(!engine::activeClockTickAdvancesStepRepeat(totalTicks),
+          "clock tick does not advance repeat inside total duration");
   require(!engine::advanceTotalTickCount(totalTicks),
           "total tick count waits before threshold");
   require(engine::advanceTotalTickCount(totalTicks),
           "total tick count completes at threshold");
   require(totalTicks.activeProgramIndex == 2,
           "total tick count jumps to group end");
+  require(!totalTicks.activeTotalDurationBranchLocal,
+          "total tick count clears active branch-local group");
+
+  BlunchSequencerRuntime repeatedTotalTicks = runtimeWithSteps(2);
+  repeatedTotalTicks.activeProgram[0].hasTotalDurationGroup = true;
+  repeatedTotalTicks.activeProgram[0].totalDurationIsTickCount = true;
+  repeatedTotalTicks.activeProgram[0].totalDurationTicks = 2;
+  repeatedTotalTicks.activeProgram[0].totalDurationGroupStart = 0;
+  repeatedTotalTicks.activeProgram[0].totalDurationGroupEnd = 2;
+  repeatedTotalTicks.activeProgram[0].repeat = 2;
+  require(!engine::advanceTotalTickCount(repeatedTotalTicks),
+          "repeated total tick count first tick waits");
+  require(engine::advanceTotalTickCount(repeatedTotalTicks),
+          "repeated total tick count first cycle completes");
+  require(repeatedTotalTicks.activeProgramIndex == 0,
+          "repeated total tick count loops to group start");
+  require(repeatedTotalTicks.activeProgramBeat == 1,
+          "repeated total tick count increments cycle counter");
+  require(!engine::advanceTotalTickCount(repeatedTotalTicks),
+          "repeated total tick count second cycle first tick waits");
+  require(engine::advanceTotalTickCount(repeatedTotalTicks),
+          "repeated total tick count second cycle completes");
+  require(repeatedTotalTicks.activeProgramIndex == 2,
+          "repeated total tick count advances after final cycle");
+  require(repeatedTotalTicks.activeProgramBeat == 0,
+          "repeated total tick count clears cycle counter");
+
+  BlunchSequencerRuntime totalGroupStep = runtimeWithSteps(3);
+  totalGroupStep.activeProgramIndex = 1;
+  totalGroupStep.activeProgramBeat = 2;
+  totalGroupStep.activeTotalDurationTicks = 5;
+  for (int i = 0; i < 3; i++) {
+    totalGroupStep.activeProgram[i].hasTotalDurationGroup = true;
+    totalGroupStep.activeProgram[i].totalDurationGroupStart = 1;
+    totalGroupStep.activeProgram[i].totalDurationGroupEnd = 3;
+  }
+  require(engine::advanceWithinTotalDurationGroup(totalGroupStep),
+          "multi-step total duration advances within its group");
+  require(totalGroupStep.activeProgramIndex == 2,
+          "multi-step total duration moves to next child");
+  require(totalGroupStep.activeProgramBeat == 2,
+          "multi-step total duration preserves outer cycle counter");
+  require(totalGroupStep.activeTotalDurationTicks == 5,
+          "multi-step total duration preserves tick counter");
+  require(engine::advanceWithinTotalDurationGroup(totalGroupStep),
+          "multi-step total duration wraps within its group");
+  require(totalGroupStep.activeProgramIndex == 1,
+          "multi-step total duration wraps to group start");
+
+  BlunchSequencerRuntime singleTotalGroupStep = runtimeWithSteps(1);
+  singleTotalGroupStep.activeProgram[0].hasTotalDurationGroup = true;
+  singleTotalGroupStep.activeProgram[0].totalDurationGroupStart = 0;
+  singleTotalGroupStep.activeProgram[0].totalDurationGroupEnd = 1;
+  require(!engine::advanceWithinTotalDurationGroup(singleTotalGroupStep),
+          "single-step total duration does not advance within group");
 
   BlunchSequencerRuntime progress = runtimeWithSteps(1);
   progress.activeProgram[0].repeat = 4;
   progress.activeProgram[0].repeatHighlightBegin = 10;
   progress.activeProgram[0].repeatHighlightEnd = 12;
   progress.activeProgramBeat = 1;
-  engine::RepeatProgress highlight;
+  engine::TimingScopeProgress highlight;
+  require(engine::activeClockTickAdvancesStepRepeat(progress),
+          "clock tick advances ordinary step repeat");
+  progress.activeProgram[0].highlightBegin = 14;
+  progress.activeProgram[0].highlightEnd = 18;
+  engine::syncActiveHighlightFromStep(progress);
+  require(progress.activeHighlightBegin == 14 && progress.activeHighlightEnd == 18,
+          "active highlight syncs from refreshed step");
   require(engine::getActiveRepeatProgressHighlight(progress, highlight),
           "repeat progress exists with repeat highlight");
+  std::vector<engine::TimingScopeProgress> scopeHighlights =
+      engine::getActiveTimingScopeProgressHighlights(progress);
+  require(scopeHighlights.size() == 1,
+          "repeat progress has one active timing scope");
+  require(scopeHighlights[0].kind == engine::TimingScopeKind::StepRepeat,
+          "repeat progress scope kind is step repeat");
   require(highlight.begin == 10 && highlight.end == 12,
           "repeat progress exposes source range");
   require(highlight.segments == 4, "repeat progress segments by repeat count");
@@ -228,6 +322,83 @@ int main() {
   require(engine::getActiveRepeatProgressHighlight(multiExternalTotal,
                                                    highlight),
           "multi external total duration shows repeat progress");
+  scopeHighlights =
+      engine::getActiveTimingScopeProgressHighlights(multiExternalTotal);
+  require(scopeHighlights.size() == 1,
+          "external total duration has one active timing scope");
+  require(scopeHighlights[0].kind == engine::TimingScopeKind::TotalDuration,
+          "external total duration scope kind is total duration");
+
+  BlunchSequencerRuntime repeatedTotalProgress = runtimeWithSteps(1);
+  repeatedTotalProgress.activeProgram[0].hasTotalDurationGroup = true;
+  repeatedTotalProgress.activeProgram[0].totalDurationIsTickCount = true;
+  repeatedTotalProgress.activeProgram[0].totalDurationTicks = 8;
+  repeatedTotalProgress.activeProgram[0].totalDurationHighlightBegin = 20;
+  repeatedTotalProgress.activeProgram[0].totalDurationHighlightEnd = 22;
+  repeatedTotalProgress.activeProgram[0].repeat = 3;
+  repeatedTotalProgress.activeProgram[0].repeatHighlightBegin = 30;
+  repeatedTotalProgress.activeProgram[0].repeatHighlightEnd = 31;
+  repeatedTotalProgress.activeProgramBeat = 1;
+  repeatedTotalProgress.activeTotalDurationTicks = 3;
+  require(engine::getActiveRepeatProgressHighlight(repeatedTotalProgress,
+                                                   highlight),
+          "repeated total duration shows total-duration progress");
+  scopeHighlights =
+      engine::getActiveTimingScopeProgressHighlights(repeatedTotalProgress);
+  require(scopeHighlights.size() == 2,
+          "repeated total duration exposes both active timing scopes");
+  require(scopeHighlights[0].kind == engine::TimingScopeKind::TotalDuration,
+          "repeated total duration first scope is total duration");
+  require(scopeHighlights[1].kind ==
+              engine::TimingScopeKind::TotalDurationRepeat,
+          "repeated total duration second scope is outer repeat");
+  require(highlight.begin == 20 && highlight.end == 22,
+          "repeated total duration highlights total-duration range");
+  require(highlight.segments == 8,
+          "repeated total duration progress segments by total tick count");
+  requireNear(highlight.progress, 0.5f,
+              "repeated total duration progress uses total tick counter");
+
+  require(engine::getActiveTotalDurationRepeatProgressHighlight(
+              repeatedTotalProgress, highlight),
+          "repeated total duration also shows outer repeat progress");
+  require(highlight.begin == 30 && highlight.end == 31,
+          "repeated total duration repeat highlights repeat range");
+  require(highlight.segments == 3,
+          "repeated total duration repeat segments by repeat count");
+  requireNear(highlight.progress, 2.f / 3.f,
+              "repeated total duration repeat progress uses current cycle");
+
+  repeatedTotalProgress.activeTotalDurationTicks = 4;
+  require(engine::getActiveTotalDurationRepeatProgressHighlight(
+              repeatedTotalProgress, highlight),
+          "repeated total duration repeat progress remains available");
+  requireNear(highlight.progress, 2.f / 3.f,
+              "repeated total duration repeat progress ignores clock ticks");
+
+  repeatedTotalProgress.activeProgramBeat = 0;
+  require(engine::getActiveTotalDurationRepeatProgressHighlight(
+              repeatedTotalProgress, highlight),
+          "repeated total duration repeat progress exists on first cycle");
+  requireNear(highlight.progress, 1.f / 3.f,
+              "repeated total duration repeat progress starts at one");
+
+  BlunchSequencerRuntime branchLocalTotalProgress = runtimeWithSteps(1);
+  branchLocalTotalProgress.activeProgram[0].hasTotalDurationGroup = true;
+  branchLocalTotalProgress.activeProgram[0].totalDurationBranchLocal = true;
+  branchLocalTotalProgress.activeProgram[0].totalDurationIsTickCount = true;
+  branchLocalTotalProgress.activeProgram[0].totalDurationTicks = 3;
+  branchLocalTotalProgress.activeProgram[0].totalDurationHighlightBegin = 40;
+  branchLocalTotalProgress.activeProgram[0].totalDurationHighlightEnd = 42;
+  scopeHighlights =
+      engine::getActiveTimingScopeProgressHighlights(branchLocalTotalProgress);
+  require(scopeHighlights.size() == 1,
+          "branch-local total duration has one active timing scope");
+  require(scopeHighlights[0].kind ==
+              engine::TimingScopeKind::BranchLocalTotalDuration,
+          "branch-local total duration scope kind is explicit");
+  require(scopeHighlights[0].segments == 3,
+          "branch-local total duration preserves segment count");
 
   std::puts("blunch sequencer engine tests passed");
   return 0;

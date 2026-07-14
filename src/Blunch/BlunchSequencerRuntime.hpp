@@ -34,6 +34,8 @@ struct BlunchProgramStep {
   bool baseRepeatHighlightIsOwn = false;
   bool hasTotalDurationGroup = false;
   bool baseHasTotalDurationGroup = false;
+  bool totalDurationBranchLocal = false;
+  bool baseTotalDurationBranchLocal = false;
   int totalDurationGroupId = -1;
   int baseTotalDurationGroupId = -1;
   int totalDurationGroupStart = 0;
@@ -79,6 +81,7 @@ struct BlunchSequencerRuntime {
   int activeProgramBeat = 0;
   double activeProgramElapsedSeconds = 0.0;
   int activeTotalDurationGroupId = -1;
+  bool activeTotalDurationBranchLocal = false;
   double activeTotalDurationElapsedSeconds = 0.0;
   int activeTotalDurationTicks = 0;
   bool activeStepPlays = true;
@@ -105,6 +108,7 @@ struct BlunchSequencerRuntime {
     activeProgramBeat = 0;
     activeProgramElapsedSeconds = 0.0;
     activeTotalDurationGroupId = -1;
+    activeTotalDurationBranchLocal = false;
     activeTotalDurationElapsedSeconds = 0.0;
     activeTotalDurationTicks = 0;
     activeStepPlays = true;

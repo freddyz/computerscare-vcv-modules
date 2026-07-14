@@ -11,6 +11,7 @@
 #include "../ComputerscareTextEditor.hpp"
 #include "BlunchEditorViews.hpp"
 #include "BlunchKeyboardShortcuts.hpp"
+#include "BlunchProgramCompiler.hpp"
 #include "BlunchRandomProgram.hpp"
 #include "BlunchSequencerEngine.hpp"
 #include "BlunchSequencerRuntime.hpp"
@@ -83,6 +84,26 @@ static int mapBlunchSourceOffsetToVisibleLine(const BlunchLineInfo& sourceLine,
       std::min(visibleLine.begin + relativeOffset, visibleLine.end));
 }
 
+static void addBlunchProgressHighlight(
+    std::vector<ComputerscareTextHighlight>& highlights,
+    const blunch::sequencer::RepeatProgress& progress,
+    const BlunchLineInfo& sourceLine, const BlunchLineInfo& visibleLine) {
+  ComputerscareTextHighlight highlight;
+  highlight.begin = mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
+                                                       progress.begin);
+  highlight.end =
+      std::max(highlight.begin, mapBlunchSourceOffsetToVisibleLine(
+                                    sourceLine, visibleLine, progress.end));
+  highlight.hasBackground = false;
+  highlight.hasProgress = true;
+  highlight.progress = progress.progress;
+  highlight.progressSegments = progress.segments;
+  highlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
+  if (highlight.begin < highlight.end) {
+    highlights.push_back(highlight);
+  }
+}
+
 static void addBlunchSequencerHighlights(
     std::vector<ComputerscareTextHighlight>& highlights,
     const BlunchSequencerRuntime& seq, const BlunchLineInfo& sourceLine,
@@ -145,40 +166,12 @@ static void addBlunchSequencerHighlights(
     }
   }
 
-  blunch::sequencer::RepeatProgress repeatProgress;
-  if (blunch::sequencer::getActiveRepeatProgressHighlight(seq,
-                                                          repeatProgress)) {
-    ComputerscareTextHighlight repeatProgressHighlight;
-    repeatProgressHighlight.begin = mapBlunchSourceOffsetToVisibleLine(
-        sourceLine, visibleLine, repeatProgress.begin);
-    repeatProgressHighlight.end =
-        std::max(repeatProgressHighlight.begin,
-                 mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
-                                                    repeatProgress.end));
-    repeatProgressHighlight.hasBackground = false;
-    repeatProgressHighlight.hasProgress = true;
-    repeatProgressHighlight.progress = repeatProgress.progress;
-    repeatProgressHighlight.progressSegments = repeatProgress.segments;
-    repeatProgressHighlight.progressColor = COLOR_COMPUTERSCARE_GREEN;
-    if (repeatProgressHighlight.begin < repeatProgressHighlight.end) {
-      highlights.push_back(repeatProgressHighlight);
-    }
+  std::vector<blunch::sequencer::TimingScopeProgress> scopeProgress =
+      blunch::sequencer::getActiveTimingScopeProgressHighlights(seq);
+  for (size_t i = 0; i < scopeProgress.size(); i++) {
+    addBlunchProgressHighlight(highlights, scopeProgress[i], sourceLine,
+                               visibleLine);
   }
-}
-
-static bool choiceHasExplicitUnit(
-    const blunch::language::RandomChoiceAst& choice) {
-  return choice.unitRange.end > choice.unitRange.begin;
-}
-
-static bool choiceIsExternalClock(
-    const blunch::language::RandomChoiceAst& choice) {
-  return choice.externalClockChoice;
-}
-
-static bool choiceHasModifiers(
-    const blunch::language::RandomChoiceAst& choice) {
-  return choice.hasRepeatModifier || choice.hasTotalDurationModifier;
 }
 
 static const blunch::language::RandomChoiceAst& chooseRandomChoice(
@@ -237,27 +230,6 @@ static int sampleRandomChoiceInteger(
   }
   return lowValue +
          (int)std::floor(randomValue * (float)(highValue - lowValue + 1));
-}
-
-static blunch::language::ClockLiteralAst literalForRandomChoice(
-    const blunch::language::ClockLiteralAst& randomAst,
-    const blunch::language::RandomChoiceAst& choice, double value) {
-  blunch::language::ClockLiteralAst literal;
-  if (choiceIsExternalClock(choice)) {
-    literal.kind = blunch::language::ClockLiteralKind::ExternalClock;
-    literal.externalClock = choice.externalClock;
-    literal.range = choice.range;
-    return literal;
-  }
-
-  literal.kind = blunch::language::ClockLiteralKind::Numeric;
-  literal.value = value;
-  literal.valueLexeme = choice.minValueLexeme;
-  literal.range = choice.range;
-  literal.unit = choiceHasExplicitUnit(choice) ? choice.unit : randomAst.unit;
-  literal.unitRange =
-      choiceHasExplicitUnit(choice) ? choice.unitRange : randomAst.unitRange;
-  return literal;
 }
 
 struct BlunchSpeedOfTimeParamQuantity : ParamQuantity {
@@ -1009,228 +981,17 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
   bool parseLineProgram(int line, int lineBegin, const std::string& lineText,
                         std::vector<BlunchProgramStep>& program) {
-    blunch::language::ParseResult parse =
-        blunch::language::parseClockLiteral(lineText);
-    if (!parse.ok()) {
-      return false;
-    }
-
-    program.clear();
-    for (size_t i = 0; i < parse.program.blocks.size(); i++) {
-      const blunch::language::ClockBlockAst& block = parse.program.blocks[i];
-
-      BlunchProgramStep step;
-      step.sourceLineBegin = lineBegin;
-      step.literal = block.literal;
-      step.isRest = block.rest;
-      step.spec.bpm = CLOCK_BPM;
-      step.spec.hz = CLOCK_HZ;
-      step.spec.periodSeconds = 1.f / CLOCK_HZ;
-      if (block.literal.kind ==
-          blunch::language::ClockLiteralKind::ExternalClock) {
-        step.externalClockInput =
-            externalClockInputIndex(block.literal.externalClock);
-      } else if (block.literal.kind ==
-                 blunch::language::ClockLiteralKind::RandomRange) {
-        bool hasNumericChoice = false;
-        for (size_t choiceIndex = 0;
-             choiceIndex < block.literal.randomChoices.size(); choiceIndex++) {
-          if (!choiceIsExternalClock(
-                  block.literal.randomChoices[choiceIndex])) {
-            hasNumericChoice = true;
-            break;
-          }
-        }
-        if (hasNumericChoice) {
-          for (size_t choiceIndex = 0;
-               choiceIndex < block.literal.randomChoices.size();
-               choiceIndex++) {
-            const blunch::language::RandomChoiceAst& choice =
-                block.literal.randomChoices[choiceIndex];
-            if (choiceIsExternalClock(choice)) {
-              continue;
-            }
-            blunch::language::ClockLiteralAst literal =
-                literalForRandomChoice(block.literal, choice, choice.minValue);
-            blunch::language::EvaluationResult eval =
-                blunch::language::evaluateClockLiteral(literal);
-            if (!eval.ok()) {
-              program.clear();
-              return false;
-            }
-            step.spec = eval.spec;
-            break;
-          }
-        }
-      } else if (block.literal.kind !=
-                 blunch::language::ClockLiteralKind::Empty) {
-        blunch::language::EvaluationResult eval =
-            blunch::language::evaluateClockLiteral(block.literal);
-        if (!eval.ok()) {
-          program.clear();
-          return false;
-        }
-        step.spec = eval.spec;
-      }
-      step.hasRandomValue =
-          block.literal.kind == blunch::language::ClockLiteralKind::RandomRange;
-      if (step.hasRandomValue) {
-        for (size_t choiceIndex = 0;
-             choiceIndex < block.literal.randomChoices.size(); choiceIndex++) {
-          const blunch::language::RandomChoiceAst& choice =
-              block.literal.randomChoices[choiceIndex];
-          if (choiceIsExternalClock(choice)) {
-            continue;
-          }
-          blunch::language::ClockLiteralAst minLiteral =
-              literalForRandomChoice(block.literal, choice, choice.minValue);
-          blunch::language::ClockLiteralAst maxLiteral =
-              literalForRandomChoice(block.literal, choice, choice.maxValue);
-          blunch::language::EvaluationResult minEval =
-              blunch::language::evaluateClockLiteral(minLiteral);
-          blunch::language::EvaluationResult maxEval =
-              blunch::language::evaluateClockLiteral(maxLiteral);
-          if (!minEval.ok() || !maxEval.ok()) {
-            program.clear();
-            return false;
-          }
-        }
-      }
-      step.repeat = std::max(1, block.repeat);
-      step.repeatIsRandom = block.repeatIsRandom;
-      step.repeatRandomIsDuration = block.repeatIsDuration;
-      step.repeatRandom = block.repeatRandom;
-      if (block.repeatUsesExternalClock) {
-        step.repeatExternalClockInput =
-            externalClockInputIndex(block.repeatExternalClock);
-      }
-      if (block.repeatIsDuration && !block.repeatIsRandom) {
-        blunch::language::EvaluationResult durationEval =
-            blunch::language::evaluateClockLiteral(block.repeatDuration);
-        if (!durationEval.ok()) {
-          program.clear();
-          return false;
-        }
-        step.hasDuration = true;
-        step.durationSeconds = std::max(0.0, durationEval.spec.periodSeconds);
-      }
-      step.probability = std::max(0, std::min(100, block.probability));
-      if (block.rest && block.range.end > block.range.begin) {
-        step.highlightBegin = lineBegin + block.range.begin;
-        step.highlightEnd = lineBegin + block.range.end;
-      } else {
-        step.highlightBegin = lineBegin + block.literal.range.begin;
-        step.highlightEnd = lineBegin + block.literal.range.end;
-      }
-      step.repeatHighlightBegin = lineBegin + block.repeatValueRange.begin;
-      step.repeatHighlightEnd = lineBegin + block.repeatValueRange.end;
-      step.repeatHighlightIsOwn = block.repeatValueIsOwn;
-      if (block.repeatIsDuration && block.repeatIsRandom) {
-        step.hasDuration = true;
-        step.durationSeconds = 0.f;
-      }
-      if (block.hasTotalDuration) {
-        step.totalDurationIsRandom = block.totalDurationIsRandom;
-        step.totalDurationRandom = block.totalDurationRandom;
-        step.totalDurationIsTickCount = block.totalDurationIsTickCount;
-        step.totalDurationTicks = block.totalDurationTicks;
-        if (block.totalDurationUsesExternalClock) {
-          step.totalDurationExternalClockInput =
-              externalClockInputIndex(block.totalDurationExternalClock);
-        }
-        if (!block.totalDurationIsTickCount && !block.totalDurationIsRandom) {
-          blunch::language::EvaluationResult totalDurationEval =
-              blunch::language::evaluateClockLiteral(block.totalDuration);
-          if (!totalDurationEval.ok()) {
-            program.clear();
-            return false;
-          }
-          step.totalDurationSeconds =
-              std::max(0.0, totalDurationEval.spec.periodSeconds);
-        }
-        step.hasTotalDurationGroup = true;
-        step.totalDurationGroupId = block.totalDurationGroupId;
-        step.totalDurationHighlightBegin =
-            lineBegin + block.totalDurationValueRange.begin;
-        step.totalDurationHighlightEnd =
-            lineBegin + block.totalDurationValueRange.end;
-      }
-      program.push_back(step);
-    }
-
-    for (size_t i = 0; i < program.size(); i++) {
-      if (!program[i].hasTotalDurationGroup) {
-        continue;
-      }
-
-      int groupId = program[i].totalDurationGroupId;
-      int begin = (int)i;
-      while (begin > 0 && program[begin - 1].hasTotalDurationGroup &&
-             program[begin - 1].totalDurationGroupId == groupId) {
-        begin--;
-      }
-
-      int end = (int)i + 1;
-      while (end < (int)program.size() && program[end].hasTotalDurationGroup &&
-             program[end].totalDurationGroupId == groupId) {
-        end++;
-      }
-
-      program[i].totalDurationGroupStart = begin;
-      program[i].totalDurationGroupEnd = end;
-    }
-
-    for (size_t i = 0; i < program.size(); i++) {
-      captureBaseStepState(program[i]);
-    }
-
-    return !program.empty();
+    (void)line;
+    return blunch::program::compileLineProgram(
+        lineText, lineBegin, externalClockInputIndex, program);
   }
 
   void captureBaseStepState(BlunchProgramStep& step) {
-    step.baseIsRest = step.isRest;
-    step.baseRepeat = step.repeat;
-    step.baseRepeatExternalClockInput = step.repeatExternalClockInput;
-    step.baseHasDuration = step.hasDuration;
-    step.baseDurationSeconds = step.durationSeconds;
-    step.baseRepeatHighlightBegin = step.repeatHighlightBegin;
-    step.baseRepeatHighlightEnd = step.repeatHighlightEnd;
-    step.baseRepeatHighlightIsOwn = step.repeatHighlightIsOwn;
-    step.baseHasTotalDurationGroup = step.hasTotalDurationGroup;
-    step.baseTotalDurationGroupId = step.totalDurationGroupId;
-    step.baseTotalDurationGroupStart = step.totalDurationGroupStart;
-    step.baseTotalDurationGroupEnd = step.totalDurationGroupEnd;
-    step.baseTotalDurationIsRandom = step.totalDurationIsRandom;
-    step.baseTotalDurationIsTickCount = step.totalDurationIsTickCount;
-    step.baseTotalDurationTicks = step.totalDurationTicks;
-    step.baseTotalDurationExternalClockInput =
-        step.totalDurationExternalClockInput;
-    step.baseTotalDurationSeconds = step.totalDurationSeconds;
-    step.baseTotalDurationHighlightBegin = step.totalDurationHighlightBegin;
-    step.baseTotalDurationHighlightEnd = step.totalDurationHighlightEnd;
+    blunch::program::captureBaseStepState(step);
   }
 
   void restoreBaseStepState(BlunchProgramStep& step) {
-    step.isRest = step.baseIsRest;
-    step.repeat = step.baseRepeat;
-    step.repeatExternalClockInput = step.baseRepeatExternalClockInput;
-    step.hasDuration = step.baseHasDuration;
-    step.durationSeconds = step.baseDurationSeconds;
-    step.repeatHighlightBegin = step.baseRepeatHighlightBegin;
-    step.repeatHighlightEnd = step.baseRepeatHighlightEnd;
-    step.repeatHighlightIsOwn = step.baseRepeatHighlightIsOwn;
-    step.hasTotalDurationGroup = step.baseHasTotalDurationGroup;
-    step.totalDurationGroupId = step.baseTotalDurationGroupId;
-    step.totalDurationGroupStart = step.baseTotalDurationGroupStart;
-    step.totalDurationGroupEnd = step.baseTotalDurationGroupEnd;
-    step.totalDurationIsRandom = step.baseTotalDurationIsRandom;
-    step.totalDurationIsTickCount = step.baseTotalDurationIsTickCount;
-    step.totalDurationTicks = step.baseTotalDurationTicks;
-    step.totalDurationExternalClockInput =
-        step.baseTotalDurationExternalClockInput;
-    step.totalDurationSeconds = step.baseTotalDurationSeconds;
-    step.totalDurationHighlightBegin = step.baseTotalDurationHighlightBegin;
-    step.totalDurationHighlightEnd = step.baseTotalDurationHighlightEnd;
+    blunch::program::restoreBaseStepState(step);
   }
 
   void resetSeededRandomSerials(BlunchSequencerRuntime& seq) {
@@ -1243,7 +1004,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool isBranchLocalTotalDuration(const BlunchProgramStep& step) const {
-    return step.hasTotalDurationGroup && step.totalDurationGroupId <= -1000000;
+    return blunch::program::isBranchLocalTotalDuration(step);
   }
 
   int seededRandomEventIndex(BlunchSequencerRuntime& seq,
@@ -1613,6 +1374,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     seq.activeProgramBeat = 0;
     seq.activeProgramElapsedSeconds = 0.0;
     seq.activeTotalDurationGroupId = -1;
+    seq.activeTotalDurationBranchLocal = false;
     seq.activeTotalDurationElapsedSeconds = 0.0;
     seq.activeTotalDurationTicks = 0;
     if (resetPhase) {
@@ -1679,7 +1441,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                   randomFloatForEvent(seq, SEEDED_RANDOM_REPEAT, eventIndex, 1))
             : sampleRandomChoiceValue(choice);
     blunch::language::ClockLiteralAst literal =
-        literalForRandomChoice(step.repeatRandom, choice, sampledValue);
+        blunch::program::literalForRandomChoice(step.repeatRandom, choice,
+                                                sampledValue);
     blunch::language::EvaluationResult eval =
         blunch::language::evaluateClockLiteral(literal);
     if (eval.ok()) {
@@ -1715,7 +1478,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
             : chooseRandomChoice(step.totalDurationRandom);
     bool suffixHasUnit = step.totalDurationRandom.unitRange.end >
                          step.totalDurationRandom.unitRange.begin;
-    bool selectedIsDuration = choiceHasExplicitUnit(choice) || suffixHasUnit;
+    bool selectedIsDuration =
+        blunch::program::randomChoiceHasExplicitUnit(choice) || suffixHasUnit;
 
     bool selectedIsTickCount = !selectedIsDuration;
     int selectedTicks = 1;
@@ -1737,8 +1501,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                     randomFloatForEvent(seq, SEEDED_RANDOM_TOTAL_DURATION,
                                         eventIndex, 1))
               : sampleRandomChoiceValue(choice);
-      blunch::language::ClockLiteralAst literal = literalForRandomChoice(
-          step.totalDurationRandom, choice, sampledValue);
+      blunch::language::ClockLiteralAst literal =
+          blunch::program::literalForRandomChoice(step.totalDurationRandom,
+                                                  choice, sampledValue);
       blunch::language::EvaluationResult eval =
           blunch::language::evaluateClockLiteral(literal);
       if (eval.ok()) {
@@ -1792,7 +1557,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
 
     step.hasTotalDurationGroup = true;
-    step.totalDurationGroupId = -1000000 - stepIndex;
+    step.totalDurationBranchLocal = true;
+    step.totalDurationGroupId = stepIndex;
     step.totalDurationGroupStart = stepIndex;
     step.totalDurationGroupEnd = stepIndex + 1;
     step.totalDurationIsRandom = false;
@@ -1822,18 +1588,20 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     BlunchProgramStep& step = seq.activeProgram[seq.activeProgramIndex];
     sampleStepRepeatArgument(seq, step);
     refreshActiveClockSpecForStep(seq);
-    seq.activeHighlightBegin = step.highlightBegin;
-    seq.activeHighlightEnd = step.highlightEnd;
+    blunch::sequencer::syncActiveHighlightFromStep(seq);
     seq.activeProgramElapsedSeconds = 0.0;
     if (step.hasTotalDurationGroup) {
-      if (seq.activeTotalDurationGroupId != step.totalDurationGroupId) {
+      if (seq.activeTotalDurationGroupId != step.totalDurationGroupId ||
+          seq.activeTotalDurationBranchLocal != step.totalDurationBranchLocal) {
         seq.activeTotalDurationGroupId = step.totalDurationGroupId;
+        seq.activeTotalDurationBranchLocal = step.totalDurationBranchLocal;
         seq.activeTotalDurationElapsedSeconds = 0.0;
         seq.activeTotalDurationTicks = 0;
         sampleTotalDurationGroup(seq, seq.activeProgramIndex);
       }
     } else {
       seq.activeTotalDurationGroupId = -1;
+      seq.activeTotalDurationBranchLocal = false;
       seq.activeTotalDurationElapsedSeconds = 0.0;
       seq.activeTotalDurationTicks = 0;
     }
@@ -1841,7 +1609,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     chooseActiveStepPlayback(seq);
   }
 
-  int externalClockInputIndex(char clock) const {
+  static int externalClockInputIndex(char clock) {
     switch (clock) {
       case 'w':
         return 0;
@@ -1894,11 +1662,24 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       return;
     }
 
+    if (!blunch::sequencer::activeClockTickAdvancesStepRepeat(seq)) {
+      if (blunch::sequencer::advanceWithinTotalDurationGroup(seq)) {
+        applyActiveProgramStep(seq);
+        triggerTokenMovePulse();
+        return;
+      }
+      refreshActiveClockSpecForStep(seq);
+      blunch::sequencer::syncActiveHighlightFromStep(seq);
+      chooseActiveStepPlayback(seq);
+      return;
+    }
+
     seq.activeProgramBeat++;
     if (seq.activeProgramBeat >= step.repeat) {
       advanceActiveProgramStep(seq);
     } else {
       refreshActiveClockSpecForStep(seq);
+      blunch::sequencer::syncActiveHighlightFromStep(seq);
       chooseActiveStepPlayback(seq);
     }
   }
@@ -2093,9 +1874,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       step.isRest = step.baseIsRest || choice.restChoice;
       step.highlightBegin = step.sourceLineBegin + choice.range.begin;
       step.highlightEnd = step.sourceLineBegin + choice.range.end;
-      if (choiceIsExternalClock(choice)) {
+      if (blunch::program::randomChoiceIsExternalClock(choice)) {
         step.externalClockInput = externalClockInputIndex(choice.externalClock);
-        if (choiceHasModifiers(choice)) {
+        if (blunch::program::randomChoiceHasModifiers(choice)) {
           applyRandomChoiceModifiers(step, choice, seq.activeProgramIndex);
         }
         seq.activeClockSpec = step.spec;
@@ -2115,8 +1896,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
 
     blunch::language::ClockLiteralAst sampledLiteral =
-        selectedChoice ? literalForRandomChoice(step.literal, *selectedChoice,
-                                                sampledValue)
+        selectedChoice ? blunch::program::literalForRandomChoice(
+                             step.literal, *selectedChoice, sampledValue)
                        : step.literal;
     blunch::language::EvaluationResult eval =
         selectedChoice ? blunch::language::evaluateClockLiteral(sampledLiteral)
@@ -2127,7 +1908,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     } else {
       seq.activeClockSpec = step.spec;
     }
-    if (selectedChoice && choiceHasModifiers(*selectedChoice)) {
+    if (selectedChoice &&
+        blunch::program::randomChoiceHasModifiers(*selectedChoice)) {
       applyRandomChoiceModifiers(step, *selectedChoice, seq.activeProgramIndex);
     }
   }
@@ -2149,7 +1931,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
   bool getActiveRepeatProgressHighlight(int& begin, int& end, float& progress,
                                         int& segments) {
-    blunch::sequencer::RepeatProgress highlight;
+    blunch::sequencer::TimingScopeProgress highlight;
     if (!blunch::sequencer::getActiveRepeatProgressHighlight(activeSequencer(),
                                                              highlight)) {
       return false;

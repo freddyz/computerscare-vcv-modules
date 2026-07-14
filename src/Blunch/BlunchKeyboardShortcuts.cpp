@@ -94,9 +94,9 @@ bool handleKeyboardShortcut(int key, const std::string& keyName, int mods,
   if ((isLeftBracket || isRightBracket) && rackMods == GLFW_MOD_CONTROL) {
     if (action == GLFW_PRESS) {
       if (isLeftBracket) {
-        commands.navigateChannelForwardCount++;
-      } else {
         commands.navigateChannelBackwardCount++;
+      } else {
+        commands.navigateChannelForwardCount++;
       }
     }
     return true;

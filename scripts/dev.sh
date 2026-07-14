@@ -80,6 +80,8 @@ run_tests() {
   g++ -std=c++11 -I src tests/text_editor_logic_test.cpp -o /tmp/cs_text_editor_logic_test && /tmp/cs_text_editor_logic_test
   g++ -std=c++11 -I src tests/blunch_sequencer_runtime_test.cpp -o /tmp/cs_blunch_sequencer_runtime_test && /tmp/cs_blunch_sequencer_runtime_test
   g++ -std=c++11 -I src tests/blunch_sequencer_engine_test.cpp src/Blunch/BlunchSequencerEngine.cpp -o /tmp/cs_blunch_sequencer_engine_test && /tmp/cs_blunch_sequencer_engine_test
+  g++ -std=c++11 -I src tests/blunch_program_compiler_test.cpp src/Blunch/BlunchProgramCompiler.cpp src/BlunchLanguage/Tokenizer.cpp src/BlunchLanguage/Parser.cpp src/BlunchLanguage/Evaluator.cpp -o /tmp/cs_blunch_program_compiler_test && /tmp/cs_blunch_program_compiler_test
+  g++ -std=c++11 -I src -I"$RACK_INCLUDE_DIR" -I"$RACK_DEP_INCLUDE_DIR" tests/blunch_keyboard_shortcuts_test.cpp src/Blunch/BlunchKeyboardShortcuts.cpp -o /tmp/cs_blunch_keyboard_shortcuts_test && /tmp/cs_blunch_keyboard_shortcuts_test
   g++ -std=c++11 -I src tests/blunch_editor_views_test.cpp src/Blunch/BlunchEditorViews.cpp -o /tmp/cs_blunch_editor_views_test && /tmp/cs_blunch_editor_views_test
   g++ -std=c++11 -I src tests/blunch_language_test.cpp src/Blunch/BlunchRandomProgram.cpp src/BlunchLanguage/Tokenizer.cpp src/BlunchLanguage/Parser.cpp src/BlunchLanguage/Evaluator.cpp -o /tmp/cs_blunch_language_test && /tmp/cs_blunch_language_test
   echo "    OK."

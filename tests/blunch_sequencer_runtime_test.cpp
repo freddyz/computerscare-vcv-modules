@@ -26,6 +26,8 @@ int main() {
           "runtime starts at first program step");
   require(runtime.activeTotalDurationGroupId == -1,
           "runtime starts outside total-duration group");
+  require(!runtime.activeTotalDurationBranchLocal,
+          "runtime starts outside branch-local total-duration group");
   require(runtime.activeStepPlays, "runtime starts with playable step");
   require(!runtime.activeClockOutputHigh, "runtime clock output starts low");
   require(runtime.running, "runtime starts armed to run");
@@ -36,6 +38,7 @@ int main() {
   runtime.activeProgramBeat = 2;
   runtime.activeProgramElapsedSeconds = 1.25f;
   runtime.activeTotalDurationGroupId = 7;
+  runtime.activeTotalDurationBranchLocal = true;
   runtime.activeTotalDurationElapsedSeconds = 3.5f;
   runtime.activeTotalDurationTicks = 9;
   runtime.activeStepPlays = false;
@@ -47,6 +50,8 @@ int main() {
           "reset clears elapsed step duration");
   require(runtime.activeTotalDurationGroupId == -1,
           "reset leaves total-duration group");
+  require(!runtime.activeTotalDurationBranchLocal,
+          "reset clears branch-local total-duration group");
   require(runtime.activeTotalDurationElapsedSeconds == 0.f,
           "reset clears total-duration seconds");
   require(runtime.activeTotalDurationTicks == 0,

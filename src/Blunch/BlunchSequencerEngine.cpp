@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 namespace blunch {
 namespace sequencer {
@@ -50,6 +51,21 @@ int activeTotalDurationExternalClockInput(const BlunchSequencerRuntime& seq) {
 
 bool activeStepUsesExternalClock(const BlunchSequencerRuntime& seq) {
   return activeExternalClockInput(seq) >= 0;
+}
+
+bool activeClockTickAdvancesStepRepeat(const BlunchSequencerRuntime& seq) {
+  const BlunchProgramStep* step = activeStep(seq);
+  return step && !step->hasTotalDurationGroup;
+}
+
+void syncActiveHighlightFromStep(BlunchSequencerRuntime& seq) {
+  const BlunchProgramStep* step = activeStep(seq);
+  if (!step) {
+    return;
+  }
+
+  seq.activeHighlightBegin = step->highlightBegin;
+  seq.activeHighlightEnd = step->highlightEnd;
 }
 
 static uint32_t mixSeed(uint32_t hash, uint32_t value) {
@@ -149,9 +165,16 @@ bool advanceTotalDuration(BlunchSequencerRuntime& seq, float sampleTime) {
   }
 
   seq.activeTotalDurationElapsedSeconds -= step->totalDurationSeconds;
-  seq.activeProgramBeat = 0;
-  seq.activeProgramIndex = step->totalDurationGroupEnd;
+  int nextBeat = seq.activeProgramBeat + 1;
+  if (nextBeat < step->repeat) {
+    seq.activeProgramBeat = nextBeat;
+    seq.activeProgramIndex = step->totalDurationGroupStart;
+  } else {
+    seq.activeProgramBeat = 0;
+    seq.activeProgramIndex = step->totalDurationGroupEnd;
+  }
   seq.activeTotalDurationGroupId = -1;
+  seq.activeTotalDurationBranchLocal = false;
   seq.activeTotalDurationTicks = 0;
   return true;
 }
@@ -168,77 +191,153 @@ bool advanceTotalTickCount(BlunchSequencerRuntime& seq) {
     return false;
   }
 
-  seq.activeProgramBeat = 0;
-  seq.activeProgramIndex = step->totalDurationGroupEnd;
+  int nextBeat = seq.activeProgramBeat + 1;
+  if (nextBeat < step->repeat) {
+    seq.activeProgramBeat = nextBeat;
+    seq.activeProgramIndex = step->totalDurationGroupStart;
+  } else {
+    seq.activeProgramBeat = 0;
+    seq.activeProgramIndex = step->totalDurationGroupEnd;
+  }
   seq.activeTotalDurationGroupId = -1;
+  seq.activeTotalDurationBranchLocal = false;
   seq.activeTotalDurationElapsedSeconds = 0.0;
   seq.activeTotalDurationTicks = 0;
   return true;
 }
 
-bool getActiveRepeatProgressHighlight(const BlunchSequencerRuntime& seq,
-                                      RepeatProgress& highlight) {
-  if (!seq.running) {
+bool advanceWithinTotalDurationGroup(BlunchSequencerRuntime& seq) {
+  const BlunchProgramStep* step = activeStep(seq);
+  if (!step || !step->hasTotalDurationGroup) {
     return false;
+  }
+
+  int begin = step->totalDurationGroupStart;
+  int end = step->totalDurationGroupEnd;
+  if (end - begin <= 1) {
+    return false;
+  }
+
+  seq.activeProgramIndex++;
+  if (seq.activeProgramIndex >= end) {
+    seq.activeProgramIndex = begin;
+  }
+  return true;
+}
+
+static TimingScopeProgress makeProgress(TimingScopeKind kind, int begin,
+                                        int end, float progress, int segments) {
+  TimingScopeProgress highlight;
+  highlight.kind = kind;
+  highlight.begin = begin;
+  highlight.end = end;
+  highlight.progress = std::max(0.f, std::min(progress, 1.f));
+  highlight.segments = segments;
+  return highlight;
+}
+
+std::vector<TimingScopeProgress> getActiveTimingScopeProgressHighlights(
+    const BlunchSequencerRuntime& seq) {
+  std::vector<TimingScopeProgress> highlights;
+  if (!seq.running) {
+    return highlights;
   }
 
   const BlunchProgramStep* step = activeStep(seq);
   if (!step) {
-    return false;
+    return highlights;
   }
 
   if (step->hasTotalDurationGroup) {
-    if (step->totalDurationHighlightEnd <= step->totalDurationHighlightBegin) {
-      return false;
-    }
-    if (step->totalDurationIsTickCount && step->totalDurationTicks <= 1 &&
-        step->totalDurationExternalClockInput >= 0) {
-      return false;
+    if (step->totalDurationHighlightEnd > step->totalDurationHighlightBegin &&
+        !(step->totalDurationIsTickCount && step->totalDurationTicks <= 1 &&
+          step->totalDurationExternalClockInput >= 0)) {
+      TimingScopeKind kind = step->totalDurationBranchLocal
+                                 ? TimingScopeKind::BranchLocalTotalDuration
+                                 : TimingScopeKind::TotalDuration;
+      if (step->totalDurationIsTickCount) {
+        float progress = step->totalDurationTicks > 0
+                             ? (float)(seq.activeTotalDurationTicks + 1) /
+                                   step->totalDurationTicks
+                             : 0.f;
+        highlights.push_back(
+            makeProgress(kind, step->totalDurationHighlightBegin,
+                         step->totalDurationHighlightEnd, progress,
+                         std::max(1, step->totalDurationTicks)));
+      } else {
+        float progress = step->totalDurationSeconds > 0.f
+                             ? seq.activeTotalDurationElapsedSeconds /
+                                   step->totalDurationSeconds
+                             : 0.f;
+        highlights.push_back(
+            makeProgress(kind, step->totalDurationHighlightBegin,
+                         step->totalDurationHighlightEnd, progress, 0));
+      }
     }
 
-    highlight.begin = step->totalDurationHighlightBegin;
-    highlight.end = step->totalDurationHighlightEnd;
-    if (step->totalDurationIsTickCount) {
-      highlight.segments = std::max(1, step->totalDurationTicks);
-      highlight.progress = step->totalDurationTicks > 0
-                               ? (float)(seq.activeTotalDurationTicks + 1) /
-                                     step->totalDurationTicks
-                               : 0.f;
-    } else {
-      highlight.segments = 0;
-      highlight.progress = step->totalDurationSeconds > 0.f
-                               ? seq.activeTotalDurationElapsedSeconds /
-                                     step->totalDurationSeconds
-                               : 0.f;
+    if (step->repeat > 1 &&
+        step->repeatHighlightEnd > step->repeatHighlightBegin) {
+      highlights.push_back(makeProgress(
+          TimingScopeKind::TotalDurationRepeat, step->repeatHighlightBegin,
+          step->repeatHighlightEnd,
+          step->repeat > 0 ? (float)(seq.activeProgramBeat + 1) / step->repeat
+                           : 0.f,
+          std::max(1, step->repeat)));
     }
-    highlight.progress = std::max(0.f, std::min(highlight.progress, 1.f));
-    return true;
+
+    return highlights;
   }
 
   if (step->repeatHighlightEnd <= step->repeatHighlightBegin) {
-    return false;
+    return highlights;
   }
   if (!step->hasDuration && step->repeat <= 1 &&
       step->repeatExternalClockInput >= 0) {
-    return false;
+    return highlights;
   }
 
-  highlight.begin = step->repeatHighlightBegin;
-  highlight.end = step->repeatHighlightEnd;
   if (step->hasDuration) {
-    highlight.segments = 0;
-    highlight.progress =
+    highlights.push_back(makeProgress(
+        TimingScopeKind::StepDuration, step->repeatHighlightBegin,
+        step->repeatHighlightEnd,
         step->durationSeconds > 0.f
             ? seq.activeProgramElapsedSeconds / step->durationSeconds
-            : 0.f;
+            : 0.f,
+        0));
   } else {
-    highlight.segments = std::max(1, step->repeat);
-    highlight.progress = step->repeat > 0
-                             ? (float)(seq.activeProgramBeat + 1) / step->repeat
-                             : 0.f;
+    highlights.push_back(makeProgress(
+        TimingScopeKind::StepRepeat, step->repeatHighlightBegin,
+        step->repeatHighlightEnd,
+        step->repeat > 0 ? (float)(seq.activeProgramBeat + 1) / step->repeat
+                         : 0.f,
+        std::max(1, step->repeat)));
   }
-  highlight.progress = std::max(0.f, std::min(highlight.progress, 1.f));
+
+  return highlights;
+}
+
+bool getActiveRepeatProgressHighlight(const BlunchSequencerRuntime& seq,
+                                      RepeatProgress& highlight) {
+  std::vector<TimingScopeProgress> highlights =
+      getActiveTimingScopeProgressHighlights(seq);
+  if (highlights.empty()) {
+    return false;
+  }
+  highlight = highlights[0];
   return true;
+}
+
+bool getActiveTotalDurationRepeatProgressHighlight(
+    const BlunchSequencerRuntime& seq, RepeatProgress& highlight) {
+  std::vector<TimingScopeProgress> highlights =
+      getActiveTimingScopeProgressHighlights(seq);
+  for (size_t i = 0; i < highlights.size(); i++) {
+    if (highlights[i].kind == TimingScopeKind::TotalDurationRepeat) {
+      highlight = highlights[i];
+      return true;
+    }
+  }
+  return false;
 }
 
 }  // namespace sequencer
