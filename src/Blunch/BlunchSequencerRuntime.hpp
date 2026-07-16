@@ -15,8 +15,10 @@ struct BlunchProgramStep {
   int repeat = 1;
   int baseRepeat = 1;
   bool repeatIsRandom = false;
+  bool repeatIsSequence = false;
   bool repeatRandomIsDuration = false;
   blunch::language::ClockLiteralAst repeatRandom;
+  std::vector<blunch::language::ClockLiteralAst> repeatSequence;
   int repeatExternalClockInput = -1;
   int baseRepeatExternalClockInput = -1;
   bool hasDuration = false;

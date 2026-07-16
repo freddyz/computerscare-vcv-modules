@@ -41,9 +41,12 @@ int mapExternalClock(char clock) {
 std::vector<BlunchProgramStep> requireCompiles(const std::string& source,
                                                int lineBegin = 0) {
   std::vector<BlunchProgramStep> program;
-  require(blunch::program::compileLineProgram(source, lineBegin,
-                                              mapExternalClock, program),
-          "program should compile");
+  if (!blunch::program::compileLineProgram(source, lineBegin, mapExternalClock,
+                                           program)) {
+    std::fprintf(stderr, "FAIL: program should compile: %s\n",
+                 source.c_str());
+    std::exit(1);
+  }
   require(!program.empty(), "compiled program should have steps");
   return program;
 }
@@ -87,6 +90,78 @@ int main() {
           "bare random choice question defaults to 50 percent");
   require(compiled[0].literal.randomChoices[1].probability == 86,
           "explicit random choice probability is preserved");
+
+  compiled = requireCompiles("3hz@(2 4 2 4)", 20);
+  require(compiled.size() == 1,
+          "repeat count sequence compiles to one step");
+  require(compiled[0].repeatIsSequence,
+          "repeat count sequence compiles sequence flag");
+  require(!compiled[0].repeatIsRandom,
+          "repeat count sequence is not marked random");
+  require(!compiled[0].repeatRandomIsDuration,
+          "repeat count sequence is not marked duration");
+  require(compiled[0].repeatSequence.size() == 4,
+          "repeat count sequence compiles all values");
+  requireNear(compiled[0].repeatSequence[0].value, 2.0,
+              "repeat count sequence compiles first value");
+  requireNear(compiled[0].repeatSequence[1].value, 4.0,
+              "repeat count sequence compiles second value");
+  require(compiled[0].repeatHighlightBegin == 24,
+          "repeat count sequence highlight starts at values");
+  require(compiled[0].repeatHighlightEnd == 33,
+          "repeat count sequence highlight ends after values");
+
+  compiled = requireCompiles("3hz@(2 (4 5))", 20);
+  require(compiled.size() == 1,
+          "nested repeat count sequence compiles to one step");
+  require(compiled[0].repeatIsSequence,
+          "nested repeat count sequence compiles sequence flag");
+  require(compiled[0].repeatSequence.size() == 3,
+          "nested repeat count sequence compiles flattened values");
+  requireNear(compiled[0].repeatSequence[0].value, 2.0,
+              "nested repeat count sequence compiles first value");
+  requireNear(compiled[0].repeatSequence[1].value, 4.0,
+              "nested repeat count sequence compiles second value");
+  requireNear(compiled[0].repeatSequence[2].value, 5.0,
+              "nested repeat count sequence compiles third value");
+  require(compiled[0].repeatHighlightBegin == 24,
+          "nested repeat count sequence highlight starts at values");
+  require(compiled[0].repeatHighlightEnd == 33,
+          "nested repeat count sequence highlight ends after values");
+
+  compiled = requireCompiles("3hz@(2 {4|5})");
+  require(compiled.size() == 1,
+          "random repeat count sequence compiles to one step");
+  require(compiled[0].repeatIsSequence,
+          "random repeat count sequence compiles sequence flag");
+  require(compiled[0].repeatSequence.size() == 2,
+          "random repeat count sequence compiles all values");
+  require(compiled[0].repeatSequence[1].kind ==
+              language::ClockLiteralKind::RandomRange,
+          "random repeat count sequence compiles random literal");
+
+  compiled = requireCompiles("3hz@(100ms 200ms)");
+  require(compiled.size() == 1,
+          "repeat duration sequence compiles to one step");
+  require(compiled[0].repeatIsSequence,
+          "repeat duration sequence compiles sequence flag");
+  require(compiled[0].repeatRandomIsDuration,
+          "repeat duration sequence compiles duration flag");
+  require(compiled[0].repeatSequence.size() == 2,
+          "repeat duration sequence compiles all values");
+  require(compiled[0].repeatSequence[0].unit ==
+              language::ClockUnit::Milliseconds,
+          "repeat duration sequence compiles first unit");
+
+  compiled = requireCompiles("[3 1]hz#6 3hz@(2 (4 5))");
+  require(compiled.size() == 3,
+          "mixed program with nested repeat sequence compiles to three steps");
+  require(!compiled[0].repeatIsSequence,
+          "mixed nested program first step has no repeat sequence");
+  require(compiled[2].repeatIsSequence,
+          "mixed nested program final step keeps repeat sequence");
+  require(compiled[2].repeatSequence.size() == 3,
+          "mixed nested program final step keeps all repeat sequence values");
 
   compiled = requireCompiles(
       "{{3.3333hz|~4.hz}|{1.0hz|1.75hz|3.333333hz}|"

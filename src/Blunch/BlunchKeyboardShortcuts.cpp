@@ -42,7 +42,7 @@ bool handleKeyboardShortcut(int key, const std::string& keyName, int mods,
   }
 
   if (options.submitOnEnter && isEnterKey(key) &&
-      rackMods == GLFW_MOD_CONTROL) {
+      (rackMods == GLFW_MOD_CONTROL || rackMods == GLFW_MOD_SUPER)) {
     if (action == GLFW_PRESS) {
       commands.submitCount++;
     }

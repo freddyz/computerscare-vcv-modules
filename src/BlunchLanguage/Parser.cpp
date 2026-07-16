@@ -503,7 +503,14 @@ class Parser {
       if (suffixUnit != ClockUnit::Unknown) {
         applyUnitToUnitlessBlock(groupBlocks[i], suffixUnit, suffixUnitRange);
       }
-      if (repeatBlock.repeatIsRandom) {
+      if (repeatBlock.repeatIsSequence) {
+        groupBlocks[i].repeatIsSequence = true;
+        groupBlocks[i].repeatSequence = repeatBlock.repeatSequence;
+        groupBlocks[i].repeatIsDuration = repeatBlock.repeatIsDuration;
+        if (repeatBlock.repeatIsDuration) {
+          groupBlocks[i].repeatDuration = repeatBlock.repeatDuration;
+        }
+      } else if (repeatBlock.repeatIsRandom) {
         groupBlocks[i].repeatIsRandom = true;
         groupBlocks[i].repeatRandom = repeatBlock.repeatRandom;
         groupBlocks[i].repeatIsDuration = repeatBlock.repeatIsDuration;
@@ -656,7 +663,14 @@ class Parser {
       if (suffixUnit != ClockUnit::Unknown) {
         applyUnitToUnitlessBlock(groupBlocks[i], suffixUnit, suffixUnitRange);
       }
-      if (repeatBlock.repeatIsRandom) {
+      if (repeatBlock.repeatIsSequence) {
+        groupBlocks[i].repeatIsSequence = true;
+        groupBlocks[i].repeatSequence = repeatBlock.repeatSequence;
+        groupBlocks[i].repeatIsDuration = repeatBlock.repeatIsDuration;
+        if (repeatBlock.repeatIsDuration) {
+          groupBlocks[i].repeatDuration = repeatBlock.repeatDuration;
+        }
+      } else if (repeatBlock.repeatIsRandom) {
         groupBlocks[i].repeatIsRandom = true;
         groupBlocks[i].repeatRandom = repeatBlock.repeatRandom;
         groupBlocks[i].repeatIsDuration = repeatBlock.repeatIsDuration;
@@ -747,6 +761,51 @@ class Parser {
       return parseColonLiteral(result, firstNumber);
     }
     return parseNumericLiteral(result, firstNumber);
+  }
+
+  void parseRepeatSequenceItems(ParseResult& result,
+                                std::vector<ClockLiteralAst>& items,
+                                TokenType closingType,
+                                const Token& openingToken,
+                                const char* expectedClosing) {
+    while (!isAtEnd() && peek().type != closingType) {
+      if (matchSeparator()) {
+        continue;
+      }
+
+      if (peek().type == TokenType::LeftParen) {
+        Token nestedOpen = advance();
+        parseRepeatSequenceItems(result, items, TokenType::RightParen,
+                                 nestedOpen, "Expected ')'");
+        continue;
+      }
+
+      if (peek().type == TokenType::LeftBracket) {
+        Token nestedOpen = advance();
+        parseRepeatSequenceItems(result, items, TokenType::RightBracket,
+                                 nestedOpen, "Expected ']'");
+        continue;
+      }
+
+      if (peek().type != TokenType::Number &&
+          peek().type != TokenType::LeftBrace &&
+          !(peek().type == TokenType::Identifier &&
+            isExternalClockIdentifier(peek().lexeme))) {
+        addDiagnostic(result, "Expected repeat sequence value",
+                      rangeFromToken(peek()));
+        advance();
+        continue;
+      }
+
+      items.push_back(parseLiteral(result));
+    }
+
+    if (peek().type == closingType) {
+      advance();
+      return;
+    }
+
+    addDiagnostic(result, expectedClosing, rangeFromToken(openingToken));
   }
 
   ClockLiteralAst parseExternalClockLiteral(ParseResult& result) {
@@ -1280,6 +1339,72 @@ class Parser {
         validateRandomDuration(result, randomAst, "Repeat duration");
       } else {
         validateRandomIntegerCount(result, randomAst, "Repeat count");
+      }
+      return;
+    }
+
+    if (peek().type == TokenType::LeftParen) {
+      Token leftParen = advance();
+      block.repeatRange.begin = atToken.begin;
+      block.repeatValueRange.begin = leftParen.begin;
+      parseRepeatSequenceItems(result, block.repeatSequence,
+                               TokenType::RightParen, leftParen,
+                               "Expected ')'");
+      Token rightParen =
+          previous().type == TokenType::RightParen ? previous() : leftParen;
+
+      block.repeatRange.end = rightParen.end;
+      block.repeatValueRange.end = rightParen.end;
+      block.repeatValueIsOwn = true;
+      block.repeatIsSequence = true;
+
+      if (block.repeatSequence.empty()) {
+        addDiagnostic(result, "Expected repeat sequence value",
+                      rangeFromToken(leftParen));
+      }
+
+      bool hasUnit = false;
+      for (size_t i = 0; i < block.repeatSequence.size(); i++) {
+        hasUnit = hasUnit || hasExplicitUnit(block.repeatSequence[i]);
+        for (size_t j = 0; j < block.repeatSequence[i].randomChoices.size();
+             j++) {
+          hasUnit = hasUnit ||
+                    hasChoiceUnit(block.repeatSequence[i].randomChoices[j]);
+        }
+      }
+      block.repeatIsDuration = hasUnit;
+      if (hasUnit) {
+        for (size_t i = 0; i < block.repeatSequence.size(); i++) {
+          if (block.repeatSequence[i].kind == ClockLiteralKind::RandomRange) {
+            validateRandomDuration(result, block.repeatSequence[i],
+                                   "Repeat duration");
+          } else if (!hasExplicitUnit(block.repeatSequence[i])) {
+            addDiagnostic(result,
+                          "Repeat duration sequence values require time units",
+                          block.repeatSequence[i].range);
+          } else if (!isDurationUnit(block.repeatSequence[i].unit)) {
+            addDiagnostic(result, "Repeat duration requires a time unit",
+                          block.repeatSequence[i].unitRange);
+          }
+        }
+      } else {
+        for (size_t i = 0; i < block.repeatSequence.size(); i++) {
+          if (block.repeatSequence[i].kind == ClockLiteralKind::RandomRange) {
+            validateRandomIntegerCount(result, block.repeatSequence[i],
+                                       "Repeat count");
+            continue;
+          }
+          if (block.repeatSequence[i].kind != ClockLiteralKind::Numeric ||
+              !isIntegerLexeme(block.repeatSequence[i].valueLexeme)) {
+            addDiagnostic(result, "Repeat count must be an integer",
+                          block.repeatSequence[i].range);
+            continue;
+          }
+          if (parseInt(block.repeatSequence[i].valueLexeme) <= 0) {
+            addDiagnostic(result, "Repeat count must be greater than zero",
+                          block.repeatSequence[i].range);
+          }
+        }
       }
       return;
     }

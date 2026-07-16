@@ -1300,6 +1300,107 @@ void testProgramAst() {
                                    "external clock random second choice");
   require(result.program.blocks[0].repeat == 4,
           "external clock random repeat");
+
+  result = lang::parseClockLiteral("3hz@(2 4 2 4)");
+  require(result.ok(), "repeat count sequence parses");
+  require(result.program.blocks.size() == 1,
+          "repeat count sequence block count");
+  require(result.program.blocks[0].repeatIsSequence,
+          "repeat count sequence flag");
+  require(!result.program.blocks[0].repeatIsRandom,
+          "repeat count sequence is not random");
+  require(!result.program.blocks[0].repeatIsDuration,
+          "repeat count sequence is not duration");
+  require(result.program.blocks[0].repeatSequence.size() == 4,
+          "repeat count sequence value count");
+  requireNear(result.program.blocks[0].repeatSequence[0].value, 2.0,
+              "repeat count sequence first value");
+  requireNear(result.program.blocks[0].repeatSequence[1].value, 4.0,
+              "repeat count sequence second value");
+  requireNear(result.program.blocks[0].repeatSequence[2].value, 2.0,
+              "repeat count sequence third value");
+  requireNear(result.program.blocks[0].repeatSequence[3].value, 4.0,
+              "repeat count sequence fourth value");
+  requireRange(result.program.blocks[0].repeatRange, 3, 13,
+               "repeat count sequence range");
+  requireRange(result.program.blocks[0].repeatSequence[0].range, 5, 6,
+               "repeat count sequence first range");
+  requireRange(result.program.blocks[0].repeatSequence[3].range, 11, 12,
+               "repeat count sequence final range");
+
+  result = lang::parseClockLiteral("3hz@(2 (4 5))");
+  require(result.ok(), "nested repeat count sequence parses");
+  require(result.program.blocks.size() == 1,
+          "nested repeat count sequence block count");
+  require(result.program.blocks[0].repeatIsSequence,
+          "nested repeat count sequence flag");
+  require(result.program.blocks[0].repeatSequence.size() == 3,
+          "nested repeat count sequence flattened value count");
+  requireNear(result.program.blocks[0].repeatSequence[0].value, 2.0,
+              "nested repeat count sequence first value");
+  requireNear(result.program.blocks[0].repeatSequence[1].value, 4.0,
+              "nested repeat count sequence second value");
+  requireNear(result.program.blocks[0].repeatSequence[2].value, 5.0,
+              "nested repeat count sequence third value");
+  requireRange(result.program.blocks[0].repeatRange, 3, 13,
+               "nested repeat count sequence range");
+  requireRange(result.program.blocks[0].repeatSequence[1].range, 8, 9,
+               "nested repeat count sequence nested first range");
+  requireRange(result.program.blocks[0].repeatSequence[2].range, 10, 11,
+               "nested repeat count sequence nested second range");
+
+  result = lang::parseClockLiteral("3hz@(2 [4 5])");
+  require(result.ok(), "bracketed repeat count sequence parses");
+  require(result.program.blocks.size() == 1,
+          "bracketed repeat count sequence block count");
+  require(result.program.blocks[0].repeatSequence.size() == 3,
+          "bracketed repeat count sequence flattened value count");
+  requireNear(result.program.blocks[0].repeatSequence[2].value, 5.0,
+              "bracketed repeat count sequence final value");
+
+  result = lang::parseClockLiteral("3hz@(2 {4|5})");
+  require(result.ok(), "random repeat count sequence parses");
+  require(result.program.blocks.size() == 1,
+          "random repeat count sequence block count");
+  require(result.program.blocks[0].repeatSequence.size() == 2,
+          "random repeat count sequence value count");
+  require(result.program.blocks[0].repeatSequence[1].kind ==
+              lang::ClockLiteralKind::RandomRange,
+          "random repeat count sequence keeps random literal");
+  require(result.program.blocks[0].repeatSequence[1].randomChoices.size() == 2,
+          "random repeat count sequence keeps random choices");
+
+  result = lang::parseClockLiteral("3hz@(100ms 200ms)");
+  require(result.ok(), "repeat duration sequence parses");
+  require(result.program.blocks.size() == 1,
+          "repeat duration sequence block count");
+  require(result.program.blocks[0].repeatIsSequence,
+          "repeat duration sequence flag");
+  require(result.program.blocks[0].repeatIsDuration,
+          "repeat duration sequence duration flag");
+  require(result.program.blocks[0].repeatSequence.size() == 2,
+          "repeat duration sequence value count");
+  require(result.program.blocks[0].repeatSequence[0].unit ==
+              lang::ClockUnit::Milliseconds,
+          "repeat duration sequence first unit");
+  require(result.program.blocks[0].repeatSequence[1].unit ==
+              lang::ClockUnit::Milliseconds,
+          "repeat duration sequence second unit");
+
+  result = lang::parseClockLiteral("[3 1]hz#6 3hz@(2 (4 5))");
+  require(result.ok(), "mixed program with nested repeat sequence parses");
+  require(result.program.blocks.size() == 3,
+          "mixed program with nested repeat sequence block count");
+  require(result.program.blocks[2].repeatIsSequence,
+          "mixed program final block nested repeat sequence flag");
+  require(result.program.blocks[2].repeatSequence.size() == 3,
+          "mixed program final block nested repeat sequence count");
+  requireNear(result.program.blocks[2].repeatSequence[1].value, 4.0,
+              "mixed program final block nested repeat sequence value");
+  requireNear(result.program.blocks[2].repeatSequence[2].value, 5.0,
+              "mixed program final block nested repeat sequence final value");
+  requireRange(result.program.blocks[2].repeatRange, 13, 23,
+               "mixed program final block nested repeat sequence range");
 }
 
 void testProgramEvaluation() {
@@ -1433,6 +1534,11 @@ void testInvalidInputs() {
   requireInvalid("120bpm@{1.5|2}", "decimal random repeat count invalid");
   requireInvalid("120bpm@{0|2}", "zero random repeat count invalid");
   requireInvalid("120bpm@{2hz|3hz}", "frequency random repeat invalid");
+  requireInvalid("120bpm@(1.5 2)", "decimal repeat sequence count invalid");
+  requireInvalid("120bpm@(0 2)", "zero repeat sequence count invalid");
+  requireInvalid("120bpm@(2hz 3hz)", "frequency repeat sequence invalid");
+  requireInvalid("120bpm@(1s 2)", "mixed repeat sequence durations invalid");
+  requireInvalid("120bpm@()", "empty repeat sequence invalid");
   requireInvalid("(3hz 4hz)#1.5", "decimal total tick count invalid");
   requireInvalid("(3hz 4hz)#0", "zero total tick count invalid");
   requireInvalid("(3hz 4hz)#{1.5|2}",

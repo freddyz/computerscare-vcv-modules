@@ -54,9 +54,28 @@ void testBracketChannelNavigationDirection() {
           "right bracket should not navigate backward");
 }
 
+void testSubmitEnterModifiers() {
+  computerscare::blunch::KeyboardShortcutOptions options;
+  options.submitOnEnter = true;
+  ComputerscareTextEditorCommands commands;
+
+  bool handled = computerscare::blunch::handleKeyboardShortcut(
+      GLFW_KEY_ENTER, "Enter", GLFW_MOD_CONTROL, GLFW_PRESS, options,
+      commands);
+  require(handled, "ctrl enter submit should be handled");
+  require(commands.submitCount == 1, "ctrl enter should submit");
+
+  commands = ComputerscareTextEditorCommands();
+  handled = computerscare::blunch::handleKeyboardShortcut(
+      GLFW_KEY_ENTER, "Enter", GLFW_MOD_SUPER, GLFW_PRESS, options, commands);
+  require(handled, "cmd enter submit should be handled");
+  require(commands.submitCount == 1, "cmd enter should submit");
+}
+
 }  // namespace
 
 int main() {
   testBracketChannelNavigationDirection();
+  testSubmitEnterModifiers();
   return 0;
 }

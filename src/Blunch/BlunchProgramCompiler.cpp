@@ -195,13 +195,16 @@ bool compileLineProgram(const std::string& lineText, int lineBegin,
     }
     step.repeat = std::max(1, block.repeat);
     step.repeatIsRandom = block.repeatIsRandom;
+    step.repeatIsSequence = block.repeatIsSequence;
     step.repeatRandomIsDuration = block.repeatIsDuration;
     step.repeatRandom = block.repeatRandom;
+    step.repeatSequence = block.repeatSequence;
     if (block.repeatUsesExternalClock) {
       step.repeatExternalClockInput =
           mapExternalClock(externalClockInputIndex, block.repeatExternalClock);
     }
-    if (block.repeatIsDuration && !block.repeatIsRandom) {
+    if (block.repeatIsDuration && !block.repeatIsRandom &&
+        !block.repeatIsSequence) {
       blunch::language::EvaluationResult durationEval =
           blunch::language::evaluateClockLiteral(block.repeatDuration);
       if (!durationEval.ok()) {

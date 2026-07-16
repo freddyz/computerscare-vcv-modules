@@ -94,7 +94,9 @@ struct ClockBlockAst {
   int repeat = 1;
   bool repeatIsDuration = false;
   bool repeatIsRandom = false;
+  bool repeatIsSequence = false;
   ClockLiteralAst repeatRandom;
+  std::vector<ClockLiteralAst> repeatSequence;
   ClockLiteralAst repeatDuration;
   bool repeatUsesExternalClock = false;
   char repeatExternalClock = '\0';
