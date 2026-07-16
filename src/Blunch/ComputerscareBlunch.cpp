@@ -344,6 +344,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   int lastOpenCount = 0;
   int lastStopCount = 0;
   int lastHardStopCount = 0;
+  int lastRunToggleCount = 0;
   int lastStartAllCount = 0;
   bool startAllRequested = false;
   int lastSwitchViewCount = 0;
@@ -357,6 +358,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   int forcedChannelsCursorChannel = -1;
   bool editorViewDirty = true;
   bool lastRunHigh = true;
+  bool rememberedRunning[MAX_POLY_CHANNELS] = {
+      true, true, true, true, true, true, true, true,
+      true, true, true, true, true, true, true, true};
   bool resetClockIgnoreActive = false;
   bool externalClockHigh[4] = {false, false, false, false};
   float width = MIN_WIDTH;
@@ -557,21 +561,43 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     refreshChannelsEditorState();
   }
 
-  void stopSequencer(int channel) {
+  void stopSequencer(int channel, bool rememberStopped = false) {
+    channel = clampChannel(channel);
     BlunchSequencerRuntime& seq = sequencerForChannel(channel);
     seq.stopPlayback();
-    clockOutputPulses[clampChannel(channel)].reset();
+    if (rememberStopped) {
+      rememberedRunning[channel] = false;
+    }
+    clockOutputPulses[channel].reset();
   }
 
-  void hardStopAllSequencers() {
+  void stopAllSequencersRememberingRunning() {
     for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
+      rememberedRunning[channel] = sequencers[channel].running;
       stopSequencer(channel);
     }
+  }
+
+  void restartRememberedSequencers() {
+    int previousProcessingChannel = blunchProcessingChannel;
+    for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
+      blunchProcessingChannel = channel;
+      BlunchSequencerRuntime& channelSequencer = sequencers[channel];
+      channelSequencer.running = rememberedRunning[channel];
+      if (channelSequencer.running && !channelSequencer.activeProgram.empty()) {
+        if (seededRandomEnabled()) {
+          resetSeededRandomSerials(channelSequencer);
+        }
+        applyActiveProgramStep(channelSequencer);
+      }
+    }
+    blunchProcessingChannel = previousProcessingChannel;
   }
 
   void startSequencer(int channel) {
     channel = std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
     playbackChannel = channel;
+    rememberedRunning[channel] = true;
     sequencerForChannel(channel).running = true;
     params[RUN_PARAM].setValue(1.f);
   }
@@ -600,6 +626,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
   bool channelLabelIsActive(int channel) {
     return channel >= 0 && channel < selectedOutputChannelCount();
+  }
+
+  void toggleRunParam() {
+    params[RUN_PARAM].setValue(params[RUN_PARAM].getValue() > 0.5f ? 0.f : 1.f);
   }
 
   void triggerTokenMovePulse() {
@@ -850,6 +880,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
         blunchProcessingChannel = channel;
         BlunchSequencerRuntime& channelSequencer = sequencers[channel];
+        rememberedRunning[channel] = true;
         channelSequencer.running = true;
         if (!channelSequencer.activeProgram.empty()) {
           if (seededRandomEnabled()) {
@@ -860,8 +891,11 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       }
       blunchProcessingChannel = previousProcessingChannel;
     }
+    if (runHigh && !lastRunHigh && !startAllNow) {
+      restartRememberedSequencers();
+    }
     if (!runHigh && lastRunHigh) {
-      hardStopAllSequencers();
+      stopAllSequencersRememberingRunning();
     }
     lastRunHigh = runHigh;
     bool resetBlockPressed =
@@ -1860,6 +1894,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         seq.activeTotalDurationBranchLocal = step.totalDurationBranchLocal;
         seq.activeTotalDurationElapsedSeconds = 0.0;
         seq.activeTotalDurationTicks = 0;
+        seq.activeTotalDurationStepBeat = 0;
         sampleTotalDurationGroup(seq, seq.activeProgramIndex);
       }
     } else {
@@ -1867,6 +1902,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       seq.activeTotalDurationBranchLocal = false;
       seq.activeTotalDurationElapsedSeconds = 0.0;
       seq.activeTotalDurationTicks = 0;
+      seq.activeTotalDurationStepBeat = 0;
     }
     scheduleTokenStartTick(seq);
     chooseActiveStepPlayback(seq);
@@ -1926,6 +1962,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
 
     if (!blunch::sequencer::activeClockTickAdvancesStepRepeat(seq)) {
+      if (blunch::sequencer::advanceRepeatWithinTotalDurationGroup(seq)) {
+        refreshActiveClockSpecForStep(seq);
+        blunch::sequencer::syncActiveHighlightFromStep(seq);
+        chooseActiveStepPlayback(seq);
+        return;
+      }
       if (blunch::sequencer::advanceWithinTotalDurationGroup(seq)) {
         applyActiveProgramStep(seq);
         triggerTokenMovePulse();
@@ -2806,6 +2848,10 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           blunch->lastStartAllCount = editor->commands.startAllCount;
           blunch->startAllRequested = true;
         }
+        if (editor->commands.runToggleCount != blunch->lastRunToggleCount) {
+          blunch->lastRunToggleCount = editor->commands.runToggleCount;
+          blunch->toggleRunParam();
+        }
         if (editor->commands.hardStopCount != blunch->lastHardStopCount) {
           blunch->lastHardStopCount = editor->commands.hardStopCount;
           blunch->params[ComputerscareBlunch::RUN_PARAM].setValue(0.f);
@@ -2819,10 +2865,10 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             if (editor->state == &blunch->channelsEditorState) {
               blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
             }
-            blunch->stopSequencer(blunch->channelsCursorChannel);
+            blunch->stopSequencer(blunch->channelsCursorChannel, true);
             blunch->refreshChannelsEditorState();
           } else {
-            blunch->stopSequencer(blunch->focusedChannel);
+            blunch->stopSequencer(blunch->focusedChannel, true);
           }
         }
         if (editor->commands.submitCount != blunch->lastSubmitCount &&
@@ -2899,6 +2945,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           blunch->lastCancelCount = editor->commands.cancelCount;
           blunch->lastOpenCount = editor->commands.openCount;
           blunch->lastStopCount = editor->commands.stopCount;
+          blunch->lastRunToggleCount = editor->commands.runToggleCount;
           blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
               editor->getCursorLine(), ComputerscareBlunch::MAX_POLY_CHANNELS);
         }
@@ -3018,6 +3065,17 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   }
 
   void onHoverKey(const HoverKeyEvent& e) override {
+    if (computerscare::blunch::isRunToggleShortcut(e.key, e.keyName, e.mods)) {
+      if (e.action == GLFW_PRESS) {
+        ComputerscareBlunch* blunch =
+            dynamic_cast<ComputerscareBlunch*>(module);
+        if (blunch) {
+          blunch->toggleRunParam();
+        }
+      }
+      e.consume(this);
+      return;
+    }
     if (computerscare::blunch::isHardStopShortcut(e.key, e.keyName, e.mods)) {
       if (e.action == GLFW_PRESS) {
         ComputerscareBlunch* blunch =

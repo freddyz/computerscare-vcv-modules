@@ -840,7 +840,7 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("({3|2|{6|9}}hz@7 ~(1 2 3)s)#12s");
   require(result.ok(), "nested random rest total duration parses");
-  require(result.program.blocks.size() == 6,
+  require(result.program.blocks.size() == 4,
           "nested random rest total duration count");
   for (size_t i = 0; i < result.program.blocks.size(); i++) {
     requireTotalDurationGroup(result.program.blocks[i], 0, 12.0,
@@ -876,20 +876,18 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("({3|2|{6|9}}hz@7 ~(1 2 3)s)");
   require(result.ok(), "nested random rest interleave parses");
-  require(result.program.blocks.size() == 6,
+  require(result.program.blocks.size() == 4,
           "nested random rest interleave block count");
-  for (size_t i = 0; i < result.program.blocks.size(); i += 2) {
-    require(result.program.blocks[i].literal.kind ==
+  require(result.program.blocks[0].literal.kind ==
                 lang::ClockLiteralKind::RandomRange,
-            "nested random rest interleave random kind");
-    require(result.program.blocks[i].literal.randomChoices.size() == 4,
-            "nested random rest interleave random choices");
-    require(result.program.blocks[i].repeat == 7,
-            "nested random rest interleave repeat");
-    require(!result.program.blocks[i].rest,
-            "nested random rest interleave random not rest");
-  }
-  for (size_t i = 1; i < result.program.blocks.size(); i += 2) {
+          "nested random rest interleave random kind");
+  require(result.program.blocks[0].literal.randomChoices.size() == 4,
+          "nested random rest interleave random choices");
+  require(result.program.blocks[0].repeat == 7,
+          "nested random rest interleave repeat");
+  require(!result.program.blocks[0].rest,
+          "nested random rest interleave random not rest");
+  for (size_t i = 1; i < result.program.blocks.size(); i++) {
     require(result.program.blocks[i].rest,
             "nested random rest interleave rest block");
     require(result.program.blocks[i].literal.unit == lang::ClockUnit::Seconds,
@@ -944,7 +942,7 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("(2 1 (3 2)@2)hz");
   require(result.ok(), "nested paren suffix repeat parses");
-  requireProgramValues(result, {2.0, 1.0, 3.0, 2.0, 1.0, 2.0},
+  requireProgramValues(result, {2.0, 1.0, 3.0, 2.0},
                        "nested paren suffix repeat values");
   requireNear(result.program.blocks[0].literal.value, 2.0,
               "nested paren suffix repeat block 0 value");
@@ -954,10 +952,6 @@ void testProgramAst() {
               "nested paren suffix repeat block 2 value");
   requireNear(result.program.blocks[3].literal.value, 2.0,
               "nested paren suffix repeat block 3 value");
-  requireNear(result.program.blocks[4].literal.value, 1.0,
-              "nested paren suffix repeat block 4 value");
-  requireNear(result.program.blocks[5].literal.value, 2.0,
-              "nested paren suffix repeat block 5 value");
   require(result.program.blocks[0].literal.unit == lang::ClockUnit::Hertz,
           "nested paren suffix repeat block 0 hz");
   require(result.program.blocks[1].literal.unit == lang::ClockUnit::Hertz,
@@ -966,19 +960,14 @@ void testProgramAst() {
           "nested paren suffix repeat block 2 hz");
   require(result.program.blocks[3].literal.unit == lang::ClockUnit::Hertz,
           "nested paren suffix repeat block 3 hz");
-  require(result.program.blocks[4].literal.unit == lang::ClockUnit::Hertz,
-          "nested paren suffix repeat block 4 hz");
-  require(result.program.blocks[5].literal.unit == lang::ClockUnit::Hertz,
-          "nested paren suffix repeat block 5 hz");
   require(result.program.blocks[2].repeat == 2,
           "nested paren suffix repeat block 2 repeat");
-  require(result.program.blocks[5].repeat == 2,
-          "nested paren suffix repeat block 5 repeat");
+  require(result.program.blocks[3].repeat == 2,
+          "nested paren suffix repeat block 3 repeat");
 
   result = lang::parseClockLiteral("(3 4 (5 4 3))hz");
   require(result.ok(), "spread interleave parses");
-  requireProgramValues(result, {3.0, 4.0, 5.0, 3.0, 4.0, 4.0, 3.0, 4.0,
-                                3.0},
+  requireProgramValues(result, {3.0, 4.0, 5.0, 4.0, 3.0},
                        "spread interleave values");
   for (size_t i = 0; i < result.program.blocks.size(); i++) {
     require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
@@ -987,8 +976,7 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("(3 3 (2 1 5))hz?69");
   require(result.ok(), "spread interleave suffix probability parses");
-  requireProgramValues(result, {3.0, 3.0, 2.0, 3.0, 3.0, 1.0, 3.0, 3.0,
-                                5.0},
+  requireProgramValues(result, {3.0, 3.0, 2.0, 1.0, 5.0},
                        "spread interleave suffix probability values");
   for (size_t i = 0; i < result.program.blocks.size(); i++) {
     require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
@@ -1001,8 +989,7 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("(3@2 (3 1)@2 (2 1 5))hz?80");
   require(result.ok(), "spread interleave suffix probability parses");
-  requireProgramValues(result, {3.0, 3.0, 2.0, 3.0, 1.0, 1.0, 3.0, 3.0,
-                                5.0},
+  requireProgramValues(result, {3.0, 3.0, 1.0, 2.0, 1.0, 5.0},
                        "spread interleave suffix probability values");
   for (size_t i = 0; i < result.program.blocks.size(); i++) {
     require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
@@ -1016,34 +1003,28 @@ void testProgramAst() {
           "spread interleave suffix probability block 0 repeat");
   require(result.program.blocks[1].repeat == 2,
           "spread interleave suffix probability block 1 repeat");
-  require(result.program.blocks[2].repeat == 1,
+  require(result.program.blocks[2].repeat == 2,
           "spread interleave suffix probability block 2 repeat");
-  require(result.program.blocks[3].repeat == 2,
+  require(result.program.blocks[3].repeat == 1,
           "spread interleave suffix probability block 3 repeat");
-  require(result.program.blocks[4].repeat == 2,
+  require(result.program.blocks[4].repeat == 1,
           "spread interleave suffix probability block 4 repeat");
   require(result.program.blocks[5].repeat == 1,
           "spread interleave suffix probability block 5 repeat");
-  require(result.program.blocks[6].repeat == 2,
-          "spread interleave suffix probability block 6 repeat");
-  require(result.program.blocks[7].repeat == 2,
-          "spread interleave suffix probability block 7 repeat");
-  require(result.program.blocks[8].repeat == 1,
-          "spread interleave suffix probability block 8 repeat");
 
   result = lang::parseClockLiteral("(3 (5 4 3))hz");
   require(result.ok(), "single lane spread interleave parses");
-  requireProgramValues(result, {3.0, 5.0, 3.0, 4.0, 3.0, 3.0},
+  requireProgramValues(result, {3.0, 5.0, 4.0, 3.0},
                        "single lane spread interleave values");
 
   result = lang::parseClockLiteral("((1 2) (3 4 5))hz");
   require(result.ok(), "two nested lane spread interleave parses");
-  requireProgramValues(result, {1.0, 3.0, 2.0, 4.0, 1.0, 5.0},
+  requireProgramValues(result, {1.0, 2.0, 3.0, 4.0, 5.0},
                        "two nested lane spread interleave values");
 
   result = lang::parseClockLiteral("([1 2] (3 4 5))hz");
   require(result.ok(), "bracket lane spread interleave parses");
-  requireProgramValues(result, {1.0, 3.0, 2.0, 4.0, 1.0, 5.0},
+  requireProgramValues(result, {1.0, 2.0, 3.0, 4.0, 5.0},
                        "bracket lane spread interleave values");
 
   result = lang::parseClockLiteral("120 (3hz [4hz 5hz])");

@@ -97,6 +97,7 @@ int main() {
   program[1].probability = 25;
   runtime.activeProgramIndex = 8;
   runtime.activeProgramBeat = 6;
+  runtime.activeTotalDurationStepBeat = 5;
   runtime.loadActiveProgram(5, "135bpm", program, true);
   require(runtime.activeLine == 5, "load sets active line");
   require(runtime.activeLineText == "135bpm", "load sets active line text");
@@ -108,6 +109,8 @@ int main() {
   require(runtime.activeProgramIndex == 0,
           "load resets active program index");
   require(runtime.activeProgramBeat == 0, "load resets active program beat");
+  require(runtime.activeTotalDurationStepBeat == 0,
+          "load resets total-duration step beat");
 
   runtime.clockPhase = 0.33f;
   runtime.activeClockRamp = 0.66f;

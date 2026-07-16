@@ -242,6 +242,29 @@ int main() {
   require(compiled[0].literal.randomChoices[1].restChoice,
           "rest random total-duration first block preserves rest choice");
 
+  compiled = requireCompiles("(3@6 (2 3.5 5))hz#11");
+  if (compiled.size() != 4) {
+    std::fprintf(stderr,
+                 "FAIL: nested repeated total-duration group expected 4 steps "
+                 "got %zu\n",
+                 compiled.size());
+    std::exit(1);
+  }
+  require(compiled[0].repeat == 6,
+          "nested repeated total-duration first step keeps repeat");
+  for (size_t i = 0; i < compiled.size(); i++) {
+    require(compiled[i].hasTotalDurationGroup,
+            "nested repeated total-duration step has total group");
+    require(compiled[i].totalDurationIsTickCount,
+            "nested repeated total-duration group is tick based");
+    require(compiled[i].totalDurationTicks == 11,
+            "nested repeated total-duration keeps total ticks");
+    require(compiled[i].totalDurationGroupStart == 0,
+            "nested repeated total-duration starts at first child");
+    require(compiled[i].totalDurationGroupEnd == 4,
+            "nested repeated total-duration ends after final child");
+  }
+
   BlunchProgramStep step;
   step.hasTotalDurationGroup = true;
   require(!program::isBranchLocalTotalDuration(step),

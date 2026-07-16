@@ -72,10 +72,23 @@ void testSubmitEnterModifiers() {
   require(commands.submitCount == 1, "cmd enter should submit");
 }
 
+void testRunToggleShortcutDoesNotStartAll() {
+  computerscare::blunch::KeyboardShortcutOptions options;
+  ComputerscareTextEditorCommands commands;
+
+  bool handled = computerscare::blunch::handleKeyboardShortcut(
+      GLFW_KEY_SLASH, "/", GLFW_MOD_CONTROL, GLFW_PRESS, options, commands);
+
+  require(handled, "ctrl slash run toggle should be handled");
+  require(commands.runToggleCount == 1, "ctrl slash should toggle run");
+  require(commands.startAllCount == 0, "ctrl slash should not start all");
+}
+
 }  // namespace
 
 int main() {
   testBracketChannelNavigationDirection();
   testSubmitEnterModifiers();
+  testRunToggleShortcutDoesNotStartAll();
   return 0;
 }

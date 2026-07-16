@@ -19,6 +19,10 @@ bool isPeriodKey(int key, const std::string& keyName) {
   return key == GLFW_KEY_PERIOD || keyName == ".";
 }
 
+bool isSlashKey(int key, const std::string& keyName) {
+  return key == GLFW_KEY_SLASH || keyName == "/";
+}
+
 bool isLeftBracketKey(int key, const std::string& keyName) {
   return key == GLFW_KEY_LEFT_BRACKET || keyName == "[";
 }
@@ -82,6 +86,13 @@ bool handleKeyboardShortcut(int key, const std::string& keyName, int mods,
     return true;
   }
 
+  if (isRunToggleShortcut(key, keyName, mods)) {
+    if (action == GLFW_PRESS) {
+      commands.runToggleCount++;
+    }
+    return true;
+  }
+
   if (isHardStopShortcut(key, keyName, mods)) {
     if (action == GLFW_PRESS) {
       commands.hardStopCount++;
@@ -108,6 +119,10 @@ bool handleKeyboardShortcut(int key, const std::string& keyName, int mods,
 bool isHardStopShortcut(int key, const std::string& keyName, int mods) {
   return isPeriodKey(key, keyName) &&
          (mods & RACK_MOD_MASK) == GLFW_MOD_CONTROL;
+}
+
+bool isRunToggleShortcut(int key, const std::string& keyName, int mods) {
+  return isSlashKey(key, keyName) && (mods & RACK_MOD_MASK) == GLFW_MOD_CONTROL;
 }
 
 }  // namespace blunch

@@ -41,6 +41,7 @@ void repeatProgramStep(BlunchSequencerRuntime& seq);
 bool advanceProgramDuration(BlunchSequencerRuntime& seq, float sampleTime);
 bool advanceTotalDuration(BlunchSequencerRuntime& seq, float sampleTime);
 bool advanceTotalTickCount(BlunchSequencerRuntime& seq);
+bool advanceRepeatWithinTotalDurationGroup(BlunchSequencerRuntime& seq);
 bool advanceWithinTotalDurationGroup(BlunchSequencerRuntime& seq);
 
 std::vector<TimingScopeProgress> getActiveTimingScopeProgressHighlights(

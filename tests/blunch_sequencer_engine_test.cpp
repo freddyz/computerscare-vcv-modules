@@ -171,17 +171,11 @@ int main() {
   repeatedTotalSeconds.activeProgram[0].totalDurationGroupEnd = 2;
   repeatedTotalSeconds.activeProgram[0].repeat = 2;
   require(engine::advanceTotalDuration(repeatedTotalSeconds, 1.f),
-          "repeated total duration first cycle completes");
-  require(repeatedTotalSeconds.activeProgramIndex == 0,
-          "repeated total duration loops to group start");
-  require(repeatedTotalSeconds.activeProgramBeat == 1,
-          "repeated total duration increments cycle counter");
-  require(engine::advanceTotalDuration(repeatedTotalSeconds, 1.f),
-          "repeated total duration second cycle completes");
+          "repeated total duration completes at threshold");
   require(repeatedTotalSeconds.activeProgramIndex == 2,
-          "repeated total duration advances after final cycle");
+          "repeated total duration advances to group end");
   require(repeatedTotalSeconds.activeProgramBeat == 0,
-          "repeated total duration clears cycle counter after final cycle");
+          "repeated total duration does not consume step repeat counter");
 
   BlunchSequencerRuntime totalTicks = runtimeWithSteps(2);
   totalTicks.activeProgram[0].hasTotalDurationGroup = true;
@@ -210,19 +204,30 @@ int main() {
   require(!engine::advanceTotalTickCount(repeatedTotalTicks),
           "repeated total tick count first tick waits");
   require(engine::advanceTotalTickCount(repeatedTotalTicks),
-          "repeated total tick count first cycle completes");
-  require(repeatedTotalTicks.activeProgramIndex == 0,
-          "repeated total tick count loops to group start");
-  require(repeatedTotalTicks.activeProgramBeat == 1,
-          "repeated total tick count increments cycle counter");
-  require(!engine::advanceTotalTickCount(repeatedTotalTicks),
-          "repeated total tick count second cycle first tick waits");
-  require(engine::advanceTotalTickCount(repeatedTotalTicks),
-          "repeated total tick count second cycle completes");
+          "repeated total tick count completes at threshold");
   require(repeatedTotalTicks.activeProgramIndex == 2,
-          "repeated total tick count advances after final cycle");
+          "repeated total tick count advances to group end");
   require(repeatedTotalTicks.activeProgramBeat == 0,
-          "repeated total tick count clears cycle counter");
+          "repeated total tick count does not consume step repeat counter");
+
+  BlunchSequencerRuntime repeatedStepInTotal = runtimeWithSteps(2);
+  repeatedStepInTotal.activeProgram[0].hasTotalDurationGroup = true;
+  repeatedStepInTotal.activeProgram[0].totalDurationIsTickCount = true;
+  repeatedStepInTotal.activeProgram[0].totalDurationTicks = 11;
+  repeatedStepInTotal.activeProgram[0].totalDurationGroupStart = 0;
+  repeatedStepInTotal.activeProgram[0].totalDurationGroupEnd = 2;
+  repeatedStepInTotal.activeProgram[0].repeat = 6;
+  require(engine::advanceRepeatWithinTotalDurationGroup(repeatedStepInTotal),
+          "repeated step in total stays on first repeat");
+  require(repeatedStepInTotal.activeProgramIndex == 0,
+          "repeated step in total keeps active index");
+  require(repeatedStepInTotal.activeTotalDurationStepBeat == 1,
+          "repeated step in total increments child repeat counter");
+  repeatedStepInTotal.activeTotalDurationStepBeat = 5;
+  require(!engine::advanceRepeatWithinTotalDurationGroup(repeatedStepInTotal),
+          "repeated step in total completes after final repeat");
+  require(repeatedStepInTotal.activeTotalDurationStepBeat == 0,
+          "repeated step in total clears child repeat counter");
 
   BlunchSequencerRuntime totalGroupStep = runtimeWithSteps(3);
   totalGroupStep.activeProgramIndex = 1;
@@ -336,7 +341,7 @@ int main() {
   repeatedTotalProgress.activeProgram[0].repeat = 3;
   repeatedTotalProgress.activeProgram[0].repeatHighlightBegin = 30;
   repeatedTotalProgress.activeProgram[0].repeatHighlightEnd = 31;
-  repeatedTotalProgress.activeProgramBeat = 1;
+  repeatedTotalProgress.activeTotalDurationStepBeat = 1;
   repeatedTotalProgress.activeTotalDurationTicks = 3;
   require(engine::getActiveRepeatProgressHighlight(repeatedTotalProgress,
                                                    highlight),
@@ -349,7 +354,7 @@ int main() {
           "repeated total duration first scope is total duration");
   require(scopeHighlights[1].kind ==
               engine::TimingScopeKind::TotalDurationRepeat,
-          "repeated total duration second scope is outer repeat");
+          "repeated total duration second scope is child repeat");
   require(highlight.begin == 20 && highlight.end == 22,
           "repeated total duration highlights total-duration range");
   require(highlight.segments == 8,
@@ -365,7 +370,7 @@ int main() {
   require(highlight.segments == 3,
           "repeated total duration repeat segments by repeat count");
   requireNear(highlight.progress, 2.f / 3.f,
-              "repeated total duration repeat progress uses current cycle");
+              "repeated total duration repeat progress uses child repeat");
 
   repeatedTotalProgress.activeTotalDurationTicks = 4;
   require(engine::getActiveTotalDurationRepeatProgressHighlight(
@@ -374,10 +379,10 @@ int main() {
   requireNear(highlight.progress, 2.f / 3.f,
               "repeated total duration repeat progress ignores clock ticks");
 
-  repeatedTotalProgress.activeProgramBeat = 0;
+  repeatedTotalProgress.activeTotalDurationStepBeat = 0;
   require(engine::getActiveTotalDurationRepeatProgressHighlight(
               repeatedTotalProgress, highlight),
-          "repeated total duration repeat progress exists on first cycle");
+          "repeated total duration repeat progress exists on first child beat");
   requireNear(highlight.progress, 1.f / 3.f,
               "repeated total duration repeat progress starts at one");
 

@@ -165,17 +165,12 @@ bool advanceTotalDuration(BlunchSequencerRuntime& seq, float sampleTime) {
   }
 
   seq.activeTotalDurationElapsedSeconds -= step->totalDurationSeconds;
-  int nextBeat = seq.activeProgramBeat + 1;
-  if (nextBeat < step->repeat) {
-    seq.activeProgramBeat = nextBeat;
-    seq.activeProgramIndex = step->totalDurationGroupStart;
-  } else {
-    seq.activeProgramBeat = 0;
-    seq.activeProgramIndex = step->totalDurationGroupEnd;
-  }
+  seq.activeProgramBeat = 0;
+  seq.activeProgramIndex = step->totalDurationGroupEnd;
   seq.activeTotalDurationGroupId = -1;
   seq.activeTotalDurationBranchLocal = false;
   seq.activeTotalDurationTicks = 0;
+  seq.activeTotalDurationStepBeat = 0;
   return true;
 }
 
@@ -191,19 +186,29 @@ bool advanceTotalTickCount(BlunchSequencerRuntime& seq) {
     return false;
   }
 
-  int nextBeat = seq.activeProgramBeat + 1;
-  if (nextBeat < step->repeat) {
-    seq.activeProgramBeat = nextBeat;
-    seq.activeProgramIndex = step->totalDurationGroupStart;
-  } else {
-    seq.activeProgramBeat = 0;
-    seq.activeProgramIndex = step->totalDurationGroupEnd;
-  }
+  seq.activeProgramBeat = 0;
+  seq.activeProgramIndex = step->totalDurationGroupEnd;
   seq.activeTotalDurationGroupId = -1;
   seq.activeTotalDurationBranchLocal = false;
   seq.activeTotalDurationElapsedSeconds = 0.0;
   seq.activeTotalDurationTicks = 0;
+  seq.activeTotalDurationStepBeat = 0;
   return true;
+}
+
+bool advanceRepeatWithinTotalDurationGroup(BlunchSequencerRuntime& seq) {
+  const BlunchProgramStep* step = activeStep(seq);
+  if (!step || !step->hasTotalDurationGroup) {
+    return false;
+  }
+
+  if (seq.activeTotalDurationStepBeat + 1 < step->repeat) {
+    seq.activeTotalDurationStepBeat++;
+    return true;
+  }
+
+  seq.activeTotalDurationStepBeat = 0;
+  return false;
 }
 
 bool advanceWithinTotalDurationGroup(BlunchSequencerRuntime& seq) {
@@ -280,8 +285,9 @@ std::vector<TimingScopeProgress> getActiveTimingScopeProgressHighlights(
       highlights.push_back(makeProgress(
           TimingScopeKind::TotalDurationRepeat, step->repeatHighlightBegin,
           step->repeatHighlightEnd,
-          step->repeat > 0 ? (float)(seq.activeProgramBeat + 1) / step->repeat
-                           : 0.f,
+          step->repeat > 0
+              ? (float)(seq.activeTotalDurationStepBeat + 1) / step->repeat
+              : 0.f,
           std::max(1, step->repeat)));
     }
 

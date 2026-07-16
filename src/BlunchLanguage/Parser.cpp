@@ -122,26 +122,6 @@ std::vector<ClockBlockAst> interleaveBlocks(
   return output;
 }
 
-std::vector<ClockBlockAst> spreadInterleaveLanes(
-    const std::vector<std::vector<ClockBlockAst>>& lanes) {
-  std::vector<ClockBlockAst> output;
-  size_t rowCount = 0;
-  for (size_t i = 0; i < lanes.size(); i++) {
-    rowCount = std::max(rowCount, lanes[i].size());
-  }
-
-  for (size_t row = 0; row < rowCount && row < 6000; row++) {
-    for (size_t laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
-      if (lanes[laneIndex].empty()) {
-        continue;
-      }
-      output.push_back(lanes[laneIndex][row % lanes[laneIndex].size()]);
-    }
-  }
-
-  return output;
-}
-
 class Parser {
  public:
   explicit Parser(const std::vector<Token>& tokens) : tokens(tokens) {}
@@ -573,12 +553,11 @@ class Parser {
             totalDurationBlock.totalDurationRange.begin;
 
     if (blocks.empty() || hasGroupSuffix) {
-      std::vector<ClockBlockAst> interleaved = spreadInterleaveLanes(lanes);
-      applyGroupModifiers(result, interleaved, repeatBlock, suffixUnit,
+      applyGroupModifiers(result, rightLane, repeatBlock, suffixUnit,
                           suffixUnitRange);
-      applyTotalDurationGroup(interleaved, totalDurationBlock);
-      for (size_t i = 0; i < interleaved.size(); i++) {
-        blocks.push_back(interleaved[i]);
+      applyTotalDurationGroup(rightLane, totalDurationBlock);
+      for (size_t i = 0; i < rightLane.size(); i++) {
+        blocks.push_back(rightLane[i]);
       }
       return;
     }

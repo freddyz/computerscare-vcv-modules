@@ -87,6 +87,7 @@ struct BlunchSequencerRuntime {
   bool activeTotalDurationBranchLocal = false;
   double activeTotalDurationElapsedSeconds = 0.0;
   int activeTotalDurationTicks = 0;
+  int activeTotalDurationStepBeat = 0;
   bool activeStepPlays = true;
   bool activeClockOutputHigh = false;
   float activeClockDisplayPulse = 0.f;
@@ -114,6 +115,7 @@ struct BlunchSequencerRuntime {
     activeTotalDurationBranchLocal = false;
     activeTotalDurationElapsedSeconds = 0.0;
     activeTotalDurationTicks = 0;
+    activeTotalDurationStepBeat = 0;
     activeStepPlays = true;
     if (resetPhase) {
       clockPhase = 0.f;
