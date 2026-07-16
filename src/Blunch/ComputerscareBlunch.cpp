@@ -9,6 +9,7 @@
 #include "../ComputerscarePolyModule.hpp"
 #include "../ComputerscareResizableHandle.hpp"
 #include "../ComputerscareTextEditor.hpp"
+#include "../ComputerscareTextEditorLayout.hpp"
 #include "BlunchEditorViews.hpp"
 #include "BlunchKeyboardShortcuts.hpp"
 #include "BlunchProgramCompiler.hpp"
@@ -28,6 +29,36 @@ static const int BLUNCH_WAIT_MODE_COUNT = 9;
 static const std::string BLUNCH_WAIT_MODE_NAMES[BLUNCH_WAIT_MODE_COUNT] = {
     "Immediate",  "Clock",      "Block",      "Line",      "Page",
     "External W", "External X", "External Y", "External Z"};
+static const std::string BLUNCH_WAIT_MODE_DESCRIPTIONS[BLUNCH_WAIT_MODE_COUNT] =
+    {"Activate submitted text immediately.",
+     "Wait for the next clock pulse.",
+     "Wait for the current block to finish.",
+     "Wait for the current line to finish.",
+     "Wait until the sequence wraps to the first line.",
+     "Wait for external clock W.",
+     "Wait for external clock X.",
+     "Wait for external clock Y.",
+     "Wait for external clock Z."};
+static const int BLUNCH_ADVANCE_MODE_COUNT = 6;
+static const std::string BLUNCH_ADVANCE_MODE_NAMES[BLUNCH_ADVANCE_MODE_COUNT] =
+    {"Off",        "Automatic",  "External W",
+     "External X", "External Y", "External Z"};
+static const std::string
+    BLUNCH_LINE_ADVANCE_MODE_DESCRIPTIONS[BLUNCH_ADVANCE_MODE_COUNT] = {
+        "Do not advance lines automatically.",
+        "Advance to the next line when the current line finishes.",
+        "Advance to the next line on external clock W.",
+        "Advance to the next line on external clock X.",
+        "Advance to the next line on external clock Y.",
+        "Advance to the next line on external clock Z."};
+static const std::string
+    BLUNCH_BLOCK_ADVANCE_MODE_DESCRIPTIONS[BLUNCH_ADVANCE_MODE_COUNT] = {
+        "Repeat the current block until advanced manually.",
+        "Advance to the next block when the current block finishes.",
+        "Advance to the next block on external clock W.",
+        "Advance to the next block on external clock X.",
+        "Advance to the next block on external clock Y.",
+        "Advance to the next block on external clock Z."};
 
 static BlunchLineInfo getLineInfo(const std::string& text, int line) {
   BlunchLineInfo info;
@@ -259,6 +290,37 @@ struct BlunchWaitModeParamQuantity : SwitchQuantity {
         0, std::min((int)std::round(getValue()), BLUNCH_WAIT_MODE_COUNT - 1));
     return BLUNCH_WAIT_MODE_NAMES[mode];
   }
+
+  std::string getString() override {
+    return getLabel() + "\n" + getDisplayValueString();
+  }
+
+  std::string getDescription() override {
+    int mode = std::max(
+        0, std::min((int)std::round(getValue()), BLUNCH_WAIT_MODE_COUNT - 1));
+    return BLUNCH_WAIT_MODE_DESCRIPTIONS[mode];
+  }
+};
+
+struct BlunchAdvanceModeParamQuantity : SwitchQuantity {
+  std::string getDisplayValueString() override {
+    int mode = std::max(0, std::min((int)std::round(getValue()),
+                                    BLUNCH_ADVANCE_MODE_COUNT - 1));
+    return BLUNCH_ADVANCE_MODE_NAMES[mode];
+  }
+
+  std::string getString() override {
+    return getLabel() + "\n" + getDisplayValueString();
+  }
+
+  std::string getDescription() override {
+    int mode = std::max(0, std::min((int)std::round(getValue()),
+                                    BLUNCH_ADVANCE_MODE_COUNT - 1));
+    if (getLabel() == "Block advance") {
+      return BLUNCH_BLOCK_ADVANCE_MODE_DESCRIPTIONS[mode];
+    }
+    return BLUNCH_LINE_ADVANCE_MODE_DESCRIPTIONS[mode];
+  }
 };
 
 struct ComputerscareBlunch : ComputerscarePolyModule {
@@ -317,8 +379,6 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   dsp::PulseGenerator wrapPulses[MAX_POLY_CHANNELS];
   dsp::PulseGenerator clockOutputPulses[MAX_POLY_CHANNELS];
   dsp::SchmittTrigger externalClockTriggers[4];
-  dsp::SchmittTrigger advanceTokenTrigger;
-  dsp::SchmittTrigger advanceLineTrigger;
   dsp::SchmittTrigger resetBlockTrigger;
   dsp::SchmittTrigger resetLineTrigger;
   dsp::SchmittTrigger resetSequenceTrigger;
@@ -412,7 +472,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool autoLineAdvanceEnabled() {
-    return params[AUTO_ADVANCE_PARAM].getValue() > 0.5f;
+    return (int)std::round(params[AUTO_ADVANCE_PARAM].getValue()) == 1;
   }
 
   bool channelsEditorEditingEnabled() { return !autoLineAdvanceEnabled(); }
@@ -628,6 +688,15 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     return channel >= 0 && channel < selectedOutputChannelCount();
   }
 
+  int advanceModeExternalClock(int paramId) {
+    int mode = std::max(0, std::min((int)std::round(params[paramId].getValue()),
+                                    BLUNCH_ADVANCE_MODE_COUNT - 1));
+    if (mode < 2) {
+      return -1;
+    }
+    return mode - 2;
+  }
+
   void toggleRunParam() {
     params[RUN_PARAM].setValue(params[RUN_PARAM].getValue() > 0.5f ? 0.f : 1.f);
   }
@@ -648,10 +717,16 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                                                 0.f, "Speed of time");
     configSwitch(POLY_CHANNELS_PARAM, 0.f, 16.f, 0.f, "Poly Channels",
                  polyChannelLabels(true));
-    configSwitch(AUTO_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Line advance",
-                 {"Manual", "Automatic"});
-    configSwitch(AUTO_BLOCK_ADVANCE_PARAM, 0.f, 1.f, 1.f, "Block advance",
-                 {"Manual", "Automatic"});
+    configSwitch<BlunchAdvanceModeParamQuantity>(
+        AUTO_ADVANCE_PARAM, 0.f, BLUNCH_ADVANCE_MODE_COUNT - 1, 1.f,
+        "Line advance",
+        {"Off", "Automatic", "External W", "External X", "External Y",
+         "External Z"});
+    configSwitch<BlunchAdvanceModeParamQuantity>(
+        AUTO_BLOCK_ADVANCE_PARAM, 0.f, BLUNCH_ADVANCE_MODE_COUNT - 1, 1.f,
+        "Block advance",
+        {"Off", "Automatic", "External W", "External X", "External Y",
+         "External Z"});
     configSwitch(RUN_PARAM, 0.f, 1.f, 1.f, "Run", {"Stopped", "Running"});
     configParam(SEED_PARAM, 0.f, 10.f, 0.f, "Seed");
     configSwitch<BlunchWaitModeParamQuantity>(
@@ -677,8 +752,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     getParamQuantity(EDITOR_FONT_WIDTH_PARAM)->randomizeEnabled = false;
     getParamQuantity(EDITOR_FONT_HEIGHT_PARAM)->randomizeEnabled = false;
     getParamQuantity(EDITOR_LETTER_SPACING_PARAM)->randomizeEnabled = false;
-    configInput(ADVANCE_TOKEN_INPUT, "Advance token");
-    configInput(ADVANCE_LINE_INPUT, "Advance line");
+    configInput(ADVANCE_TOKEN_INPUT, "Legacy advance token");
+    configInput(ADVANCE_LINE_INPUT, "Legacy advance line");
     configInput(RESET_BLOCK_INPUT, "Reset block");
     configInput(RESET_LINE_INPUT, "Reset line");
     configInput(RESET_SEQUENCE_INPUT, "Reset sequence");
@@ -923,12 +998,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         externalClockEdges[i] = false;
       }
     }
-    bool advanceLinePressed =
-        advanceLineTrigger.process(inputs[ADVANCE_LINE_INPUT].getVoltage()) &&
-        !ignoreClockInputs;
-    bool advanceTokenPressed =
-        advanceTokenTrigger.process(inputs[ADVANCE_TOKEN_INPUT].getVoltage()) &&
-        !ignoreClockInputs;
+    int lineAdvanceClock = advanceModeExternalClock(AUTO_ADVANCE_PARAM);
+    int blockAdvanceClock = advanceModeExternalClock(AUTO_BLOCK_ADVANCE_PARAM);
+    bool advanceLinePressed = lineAdvanceClock >= 0 && !ignoreClockInputs &&
+                              externalClockEdges[lineAdvanceClock];
+    bool advanceTokenPressed = blockAdvanceClock >= 0 && !ignoreClockInputs &&
+                               externalClockEdges[blockAdvanceClock];
 
     polyChannels = selectedOutputChannelCount();
     outputs[CLOCK_OUTPUT].setChannels(polyChannels);
@@ -2040,7 +2115,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool autoBlockAdvanceEnabled() {
-    return params[AUTO_BLOCK_ADVANCE_PARAM].getValue() > 0.5f;
+    return (int)std::round(params[AUTO_BLOCK_ADVANCE_PARAM].getValue()) == 1;
   }
 
   void repeatActiveProgramStep(BlunchSequencerRuntime& seq) {
@@ -2096,7 +2171,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       return true;
     }
 
-    if (params[AUTO_ADVANCE_PARAM].getValue() > 0.5f) {
+    if (autoLineAdvanceEnabled()) {
       if (!moveToNextLine(false, false)) {
         applyActiveProgramStep(activeSequencer());
         return false;
@@ -2296,12 +2371,12 @@ struct BlunchExternalClockLabels : TransparentWidget {
     }
 
     nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, 14.f);
+    nvgFontSize(args.vg, 16.f);
     nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
 
     const char* labels[] = {"w", "x", "y", "z"};
-    const float jackCenters[] = {14.f, 44.f, 74.f, 104.f};
+    const float jackCenters[] = {12.f, 42.f, 72.f, 102.f};
     for (int i = 0; i < 4; i++) {
       nvgText(args.vg, jackCenters[i], 2.f, labels[i], NULL);
     }
@@ -2350,18 +2425,13 @@ struct BlunchChannelLabel : TransparentWidget {
       return;
     }
 
-    int channel = 0;
-    if (module) {
-      channel = module->showingChannelsView() ? module->channelsCursorChannel
-                                              : module->focusedChannel;
-    }
-
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 13.f);
     nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
+    int channel = module ? module->focusedChannel : 0;
     std::string label = module && module->showingChannelsView()
-                            ? "All - Ch" + std::to_string(channel + 1)
+                            ? "All"
                             : "Ch." + std::to_string(channel + 1) + " Sequence";
     nvgText(args.vg, box.size.x * 0.5f, 0.f, label.c_str(), NULL);
   }
@@ -2399,38 +2469,106 @@ struct BlunchAdvanceModeButton : ComputerscareBlankButton {
   }
 };
 
-struct BlunchWaitModeItem : MenuItem {
+struct BlunchModeMenuItem : MenuItem {
   ComputerscareBlunch* module = nullptr;
-  int waitMode = 0;
+  int paramId = 0;
+  int mode = 0;
 
   void onAction(const event::Action& e) override {
     if (module) {
-      module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(waitMode);
+      module->params[paramId].setValue(mode);
     }
   }
 
   void step() override {
     if (module) {
       int currentMode = std::max(
-          0, std::min((int)std::round(
-                          module->params[ComputerscareBlunch::WAIT_MODE_PARAM]
-                              .getValue()),
-                      BLUNCH_WAIT_MODE_COUNT - 1));
-      rightText = CHECKMARK(currentMode == waitMode);
+          0, std::min((int)std::round(module->params[paramId].getValue()),
+                      paramId == ComputerscareBlunch::WAIT_MODE_PARAM
+                          ? BLUNCH_WAIT_MODE_COUNT - 1
+                          : BLUNCH_ADVANCE_MODE_COUNT - 1));
+      rightText = CHECKMARK(currentMode == mode);
     }
     MenuItem::step();
   }
 };
 
-struct BlunchWaitModeButton : ComputerscareBlankButton {
+struct BlunchModeMenuButton : ComputerscareBlankButton {
   static constexpr float DRAW_SCALE_X = 0.72f;
   ComputerscareBlunch* blunch = nullptr;
   WeakPtr<ui::MenuOverlay> activeMenuOverlay;
+  ui::Tooltip* hoverTooltip = NULL;
+  int paramId = ComputerscareBlunch::WAIT_MODE_PARAM;
+  std::string label = "Wait";
+  std::string menuLabel = "Wait";
   int menuFrame = -1;
 
-  BlunchWaitModeButton() {
+  BlunchModeMenuButton() {
     momentary = true;
     box.size.x *= DRAW_SCALE_X;
+  }
+
+  ~BlunchModeMenuButton() { destroyHoverTooltip(); }
+
+  int modeCount() const {
+    return paramId == ComputerscareBlunch::WAIT_MODE_PARAM
+               ? BLUNCH_WAIT_MODE_COUNT
+               : BLUNCH_ADVANCE_MODE_COUNT;
+  }
+
+  int currentMode() const {
+    if (!blunch) {
+      return paramId == ComputerscareBlunch::WAIT_MODE_PARAM ? 0 : 1;
+    }
+    return std::max(
+        0, std::min((int)std::round(blunch->params[paramId].getValue()),
+                    modeCount() - 1));
+  }
+
+  const std::string& modeName(int mode) const {
+    if (paramId == ComputerscareBlunch::WAIT_MODE_PARAM) {
+      return BLUNCH_WAIT_MODE_NAMES[mode];
+    }
+    return BLUNCH_ADVANCE_MODE_NAMES[mode];
+  }
+
+  const std::string& modeDescription(int mode) const {
+    if (paramId == ComputerscareBlunch::WAIT_MODE_PARAM) {
+      return BLUNCH_WAIT_MODE_DESCRIPTIONS[mode];
+    }
+    if (paramId == ComputerscareBlunch::AUTO_BLOCK_ADVANCE_PARAM) {
+      return BLUNCH_BLOCK_ADVANCE_MODE_DESCRIPTIONS[mode];
+    }
+    return BLUNCH_LINE_ADVANCE_MODE_DESCRIPTIONS[mode];
+  }
+
+  void createHoverTooltip() {
+    if (!settings::tooltips || hoverTooltip) {
+      return;
+    }
+
+    hoverTooltip = new ui::Tooltip;
+    APP->scene->addChild(hoverTooltip);
+  }
+
+  void updateHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    int mode = currentMode();
+    hoverTooltip->text =
+        menuLabel + ":\n" + modeName(mode) + "\n" + modeDescription(mode);
+  }
+
+  void destroyHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    APP->scene->removeChild(hoverTooltip);
+    delete hoverTooltip;
+    hoverTooltip = NULL;
   }
 
   bool isMenuOpen() {
@@ -2453,6 +2591,7 @@ struct BlunchWaitModeButton : ComputerscareBlankButton {
   void step() override {
     ComputerscareBlankButton::step();
     updateMenuFrame();
+    updateHoverTooltip();
   }
 
   void draw(const DrawArgs& args) override {
@@ -2474,7 +2613,7 @@ struct BlunchWaitModeButton : ComputerscareBlankButton {
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
     nvgText(args.vg, box.size.x * 0.5f + (pressed ? 2.1f : -1.1f),
-            box.size.y * 0.48f + (pressed ? 3.3f : 0.f), "Wait", NULL);
+            box.size.y * 0.48f + (pressed ? 3.3f : 0.f), label.c_str(), NULL);
   }
 
   void onDragEnd(const event::DragEnd& e) override {
@@ -2486,6 +2625,17 @@ struct BlunchWaitModeButton : ComputerscareBlankButton {
     ComputerscareBlankButton::onDragEnd(e);
   }
 
+  void onEnter(const event::Enter& e) override {
+    createHoverTooltip();
+    updateHoverTooltip();
+    ComputerscareBlankButton::onEnter(e);
+  }
+
+  void onLeave(const event::Leave& e) override {
+    destroyHoverTooltip();
+    ComputerscareBlankButton::onLeave(e);
+  }
+
   void onButton(const event::Button& e) override {
     if (e.button != GLFW_MOUSE_BUTTON_LEFT || e.action != GLFW_PRESS) {
       ComputerscareBlankButton::onButton(e);
@@ -2493,18 +2643,34 @@ struct BlunchWaitModeButton : ComputerscareBlankButton {
     }
 
     e.consume(this);
+    destroyHoverTooltip();
     if (!blunch) {
       return;
     }
 
     Menu* menu = createMenu();
     activeMenuOverlay = menu->getAncestorOfType<ui::MenuOverlay>();
-    menu->addChild(createMenuLabel("Wait"));
+    menu->addChild(createMenuLabel(menuLabel));
+    if (paramId != ComputerscareBlunch::WAIT_MODE_PARAM) {
+      const int menuOrder[BLUNCH_ADVANCE_MODE_COUNT] = {1, 2, 3, 4, 5, 0};
+      for (int i = 0; i < BLUNCH_ADVANCE_MODE_COUNT; i++) {
+        int mode = menuOrder[i];
+        BlunchModeMenuItem* item = new BlunchModeMenuItem();
+        item->text = BLUNCH_ADVANCE_MODE_NAMES[mode];
+        item->module = blunch;
+        item->paramId = paramId;
+        item->mode = mode;
+        menu->addChild(item);
+      }
+      updateMenuFrame();
+      return;
+    }
     for (int i = 0; i < BLUNCH_WAIT_MODE_COUNT; i++) {
-      BlunchWaitModeItem* item = new BlunchWaitModeItem();
+      BlunchModeMenuItem* item = new BlunchModeMenuItem();
       item->text = BLUNCH_WAIT_MODE_NAMES[i];
       item->module = blunch;
-      item->waitMode = i;
+      item->paramId = paramId;
+      item->mode = i;
       menu->addChild(item);
     }
     updateMenuFrame();
@@ -2545,8 +2711,6 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   PortWidget* externalClockXInput = nullptr;
   PortWidget* externalClockYInput = nullptr;
   PortWidget* externalClockZInput = nullptr;
-  PortWidget* advanceTokenInput = nullptr;
-  PortWidget* advanceLineInput = nullptr;
   PortWidget* resetBlockInput = nullptr;
   PortWidget* resetLineInput = nullptr;
   PortWidget* resetSequenceInput = nullptr;
@@ -2558,6 +2722,10 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   ComputerscareResizeHandle* rightHandle = nullptr;
   ComputerscareTextEditorState browserEditorState;
   int lastCursorLine = -1;
+  int lastChannelsIndicatorChannel = -1;
+  int channelsIndicatorChannel = 0;
+  double channelsIndicatorStartTime = -10.0;
+  bool wasShowingChannelsView = false;
 
   ComputerscareBlunchWidget(ComputerscareBlunch* module) {
     setModule(module);
@@ -2604,7 +2772,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                                     ComputerscareBlunch::SEED_PARAM));
 
     externalClockLabels = new BlunchExternalClockLabels();
-    externalClockLabels->box.pos = Vec(0.f, 278.f);
+    externalClockLabels->box.pos = Vec(0.f, 282.f);
     externalClockLabels->box.size = Vec(box.size.x, 12.f);
     addChild(externalClockLabels);
 
@@ -2630,22 +2798,28 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     runButton->label = "Run";
     addParam(runButton);
 
-    BlunchAdvanceModeButton* lineAdvanceButton =
-        createParam<BlunchAdvanceModeButton>(
-            Vec(58.f, 8.f), module, ComputerscareBlunch::AUTO_ADVANCE_PARAM);
+    BlunchModeMenuButton* lineAdvanceButton =
+        createWidget<BlunchModeMenuButton>(Vec(58.f, 8.f));
+    lineAdvanceButton->blunch = module;
+    lineAdvanceButton->paramId = ComputerscareBlunch::AUTO_ADVANCE_PARAM;
     lineAdvanceButton->label = "Line";
-    addParam(lineAdvanceButton);
+    lineAdvanceButton->menuLabel = "Line advance";
+    addChild(lineAdvanceButton);
 
-    BlunchAdvanceModeButton* blockAdvanceButton =
-        createParam<BlunchAdvanceModeButton>(
-            Vec(80.f, 8.f), module,
-            ComputerscareBlunch::AUTO_BLOCK_ADVANCE_PARAM);
+    BlunchModeMenuButton* blockAdvanceButton =
+        createWidget<BlunchModeMenuButton>(Vec(80.f, 8.f));
+    blockAdvanceButton->blunch = module;
+    blockAdvanceButton->paramId = ComputerscareBlunch::AUTO_BLOCK_ADVANCE_PARAM;
     blockAdvanceButton->label = "Block";
-    addParam(blockAdvanceButton);
+    blockAdvanceButton->menuLabel = "Block advance";
+    addChild(blockAdvanceButton);
 
-    BlunchWaitModeButton* waitModeButton =
-        createWidget<BlunchWaitModeButton>(Vec(36.f, 25.f));
+    BlunchModeMenuButton* waitModeButton =
+        createWidget<BlunchModeMenuButton>(Vec(36.f, 25.f));
     waitModeButton->blunch = module;
+    waitModeButton->paramId = ComputerscareBlunch::WAIT_MODE_PARAM;
+    waitModeButton->label = "Wait";
+    waitModeButton->menuLabel = "Wait";
     addChild(waitModeButton);
 
     polyChannelsWidget =
@@ -2666,18 +2840,12 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     addInput(externalClockYInput);
     addInput(externalClockZInput);
 
-    advanceTokenInput = createInput<PointingUpPentagonPort>(
-        Vec(38.f, 314.f), module, ComputerscareBlunch::ADVANCE_TOKEN_INPUT);
-    advanceLineInput = createInput<PointingUpPentagonPort>(
-        Vec(68.f, 314.f), module, ComputerscareBlunch::ADVANCE_LINE_INPUT);
     resetBlockInput = createInput<PointingUpPentagonPort>(
         Vec(38.f, 335.f), module, ComputerscareBlunch::RESET_BLOCK_INPUT);
     resetLineInput = createInput<PointingUpPentagonPort>(
         Vec(68.f, 335.f), module, ComputerscareBlunch::RESET_LINE_INPUT);
     resetSequenceInput = createInput<PointingUpPentagonPort>(
         Vec(98.f, 335.f), module, ComputerscareBlunch::RESET_SEQUENCE_INPUT);
-    addInput(advanceTokenInput);
-    addInput(advanceLineInput);
     addInput(resetBlockInput);
     addInput(resetLineInput);
     addInput(resetSequenceInput);
@@ -2737,13 +2905,11 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
     }
 
-    const float externalInputY = 290.f;
-    const float advanceInputY = 314.f;
-    const float resetInputY = 335.f;
-    const float outputY = 356.f;
+    const float externalInputY = 292.f;
+    const float resetInputY = 320.f;
+    const float outputY = 348.f;
     PortWidget* externalInputs[] = {externalClockWInput, externalClockXInput,
                                     externalClockYInput, externalClockZInput};
-    PortWidget* advanceInputs[] = {advanceTokenInput, advanceLineInput};
     PortWidget* resetInputs[] = {resetBlockInput, resetLineInput,
                                  resetSequenceInput};
     PortWidget* outputs[] = {clockOutput, eoc1Output, eoc2Output, eoc3Output};
@@ -2754,11 +2920,6 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       }
       if (outputs[i]) {
         outputs[i]->box.pos = Vec(jackXs[i], outputY);
-      }
-    }
-    for (int i = 0; i < 2; i++) {
-      if (advanceInputs[i]) {
-        advanceInputs[i]->box.pos = Vec(jackXs[i + 1], advanceInputY);
       }
     }
     for (int i = 0; i < 3; i++) {
@@ -2904,6 +3065,18 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
           }
           blunch->refreshChannelsEditorState(true);
+        }
+        if (blunch->showingChannelsView()) {
+          if (!wasShowingChannelsView ||
+              blunch->channelsCursorChannel != lastChannelsIndicatorChannel) {
+            channelsIndicatorChannel = blunch->channelsCursorChannel;
+            channelsIndicatorStartTime = rack::system::getTime();
+          }
+          lastChannelsIndicatorChannel = blunch->channelsCursorChannel;
+          wasShowingChannelsView = true;
+        } else {
+          wasShowingChannelsView = false;
+          lastChannelsIndicatorChannel = -1;
         }
         state = &blunch->visibleEditorState();
         if (editor->state != state || blunch->editorViewDirty) {
@@ -3062,6 +3235,67 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         }
       }
     }
+  }
+
+  void drawLayer(const DrawArgs& args, int layer) override {
+    ModuleWidget::drawLayer(args, layer);
+    if (layer != 1) {
+      return;
+    }
+
+    ComputerscareBlunch* blunch = dynamic_cast<ComputerscareBlunch*>(module);
+    if (!blunch || !editor || !blunch->showingChannelsView()) {
+      return;
+    }
+
+    double elapsed = rack::system::getTime() - channelsIndicatorStartTime;
+    if (elapsed < 0.0 || elapsed > 1.0) {
+      return;
+    }
+
+    std::shared_ptr<Font> font =
+        APP->window->loadFont(asset::system(editor->style.fontPath));
+    if (!font || font->handle < 0) {
+      font = APP->window->uiFont;
+    }
+    if (!font || font->handle < 0) {
+      return;
+    }
+
+    nvgSave(args.vg);
+    nvgTranslate(args.vg, editor->box.pos.x, editor->box.pos.y);
+    nvgScissor(args.vg, 0.f, 0.f, editor->box.size.x, editor->box.size.y);
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, std::max(6.f, editor->style.fontSize));
+    nvgTextLetterSpacing(args.vg, editor->style.letterSpacing);
+    nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+
+    float fontScaleX = std::max(0.5f, 1.f + editor->style.fontWidthOffset);
+    float fontScaleY = std::max(0.5f, 1.f + editor->style.fontHeightOffset);
+    Vec scaledBox(editor->box.size.x / fontScaleX,
+                  editor->box.size.y / fontScaleY);
+    ComputerscareTextEditorLayout layout = ComputerscareTextEditorLayout::build(
+        args.vg, editor->text, scaledBox, editor->style);
+    if (!layout.rows.empty()) {
+      int rowIndex = std::max(
+          0, std::min(channelsIndicatorChannel, (int)layout.rows.size() - 1));
+      const ComputerscareTextEditorLayoutRow& row = layout.rows[rowIndex];
+      float alpha = std::max(0.f, std::min(1.f, 1.f - (float)elapsed));
+      std::string number = std::to_string(channelsIndicatorChannel + 1);
+
+      nvgScale(args.vg, fontScaleX, fontScaleY);
+      nvgFontFaceId(args.vg, font->handle);
+      nvgFontSize(args.vg, std::max(14.f, editor->style.fontSize + 7.f));
+      nvgTextLetterSpacing(args.vg, 0.f);
+      nvgTextAlign(args.vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+      nvgFillColor(args.vg,
+                   nvgRGBA(0x24, 0xc9, 0xa6, (unsigned char)(0xee * alpha)));
+      nvgText(args.vg, scaledBox.x - 9.f,
+              row.top + layout.metrics.lineHeight * 0.5f, number.c_str(), NULL);
+    }
+
+    nvgResetScissor(args.vg);
+    nvgRestore(args.vg);
   }
 
   void onHoverKey(const HoverKeyEvent& e) override {

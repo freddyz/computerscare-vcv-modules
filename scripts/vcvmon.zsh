@@ -1,10 +1,11 @@
-# vcvmon — watch this repo, rebuild + run Rack on changes, with keyboard pause/resume.
+# vcvmon - watch this repo, rebuild + run Rack on changes, with keyboard pause/resume.
 # Source from ~/.zshrc:  source /Users/adammalone/dev/computerscare-vcv-modules/scripts/vcvmon.zsh
 # Paths are machine-specific to this machine.
 
 VCVMON_PAUSE=/tmp/vcvmon.pause
 VCVMON_REPO=/Users/adammalone/dev/computerscare-vcv-modules
 VCVMON_RACK=/Users/adammalone/dev/VCV-Rack/Rack
+VCVMON_VERSION="polling-v2"
 
 # full-width 3-line colored banner so state is visible through Rack's log spew
 # usage: _vcvmon_banner <ansi-colors> <message>
@@ -25,50 +26,109 @@ _vcvmon_banner () {
 	print -n -- "\e[0m"
 }
 
+_vcvmon_stamp () {
+	find "$VCVMON_REPO" \
+		\( -path "$VCVMON_REPO/.git" -o \
+		   -path "$VCVMON_REPO/build" -o \
+		   -path "$VCVMON_REPO/scripts" \) -prune -o \
+		\( -name '*.cpp' -o -name '*.hpp' -o -name '*.svg' \) -print0 \
+		| xargs -0 stat -f '%m %z %N' 2>/dev/null \
+		| cksum
+}
+
+_vcvmon_kill_tree () {
+	local parent=$1
+	local child
+	for child in ${(f)"$(pgrep -P "$parent" 2>/dev/null)"}; do
+		_vcvmon_kill_tree "$child"
+	done
+	kill "$parent" 2>/dev/null
+}
+
 vcvmon () {
 	emulate -L zsh
 	rm -f "$VCVMON_PAUSE"
-	local fifo="/tmp/vcvmon.fifo.$$" fd pid key
-	mkfifo "$fifo" || return 1
-	# read-write fd keeps the FIFO open so nodemon's stdin never hits EOF,
-	# and lets us send it "rs" to force a restart
-	exec {fd}<>"$fifo"
 
-	_vcvmon_banner "1;30;42" "VCVMON RUNNING   [space] pause/resume   [r] rebuild   [q] quit"
+	local key runner_pid=0 stamp next_stamp dirty=0
+	local last_scan=0 now=0
 
-	nodemon \
-		--watch "$VCVMON_REPO" \
-		--ignore "$VCVMON_REPO/scripts/**" \
-		-e cpp,hpp,svg \
-		--exec "while [ -f $VCVMON_PAUSE ]; do sleep 1; done; cd $VCVMON_RACK; make plugins run || exit 1;" \
-		<&$fd &!
-	pid=$!
+	_vcvmon_start_rack () {
+		(
+			cd "$VCVMON_RACK" || exit 1
+			make plugins run
+		) &!
+		runner_pid=$!
+	}
+
+	_vcvmon_stop_rack () {
+		if (( runner_pid > 0 )) && kill -0 "$runner_pid" 2>/dev/null; then
+			_vcvmon_kill_tree "$runner_pid"
+			wait "$runner_pid" 2>/dev/null
+		fi
+		runner_pid=0
+	}
+
+	_vcvmon_restart_rack () {
+		local message="$*"
+		[[ -n "$message" ]] && _vcvmon_banner "1;30;42" "$message"
+		_vcvmon_stop_rack
+		_vcvmon_start_rack
+		stamp=$(_vcvmon_stamp)
+		dirty=0
+	}
+
+	_vcvmon_banner "1;30;42" "VCVMON $VCVMON_VERSION RUNNING   [space] pause/resume   [r] rebuild   [q] quit"
+	stamp=$(_vcvmon_stamp)
+	_vcvmon_start_rack
 
 	{
-		while kill -0 $pid 2>/dev/null && read -sk1 key; do
-			case $key in
-				' ')
-					if [[ -f $VCVMON_PAUSE ]]; then
+		while true; do
+			if read -t 0.5 -sk1 key; then
+				case $key in
+					' ')
+						if [[ -f "$VCVMON_PAUSE" ]]; then
+							rm -f "$VCVMON_PAUSE"
+							if (( dirty )); then
+								_vcvmon_restart_rack "VCVMON RUNNING - rebuilding queued changes   [space] to pause"
+							else
+								_vcvmon_banner "1;30;42" "VCVMON RUNNING   [space] to pause"
+							fi
+						else
+							touch "$VCVMON_PAUSE"
+							_vcvmon_banner "1;30;43" "VCVMON PAUSED   [space] to resume + rebuild"
+						fi
+						;;
+					r|R)
 						rm -f "$VCVMON_PAUSE"
-						print -u$fd rs
-						_vcvmon_banner "1;30;42" "VCVMON RUNNING — rebuilding   [space] to pause"
-					else
-						touch "$VCVMON_PAUSE"
-						_vcvmon_banner "1;30;43" "VCVMON PAUSED   [space] to resume + rebuild"
+						_vcvmon_restart_rack "VCVMON REBUILD"
+						;;
+					q|Q)
+						break
+						;;
+				esac
+			fi
+
+			now=$(date +%s)
+			if (( now == last_scan )); then
+				continue
+			fi
+			last_scan=$now
+			next_stamp=$(_vcvmon_stamp)
+			if [[ "$next_stamp" != "$stamp" ]]; then
+				stamp="$next_stamp"
+				if [[ -f "$VCVMON_PAUSE" ]]; then
+					if (( ! dirty )); then
+						_vcvmon_banner "1;30;43" "VCVMON PAUSED - rebuild queued   [space] to resume + rebuild"
 					fi
-					;;
-				r|R)
-					rm -f "$VCVMON_PAUSE"
-					print -u$fd rs
-					_vcvmon_banner "1;30;42" "VCVMON REBUILD"
-					;;
-				q|Q) break ;;
-			esac
+					dirty=1
+				else
+					_vcvmon_restart_rack "VCVMON CHANGE - rebuilding   [space] to pause"
+				fi
+			fi
 		done
 	} always {
-		kill $pid 2>/dev/null
-		exec {fd}<&-
-		rm -f "$fifo" "$VCVMON_PAUSE"
+		_vcvmon_stop_rack
+		rm -f "$VCVMON_PAUSE"
 		_vcvmon_banner "1;97;41" "VCVMON STOPPED"
 	}
 }
