@@ -59,6 +59,11 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
     }
   }
 
+  bool readBipolarMainKnobs(json_t* rootJ) {
+    json_t* bipolarMainKnobsJ = json_object_get(rootJ, "bipolarMainKnobs");
+    return bipolarMainKnobsJ && json_boolean_value(bipolarMainKnobsJ);
+  }
+
   json_t* dataToJson() override {
     json_t* rootJ = json_object();
     json_object_set_new(rootJ, "bipolarMainKnobs",
@@ -66,10 +71,16 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
     return rootJ;
   }
 
+  void paramsFromJson(json_t* rootJ) override {
+    json_t* dataJ = json_object_get(rootJ, "data");
+    if (dataJ) {
+      setMainKnobRange(readBipolarMainKnobs(dataJ));
+    }
+    Module::paramsFromJson(rootJ);
+  }
+
   void dataFromJson(json_t* rootJ) override {
-    json_t* bipolarMainKnobsJ = json_object_get(rootJ, "bipolarMainKnobs");
-    setMainKnobRange(bipolarMainKnobsJ &&
-                     json_boolean_value(bipolarMainKnobsJ));
+    setMainKnobRange(readBipolarMainKnobs(rootJ));
   }
 
   void process(const ProcessArgs& args) override {
