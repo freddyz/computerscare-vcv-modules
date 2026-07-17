@@ -1,11 +1,15 @@
 # vcvmon - watch this repo, rebuild + run Rack on changes, with keyboard pause/resume.
-# Source from ~/.zshrc:  source /Users/adammalone/dev/computerscare-vcv-modules/scripts/vcvmon.zsh
-# Paths are machine-specific to this machine.
+# Source from ~/.zshrc, for example:
+#   source ~/dev/computerscare-vcv-modules/scripts/vcvmon.zsh
+#
+# Optional overrides:
+#   VCVMON_REPO=/path/to/plugin/repo
+#   VCVMON_RACK=/path/to/VCV-Rack/Rack
+#   VCVMON_PAUSE=/tmp/vcvmon.pause
 
-VCVMON_PAUSE=/tmp/vcvmon.pause
-VCVMON_REPO=/Users/adammalone/dev/computerscare-vcv-modules
-VCVMON_RACK=/Users/adammalone/dev/VCV-Rack/Rack
-VCVMON_VERSION="polling-v2"
+: ${VCVMON_PAUSE:=/tmp/vcvmon.pause}
+: ${VCVMON_RACK:=$HOME/dev/VCV-Rack/Rack}
+: ${VCVMON_VERSION:=polling-v2}
 
 # full-width 3-line colored banner so state is visible through Rack's log spew
 # usage: _vcvmon_banner <ansi-colors> <message>
@@ -47,6 +51,17 @@ _vcvmon_kill_tree () {
 
 vcvmon () {
 	emulate -L zsh
+	if [[ -z "$VCVMON_REPO" ]]; then
+		VCVMON_REPO=$PWD
+	fi
+	if [[ ! -f "$VCVMON_REPO/plugin.json" ]]; then
+		print -u2 "vcvmon: set VCVMON_REPO or run vcvmon from the plugin repo root"
+		return 1
+	fi
+	if [[ ! -d "$VCVMON_RACK" ]]; then
+		print -u2 "vcvmon: set VCVMON_RACK to your Rack source directory"
+		return 1
+	fi
 	rm -f "$VCVMON_PAUSE"
 
 	local key runner_pid=0 stamp next_stamp dirty=0
