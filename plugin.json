@@ -1,6 +1,6 @@
 {
   "slug": "computerscare",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "name": "computerscare",
   "brand": "computerscare",
   "author": "computerscare",
@@ -17,6 +17,13 @@
       "description": "16 knobs with polyphonic output",
       "tags": ["Polyphonic", "Utility"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#knoly-pobs"
+    },
+    {
+      "slug": "computerscare-polypobs",
+      "name": "Poly Pobs",
+      "description": "16 knobs with selectable channel, input, and output views",
+      "tags": ["Polyphonic", "Utility"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#poly-pobs"
     },
     {
       "slug": "computerscare-bolyputtons",

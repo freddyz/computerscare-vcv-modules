@@ -1,3 +1,13 @@
+# 2.3.4
+Poly Pobs:
+- Add scaffold module with Knoly-style knobs, 8 inputs, 8 outputs, and channel/input/output selectors
+
+Knoly Pobs:
+- Fix saved bipolar main knob values loading as 0 when they were negative
+
+Development:
+- Add portable vcvmon watcher script
+
 # 2.3.2
 Sloly Pit:
 - Polyphonic splitter/router, split a poly signal into multiple poly signals
