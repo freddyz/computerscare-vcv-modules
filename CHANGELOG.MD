@@ -5,6 +5,9 @@ Poly Pobs:
 Knoly Pobs:
 - Fix saved bipolar main knob values loading as 0 when they were negative
 
+Sloly Pit:
+- Add blank routes and randomization defaults
+
 Development:
 - Add portable vcvmon watcher script
 

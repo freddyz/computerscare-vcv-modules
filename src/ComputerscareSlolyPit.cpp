@@ -19,10 +19,11 @@ const std::string SlolyPitInputPoolNames[2] = {"Only active input channels",
                                                "All input channels"};
 const std::string SlolyPitReplacementNames[3] = {
     "With replacement", "Without replacement", "Shuffle existing"};
-const std::string SlolyPitChannelCountNames[2] = {"Same channels as current",
-                                                  "Random channels"};
+const std::string SlolyPitChannelCountNames[3] = {
+    "Same channels as current", "Random channels", "Same channels as input"};
 const std::string SlolyPitOutputTargetNames[2] = {"Only connected outputs",
                                                   "All outputs"};
+const int SLOLY_PIT_BLANK_INPUT = -1;
 
 std::string slolyPitOrdinal(int number) {
   if (number % 100 >= 11 && number % 100 <= 13) {
@@ -64,6 +65,7 @@ struct ComputerscareSlolyPit : Module {
     RANDOMIZE_SAME_CHANNEL_COUNT,
     RANDOMIZE_RANDOM_CHANNEL_COUNT,
     RANDOMIZE_FIXED_CHANNEL_COUNT,
+    RANDOMIZE_SAME_INPUT_CHANNEL_COUNT = RANDOMIZE_FIXED_CHANNEL_COUNT + 16,
   };
 
   std::array<std::vector<int>, 16> routing;
@@ -74,8 +76,8 @@ struct ComputerscareSlolyPit : Module {
   bool customRoutingInitialized = false;
   int randomizeInputPool = RANDOMIZE_ONLY_ACTIVE_INPUT_CHANNELS;
   int randomizeReplacement = RANDOMIZE_WITH_REPLACEMENT;
-  int randomizeChannelCount = RANDOMIZE_SAME_CHANNEL_COUNT;
-  bool randomizeOnlyConnectedOutputs = true;
+  int randomizeChannelCount = RANDOMIZE_SAME_INPUT_CHANNEL_COUNT;
+  bool randomizeOnlyConnectedOutputs = false;
   int cachedRoutingMode = -1;
   int cachedRoutingChannels = -1;
   uint16_t cachedOutputConnectionMask = 0;
@@ -231,7 +233,7 @@ struct ComputerscareSlolyPit : Module {
     if (randomizeChannelCountJ) {
       int loadedChannelCount = json_integer_value(randomizeChannelCountJ);
       if (loadedChannelCount >= RANDOMIZE_SAME_CHANNEL_COUNT &&
-          loadedChannelCount < RANDOMIZE_FIXED_CHANNEL_COUNT + 16) {
+          loadedChannelCount <= RANDOMIZE_SAME_INPUT_CHANNEL_COUNT) {
         randomizeChannelCount = loadedChannelCount;
       }
     } else {
@@ -241,6 +243,8 @@ struct ComputerscareSlolyPit : Module {
         randomizeChannelCount = json_boolean_value(randomizeSameChannelCountJ)
                                     ? RANDOMIZE_SAME_CHANNEL_COUNT
                                     : RANDOMIZE_RANDOM_CHANNEL_COUNT;
+      } else {
+        randomizeChannelCount = RANDOMIZE_SAME_CHANNEL_COUNT;
       }
     }
 
@@ -249,6 +253,8 @@ struct ComputerscareSlolyPit : Module {
     if (randomizeOnlyConnectedOutputsJ) {
       randomizeOnlyConnectedOutputs =
           json_boolean_value(randomizeOnlyConnectedOutputsJ);
+    } else {
+      randomizeOnlyConnectedOutputs = true;
     }
 
     for (int outputIndex = 0; outputIndex < 16; outputIndex++) {
@@ -266,7 +272,8 @@ struct ComputerscareSlolyPit : Module {
         }
 
         int inputChannel = json_integer_value(inputChannelJ);
-        if (inputChannel >= 0 && inputChannel < 16) {
+        if (inputChannel == SLOLY_PIT_BLANK_INPUT ||
+            (inputChannel >= 0 && inputChannel < 16)) {
           routing[outputIndex].push_back(inputChannel);
         }
       }
@@ -401,7 +408,8 @@ struct ComputerscareSlolyPit : Module {
   void appendCustomRouteToIndex(int outputIndex, int routeIndex,
                                 int inputChannel) {
     if (outputIndex < 0 || outputIndex >= 16 || routeIndex < 0 ||
-        inputChannel < 0 || inputChannel >= 16) {
+        (inputChannel != SLOLY_PIT_BLANK_INPUT &&
+         (inputChannel < 0 || inputChannel >= 16))) {
       return;
     }
 
@@ -467,6 +475,10 @@ struct ComputerscareSlolyPit : Module {
     if (randomizeChannelCount == RANDOMIZE_RANDOM_CHANNEL_COUNT) {
       return 1 + randomIndex(16);
     }
+    if (randomizeChannelCount == RANDOMIZE_SAME_INPUT_CHANNEL_COUNT) {
+      int inputChannels = inputs[POLY_INPUT].getChannels();
+      return inputChannels > 0 ? inputChannels : 16;
+    }
     return randomizeChannelCount - RANDOMIZE_FIXED_CHANNEL_COUNT + 1;
   }
 
@@ -516,6 +528,9 @@ struct ComputerscareSlolyPit : Module {
   }
 
   static int routeCharToInputChannel(char routeChar) {
+    if (routeChar == '-') {
+      return SLOLY_PIT_BLANK_INPUT;
+    }
     if (routeChar >= '1' && routeChar <= '9') {
       return routeChar - '1';
     }
@@ -540,6 +555,9 @@ struct ComputerscareSlolyPit : Module {
     }
     if (inputChannel >= 10 && inputChannel < 16) {
       return 'a' + inputChannel - 10;
+    }
+    if (inputChannel == SLOLY_PIT_BLANK_INPUT) {
+      return '-';
     }
     return '?';
   }
@@ -575,7 +593,8 @@ struct ComputerscareSlolyPit : Module {
       }
 
       int inputChannel = routeCharToInputChannel(routeChar);
-      if (inputChannel >= 0 && inputChannel < 16) {
+      if (inputChannel == SLOLY_PIT_BLANK_INPUT ||
+          (inputChannel >= 0 && inputChannel < 16)) {
         routing[outputIndex].push_back(inputChannel);
       }
     }
@@ -778,7 +797,7 @@ struct ComputerscareSlolyPit : Module {
          polyChannel++) {
       int inputChannel = inputRoute[polyChannel];
       outputs[CHANNEL_OUTPUT + outputIndex].setVoltage(
-          inputChannel < inputChannels
+          inputChannel >= 0 && inputChannel < inputChannels
               ? inputs[POLY_INPUT].getVoltage(inputChannel)
               : 0.f,
           polyChannel);
@@ -1044,6 +1063,14 @@ struct SlolyPitChannelCountMenu : MenuItem {
       item->value = i;
       menu->addChild(item);
     }
+    SlolyPitRandomizationIntItem* sameInputItem =
+        new SlolyPitRandomizationIntItem();
+    sameInputItem->text = SlolyPitChannelCountNames[2];
+    sameInputItem->module = module;
+    sameInputItem->option = &ComputerscareSlolyPit::randomizeChannelCount;
+    sameInputItem->value =
+        ComputerscareSlolyPit::RANDOMIZE_SAME_INPUT_CHANNEL_COUNT;
+    menu->addChild(sameInputItem);
 
     menu->addChild(new MenuSeparator);
 
@@ -1074,6 +1101,10 @@ struct SlolyPitChannelCountMenu : MenuItem {
         ComputerscareSlolyPit::RANDOMIZE_RANDOM_CHANNEL_COUNT) {
       return SlolyPitChannelCountNames[1];
     }
+    if (channelCountMode ==
+        ComputerscareSlolyPit::RANDOMIZE_SAME_INPUT_CHANNEL_COUNT) {
+      return SlolyPitChannelCountNames[2];
+    }
     return std::to_string(channelCountMode -
                           ComputerscareSlolyPit::RANDOMIZE_FIXED_CHANNEL_COUNT +
                           1);
@@ -1101,7 +1132,8 @@ struct SlolyPitRouteInputItem : MenuItem {
       return;
     }
 
-    if (inputChannel < 0 || inputChannel >= 16) {
+    if (inputChannel != SLOLY_PIT_BLANK_INPUT &&
+        (inputChannel < 0 || inputChannel >= 16)) {
       return;
     }
 
@@ -1147,7 +1179,7 @@ struct SlolyPitRouteTextField : ComputerscareTextField {
 
       int inputChannel =
           ComputerscareSlolyPit::routeCharToInputChannel(routeChar);
-      if (inputChannel >= 0) {
+      if (inputChannel == SLOLY_PIT_BLANK_INPUT || inputChannel >= 0) {
         sanitized.push_back(std::tolower((unsigned char)routeChar));
       }
     }
@@ -1399,8 +1431,12 @@ struct SlolyPitOutputLabels : Widget {
         text += "\n";
       }
       text += std::to_string(routeIndex + 1);
-      text += ": Input ch ";
-      text += std::to_string(outputRoute[routeIndex] + 1);
+      if (outputRoute[routeIndex] == SLOLY_PIT_BLANK_INPUT) {
+        text += ": 0V";
+      } else {
+        text += ": Input ch ";
+        text += std::to_string(outputRoute[routeIndex] + 1);
+      }
     }
     return text;
   }
@@ -1491,6 +1527,7 @@ struct SlolyPitOutputLabels : Widget {
     menu->addChild(createMenuLabel("1-9: ch 1-9"));
     menu->addChild(createMenuLabel("  0: ch10"));
     menu->addChild(createMenuLabel("a-f: ch11-16"));
+    menu->addChild(createMenuLabel("  -: 0v blank"));
     menu->addChild(new MenuSeparator);
     menu->addChild(createMenuLabel("Randomize:"));
     addRouteRandomizeItem(menu, textField, "Full",
@@ -1529,7 +1566,7 @@ struct SlolyPitOutputLabels : Widget {
 
     if (!addRoute) {
       SlolyPitRouteInputItem* item = new SlolyPitRouteInputItem();
-      item->text = "(none)";
+      item->text = "(end here)";
       item->module = module;
       item->outputIndex = outputIndex;
       item->routeIndex = routeIndex;
@@ -1537,8 +1574,23 @@ struct SlolyPitOutputLabels : Widget {
       item->addRoute = false;
       item->clearFromRoute = true;
       menu->addChild(item);
-      menu->addChild(new MenuSeparator);
     }
+
+    SlolyPitRouteInputItem* blankItem = new SlolyPitRouteInputItem();
+    blankItem->text = "(blank)";
+    blankItem->rightText =
+        !addRoute && module->routing[outputIndex][routeIndex] ==
+                         SLOLY_PIT_BLANK_INPUT
+            ? CHECKMARK_STRING
+            : "";
+    blankItem->module = module;
+    blankItem->outputIndex = outputIndex;
+    blankItem->routeIndex = routeIndex;
+    blankItem->inputChannel = SLOLY_PIT_BLANK_INPUT;
+    blankItem->addRoute = addRoute;
+    blankItem->clearFromRoute = false;
+    menu->addChild(blankItem);
+    menu->addChild(new MenuSeparator);
 
     addRouteInputMenuItems(menu, routeIndex, addRoute, 0, inputChannels);
 
@@ -1688,7 +1740,8 @@ struct SlolyPitOutputLabels : Widget {
     int inputChannels = getVisualInputChannels();
     for (size_t routeIndex = 0;
          routeIndex < inputRoute.size() && routeIndex < 16; routeIndex++) {
-      bool outOfBounds = inputRoute[routeIndex] >= inputChannels;
+      bool outOfBounds = inputRoute[routeIndex] == SLOLY_PIT_BLANK_INPUT ||
+                         inputRoute[routeIndex] >= inputChannels;
       drawRouteBlock(args, (int)routeIndex, (int)routeIndex + 1,
                      (int)routeIndex, true, routeBackgroundX,
                      routeBackgroundWidth, outOfBounds ? 0x62 : 0xc8);
@@ -2014,7 +2067,9 @@ struct SlolyPitOutputLabels : Widget {
         nvgFillColor(args.vg, nvgRGB(0x10, 0x10, 0x00));
       }
 
-      std::string label = std::to_string(inputRoute[routeIndex] + 1);
+      std::string label = inputRoute[routeIndex] == SLOLY_PIT_BLANK_INPUT
+                              ? "-"
+                              : std::to_string(inputRoute[routeIndex] + 1);
       nvgText(args.vg, routeTextRightX, textBaselineY + routeIndex * rowSpacing,
               label.c_str(), NULL);
     }

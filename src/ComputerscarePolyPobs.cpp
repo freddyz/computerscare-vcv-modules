@@ -4,7 +4,6 @@
 namespace {
 
 const int polyPobsNumKnobs = 16;
-const int polyPobsNumInputs = 16;
 const int polyPobsNumOutputs = 16;
 
 const std::vector<std::string> polyPobsPortLabels = {
@@ -44,6 +43,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   float lastVisibleKnobValues[polyPobsNumKnobs] = {};
   float lastVisibleScaleValue = 1.f;
   float lastVisibleOffsetValue = 0.f;
+  rack::dsp::SchmittTrigger channelRandomizeTriggers[polyPobsNumKnobs];
+  rack::dsp::SchmittTrigger outputRandomizeTriggers[polyPobsNumOutputs];
   int viewedOutput = 0;
   int viewedChannel = -1;
   bool loadingView = false;
@@ -59,7 +60,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     INPUT_SELECTOR,
     NUM_PARAMS
   };
-  enum InputIds { INPUT, NUM_INPUTS = INPUT + polyPobsNumInputs };
+  enum InputIds { CHANNEL_RANDOMIZE_INPUT, OUTPUT_RANDOMIZE_INPUT, NUM_INPUTS };
   enum OutputIds { OUTPUT, NUM_OUTPUTS = OUTPUT + polyPobsNumOutputs };
   enum LightIds { NUM_LIGHTS };
 
@@ -77,7 +78,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
                  withAllLabel(oneToSixteenLabels()));
     configSwitch(OUTPUT_SELECTOR, 0.f, polyPobsNumOutputs, 1.f, "Output",
                  withAllLabel(polyPobsPortLabels));
-    configSwitch(INPUT_SELECTOR, 0.f, polyPobsNumInputs - 1, 0.f, "Input",
+    configSwitch(INPUT_SELECTOR, 0.f, polyPobsNumKnobs - 1, 0.f, "Input",
                  polyPobsPortLabels);
 
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
@@ -91,9 +92,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     getParamQuantity(OUTPUT_SELECTOR)->resetEnabled = false;
     getParamQuantity(INPUT_SELECTOR)->resetEnabled = false;
 
-    for (int i = 0; i < polyPobsNumInputs; i++) {
-      configInput(INPUT + i, polyPobsPortLabels[i]);
-    }
+    configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize channel");
+    configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize output");
     for (int i = 0; i < polyPobsNumOutputs; i++) {
       configOutput(OUTPUT + i, polyPobsPortLabels[i]);
     }
@@ -321,6 +321,32 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     outputsDirty = true;
   }
 
+  void randomizeChannel(int channel) {
+    channel = math::clamp(channel, 0, polyPobsNumKnobs - 1);
+    storeViewedView();
+    for (int output = 0; output < polyPobsNumOutputs; output++) {
+      outputKnobValues[output][channel] = randomKnobValue();
+    }
+    if (selectedChannel() == channel) {
+      loadCurrentView();
+      captureVisibleControls();
+    }
+    outputsDirty = true;
+  }
+
+  void randomizeOutput(int output) {
+    output = math::clamp(output, 0, polyPobsNumOutputs - 1);
+    storeViewedView();
+    for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+      outputKnobValues[output][channel] = randomKnobValue();
+    }
+    if (!channelViewActive() && normalizedOutputView() == output) {
+      loadCurrentView();
+      captureVisibleControls();
+    }
+    outputsDirty = true;
+  }
+
   void randomizeAllValues() {
     for (int output = 0; output < polyPobsNumOutputs; output++) {
       for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
@@ -331,6 +357,29 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     updateParamLabels();
     captureVisibleControls();
     outputsDirty = true;
+  }
+
+  void processRandomizeTriggers() {
+    int channelTriggerChannels = inputs[CHANNEL_RANDOMIZE_INPUT].getChannels();
+    int outputTriggerChannels = inputs[OUTPUT_RANDOMIZE_INPUT].getChannels();
+
+    for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+      float channelVoltage =
+          channel < channelTriggerChannels
+              ? inputs[CHANNEL_RANDOMIZE_INPUT].getVoltage(channel)
+              : 0.f;
+      if (channelRandomizeTriggers[channel].process(channelVoltage / 2.f)) {
+        randomizeChannel(channel);
+      }
+
+      float outputVoltage =
+          channel < outputTriggerChannels
+              ? inputs[OUTPUT_RANDOMIZE_INPUT].getVoltage(channel)
+              : 0.f;
+      if (outputRandomizeTriggers[channel].process(outputVoltage / 2.f)) {
+        randomizeOutput(channel);
+      }
+    }
   }
 
   void initializeAllValues() {
@@ -568,6 +617,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
 
   void process(const ProcessArgs& args) override {
     (void)args;
+    processRandomizeTriggers();
     ComputerscarePolyModule::checkCounter();
     if (counter == 0 || outputsDirty) {
       syncView();
@@ -1186,13 +1236,20 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     initializeAllButton->initialize = true;
     addChild(initializeAllButton);
 
+    addInput(
+        createInput<TinyJack>(Vec(63.7f, 7.f), module,
+                              ComputerscarePolyPobs::CHANNEL_RANDOMIZE_INPUT));
+    addInput(
+        createInput<TinyJack>(Vec(82.2f, 7.f), module,
+                              ComputerscarePolyPobs::OUTPUT_RANDOMIZE_INPUT));
+
     for (int i = 0; i < polyPobsNumKnobs; i++) {
       float x = 1.4f + 24.3f * (i - i % 8) / 8.f;
       float y = 108.f + 30.f * (i % 8) + 14.3f / 8.f * (i - i % 8);
       addLabeledKnob(x, y, module, i, i >= 8 ? 12.f : -3.f, 2.f);
     }
 
-    for (int i = 0; i < polyPobsNumInputs; i++) {
+    for (int i = 0; i < polyPobsNumOutputs; i++) {
       addPortPair(polyPobsPortLabels[i], 58.f, 31.f + i * 21.5f, module, i,
                   ComputerscarePolyPobs::OUTPUT + i);
     }
