@@ -46,6 +46,7 @@ struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
       "res/components/computerscare-channels-empty-knob-auto-mode.svg"));
   int prevSetting = -1;
   int paramId = -1;
+  int previewChannels = 16;
 
   ComputerscarePolyModule* module;
 
@@ -66,6 +67,15 @@ struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
         prevSetting = currentSetting;
       }
     } else {
+      setSvg(manualChannelsSetSvg);
+      float angle =
+          math::rescale((float)previewChannels, 1.f, 16.f, minAngle, maxAngle);
+      math::Vec center = sw->box.getCenter();
+      tw->identity();
+      tw->translate(center);
+      tw->rotate(angle);
+      tw->translate(center.neg());
+      fb->setDirty();
     }
     ComputerscareRoundKnob::draw(args);
   }
@@ -76,6 +86,7 @@ struct PolyChannelsDisplay : SmallLetterDisplay {
   bool controlled = false;
   int prevChannels = -1;
   int paramId = -1;
+  int previewChannels = 16;
 
   PolyChannelsDisplay(math::Vec pos) {
     box.pos = pos;
@@ -96,7 +107,7 @@ struct PolyChannelsDisplay : SmallLetterDisplay {
       }
 
     } else {
-      value = std::to_string((random::u32() % 16) + 1);
+      value = std::to_string(previewChannels);
     }
     SmallLetterDisplay::draw(args);
   }
@@ -106,17 +117,20 @@ struct PolyOutputChannelsWidget : Widget {
   PolyChannelsDisplay* channelCountDisplay;
   TinyChannelsSnapKnob* channelsKnob;
   PolyOutputChannelsWidget(math::Vec pos, ComputerscarePolyModule* mod,
-                           int paramId) {
+                           int paramId, int previewChannels = -1) {
     module = mod;
 
     channelsKnob =
         createParam<TinyChannelsSnapKnob>(pos.plus(Vec(7, 3)), module, paramId);
     channelsKnob->module = module;
     channelsKnob->paramId = paramId;
+    channelsKnob->previewChannels =
+        previewChannels > 0 ? previewChannels : (int)(random::u32() % 16) + 1;
 
     channelCountDisplay = new PolyChannelsDisplay(pos);
 
     channelCountDisplay->module = module;
+    channelCountDisplay->previewChannels = channelsKnob->previewChannels;
 
     addChild(channelsKnob);
     addChild(channelCountDisplay);

@@ -29,6 +29,8 @@ float polyPobsIndexJitter(int index, int salt, float amount) {
   return (value - 3) * amount;
 }
 
+float polyPobsRandomKnobPreviewValue() { return random::uniform() * 10.f; }
+
 }  // namespace
 
 struct ComputerscarePolyPobs : ComputerscarePolyModule {
@@ -39,9 +41,13 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   float outputOffsetValues[polyPobsNumOutputs] = {};
   float channelScaleValues[polyPobsNumKnobs] = {};
   float channelOffsetValues[polyPobsNumKnobs] = {};
+  float lastVisibleKnobValues[polyPobsNumKnobs] = {};
+  float lastVisibleScaleValue = 1.f;
+  float lastVisibleOffsetValue = 0.f;
   int viewedOutput = 0;
   int viewedChannel = -1;
   bool loadingView = false;
+  bool outputsDirty = true;
 
   enum ParamIds {
     KNOB,
@@ -102,6 +108,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
 
     loadCurrentView();
     loadCurrentControls();
+    captureVisibleControls();
     updateParamLabels();
   }
 
@@ -145,6 +152,24 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
       params[GLOBAL_SCALE].setValue(outputScaleValues[output]);
       params[GLOBAL_OFFSET].setValue(outputOffsetValues[output]);
     }
+  }
+
+  void captureVisibleControls() {
+    for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+      lastVisibleKnobValues[knob] = params[KNOB + knob].getValue();
+    }
+    lastVisibleScaleValue = params[GLOBAL_SCALE].getValue();
+    lastVisibleOffsetValue = params[GLOBAL_OFFSET].getValue();
+  }
+
+  bool visibleControlsChanged() {
+    for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+      if (lastVisibleKnobValues[knob] != params[KNOB + knob].getValue()) {
+        return true;
+      }
+    }
+    return lastVisibleScaleValue != params[GLOBAL_SCALE].getValue() ||
+           lastVisibleOffsetValue != params[GLOBAL_OFFSET].getValue();
   }
 
   void storeCurrentView() {
@@ -204,13 +229,17 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
       storeViewedControls();
       loadCurrentView();
       loadCurrentControls();
+      captureVisibleControls();
       updateParamLabels();
+      outputsDirty = true;
       return;
     }
 
-    if (!loadingView) {
+    if (!loadingView && visibleControlsChanged()) {
       storeViewedView();
       storeViewedControls();
+      captureVisibleControls();
+      outputsDirty = true;
     }
   }
 
@@ -222,7 +251,9 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
         math::clamp(output, 0, polyPobsNumOutputs - 1) + 1);
     loadCurrentView();
     loadCurrentControls();
+    captureVisibleControls();
     updateParamLabels();
+    outputsDirty = true;
   }
 
   void selectChannelView(int channel) {
@@ -233,7 +264,9 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
         math::clamp(channel, 0, polyPobsNumKnobs - 1) + 1);
     loadCurrentView();
     loadCurrentControls();
+    captureVisibleControls();
     updateParamLabels();
+    outputsDirty = true;
   }
 
   float randomKnobValue() {
@@ -263,6 +296,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     }
     loadCurrentView();
     updateParamLabels();
+    captureVisibleControls();
+    outputsDirty = true;
   }
 
   void randomizeCurrentView() {
@@ -282,6 +317,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     }
     loadCurrentView();
     updateParamLabels();
+    captureVisibleControls();
+    outputsDirty = true;
   }
 
   void randomizeAllValues() {
@@ -292,6 +329,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     }
     loadCurrentView();
     updateParamLabels();
+    captureVisibleControls();
+    outputsDirty = true;
   }
 
   void initializeAllValues() {
@@ -309,6 +348,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     loadCurrentView();
     loadCurrentControls();
     updateParamLabels();
+    captureVisibleControls();
+    outputsDirty = true;
   }
 
   void onRandomize() override { randomizeCurrentView(); }
@@ -398,6 +439,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     }
     if (changed) {
       mainKnobRangeRevision++;
+      outputsDirty = true;
     }
   }
 
@@ -452,6 +494,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     }
     Module::paramsFromJson(rootJ);
     updateParamLabels();
+    captureVisibleControls();
+    outputsDirty = true;
   }
 
   void dataFromJson(json_t* rootJ) override {
@@ -509,18 +553,28 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
       loadCurrentView();
       loadCurrentControls();
       updateParamLabels();
+      captureVisibleControls();
+      outputsDirty = true;
     } else {
       loadCurrentView();
       loadCurrentControls();
       updateParamLabels();
       storeViewedView();
       storeViewedControls();
+      captureVisibleControls();
+      outputsDirty = true;
     }
   }
 
   void process(const ProcessArgs& args) override {
+    (void)args;
     ComputerscarePolyModule::checkCounter();
-    syncView();
+    if (counter == 0 || outputsDirty) {
+      syncView();
+    }
+    if (!outputsDirty) {
+      return;
+    }
     for (int output = 0; output < polyPobsNumOutputs; output++) {
       outputs[OUTPUT + output].setChannels(polyChannels);
       for (int channel = 0; channel < polyChannels; channel++) {
@@ -528,28 +582,65 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
                                             channel);
       }
     }
+    outputsDirty = false;
   }
 
   void checkPoly() override {
+    int oldPolyChannels = polyChannels;
     polyChannels = params[POLY_CHANNELS].getValue();
     if (polyChannels == 0) {
       polyChannels = 16;
       params[POLY_CHANNELS].setValue(16);
     }
+    if (oldPolyChannels != polyChannels) {
+      outputsDirty = true;
+    }
   }
 };
 
 struct PolyPobsNoRandomSmallKnob : SmallKnob {
+  bool previewMode = false;
+  float previewValue = 1.f;
+
   PolyPobsNoRandomSmallKnob() { SmallKnob(); }
+
+  void draw(const DrawArgs& args) override {
+    if (previewMode && !getParamQuantity()) {
+      float angle = math::rescale(previewValue, -2.f, 2.f, minAngle, maxAngle);
+      math::Vec center = sw->box.getCenter();
+      tw->identity();
+      tw->translate(center);
+      tw->rotate(angle);
+      tw->translate(center.neg());
+      fb->dirty = true;
+    }
+    SmallKnob::draw(args);
+  }
 };
 
 struct PolyPobsNoRandomMediumSmallKnob : ComputerscareRoundKnob {
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance, "res/components/computerscare-medium-small-knob.svg"));
+  bool previewMode = false;
+  float previewValue = 0.f;
 
   PolyPobsNoRandomMediumSmallKnob() {
     setSvg(enabledSvg);
     ComputerscareRoundKnob();
+  }
+
+  void draw(const DrawArgs& args) override {
+    if (previewMode && !getParamQuantity()) {
+      float angle =
+          math::rescale(previewValue, -10.f, 10.f, minAngle, maxAngle);
+      math::Vec center = sw->box.getCenter();
+      tw->identity();
+      tw->translate(center);
+      tw->rotate(angle);
+      tw->translate(center.neg());
+      fb->dirty = true;
+    }
+    ComputerscareRoundKnob::draw(args);
   }
 };
 
@@ -564,6 +655,11 @@ struct PolyPobsDisableableSmoothKnob : ComputerscareRoundKnob {
   bool disabled = false;
   int mainKnobRangeRevision = -1;
   ComputerscarePolyModule* module = NULL;
+  bool previewMode = false;
+  bool previewChannelView = false;
+  int previewSelectedChannel = 0;
+  int previewPolyChannels = 16;
+  float previewValue = 0.f;
 
   PolyPobsDisableableSmoothKnob() {
     setSvg(enabledSvg);
@@ -593,8 +689,33 @@ struct PolyPobsDisableableSmoothKnob : ComputerscareRoundKnob {
         fb->dirty = true;
         disabled = candidate;
       }
+    } else if (previewMode) {
+      bool candidate =
+          (!previewChannelView && channel > previewPolyChannels - 1) ||
+          (previewChannelView &&
+           previewSelectedChannel > previewPolyChannels - 1);
+      if (disabled != candidate) {
+        setSvg(candidate ? disabledSvg : enabledSvg);
+        event::Change eChange;
+        onChange(eChange);
+        fb->dirty = true;
+        disabled = candidate;
+      }
     }
     ComputerscareRoundKnob::step();
+  }
+
+  void draw(const DrawArgs& args) override {
+    if (previewMode && !module) {
+      float angle = math::rescale(previewValue, 0.f, 10.f, minAngle, maxAngle);
+      math::Vec center = sw->box.getCenter();
+      tw->identity();
+      tw->translate(center);
+      tw->rotate(angle);
+      tw->translate(center.neg());
+      fb->dirty = true;
+    }
+    ComputerscareRoundKnob::draw(args);
   }
 };
 
@@ -602,9 +723,12 @@ struct PolyPobsKnobLabel : SmallLetterDisplay {
   ComputerscarePolyPobs* module = NULL;
   int index = 0;
   bool previousChannelView = false;
+  bool previewMode = false;
+  bool previewChannelView = false;
 
   void draw(const DrawArgs& args) override {
-    bool channelView = module && module->channelViewActive();
+    bool channelView = module ? module->channelViewActive()
+                              : (previewMode && previewChannelView);
     if (channelView != previousChannelView || value.empty()) {
       value =
           channelView ? polyPobsPortLabels[index] : std::to_string(index + 1);
@@ -622,8 +746,13 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
   bool outputLabel = false;
   bool pressed = false;
   bool latchedDown = false;
+  bool previewMode = false;
+  bool previewChannelView = false;
+  int previewSelectedOutput = 0;
+  int previewSelectedChannel = 0;
+  int previewPolyChannels = 16;
   float xScale = 0.66f;
-  float yScale = 1.34f;
+  float yScale = 1.46f;
   Vec weirdOffset = Vec(0.f, 0.f);
 
   PolyPobsLabelButton() {
@@ -637,7 +766,7 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
     outputLabel = isOutputLabel;
     xScale = (outputLabel ? 0.7f : 0.62f) +
              polyPobsIndexJitter(index, outputLabel ? 2 : 5, 0.01f);
-    yScale = (outputLabel ? 1.38f : 1.32f) +
+    yScale = (outputLabel ? 1.52f : 1.46f) +
              polyPobsIndexJitter(index, outputLabel ? 7 : 11, 0.014f);
     weirdOffset = Vec(polyPobsIndexJitter(index, outputLabel ? 13 : 19, 0.42f),
                       polyPobsIndexJitter(index, outputLabel ? 23 : 29, 0.34f));
@@ -662,18 +791,28 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
   }
 
   bool selected() {
-    if (!module) {
-      return false;
-    }
     if (outputLabel) {
-      return module->selectedOutput() == outputIndex &&
-             !module->channelViewActive();
+      if (module) {
+        return module->selectedOutput() == outputIndex &&
+               !module->channelViewActive();
+      }
+      return previewMode && !previewChannelView &&
+             previewSelectedOutput == outputIndex;
     }
-    return module->selectedChannel() == channelIndex;
+    if (module) {
+      return module->selectedChannel() == channelIndex;
+    }
+    return previewMode && previewChannelView &&
+           previewSelectedChannel == channelIndex;
   }
 
   bool inactive() {
-    return !outputLabel && module && channelIndex > module->polyChannels - 1;
+    if (outputLabel) {
+      return false;
+    }
+    int activePolyChannels = module ? module->polyChannels
+                                    : (previewMode ? previewPolyChannels : 16);
+    return channelIndex > activePolyChannels - 1;
   }
 
   void step() override {
@@ -704,31 +843,12 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     bool down = pressed || isSelected;
     float textX =
-        box.size.x * 0.5f + weirdOffset.x + (down ? 3.6f * xScale : 0.f);
+        box.size.x * 0.5f + weirdOffset.x + (down ? 3.6f * xScale : -1.3f);
     float textY =
-        box.size.y * 0.52f + weirdOffset.y + (down ? 2.9f * yScale : 0.f);
+        box.size.y * 0.52f + weirdOffset.y + (down ? 2.9f * yScale : -1.7f);
 
     nvgSave(args.vg);
-    if (isSelected) {
-      nvgFillColor(args.vg, COLOR_COMPUTERSCARE_YELLOW);
-      for (float dx = -1.8f; dx <= 1.8f; dx += 1.8f) {
-        for (float dy = -1.8f; dy <= 1.8f; dy += 1.8f) {
-          if (dx == 0.f && dy == 0.f) continue;
-          nvgText(args.vg, textX + dx, textY + dy, value.c_str(), NULL);
-        }
-      }
-      nvgFillColor(args.vg, BLACK);
-      for (float dx = -0.8f; dx <= 0.8f; dx += 0.8f) {
-        for (float dy = -0.8f; dy <= 0.8f; dy += 0.8f) {
-          if (dx == 0.f && dy == 0.f) continue;
-          nvgText(args.vg, textX + dx, textY + dy, value.c_str(), NULL);
-        }
-      }
-      nvgFillColor(args.vg,
-                   isInactive ? labelColor : COLOR_COMPUTERSCARE_YELLOW);
-    } else {
-      nvgFillColor(args.vg, labelColor);
-    }
+    nvgFillColor(args.vg, labelColor);
     nvgText(args.vg, textX, textY, value.c_str(), NULL);
     nvgRestore(args.vg);
   }
@@ -1009,18 +1129,28 @@ struct PolyPobsSelectorButton : ComputerscareBlankButton {
   }
 };
 
-struct PolyPobsOutputBackground : TransparentWidget {
-  void draw(const DrawArgs& args) override {
-    nvgBeginPath(args.vg);
-    nvgRoundedRect(args.vg, 0.f, 0.f, box.size.x, box.size.y, 4.f);
-    nvgFillColor(args.vg, nvgRGBA(0x42, 0x42, 0x42, 0x9c));
-    nvgFill(args.vg);
-  }
-};
-
 struct ComputerscarePolyPobsWidget : ModuleWidget {
+  bool previewMode = false;
+  bool previewChannelView = false;
+  int previewSelectedOutput = 0;
+  int previewSelectedChannel = 0;
+  int previewPolyChannels = 16;
+  float previewKnobValues[polyPobsNumKnobs] = {};
+
   ComputerscarePolyPobsWidget(ComputerscarePolyPobs* module) {
     setModule(module);
+    if (!module) {
+      previewMode = true;
+      previewChannelView = random::uniform() < 0.5f;
+      previewSelectedOutput =
+          (int)std::floor(random::uniform() * polyPobsNumOutputs);
+      previewSelectedChannel =
+          (int)std::floor(random::uniform() * polyPobsNumKnobs);
+      previewPolyChannels = 1 + (int)std::floor(random::uniform() * 16.f);
+      for (int i = 0; i < polyPobsNumKnobs; i++) {
+        previewKnobValues[i] = polyPobsRandomKnobPreviewValue();
+      }
+    }
     box.size = Vec(8 * 15, 380);
 
     ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
@@ -1029,12 +1159,21 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
         pluginInstance, "res/panels/ComputerscarePolyPobsPanel.svg")));
     addChild(panel);
 
-    addChild(new PolyOutputChannelsWidget(
-        Vec(91.f, 1.f), module, ComputerscarePolyPobs::POLY_CHANNELS));
-    addParam(createParam<PolyPobsNoRandomSmallKnob>(
-        Vec(13, 75), module, ComputerscarePolyPobs::GLOBAL_SCALE));
-    addParam(createParam<PolyPobsNoRandomMediumSmallKnob>(
-        Vec(35, 78), module, ComputerscarePolyPobs::GLOBAL_OFFSET));
+    addChild(new PolyOutputChannelsWidget(Vec(91.f, 1.f), module,
+                                          ComputerscarePolyPobs::POLY_CHANNELS,
+                                          previewPolyChannels));
+    PolyPobsNoRandomSmallKnob* scaleKnob =
+        createParam<PolyPobsNoRandomSmallKnob>(
+            Vec(13, 75), module, ComputerscarePolyPobs::GLOBAL_SCALE);
+    scaleKnob->previewMode = previewMode;
+    scaleKnob->previewValue = -2.f + random::uniform() * 4.f;
+    addParam(scaleKnob);
+    PolyPobsNoRandomMediumSmallKnob* offsetKnob =
+        createParam<PolyPobsNoRandomMediumSmallKnob>(
+            Vec(35, 78), module, ComputerscarePolyPobs::GLOBAL_OFFSET);
+    offsetKnob->previewMode = previewMode;
+    offsetKnob->previewValue = -10.f + random::uniform() * 20.f;
+    addParam(offsetKnob);
     PolyPobsActionButton* randomizeAllButton =
         createWidget<PolyPobsActionButton>(Vec(4.f, 28.f));
     randomizeAllButton->module = module;
@@ -1046,11 +1185,6 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     initializeAllButton->label = "INIT ALL";
     initializeAllButton->initialize = true;
     addChild(initializeAllButton);
-
-    PolyPobsOutputBackground* outputBackground =
-        createWidget<PolyPobsOutputBackground>(Vec(84.f, 25.f));
-    outputBackground->box.size = Vec(34.f, 350.f);
-    addChild(outputBackground);
 
     for (int i = 0; i < polyPobsNumKnobs; i++) {
       float x = 1.4f + 24.3f * (i - i % 8) / 8.f;
@@ -1111,6 +1245,8 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     PolyPobsKnobLabel* smallLetterDisplay = new PolyPobsKnobLabel();
     smallLetterDisplay->module = module;
     smallLetterDisplay->index = index;
+    smallLetterDisplay->previewMode = previewMode;
+    smallLetterDisplay->previewChannelView = previewChannelView;
     smallLetterDisplay->box.size = Vec(5, 10);
     smallLetterDisplay->fontSize = 18;
     smallLetterDisplay->textAlign = 1;
@@ -1123,6 +1259,11 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
 
     fader->module = module;
     fader->channel = index;
+    fader->previewMode = previewMode;
+    fader->previewChannelView = previewChannelView;
+    fader->previewSelectedChannel = previewSelectedChannel;
+    fader->previewPolyChannels = previewPolyChannels;
+    fader->previewValue = previewKnobValues[index];
 
     addParam(fader);
 
@@ -1137,18 +1278,28 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     PolyPobsLabelButton* channelDisplay = new PolyPobsLabelButton();
     channelDisplay->module = module;
     channelDisplay->configure(outputIndex, false);
-    channelDisplay->box.pos = Vec(x + 4.f, y - 7.f);
+    channelDisplay->previewMode = previewMode;
+    channelDisplay->previewChannelView = previewChannelView;
+    channelDisplay->previewSelectedOutput = previewSelectedOutput;
+    channelDisplay->previewSelectedChannel = previewSelectedChannel;
+    channelDisplay->previewPolyChannels = previewPolyChannels;
+    channelDisplay->box.pos = Vec(x + 4.f, y - 4.f);
     channelDisplay->value = std::to_string(outputIndex + 1);
     addChild(channelDisplay);
 
     PolyPobsLabelButton* outputDisplay = new PolyPobsLabelButton();
     outputDisplay->module = module;
     outputDisplay->configure(outputIndex, true);
-    outputDisplay->box.pos = Vec(x + 21.f, y - 8.f);
+    outputDisplay->previewMode = previewMode;
+    outputDisplay->previewChannelView = previewChannelView;
+    outputDisplay->previewSelectedOutput = previewSelectedOutput;
+    outputDisplay->previewSelectedChannel = previewSelectedChannel;
+    outputDisplay->previewPolyChannels = previewPolyChannels;
+    outputDisplay->box.pos = Vec(x + 21.f, y - 5.f);
     outputDisplay->value = label;
     addChild(outputDisplay);
 
-    addOutput(createOutput<TinyJack>(Vec(x + 39.f, y), module, outputId));
+    addOutput(createOutput<TinyJack>(Vec(x + 44.f, y - 2.f), module, outputId));
   }
 };
 
