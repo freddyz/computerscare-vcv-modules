@@ -8,6 +8,9 @@ Knoly Pobs:
 Sloly Pit:
 - Add blank routes and randomization defaults
 
+Debug:
+- Note name / midi note number mode to display, eg: "Db3" or "F#5 - 43"
+
 Development:
 - Add portable vcvmon watcher script
 
