@@ -327,7 +327,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     for (int output = 0; output < polyPobsNumOutputs; output++) {
       outputKnobValues[output][channel] = randomKnobValue();
     }
-    if (selectedChannel() == channel) {
+    if (!channelViewActive() || selectedChannel() == channel) {
       loadCurrentView();
       captureVisibleControls();
     }
@@ -340,7 +340,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
       outputKnobValues[output][channel] = randomKnobValue();
     }
-    if (!channelViewActive() && normalizedOutputView() == output) {
+    if (channelViewActive() || normalizedOutputView() == output) {
       loadCurrentView();
       captureVisibleControls();
     }
