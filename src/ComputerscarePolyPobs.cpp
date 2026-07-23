@@ -957,7 +957,7 @@ struct PolyPobsActionButton : ComputerscareBlankButton {
   ComputerscarePolyPobs* module = NULL;
   std::string label;
   bool initialize = false;
-  float xScale = 1.62f;
+  float xScale = 1.35f;
   float yScale = 1.18f;
   bool pressed = false;
 
@@ -993,7 +993,7 @@ struct PolyPobsActionButton : ComputerscareBlankButton {
     nvgFontSize(args.vg, 10.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, BLACK);
-    float textXOffset = pressed ? 3.6f * xScale : 0.f;
+    float textXOffset = pressed ? 3.6f * xScale : -3.f;
     float textYOffset = pressed ? 2.9f * yScale : 0.f;
     nvgText(args.vg, box.size.x * 0.5f + textXOffset,
             box.size.y * 0.48f + textYOffset, label.c_str(), NULL);
@@ -1209,7 +1209,7 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
         pluginInstance, "res/panels/ComputerscarePolyPobsPanel.svg")));
     addChild(panel);
 
-    addChild(new PolyOutputChannelsWidget(Vec(91.f, 1.f), module,
+    addChild(new PolyOutputChannelsWidget(Vec(94.f, 1.f), module,
                                           ComputerscarePolyPobs::POLY_CHANNELS,
                                           previewPolyChannels));
     PolyPobsNoRandomSmallKnob* scaleKnob =
