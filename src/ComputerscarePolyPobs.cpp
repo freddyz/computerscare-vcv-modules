@@ -93,7 +93,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize channel");
     configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize output");
     for (int i = 0; i < polyPobsNumOutputs; i++) {
-      configOutput(OUTPUT + i, outputName(i) + " Output");
+      configOutput(OUTPUT + i, outputName(i));
     }
     for (int i = 0; i < polyPobsNumOutputs; i++) {
       outputScaleValues[i] = 1.f;
