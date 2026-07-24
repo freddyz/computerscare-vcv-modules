@@ -9,6 +9,9 @@ const int polyPobsNumOutputs = 16;
 const std::vector<std::string> polyPobsPortLabels = {
     "A", "B", "C", "D", "E", "F", "G", "H",
     "I", "J", "K", "L", "M", "N", "O", "P"};
+const std::vector<std::string> polyPobsNatoLabels = {
+    "Alpha", "Bravo",  "Charlie", "Delta", "Echo", "Foxtrot",  "Golf",  "Hotel",
+    "India", "Juliet", "Kilo",    "Lima",  "Mike", "November", "Oscar", "Papa"};
 
 std::vector<std::string> withAllLabel(std::vector<std::string> labels) {
   labels.insert(labels.begin(), "(All)");
@@ -21,11 +24,6 @@ std::vector<std::string> oneToSixteenLabels() {
     labels.push_back(std::to_string(i));
   }
   return labels;
-}
-
-float polyPobsIndexJitter(int index, int salt, float amount) {
-  int value = (index * 37 + salt * 17) % 7;
-  return (value - 3) * amount;
 }
 
 float polyPobsRandomKnobPreviewValue() { return random::uniform() * 10.f; }
@@ -95,7 +93,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize channel");
     configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize output");
     for (int i = 0; i < polyPobsNumOutputs; i++) {
-      configOutput(OUTPUT + i, polyPobsPortLabels[i]);
+      configOutput(OUTPUT + i, outputName(i) + " Output");
     }
     for (int i = 0; i < polyPobsNumOutputs; i++) {
       outputScaleValues[i] = 1.f;
@@ -435,13 +433,15 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     return value * outputScale * channelScale + outputOffset + channelOffset;
   }
 
-  std::string outputName(int output) {
-    return "Output " +
-           polyPobsPortLabels[math::clamp(output, 0, polyPobsNumOutputs - 1)];
+  std::string outputName(int output) { return outputBandName(output); }
+
+  std::string outputBandName(int output) {
+    return polyPobsNatoLabels[math::clamp(output, 0, polyPobsNumOutputs - 1)] +
+           " Band";
   }
 
   std::string channelName(int channel) {
-    return "Ch " +
+    return "Channel " +
            std::to_string(math::clamp(channel, 0, polyPobsNumKnobs - 1) + 1);
   }
 
@@ -788,6 +788,54 @@ struct PolyPobsKnobLabel : SmallLetterDisplay {
   }
 };
 
+struct PolyPobsViewTitle : Widget {
+  ComputerscarePolyPobs* module = NULL;
+  bool previewMode = false;
+  bool previewChannelView = false;
+  int previewSelectedOutput = 0;
+  int previewSelectedChannel = 0;
+  float rotation = -0.035f;
+  float skew = 0.08f;
+  float xScale = 1.04f;
+  float yScale = 0.96f;
+  float fontSize = 17.f;
+  std::string fontPath =
+      asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
+
+  std::string title() {
+    if (module) {
+      if (module->channelViewActive()) {
+        return "Channel " + std::to_string(module->selectedChannel() + 1);
+      }
+      return polyPobsNatoLabels[module->normalizedOutputView()] + " Band";
+    }
+    if (previewMode && previewChannelView) {
+      return "Channel " + std::to_string(previewSelectedChannel + 1);
+    }
+    return polyPobsNatoLabels[previewSelectedOutput] + " Band";
+  }
+
+  void draw(const DrawArgs& args) override {
+    std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
+    if (!font) {
+      return;
+    }
+
+    nvgSave(args.vg);
+    nvgTranslate(args.vg, box.size.x * 0.5f, box.size.y * 0.5f);
+    nvgRotate(args.vg, rotation);
+    nvgSkewX(args.vg, skew);
+    nvgScale(args.vg, xScale, yScale);
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, fontSize);
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    nvgFillColor(args.vg, nvgRGB(0x10, 0x10, 0x00));
+    std::string text = title();
+    nvgText(args.vg, 0.f, 0.f, text.c_str(), NULL);
+    nvgRestore(args.vg);
+  }
+};
+
 struct PolyPobsLabelButton : ComputerscareBlankButton {
   ComputerscarePolyPobs* module = NULL;
   std::string value;
@@ -814,12 +862,9 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
     outputIndex = index;
     channelIndex = index;
     outputLabel = isOutputLabel;
-    xScale = (outputLabel ? 0.7f : 0.62f) +
-             polyPobsIndexJitter(index, outputLabel ? 2 : 5, 0.01f);
-    yScale = (outputLabel ? 1.52f : 1.46f) +
-             polyPobsIndexJitter(index, outputLabel ? 7 : 11, 0.014f);
-    weirdOffset = Vec(polyPobsIndexJitter(index, outputLabel ? 13 : 19, 0.42f),
-                      polyPobsIndexJitter(index, outputLabel ? 23 : 29, 0.34f));
+    xScale = outputLabel ? 0.7f : 0.62f;
+    yScale = outputLabel ? 1.52f : 1.46f;
+    weirdOffset = Vec(0.f, 0.f);
     box.size.x *= xScale;
     box.size.y *= yScale;
   }
@@ -1214,13 +1259,13 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
                                           previewPolyChannels));
     PolyPobsNoRandomSmallKnob* scaleKnob =
         createParam<PolyPobsNoRandomSmallKnob>(
-            Vec(13, 75), module, ComputerscarePolyPobs::GLOBAL_SCALE);
+            Vec(34.f, 84.f), module, ComputerscarePolyPobs::GLOBAL_SCALE);
     scaleKnob->previewMode = previewMode;
     scaleKnob->previewValue = -2.f + random::uniform() * 4.f;
     addParam(scaleKnob);
     PolyPobsNoRandomMediumSmallKnob* offsetKnob =
         createParam<PolyPobsNoRandomMediumSmallKnob>(
-            Vec(35, 78), module, ComputerscarePolyPobs::GLOBAL_OFFSET);
+            Vec(7.f, 88.f), module, ComputerscarePolyPobs::GLOBAL_OFFSET);
     offsetKnob->previewMode = previewMode;
     offsetKnob->previewValue = -10.f + random::uniform() * 20.f;
     addParam(offsetKnob);
@@ -1243,10 +1288,22 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
         createInput<TinyJack>(Vec(82.2f, 7.f), module,
                               ComputerscarePolyPobs::OUTPUT_RANDOMIZE_INPUT));
 
+    PolyPobsViewTitle* viewTitle = new PolyPobsViewTitle();
+    viewTitle->module = module;
+    viewTitle->previewMode = previewMode;
+    viewTitle->previewChannelView = previewChannelView;
+    viewTitle->previewSelectedOutput = previewSelectedOutput;
+    viewTitle->previewSelectedChannel = previewSelectedChannel;
+    viewTitle->box.pos = Vec(2.f, 69.f);
+    viewTitle->box.size = Vec(52.f, 18.f);
+    addChild(viewTitle);
+
     for (int i = 0; i < polyPobsNumKnobs; i++) {
-      float x = 1.4f + 24.3f * (i - i % 8) / 8.f;
-      float y = 108.f + 30.f * (i % 8) + 14.3f / 8.f * (i - i % 8);
-      addLabeledKnob(x, y, module, i, i >= 8 ? 12.f : -3.f, 2.f);
+      int column = i / 8;
+      int row = i % 8;
+      float x = column == 0 ? 4.2f : 31.2f;
+      float y = 122.f + row * 30.2f + (column == 1 ? -5.f : 0.f);
+      addLabeledKnob(x, y, module, i, column == 0 ? -3.5f : 9.5f, 1.4f);
     }
 
     for (int i = 0; i < polyPobsNumOutputs; i++) {
@@ -1305,7 +1362,7 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     smallLetterDisplay->previewMode = previewMode;
     smallLetterDisplay->previewChannelView = previewChannelView;
     smallLetterDisplay->box.size = Vec(5, 10);
-    smallLetterDisplay->fontSize = 18;
+    smallLetterDisplay->fontSize = 17;
     smallLetterDisplay->textAlign = 1;
 
     ParamWidget* pob = createParam<PolyPobsDisableableSmoothKnob>(
@@ -1321,7 +1378,6 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     fader->previewSelectedChannel = previewSelectedChannel;
     fader->previewPolyChannels = previewPolyChannels;
     fader->previewValue = previewKnobValues[index];
-
     addParam(fader);
 
     smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
