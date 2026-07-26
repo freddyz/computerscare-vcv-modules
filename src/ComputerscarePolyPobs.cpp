@@ -999,6 +999,7 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
       if (wasPressed) {
         runAction();
       }
+      return;
     }
     ComputerscareBlankButton::onDragEnd(e);
   }
@@ -1090,6 +1091,7 @@ struct PolyPobsActionButton : ComputerscareBlankButton {
       if (wasPressed) {
         runAction();
       }
+      return;
     }
     ComputerscareBlankButton::onDragEnd(e);
   }
