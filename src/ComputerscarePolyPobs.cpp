@@ -1,5 +1,6 @@
 #include "Computerscare.hpp"
 #include "ComputerscarePolyModule.hpp"
+#include "PolyPobsRandomization.hpp"
 
 namespace {
 
@@ -43,6 +44,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   float lastVisibleOffsetValue = 0.f;
   rack::dsp::SchmittTrigger channelRandomizeTriggers[polyPobsNumKnobs];
   rack::dsp::SchmittTrigger outputRandomizeTriggers[polyPobsNumOutputs];
+  rack::dsp::SchmittTrigger randomizeAllTrigger;
   int viewedOutput = 0;
   int viewedChannel = -1;
   bool loadingView = false;
@@ -56,9 +58,20 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     CHANNEL_SELECTOR,
     OUTPUT_SELECTOR,
     INPUT_SELECTOR,
+    RANDOMIZE_CHANCE,
+    RANDOMIZE_MODE,
+    RANDOMIZE_MIN,
+    RANDOMIZE_MAX,
+    WIGGLE_MIN,
+    WIGGLE_MAX,
     NUM_PARAMS
   };
-  enum InputIds { CHANNEL_RANDOMIZE_INPUT, OUTPUT_RANDOMIZE_INPUT, NUM_INPUTS };
+  enum InputIds {
+    CHANNEL_RANDOMIZE_INPUT,
+    OUTPUT_RANDOMIZE_INPUT,
+    RANDOMIZE_ALL_INPUT,
+    NUM_INPUTS
+  };
   enum OutputIds { OUTPUT, NUM_OUTPUTS = OUTPUT + polyPobsNumOutputs };
   enum LightIds { NUM_LIGHTS };
 
@@ -78,6 +91,14 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
                  withAllLabel(polyPobsPortLabels));
     configSwitch(INPUT_SELECTOR, 0.f, polyPobsNumKnobs - 1, 0.f, "Input",
                  polyPobsPortLabels);
+    configParam(RANDOMIZE_CHANCE, 0.f, 1.f, 1.f, "Randomize Chance", "%", 0.f,
+                100.f);
+    configSwitch(RANDOMIZE_MODE, 0.f, 1.f, 0.f, "Randomize Mode",
+                 {"Replace", "Wiggle"});
+    configParam(RANDOMIZE_MIN, 0.f, 10.f, 0.f, "Randomize Minimum", " volts");
+    configParam(RANDOMIZE_MAX, 0.f, 10.f, 10.f, "Randomize Maximum", " volts");
+    configParam(WIGGLE_MIN, -10.f, 10.f, -1.f, "Wiggle Amount Min", " volts");
+    configParam(WIGGLE_MAX, -10.f, 10.f, 1.f, "Wiggle Amount Max", " volts");
 
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
     getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
@@ -89,9 +110,22 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     getParamQuantity(CHANNEL_SELECTOR)->resetEnabled = false;
     getParamQuantity(OUTPUT_SELECTOR)->resetEnabled = false;
     getParamQuantity(INPUT_SELECTOR)->resetEnabled = false;
+    getParamQuantity(RANDOMIZE_CHANCE)->randomizeEnabled = false;
+    getParamQuantity(RANDOMIZE_MODE)->randomizeEnabled = false;
+    getParamQuantity(RANDOMIZE_MIN)->randomizeEnabled = false;
+    getParamQuantity(RANDOMIZE_MAX)->randomizeEnabled = false;
+    getParamQuantity(WIGGLE_MIN)->randomizeEnabled = false;
+    getParamQuantity(WIGGLE_MAX)->randomizeEnabled = false;
+    getParamQuantity(RANDOMIZE_CHANCE)->resetEnabled = false;
+    getParamQuantity(RANDOMIZE_MODE)->resetEnabled = false;
+    getParamQuantity(RANDOMIZE_MIN)->resetEnabled = false;
+    getParamQuantity(RANDOMIZE_MAX)->resetEnabled = false;
+    getParamQuantity(WIGGLE_MIN)->resetEnabled = false;
+    getParamQuantity(WIGGLE_MAX)->resetEnabled = false;
 
     configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize channel");
     configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize output");
+    configInput(RANDOMIZE_ALL_INPUT, "Randomize all");
     for (int i = 0; i < polyPobsNumOutputs; i++) {
       configOutput(OUTPUT + i, outputName(i));
     }
@@ -267,9 +301,38 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     outputsDirty = true;
   }
 
-  float randomKnobValue() {
-    float minValue = bipolarMainKnobs ? -10.f : 0.f;
-    return minValue + random::uniform() * (10.f - minValue);
+  float minimumAllowedKnobValue() { return bipolarMainKnobs ? -10.f : 0.f; }
+
+  computerscare::polypobs::RandomizeSettings randomizeSettings() {
+    float minAllowed = minimumAllowedKnobValue();
+    computerscare::polypobs::RandomizeSettings settings;
+    settings.chance = params[RANDOMIZE_CHANCE].getValue();
+    settings.mode = params[RANDOMIZE_MODE].getValue() >= 0.5f
+                        ? computerscare::polypobs::RandomizeMode::WIGGLE
+                        : computerscare::polypobs::RandomizeMode::REPLACE;
+    settings.minValue =
+        math::clamp(params[RANDOMIZE_MIN].getValue(), minAllowed, 10.f);
+    settings.maxValue =
+        math::clamp(params[RANDOMIZE_MAX].getValue(), minAllowed, 10.f);
+    settings.wiggleMin = params[WIGGLE_MIN].getValue();
+    settings.wiggleMax = params[WIGGLE_MAX].getValue();
+    return settings;
+  }
+
+  void updateRandomizeRangeLimits() {
+    float minAllowed = minimumAllowedKnobValue();
+    for (int paramId : {RANDOMIZE_MIN, RANDOMIZE_MAX}) {
+      engine::ParamQuantity* pq = getParamQuantity(paramId);
+      if (!pq) continue;
+      pq->minValue = minAllowed;
+      pq->maxValue = 10.f;
+      pq->setValue(math::clamp(pq->getValue(), minAllowed, 10.f));
+    }
+  }
+
+  float randomKnobValue(float currentValue) {
+    return computerscare::polypobs::randomizeValue(currentValue,
+                                                   randomizeSettings());
   }
 
   void restoreViewSelection(float outputSelection, float channelSelection) {
@@ -305,12 +368,14 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     if (channelViewActive()) {
       int channel = selectedChannel();
       for (int output = 0; output < polyPobsNumOutputs; output++) {
-        outputKnobValues[output][channel] = randomKnobValue();
+        outputKnobValues[output][channel] =
+            randomKnobValue(outputKnobValues[output][channel]);
       }
     } else {
       int output = normalizedOutputView();
       for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
-        outputKnobValues[output][channel] = randomKnobValue();
+        outputKnobValues[output][channel] =
+            randomKnobValue(outputKnobValues[output][channel]);
       }
     }
     loadCurrentView();
@@ -323,7 +388,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     channel = math::clamp(channel, 0, polyPobsNumKnobs - 1);
     storeViewedView();
     for (int output = 0; output < polyPobsNumOutputs; output++) {
-      outputKnobValues[output][channel] = randomKnobValue();
+      outputKnobValues[output][channel] =
+          randomKnobValue(outputKnobValues[output][channel]);
     }
     if (!channelViewActive() || selectedChannel() == channel) {
       loadCurrentView();
@@ -336,7 +402,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     output = math::clamp(output, 0, polyPobsNumOutputs - 1);
     storeViewedView();
     for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
-      outputKnobValues[output][channel] = randomKnobValue();
+      outputKnobValues[output][channel] =
+          randomKnobValue(outputKnobValues[output][channel]);
     }
     if (channelViewActive() || normalizedOutputView() == output) {
       loadCurrentView();
@@ -348,7 +415,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   void randomizeAllValues() {
     for (int output = 0; output < polyPobsNumOutputs; output++) {
       for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
-        outputKnobValues[output][channel] = randomKnobValue();
+        outputKnobValues[output][channel] =
+            randomKnobValue(outputKnobValues[output][channel]);
       }
     }
     loadCurrentView();
@@ -360,6 +428,17 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   void processRandomizeTriggers() {
     int channelTriggerChannels = inputs[CHANNEL_RANDOMIZE_INPUT].getChannels();
     int outputTriggerChannels = inputs[OUTPUT_RANDOMIZE_INPUT].getChannels();
+    int allTriggerChannels = inputs[RANDOMIZE_ALL_INPUT].getChannels();
+    float allVoltage = 0.f;
+    for (int channel = 0; channel < allTriggerChannels; channel++) {
+      float channelVoltage = inputs[RANDOMIZE_ALL_INPUT].getVoltage(channel);
+      if (channelVoltage > allVoltage) {
+        allVoltage = channelVoltage;
+      }
+    }
+    if (randomizeAllTrigger.process(allVoltage / 2.f)) {
+      randomizeAllValues();
+    }
 
     for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
       float channelVoltage =
@@ -471,7 +550,14 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
 
   void setMainKnobRange(bool bipolar) {
     bool changed = bipolarMainKnobs != bipolar;
+    float oldMinAllowed = minimumAllowedKnobValue();
+    bool randomMinWasAtFloor =
+        std::fabs(params[RANDOMIZE_MIN].getValue() - oldMinAllowed) < 0.0001f;
     bipolarMainKnobs = bipolar;
+    updateRandomizeRangeLimits();
+    if (randomMinWasAtFloor) {
+      params[RANDOMIZE_MIN].setValue(minimumAllowedKnobValue());
+    }
     for (int i = 0; i < polyPobsNumKnobs; i++) {
       engine::ParamQuantity* pq = getParamQuantity(KNOB + i);
       if (!pq) continue;
@@ -844,6 +930,7 @@ struct PolyPobsViewTitle : Widget {
 
 struct PolyPobsLabelButton : ComputerscareBlankButton {
   ComputerscarePolyPobs* module = NULL;
+  ui::Tooltip* hoverTooltip = NULL;
   std::string value;
   int outputIndex = 0;
   int channelIndex = 0;
@@ -864,6 +951,8 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
     iconDownOffset = Vec(0.f, 0.f);
   }
 
+  ~PolyPobsLabelButton() { destroyHoverTooltip(); }
+
   void configure(int index, bool isOutputLabel) {
     outputIndex = index;
     channelIndex = index;
@@ -873,6 +962,40 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
     weirdOffset = Vec(0.f, 0.f);
     box.size.x *= xScale;
     box.size.y *= yScale;
+  }
+
+  std::string tooltipText() const {
+    if (outputLabel) {
+      return polyPobsNatoLabels[outputIndex] + " Band";
+    }
+    return "Channel " + std::to_string(channelIndex + 1);
+  }
+
+  void createHoverTooltip() {
+    if (!settings::tooltips || hoverTooltip) {
+      return;
+    }
+
+    hoverTooltip = new ui::Tooltip;
+    APP->scene->addChild(hoverTooltip);
+  }
+
+  void updateHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    hoverTooltip->text = tooltipText();
+  }
+
+  void destroyHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    APP->scene->removeChild(hoverTooltip);
+    delete hoverTooltip;
+    hoverTooltip = NULL;
   }
 
   void setDownFrame(bool down) {
@@ -919,6 +1042,7 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
   void step() override {
     ComputerscareBlankButton::step();
     setDownFrame(pressed || selected());
+    updateHoverTooltip();
   }
 
   void drawButton(const DrawArgs& args) {
@@ -992,6 +1116,17 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
     ComputerscareBlankButton::onButton(e);
   }
 
+  void onEnter(const event::Enter& e) override {
+    createHoverTooltip();
+    updateHoverTooltip();
+    ComputerscareBlankButton::onEnter(e);
+  }
+
+  void onLeave(const event::Leave& e) override {
+    destroyHoverTooltip();
+    ComputerscareBlankButton::onLeave(e);
+  }
+
   void onDragEnd(const event::DragEnd& e) override {
     if (e.button == GLFW_MOUSE_BUTTON_LEFT) {
       bool wasPressed = pressed;
@@ -1007,6 +1142,7 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
 
 struct PolyPobsActionButton : ComputerscareBlankButton {
   ComputerscarePolyPobs* module = NULL;
+  ui::Tooltip* hoverTooltip = NULL;
   std::string label;
   bool initialize = false;
   float xScale = 1.35f;
@@ -1017,6 +1153,39 @@ struct PolyPobsActionButton : ComputerscareBlankButton {
     iconUpPos = Vec(0.f, 0.f);
     iconDownOffset = Vec(0.f, 0.f);
     box.size = Vec(box.size.x * xScale, box.size.y * yScale);
+  }
+
+  ~PolyPobsActionButton() { destroyHoverTooltip(); }
+
+  std::string tooltipText() const {
+    return initialize ? "Initialize all values" : "Randomize all values";
+  }
+
+  void createHoverTooltip() {
+    if (!settings::tooltips || hoverTooltip) {
+      return;
+    }
+
+    hoverTooltip = new ui::Tooltip;
+    APP->scene->addChild(hoverTooltip);
+  }
+
+  void updateHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    hoverTooltip->text = tooltipText();
+  }
+
+  void destroyHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    APP->scene->removeChild(hoverTooltip);
+    delete hoverTooltip;
+    hoverTooltip = NULL;
   }
 
   void setPressedFrame(bool isPressed) {
@@ -1051,6 +1220,11 @@ struct PolyPobsActionButton : ComputerscareBlankButton {
             box.size.y * 0.48f + textYOffset, label.c_str(), NULL);
   }
 
+  void step() override {
+    ComputerscareBlankButton::step();
+    updateHoverTooltip();
+  }
+
   void runAction() {
     if (!module) {
       return;
@@ -1082,6 +1256,17 @@ struct PolyPobsActionButton : ComputerscareBlankButton {
     }
 
     ComputerscareBlankButton::onButton(e);
+  }
+
+  void onEnter(const event::Enter& e) override {
+    createHoverTooltip();
+    updateHoverTooltip();
+    ComputerscareBlankButton::onEnter(e);
+  }
+
+  void onLeave(const event::Leave& e) override {
+    destroyHoverTooltip();
+    ComputerscareBlankButton::onLeave(e);
   }
 
   void onDragEnd(const event::DragEnd& e) override {
@@ -1278,12 +1463,12 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     offsetKnob->previewValue = -10.f + random::uniform() * 20.f;
     addParam(offsetKnob);
     PolyPobsActionButton* randomizeAllButton =
-        createWidget<PolyPobsActionButton>(Vec(4.f, 28.f));
+        createWidget<PolyPobsActionButton>(Vec(21.f, 28.f));
     randomizeAllButton->module = module;
     randomizeAllButton->label = "RAND ALL";
     addChild(randomizeAllButton);
     PolyPobsActionButton* initializeAllButton =
-        createWidget<PolyPobsActionButton>(Vec(4.f, 50.f));
+        createWidget<PolyPobsActionButton>(Vec(21.f, 50.f));
     initializeAllButton->module = module;
     initializeAllButton->label = "INIT ALL";
     initializeAllButton->initialize = true;
@@ -1295,6 +1480,8 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     addInput(
         createInput<TinyJack>(Vec(82.2f, 7.f), module,
                               ComputerscarePolyPobs::OUTPUT_RANDOMIZE_INPUT));
+    addInput(createInput<TinyJack>(Vec(4.f, 31.f), module,
+                                   ComputerscarePolyPobs::RANDOMIZE_ALL_INPUT));
 
     PolyPobsViewTitle* viewTitle = new PolyPobsViewTitle();
     viewTitle->module = module;
@@ -1324,6 +1511,7 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     ComputerscarePolyPobs* module =
         dynamic_cast<ComputerscarePolyPobs*>(this->module);
     if (!module) return;
+    module->updateRandomizeRangeLimits();
 
     struct MainKnobRangeItem : MenuItem {
       ComputerscarePolyPobs* module;
@@ -1336,7 +1524,41 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
         MenuItem::step();
       }
     };
+    struct RandomizeModeItem : MenuItem {
+      ComputerscarePolyPobs* module;
+      int mode;
+      void onAction(const event::Action& e) override {
+        module->params[ComputerscarePolyPobs::RANDOMIZE_MODE].setValue(mode);
+      }
+      void step() override {
+        rightText =
+            CHECKMARK((int)std::round(
+                          module->params[ComputerscarePolyPobs::RANDOMIZE_MODE]
+                              .getValue()) == mode);
+        MenuItem::step();
+      }
+    };
 
+    menu->addChild(new MenuSeparator());
+    menu->addChild(createSubmenuItem("Randomization", "", [=](Menu* submenu) {
+      submenu->addChild(new MenuParamSlider(
+          module->getParamQuantity(ComputerscarePolyPobs::RANDOMIZE_CHANCE)));
+      submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Mode"));
+      submenu->addChild(construct<RandomizeModeItem>(
+          &MenuItem::text, "Replace", &RandomizeModeItem::module, module,
+          &RandomizeModeItem::mode, 0));
+      submenu->addChild(construct<RandomizeModeItem>(
+          &MenuItem::text, "Wiggle", &RandomizeModeItem::module, module,
+          &RandomizeModeItem::mode, 1));
+      submenu->addChild(new MenuParamSlider(
+          module->getParamQuantity(ComputerscarePolyPobs::RANDOMIZE_MIN)));
+      submenu->addChild(new MenuParamSlider(
+          module->getParamQuantity(ComputerscarePolyPobs::RANDOMIZE_MAX)));
+      submenu->addChild(new MenuParamSlider(
+          module->getParamQuantity(ComputerscarePolyPobs::WIGGLE_MIN)));
+      submenu->addChild(new MenuParamSlider(
+          module->getParamQuantity(ComputerscarePolyPobs::WIGGLE_MAX)));
+    }));
     menu->addChild(new MenuSeparator());
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Main Knob Range"));
     menu->addChild(construct<MainKnobRangeItem>(
