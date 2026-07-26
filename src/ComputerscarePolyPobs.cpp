@@ -619,6 +619,12 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     (void)args;
     processRandomizeTriggers();
     ComputerscarePolyModule::checkCounter();
+    for (int output = 0; output < polyPobsNumOutputs; output++) {
+      if (outputs[OUTPUT + output].getChannels() != polyChannels) {
+        outputs[OUTPUT + output].setChannels(polyChannels);
+        outputsDirty = true;
+      }
+    }
     if (counter == 0 || outputsDirty) {
       syncView();
     }
