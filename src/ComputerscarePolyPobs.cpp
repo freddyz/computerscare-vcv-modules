@@ -123,8 +123,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     getParamQuantity(WIGGLE_MIN)->resetEnabled = false;
     getParamQuantity(WIGGLE_MAX)->resetEnabled = false;
 
-    configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize channel");
-    configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize output");
+    configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize Output Channel");
+    configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize Output Band");
     configInput(RANDOMIZE_ALL_INPUT, "Randomize all");
     for (int i = 0; i < polyPobsNumOutputs; i++) {
       configOutput(OUTPUT + i, outputName(i));

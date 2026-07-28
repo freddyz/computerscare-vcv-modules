@@ -8,7 +8,7 @@
 
 ## Poly Pobs
 
-16 knobs with 16 inputs, 16 outputs, and selectors for channel, input, and output. This is a scaffold module; the controls save and load but do not affect signal routing yet.
+16 editable polyphonic CV bands. See the [Poly Pobs manual](./poly-pobs.md).
 
 ## Boly Puttons
 

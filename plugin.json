@@ -23,7 +23,7 @@
       "name": "Poly Pobs",
       "description": "16 knobs with selectable channel, input, and output views",
       "tags": ["Polyphonic", "Utility"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#poly-pobs"
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-pobs.md"
     },
     {
       "slug": "computerscare-bolyputtons",
