@@ -886,11 +886,11 @@ struct PolyPobsViewTitle : Widget {
   bool previewChannelView = false;
   int previewSelectedOutput = 0;
   int previewSelectedChannel = 0;
-  float rotation = -0.035f;
+  float rotation = -0.11f;
   float skew = 0.08f;
   float xScale = 1.04f;
   float yScale = 0.96f;
-  float fontSize = 17.f;
+  float fontSize = 16.5f;
   std::string fontPath =
       asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
 
@@ -919,10 +919,11 @@ struct PolyPobsViewTitle : Widget {
     nvgSkewX(args.vg, skew);
     nvgScale(args.vg, xScale, yScale);
     nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, fontSize);
+    std::string text = title();
+    float currentFontSize = text == "November Band" ? 13.5f : fontSize;
+    nvgFontSize(args.vg, currentFontSize);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, nvgRGB(0x10, 0x10, 0x00));
-    std::string text = title();
     nvgText(args.vg, 0.f, 0.f, text.c_str(), NULL);
     nvgRestore(args.vg);
   }
@@ -1452,13 +1453,13 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
                                           previewPolyChannels));
     PolyPobsNoRandomSmallKnob* scaleKnob =
         createParam<PolyPobsNoRandomSmallKnob>(
-            Vec(34.f, 84.f), module, ComputerscarePolyPobs::GLOBAL_SCALE);
+            Vec(34.f, 94.f), module, ComputerscarePolyPobs::GLOBAL_SCALE);
     scaleKnob->previewMode = previewMode;
     scaleKnob->previewValue = -2.f + random::uniform() * 4.f;
     addParam(scaleKnob);
     PolyPobsNoRandomMediumSmallKnob* offsetKnob =
         createParam<PolyPobsNoRandomMediumSmallKnob>(
-            Vec(7.f, 88.f), module, ComputerscarePolyPobs::GLOBAL_OFFSET);
+            Vec(7.f, 98.f), module, ComputerscarePolyPobs::GLOBAL_OFFSET);
     offsetKnob->previewMode = previewMode;
     offsetKnob->previewValue = -10.f + random::uniform() * 20.f;
     addParam(offsetKnob);
@@ -1489,7 +1490,7 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     viewTitle->previewChannelView = previewChannelView;
     viewTitle->previewSelectedOutput = previewSelectedOutput;
     viewTitle->previewSelectedChannel = previewSelectedChannel;
-    viewTitle->box.pos = Vec(2.f, 69.f);
+    viewTitle->box.pos = Vec(4.f, 76.f);
     viewTitle->box.size = Vec(52.f, 18.f);
     addChild(viewTitle);
 
@@ -1497,7 +1498,7 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
       int column = i / 8;
       int row = i % 8;
       float x = column == 0 ? 4.2f : 31.2f;
-      float y = 122.f + row * 30.2f + (column == 1 ? -5.f : 0.f);
+      float y = 133.f + row * 30.2f + (column == 1 ? -5.f : 0.f);
       addLabeledKnob(x, y, module, i, column == 0 ? -3.5f : 9.5f, 1.4f);
     }
 
@@ -1592,7 +1593,8 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     smallLetterDisplay->previewMode = previewMode;
     smallLetterDisplay->previewChannelView = previewChannelView;
     smallLetterDisplay->box.size = Vec(5, 10);
-    smallLetterDisplay->fontSize = 17;
+    smallLetterDisplay->fontSize = 16;
+    smallLetterDisplay->letterSpacing = 1.6f;
     smallLetterDisplay->textAlign = 1;
 
     ParamWidget* pob = createParam<PolyPobsDisableableSmoothKnob>(
@@ -1610,7 +1612,7 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     fader->previewValue = previewKnobValues[index];
     addParam(fader);
 
-    smallLetterDisplay->box.pos = Vec(x + labelDx, y - 12 + labelDy);
+    smallLetterDisplay->box.pos = Vec(x + labelDx, y - 10 + labelDy);
 
     addChild(smallLetterDisplay);
   }
