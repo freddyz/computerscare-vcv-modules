@@ -45,10 +45,14 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
   rack::dsp::SchmittTrigger channelRandomizeTriggers[volyPectorNumKnobs];
   rack::dsp::SchmittTrigger outputRandomizeTriggers[volyPectorNumOutputs];
   rack::dsp::SchmittTrigger randomizeAllTrigger;
+  rack::dsp::SchmittTrigger channelInitializeTriggers[volyPectorNumKnobs];
+  rack::dsp::SchmittTrigger outputInitializeTriggers[volyPectorNumOutputs];
+  rack::dsp::SchmittTrigger initializeAllTrigger;
   int viewedOutput = 0;
   int viewedChannel = -1;
   bool loadingView = false;
   bool outputsDirty = true;
+  bool outputConnected[volyPectorNumOutputs] = {};
 
   enum ParamIds {
     KNOB,
@@ -64,12 +68,19 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     RANDOMIZE_MAX,
     WIGGLE_MIN,
     WIGGLE_MAX,
+    RANDOMIZE_PROBABILITY_CONTROL,
+    RANDOMIZE_RANGE_CONTROL,
     NUM_PARAMS
   };
   enum InputIds {
     CHANNEL_RANDOMIZE_INPUT,
     OUTPUT_RANDOMIZE_INPUT,
     RANDOMIZE_ALL_INPUT,
+    CHANNEL_INITIALIZE_INPUT,
+    OUTPUT_INITIALIZE_INPUT,
+    INITIALIZE_ALL_INPUT,
+    RANDOMIZE_PROBABILITY_CV_INPUT,
+    RANDOMIZE_RANGE_CV_INPUT,
     NUM_INPUTS
   };
   enum OutputIds { OUTPUT, NUM_OUTPUTS = OUTPUT + volyPectorNumOutputs };
@@ -99,6 +110,10 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     configParam(RANDOMIZE_MAX, 0.f, 10.f, 10.f, "Randomize Maximum", " volts");
     configParam(WIGGLE_MIN, -10.f, 10.f, -1.f, "Wiggle Amount Min", " volts");
     configParam(WIGGLE_MAX, -10.f, 10.f, 1.f, "Wiggle Amount Max", " volts");
+    configParam(RANDOMIZE_PROBABILITY_CONTROL, 0.f, 1.f, 1.f,
+                "Randomize Probability", "%", 0.f, 100.f);
+    configParam(RANDOMIZE_RANGE_CONTROL, 0.f, 1.f, 1.f,
+                "Randomize Range Scale");
 
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
     getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
@@ -116,6 +131,8 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     getParamQuantity(RANDOMIZE_MAX)->randomizeEnabled = false;
     getParamQuantity(WIGGLE_MIN)->randomizeEnabled = false;
     getParamQuantity(WIGGLE_MAX)->randomizeEnabled = false;
+    getParamQuantity(RANDOMIZE_PROBABILITY_CONTROL)->randomizeEnabled = false;
+    getParamQuantity(RANDOMIZE_RANGE_CONTROL)->randomizeEnabled = false;
     getParamQuantity(RANDOMIZE_CHANCE)->resetEnabled = false;
     getParamQuantity(RANDOMIZE_MODE)->resetEnabled = false;
     getParamQuantity(RANDOMIZE_MIN)->resetEnabled = false;
@@ -126,6 +143,11 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize Output Channel");
     configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize Output Band");
     configInput(RANDOMIZE_ALL_INPUT, "Randomize all");
+    configInput(CHANNEL_INITIALIZE_INPUT, "Initialize Output Channel");
+    configInput(OUTPUT_INITIALIZE_INPUT, "Initialize Output Band");
+    configInput(INITIALIZE_ALL_INPUT, "Initialize all");
+    configInput(RANDOMIZE_PROBABILITY_CV_INPUT, "Randomize Probability CV");
+    configInput(RANDOMIZE_RANGE_CV_INPUT, "Randomize Range CV");
     for (int i = 0; i < volyPectorNumOutputs; i++) {
       configOutput(OUTPUT + i, outputName(i));
     }
@@ -303,19 +325,33 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
 
   float minimumAllowedKnobValue() { return bipolarMainKnobs ? -10.f : 0.f; }
 
+  float randomizeProbability() {
+    return math::clamp(
+        params[RANDOMIZE_PROBABILITY_CONTROL].getValue() +
+            inputs[RANDOMIZE_PROBABILITY_CV_INPUT].getVoltage() / 10.f,
+        0.f, 1.f);
+  }
+
+  float randomizeRangeScale() {
+    return math::clamp(params[RANDOMIZE_RANGE_CONTROL].getValue() +
+                           inputs[RANDOMIZE_RANGE_CV_INPUT].getVoltage() / 10.f,
+                       0.f, 1.f);
+  }
+
   computerscare::volypector::RandomizeSettings randomizeSettings() {
     float minAllowed = minimumAllowedKnobValue();
+    float rangeScale = randomizeRangeScale();
     computerscare::volypector::RandomizeSettings settings;
-    settings.chance = params[RANDOMIZE_CHANCE].getValue();
+    settings.chance = randomizeProbability();
     settings.mode = params[RANDOMIZE_MODE].getValue() >= 0.5f
                         ? computerscare::volypector::RandomizeMode::WIGGLE
                         : computerscare::volypector::RandomizeMode::REPLACE;
-    settings.minValue =
-        math::clamp(params[RANDOMIZE_MIN].getValue(), minAllowed, 10.f);
-    settings.maxValue =
-        math::clamp(params[RANDOMIZE_MAX].getValue(), minAllowed, 10.f);
-    settings.wiggleMin = params[WIGGLE_MIN].getValue();
-    settings.wiggleMax = params[WIGGLE_MAX].getValue();
+    settings.minValue = math::clamp(
+        params[RANDOMIZE_MIN].getValue() * rangeScale, minAllowed, 10.f);
+    settings.maxValue = math::clamp(
+        params[RANDOMIZE_MAX].getValue() * rangeScale, minAllowed, 10.f);
+    settings.wiggleMin = params[WIGGLE_MIN].getValue() * rangeScale;
+    settings.wiggleMax = params[WIGGLE_MAX].getValue() * rangeScale;
     return settings;
   }
 
@@ -425,36 +461,131 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     outputsDirty = true;
   }
 
-  void processRandomizeTriggers() {
-    int channelTriggerChannels = inputs[CHANNEL_RANDOMIZE_INPUT].getChannels();
-    int outputTriggerChannels = inputs[OUTPUT_RANDOMIZE_INPUT].getChannels();
-    int allTriggerChannels = inputs[RANDOMIZE_ALL_INPUT].getChannels();
-    float allVoltage = 0.f;
-    for (int channel = 0; channel < allTriggerChannels; channel++) {
-      float channelVoltage = inputs[RANDOMIZE_ALL_INPUT].getVoltage(channel);
-      if (channelVoltage > allVoltage) {
-        allVoltage = channelVoltage;
+  void initializeChannel(int channel) {
+    channel = math::clamp(channel, 0, volyPectorNumKnobs - 1);
+    storeViewedView();
+    for (int output = 0; output < volyPectorNumOutputs; output++) {
+      outputKnobValues[output][channel] = 0.f;
+    }
+    if (!channelViewActive() || selectedChannel() == channel) {
+      loadCurrentView();
+      captureVisibleControls();
+    }
+    outputsDirty = true;
+  }
+
+  void initializeOutput(int output) {
+    output = math::clamp(output, 0, volyPectorNumOutputs - 1);
+    storeViewedView();
+    for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
+      outputKnobValues[output][channel] = 0.f;
+    }
+    if (channelViewActive() || normalizedOutputView() == output) {
+      loadCurrentView();
+      captureVisibleControls();
+    }
+    outputsDirty = true;
+  }
+
+  float highestInputVoltage(int inputId) {
+    int channels = inputs[inputId].getChannels();
+    float voltage = 0.f;
+    for (int channel = 0; channel < channels; channel++) {
+      float channelVoltage = inputs[inputId].getVoltage(channel);
+      if (channelVoltage > voltage) {
+        voltage = channelVoltage;
       }
     }
-    if (randomizeAllTrigger.process(allVoltage / 2.f)) {
+    return voltage;
+  }
+
+  void processTriggers() {
+    bool channelRandomizeConnected =
+        inputs[CHANNEL_RANDOMIZE_INPUT].isConnected();
+    bool outputRandomizeConnected =
+        inputs[OUTPUT_RANDOMIZE_INPUT].isConnected();
+    bool randomizeAllConnected = inputs[RANDOMIZE_ALL_INPUT].isConnected();
+    bool channelInitializeConnected =
+        inputs[CHANNEL_INITIALIZE_INPUT].isConnected();
+    bool outputInitializeConnected =
+        inputs[OUTPUT_INITIALIZE_INPUT].isConnected();
+    bool initializeAllConnected = inputs[INITIALIZE_ALL_INPUT].isConnected();
+
+    if (!channelRandomizeConnected && !outputRandomizeConnected &&
+        !randomizeAllConnected && !channelInitializeConnected &&
+        !outputInitializeConnected && !initializeAllConnected) {
+      return;
+    }
+
+    int channelTriggerChannels =
+        channelRandomizeConnected
+            ? inputs[CHANNEL_RANDOMIZE_INPUT].getChannels()
+            : 0;
+    int outputTriggerChannels =
+        outputRandomizeConnected ? inputs[OUTPUT_RANDOMIZE_INPUT].getChannels()
+                                 : 0;
+    int channelInitializeChannels =
+        channelInitializeConnected
+            ? inputs[CHANNEL_INITIALIZE_INPUT].getChannels()
+            : 0;
+    int outputInitializeChannels =
+        outputInitializeConnected
+            ? inputs[OUTPUT_INITIALIZE_INPUT].getChannels()
+            : 0;
+
+    if (randomizeAllConnected &&
+        randomizeAllTrigger.process(highestInputVoltage(RANDOMIZE_ALL_INPUT) /
+                                    2.f)) {
       randomizeAllValues();
+    }
+    if (initializeAllConnected &&
+        initializeAllTrigger.process(highestInputVoltage(INITIALIZE_ALL_INPUT) /
+                                     2.f)) {
+      initializeAllValues();
+    }
+
+    if (!channelRandomizeConnected && !outputRandomizeConnected &&
+        !channelInitializeConnected && !outputInitializeConnected) {
+      return;
     }
 
     for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
       float channelVoltage =
-          channel < channelTriggerChannels
+          channelRandomizeConnected && channel < channelTriggerChannels
               ? inputs[CHANNEL_RANDOMIZE_INPUT].getVoltage(channel)
               : 0.f;
-      if (channelRandomizeTriggers[channel].process(channelVoltage / 2.f)) {
+      if (channelRandomizeConnected &&
+          channelRandomizeTriggers[channel].process(channelVoltage / 2.f)) {
         randomizeChannel(channel);
       }
 
       float outputVoltage =
-          channel < outputTriggerChannels
+          outputRandomizeConnected && channel < outputTriggerChannels
               ? inputs[OUTPUT_RANDOMIZE_INPUT].getVoltage(channel)
               : 0.f;
-      if (outputRandomizeTriggers[channel].process(outputVoltage / 2.f)) {
+      if (outputRandomizeConnected &&
+          outputRandomizeTriggers[channel].process(outputVoltage / 2.f)) {
         randomizeOutput(channel);
+      }
+
+      float channelInitializeVoltage =
+          channelInitializeConnected && channel < channelInitializeChannels
+              ? inputs[CHANNEL_INITIALIZE_INPUT].getVoltage(channel)
+              : 0.f;
+      if (channelInitializeConnected &&
+          channelInitializeTriggers[channel].process(channelInitializeVoltage /
+                                                     2.f)) {
+        initializeChannel(channel);
+      }
+
+      float outputInitializeVoltage =
+          outputInitializeConnected && channel < outputInitializeChannels
+              ? inputs[OUTPUT_INITIALIZE_INPUT].getVoltage(channel)
+              : 0.f;
+      if (outputInitializeConnected &&
+          outputInitializeTriggers[channel].process(outputInitializeVoltage /
+                                                    2.f)) {
+        initializeOutput(channel);
       }
     }
   }
@@ -478,9 +609,27 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     outputsDirty = true;
   }
 
+  void syncOutputConnections() {
+    for (int output = 0; output < volyPectorNumOutputs; output++) {
+      bool connected = outputs[OUTPUT + output].isConnected();
+      if (outputConnected[output] != connected) {
+        outputConnected[output] = connected;
+        outputsDirty = true;
+      }
+    }
+  }
+
   void onRandomize() override { randomizeCurrentView(); }
 
-  void onReset() override { resetCurrentView(); }
+  void resetVisibleRandomizeControls() {
+    params[RANDOMIZE_PROBABILITY_CONTROL].setValue(1.f);
+    params[RANDOMIZE_RANGE_CONTROL].setValue(1.f);
+  }
+
+  void onReset() override {
+    resetCurrentView();
+    resetVisibleRandomizeControls();
+  }
 
   float clampKnobValue(float value) {
     return math::clamp(value, bipolarMainKnobs ? -10.f : 0.f, 10.f);
@@ -704,13 +853,10 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
 
   void process(const ProcessArgs& args) override {
     (void)args;
-    processRandomizeTriggers();
+    processTriggers();
     ComputerscarePolyModule::checkCounter();
-    for (int output = 0; output < volyPectorNumOutputs; output++) {
-      if (outputs[OUTPUT + output].getChannels() != polyChannels) {
-        outputs[OUTPUT + output].setChannels(polyChannels);
-        outputsDirty = true;
-      }
+    if (counter == 0) {
+      syncOutputConnections();
     }
     if (counter == 0 || outputsDirty) {
       syncView();
@@ -719,6 +865,10 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
       return;
     }
     for (int output = 0; output < volyPectorNumOutputs; output++) {
+      if (!outputConnected[output]) {
+        outputs[OUTPUT + output].setChannels(0);
+        continue;
+      }
       outputs[OUTPUT + output].setChannels(polyChannels);
       for (int channel = 0; channel < polyChannels; channel++) {
         outputs[OUTPUT + output].setVoltage(scaledOutputValue(output, channel),
@@ -1147,7 +1297,7 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
   ui::Tooltip* hoverTooltip = NULL;
   std::string label;
   bool initialize = false;
-  float xScale = 1.35f;
+  float xScale = 0.92f;
   float yScale = 1.18f;
   bool pressed = false;
 
@@ -1216,7 +1366,7 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
     nvgFontSize(args.vg, 10.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, BLACK);
-    float textXOffset = pressed ? 3.6f * xScale : -3.f;
+    float textXOffset = pressed ? 3.6f * xScale : -1.8f;
     float textYOffset = pressed ? 2.9f * yScale : 0.f;
     nvgText(args.vg, box.size.x * 0.5f + textXOffset,
             box.size.y * 0.48f + textYOffset, label.c_str(), NULL);
@@ -1443,6 +1593,39 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     }
     box.size = Vec(8 * 15, 380);
 
+    struct Layout {
+      Vec polyChannelsPos = Vec(94.f, 1.f);
+
+      Vec mainScalePos = Vec(34.f, 36.f);
+      Vec mainOffsetPos = Vec(7.f, 40.f);
+      Vec focusLabelPos = Vec(4.f, 22.f);
+
+      Vec knobGridStart = Vec(4.2f, 68.f);
+      Vec knobGridSpacing = Vec(27.f, 27.9f);
+      float knobGridSecondColumnYOffset = -5.f;
+      Vec knobLabelOffset = Vec(-3.5f, 1.4f);
+      Vec knobSecondColumnLabelOffset = Vec(9.5f, 1.4f);
+
+      Vec outputRowsStart = Vec(56.f, 24.f);
+      Vec outputRowsSpacing = Vec(0.f, 19.6f);
+      Vec outputChannelButtonOffset = Vec(2.f, -4.f);
+      Vec outputBandButtonOffset = Vec(22.f, -5.f);
+      Vec outputJackOffset = Vec(44.f, -2.f);
+
+      float bottomRandY = 332.f;
+      float bottomInitY = 350.f;
+      float bottomAllJackX = 4.f;
+      float bottomActionX = 24.f;
+      float bottomChannelJackX = 60.f;
+      float bottomBandJackX = 81.f;
+      float bottomJackYOffset = 3.f;
+
+      float randomizeProbabilityY = 292.f;
+      float randomizeRangeY = 312.f;
+      float randomizeCvX = bottomAllJackX;
+      float randomizeKnobX = bottomActionX;
+    } layout;
+
     ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
     panel->box.size = box.size;
     panel->setBackground(APP->window->loadSvg(asset::plugin(
@@ -1450,40 +1633,77 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     addChild(panel);
 
     addChild(new PolyOutputChannelsWidget(
-        Vec(94.f, 1.f), module, ComputerscareVolyPector::POLY_CHANNELS,
+        layout.polyChannelsPos, module, ComputerscareVolyPector::POLY_CHANNELS,
         previewPolyChannels));
     VolyPectorNoRandomSmallKnob* scaleKnob =
         createParam<VolyPectorNoRandomSmallKnob>(
-            Vec(34.f, 94.f), module, ComputerscareVolyPector::GLOBAL_SCALE);
+            layout.mainScalePos, module, ComputerscareVolyPector::GLOBAL_SCALE);
     scaleKnob->previewMode = previewMode;
     scaleKnob->previewValue = -2.f + random::uniform() * 4.f;
     addParam(scaleKnob);
     VolyPectorNoRandomMediumSmallKnob* offsetKnob =
         createParam<VolyPectorNoRandomMediumSmallKnob>(
-            Vec(7.f, 98.f), module, ComputerscareVolyPector::GLOBAL_OFFSET);
+            layout.mainOffsetPos, module,
+            ComputerscareVolyPector::GLOBAL_OFFSET);
     offsetKnob->previewMode = previewMode;
     offsetKnob->previewValue = -10.f + random::uniform() * 20.f;
     addParam(offsetKnob);
+
+    addInput(createInput<TinyJack>(
+        Vec(layout.randomizeCvX,
+            layout.randomizeProbabilityY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::RANDOMIZE_PROBABILITY_CV_INPUT));
+    addParam(createParam<ScrambleKnob>(
+        Vec(layout.randomizeKnobX, layout.randomizeProbabilityY), module,
+        ComputerscareVolyPector::RANDOMIZE_PROBABILITY_CONTROL));
+    addInput(createInput<TinyJack>(
+        Vec(layout.randomizeCvX,
+            layout.randomizeRangeY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::RANDOMIZE_RANGE_CV_INPUT));
+    VolyPectorNoRandomSmallKnob* randomizeRangeKnob =
+        createParam<VolyPectorNoRandomSmallKnob>(
+            Vec(layout.randomizeKnobX, layout.randomizeRangeY), module,
+            ComputerscareVolyPector::RANDOMIZE_RANGE_CONTROL);
+    addParam(randomizeRangeKnob);
+
     VolyPectorActionButton* randomizeAllButton =
-        createWidget<VolyPectorActionButton>(Vec(21.f, 28.f));
+        createWidget<VolyPectorActionButton>(
+            Vec(layout.bottomActionX, layout.bottomRandY));
     randomizeAllButton->module = module;
-    randomizeAllButton->label = "RAND ALL";
+    randomizeAllButton->label = "RAND";
     addChild(randomizeAllButton);
     VolyPectorActionButton* initializeAllButton =
-        createWidget<VolyPectorActionButton>(Vec(21.f, 50.f));
+        createWidget<VolyPectorActionButton>(
+            Vec(layout.bottomActionX, layout.bottomInitY));
     initializeAllButton->module = module;
-    initializeAllButton->label = "INIT ALL";
+    initializeAllButton->label = "INIT";
     initializeAllButton->initialize = true;
     addChild(initializeAllButton);
 
     addInput(createInput<TinyJack>(
-        Vec(63.7f, 7.f), module,
-        ComputerscareVolyPector::CHANNEL_RANDOMIZE_INPUT));
-    addInput(
-        createInput<TinyJack>(Vec(82.2f, 7.f), module,
-                              ComputerscareVolyPector::OUTPUT_RANDOMIZE_INPUT));
+        Vec(layout.bottomAllJackX,
+            layout.bottomRandY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::RANDOMIZE_ALL_INPUT));
     addInput(createInput<TinyJack>(
-        Vec(4.f, 31.f), module, ComputerscareVolyPector::RANDOMIZE_ALL_INPUT));
+        Vec(layout.bottomChannelJackX,
+            layout.bottomRandY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::CHANNEL_RANDOMIZE_INPUT));
+    addInput(createInput<TinyJack>(
+        Vec(layout.bottomBandJackX,
+            layout.bottomRandY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::OUTPUT_RANDOMIZE_INPUT));
+    addInput(createInput<TinyJack>(
+        Vec(layout.bottomAllJackX,
+            layout.bottomInitY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::INITIALIZE_ALL_INPUT));
+    addInput(createInput<TinyJack>(
+        Vec(layout.bottomChannelJackX,
+            layout.bottomInitY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::CHANNEL_INITIALIZE_INPUT));
+    addInput(createInput<TinyJack>(
+        Vec(layout.bottomBandJackX,
+            layout.bottomInitY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::OUTPUT_INITIALIZE_INPUT));
 
     VolyPectorViewTitle* viewTitle = new VolyPectorViewTitle();
     viewTitle->module = module;
@@ -1491,21 +1711,29 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     viewTitle->previewChannelView = previewChannelView;
     viewTitle->previewSelectedOutput = previewSelectedOutput;
     viewTitle->previewSelectedChannel = previewSelectedChannel;
-    viewTitle->box.pos = Vec(4.f, 76.f);
+    viewTitle->box.pos = layout.focusLabelPos;
     viewTitle->box.size = Vec(52.f, 18.f);
     addChild(viewTitle);
 
     for (int i = 0; i < volyPectorNumKnobs; i++) {
       int column = i / 8;
       int row = i % 8;
-      float x = column == 0 ? 4.2f : 31.2f;
-      float y = 133.f + row * 30.2f + (column == 1 ? -5.f : 0.f);
-      addLabeledKnob(x, y, module, i, column == 0 ? -3.5f : 9.5f, 1.4f);
+      Vec pos =
+          layout.knobGridStart +
+          Vec(column * layout.knobGridSpacing.x,
+              row * layout.knobGridSpacing.y +
+                  (column == 1 ? layout.knobGridSecondColumnYOffset : 0.f));
+      Vec labelOffset = column == 0 ? layout.knobLabelOffset
+                                    : layout.knobSecondColumnLabelOffset;
+      addLabeledKnob(pos.x, pos.y, module, i, labelOffset.x, labelOffset.y);
     }
 
     for (int i = 0; i < volyPectorNumOutputs; i++) {
-      addPortPair(volyPectorPortLabels[i], 58.f, 31.f + i * 21.5f, module, i,
-                  ComputerscareVolyPector::OUTPUT + i);
+      Vec pos = layout.outputRowsStart + layout.outputRowsSpacing * i;
+      addPortPair(volyPectorPortLabels[i], pos.x, pos.y, module, i,
+                  ComputerscareVolyPector::OUTPUT + i,
+                  layout.outputChannelButtonOffset,
+                  layout.outputBandButtonOffset, layout.outputJackOffset);
     }
   }
 
@@ -1543,8 +1771,6 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
 
     menu->addChild(new MenuSeparator());
     menu->addChild(createSubmenuItem("Randomization", "", [=](Menu* submenu) {
-      submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscareVolyPector::RANDOMIZE_CHANCE)));
       submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Mode"));
       submenu->addChild(construct<RandomizeModeItem>(
           &MenuItem::text, "Replace", &RandomizeModeItem::module, module,
@@ -1621,7 +1847,8 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
 
   void addPortPair(std::string label, float x, float y,
                    ComputerscareVolyPector* module, int outputIndex,
-                   int outputId) {
+                   int outputId, Vec channelButtonOffset,
+                   Vec outputButtonOffset, Vec outputJackOffset) {
     VolyPectorLabelButton* channelDisplay = new VolyPectorLabelButton();
     channelDisplay->module = module;
     channelDisplay->configure(outputIndex, false);
@@ -1630,7 +1857,7 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     channelDisplay->previewSelectedOutput = previewSelectedOutput;
     channelDisplay->previewSelectedChannel = previewSelectedChannel;
     channelDisplay->previewPolyChannels = previewPolyChannels;
-    channelDisplay->box.pos = Vec(x + 4.f, y - 4.f);
+    channelDisplay->box.pos = Vec(x, y) + channelButtonOffset;
     channelDisplay->value = std::to_string(outputIndex + 1);
     addChild(channelDisplay);
 
@@ -1642,11 +1869,12 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     outputDisplay->previewSelectedOutput = previewSelectedOutput;
     outputDisplay->previewSelectedChannel = previewSelectedChannel;
     outputDisplay->previewPolyChannels = previewPolyChannels;
-    outputDisplay->box.pos = Vec(x + 21.f, y - 5.f);
+    outputDisplay->box.pos = Vec(x, y) + outputButtonOffset;
     outputDisplay->value = label;
     addChild(outputDisplay);
 
-    addOutput(createOutput<TinyJack>(Vec(x + 44.f, y - 2.f), module, outputId));
+    addOutput(
+        createOutput<TinyJack>(Vec(x, y) + outputJackOffset, module, outputId));
   }
 };
 
