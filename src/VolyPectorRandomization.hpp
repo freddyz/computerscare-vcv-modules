@@ -5,7 +5,7 @@
 #include "rack.hpp"
 
 namespace computerscare {
-namespace polypobs {
+namespace volypector {
 
 enum class RandomizeMode { REPLACE = 0, WIGGLE = 1 };
 
@@ -44,5 +44,5 @@ inline float randomizeValue(float currentValue,
   return minValue + rack::random::uniform() * (maxValue - minValue);
 }
 
-}  // namespace polypobs
+}  // namespace volypector
 }  // namespace computerscare

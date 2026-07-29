@@ -1,16 +1,16 @@
 #include "Computerscare.hpp"
 #include "ComputerscarePolyModule.hpp"
-#include "PolyPobsRandomization.hpp"
+#include "VolyPectorRandomization.hpp"
 
 namespace {
 
-const int polyPobsNumKnobs = 16;
-const int polyPobsNumOutputs = 16;
+const int volyPectorNumKnobs = 16;
+const int volyPectorNumOutputs = 16;
 
-const std::vector<std::string> polyPobsPortLabels = {
+const std::vector<std::string> volyPectorPortLabels = {
     "A", "B", "C", "D", "E", "F", "G", "H",
     "I", "J", "K", "L", "M", "N", "O", "P"};
-const std::vector<std::string> polyPobsNatoLabels = {
+const std::vector<std::string> volyPectorNatoLabels = {
     "Alpha", "Bravo",  "Charlie", "Delta", "Echo", "Foxtrot",  "Golf",  "Hotel",
     "India", "Juliet", "Kilo",    "Lima",  "Mike", "November", "Oscar", "Papa"};
 
@@ -27,23 +27,23 @@ std::vector<std::string> oneToSixteenLabels() {
   return labels;
 }
 
-float polyPobsRandomKnobPreviewValue() { return random::uniform() * 10.f; }
+float volyPectorRandomKnobPreviewValue() { return random::uniform() * 10.f; }
 
 }  // namespace
 
-struct ComputerscarePolyPobs : ComputerscarePolyModule {
+struct ComputerscareVolyPector : ComputerscarePolyModule {
   bool bipolarMainKnobs = false;
   int mainKnobRangeRevision = 0;
-  float outputKnobValues[polyPobsNumOutputs][polyPobsNumKnobs] = {};
-  float outputScaleValues[polyPobsNumOutputs] = {};
-  float outputOffsetValues[polyPobsNumOutputs] = {};
-  float channelScaleValues[polyPobsNumKnobs] = {};
-  float channelOffsetValues[polyPobsNumKnobs] = {};
-  float lastVisibleKnobValues[polyPobsNumKnobs] = {};
+  float outputKnobValues[volyPectorNumOutputs][volyPectorNumKnobs] = {};
+  float outputScaleValues[volyPectorNumOutputs] = {};
+  float outputOffsetValues[volyPectorNumOutputs] = {};
+  float channelScaleValues[volyPectorNumKnobs] = {};
+  float channelOffsetValues[volyPectorNumKnobs] = {};
+  float lastVisibleKnobValues[volyPectorNumKnobs] = {};
   float lastVisibleScaleValue = 1.f;
   float lastVisibleOffsetValue = 0.f;
-  rack::dsp::SchmittTrigger channelRandomizeTriggers[polyPobsNumKnobs];
-  rack::dsp::SchmittTrigger outputRandomizeTriggers[polyPobsNumOutputs];
+  rack::dsp::SchmittTrigger channelRandomizeTriggers[volyPectorNumKnobs];
+  rack::dsp::SchmittTrigger outputRandomizeTriggers[volyPectorNumOutputs];
   rack::dsp::SchmittTrigger randomizeAllTrigger;
   int viewedOutput = 0;
   int viewedChannel = -1;
@@ -52,7 +52,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
 
   enum ParamIds {
     KNOB,
-    POLY_CHANNELS = KNOB + polyPobsNumKnobs,
+    POLY_CHANNELS = KNOB + volyPectorNumKnobs,
     GLOBAL_SCALE,
     GLOBAL_OFFSET,
     CHANNEL_SELECTOR,
@@ -72,13 +72,13 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     RANDOMIZE_ALL_INPUT,
     NUM_INPUTS
   };
-  enum OutputIds { OUTPUT, NUM_OUTPUTS = OUTPUT + polyPobsNumOutputs };
+  enum OutputIds { OUTPUT, NUM_OUTPUTS = OUTPUT + volyPectorNumOutputs };
   enum LightIds { NUM_LIGHTS };
 
-  ComputerscarePolyPobs() {
+  ComputerscareVolyPector() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
-    for (int i = 0; i < polyPobsNumKnobs; i++) {
+    for (int i = 0; i < volyPectorNumKnobs; i++) {
       configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
     }
     configSwitch(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels",
@@ -87,10 +87,10 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     configParam(GLOBAL_OFFSET, -10.f, 10.f, 0.f, "Offset", " volts");
     configSwitch(CHANNEL_SELECTOR, 0.f, 16.f, 0.f, "Channel",
                  withAllLabel(oneToSixteenLabels()));
-    configSwitch(OUTPUT_SELECTOR, 0.f, polyPobsNumOutputs, 1.f, "Output",
-                 withAllLabel(polyPobsPortLabels));
-    configSwitch(INPUT_SELECTOR, 0.f, polyPobsNumKnobs - 1, 0.f, "Input",
-                 polyPobsPortLabels);
+    configSwitch(OUTPUT_SELECTOR, 0.f, volyPectorNumOutputs, 1.f, "Output",
+                 withAllLabel(volyPectorPortLabels));
+    configSwitch(INPUT_SELECTOR, 0.f, volyPectorNumKnobs - 1, 0.f, "Input",
+                 volyPectorPortLabels);
     configParam(RANDOMIZE_CHANCE, 0.f, 1.f, 1.f, "Randomize Chance", "%", 0.f,
                 100.f);
     configSwitch(RANDOMIZE_MODE, 0.f, 1.f, 0.f, "Randomize Mode",
@@ -126,14 +126,14 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize Output Channel");
     configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize Output Band");
     configInput(RANDOMIZE_ALL_INPUT, "Randomize all");
-    for (int i = 0; i < polyPobsNumOutputs; i++) {
+    for (int i = 0; i < volyPectorNumOutputs; i++) {
       configOutput(OUTPUT + i, outputName(i));
     }
-    for (int i = 0; i < polyPobsNumOutputs; i++) {
+    for (int i = 0; i < volyPectorNumOutputs; i++) {
       outputScaleValues[i] = 1.f;
       outputOffsetValues[i] = 0.f;
     }
-    for (int i = 0; i < polyPobsNumKnobs; i++) {
+    for (int i = 0; i < volyPectorNumKnobs; i++) {
       channelScaleValues[i] = 1.f;
       channelOffsetValues[i] = 0.f;
     }
@@ -146,14 +146,14 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
 
   int selectedOutput() {
     int value = math::clamp((int)std::round(params[OUTPUT_SELECTOR].getValue()),
-                            0, polyPobsNumOutputs);
+                            0, volyPectorNumOutputs);
     return value - 1;
   }
 
   int selectedChannel() {
     int value =
         math::clamp((int)std::round(params[CHANNEL_SELECTOR].getValue()), 0,
-                    polyPobsNumKnobs);
+                    volyPectorNumKnobs);
     return value - 1;
   }
 
@@ -187,7 +187,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   }
 
   void captureVisibleControls() {
-    for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+    for (int knob = 0; knob < volyPectorNumKnobs; knob++) {
       lastVisibleKnobValues[knob] = params[KNOB + knob].getValue();
     }
     lastVisibleScaleValue = params[GLOBAL_SCALE].getValue();
@@ -195,7 +195,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   }
 
   bool visibleControlsChanged() {
-    for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+    for (int knob = 0; knob < volyPectorNumKnobs; knob++) {
       if (lastVisibleKnobValues[knob] != params[KNOB + knob].getValue()) {
         return true;
       }
@@ -207,26 +207,26 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   void storeCurrentView() {
     if (channelViewActive()) {
       int channel = selectedChannel();
-      for (int output = 0; output < polyPobsNumOutputs; output++) {
+      for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][channel] = params[KNOB + output].getValue();
       }
       return;
     }
 
     int output = normalizedOutputView();
-    for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+    for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
       outputKnobValues[output][channel] = params[KNOB + channel].getValue();
     }
   }
 
   void storeViewedView() {
     if (viewedChannel >= 0) {
-      for (int output = 0; output < polyPobsNumOutputs; output++) {
+      for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][viewedChannel] =
             params[KNOB + output].getValue();
       }
     } else {
-      for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+      for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
         outputKnobValues[viewedOutput][channel] =
             params[KNOB + channel].getValue();
       }
@@ -238,12 +238,12 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     int output = normalizedOutputView();
     loadingView = true;
     if (channel >= 0) {
-      for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+      for (int knob = 0; knob < volyPectorNumKnobs; knob++) {
         params[KNOB + knob].setValue(
             clampKnobValue(outputKnobValues[knob][channel]));
       }
     } else {
-      for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+      for (int knob = 0; knob < volyPectorNumKnobs; knob++) {
         params[KNOB + knob].setValue(
             clampKnobValue(outputKnobValues[output][knob]));
       }
@@ -280,7 +280,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     storeViewedControls();
     params[CHANNEL_SELECTOR].setValue(0.f);
     params[OUTPUT_SELECTOR].setValue(
-        math::clamp(output, 0, polyPobsNumOutputs - 1) + 1);
+        math::clamp(output, 0, volyPectorNumOutputs - 1) + 1);
     loadCurrentView();
     loadCurrentControls();
     captureVisibleControls();
@@ -293,7 +293,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     storeViewedControls();
     params[OUTPUT_SELECTOR].setValue(0.f);
     params[CHANNEL_SELECTOR].setValue(
-        math::clamp(channel, 0, polyPobsNumKnobs - 1) + 1);
+        math::clamp(channel, 0, volyPectorNumKnobs - 1) + 1);
     loadCurrentView();
     loadCurrentControls();
     captureVisibleControls();
@@ -303,13 +303,13 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
 
   float minimumAllowedKnobValue() { return bipolarMainKnobs ? -10.f : 0.f; }
 
-  computerscare::polypobs::RandomizeSettings randomizeSettings() {
+  computerscare::volypector::RandomizeSettings randomizeSettings() {
     float minAllowed = minimumAllowedKnobValue();
-    computerscare::polypobs::RandomizeSettings settings;
+    computerscare::volypector::RandomizeSettings settings;
     settings.chance = params[RANDOMIZE_CHANCE].getValue();
     settings.mode = params[RANDOMIZE_MODE].getValue() >= 0.5f
-                        ? computerscare::polypobs::RandomizeMode::WIGGLE
-                        : computerscare::polypobs::RandomizeMode::REPLACE;
+                        ? computerscare::volypector::RandomizeMode::WIGGLE
+                        : computerscare::volypector::RandomizeMode::REPLACE;
     settings.minValue =
         math::clamp(params[RANDOMIZE_MIN].getValue(), minAllowed, 10.f);
     settings.maxValue =
@@ -331,8 +331,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   }
 
   float randomKnobValue(float currentValue) {
-    return computerscare::polypobs::randomizeValue(currentValue,
-                                                   randomizeSettings());
+    return computerscare::volypector::randomizeValue(currentValue,
+                                                     randomizeSettings());
   }
 
   void restoreViewSelection(float outputSelection, float channelSelection) {
@@ -346,12 +346,12 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     restoreViewSelection(outputSelection, channelSelection);
     if (channelViewActive()) {
       int channel = selectedChannel();
-      for (int output = 0; output < polyPobsNumOutputs; output++) {
+      for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][channel] = 0.f;
       }
     } else {
       int output = normalizedOutputView();
-      for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+      for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
         outputKnobValues[output][channel] = 0.f;
       }
     }
@@ -367,13 +367,13 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     restoreViewSelection(outputSelection, channelSelection);
     if (channelViewActive()) {
       int channel = selectedChannel();
-      for (int output = 0; output < polyPobsNumOutputs; output++) {
+      for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][channel] =
             randomKnobValue(outputKnobValues[output][channel]);
       }
     } else {
       int output = normalizedOutputView();
-      for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+      for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
         outputKnobValues[output][channel] =
             randomKnobValue(outputKnobValues[output][channel]);
       }
@@ -385,9 +385,9 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   }
 
   void randomizeChannel(int channel) {
-    channel = math::clamp(channel, 0, polyPobsNumKnobs - 1);
+    channel = math::clamp(channel, 0, volyPectorNumKnobs - 1);
     storeViewedView();
-    for (int output = 0; output < polyPobsNumOutputs; output++) {
+    for (int output = 0; output < volyPectorNumOutputs; output++) {
       outputKnobValues[output][channel] =
           randomKnobValue(outputKnobValues[output][channel]);
     }
@@ -399,9 +399,9 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   }
 
   void randomizeOutput(int output) {
-    output = math::clamp(output, 0, polyPobsNumOutputs - 1);
+    output = math::clamp(output, 0, volyPectorNumOutputs - 1);
     storeViewedView();
-    for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+    for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
       outputKnobValues[output][channel] =
           randomKnobValue(outputKnobValues[output][channel]);
     }
@@ -413,8 +413,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   }
 
   void randomizeAllValues() {
-    for (int output = 0; output < polyPobsNumOutputs; output++) {
-      for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+    for (int output = 0; output < volyPectorNumOutputs; output++) {
+      for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
         outputKnobValues[output][channel] =
             randomKnobValue(outputKnobValues[output][channel]);
       }
@@ -440,7 +440,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
       randomizeAllValues();
     }
 
-    for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+    for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
       float channelVoltage =
           channel < channelTriggerChannels
               ? inputs[CHANNEL_RANDOMIZE_INPUT].getVoltage(channel)
@@ -460,14 +460,14 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   }
 
   void initializeAllValues() {
-    for (int output = 0; output < polyPobsNumOutputs; output++) {
-      for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+    for (int output = 0; output < volyPectorNumOutputs; output++) {
+      for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
         outputKnobValues[output][channel] = 0.f;
       }
       outputScaleValues[output] = 1.f;
       outputOffsetValues[output] = 0.f;
     }
-    for (int channel = 0; channel < polyPobsNumKnobs; channel++) {
+    for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
       channelScaleValues[channel] = 1.f;
       channelOffsetValues[channel] = 0.f;
     }
@@ -515,19 +515,20 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   std::string outputName(int output) { return outputBandName(output); }
 
   std::string outputBandName(int output) {
-    return polyPobsNatoLabels[math::clamp(output, 0, polyPobsNumOutputs - 1)] +
+    return volyPectorNatoLabels[math::clamp(output, 0,
+                                            volyPectorNumOutputs - 1)] +
            " Band";
   }
 
   std::string channelName(int channel) {
     return "Channel " +
-           std::to_string(math::clamp(channel, 0, polyPobsNumKnobs - 1) + 1);
+           std::to_string(math::clamp(channel, 0, volyPectorNumKnobs - 1) + 1);
   }
 
   void updateParamLabels() {
     int channel = selectedChannel();
     int output = normalizedOutputView();
-    for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+    for (int knob = 0; knob < volyPectorNumKnobs; knob++) {
       engine::ParamQuantity* pq = getParamQuantity(KNOB + knob);
       if (!pq) continue;
       if (channel >= 0) {
@@ -558,7 +559,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     if (randomMinWasAtFloor) {
       params[RANDOMIZE_MIN].setValue(minimumAllowedKnobValue());
     }
-    for (int i = 0; i < polyPobsNumKnobs; i++) {
+    for (int i = 0; i < volyPectorNumKnobs; i++) {
       engine::ParamQuantity* pq = getParamQuantity(KNOB + i);
       if (!pq) continue;
       pq->minValue = bipolar ? -10.f : 0.f;
@@ -566,8 +567,8 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
       pq->defaultValue = 0.f;
       pq->setValue(math::clamp(pq->getValue(), pq->minValue, pq->maxValue));
     }
-    for (int output = 0; output < polyPobsNumOutputs; output++) {
-      for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+    for (int output = 0; output < volyPectorNumOutputs; output++) {
+      for (int knob = 0; knob < volyPectorNumKnobs; knob++) {
         outputKnobValues[output][knob] = math::clamp(
             outputKnobValues[output][knob], bipolar ? -10.f : 0.f, 10.f);
       }
@@ -590,9 +591,9 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     json_object_set_new(rootJ, "bipolarMainKnobs",
                         json_boolean(bipolarMainKnobs));
     json_t* outputKnobValuesJ = json_array();
-    for (int output = 0; output < polyPobsNumOutputs; output++) {
+    for (int output = 0; output < volyPectorNumOutputs; output++) {
       json_t* outputJ = json_array();
-      for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+      for (int knob = 0; knob < volyPectorNumKnobs; knob++) {
         json_array_append_new(outputJ,
                               json_real(outputKnobValues[output][knob]));
       }
@@ -603,13 +604,13 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     json_t* outputOffsetValuesJ = json_array();
     json_t* channelScaleValuesJ = json_array();
     json_t* channelOffsetValuesJ = json_array();
-    for (int i = 0; i < polyPobsNumOutputs; i++) {
+    for (int i = 0; i < volyPectorNumOutputs; i++) {
       json_array_append_new(outputScaleValuesJ,
                             json_real(outputScaleValues[i]));
       json_array_append_new(outputOffsetValuesJ,
                             json_real(outputOffsetValues[i]));
     }
-    for (int i = 0; i < polyPobsNumKnobs; i++) {
+    for (int i = 0; i < volyPectorNumKnobs; i++) {
       json_array_append_new(channelScaleValuesJ,
                             json_real(channelScaleValues[i]));
       json_array_append_new(channelOffsetValuesJ,
@@ -641,7 +642,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     json_t* channelOffsetValuesJ =
         json_object_get(rootJ, "channelOffsetValues");
     if (outputScaleValuesJ) {
-      for (int i = 0; i < polyPobsNumOutputs; i++) {
+      for (int i = 0; i < volyPectorNumOutputs; i++) {
         json_t* valueJ = json_array_get(outputScaleValuesJ, i);
         if (valueJ) {
           outputScaleValues[i] = json_number_value(valueJ);
@@ -649,7 +650,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
       }
     }
     if (outputOffsetValuesJ) {
-      for (int i = 0; i < polyPobsNumOutputs; i++) {
+      for (int i = 0; i < volyPectorNumOutputs; i++) {
         json_t* valueJ = json_array_get(outputOffsetValuesJ, i);
         if (valueJ) {
           outputOffsetValues[i] = json_number_value(valueJ);
@@ -657,7 +658,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
       }
     }
     if (channelScaleValuesJ) {
-      for (int i = 0; i < polyPobsNumKnobs; i++) {
+      for (int i = 0; i < volyPectorNumKnobs; i++) {
         json_t* valueJ = json_array_get(channelScaleValuesJ, i);
         if (valueJ) {
           channelScaleValues[i] = json_number_value(valueJ);
@@ -665,7 +666,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
       }
     }
     if (channelOffsetValuesJ) {
-      for (int i = 0; i < polyPobsNumKnobs; i++) {
+      for (int i = 0; i < volyPectorNumKnobs; i++) {
         json_t* valueJ = json_array_get(channelOffsetValuesJ, i);
         if (valueJ) {
           channelOffsetValues[i] = json_number_value(valueJ);
@@ -674,10 +675,10 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     }
     json_t* outputKnobValuesJ = json_object_get(rootJ, "outputKnobValues");
     if (outputKnobValuesJ) {
-      for (int output = 0; output < polyPobsNumOutputs; output++) {
+      for (int output = 0; output < volyPectorNumOutputs; output++) {
         json_t* outputJ = json_array_get(outputKnobValuesJ, output);
         if (!outputJ) continue;
-        for (int knob = 0; knob < polyPobsNumKnobs; knob++) {
+        for (int knob = 0; knob < volyPectorNumKnobs; knob++) {
           json_t* valueJ = json_array_get(outputJ, knob);
           if (valueJ) {
             outputKnobValues[output][knob] =
@@ -705,7 +706,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     (void)args;
     processRandomizeTriggers();
     ComputerscarePolyModule::checkCounter();
-    for (int output = 0; output < polyPobsNumOutputs; output++) {
+    for (int output = 0; output < volyPectorNumOutputs; output++) {
       if (outputs[OUTPUT + output].getChannels() != polyChannels) {
         outputs[OUTPUT + output].setChannels(polyChannels);
         outputsDirty = true;
@@ -717,7 +718,7 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
     if (!outputsDirty) {
       return;
     }
-    for (int output = 0; output < polyPobsNumOutputs; output++) {
+    for (int output = 0; output < volyPectorNumOutputs; output++) {
       outputs[OUTPUT + output].setChannels(polyChannels);
       for (int channel = 0; channel < polyChannels; channel++) {
         outputs[OUTPUT + output].setVoltage(scaledOutputValue(output, channel),
@@ -740,11 +741,11 @@ struct ComputerscarePolyPobs : ComputerscarePolyModule {
   }
 };
 
-struct PolyPobsNoRandomSmallKnob : SmallKnob {
+struct VolyPectorNoRandomSmallKnob : SmallKnob {
   bool previewMode = false;
   float previewValue = 1.f;
 
-  PolyPobsNoRandomSmallKnob() { SmallKnob(); }
+  VolyPectorNoRandomSmallKnob() { SmallKnob(); }
 
   void draw(const DrawArgs& args) override {
     if (previewMode && !getParamQuantity()) {
@@ -760,13 +761,13 @@ struct PolyPobsNoRandomSmallKnob : SmallKnob {
   }
 };
 
-struct PolyPobsNoRandomMediumSmallKnob : ComputerscareRoundKnob {
+struct VolyPectorNoRandomMediumSmallKnob : ComputerscareRoundKnob {
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance, "res/components/computerscare-medium-small-knob.svg"));
   bool previewMode = false;
   float previewValue = 0.f;
 
-  PolyPobsNoRandomMediumSmallKnob() {
+  VolyPectorNoRandomMediumSmallKnob() {
     setSvg(enabledSvg);
     ComputerscareRoundKnob();
   }
@@ -786,7 +787,7 @@ struct PolyPobsNoRandomMediumSmallKnob : ComputerscareRoundKnob {
   }
 };
 
-struct PolyPobsDisableableSmoothKnob : ComputerscareRoundKnob {
+struct VolyPectorDisableableSmoothKnob : ComputerscareRoundKnob {
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance, "res/components/computerscare-medium-small-knob.svg"));
   std::shared_ptr<Svg> disabledSvg = APP->window->loadSvg(asset::plugin(
@@ -803,7 +804,7 @@ struct PolyPobsDisableableSmoothKnob : ComputerscareRoundKnob {
   int previewPolyChannels = 16;
   float previewValue = 0.f;
 
-  PolyPobsDisableableSmoothKnob() {
+  VolyPectorDisableableSmoothKnob() {
     setSvg(enabledSvg);
     shadow->box.size = math::Vec(0, 0);
     shadow->opacity = 0.f;
@@ -811,8 +812,8 @@ struct PolyPobsDisableableSmoothKnob : ComputerscareRoundKnob {
 
   void step() override {
     if (module) {
-      ComputerscarePolyPobs* pobs =
-          dynamic_cast<ComputerscarePolyPobs*>(module);
+      ComputerscareVolyPector* pobs =
+          dynamic_cast<ComputerscareVolyPector*>(module);
       if (pobs && mainKnobRangeRevision != pobs->mainKnobRangeRevision) {
         event::Change eChange;
         onChange(eChange);
@@ -861,8 +862,8 @@ struct PolyPobsDisableableSmoothKnob : ComputerscareRoundKnob {
   }
 };
 
-struct PolyPobsKnobLabel : SmallLetterDisplay {
-  ComputerscarePolyPobs* module = NULL;
+struct VolyPectorKnobLabel : SmallLetterDisplay {
+  ComputerscareVolyPector* module = NULL;
   int index = 0;
   bool previousChannelView = false;
   bool previewMode = false;
@@ -873,15 +874,15 @@ struct PolyPobsKnobLabel : SmallLetterDisplay {
                               : (previewMode && previewChannelView);
     if (channelView != previousChannelView || value.empty()) {
       value =
-          channelView ? polyPobsPortLabels[index] : std::to_string(index + 1);
+          channelView ? volyPectorPortLabels[index] : std::to_string(index + 1);
       previousChannelView = channelView;
     }
     SmallLetterDisplay::draw(args);
   }
 };
 
-struct PolyPobsViewTitle : Widget {
-  ComputerscarePolyPobs* module = NULL;
+struct VolyPectorViewTitle : Widget {
+  ComputerscareVolyPector* module = NULL;
   bool previewMode = false;
   bool previewChannelView = false;
   int previewSelectedOutput = 0;
@@ -899,12 +900,12 @@ struct PolyPobsViewTitle : Widget {
       if (module->channelViewActive()) {
         return "Channel " + std::to_string(module->selectedChannel() + 1);
       }
-      return polyPobsNatoLabels[module->normalizedOutputView()] + " Band";
+      return volyPectorNatoLabels[module->normalizedOutputView()] + " Band";
     }
     if (previewMode && previewChannelView) {
       return "Channel " + std::to_string(previewSelectedChannel + 1);
     }
-    return polyPobsNatoLabels[previewSelectedOutput] + " Band";
+    return volyPectorNatoLabels[previewSelectedOutput] + " Band";
   }
 
   void draw(const DrawArgs& args) override {
@@ -929,8 +930,8 @@ struct PolyPobsViewTitle : Widget {
   }
 };
 
-struct PolyPobsLabelButton : ComputerscareBlankButton {
-  ComputerscarePolyPobs* module = NULL;
+struct VolyPectorLabelButton : ComputerscareBlankButton {
+  ComputerscareVolyPector* module = NULL;
   ui::Tooltip* hoverTooltip = NULL;
   std::string value;
   int outputIndex = 0;
@@ -947,12 +948,12 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
   float yScale = 1.46f;
   Vec weirdOffset = Vec(0.f, 0.f);
 
-  PolyPobsLabelButton() {
+  VolyPectorLabelButton() {
     iconUpPos = Vec(0.f, 0.f);
     iconDownOffset = Vec(0.f, 0.f);
   }
 
-  ~PolyPobsLabelButton() { destroyHoverTooltip(); }
+  ~VolyPectorLabelButton() { destroyHoverTooltip(); }
 
   void configure(int index, bool isOutputLabel) {
     outputIndex = index;
@@ -967,7 +968,7 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
 
   std::string tooltipText() const {
     if (outputLabel) {
-      return polyPobsNatoLabels[outputIndex] + " Band";
+      return volyPectorNatoLabels[outputIndex] + " Band";
     }
     return "Channel " + std::to_string(channelIndex + 1);
   }
@@ -1141,8 +1142,8 @@ struct PolyPobsLabelButton : ComputerscareBlankButton {
   }
 };
 
-struct PolyPobsActionButton : ComputerscareBlankButton {
-  ComputerscarePolyPobs* module = NULL;
+struct VolyPectorActionButton : ComputerscareBlankButton {
+  ComputerscareVolyPector* module = NULL;
   ui::Tooltip* hoverTooltip = NULL;
   std::string label;
   bool initialize = false;
@@ -1150,13 +1151,13 @@ struct PolyPobsActionButton : ComputerscareBlankButton {
   float yScale = 1.18f;
   bool pressed = false;
 
-  PolyPobsActionButton() {
+  VolyPectorActionButton() {
     iconUpPos = Vec(0.f, 0.f);
     iconDownOffset = Vec(0.f, 0.f);
     box.size = Vec(box.size.x * xScale, box.size.y * yScale);
   }
 
-  ~PolyPobsActionButton() { destroyHoverTooltip(); }
+  ~VolyPectorActionButton() { destroyHoverTooltip(); }
 
   std::string tooltipText() const {
     return initialize ? "Initialize all values" : "Randomize all values";
@@ -1283,7 +1284,7 @@ struct PolyPobsActionButton : ComputerscareBlankButton {
   }
 };
 
-struct PolyPobsSelectorMenuItem : MenuItem {
+struct VolyPectorSelectorMenuItem : MenuItem {
   Module* module = NULL;
   int paramId = -1;
   int companionParamId = -1;
@@ -1307,7 +1308,7 @@ struct PolyPobsSelectorMenuItem : MenuItem {
   }
 };
 
-struct PolyPobsSelectorButton : ComputerscareBlankButton {
+struct VolyPectorSelectorButton : ComputerscareBlankButton {
   Module* module = NULL;
   WeakPtr<ui::MenuOverlay> activeMenuOverlay;
   std::vector<std::string> labels;
@@ -1320,7 +1321,7 @@ struct PolyPobsSelectorButton : ComputerscareBlankButton {
   float xScale = 1.85f;
   float yScale = 1.22f;
 
-  PolyPobsSelectorButton() {
+  VolyPectorSelectorButton() {
     iconUpPos = Vec(0.f, 0.f);
     iconDownOffset = Vec(0.f, 0.f);
     box.size = Vec(box.size.x * xScale, box.size.y * yScale);
@@ -1406,8 +1407,8 @@ struct PolyPobsSelectorButton : ComputerscareBlankButton {
     activeMenuOverlay = menu->getAncestorOfType<ui::MenuOverlay>();
     menu->addChild(createMenuLabel(menuTitle));
     for (int i = 0; i < (int)labels.size(); i++) {
-      PolyPobsSelectorMenuItem* item =
-          createMenuItem<PolyPobsSelectorMenuItem>(labels[i]);
+      VolyPectorSelectorMenuItem* item =
+          createMenuItem<VolyPectorSelectorMenuItem>(labels[i]);
       item->module = module;
       item->paramId = paramId;
       item->companionParamId = companionParamId;
@@ -1418,26 +1419,26 @@ struct PolyPobsSelectorButton : ComputerscareBlankButton {
   }
 };
 
-struct ComputerscarePolyPobsWidget : ModuleWidget {
+struct ComputerscareVolyPectorWidget : ModuleWidget {
   bool previewMode = false;
   bool previewChannelView = false;
   int previewSelectedOutput = 0;
   int previewSelectedChannel = 0;
   int previewPolyChannels = 16;
-  float previewKnobValues[polyPobsNumKnobs] = {};
+  float previewKnobValues[volyPectorNumKnobs] = {};
 
-  ComputerscarePolyPobsWidget(ComputerscarePolyPobs* module) {
+  ComputerscareVolyPectorWidget(ComputerscareVolyPector* module) {
     setModule(module);
     if (!module) {
       previewMode = true;
       previewChannelView = random::uniform() < 0.5f;
       previewSelectedOutput =
-          (int)std::floor(random::uniform() * polyPobsNumOutputs);
+          (int)std::floor(random::uniform() * volyPectorNumOutputs);
       previewSelectedChannel =
-          (int)std::floor(random::uniform() * polyPobsNumKnobs);
+          (int)std::floor(random::uniform() * volyPectorNumKnobs);
       previewPolyChannels = 1 + (int)std::floor(random::uniform() * 16.f);
-      for (int i = 0; i < polyPobsNumKnobs; i++) {
-        previewKnobValues[i] = polyPobsRandomKnobPreviewValue();
+      for (int i = 0; i < volyPectorNumKnobs; i++) {
+        previewKnobValues[i] = volyPectorRandomKnobPreviewValue();
       }
     }
     box.size = Vec(8 * 15, 380);
@@ -1445,46 +1446,46 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
     panel->box.size = box.size;
     panel->setBackground(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/panels/ComputerscarePolyPobsPanel.svg")));
+        pluginInstance, "res/panels/ComputerscareVolyPectorPanel.svg")));
     addChild(panel);
 
-    addChild(new PolyOutputChannelsWidget(Vec(94.f, 1.f), module,
-                                          ComputerscarePolyPobs::POLY_CHANNELS,
-                                          previewPolyChannels));
-    PolyPobsNoRandomSmallKnob* scaleKnob =
-        createParam<PolyPobsNoRandomSmallKnob>(
-            Vec(34.f, 94.f), module, ComputerscarePolyPobs::GLOBAL_SCALE);
+    addChild(new PolyOutputChannelsWidget(
+        Vec(94.f, 1.f), module, ComputerscareVolyPector::POLY_CHANNELS,
+        previewPolyChannels));
+    VolyPectorNoRandomSmallKnob* scaleKnob =
+        createParam<VolyPectorNoRandomSmallKnob>(
+            Vec(34.f, 94.f), module, ComputerscareVolyPector::GLOBAL_SCALE);
     scaleKnob->previewMode = previewMode;
     scaleKnob->previewValue = -2.f + random::uniform() * 4.f;
     addParam(scaleKnob);
-    PolyPobsNoRandomMediumSmallKnob* offsetKnob =
-        createParam<PolyPobsNoRandomMediumSmallKnob>(
-            Vec(7.f, 98.f), module, ComputerscarePolyPobs::GLOBAL_OFFSET);
+    VolyPectorNoRandomMediumSmallKnob* offsetKnob =
+        createParam<VolyPectorNoRandomMediumSmallKnob>(
+            Vec(7.f, 98.f), module, ComputerscareVolyPector::GLOBAL_OFFSET);
     offsetKnob->previewMode = previewMode;
     offsetKnob->previewValue = -10.f + random::uniform() * 20.f;
     addParam(offsetKnob);
-    PolyPobsActionButton* randomizeAllButton =
-        createWidget<PolyPobsActionButton>(Vec(21.f, 28.f));
+    VolyPectorActionButton* randomizeAllButton =
+        createWidget<VolyPectorActionButton>(Vec(21.f, 28.f));
     randomizeAllButton->module = module;
     randomizeAllButton->label = "RAND ALL";
     addChild(randomizeAllButton);
-    PolyPobsActionButton* initializeAllButton =
-        createWidget<PolyPobsActionButton>(Vec(21.f, 50.f));
+    VolyPectorActionButton* initializeAllButton =
+        createWidget<VolyPectorActionButton>(Vec(21.f, 50.f));
     initializeAllButton->module = module;
     initializeAllButton->label = "INIT ALL";
     initializeAllButton->initialize = true;
     addChild(initializeAllButton);
 
-    addInput(
-        createInput<TinyJack>(Vec(63.7f, 7.f), module,
-                              ComputerscarePolyPobs::CHANNEL_RANDOMIZE_INPUT));
+    addInput(createInput<TinyJack>(
+        Vec(63.7f, 7.f), module,
+        ComputerscareVolyPector::CHANNEL_RANDOMIZE_INPUT));
     addInput(
         createInput<TinyJack>(Vec(82.2f, 7.f), module,
-                              ComputerscarePolyPobs::OUTPUT_RANDOMIZE_INPUT));
-    addInput(createInput<TinyJack>(Vec(4.f, 31.f), module,
-                                   ComputerscarePolyPobs::RANDOMIZE_ALL_INPUT));
+                              ComputerscareVolyPector::OUTPUT_RANDOMIZE_INPUT));
+    addInput(createInput<TinyJack>(
+        Vec(4.f, 31.f), module, ComputerscareVolyPector::RANDOMIZE_ALL_INPUT));
 
-    PolyPobsViewTitle* viewTitle = new PolyPobsViewTitle();
+    VolyPectorViewTitle* viewTitle = new VolyPectorViewTitle();
     viewTitle->module = module;
     viewTitle->previewMode = previewMode;
     viewTitle->previewChannelView = previewChannelView;
@@ -1494,7 +1495,7 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     viewTitle->box.size = Vec(52.f, 18.f);
     addChild(viewTitle);
 
-    for (int i = 0; i < polyPobsNumKnobs; i++) {
+    for (int i = 0; i < volyPectorNumKnobs; i++) {
       int column = i / 8;
       int row = i % 8;
       float x = column == 0 ? 4.2f : 31.2f;
@@ -1502,20 +1503,20 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
       addLabeledKnob(x, y, module, i, column == 0 ? -3.5f : 9.5f, 1.4f);
     }
 
-    for (int i = 0; i < polyPobsNumOutputs; i++) {
-      addPortPair(polyPobsPortLabels[i], 58.f, 31.f + i * 21.5f, module, i,
-                  ComputerscarePolyPobs::OUTPUT + i);
+    for (int i = 0; i < volyPectorNumOutputs; i++) {
+      addPortPair(volyPectorPortLabels[i], 58.f, 31.f + i * 21.5f, module, i,
+                  ComputerscareVolyPector::OUTPUT + i);
     }
   }
 
   void appendContextMenu(Menu* menu) override {
-    ComputerscarePolyPobs* module =
-        dynamic_cast<ComputerscarePolyPobs*>(this->module);
+    ComputerscareVolyPector* module =
+        dynamic_cast<ComputerscareVolyPector*>(this->module);
     if (!module) return;
     module->updateRandomizeRangeLimits();
 
     struct MainKnobRangeItem : MenuItem {
-      ComputerscarePolyPobs* module;
+      ComputerscareVolyPector* module;
       bool bipolar;
       void onAction(const event::Action& e) override {
         module->setMainKnobRange(bipolar);
@@ -1526,16 +1527,16 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
       }
     };
     struct RandomizeModeItem : MenuItem {
-      ComputerscarePolyPobs* module;
+      ComputerscareVolyPector* module;
       int mode;
       void onAction(const event::Action& e) override {
-        module->params[ComputerscarePolyPobs::RANDOMIZE_MODE].setValue(mode);
+        module->params[ComputerscareVolyPector::RANDOMIZE_MODE].setValue(mode);
       }
       void step() override {
-        rightText =
-            CHECKMARK((int)std::round(
-                          module->params[ComputerscarePolyPobs::RANDOMIZE_MODE]
-                              .getValue()) == mode);
+        rightText = CHECKMARK(
+            (int)std::round(
+                module->params[ComputerscareVolyPector::RANDOMIZE_MODE]
+                    .getValue()) == mode);
         MenuItem::step();
       }
     };
@@ -1543,7 +1544,7 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     menu->addChild(new MenuSeparator());
     menu->addChild(createSubmenuItem("Randomization", "", [=](Menu* submenu) {
       submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscarePolyPobs::RANDOMIZE_CHANCE)));
+          module->getParamQuantity(ComputerscareVolyPector::RANDOMIZE_CHANCE)));
       submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Mode"));
       submenu->addChild(construct<RandomizeModeItem>(
           &MenuItem::text, "Replace", &RandomizeModeItem::module, module,
@@ -1552,13 +1553,13 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
           &MenuItem::text, "Wiggle", &RandomizeModeItem::module, module,
           &RandomizeModeItem::mode, 1));
       submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscarePolyPobs::RANDOMIZE_MIN)));
+          module->getParamQuantity(ComputerscareVolyPector::RANDOMIZE_MIN)));
       submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscarePolyPobs::RANDOMIZE_MAX)));
+          module->getParamQuantity(ComputerscareVolyPector::RANDOMIZE_MAX)));
       submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscarePolyPobs::WIGGLE_MIN)));
+          module->getParamQuantity(ComputerscareVolyPector::WIGGLE_MIN)));
       submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscarePolyPobs::WIGGLE_MAX)));
+          module->getParamQuantity(ComputerscareVolyPector::WIGGLE_MAX)));
     }));
     menu->addChild(new MenuSeparator());
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Main Knob Range"));
@@ -1570,11 +1571,12 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
         &MainKnobRangeItem::bipolar, true));
   }
 
-  void addSelector(Vec pos, ComputerscarePolyPobs* module, int paramId,
+  void addSelector(Vec pos, ComputerscareVolyPector* module, int paramId,
                    std::string prefix, std::string menuTitle,
                    std::vector<std::string> labels, int defaultValue,
                    int companionParamId) {
-    PolyPobsSelectorButton* button = createWidget<PolyPobsSelectorButton>(pos);
+    VolyPectorSelectorButton* button =
+        createWidget<VolyPectorSelectorButton>(pos);
     button->module = module;
     button->paramId = paramId;
     button->companionParamId = companionParamId;
@@ -1585,9 +1587,9 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     addChild(button);
   }
 
-  void addLabeledKnob(float x, float y, ComputerscarePolyPobs* module,
+  void addLabeledKnob(float x, float y, ComputerscareVolyPector* module,
                       int index, float labelDx, float labelDy) {
-    PolyPobsKnobLabel* smallLetterDisplay = new PolyPobsKnobLabel();
+    VolyPectorKnobLabel* smallLetterDisplay = new VolyPectorKnobLabel();
     smallLetterDisplay->module = module;
     smallLetterDisplay->index = index;
     smallLetterDisplay->previewMode = previewMode;
@@ -1597,11 +1599,11 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     smallLetterDisplay->letterSpacing = 1.6f;
     smallLetterDisplay->textAlign = 1;
 
-    ParamWidget* pob = createParam<PolyPobsDisableableSmoothKnob>(
-        Vec(x, y), module, ComputerscarePolyPobs::KNOB + index);
+    ParamWidget* pob = createParam<VolyPectorDisableableSmoothKnob>(
+        Vec(x, y), module, ComputerscareVolyPector::KNOB + index);
 
-    PolyPobsDisableableSmoothKnob* fader =
-        dynamic_cast<PolyPobsDisableableSmoothKnob*>(pob);
+    VolyPectorDisableableSmoothKnob* fader =
+        dynamic_cast<VolyPectorDisableableSmoothKnob*>(pob);
 
     fader->module = module;
     fader->channel = index;
@@ -1618,9 +1620,9 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
   }
 
   void addPortPair(std::string label, float x, float y,
-                   ComputerscarePolyPobs* module, int outputIndex,
+                   ComputerscareVolyPector* module, int outputIndex,
                    int outputId) {
-    PolyPobsLabelButton* channelDisplay = new PolyPobsLabelButton();
+    VolyPectorLabelButton* channelDisplay = new VolyPectorLabelButton();
     channelDisplay->module = module;
     channelDisplay->configure(outputIndex, false);
     channelDisplay->previewMode = previewMode;
@@ -1632,7 +1634,7 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
     channelDisplay->value = std::to_string(outputIndex + 1);
     addChild(channelDisplay);
 
-    PolyPobsLabelButton* outputDisplay = new PolyPobsLabelButton();
+    VolyPectorLabelButton* outputDisplay = new VolyPectorLabelButton();
     outputDisplay->module = module;
     outputDisplay->configure(outputIndex, true);
     outputDisplay->previewMode = previewMode;
@@ -1648,6 +1650,6 @@ struct ComputerscarePolyPobsWidget : ModuleWidget {
   }
 };
 
-Model* modelComputerscarePolyPobs =
-    createModel<ComputerscarePolyPobs, ComputerscarePolyPobsWidget>(
-        "computerscare-polypobs");
+Model* modelComputerscareVolyPector =
+    createModel<ComputerscareVolyPector, ComputerscareVolyPectorWidget>(
+        "computerscare-volypector");

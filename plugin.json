@@ -19,11 +19,11 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#knoly-pobs"
     },
     {
-      "slug": "computerscare-polypobs",
-      "name": "Poly Pobs",
-      "description": "16 knobs with selectable channel, input, and output views",
+      "slug": "computerscare-volypector",
+      "name": "VolyPector",
+      "description": "16 editable polyphonic CV bands",
       "tags": ["Polyphonic", "Utility"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-pobs.md"
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/volypector.md"
     },
     {
       "slug": "computerscare-bolyputtons",

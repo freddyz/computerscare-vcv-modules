@@ -6,9 +6,9 @@
 
 16 knobs, polyphonic output, Default range: 0 - 10 volts. Global scale & offset knobs to adjust all output channel values simultaniously.
 
-## Poly Pobs
+## VolyPector
 
-16 editable polyphonic CV bands. See the [Poly Pobs manual](./poly-pobs.md).
+16 editable polyphonic CV bands. See the [VolyPector manual](./volypector.md).
 
 ## Boly Puttons
 

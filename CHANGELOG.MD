@@ -1,5 +1,5 @@
 # 2.3.4
-Poly Pobs:
+VolyPector:
 - Add scaffold module with Knoly-style knobs, 8 inputs, 8 outputs, and channel/input/output selectors
 
 Knoly Pobs:

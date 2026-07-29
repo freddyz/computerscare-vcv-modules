@@ -1,4 +1,4 @@
-# Poly Pobs
+# VolyPector
 
 16 editable polyphonic CV bands. Each band output has up to 16 channels.
 

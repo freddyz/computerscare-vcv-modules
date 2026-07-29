@@ -14,7 +14,7 @@
 ## Polyphonic Utilities
 
 - [Knoly Pobs](./doc/poly-utilities.md): 16 knobs, polyphonic output
-- [Poly Pobs](./doc/poly-pobs.md): 16 editable polyphonic CV bands
+- [VolyPector](./doc/volypector.md): 16 editable polyphonic CV bands
 - [Boly Puttons](./doc/poly-utilities.md): 16 latch buttons. Optional A/B inputs. Polyphonic output
 - [Roly Pouter](./doc/poly-utilities.md): Re-routes the channels of a polyphonic signal
 - [Soly Pequencer](./doc/poly-utilities.md): Sequentially outputs the individual channel voltages of a polyphonic signal
