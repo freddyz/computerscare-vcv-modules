@@ -62,12 +62,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     CHANNEL_SELECTOR,
     OUTPUT_SELECTOR,
     INPUT_SELECTOR,
-    RANDOMIZE_CHANCE,
     RANDOMIZE_MODE,
-    RANDOMIZE_MIN,
-    RANDOMIZE_MAX,
-    WIGGLE_MIN,
-    WIGGLE_MAX,
     RANDOMIZE_PROBABILITY_CONTROL,
     RANDOMIZE_RANGE_CONTROL,
     NUM_PARAMS
@@ -102,14 +97,8 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
                  withAllLabel(volyPectorPortLabels));
     configSwitch(INPUT_SELECTOR, 0.f, volyPectorNumKnobs - 1, 0.f, "Input",
                  volyPectorPortLabels);
-    configParam(RANDOMIZE_CHANCE, 0.f, 1.f, 1.f, "Randomize Chance", "%", 0.f,
-                100.f);
     configSwitch(RANDOMIZE_MODE, 0.f, 1.f, 0.f, "Randomize Mode",
                  {"Replace", "Wiggle"});
-    configParam(RANDOMIZE_MIN, 0.f, 10.f, 0.f, "Randomize Minimum", " volts");
-    configParam(RANDOMIZE_MAX, 0.f, 10.f, 10.f, "Randomize Maximum", " volts");
-    configParam(WIGGLE_MIN, -10.f, 10.f, -1.f, "Wiggle Amount Min", " volts");
-    configParam(WIGGLE_MAX, -10.f, 10.f, 1.f, "Wiggle Amount Max", " volts");
     configParam(RANDOMIZE_PROBABILITY_CONTROL, 0.f, 1.f, 1.f,
                 "Randomize Probability", "%", 0.f, 100.f);
     configParam(RANDOMIZE_RANGE_CONTROL, 0.f, 1.f, 1.f,
@@ -125,20 +114,10 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     getParamQuantity(CHANNEL_SELECTOR)->resetEnabled = false;
     getParamQuantity(OUTPUT_SELECTOR)->resetEnabled = false;
     getParamQuantity(INPUT_SELECTOR)->resetEnabled = false;
-    getParamQuantity(RANDOMIZE_CHANCE)->randomizeEnabled = false;
     getParamQuantity(RANDOMIZE_MODE)->randomizeEnabled = false;
-    getParamQuantity(RANDOMIZE_MIN)->randomizeEnabled = false;
-    getParamQuantity(RANDOMIZE_MAX)->randomizeEnabled = false;
-    getParamQuantity(WIGGLE_MIN)->randomizeEnabled = false;
-    getParamQuantity(WIGGLE_MAX)->randomizeEnabled = false;
     getParamQuantity(RANDOMIZE_PROBABILITY_CONTROL)->randomizeEnabled = false;
     getParamQuantity(RANDOMIZE_RANGE_CONTROL)->randomizeEnabled = false;
-    getParamQuantity(RANDOMIZE_CHANCE)->resetEnabled = false;
     getParamQuantity(RANDOMIZE_MODE)->resetEnabled = false;
-    getParamQuantity(RANDOMIZE_MIN)->resetEnabled = false;
-    getParamQuantity(RANDOMIZE_MAX)->resetEnabled = false;
-    getParamQuantity(WIGGLE_MIN)->resetEnabled = false;
-    getParamQuantity(WIGGLE_MAX)->resetEnabled = false;
 
     configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize Output Channel");
     configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize Output Band");
@@ -346,24 +325,11 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     settings.mode = params[RANDOMIZE_MODE].getValue() >= 0.5f
                         ? computerscare::volypector::RandomizeMode::WIGGLE
                         : computerscare::volypector::RandomizeMode::REPLACE;
-    settings.minValue = math::clamp(
-        params[RANDOMIZE_MIN].getValue() * rangeScale, minAllowed, 10.f);
-    settings.maxValue = math::clamp(
-        params[RANDOMIZE_MAX].getValue() * rangeScale, minAllowed, 10.f);
-    settings.wiggleMin = params[WIGGLE_MIN].getValue() * rangeScale;
-    settings.wiggleMax = params[WIGGLE_MAX].getValue() * rangeScale;
+    settings.minValue = minAllowed * rangeScale;
+    settings.maxValue = 10.f * rangeScale;
+    settings.wiggleMin = -2.f * rangeScale;
+    settings.wiggleMax = 2.f * rangeScale;
     return settings;
-  }
-
-  void updateRandomizeRangeLimits() {
-    float minAllowed = minimumAllowedKnobValue();
-    for (int paramId : {RANDOMIZE_MIN, RANDOMIZE_MAX}) {
-      engine::ParamQuantity* pq = getParamQuantity(paramId);
-      if (!pq) continue;
-      pq->minValue = minAllowed;
-      pq->maxValue = 10.f;
-      pq->setValue(math::clamp(pq->getValue(), minAllowed, 10.f));
-    }
   }
 
   float randomKnobValue(float currentValue) {
@@ -700,14 +666,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
 
   void setMainKnobRange(bool bipolar) {
     bool changed = bipolarMainKnobs != bipolar;
-    float oldMinAllowed = minimumAllowedKnobValue();
-    bool randomMinWasAtFloor =
-        std::fabs(params[RANDOMIZE_MIN].getValue() - oldMinAllowed) < 0.0001f;
     bipolarMainKnobs = bipolar;
-    updateRandomizeRangeLimits();
-    if (randomMinWasAtFloor) {
-      params[RANDOMIZE_MIN].setValue(minimumAllowedKnobValue());
-    }
     for (int i = 0; i < volyPectorNumKnobs; i++) {
       engine::ParamQuantity* pq = getParamQuantity(KNOB + i);
       if (!pq) continue;
@@ -1741,7 +1700,6 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     ComputerscareVolyPector* module =
         dynamic_cast<ComputerscareVolyPector*>(this->module);
     if (!module) return;
-    module->updateRandomizeRangeLimits();
 
     struct MainKnobRangeItem : MenuItem {
       ComputerscareVolyPector* module;
@@ -1778,14 +1736,6 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       submenu->addChild(construct<RandomizeModeItem>(
           &MenuItem::text, "Wiggle", &RandomizeModeItem::module, module,
           &RandomizeModeItem::mode, 1));
-      submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscareVolyPector::RANDOMIZE_MIN)));
-      submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscareVolyPector::RANDOMIZE_MAX)));
-      submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscareVolyPector::WIGGLE_MIN)));
-      submenu->addChild(new MenuParamSlider(
-          module->getParamQuantity(ComputerscareVolyPector::WIGGLE_MAX)));
     }));
     menu->addChild(new MenuSeparator());
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Main Knob Range"));

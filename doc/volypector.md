@@ -30,13 +30,11 @@ Inactive channel controls are dimmed when they are above the selected Poly Chann
 - Initialize Output Band input: each polyphonic input channel initializes the matching band across all channels
 - Initialize all input: any high input channel initializes all band/channel values and all band/channel scale/offset values
 - Randomize Probability knob sets the chance that each individual value changes; its CV input sums with the knob value, where 10V equals 100%
-- Randomize Range Scale knob multiplies the context-menu replacement and wiggle ranges; its CV input sums with the knob value, where 10V equals 1.0 scale
+- Randomize Range Scale knob scales the replacement range and wiggle amount; its CV input sums with the knob value, where 10V equals 1.0 scale
 
 ## Right-Click Options
 
 - Main Knob Range: choose Unipolar (0V to 10V) or Bipolar (-10V to 10V)
-- Randomization > Mode: Replace chooses a new value; Wiggle moves the current value
-- Randomization > Randomize Minimum/Maximum: clamps replacement values and final wiggle results
-- Randomization > Wiggle Amount Min/Max: voltage range added to the current value in Wiggle mode
+- Randomization > Mode: Replace chooses a new value across the scaled knob range; Wiggle moves the current value by the scaled wiggle amount
 
 INIT and randomize actions do not reset the randomization settings.
