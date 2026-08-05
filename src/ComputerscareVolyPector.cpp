@@ -45,6 +45,9 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
   rack::dsp::SchmittTrigger channelRandomizeTriggers[volyPectorNumKnobs];
   rack::dsp::SchmittTrigger outputRandomizeTriggers[volyPectorNumOutputs];
   rack::dsp::SchmittTrigger randomizeAllTrigger;
+  rack::dsp::SchmittTrigger channelWiggleTriggers[volyPectorNumKnobs];
+  rack::dsp::SchmittTrigger outputWiggleTriggers[volyPectorNumOutputs];
+  rack::dsp::SchmittTrigger wiggleAllTrigger;
   rack::dsp::SchmittTrigger channelInitializeTriggers[volyPectorNumKnobs];
   rack::dsp::SchmittTrigger outputInitializeTriggers[volyPectorNumOutputs];
   rack::dsp::SchmittTrigger initializeAllTrigger;
@@ -62,20 +65,26 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     CHANNEL_SELECTOR,
     OUTPUT_SELECTOR,
     INPUT_SELECTOR,
-    RANDOMIZE_MODE,
     RANDOMIZE_PROBABILITY_CONTROL,
     RANDOMIZE_RANGE_CONTROL,
+    WIGGLE_PROBABILITY_CONTROL,
+    WIGGLE_RANGE_CONTROL,
     NUM_PARAMS
   };
   enum InputIds {
     CHANNEL_RANDOMIZE_INPUT,
     OUTPUT_RANDOMIZE_INPUT,
     RANDOMIZE_ALL_INPUT,
+    CHANNEL_WIGGLE_INPUT,
+    OUTPUT_WIGGLE_INPUT,
+    WIGGLE_ALL_INPUT,
     CHANNEL_INITIALIZE_INPUT,
     OUTPUT_INITIALIZE_INPUT,
     INITIALIZE_ALL_INPUT,
     RANDOMIZE_PROBABILITY_CV_INPUT,
     RANDOMIZE_RANGE_CV_INPUT,
+    WIGGLE_PROBABILITY_CV_INPUT,
+    WIGGLE_RANGE_CV_INPUT,
     NUM_INPUTS
   };
   enum OutputIds { OUTPUT, NUM_OUTPUTS = OUTPUT + volyPectorNumOutputs };
@@ -97,12 +106,13 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
                  withAllLabel(volyPectorPortLabels));
     configSwitch(INPUT_SELECTOR, 0.f, volyPectorNumKnobs - 1, 0.f, "Input",
                  volyPectorPortLabels);
-    configSwitch(RANDOMIZE_MODE, 0.f, 1.f, 0.f, "Randomize Mode",
-                 {"Replace", "Wiggle"});
     configParam(RANDOMIZE_PROBABILITY_CONTROL, 0.f, 1.f, 1.f,
                 "Randomize Probability", "%", 0.f, 100.f);
     configParam(RANDOMIZE_RANGE_CONTROL, 0.f, 1.f, 1.f,
                 "Randomize Range Scale");
+    configParam(WIGGLE_PROBABILITY_CONTROL, 0.f, 1.f, 1.f, "Wiggle Probability",
+                "%", 0.f, 100.f);
+    configParam(WIGGLE_RANGE_CONTROL, 0.f, 1.f, 1.f, "Wiggle Range Scale");
 
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
     getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
@@ -114,19 +124,24 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     getParamQuantity(CHANNEL_SELECTOR)->resetEnabled = false;
     getParamQuantity(OUTPUT_SELECTOR)->resetEnabled = false;
     getParamQuantity(INPUT_SELECTOR)->resetEnabled = false;
-    getParamQuantity(RANDOMIZE_MODE)->randomizeEnabled = false;
     getParamQuantity(RANDOMIZE_PROBABILITY_CONTROL)->randomizeEnabled = false;
     getParamQuantity(RANDOMIZE_RANGE_CONTROL)->randomizeEnabled = false;
-    getParamQuantity(RANDOMIZE_MODE)->resetEnabled = false;
+    getParamQuantity(WIGGLE_PROBABILITY_CONTROL)->randomizeEnabled = false;
+    getParamQuantity(WIGGLE_RANGE_CONTROL)->randomizeEnabled = false;
 
     configInput(CHANNEL_RANDOMIZE_INPUT, "Randomize Output Channel");
     configInput(OUTPUT_RANDOMIZE_INPUT, "Randomize Output Band");
     configInput(RANDOMIZE_ALL_INPUT, "Randomize all");
+    configInput(CHANNEL_WIGGLE_INPUT, "Wiggle Output Channel");
+    configInput(OUTPUT_WIGGLE_INPUT, "Wiggle Output Band");
+    configInput(WIGGLE_ALL_INPUT, "Wiggle all");
     configInput(CHANNEL_INITIALIZE_INPUT, "Initialize Output Channel");
     configInput(OUTPUT_INITIALIZE_INPUT, "Initialize Output Band");
     configInput(INITIALIZE_ALL_INPUT, "Initialize all");
     configInput(RANDOMIZE_PROBABILITY_CV_INPUT, "Randomize Probability CV");
     configInput(RANDOMIZE_RANGE_CV_INPUT, "Randomize Range CV");
+    configInput(WIGGLE_PROBABILITY_CV_INPUT, "Wiggle Probability CV");
+    configInput(WIGGLE_RANGE_CV_INPUT, "Wiggle Range CV");
     for (int i = 0; i < volyPectorNumOutputs; i++) {
       configOutput(OUTPUT + i, outputName(i));
     }
@@ -304,37 +319,53 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
 
   float minimumAllowedKnobValue() { return bipolarMainKnobs ? -10.f : 0.f; }
 
-  float randomizeProbability() {
+  float randomizeProbability(computerscare::volypector::RandomizeMode mode) {
+    int paramId = mode == computerscare::volypector::RandomizeMode::WIGGLE
+                      ? WIGGLE_PROBABILITY_CONTROL
+                      : RANDOMIZE_PROBABILITY_CONTROL;
+    int inputId = mode == computerscare::volypector::RandomizeMode::WIGGLE
+                      ? WIGGLE_PROBABILITY_CV_INPUT
+                      : RANDOMIZE_PROBABILITY_CV_INPUT;
     return math::clamp(
-        params[RANDOMIZE_PROBABILITY_CONTROL].getValue() +
-            inputs[RANDOMIZE_PROBABILITY_CV_INPUT].getVoltage() / 10.f,
-        0.f, 1.f);
+        params[paramId].getValue() + inputs[inputId].getVoltage() / 10.f, 0.f,
+        1.f);
   }
 
-  float randomizeRangeScale() {
-    return math::clamp(params[RANDOMIZE_RANGE_CONTROL].getValue() +
-                           inputs[RANDOMIZE_RANGE_CV_INPUT].getVoltage() / 10.f,
-                       0.f, 1.f);
+  float randomizeRangeScale(computerscare::volypector::RandomizeMode mode) {
+    int paramId = mode == computerscare::volypector::RandomizeMode::WIGGLE
+                      ? WIGGLE_RANGE_CONTROL
+                      : RANDOMIZE_RANGE_CONTROL;
+    int inputId = mode == computerscare::volypector::RandomizeMode::WIGGLE
+                      ? WIGGLE_RANGE_CV_INPUT
+                      : RANDOMIZE_RANGE_CV_INPUT;
+    return math::clamp(
+        params[paramId].getValue() + inputs[inputId].getVoltage() / 10.f, 0.f,
+        1.f);
   }
 
-  computerscare::volypector::RandomizeSettings randomizeSettings() {
+  computerscare::volypector::RandomizeSettings randomizeSettings(
+      computerscare::volypector::RandomizeMode mode) {
     float minAllowed = minimumAllowedKnobValue();
-    float rangeScale = randomizeRangeScale();
+    float rangeScale = randomizeRangeScale(mode);
     computerscare::volypector::RandomizeSettings settings;
-    settings.chance = randomizeProbability();
-    settings.mode = params[RANDOMIZE_MODE].getValue() >= 0.5f
-                        ? computerscare::volypector::RandomizeMode::WIGGLE
-                        : computerscare::volypector::RandomizeMode::REPLACE;
-    settings.minValue = minAllowed * rangeScale;
-    settings.maxValue = 10.f * rangeScale;
+    settings.chance = randomizeProbability(mode);
+    settings.mode = mode;
+    if (mode == computerscare::volypector::RandomizeMode::REPLACE) {
+      settings.minValue = minAllowed * rangeScale;
+      settings.maxValue = 10.f * rangeScale;
+    } else {
+      settings.minValue = minAllowed;
+      settings.maxValue = 10.f;
+    }
     settings.wiggleMin = -2.f * rangeScale;
     settings.wiggleMax = 2.f * rangeScale;
     return settings;
   }
 
-  float randomKnobValue(float currentValue) {
+  float randomKnobValue(float currentValue,
+                        computerscare::volypector::RandomizeMode mode) {
     return computerscare::volypector::randomizeValue(currentValue,
-                                                     randomizeSettings());
+                                                     randomizeSettings(mode));
   }
 
   void restoreViewSelection(float outputSelection, float channelSelection) {
@@ -363,7 +394,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     outputsDirty = true;
   }
 
-  void randomizeCurrentView() {
+  void randomizeCurrentView(computerscare::volypector::RandomizeMode mode) {
     float outputSelection = params[OUTPUT_SELECTOR].getValue();
     float channelSelection = params[CHANNEL_SELECTOR].getValue();
     restoreViewSelection(outputSelection, channelSelection);
@@ -371,13 +402,13 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
       int channel = selectedChannel();
       for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][channel] =
-            randomKnobValue(outputKnobValues[output][channel]);
+            randomKnobValue(outputKnobValues[output][channel], mode);
       }
     } else {
       int output = normalizedOutputView();
       for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
         outputKnobValues[output][channel] =
-            randomKnobValue(outputKnobValues[output][channel]);
+            randomKnobValue(outputKnobValues[output][channel], mode);
       }
     }
     loadCurrentView();
@@ -386,12 +417,13 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     outputsDirty = true;
   }
 
-  void randomizeChannel(int channel) {
+  void randomizeChannel(int channel,
+                        computerscare::volypector::RandomizeMode mode) {
     channel = math::clamp(channel, 0, volyPectorNumKnobs - 1);
     storeViewedView();
     for (int output = 0; output < volyPectorNumOutputs; output++) {
       outputKnobValues[output][channel] =
-          randomKnobValue(outputKnobValues[output][channel]);
+          randomKnobValue(outputKnobValues[output][channel], mode);
     }
     if (!channelViewActive() || selectedChannel() == channel) {
       loadCurrentView();
@@ -400,12 +432,13 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     outputsDirty = true;
   }
 
-  void randomizeOutput(int output) {
+  void randomizeOutput(int output,
+                       computerscare::volypector::RandomizeMode mode) {
     output = math::clamp(output, 0, volyPectorNumOutputs - 1);
     storeViewedView();
     for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
       outputKnobValues[output][channel] =
-          randomKnobValue(outputKnobValues[output][channel]);
+          randomKnobValue(outputKnobValues[output][channel], mode);
     }
     if (channelViewActive() || normalizedOutputView() == output) {
       loadCurrentView();
@@ -414,11 +447,11 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     outputsDirty = true;
   }
 
-  void randomizeAllValues() {
+  void randomizeAllValues(computerscare::volypector::RandomizeMode mode) {
     for (int output = 0; output < volyPectorNumOutputs; output++) {
       for (int channel = 0; channel < volyPectorNumKnobs; channel++) {
         outputKnobValues[output][channel] =
-            randomKnobValue(outputKnobValues[output][channel]);
+            randomKnobValue(outputKnobValues[output][channel], mode);
       }
     }
     loadCurrentView();
@@ -471,6 +504,9 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     bool outputRandomizeConnected =
         inputs[OUTPUT_RANDOMIZE_INPUT].isConnected();
     bool randomizeAllConnected = inputs[RANDOMIZE_ALL_INPUT].isConnected();
+    bool channelWiggleConnected = inputs[CHANNEL_WIGGLE_INPUT].isConnected();
+    bool outputWiggleConnected = inputs[OUTPUT_WIGGLE_INPUT].isConnected();
+    bool wiggleAllConnected = inputs[WIGGLE_ALL_INPUT].isConnected();
     bool channelInitializeConnected =
         inputs[CHANNEL_INITIALIZE_INPUT].isConnected();
     bool outputInitializeConnected =
@@ -478,8 +514,10 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     bool initializeAllConnected = inputs[INITIALIZE_ALL_INPUT].isConnected();
 
     if (!channelRandomizeConnected && !outputRandomizeConnected &&
-        !randomizeAllConnected && !channelInitializeConnected &&
-        !outputInitializeConnected && !initializeAllConnected) {
+        !randomizeAllConnected && !channelWiggleConnected &&
+        !outputWiggleConnected && !wiggleAllConnected &&
+        !channelInitializeConnected && !outputInitializeConnected &&
+        !initializeAllConnected) {
       return;
     }
 
@@ -490,6 +528,10 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     int outputTriggerChannels =
         outputRandomizeConnected ? inputs[OUTPUT_RANDOMIZE_INPUT].getChannels()
                                  : 0;
+    int channelWiggleChannels =
+        channelWiggleConnected ? inputs[CHANNEL_WIGGLE_INPUT].getChannels() : 0;
+    int outputWiggleChannels =
+        outputWiggleConnected ? inputs[OUTPUT_WIGGLE_INPUT].getChannels() : 0;
     int channelInitializeChannels =
         channelInitializeConnected
             ? inputs[CHANNEL_INITIALIZE_INPUT].getChannels()
@@ -502,7 +544,11 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     if (randomizeAllConnected &&
         randomizeAllTrigger.process(highestInputVoltage(RANDOMIZE_ALL_INPUT) /
                                     2.f)) {
-      randomizeAllValues();
+      randomizeAllValues(computerscare::volypector::RandomizeMode::REPLACE);
+    }
+    if (wiggleAllConnected &&
+        wiggleAllTrigger.process(highestInputVoltage(WIGGLE_ALL_INPUT) / 2.f)) {
+      randomizeAllValues(computerscare::volypector::RandomizeMode::WIGGLE);
     }
     if (initializeAllConnected &&
         initializeAllTrigger.process(highestInputVoltage(INITIALIZE_ALL_INPUT) /
@@ -511,6 +557,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     }
 
     if (!channelRandomizeConnected && !outputRandomizeConnected &&
+        !channelWiggleConnected && !outputWiggleConnected &&
         !channelInitializeConnected && !outputInitializeConnected) {
       return;
     }
@@ -522,7 +569,8 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
               : 0.f;
       if (channelRandomizeConnected &&
           channelRandomizeTriggers[channel].process(channelVoltage / 2.f)) {
-        randomizeChannel(channel);
+        randomizeChannel(channel,
+                         computerscare::volypector::RandomizeMode::REPLACE);
       }
 
       float outputVoltage =
@@ -531,7 +579,28 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
               : 0.f;
       if (outputRandomizeConnected &&
           outputRandomizeTriggers[channel].process(outputVoltage / 2.f)) {
-        randomizeOutput(channel);
+        randomizeOutput(channel,
+                        computerscare::volypector::RandomizeMode::REPLACE);
+      }
+
+      float channelWiggleVoltage =
+          channelWiggleConnected && channel < channelWiggleChannels
+              ? inputs[CHANNEL_WIGGLE_INPUT].getVoltage(channel)
+              : 0.f;
+      if (channelWiggleConnected &&
+          channelWiggleTriggers[channel].process(channelWiggleVoltage / 2.f)) {
+        randomizeChannel(channel,
+                         computerscare::volypector::RandomizeMode::WIGGLE);
+      }
+
+      float outputWiggleVoltage =
+          outputWiggleConnected && channel < outputWiggleChannels
+              ? inputs[OUTPUT_WIGGLE_INPUT].getVoltage(channel)
+              : 0.f;
+      if (outputWiggleConnected &&
+          outputWiggleTriggers[channel].process(outputWiggleVoltage / 2.f)) {
+        randomizeOutput(channel,
+                        computerscare::volypector::RandomizeMode::WIGGLE);
       }
 
       float channelInitializeVoltage =
@@ -585,11 +654,15 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     }
   }
 
-  void onRandomize() override { randomizeCurrentView(); }
+  void onRandomize() override {
+    randomizeCurrentView(computerscare::volypector::RandomizeMode::REPLACE);
+  }
 
   void resetVisibleRandomizeControls() {
     params[RANDOMIZE_PROBABILITY_CONTROL].setValue(1.f);
     params[RANDOMIZE_RANGE_CONTROL].setValue(1.f);
+    params[WIGGLE_PROBABILITY_CONTROL].setValue(1.f);
+    params[WIGGLE_RANGE_CONTROL].setValue(1.f);
   }
 
   void onReset() override {
@@ -1256,6 +1329,7 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
   ui::Tooltip* hoverTooltip = NULL;
   std::string label;
   bool initialize = false;
+  bool wiggle = false;
   float xScale = 0.92f;
   float yScale = 1.18f;
   bool pressed = false;
@@ -1266,10 +1340,18 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
     box.size = Vec(box.size.x * xScale, box.size.y * yScale);
   }
 
+  void setXScale(float scale) {
+    box.size.x *= scale / xScale;
+    xScale = scale;
+  }
+
   ~VolyPectorActionButton() { destroyHoverTooltip(); }
 
   std::string tooltipText() const {
-    return initialize ? "Initialize all values" : "Randomize all values";
+    if (initialize) {
+      return "Initialize all values";
+    }
+    return wiggle ? "Wiggle all values" : "Randomize all values";
   }
 
   void createHoverTooltip() {
@@ -1342,8 +1424,12 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
     }
     if (initialize) {
       module->initializeAllValues();
+    } else if (wiggle) {
+      module->randomizeAllValues(
+          computerscare::volypector::RandomizeMode::WIGGLE);
     } else {
-      module->randomizeAllValues();
+      module->randomizeAllValues(
+          computerscare::volypector::RandomizeMode::REPLACE);
     }
   }
 
@@ -1553,7 +1639,7 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     box.size = Vec(8 * 15, 380);
 
     struct Layout {
-      Vec polyChannelsPos = Vec(94.f, 1.f);
+      Vec polyChannelsPos = Vec(32.f, -2.f);
 
       Vec mainScalePos = Vec(34.f, 36.f);
       Vec mainOffsetPos = Vec(7.f, 40.f);
@@ -1562,27 +1648,35 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       Vec knobGridStart = Vec(4.2f, 68.f);
       Vec knobGridSpacing = Vec(27.f, 27.9f);
       float knobGridSecondColumnYOffset = -5.f;
-      Vec knobLabelOffset = Vec(-3.5f, 1.4f);
-      Vec knobSecondColumnLabelOffset = Vec(9.5f, 1.4f);
+      Vec knobLabelOffset = Vec(-5.5f, 1.4f);
+      Vec knobSecondColumnLabelOffset = Vec(11.5f, 1.4f);
 
-      Vec outputRowsStart = Vec(56.f, 24.f);
+      Vec outputRowsStart = Vec(56.f, 4.f);
       Vec outputRowsSpacing = Vec(0.f, 19.6f);
       Vec outputChannelButtonOffset = Vec(2.f, -4.f);
       Vec outputBandButtonOffset = Vec(22.f, -5.f);
       Vec outputJackOffset = Vec(44.f, -2.f);
 
-      float bottomRandY = 332.f;
-      float bottomInitY = 350.f;
-      float bottomAllJackX = 4.f;
-      float bottomActionX = 24.f;
-      float bottomChannelJackX = 60.f;
-      float bottomBandJackX = 81.f;
+      float bottomRandY = 316.f;
+      float bottomWiggleY = 334.f;
+      float bottomInitY = 352.f;
+      float bottomAllJackX = 42.f;
+      float bottomActionX = 4.f;
+      float bottomRightActionX = 98.f;
+      float bottomRightActionYOffset = 3.f;
+      float bottomRightActionScale = 0.78f;
+      float bottomChannelJackX = 61.f;
+      float bottomBandJackX = 80.f;
       float bottomJackYOffset = 3.f;
 
-      float randomizeProbabilityY = 292.f;
-      float randomizeRangeY = 312.f;
-      float randomizeCvX = bottomAllJackX;
-      float randomizeKnobX = bottomActionX;
+      float randomizeProbabilityY = 284.f;
+      float randomizeRangeY = 304.f;
+      float randomizeCvX = 8.f;
+      float randomizeKnobX = 28.f;
+      float wiggleProbabilityY = 326.f;
+      float wiggleRangeY = 346.f;
+      float wiggleCvX = 2.f;
+      float wiggleKnobX = 22.f;
     } layout;
 
     ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
@@ -1624,19 +1718,47 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
             Vec(layout.randomizeKnobX, layout.randomizeRangeY), module,
             ComputerscareVolyPector::RANDOMIZE_RANGE_CONTROL);
     addParam(randomizeRangeKnob);
+    addInput(createInput<TinyJack>(
+        Vec(layout.wiggleCvX,
+            layout.wiggleProbabilityY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::WIGGLE_PROBABILITY_CV_INPUT));
+    addParam(createParam<ScrambleKnob>(
+        Vec(layout.wiggleKnobX, layout.wiggleProbabilityY), module,
+        ComputerscareVolyPector::WIGGLE_PROBABILITY_CONTROL));
+    addInput(createInput<TinyJack>(
+        Vec(layout.wiggleCvX, layout.wiggleRangeY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::WIGGLE_RANGE_CV_INPUT));
+    VolyPectorNoRandomSmallKnob* wiggleRangeKnob =
+        createParam<VolyPectorNoRandomSmallKnob>(
+            Vec(layout.wiggleKnobX, layout.wiggleRangeY), module,
+            ComputerscareVolyPector::WIGGLE_RANGE_CONTROL);
+    addParam(wiggleRangeKnob);
 
     VolyPectorActionButton* randomizeAllButton =
         createWidget<VolyPectorActionButton>(
-            Vec(layout.bottomActionX, layout.bottomRandY));
+            Vec(layout.bottomRightActionX,
+                layout.bottomRandY + layout.bottomRightActionYOffset));
     randomizeAllButton->module = module;
     randomizeAllButton->label = "RAND";
+    randomizeAllButton->setXScale(layout.bottomRightActionScale);
     addChild(randomizeAllButton);
+    VolyPectorActionButton* wiggleAllButton =
+        createWidget<VolyPectorActionButton>(
+            Vec(layout.bottomRightActionX,
+                layout.bottomWiggleY + layout.bottomRightActionYOffset));
+    wiggleAllButton->module = module;
+    wiggleAllButton->label = "WIG";
+    wiggleAllButton->wiggle = true;
+    wiggleAllButton->setXScale(layout.bottomRightActionScale);
+    addChild(wiggleAllButton);
     VolyPectorActionButton* initializeAllButton =
         createWidget<VolyPectorActionButton>(
-            Vec(layout.bottomActionX, layout.bottomInitY));
+            Vec(layout.bottomRightActionX,
+                layout.bottomInitY + layout.bottomRightActionYOffset));
     initializeAllButton->module = module;
     initializeAllButton->label = "INIT";
     initializeAllButton->initialize = true;
+    initializeAllButton->setXScale(layout.bottomRightActionScale);
     addChild(initializeAllButton);
 
     addInput(createInput<TinyJack>(
@@ -1651,6 +1773,18 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
         Vec(layout.bottomBandJackX,
             layout.bottomRandY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::OUTPUT_RANDOMIZE_INPUT));
+    addInput(createInput<TinyJack>(
+        Vec(layout.bottomAllJackX,
+            layout.bottomWiggleY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::WIGGLE_ALL_INPUT));
+    addInput(createInput<TinyJack>(
+        Vec(layout.bottomChannelJackX,
+            layout.bottomWiggleY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::CHANNEL_WIGGLE_INPUT));
+    addInput(createInput<TinyJack>(
+        Vec(layout.bottomBandJackX,
+            layout.bottomWiggleY + layout.bottomJackYOffset),
+        module, ComputerscareVolyPector::OUTPUT_WIGGLE_INPUT));
     addInput(createInput<TinyJack>(
         Vec(layout.bottomAllJackX,
             layout.bottomInitY + layout.bottomJackYOffset),
@@ -1712,31 +1846,6 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
         MenuItem::step();
       }
     };
-    struct RandomizeModeItem : MenuItem {
-      ComputerscareVolyPector* module;
-      int mode;
-      void onAction(const event::Action& e) override {
-        module->params[ComputerscareVolyPector::RANDOMIZE_MODE].setValue(mode);
-      }
-      void step() override {
-        rightText = CHECKMARK(
-            (int)std::round(
-                module->params[ComputerscareVolyPector::RANDOMIZE_MODE]
-                    .getValue()) == mode);
-        MenuItem::step();
-      }
-    };
-
-    menu->addChild(new MenuSeparator());
-    menu->addChild(createSubmenuItem("Randomization", "", [=](Menu* submenu) {
-      submenu->addChild(construct<MenuLabel>(&MenuLabel::text, "Mode"));
-      submenu->addChild(construct<RandomizeModeItem>(
-          &MenuItem::text, "Replace", &RandomizeModeItem::module, module,
-          &RandomizeModeItem::mode, 0));
-      submenu->addChild(construct<RandomizeModeItem>(
-          &MenuItem::text, "Wiggle", &RandomizeModeItem::module, module,
-          &RandomizeModeItem::mode, 1));
-    }));
     menu->addChild(new MenuSeparator());
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Main Knob Range"));
     menu->addChild(construct<MainKnobRangeItem>(
@@ -1774,6 +1883,9 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     smallLetterDisplay->fontSize = 16;
     smallLetterDisplay->letterSpacing = 1.6f;
     smallLetterDisplay->textAlign = 1;
+    smallLetterDisplay->box.pos = Vec(x + labelDx, y - 10 + labelDy);
+
+    addChild(smallLetterDisplay);
 
     ParamWidget* pob = createParam<VolyPectorDisableableSmoothKnob>(
         Vec(x, y), module, ComputerscareVolyPector::KNOB + index);
@@ -1789,10 +1901,6 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     fader->previewPolyChannels = previewPolyChannels;
     fader->previewValue = previewKnobValues[index];
     addParam(fader);
-
-    smallLetterDisplay->box.pos = Vec(x + labelDx, y - 10 + labelDy);
-
-    addChild(smallLetterDisplay);
   }
 
   void addPortPair(std::string label, float x, float y,

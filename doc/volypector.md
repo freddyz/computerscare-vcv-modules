@@ -22,19 +22,22 @@ Inactive channel controls are dimmed when they are above the selected Poly Chann
 ## Randomize
 
 - RAND: randomizes all band/channel values
+- WIG: wiggles all band/channel values
 - INIT: initializes all band/channel values and all band/channel scale/offset values
 - Randomize Output Channel input: each polyphonic input channel randomizes the matching channel across all bands
 - Randomize Output Band input: each polyphonic input channel randomizes the matching band across all channels
 - Randomize all input: any high input channel randomizes all band/channel values
+- Wiggle Output Channel input: each polyphonic input channel wiggles the matching channel across all bands
+- Wiggle Output Band input: each polyphonic input channel wiggles the matching band across all channels
+- Wiggle all input: any high input channel wiggles all band/channel values
 - Initialize Output Channel input: each polyphonic input channel initializes the matching channel across all bands
 - Initialize Output Band input: each polyphonic input channel initializes the matching band across all channels
 - Initialize all input: any high input channel initializes all band/channel values and all band/channel scale/offset values
-- Randomize Probability knob sets the chance that each individual value changes; its CV input sums with the knob value, where 10V equals 100%
-- Randomize Range Scale knob scales the replacement range and wiggle amount; its CV input sums with the knob value, where 10V equals 1.0 scale
+- Randomize Probability and Range Scale controls affect RAND and randomize trigger inputs
+- Wiggle Probability and Range Scale controls affect WIG and wiggle trigger inputs
 
 ## Right-Click Options
 
 - Main Knob Range: choose Unipolar (0V to 10V) or Bipolar (-10V to 10V)
-- Randomization > Mode: Replace chooses a new value across the scaled knob range; Wiggle moves the current value by the scaled wiggle amount
 
-INIT and randomize actions do not reset the randomization settings.
+RAND uses replace randomization. Wiggle inputs move the current values by the scaled wiggle amount.
