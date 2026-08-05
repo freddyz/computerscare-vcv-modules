@@ -1646,10 +1646,11 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       Vec focusLabelPos = Vec(4.f, 22.f);
 
       Vec knobGridStart = Vec(4.2f, 68.f);
-      Vec knobGridSpacing = Vec(27.f, 27.9f);
+      Vec knobGridSpacing = Vec(25.5f, 27.9f);
       float knobGridSecondColumnYOffset = -5.f;
       Vec knobLabelOffset = Vec(-5.5f, 1.4f);
-      Vec knobSecondColumnLabelOffset = Vec(11.5f, 1.4f);
+      Vec knobSecondColumnLabelOffset = Vec(18.f, 1.4f);
+      float knobSecondColumnLabelWidth = 18.f;
 
       Vec outputRowsStart = Vec(56.f, 4.f);
       Vec outputRowsSpacing = Vec(0.f, 19.6f);
@@ -1672,11 +1673,11 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       float randomizeProbabilityY = 290.f;
       float randomizeRangeY = 310.f;
       float randomizeCvX = 2.f;
-      float randomizeKnobX = 22.f;
+      float randomizeKnobX = 18.f;
       float wiggleProbabilityY = 332.f;
       float wiggleRangeY = 352.f;
       float wiggleCvX = 2.f;
-      float wiggleKnobX = 22.f;
+      float wiggleKnobX = 18.f;
     } layout;
 
     ComputerscareSVGPanel* panel = new ComputerscareSVGPanel();
@@ -1818,7 +1819,8 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
                   (column == 1 ? layout.knobGridSecondColumnYOffset : 0.f));
       Vec labelOffset = column == 0 ? layout.knobLabelOffset
                                     : layout.knobSecondColumnLabelOffset;
-      addLabeledKnob(pos.x, pos.y, module, i, labelOffset.x, labelOffset.y);
+      addLabeledKnob(pos.x, pos.y, module, i, labelOffset.x, labelOffset.y,
+                     column == 1 ? layout.knobSecondColumnLabelWidth : 0.f);
     }
 
     for (int i = 0; i < volyPectorNumOutputs; i++) {
@@ -1873,7 +1875,8 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
   }
 
   void addLabeledKnob(float x, float y, ComputerscareVolyPector* module,
-                      int index, float labelDx, float labelDy) {
+                      int index, float labelDx, float labelDy,
+                      float labelRightAlignWidth = 0.f) {
     VolyPectorKnobLabel* smallLetterDisplay = new VolyPectorKnobLabel();
     smallLetterDisplay->module = module;
     smallLetterDisplay->index = index;
@@ -1882,8 +1885,13 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     smallLetterDisplay->box.size = Vec(5, 10);
     smallLetterDisplay->fontSize = 16;
     smallLetterDisplay->letterSpacing = 1.6f;
-    smallLetterDisplay->textAlign = 1;
-    smallLetterDisplay->box.pos = Vec(x + labelDx, y - 10 + labelDy);
+    smallLetterDisplay->textAlign =
+        labelRightAlignWidth > 0.f ? NVG_ALIGN_RIGHT : NVG_ALIGN_LEFT;
+    if (labelRightAlignWidth > 0.f) {
+      smallLetterDisplay->breakRowWidth = labelRightAlignWidth;
+    }
+    smallLetterDisplay->box.pos =
+        Vec(x + labelDx - labelRightAlignWidth, y - 10 + labelDy);
 
     addChild(smallLetterDisplay);
 

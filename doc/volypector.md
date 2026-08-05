@@ -21,8 +21,8 @@ Inactive channel controls are dimmed when they are above the selected Poly Chann
 
 ## Randomize
 
-- RAND: randomizes all band/channel values
-- WIG: wiggles all band/channel values
+- RAND: replace-randomizes all band/channel values
+- WIG: wiggles all band/channel values from their current positions
 - INIT: initializes all band/channel values and all band/channel scale/offset values
 - Randomize Output Channel input: each polyphonic input channel randomizes the matching channel across all bands
 - Randomize Output Band input: each polyphonic input channel randomizes the matching band across all channels
@@ -33,11 +33,15 @@ Inactive channel controls are dimmed when they are above the selected Poly Chann
 - Initialize Output Channel input: each polyphonic input channel initializes the matching channel across all bands
 - Initialize Output Band input: each polyphonic input channel initializes the matching band across all channels
 - Initialize all input: any high input channel initializes all band/channel values and all band/channel scale/offset values
-- Randomize Probability and Range Scale controls affect RAND and randomize trigger inputs
-- Wiggle Probability and Range Scale controls affect WIG and wiggle trigger inputs
+- Randomize Probability and Range Scale affect RAND and randomize trigger inputs
+- Wiggle Probability and Range Scale affect WIG and wiggle trigger inputs
+
+CV adds `voltage / 10` to each Probability or Range Scale knob.
+
+Range Scale narrows RAND's full knob range. Wiggle Range Scale narrows WIG's +/-2V movement.
+
+Rack initialize resets the visible Probability and Range Scale knobs to 100%.
 
 ## Right-Click Options
 
 - Main Knob Range: choose Unipolar (0V to 10V) or Bipolar (-10V to 10V)
-
-RAND uses replace randomization. Wiggle inputs move the current values by the scaled wiggle amount.
