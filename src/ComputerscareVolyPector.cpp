@@ -1639,7 +1639,7 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     box.size = Vec(8 * 15, 380);
 
     struct Layout {
-      Vec polyChannelsPos = Vec(32.f, -2.f);
+      Vec polyChannelsPos = Vec(28.f, 1.f);
 
       Vec mainScalePos = Vec(34.f, 36.f);
       Vec mainOffsetPos = Vec(7.f, 40.f);
@@ -1669,12 +1669,12 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       float bottomBandJackX = 80.f;
       float bottomJackYOffset = 3.f;
 
-      float randomizeProbabilityY = 284.f;
-      float randomizeRangeY = 304.f;
-      float randomizeCvX = 8.f;
-      float randomizeKnobX = 28.f;
-      float wiggleProbabilityY = 326.f;
-      float wiggleRangeY = 346.f;
+      float randomizeProbabilityY = 290.f;
+      float randomizeRangeY = 310.f;
+      float randomizeCvX = 2.f;
+      float randomizeKnobX = 22.f;
+      float wiggleProbabilityY = 332.f;
+      float wiggleRangeY = 352.f;
       float wiggleCvX = 2.f;
       float wiggleKnobX = 22.f;
     } layout;
