@@ -73,10 +73,11 @@ struct ComputerscareKnolyPobs : ComputerscarePolyModule {
 
   void fromJson(json_t* rootJ) override {
     json_t* dataJ = json_object_get(rootJ, "data");
-    if (dataJ) {
-      setMainKnobRange(readBipolarMainKnobs(dataJ));
-    }
+    setMainKnobRange(dataJ && readBipolarMainKnobs(dataJ));
     Module::fromJson(rootJ);
+    if (!dataJ) {
+      setMainKnobRange(false);
+    }
   }
 
   void dataFromJson(json_t* rootJ) override {
