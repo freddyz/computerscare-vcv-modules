@@ -27,12 +27,14 @@ std::vector<std::string> oneToSixteenLabels() {
   return labels;
 }
 
-float volyPectorRandomKnobPreviewValue() { return random::uniform() * 10.f; }
+float volyPectorRandomKnobPreviewValue() {
+  return random::uniform() * 20.f - 10.f;
+}
 
 }  // namespace
 
 struct ComputerscareVolyPector : ComputerscarePolyModule {
-  bool bipolarMainKnobs = false;
+  bool bipolarMainKnobs = true;
   int mainKnobRangeRevision = 0;
   float outputKnobValues[volyPectorNumOutputs][volyPectorNumKnobs] = {};
   float outputScaleValues[volyPectorNumOutputs] = {};
@@ -94,7 +96,8 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
 
     for (int i = 0; i < volyPectorNumKnobs; i++) {
-      configParam(KNOB + i, 0.f, 10.f, 0.f, "Channel " + std::to_string(i + 1));
+      configParam(KNOB + i, -10.f, 10.f, 0.f,
+                  "Channel " + std::to_string(i + 1));
     }
     configSwitch(POLY_CHANNELS, 1.f, 16.f, 16.f, "Poly Channels",
                  polyChannelLabels(false));
@@ -764,7 +767,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
 
   bool readBipolarMainKnobs(json_t* rootJ) {
     json_t* bipolarMainKnobsJ = json_object_get(rootJ, "bipolarMainKnobs");
-    return bipolarMainKnobsJ && json_boolean_value(bipolarMainKnobsJ);
+    return !bipolarMainKnobsJ || json_boolean_value(bipolarMainKnobsJ);
   }
 
   json_t* dataToJson() override {

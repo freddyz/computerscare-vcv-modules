@@ -21,8 +21,8 @@
     {
       "slug": "computerscare-volypector",
       "name": "VolyPector",
-      "description": "16 editable polyphonic CV bands",
-      "tags": ["Polyphonic", "Utility"],
+      "description": "16 polyphonic CV bands with compact UI, edit by Band or by Channel",
+      "tags": ["Polyphonic", "Utility", "Random"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/volypector.md"
     },
     {
