@@ -38,7 +38,7 @@ Inactive channel controls are dimmed when they are above the selected Poly Chann
 
 CV adds `voltage / 10` to each Probability or Range Scale knob.
 
-Range Scale narrows RAND's full knob range. Wiggle Range Scale narrows WIG's +/-2V movement.
+Range Scale narrows RAND's full knob range. Wiggle Range Scale sets WIG movement from 0x to 2x the normal +/-2V movement, or up to 3x with CV.
 
 Rack initialize resets the visible Probability and Range Scale knobs to 100%.
 

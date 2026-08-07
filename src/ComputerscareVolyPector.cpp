@@ -112,7 +112,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
                 "Randomize Range Scale");
     configParam(WIGGLE_PROBABILITY_CONTROL, 0.f, 1.f, 1.f, "Wiggle Probability",
                 "%", 0.f, 100.f);
-    configParam(WIGGLE_RANGE_CONTROL, 0.f, 1.f, 1.f, "Wiggle Range Scale");
+    configParam(WIGGLE_RANGE_CONTROL, 0.f, 2.f, 1.f, "Wiggle Range Scale");
 
     getParamQuantity(POLY_CHANNELS)->randomizeEnabled = false;
     getParamQuantity(POLY_CHANNELS)->resetEnabled = false;
@@ -338,9 +338,11 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     int inputId = mode == computerscare::volypector::RandomizeMode::WIGGLE
                       ? WIGGLE_RANGE_CV_INPUT
                       : RANDOMIZE_RANGE_CV_INPUT;
+    float maxScale =
+        mode == computerscare::volypector::RandomizeMode::WIGGLE ? 3.f : 1.f;
     return math::clamp(
         params[paramId].getValue() + inputs[inputId].getVoltage() / 10.f, 0.f,
-        1.f);
+        maxScale);
   }
 
   computerscare::volypector::RandomizeSettings randomizeSettings(
