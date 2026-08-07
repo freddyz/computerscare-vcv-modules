@@ -1643,7 +1643,7 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
 
       Vec mainScalePos = Vec(34.f, 36.f);
       Vec mainOffsetPos = Vec(7.f, 40.f);
-      Vec focusLabelPos = Vec(4.f, 22.f);
+      Vec focusLabelPos = Vec(4.f, 23.5f);
 
       Vec knobGridStart = Vec(4.2f, 68.f);
       Vec knobGridSpacing = Vec(25.5f, 27.9f);
@@ -1849,7 +1849,7 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       }
     };
     menu->addChild(new MenuSeparator());
-    menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Main Knob Range"));
+    menu->addChild(construct<MenuLabel>(&MenuLabel::text, "Knob Range"));
     menu->addChild(construct<MainKnobRangeItem>(
         &MenuItem::text, "Unipolar", &MainKnobRangeItem::module, module,
         &MainKnobRangeItem::bipolar, false));

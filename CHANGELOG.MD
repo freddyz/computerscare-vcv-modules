@@ -1,6 +1,6 @@
 # 2.3.4
 VolyPector:
-- Add scaffold module with Knoly-style knobs, 8 inputs, 8 outputs, and channel/input/output selectors
+- 16 polyphonic signals, with a compact UI.  Edit by signal, or by channel.  Triggered randomization/wiggle per channel or signal.
 
 Knoly Pobs:
 - Fix saved bipolar main knob values loading as 0 when they were negative

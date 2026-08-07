@@ -44,4 +44,4 @@ Rack initialize resets the visible Probability and Range Scale knobs to 100%.
 
 ## Right-Click Options
 
-- Main Knob Range: choose Unipolar (0V to 10V) or Bipolar (-10V to 10V)
+- Knob Range: choose Unipolar (0V to 10V) or Bipolar (-10V to 10V)
