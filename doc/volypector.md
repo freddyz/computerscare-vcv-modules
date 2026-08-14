@@ -19,6 +19,10 @@ Click a channel number to focus a channel. The 16 main knobs edit Alpha-Papa for
 
 Inactive channel controls are dimmed when they are above the selected Poly Channels count.
 
+Focus CV divides positive and negative 10V ranges into 16 equal steps. 0V and positive voltages focus bands Alpha-Papa, and negative voltages focus channels 1-16. Voltages outside +/-10V clamp to the highest step. While Focus CV is connected, the band/channel focus controls are disabled.
+
+This can be useful for MIDI mapping the main knobs: apply CV to the Focus CV input to choose which band/channel is being edited, then move the mapped main knobs to edit those values. (Thanks to fiddlercrabseason for the idea)
+
 ## Randomize
 
 - RAND: replace-randomizes all band/channel values

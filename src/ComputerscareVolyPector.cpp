@@ -6,6 +6,8 @@ namespace {
 
 const int volyPectorNumKnobs = 16;
 const int volyPectorNumOutputs = 16;
+const float volyPectorFocusCvRange = 10.f;
+const float volyPectorFocusCvSteps = 16.f;
 
 const std::vector<std::string> volyPectorPortLabels = {
     "A", "B", "C", "D", "E", "F", "G", "H",
@@ -87,6 +89,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     RANDOMIZE_RANGE_CV_INPUT,
     WIGGLE_PROBABILITY_CV_INPUT,
     WIGGLE_RANGE_CV_INPUT,
+    FOCUS_CV_INPUT,
     NUM_INPUTS
   };
   enum OutputIds { OUTPUT, NUM_OUTPUTS = OUTPUT + volyPectorNumOutputs };
@@ -141,6 +144,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     configInput(CHANNEL_INITIALIZE_INPUT, "Initialize Output Channel");
     configInput(OUTPUT_INITIALIZE_INPUT, "Initialize Output Band");
     configInput(INITIALIZE_ALL_INPUT, "Initialize all");
+    configInput(FOCUS_CV_INPUT, "Focus CV");
     configInput(RANDOMIZE_PROBABILITY_CV_INPUT, "Randomize Probability CV");
     configInput(RANDOMIZE_RANGE_CV_INPUT, "Randomize Range CV");
     configInput(WIGGLE_PROBABILITY_CV_INPUT, "Wiggle Probability CV");
@@ -318,6 +322,39 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     captureVisibleControls();
     updateParamLabels();
     outputsDirty = true;
+  }
+
+  float focusCvVoltage() {
+    return math::clamp(inputs[FOCUS_CV_INPUT].getVoltage(),
+                       -volyPectorFocusCvRange, volyPectorFocusCvRange);
+  }
+
+  int focusCvIndex() {
+    float voltage = focusCvVoltage();
+    float normalized = std::abs(voltage) / volyPectorFocusCvRange;
+    normalized = math::clamp(normalized, 0.f, 1.f - 1e-6f);
+    return math::clamp((int)std::floor(normalized * volyPectorFocusCvSteps), 0,
+                       volyPectorNumKnobs - 1);
+  }
+
+  bool focusCvControlsFocus() { return inputs[FOCUS_CV_INPUT].isConnected(); }
+
+  void processFocusCv() {
+    if (!focusCvControlsFocus()) {
+      return;
+    }
+
+    int index = focusCvIndex();
+    if (focusCvVoltage() >= 0.f) {
+      if (channelViewActive() || selectedOutput() != index) {
+        selectOutputView(index);
+      }
+      return;
+    }
+
+    if (selectedChannel() != index) {
+      selectChannelView(index);
+    }
   }
 
   float minimumAllowedKnobValue() { return bipolarMainKnobs ? -10.f : 0.f; }
@@ -890,6 +927,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
 
   void process(const ProcessArgs& args) override {
     (void)args;
+    processFocusCv();
     processTriggers();
     ComputerscarePolyModule::checkCounter();
     if (counter == 0) {
@@ -1228,6 +1266,8 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
     return channelIndex > activePolyChannels - 1;
   }
 
+  bool disabledByFocusCv() { return module && module->focusCvControlsFocus(); }
+
   void step() override {
     ComputerscareBlankButton::step();
     setDownFrame(pressed || selected());
@@ -1251,7 +1291,9 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
 
     bool isSelected = selected();
     bool isInactive = inactive();
-    NVGcolor labelColor = isInactive ? nvgRGB(0x78, 0x78, 0x78) : BLACK;
+    bool isDisabled = disabledByFocusCv();
+    NVGcolor labelColor =
+        (isInactive || isDisabled) ? nvgRGB(0x78, 0x78, 0x78) : BLACK;
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, outputLabel ? 18.f : 15.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
@@ -1273,7 +1315,7 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
   }
 
   void runAction() {
-    if (!module) {
+    if (!module || disabledByFocusCv()) {
       return;
     }
     if (outputLabel) {
@@ -1286,6 +1328,12 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
   void onButton(const event::Button& e) override {
     if (e.button != GLFW_MOUSE_BUTTON_LEFT) {
       ComputerscareBlankButton::onButton(e);
+      return;
+    }
+
+    if (disabledByFocusCv()) {
+      setPressedState(false);
+      e.consume(this);
       return;
     }
 
@@ -1320,7 +1368,7 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
     if (e.button == GLFW_MOUSE_BUTTON_LEFT) {
       bool wasPressed = pressed;
       setPressedState(false);
-      if (wasPressed) {
+      if (wasPressed && !disabledByFocusCv()) {
         runAction();
       }
       return;
@@ -1490,8 +1538,16 @@ struct VolyPectorSelectorMenuItem : MenuItem {
   int companionParamId = -1;
   int value = 0;
 
+  bool disabledByFocusCv() {
+    ComputerscareVolyPector* volyPector =
+        dynamic_cast<ComputerscareVolyPector*>(module);
+    return volyPector && volyPector->focusCvControlsFocus() &&
+           (paramId == ComputerscareVolyPector::CHANNEL_SELECTOR ||
+            paramId == ComputerscareVolyPector::OUTPUT_SELECTOR);
+  }
+
   void onAction(const event::Action& e) override {
-    if (module && paramId >= 0) {
+    if (module && paramId >= 0 && !disabledByFocusCv()) {
       module->params[paramId].setValue(value);
       if (value > 0 && companionParamId >= 0) {
         module->params[companionParamId].setValue(0.f);
@@ -1504,6 +1560,7 @@ struct VolyPectorSelectorMenuItem : MenuItem {
       rightText = CHECKMARK(
           (int)std::round(module->params[paramId].getValue()) == value);
     }
+    disabled = disabledByFocusCv();
     MenuItem::step();
   }
 };
@@ -1552,6 +1609,14 @@ struct VolyPectorSelectorButton : ComputerscareBlankButton {
     return math::clamp(defaultValue, 0, (int)labels.size() - 1);
   }
 
+  bool disabledByFocusCv() {
+    ComputerscareVolyPector* volyPector =
+        dynamic_cast<ComputerscareVolyPector*>(module);
+    return volyPector && volyPector->focusCvControlsFocus() &&
+           (paramId == ComputerscareVolyPector::CHANNEL_SELECTOR ||
+            paramId == ComputerscareVolyPector::OUTPUT_SELECTOR);
+  }
+
   void step() override {
     ComputerscareBlankButton::step();
     updateMenuFrame();
@@ -1574,7 +1639,8 @@ struct VolyPectorSelectorButton : ComputerscareBlankButton {
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 13.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    nvgFillColor(args.vg, BLACK);
+    nvgFillColor(args.vg,
+                 disabledByFocusCv() ? nvgRGB(0x78, 0x78, 0x78) : BLACK);
     bool pressed = isMenuOpen();
     float xOffset = pressed ? 1.5f : 0.f;
     float yOffset = pressed ? 1.5f : 0.f;
@@ -1599,7 +1665,7 @@ struct VolyPectorSelectorButton : ComputerscareBlankButton {
 
     e.consume(this);
     destroyTooltip();
-    if (!module) {
+    if (!module || disabledByFocusCv()) {
       return;
     }
 
@@ -1661,7 +1727,7 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       Vec outputRowsSpacing = Vec(0.f, 19.6f);
       Vec outputChannelButtonOffset = Vec(2.f, -4.f);
       Vec outputBandButtonOffset = Vec(22.f, -5.f);
-      Vec outputJackOffset = Vec(44.f, -2.f);
+      Vec outputJackOffset = Vec(45.f, -2.f);
 
       float bottomRandY = 316.f;
       float bottomWiggleY = 334.f;
@@ -1674,6 +1740,7 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       float bottomChannelJackX = 61.f;
       float bottomBandJackX = 80.f;
       float bottomJackYOffset = 3.f;
+      float focusCvY = 288.f;
 
       float randomizeProbabilityY = 290.f;
       float randomizeRangeY = 310.f;
@@ -1779,6 +1846,9 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
         Vec(layout.bottomBandJackX,
             layout.bottomRandY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::OUTPUT_RANDOMIZE_INPUT));
+    addInput(createInput<TinyJack>(Vec(layout.bottomAllJackX, layout.focusCvY),
+                                   module,
+                                   ComputerscareVolyPector::FOCUS_CV_INPUT));
     addInput(createInput<TinyJack>(
         Vec(layout.bottomAllJackX,
             layout.bottomWiggleY + layout.bottomJackYOffset),
