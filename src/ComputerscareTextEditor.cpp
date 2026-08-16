@@ -44,8 +44,10 @@ void ComputerscareTextEditor::step() {
 }
 
 void ComputerscareTextEditor::onChange(const ChangeEvent& e) {
-  if (!suppressChangeTracking && !handlingTrackedInput &&
-      text != lastSnapshot.text) {
+  if (suppressChangeTracking) {
+    return;
+  }
+  if (!handlingTrackedInput && text != lastSnapshot.text) {
     pushUndoSnapshot(lastSnapshot);
     redoStack.clear();
   }

@@ -23,6 +23,11 @@ struct BlunchLineInfo {
   std::string text;
 };
 
+struct BlunchAllViewTextPosition {
+  int line = 0;
+  int column = 0;
+};
+
 static thread_local int blunchProcessingChannel = -1;
 static const float EXTERNAL_TIMING_DISPLAY_PULSE_SECONDS = 0.14f;
 static const int BLUNCH_WAIT_MODE_COUNT = 9;
@@ -100,6 +105,27 @@ static int getLineCount(const std::string& text) {
     }
   }
   return count;
+}
+
+static BlunchAllViewTextPosition getAllViewTextPositionForOffset(
+    const std::string& text, int offset) {
+  BlunchAllViewTextPosition position;
+  int clampedOffset = std::max(0, std::min(offset, (int)text.size()));
+  for (int i = 0; i < clampedOffset; i++) {
+    if (text[i] == '\n') {
+      position.line++;
+      position.column = 0;
+    } else {
+      position.column++;
+    }
+  }
+  return position;
+}
+
+static int getOffsetForAllViewTextPosition(const std::string& text,
+                                           BlunchAllViewTextPosition position) {
+  BlunchLineInfo lineInfo = getLineInfo(text, position.line);
+  return std::min(lineInfo.begin + std::max(0, position.column), lineInfo.end);
 }
 
 static bool isBlankLine(const std::string& text) {
@@ -515,33 +541,16 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void refreshChannelsEditorState(bool preserveCursor = false) {
-    int cursorColumn = 0;
-    int selectionColumn = 0;
+    BlunchAllViewTextPosition cursorPosition;
+    BlunchAllViewTextPosition selectionPosition;
     if (preserveCursor) {
-      int cursorCurrentLine = 0;
-      int selectionCurrentLine = 0;
-      for (int i = 0; i < channelsEditorState.cursor &&
-                      i < (int)channelsEditorState.text.size();
-           i++) {
-        if (channelsEditorState.text[i] == '\n') {
-          cursorCurrentLine++;
-          cursorColumn = 0;
-        } else {
-          cursorColumn++;
-        }
-      }
-      for (int i = 0; i < channelsEditorState.selection &&
-                      i < (int)channelsEditorState.text.size();
-           i++) {
-        if (channelsEditorState.text[i] == '\n') {
-          selectionCurrentLine++;
-          selectionColumn = 0;
-        } else {
-          selectionColumn++;
-        }
-      }
-      if (cursorCurrentLine != selectionCurrentLine) {
-        selectionColumn = cursorColumn;
+      cursorPosition = getAllViewTextPositionForOffset(
+          channelsEditorState.text, channelsEditorState.cursor);
+      selectionPosition = getAllViewTextPositionForOffset(
+          channelsEditorState.text, channelsEditorState.selection);
+      if (cursorPosition.line != selectionPosition.line) {
+        selectionPosition.line = cursorPosition.line;
+        selectionPosition.column = cursorPosition.column;
       }
     }
 
@@ -557,10 +566,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     BlunchLineInfo channelLineInfo =
         getLineInfo(channelsEditorState.text, channelLine);
     if (preserveCursor) {
-      channelsEditorState.cursor =
-          std::min(channelLineInfo.begin + cursorColumn, channelLineInfo.end);
-      channelsEditorState.selection = std::min(
-          channelLineInfo.begin + selectionColumn, channelLineInfo.end);
+      channelsEditorState.cursor = getOffsetForAllViewTextPosition(
+          channelsEditorState.text, cursorPosition);
+      channelsEditorState.selection = getOffsetForAllViewTextPosition(
+          channelsEditorState.text, selectionPosition);
     } else {
       channelsEditorState.cursor = channelLineInfo.begin;
       channelsEditorState.selection = channelsEditorState.cursor;
@@ -2726,6 +2735,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   int channelsIndicatorChannel = 0;
   double channelsIndicatorStartTime = -10.0;
   bool wasShowingChannelsView = false;
+  int lastChannelsEditorCursor = -1;
+  std::string lastChannelsEditorText;
 
   ComputerscareBlunchWidget(ComputerscareBlunch* module) {
     setModule(module);
@@ -2947,6 +2958,14 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       float activeProgress = 0.f;
 
       if (blunch) {
+        bool editorHasChannelsState =
+            editor->state == &blunch->channelsEditorState;
+        bool channelsCursorMovedInSameText =
+            blunch->showingChannelsView() && editorHasChannelsState &&
+            lastChannelsEditorCursor >= 0 &&
+            editor->cursor != lastChannelsEditorCursor &&
+            editor->text == lastChannelsEditorText;
+
         editor->style.fontSize =
             blunch->params[ComputerscareBlunch::EDITOR_FONT_SIZE_PARAM]
                 .getValue();
@@ -3057,12 +3076,18 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                 0, std::min(blunch->forcedChannelsCursorChannel,
                             ComputerscareBlunch::MAX_POLY_CHANNELS - 1));
             blunch->forcedChannelsCursorChannel = -1;
-          } else if (editor->state == &blunch->channelsEditorState) {
+          } else if (editorHasChannelsState) {
             blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
-            blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
-                editor->getCursorLine(),
-                ComputerscareBlunch::MAX_POLY_CHANNELS);
+            if (channelsCursorMovedInSameText) {
+              blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
+                  editor->getCursorLine(),
+                  ComputerscareBlunch::MAX_POLY_CHANNELS);
+            }
             blunch->syncChannelsEditorEdit(blunch->channelsCursorChannel);
+          }
+          if (editorHasChannelsState) {
+            blunch->channelsEditorState.cursor = editor->cursor;
+            blunch->channelsEditorState.selection = editor->selection;
           }
           blunch->refreshChannelsEditorState(true);
         }
@@ -3119,8 +3144,11 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           blunch->lastOpenCount = editor->commands.openCount;
           blunch->lastStopCount = editor->commands.stopCount;
           blunch->lastRunToggleCount = editor->commands.runToggleCount;
-          blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
-              editor->getCursorLine(), ComputerscareBlunch::MAX_POLY_CHANNELS);
+          if (channelsCursorMovedInSameText) {
+            blunch->channelsCursorChannel = blunchChannelForChannelsViewLine(
+                editor->getCursorLine(),
+                ComputerscareBlunch::MAX_POLY_CHANNELS);
+          }
         }
         const BlunchSequencerRuntime& visibleSequencer =
             blunch->showingChannelsView()
@@ -3128,6 +3156,14 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                 : blunch->activeSequencer();
         blinkHigh = visibleSequencer.activeClockOutputHigh;
         activeProgress = visibleSequencer.activeClockRamp;
+        if (blunch->showingChannelsView() &&
+            editor->state == &blunch->channelsEditorState) {
+          lastChannelsEditorCursor = editor->cursor;
+          lastChannelsEditorText = editor->text;
+        } else {
+          lastChannelsEditorCursor = -1;
+          lastChannelsEditorText.clear();
+        }
       } else {
         editor->openOnEnter = false;
         editor->stopShortcutEnabled = false;
