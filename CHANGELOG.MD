@@ -1,3 +1,19 @@
+# 2.3.7
+VolyPector:
+- 16 polyphonic signals, with a compact UI.  Edit by signal, or by channel.  Triggered randomization/wiggle per channel or signal.
+
+Knoly Pobs:
+- Fix saved bipolar main knob values loading as 0 when they were negative
+
+Sloly Pit:
+- Add blank routes and randomization defaults
+
+Debug:
+- Note name / midi note number mode to display, eg: "Db3" or "F#5 - 43"
+
+Development:
+- Add portable vcvmon watcher script
+
 # 2.3.2
 Sloly Pit:
 - Polyphonic splitter/router, split a poly signal into multiple poly signals
