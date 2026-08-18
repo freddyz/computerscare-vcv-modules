@@ -226,7 +226,8 @@ struct DisableableSmallKnob : ComputerscareRoundKnob {
       if (disabled != candidateDisabled || !initialized) {
         setSvg(candidateDisabled ? disabledSvg : enabledThemes[themeIndex]);
         disabled = candidateDisabled;
-        onChange(*(new event::Change()));
+        event::Change eChange;
+        onChange(eChange);
         fb->dirty = true;
         initialized = true;
       }

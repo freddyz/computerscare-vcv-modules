@@ -145,6 +145,9 @@ std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
   }
 
   absoluteSequence.resize(numSteps);
+  if (numSteps == 0) {
+    return absoluteSequence;
+  }
   for (unsigned i = 0; i < sequenceSums.size() - 1; i++) {
     mappedIndex = (sequenceSums[i] + offset) % numSteps;
     absoluteSequence[mappedIndex] = 1;

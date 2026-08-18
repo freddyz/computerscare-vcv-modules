@@ -299,7 +299,7 @@ struct ComputerscareLaundrySoup : Module {
 void ComputerscareLaundrySoup::process(const ProcessArgs& args) {
   bool globalGateIn = globalClockTrigger.isHigh();
   bool atFirstStep = false;
-  bool atFirstStepPoly[16];
+  bool atFirstStepPoly[16] = {};
   bool atLastStepAfterIncrement = false;
   bool clocked =
       globalClockTrigger.process(inputs[GLOBAL_CLOCK_INPUT].getVoltage());

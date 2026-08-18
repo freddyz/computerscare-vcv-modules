@@ -146,7 +146,8 @@ struct DisableableSmoothKnob : ComputerscareRoundKnob {
       bool candidate = channel > module->polyChannels - 1;
       if (disabled != candidate) {
         setSvg(candidate ? disabledSvg : enabledSvg);
-        onChange(*(new event::Change()));
+        event::Change eChange;
+        onChange(eChange);
         fb->dirty = true;
         disabled = candidate;
       }

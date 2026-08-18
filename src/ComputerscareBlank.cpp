@@ -1474,7 +1474,7 @@ struct ComputerscareBlankWidget : ModuleWidget {
     menu->addChild(kbMenu);
   }
   void step() override {
-    if (module) {
+    if (module && blankModule) {
       if (blankModule && !blankModule->loadedJSON) {
         box.size.x = blankModule->width;
         panel->box.size.x = blankModule->width;

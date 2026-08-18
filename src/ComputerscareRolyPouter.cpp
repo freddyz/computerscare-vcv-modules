@@ -1,3 +1,5 @@
+#include <array>
+
 #include "Computerscare.hpp"
 #include "dtpulse.hpp"
 
@@ -50,7 +52,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
   void onRandomize() override {
     float max = numInputChannels > 0 ? numInputChannels : 16;
     if (params[RANDOMIZE_ONE_TO_ONE].getValue() == 1) {
-      int tempRouting[polyChannels];
+      std::array<int, numKnobs> tempRouting = {};
       for (int i = 0; i < polyChannels; i++) {
         tempRouting[i] = i + 1;
       }
@@ -182,12 +184,14 @@ struct DisableableSnapKnob : ComputerscareRoundKnob {
     } else {
       disabled = false;
       setSvg(enabledSvg);
-      onChange(*(new event::Change()));
+      event::Change eChange;
+      onChange(eChange);
       fb->dirty = true;
     }
     if (disabled != lastDisabled) {
       setSvg(disabled ? disabledSvg : enabledSvg);
-      onChange(*(new event::Change()));
+      event::Change eChange;
+      onChange(eChange);
       fb->dirty = true;
       lastDisabled = disabled;
     }

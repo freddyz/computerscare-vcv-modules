@@ -187,6 +187,11 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
 
   bool channelViewActive() { return selectedChannel() >= 0; }
 
+  int normalizedChannelView() {
+    int channel = selectedChannel();
+    return channel < 0 ? 0 : channel;
+  }
+
   void storeViewedControls() {
     if (viewedChannel >= 0) {
       channelScaleValues[viewedChannel] = params[GLOBAL_SCALE].getValue();
@@ -229,7 +234,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
 
   void storeCurrentView() {
     if (channelViewActive()) {
-      int channel = selectedChannel();
+      int channel = normalizedChannelView();
       for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][channel] = params[KNOB + output].getValue();
       }
@@ -420,7 +425,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     float channelSelection = params[CHANNEL_SELECTOR].getValue();
     restoreViewSelection(outputSelection, channelSelection);
     if (channelViewActive()) {
-      int channel = selectedChannel();
+      int channel = normalizedChannelView();
       for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][channel] = 0.f;
       }
@@ -441,7 +446,7 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     float channelSelection = params[CHANNEL_SELECTOR].getValue();
     restoreViewSelection(outputSelection, channelSelection);
     if (channelViewActive()) {
-      int channel = selectedChannel();
+      int channel = normalizedChannelView();
       for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][channel] =
             randomKnobValue(outputKnobValues[output][channel], mode);
