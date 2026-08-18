@@ -47,8 +47,8 @@ struct ComputerscareOhPeas : Module {
   std::string lastFormula = "52";
 
   std::string numDivisionsString = "";
-  SmallLetterDisplay* numDivisionsDisplay;
-  SmallLetterDisplay* globalTransposeDisplay;
+  SmallLetterDisplay* numDivisionsDisplay = nullptr;
+  SmallLetterDisplay* globalTransposeDisplay = nullptr;
 
   Quantizer quant;
 
@@ -204,7 +204,7 @@ void ComputerscareOhPeas::process(const ProcessArgs& args) {
 }
 
 struct SetQuantizationModeMenuItem : MenuItem {
-  ComputerscareOhPeas* peas;
+  ComputerscareOhPeas* peas = nullptr;
 
   bool mode = true;
   SetQuantizationModeMenuItem(bool evenMode) { mode = evenMode; }
@@ -215,10 +215,8 @@ struct SetQuantizationModeMenuItem : MenuItem {
   }
 };
 struct PeasTF2 : ComputerscareTextField {
-  ComputerscareOhPeas* module;
-  int fontSize = 16;
+  ComputerscareOhPeas* module = nullptr;
   int rowIndex = 0;
-  bool inError = false;
 
   PeasTF2() { ComputerscareTextField(); };
   void draw(const DrawArgs& args) override {
@@ -241,8 +239,8 @@ struct PeasTF2 : ComputerscareTextField {
   // int getTextPosition(math::Vec mousePos) override;
 };
 struct PeasSmallDisplay : SmallLetterDisplay {
-  ComputerscareOhPeas* module;
-  int type;
+  ComputerscareOhPeas* module = nullptr;
+  int type = 0;
   PeasSmallDisplay(int t) {
     type = t;
     SmallLetterDisplay();
@@ -378,18 +376,18 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
       }
   }*/
 
-  ComputerscareOhPeas* peas;
-  PeasTF2* textFieldTemp;
-  SmallLetterDisplay* trimPlusMinus;
-  PeasSmallDisplay* ndd;
-  PeasSmallDisplay* transposeDisplay;
+  ComputerscareOhPeas* peas = nullptr;
+  PeasTF2* textFieldTemp = nullptr;
+  SmallLetterDisplay* trimPlusMinus = nullptr;
+  PeasSmallDisplay* ndd = nullptr;
+  PeasSmallDisplay* transposeDisplay = nullptr;
   void scaleItemAdd(ComputerscareOhPeas* peas, Menu* menu, std::string scale,
                     std::string label);
   void appendContextMenu(Menu* menu) override;
 };
 struct SetScaleMenuItem : MenuItem {
-  ComputerscareOhPeas* peas;
-  ComputerscareOhPeasWidget* peasWidget;
+  ComputerscareOhPeas* peas = nullptr;
+  ComputerscareOhPeasWidget* peasWidget = nullptr;
   std::string scale = "221222";
   SetScaleMenuItem(std::string scaleInput) { scale = scaleInput; }
 
@@ -401,7 +399,7 @@ struct SetScaleMenuItem : MenuItem {
   }
 };
 struct SetGainModeMenuItem : MenuItem {
-  ComputerscareOhPeas* peas;
+  ComputerscareOhPeas* peas = nullptr;
   int channel = 0;
   bool enabled = false;
 
@@ -415,7 +413,7 @@ struct SetGainModeMenuItem : MenuItem {
   }
 };
 struct SetAllGainModesMenuItem : MenuItem {
-  ComputerscareOhPeas* peas;
+  ComputerscareOhPeas* peas = nullptr;
   bool enabled = false;
 
   void onAction(const event::Action& e) override {

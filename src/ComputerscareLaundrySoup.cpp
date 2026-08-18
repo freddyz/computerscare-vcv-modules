@@ -434,7 +434,7 @@ void ComputerscareLaundrySoup::process(const ProcessArgs& args) {
 }
 
 struct LaundryTF2 : ComputerscareTextField {
-  ComputerscareLaundrySoup* module;
+  ComputerscareLaundrySoup* module = nullptr;
   // int fontSize = 16;
   int rowIndex = 0;
 
@@ -472,8 +472,8 @@ struct LaundryTF2 : ComputerscareTextField {
 };
 
 struct LaundrySmallDisplay : SmallLetterDisplay {
-  ComputerscareLaundrySoup* module;
-  int type;
+  ComputerscareLaundrySoup* module = nullptr;
+  int type = 0;
   int index;
   LaundrySmallDisplay(int i) {
     index = i;

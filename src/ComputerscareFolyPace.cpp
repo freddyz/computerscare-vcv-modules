@@ -162,7 +162,7 @@ struct FolyPace : Module {
 };
 
 struct FolyPaceDisplay : TransparentWidget {
-  FolyPace* module;
+  FolyPace* module = nullptr;
 
   FolyPaceDisplay() {}
 

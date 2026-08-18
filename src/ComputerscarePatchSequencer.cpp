@@ -426,8 +426,8 @@ void ComputerscarePatchSequencer::process(const ProcessArgs& args) {
 
 ////////////////////////////////////
 struct NumberDisplayWidget3 : TransparentWidget {
-  int* value;
-  ComputerscarePatchSequencer* module;
+  int* value = nullptr;
+  ComputerscarePatchSequencer* module = nullptr;
   std::string fontPath = "res/fonts/Segment7Standard.ttf";
 
   NumberDisplayWidget3() {
@@ -609,10 +609,10 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
    }*/
   void appendContextMenu(Menu* menu) override;
 
-  ComputerscarePatchSequencer* fatherSon;
+  ComputerscarePatchSequencer* fatherSon = nullptr;
 };
 struct OnlyRandomizeActiveMenuItem : MenuItem {
-  ComputerscarePatchSequencer* patchSequencer;
+  ComputerscarePatchSequencer* patchSequencer = nullptr;
   OnlyRandomizeActiveMenuItem() {}
   void onAction(const event::Action& e) override {
     patchSequencer->onlyRandomizeActive = !patchSequencer->onlyRandomizeActive;

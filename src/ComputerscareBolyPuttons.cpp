@@ -13,7 +13,7 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
   rack::dsp::SchmittTrigger momentaryTriggers[16];
   rack::dsp::PulseGenerator pulseGen[16];
 
-  ComputerscareSVGPanel* panelRef;
+  ComputerscareSVGPanel* panelRef = nullptr;
   enum ParamIds {
     TOGGLE,
     POLY_CHANNELS = TOGGLE + numToggles,
@@ -175,9 +175,9 @@ struct ComputerscareBolyPuttons : ComputerscarePolyModule {
 };
 
 struct DisableableParamWidget : SmallIsoButton {
-  ComputerscareBolyPuttons* module;
-  SmallLetterDisplay* smallLetterDisplay;
-  int channel;
+  ComputerscareBolyPuttons* module = nullptr;
+  SmallLetterDisplay* smallLetterDisplay = nullptr;
+  int channel = 0;
   Vec labelOffset = Vec(0, 0);
   bool pressed = false;
 
@@ -266,13 +266,13 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
   }*/
   void appendContextMenu(Menu* menu) override;
 
-  DisableableParamWidget* button;
-  PolyOutputChannelsWidget* channelWidget;
-  ComputerscareBolyPuttons* bolyPuttons;
-  SmallLetterDisplay* smallLetterDisplay;
+  DisableableParamWidget* button = nullptr;
+  PolyOutputChannelsWidget* channelWidget = nullptr;
+  ComputerscareBolyPuttons* bolyPuttons = nullptr;
+  SmallLetterDisplay* smallLetterDisplay = nullptr;
 };
 struct OutputRangeItem : MenuItem {
-  ComputerscareBolyPuttons* bolyPuttons;
+  ComputerscareBolyPuttons* bolyPuttons = nullptr;
   int outputRangeEnum;
   void onAction(const event::Action& e) override {
     bolyPuttons->outputRangeEnum = outputRangeEnum;
@@ -283,7 +283,7 @@ struct OutputRangeItem : MenuItem {
   }
 };
 struct RadioModeMenuItem : MenuItem {
-  ComputerscareBolyPuttons* bolyPuttons;
+  ComputerscareBolyPuttons* bolyPuttons = nullptr;
   RadioModeMenuItem() {}
   void onAction(const event::Action& e) override { bolyPuttons->toggleRadio(); }
   void step() override {
@@ -292,7 +292,7 @@ struct RadioModeMenuItem : MenuItem {
   }
 };
 struct MomentaryModeMenuItem : MenuItem {
-  ComputerscareBolyPuttons* bolyPuttons;
+  ComputerscareBolyPuttons* bolyPuttons = nullptr;
   MomentaryModeMenuItem() {}
   void onAction(const event::Action& e) override {
     bolyPuttons->toggleMomentary();

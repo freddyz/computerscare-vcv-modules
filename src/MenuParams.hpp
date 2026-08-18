@@ -102,14 +102,14 @@ struct InvertedMenuToggle : MenuItem {
 };
 
 struct MenuParam : MenuEntry {
-  ParamWidget* pWidget;
+  ParamWidget* pWidget = nullptr;
 
-  SmoothSlider* slider;
-  MenuToggle* toggle;
+  SmoothSlider* slider = nullptr;
+  MenuToggle* toggle = nullptr;
 
-  MenuLabel* johnLabel;
-  MenuLabel* displayString;
-  SubMenuAndKnob* submenu;
+  MenuLabel* johnLabel = nullptr;
+  MenuLabel* displayString = nullptr;
+  SubMenuAndKnob* submenu = nullptr;
   float controlRightMargin = 6;
 
   MenuParam(ParamQuantity* param, int type) {
@@ -180,7 +180,7 @@ struct MultiselectParamQuantity;
 struct ComputerscareMenuParamModule : ComputerscarePolyModule {
   std::vector<ParamAndType*> paramList;
   std::map<int, ParamAndType*> pidMap;
-  ParamQuantity* pq;
+  ParamQuantity* pq = nullptr;
   void configMenuParam(int paramId, float minValue, float maxValue,
                        float defaultValue, std::string label = "",
                        int controlType = 2, std::string unit = "",

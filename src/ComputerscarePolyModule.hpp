@@ -48,7 +48,7 @@ struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
   int paramId = -1;
   int previewChannels = 16;
 
-  ComputerscarePolyModule* module;
+  ComputerscarePolyModule* module = nullptr;
 
   TinyChannelsSnapKnob() {
     setSvg(APP->window->loadSvg(
@@ -82,7 +82,7 @@ struct TinyChannelsSnapKnob : ComputerscareRoundKnob {
 };
 
 struct PolyChannelsDisplay : SmallLetterDisplay {
-  ComputerscarePolyModule* module;
+  ComputerscarePolyModule* module = nullptr;
   bool controlled = false;
   int prevChannels = -1;
   int paramId = -1;
@@ -113,9 +113,9 @@ struct PolyChannelsDisplay : SmallLetterDisplay {
   }
 };
 struct PolyOutputChannelsWidget : Widget {
-  ComputerscarePolyModule* module;
-  PolyChannelsDisplay* channelCountDisplay;
-  TinyChannelsSnapKnob* channelsKnob;
+  ComputerscarePolyModule* module = nullptr;
+  PolyChannelsDisplay* channelCountDisplay = nullptr;
+  TinyChannelsSnapKnob* channelsKnob = nullptr;
   PolyOutputChannelsWidget(math::Vec pos, ComputerscarePolyModule* mod,
                            int paramId, int previewChannels = -1) {
     module = mod;

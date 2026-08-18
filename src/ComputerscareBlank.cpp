@@ -111,7 +111,7 @@ struct ComputerscareBlank : ComputerscareMenuParamModule {
 
   dsp::PulseGenerator resetTriggerPulse;
 
-  ComputerscareSVGPanel* panelRef;
+  ComputerscareSVGPanel* panelRef = nullptr;
 
   float leftMessages[2][11] = {};
 
@@ -790,7 +790,7 @@ struct LoadImageItem : MenuItem {
   }
 };
 struct ImageFitModeItem : MenuItem {
-  ComputerscareBlank* blank;
+  ComputerscareBlank* blank = nullptr;
   int imageFitEnum;
   void onAction(const event::Action& e) override {
     blank->imageFitEnum = imageFitEnum;
@@ -801,7 +801,7 @@ struct ImageFitModeItem : MenuItem {
   }
 };
 struct InvertYMenuItem : MenuItem {
-  ComputerscareBlank* blank;
+  ComputerscareBlank* blank = nullptr;
   InvertYMenuItem() {}
   void onAction(const event::Action& e) override {
     blank->invertY = !blank->invertY;
@@ -1006,10 +1006,12 @@ struct CustomBlankGifPlayback {
 
 template <class TBase>
 struct tPNGDisplay : TBase {
-  ComputerscareBlank* blankModule;
+  ComputerscareBlank* blankModule = nullptr;
 
-  int imgWidth, imgHeight;
-  float imgRatio, widgetRatio;
+  int imgWidth = 1;
+  int imgHeight = 1;
+  float imgRatio = 1.f;
+  float widgetRatio = 1.f;
   int lastEnum = -1;
   std::string path = "empty";
   int img = 0;
@@ -1255,13 +1257,13 @@ struct PNGDisplay : Widget {
     Widget::step();
   }
   PNGDisplayTransparentWidget* pngTransparent;
-  ComputerscareBlank* module;
+  ComputerscareBlank* module = nullptr;
 };
 
 struct GiantFrameDisplay : TransparentWidget {
-  ComputerscareBlank* module;
-  SmallLetterDisplay* description;
-  SmallLetterDisplay* frameDisplay;
+  ComputerscareBlank* module = nullptr;
+  SmallLetterDisplay* description = nullptr;
+  SmallLetterDisplay* frameDisplay = nullptr;
   GiantFrameDisplay() {
     box.size = Vec(200, 380);
 

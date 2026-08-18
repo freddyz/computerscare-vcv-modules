@@ -10,9 +10,8 @@ const int numColumns = 16;
 const int numOutputs = 1;
 
 struct ComputerscareMolyPatrix : ComputerscarePolyModule {
-  int counter = 0;
   int numInputChannels = 0;
-  ComputerscareSVGPanel* panelRef;
+  ComputerscareSVGPanel* panelRef = nullptr;
   enum ParamIds {
     KNOB,
     INPUT_ROW_TRIM = KNOB + numKnobs,
@@ -198,7 +197,7 @@ struct DisableableSmallKnob : ComputerscareRoundKnob {
   bool disabled = false;
   bool initialized = false;
   bool randomizable = true;
-  ComputerscareMolyPatrix* module;
+  ComputerscareMolyPatrix* module = nullptr;
   bool previewMode = false;
   int previewNumInputChannels = 16;
   int previewPolyChannels = 16;

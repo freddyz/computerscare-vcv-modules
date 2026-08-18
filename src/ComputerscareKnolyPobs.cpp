@@ -7,7 +7,7 @@ const int numKnobs = 16;
 const int numToggles = 16;
 
 struct ComputerscareKnolyPobs : ComputerscarePolyModule {
-  ComputerscareSVGPanel* panelRef;
+  ComputerscareSVGPanel* panelRef = nullptr;
   bool bipolarMainKnobs = false;
   int mainKnobRangeRevision = 0;
 
@@ -126,7 +126,7 @@ struct DisableableSmoothKnob : ComputerscareRoundKnob {
   int channel = 0;
   bool disabled = false;
   int mainKnobRangeRevision = -1;
-  ComputerscarePolyModule* module;
+  ComputerscarePolyModule* module = nullptr;
 
   DisableableSmoothKnob() {
     setSvg(enabledSvg);

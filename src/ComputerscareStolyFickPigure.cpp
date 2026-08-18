@@ -153,7 +153,7 @@ struct StolyFickPigure : Module {
 };
 
 struct StolyFickPigureDisplay : TransparentWidget {
-  StolyFickPigure* module;
+  StolyFickPigure* module = nullptr;
 
   StolyFickPigureDisplay() {}
 

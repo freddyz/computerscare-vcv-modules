@@ -8,11 +8,11 @@ struct ComputerscareRolyPouter;
 const int numKnobs = 16;
 
 struct ComputerscareRolyPouter : ComputerscarePolyModule {
-  int counter = 0;
+  int processCounter = 0;
   int routing[numKnobs];
   int numOutputChannels = 16;
   int numInputChannels = -1;
-  ComputerscareSVGPanel* panelRef;
+  ComputerscareSVGPanel* panelRef = nullptr;
   enum ParamIds {
     KNOB,
     POLY_CHANNELS = KNOB + numKnobs,
@@ -93,7 +93,7 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
   }
   void process(const ProcessArgs& args) override {
     ComputerscarePolyModule::checkCounter();
-    counter++;
+    processCounter++;
     int inputChannels = inputs[POLY_INPUT].getChannels();
     int cvChannels = inputs[ROUTING_CV].getChannels();
     int knobSetting;
@@ -116,9 +116,9 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
         }
       }
     } else {
-      if (counter > 8) {
+      if (processCounter > 8) {
         // printf("%f \n",random::uniform());
-        counter = 0;
+        processCounter = 0;
         for (int i = 0; i < numKnobs; i++) {
           routing[i] = (int)params[KNOB + i].getValue() - 1;
         }
@@ -136,8 +136,8 @@ struct ComputerscareRolyPouter : ComputerscarePolyModule {
   }
 };
 struct PouterSmallDisplay : SmallLetterDisplay {
-  ComputerscareRolyPouter* module;
-  int ch;
+  ComputerscareRolyPouter* module = nullptr;
+  int ch = 0;
   NVGcolor okayColor = COLOR_COMPUTERSCARE_LIGHT_GREEN;
   NVGcolor outOfBoundsColor = COLOR_COMPUTERSCARE_YELLOW;
   PouterSmallDisplay(int outputChannelNumber) {
@@ -162,8 +162,8 @@ struct PouterSmallDisplay : SmallLetterDisplay {
   }
 };
 struct DisableableSnapKnob : ComputerscareRoundKnob {
-  ComputerscarePolyModule* module;
-  int channel;
+  ComputerscarePolyModule* module = nullptr;
+  int channel = 0;
   bool disabled = false;
   int lastDisabled = -1;
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
@@ -264,7 +264,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
     if (!module) return;
 
     struct ssmi : MenuItem {
-      ComputerscareRolyPouter* pouter;
+      ComputerscareRolyPouter* pouter = nullptr;
       int mySetVal = 1;
       ssmi(int setVal) {
         mySetVal = setVal;
@@ -276,7 +276,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
       }
     };
     struct OneToOneItem : MenuItem {
-      ComputerscareRolyPouter* pouter;
+      ComputerscareRolyPouter* pouter = nullptr;
 
       OneToOneItem() { MenuItem(); }
       void onAction(const event::Action& e) override {

@@ -21,9 +21,9 @@ struct GolyAlgoParamQuantity : SwitchQuantity {
 };
 
 struct ComputerscareGolyPenerator : ComputerscareMenuParamModule {
-  int counter = 0;
+  int updateCounter = 0;
   int numChannels = 16;
-  ComputerscareSVGPanel* panelRef;
+  ComputerscareSVGPanel* panelRef = nullptr;
   Goly goly;
   float currentValues[16] = {0.f};
   std::vector<std::string> availableAlgorithms;
@@ -86,9 +86,9 @@ struct ComputerscareGolyPenerator : ComputerscareMenuParamModule {
   }
   void process(const ProcessArgs& args) override {
     ComputerscarePolyModule::checkCounter();
-    counter++;
-    if (counter > 13) {
-      counter = 0;
+    updateCounter++;
+    if (updateCounter > 13) {
+      updateCounter = 0;
       updateCurrents();
       // numChannels=(int) (std::floor(params[POLY_CHANNELS].getValue()));
     }
@@ -100,8 +100,8 @@ struct ComputerscareGolyPenerator : ComputerscareMenuParamModule {
   }
 };
 struct setAlgoItem : MenuItem {
-  ComputerscareGolyPenerator* penerator;
-  int mySetVal;
+  ComputerscareGolyPenerator* penerator = nullptr;
+  int mySetVal = 0;
   setAlgoItem(int setVal) { mySetVal = setVal; }
 
   void onAction(const event::Action& e) override {
@@ -116,7 +116,7 @@ struct setAlgoItem : MenuItem {
 };
 
 struct AlgorithmChildMenu : MenuItem {
-  ComputerscareGolyPenerator* penerator;
+  ComputerscareGolyPenerator* penerator = nullptr;
 
   Menu* createChildMenu() override {
     Menu* menu = new Menu;
@@ -137,7 +137,7 @@ struct AlgorithmChildMenu : MenuItem {
   }
 };
 struct PeneratorDisplay : TransparentWidget {
-  ComputerscareGolyPenerator* module;
+  ComputerscareGolyPenerator* module = nullptr;
 
   PeneratorDisplay() {}
   void drawLayer(const BGPanel::DrawArgs& args, int layer) override {
