@@ -8,6 +8,7 @@ RACK_DIR=${RACK_DIR:-$HOME/dev/VCV-Rack/Rack}
 RACK_INCLUDE_DIR=${RACK_INCLUDE_DIR:-$RACK_DIR/include}
 RACK_DEP_INCLUDE_DIR=${RACK_DEP_INCLUDE_DIR:-$RACK_DIR/dep/include}
 CLANG_TIDY_CHECKS=${CLANG_TIDY_CHECKS:-clang-analyzer-*}
+CPPCHECK_ISSUE_ENABLE=${CPPCHECK_ISSUE_ENABLE:-all}
 
 find_clang_tidy() {
   if [ -n "${CLANG_TIDY:-}" ]; then
@@ -58,6 +59,47 @@ lint() {
   echo "    OK."
 }
 
+clang_tidy_project() {
+  echo "==> clang-tidy project analysis..."
+  CLANG_TIDY=$(find_clang_tidy)
+  if [ -z "$CLANG_TIDY" ]; then
+    echo "clang-tidy not found. Install it with: brew install llvm" >&2
+    exit 1
+  fi
+
+  "$CLANG_TIDY" --checks="$CLANG_TIDY_CHECKS" --system-headers=false \
+    --header-filter="^$(pwd)/src/.*" $CPP_FILES -- \
+    -std=c++17 -I./src -I"$RACK_INCLUDE_DIR" -I"$RACK_DEP_INCLUDE_DIR"
+  echo "    OK."
+}
+
+clang_tidy_vcv_library() {
+  echo "==> clang-tidy VCV Library-style analysis..."
+  CLANG_TIDY=$(find_clang_tidy)
+  if [ -z "$CLANG_TIDY" ]; then
+    echo "clang-tidy not found. Install it with: brew install llvm" >&2
+    exit 1
+  fi
+
+  "$CLANG_TIDY" --checks="$CLANG_TIDY_CHECKS,-clang-analyzer-security.insecureAPI.rand" \
+    --system-headers=false --header-filter="^$(pwd)/src/.*" $CPP_FILES -- \
+    -std=c++17 -I./src -I"$RACK_INCLUDE_DIR" -I"$RACK_DEP_INCLUDE_DIR" 2>&1 |
+    awk '
+      /^.*\/src\/.* warning: / {
+        sub(/^.*\/src\//, "src/")
+        print
+        found = 1
+        next
+      }
+      /^src\/.* warning: / {
+        print
+        found = 1
+      }
+      END { exit found ? 1 : 0 }
+    '
+  echo "    OK."
+}
+
 cppcheck_run() {
   echo "==> cppcheck..."
   cppcheck --enable=unusedFunction --suppress=missingIncludeSystem \
@@ -66,6 +108,34 @@ cppcheck_run() {
     --suppress="*:$RACK_DEP_INCLUDE_DIR/*" \
     --max-configs=1 --error-exitcode=1 src/
   echo "    OK."
+}
+
+cppcheck_vcv_library() {
+  echo "==> cppcheck VCV Library-style analysis..."
+  cppcheck --enable="$CPPCHECK_ISSUE_ENABLE" --suppress=missingIncludeSystem \
+    --max-configs=1 --template="{file}:{line}: warning: {message} [{id}]" \
+    $SRC_FILES 2>&1 |
+    awk '
+      /\[(uninitMemberVar|uninitMemberVarNoCtor|uninitDerivedMemberVar|duplInheritedMember|nullPointerRedundantCheck|invalidPrintfArgType_sint)\]$/ {
+        print
+        found = 1
+      }
+      END { exit found ? 1 : 0 }
+    '
+  echo "    OK."
+}
+
+static_analysis() {
+  set +e
+  cppcheck_vcv_library
+  CPPCHECK_STATUS=$?
+  clang_tidy_vcv_library
+  CLANG_TIDY_STATUS=$?
+  set -e
+
+  if [ "$CPPCHECK_STATUS" -ne 0 ] || [ "$CLANG_TIDY_STATUS" -ne 0 ]; then
+    exit 1
+  fi
 }
 
 build() {
@@ -100,31 +170,39 @@ full_check() {
 }
 
 usage() {
-  echo "Usage: $0 [fmt|lint|cppcheck|build|fast|check|full-check|test|all|help]"
+  echo "Usage: $0 [fmt|lint|clang-tidy-project|clang-tidy-vcv-library|cppcheck|cppcheck-vcv-library|static|build|fast|check|full-check|test|all|help]"
   echo ""
-  echo "  fmt        Auto-format all src files in place"
-  echo "  lint       Run clang-tidy static analysis"
-  echo "  cppcheck   Run cppcheck unused-function analysis"
-  echo "  build      Build the Rack plugin"
-  echo "  fast       Auto-format + run tests for local iteration"
-  echo "  check      Alias for fast local validation"
-  echo "  full-check Prettier format check + tests"
-  echo "  test       Build + run test binary"
-  echo "  all        fmt + lint + cppcheck + build + test"
-  echo "  help       Show this help"
+  echo "  fmt                 Auto-format all src files in place"
+  echo "  lint                Run clang-tidy static analysis"
+  echo "  clang-tidy-project  Run clang-tidy with project-focused header filtering"
+  echo "  clang-tidy-vcv-library Run clang-tidy with settings close to VCV Library output"
+  echo "  cppcheck            Run cppcheck unused-function analysis"
+  echo "  cppcheck-vcv-library Run cppcheck with settings close to VCV Library output"
+  echo "  static              Run cppcheck-vcv-library + clang-tidy-vcv-library"
+  echo "  build               Build the Rack plugin"
+  echo "  fast                Auto-format + run tests for local iteration"
+  echo "  check               Alias for fast local validation"
+  echo "  full-check          Prettier format check + tests"
+  echo "  test                Build + run test binary"
+  echo "  all                 fmt + lint + cppcheck + build + test"
+  echo "  help                Show this help"
 }
 
 case $CMD in
-  fmt)      fmt ;;
-  lint)     lint ;;
-  cppcheck) cppcheck_run ;;
-  build)    build ;;
-  fast)     fast ;;
-  check)    check ;;
-  full-check) full_check ;;
-  test)     test_all ;;
-  all)      fmt && lint && cppcheck_run && test_all ;;
-  help)     usage ;;
+  fmt)                fmt ;;
+  lint)               lint ;;
+  clang-tidy-project) clang_tidy_project ;;
+  clang-tidy-vcv-library) clang_tidy_vcv_library ;;
+  cppcheck)           cppcheck_run ;;
+  cppcheck-vcv-library) cppcheck_vcv_library ;;
+  static)             static_analysis ;;
+  build)              build ;;
+  fast)               fast ;;
+  check)              check ;;
+  full-check)         full_check ;;
+  test)               test_all ;;
+  all)                fmt && lint && cppcheck_run && test_all ;;
+  help)               usage ;;
   *)
     usage
     exit 1

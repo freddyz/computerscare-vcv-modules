@@ -2,6 +2,18 @@
 
 <img src="doc/images/computerscare-1.4-all-modules.png" width="900" alt="Computerscare Modules for VCV Rack" />
 
+## Development
+
+Static analysis commands are available through `scripts/dev.sh`:
+
+```bash
+scripts/dev.sh cppcheck-vcv-library
+scripts/dev.sh clang-tidy-vcv-library
+scripts/dev.sh static
+```
+
+Use `RACK_DIR=/path/to/Rack-SDK` when the Rack SDK is not in the default local path.
+
 ## Platinum Collection
 
 - [Father & Son Patch Sequencer](./doc/father-and-son.md): 16 scene, polyphonic patch matrix
