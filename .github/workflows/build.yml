@@ -36,7 +36,7 @@ jobs:
           cache: npm
 
       - name: Install validation dependencies
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
           sudo apt-get install -y --no-install-recommends cppcheck

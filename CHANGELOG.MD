@@ -1,4 +1,4 @@
-# 2.3.9
+# 2.3.10
 VolyPector:
 - 16 polyphonic signals, with a compact UI.  Edit by signal, or by channel.  Triggered randomization/wiggle per channel or signal.
 
