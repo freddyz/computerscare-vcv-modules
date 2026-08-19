@@ -9,6 +9,32 @@ RACK_INCLUDE_DIR=${RACK_INCLUDE_DIR:-$RACK_DIR/include}
 RACK_DEP_INCLUDE_DIR=${RACK_DEP_INCLUDE_DIR:-$RACK_DIR/dep/include}
 CLANG_TIDY_CHECKS=${CLANG_TIDY_CHECKS:-clang-analyzer-*}
 CPPCHECK_ISSUE_ENABLE=${CPPCHECK_ISSUE_ENABLE:-all}
+ANALYSIS_JOBS=${ANALYSIS_JOBS:-}
+
+analysis_jobs() {
+  if [ -n "$ANALYSIS_JOBS" ]; then
+    echo "$ANALYSIS_JOBS"
+    return
+  fi
+
+  if command -v nproc >/dev/null 2>&1; then
+    JOBS=$(nproc 2>/dev/null || true)
+    if [ -n "$JOBS" ]; then
+      echo "$JOBS"
+      return
+    fi
+  fi
+
+  if command -v sysctl >/dev/null 2>&1; then
+    JOBS=$(sysctl -n hw.ncpu 2>/dev/null || true)
+    if [ -n "$JOBS" ]; then
+      echo "$JOBS"
+      return
+    fi
+  fi
+
+  echo 4
+}
 
 find_clang_tidy() {
   if [ -n "${CLANG_TIDY:-}" ]; then
@@ -81,9 +107,14 @@ clang_tidy_vcv_library() {
     exit 1
   fi
 
-  "$CLANG_TIDY" --checks="$CLANG_TIDY_CHECKS,-clang-analyzer-security.insecureAPI.rand" \
-    --system-headers=false --header-filter="^$(pwd)/src/.*" $CPP_FILES -- \
-    -std=c++17 -I./src -I"$RACK_INCLUDE_DIR" -I"$RACK_DEP_INCLUDE_DIR" 2>&1 |
+  JOBS=$(analysis_jobs)
+  CLANG_TIDY_VCV_CHECKS="$CLANG_TIDY_CHECKS,-clang-analyzer-security.insecureAPI.rand"
+  CLANG_TIDY_HEADER_FILTER="^$(pwd)/src/.*"
+  printf "%s\n" $CPP_FILES | xargs -n 1 -P "$JOBS" sh -c '
+    "$1" --checks="$2" --system-headers=false --header-filter="$3" "$6" -- \
+      -std=c++17 -I./src -I"$4" -I"$5"
+  ' sh "$CLANG_TIDY" "$CLANG_TIDY_VCV_CHECKS" "$CLANG_TIDY_HEADER_FILTER" \
+    "$RACK_INCLUDE_DIR" "$RACK_DEP_INCLUDE_DIR" 2>&1 |
     awk '
       /^.*\/src\/.* warning: / {
         sub(/^.*\/src\//, "src/")
@@ -113,7 +144,7 @@ cppcheck_run() {
 cppcheck_vcv_library() {
   echo "==> cppcheck VCV Library-style analysis..."
   cppcheck --enable="$CPPCHECK_ISSUE_ENABLE" --suppress=missingIncludeSystem \
-    --max-configs=1 --template="{file}:{line}: warning: {message} [{id}]" \
+    -j "$(analysis_jobs)" --max-configs=1 --template="{file}:{line}: warning: {message} [{id}]" \
     $SRC_FILES 2>&1 |
     awk '
       /\[(uninitMemberVar|uninitMemberVarNoCtor|uninitDerivedMemberVar|duplInheritedMember|nullPointerRedundantCheck|invalidPrintfArgType_sint)\]$/ {
