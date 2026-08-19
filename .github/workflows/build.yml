@@ -38,7 +38,7 @@ jobs:
       - name: Install validation dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y g++ jq unzip
+          sudo apt-get install -y g++ jq unzip cppcheck clang-tidy
           npm ci
 
       - name: Get Rack SDK
@@ -46,6 +46,9 @@ jobs:
           pushd "$HOME"
           curl -Lo Rack-SDK.zip https://vcvrack.com/downloads/Rack-SDK-${{ env.rack-sdk-version }}-lin-x64.zip
           unzip Rack-SDK.zip
+
+      - name: VCV Library-style static analysis
+        run: RACK_DIR="$HOME/Rack-SDK" scripts/dev.sh static
 
       - name: Check Prettier formatting
         run: npm run format:check
