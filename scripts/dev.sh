@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+SCRIPT_START=$(date +%s)
 SRC_FILES=$(find src -name "*.cpp" -o -name "*.hpp")
 CPP_FILES=$(find src -name "*.cpp")
 CMD=${1:-fast}
@@ -10,6 +11,12 @@ RACK_DEP_INCLUDE_DIR=${RACK_DEP_INCLUDE_DIR:-$RACK_DIR/dep/include}
 CLANG_TIDY_CHECKS=${CLANG_TIDY_CHECKS:-clang-analyzer-*}
 CPPCHECK_ISSUE_ENABLE=${CPPCHECK_ISSUE_ENABLE:-all}
 ANALYSIS_JOBS=${ANALYSIS_JOBS:-}
+
+elapsed_since() {
+  START=$1
+  NOW=$(date +%s)
+  echo "$((NOW - START))s"
+}
 
 analysis_jobs() {
   if [ -n "$ANALYSIS_JOBS" ]; then
@@ -100,7 +107,8 @@ clang_tidy_project() {
 }
 
 clang_tidy_vcv_library() {
-  echo "==> clang-tidy VCV Library-style analysis..."
+  echo "==> clang-tidy..."
+  STEP_START=$(date +%s)
   CLANG_TIDY=$(find_clang_tidy)
   if [ -z "$CLANG_TIDY" ]; then
     echo "clang-tidy not found. Install it with: brew install llvm" >&2
@@ -128,7 +136,12 @@ clang_tidy_vcv_library() {
       }
       END { exit found ? 1 : 0 }
     '
-  echo "    OK."
+  STATUS=$?
+  if [ "$STATUS" -ne 0 ]; then
+    return "$STATUS"
+  fi
+
+  echo "    OK ($(elapsed_since "$STEP_START"))."
 }
 
 cppcheck_run() {
@@ -142,7 +155,8 @@ cppcheck_run() {
 }
 
 cppcheck_vcv_library() {
-  echo "==> cppcheck VCV Library-style analysis..."
+  echo "==> cppcheck..."
+  STEP_START=$(date +%s)
   cppcheck --enable="$CPPCHECK_ISSUE_ENABLE" --suppress=missingIncludeSystem \
     -j "$(analysis_jobs)" --max-configs=1 --template="{file}:{line}: warning: {message} [{id}]" \
     $SRC_FILES 2>&1 |
@@ -153,7 +167,12 @@ cppcheck_vcv_library() {
       }
       END { exit found ? 1 : 0 }
     '
-  echo "    OK."
+  STATUS=$?
+  if [ "$STATUS" -ne 0 ]; then
+    return "$STATUS"
+  fi
+
+  echo "    OK ($(elapsed_since "$STEP_START"))."
 }
 
 static_analysis() {
@@ -241,4 +260,4 @@ case $CMD in
 esac
 
 echo ""
-echo "Done."
+echo "Done ($(elapsed_since "$SCRIPT_START") total)."
