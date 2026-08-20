@@ -791,7 +791,7 @@ struct LoadImageItem : MenuItem {
 };
 struct ImageFitModeItem : MenuItem {
   ComputerscareBlank* blank = nullptr;
-  int imageFitEnum;
+  int imageFitEnum = 0;
   void onAction(const event::Action& e) override {
     blank->imageFitEnum = imageFitEnum;
   }

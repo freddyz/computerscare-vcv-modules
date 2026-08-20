@@ -157,17 +157,54 @@ cppcheck_run() {
 cppcheck_vcv_library() {
   echo "==> cppcheck..."
   STEP_START=$(date +%s)
-  cppcheck --enable="$CPPCHECK_ISSUE_ENABLE" --suppress=missingIncludeSystem \
-    -j "$(analysis_jobs)" --max-configs=1 --template="{file}:{line}: warning: {message} [{id}]" \
-    $SRC_FILES 2>&1 |
+  set +e
+  set -o pipefail
+  cppcheck src/ \
+    -isrc/tests -isrc/dep -isrc/third_party -isrc/third-party -isrc/thirdparty -isrc/external \
+    --std=c++11 --max-configs=1 --enable=warning \
+    --suppress=*:*/tests/* --suppress=*:*/dep/* --suppress=*:*/third_party/* \
+    --suppress=*:*/third-party/* --suppress=*:*/thirdparty/* --suppress=*:*/external/* \
+    -j "$(analysis_jobs)" -q --xml 2>&1 |
     awk '
-      /\[(uninitMemberVar|uninitMemberVarNoCtor|uninitDerivedMemberVar|duplInheritedMember|nullPointerRedundantCheck|invalidPrintfArgType_sint)\]$/ {
-        print
-        found = 1
+      function attr(name, value) {
+        value = $0
+        sub(".* " name "=\"", "", value)
+        sub("\".*", "", value)
+        gsub("&quot;", "\"", value)
+        gsub("&apos;", "\047", value)
+        gsub("&lt;", "<", value)
+        gsub("&gt;", ">", value)
+        gsub("&amp;", "\\&", value)
+        return value
       }
+
+      /<error / {
+        id = attr("id")
+        msg = attr("msg")
+        pending = 1
+        next
+      }
+
+      pending && /<location / {
+        file = attr("file")
+        line = attr("line")
+        print file ":" line ": warning: " msg " [" id "]"
+        found = 1
+        pending = 0
+        next
+      }
+
+      pending && /<\/error>/ {
+        print "warning: " msg " [" id "]"
+        found = 1
+        pending = 0
+      }
+
       END { exit found ? 1 : 0 }
     '
   STATUS=$?
+  set +o pipefail
+  set -e
   if [ "$STATUS" -ne 0 ]; then
     return "$STATUS"
   fi

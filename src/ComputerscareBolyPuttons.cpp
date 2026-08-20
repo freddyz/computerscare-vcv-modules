@@ -273,7 +273,7 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
 };
 struct OutputRangeItem : MenuItem {
   ComputerscareBolyPuttons* bolyPuttons = nullptr;
-  int outputRangeEnum;
+  int outputRangeEnum = 0;
   void onAction(const event::Action& e) override {
     bolyPuttons->outputRangeEnum = outputRangeEnum;
   }
