@@ -1,4 +1,4 @@
-# 2.3.10
+# 2.3.11
 VolyPector:
 - 16 polyphonic signals, with a compact UI.  Edit by signal, or by channel.  Triggered randomization/wiggle per channel or signal.
 
@@ -13,6 +13,7 @@ Debug:
 
 Development:
 - Add portable vcvmon watcher script
+- Static analysis checker scripts, and CI integration
 
 # 2.3.2
 Sloly Pit:
