@@ -43,22 +43,22 @@ jobs:
         id: cache-cppcheck
         uses: actions/cache@v4
         with:
-          path: .cppcheck-install
+          path: ${{ runner.temp }}/cppcheck-install
           key: cppcheck-${{ runner.os }}-${{ env.cppcheck-version }}
 
       - name: Build cppcheck
         if: steps.cache-cppcheck.outputs.cache-hit != 'true'
         timeout-minutes: 10
         run: |
-          git clone --depth 1 --branch "${{ env.cppcheck-version }}" https://github.com/cppcheck-opensource/cppcheck.git _cppcheck
-          cmake -S _cppcheck -B _cppcheck-build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/.cppcheck-install"
-          cmake --build _cppcheck-build --parallel "$(nproc)"
-          cmake --install _cppcheck-build
+          git clone --depth 1 --branch "${{ env.cppcheck-version }}" https://github.com/cppcheck-opensource/cppcheck.git "$RUNNER_TEMP/cppcheck-src"
+          cmake -S "$RUNNER_TEMP/cppcheck-src" -B "$RUNNER_TEMP/cppcheck-build" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$RUNNER_TEMP/cppcheck-install"
+          cmake --build "$RUNNER_TEMP/cppcheck-build" --parallel "$(nproc)"
+          cmake --install "$RUNNER_TEMP/cppcheck-build"
 
       - name: Use cppcheck
         run: |
-          echo "$PWD/.cppcheck-install/bin" >> "$GITHUB_PATH"
-          .cppcheck-install/bin/cppcheck --version
+          echo "$RUNNER_TEMP/cppcheck-install/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/cppcheck-install/bin/cppcheck" --version
 
       - name: Get Rack SDK
         run: |
