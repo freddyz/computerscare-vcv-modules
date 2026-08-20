@@ -43,6 +43,46 @@ analysis_jobs() {
   echo 4
 }
 
+cppcheck_xml_to_warnings() {
+  awk '
+    function attr(name, value) {
+      value = $0
+      sub(".* " name "=\"", "", value)
+      sub("\".*", "", value)
+      gsub("&quot;", "\"", value)
+      gsub("&apos;", "\047", value)
+      gsub("&lt;", "<", value)
+      gsub("&gt;", ">", value)
+      gsub("&amp;", "\\&", value)
+      return value
+    }
+
+    /<error / {
+      id = attr("id")
+      msg = attr("msg")
+      pending = 1
+      next
+    }
+
+    pending && /<location / {
+      file = attr("file")
+      line = attr("line")
+      print file ":" line ": warning: " msg " [" id "]"
+      found = 1
+      pending = 0
+      next
+    }
+
+    pending && /<\/error>/ {
+      print "warning: " msg " [" id "]"
+      found = 1
+      pending = 0
+    }
+
+    END { exit found ? 1 : 0 }
+  '
+}
+
 find_clang_tidy() {
   if [ -n "${CLANG_TIDY:-}" ]; then
     echo "$CLANG_TIDY"
@@ -164,44 +204,31 @@ cppcheck_vcv_library() {
     --std=c++11 --max-configs=1 --enable=warning \
     --suppress=*:*/tests/* --suppress=*:*/dep/* --suppress=*:*/third_party/* \
     --suppress=*:*/third-party/* --suppress=*:*/thirdparty/* --suppress=*:*/external/* \
-    -j "$(analysis_jobs)" -q --xml 2>&1 |
-    awk '
-      function attr(name, value) {
-        value = $0
-        sub(".* " name "=\"", "", value)
-        sub("\".*", "", value)
-        gsub("&quot;", "\"", value)
-        gsub("&apos;", "\047", value)
-        gsub("&lt;", "<", value)
-        gsub("&gt;", ">", value)
-        gsub("&amp;", "\\&", value)
-        return value
-      }
+    -j "$(analysis_jobs)" -q --xml 2>&1 | cppcheck_xml_to_warnings
+  STATUS=$?
+  set +o pipefail
+  set -e
+  if [ "$STATUS" -ne 0 ]; then
+    return "$STATUS"
+  fi
 
-      /<error / {
-        id = attr("id")
-        msg = attr("msg")
-        pending = 1
-        next
-      }
+  echo "    OK ($(elapsed_since "$STEP_START"))."
+}
 
-      pending && /<location / {
-        file = attr("file")
-        line = attr("line")
-        print file ":" line ": warning: " msg " [" id "]"
-        found = 1
-        pending = 0
-        next
-      }
-
-      pending && /<\/error>/ {
-        print "warning: " msg " [" id "]"
-        found = 1
-        pending = 0
-      }
-
-      END { exit found ? 1 : 0 }
-    '
+cppcheck_strict() {
+  echo "==> cppcheck strict..."
+  STEP_START=$(date +%s)
+  set +e
+  set -o pipefail
+  cppcheck src/ \
+    -isrc/test.cpp -isrc/tests -isrc/dep -isrc/third_party -isrc/third-party -isrc/thirdparty -isrc/external \
+    -I./src -I"$RACK_INCLUDE_DIR" -I"$RACK_DEP_INCLUDE_DIR" \
+    --std=c++11 --max-configs=1 --enable=all --inconclusive \
+    --suppress=missingIncludeSystem \
+    --suppress=*:*/tests/* --suppress=*:*/dep/* --suppress=*:*/third_party/* \
+    --suppress=*:*/third-party/* --suppress=*:*/thirdparty/* --suppress=*:*/external/* \
+    --suppress="*:$RACK_INCLUDE_DIR/*" --suppress="*:$RACK_DEP_INCLUDE_DIR/*" \
+    -j "$(analysis_jobs)" -q --xml 2>&1 | cppcheck_xml_to_warnings
   STATUS=$?
   set +o pipefail
   set -e
@@ -257,7 +284,7 @@ full_check() {
 }
 
 usage() {
-  echo "Usage: $0 [fmt|lint|clang-tidy-project|clang-tidy-vcv-library|cppcheck|cppcheck-vcv-library|static|build|fast|check|full-check|test|all|help]"
+  echo "Usage: $0 [fmt|lint|clang-tidy-project|clang-tidy-vcv-library|cppcheck|cppcheck-vcv-library|cppcheck-strict|static|build|fast|check|full-check|test|all|help]"
   echo ""
   echo "  fmt                 Auto-format all src files in place"
   echo "  lint                Run clang-tidy static analysis"
@@ -265,6 +292,7 @@ usage() {
   echo "  clang-tidy-vcv-library Run clang-tidy with settings close to VCV Library output"
   echo "  cppcheck            Run cppcheck unused-function analysis"
   echo "  cppcheck-vcv-library Run cppcheck with settings close to VCV Library output"
+  echo "  cppcheck-strict     Run broader local-only cppcheck analysis"
   echo "  static              Run cppcheck-vcv-library + clang-tidy-vcv-library"
   echo "  build               Build the Rack plugin"
   echo "  fast                Auto-format + run tests for local iteration"
@@ -282,6 +310,7 @@ case $CMD in
   clang-tidy-vcv-library) clang_tidy_vcv_library ;;
   cppcheck)           cppcheck_run ;;
   cppcheck-vcv-library) cppcheck_vcv_library ;;
+  cppcheck-strict)    cppcheck_strict ;;
   static)             static_analysis ;;
   build)              build ;;
   fast)               fast ;;

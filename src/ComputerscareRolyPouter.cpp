@@ -264,11 +264,11 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
     if (!module) return;
 
     struct ssmi : MenuItem {
-      ComputerscareRolyPouter* pouter = nullptr;
+      ComputerscareRolyPouter* pouter;
       int mySetVal = 1;
-      ssmi(int setVal) {
+      ssmi(int setVal, ComputerscareRolyPouter* module) {
         mySetVal = setVal;
-        MenuItem();
+        pouter = module;
       }
 
       void onAction(const event::Action& e) override {
@@ -276,9 +276,9 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
       }
     };
     struct OneToOneItem : MenuItem {
-      ComputerscareRolyPouter* pouter = nullptr;
+      ComputerscareRolyPouter* pouter;
 
-      OneToOneItem() { MenuItem(); }
+      OneToOneItem(ComputerscareRolyPouter* module) { pouter = module; }
       void onAction(const event::Action& e) override {
         pouter->toggleOneToOne();
       }
@@ -295,12 +295,13 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
     struct SetAllItem : MenuItem {
       ComputerscareRolyPouter* pouter;
 
+      SetAllItem(ComputerscareRolyPouter* module) { pouter = module; }
+
       Menu* createChildMenu() override {
         Menu* menu = new Menu;
         for (unsigned int i = 1; i < 17; i++) {
-          ssmi* menuItem = new ssmi(i);
+          ssmi* menuItem = new ssmi(i, pouter);
           menuItem->text = "Set all to ch. " + std::to_string(i);
-          menuItem->pouter = pouter;
           menu->addChild(menuItem);
         }
         return menu;
@@ -310,18 +311,16 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
     MenuLabel* spacerLabel = new MenuLabel();
     menu->addChild(spacerLabel);
 
-    OneToOneItem* oneToOne = new OneToOneItem();
+    OneToOneItem* oneToOne = new OneToOneItem(module);
     oneToOne->text =
         "Randomize one-to-one (Don't re-use input channels on randomize)";
-    oneToOne->pouter = module;
     menu->addChild(oneToOne);
 
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 
-    SetAllItem* setAllItem = new SetAllItem();
+    SetAllItem* setAllItem = new SetAllItem(module);
     setAllItem->text = "Set All To";
     setAllItem->rightText = RIGHT_ARROW;
-    setAllItem->pouter = module;
     menu->addChild(setAllItem);
   }
 
