@@ -16,7 +16,7 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
   rack::dsp::SchmittTrigger globalManualClockTrigger;
   rack::dsp::SchmittTrigger globalManualResetTrigger;
 
-  ComputerscareSVGPanel* panelRef;
+  ComputerscareSVGPanel* panelRef = nullptr;
   enum ParamIds {
     MANUAL_RUN_BUTTON,
     MANUAL_CLOCK_BUTTON,
@@ -133,8 +133,8 @@ struct ComputerscareSolyPequencer : ComputerscarePolyModule {
   }
 };
 struct PequencerSmallDisplay : SmallLetterDisplay {
-  ComputerscareSolyPequencer* module;
-  int ch;
+  ComputerscareSolyPequencer* module = nullptr;
+  int ch = 0;
   PequencerSmallDisplay(int outputChannelNumber) {
     ch = outputChannelNumber;
     SmallLetterDisplay();

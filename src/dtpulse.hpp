@@ -64,7 +64,7 @@ class Parser {
   void setForSquareBrackets(Token t, std::vector<std::string> whitelist,
                             bool laundryMode);
   void setFinal(Token t, std::vector<std::string> whitelist);
-  bool inError;
+  bool inError = false;
   std::string parseFloat(Token t);
   std::vector<Token> tokenStack;
   std::vector<float> exactFloats;
@@ -75,7 +75,7 @@ class Parser {
       std::vector<std::vector<Token>> tokenVecVec, int atNum);
 
  private:
-  int currentIndex;
+  int currentIndex = 0;
   void ParseExactValue(Token t);
   void ParseExactInteger(Token t);
   void ParseFormula(Token t, std::vector<std::string> operatorWhitelist,
@@ -101,10 +101,10 @@ class AbsoluteSequence {
   std::vector<std::vector<int>> randomIndexes;
   std::vector<std::vector<Token>> randomTokens;
   std::vector<Token> tokenStack;
-  int readHead;
-  int numTokens;
+  int readHead = -1;
+  int numTokens = 0;
   void print();
-  bool inError;
+  bool inError = false;
   void skipStep();
   int peekStep();
   int peekWorkingStep();
@@ -126,9 +126,9 @@ class LaundrySoupSequence {
   std::vector<int> pulseSequence;
   std::vector<int> workingPulseSequence;
   std::vector<int> makePulseSequence(std::vector<Token> tokens);
-  int readHead;
-  int numSteps;
-  bool inError;
+  int readHead = -1;
+  int numSteps = 0;
+  bool inError = false;
   void print();
   int peekStep();
   void skipStep();
@@ -147,13 +147,13 @@ class Quantizer {
   float quantizeEven(float val, int iTranspose);
   float findEvenSpacingValue(float input, std::vector<float> allowedValues);
   float findEvenSpacingImpure(float input);
-  float fNumDivisions;
+  float fNumDivisions = 12.f;
   std::vector<float> mappedValues;
-  int numDivisions;
-  int transpose;
-  bool parseError;
-  int numSteps;
-  float fTranspose;
+  int numDivisions = 12;
+  int transpose = 0;
+  bool parseError = false;
+  int numSteps = 0;
+  float fTranspose = 0.f;
   void print();
 
  private:
@@ -165,14 +165,14 @@ class Quantizer {
 class LaundryPoly {
  public:
   LaundrySoupSequence lss[16];
-  int maxIndex;
-  int maxSteps;
+  int maxIndex = 0;
+  int maxSteps = 0;
   LaundryPoly(std::string formula);
   LaundryPoly();
   bool maxChannelAtLastStep();
 
   void print();
-  bool inError;
+  bool inError = false;
 };
 bool matchesAny(std::string val, std::vector<std::string> whitelist);
 bool is_digits(const std::string& str);

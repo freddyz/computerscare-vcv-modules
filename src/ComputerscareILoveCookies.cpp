@@ -467,7 +467,7 @@ struct CookiesKnobRangeItem : MenuItem {
   }
 };
 struct CookiesTF2 : ComputerscareTextField {
-  ComputerscareILoveCookies* module;
+  ComputerscareILoveCookies* module = nullptr;
   int rowIndex = 0;
 
   CookiesTF2(int i) {
@@ -492,8 +492,8 @@ struct CookiesTF2 : ComputerscareTextField {
 };
 
 struct CookiesSmallDisplay : SmallLetterDisplay {
-  ComputerscareILoveCookies* module;
-  int type;
+  ComputerscareILoveCookies* module = nullptr;
+  int type = 0;
   int index;
   CookiesSmallDisplay(int i) {
     index = i;
@@ -513,8 +513,8 @@ struct CookiesSmallDisplay : SmallLetterDisplay {
   }
 };
 struct CookiesCurrentStepDisplay : SmallLetterDisplay {
-  ComputerscareILoveCookies* module;
-  int type;
+  ComputerscareILoveCookies* module = nullptr;
+  int type = 0;
   int index;
   CookiesCurrentStepDisplay(int i) {
     index = i;

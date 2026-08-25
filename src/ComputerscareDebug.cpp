@@ -633,7 +633,7 @@ struct DebugModeSwitch : ThreeVerticalXSwitch {
 struct HidableSmallSnapKnob : SmallSnapKnob {
   bool visible = true;
   int hackIndex = 0;
-  ComputerscareDebug* module;
+  ComputerscareDebug* module = nullptr;
 
   HidableSmallSnapKnob() { SmallSnapKnob(); }
   void draw(const DrawArgs& args) override {
@@ -1443,9 +1443,9 @@ struct DebugTriggerBlinkersItem : MenuItem {
 };
 
 struct DebugModeMenuItem : MenuItem {
-  ComputerscareDebug* debug;
-  int paramId;
-  int value;
+  ComputerscareDebug* debug = nullptr;
+  int paramId = 0;
+  int value = 0;
   std::string description;
 
   DebugModeMenuItem(int value, const char* description) {

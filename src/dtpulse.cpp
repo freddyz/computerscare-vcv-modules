@@ -145,6 +145,9 @@ std::vector<int> parseDt(std::string input, int offset, std::string lookup) {
   }
 
   absoluteSequence.resize(numSteps);
+  if (numSteps == 0) {
+    return absoluteSequence;
+  }
   for (unsigned i = 0; i < sequenceSums.size() - 1; i++) {
     mappedIndex = (sequenceSums[i] + offset) % numSteps;
     absoluteSequence[mappedIndex] = 1;
@@ -311,12 +314,12 @@ std::string concatVectorFromLookup(std::vector<int> vector,
 }
 void printFloatVector(std::vector<float> floatVector) {
   for (unsigned int i = 0; i < floatVector.size(); i++) {
-    printf("floatVector[%i]: %f\n", i, floatVector[i]);
+    printf("floatVector[%zu]: %f\n", static_cast<size_t>(i), floatVector[i]);
   }
 }
 void printTokenVector(std::vector<std::vector<Token>> tokenVector) {
   for (unsigned int i = 0; i < tokenVector.size(); i++) {
-    printf("tokenVector[%i]: ", i);
+    printf("tokenVector[%zu]: ", static_cast<size_t>(i));
     for (unsigned int j = 0; j < tokenVector[i].size(); j++) {
       printf("%i ", tokenVector[i][j].index);
     }
@@ -405,7 +408,7 @@ LaundryPoly::LaundryPoly(std::string formula) {
   }
   inError = myInError;
 }
-LaundryPoly::LaundryPoly() { LaundryPoly(""); }
+LaundryPoly::LaundryPoly() : LaundryPoly("") {}
 void LaundryPoly::print() {
   printf("   LaundryPoly:\n");
   for (int i = 0; i < 16; i++) {
@@ -424,7 +427,7 @@ void whoKnowsLaundry(std::string input) {
     printVector(laundry.workingPulseSequence);
   }
 }
-LaundrySoupSequence::LaundrySoupSequence() { LaundrySoupSequence(""); }
+LaundrySoupSequence::LaundrySoupSequence() : LaundrySoupSequence("") {}
 LaundrySoupSequence::LaundrySoupSequence(std::string expr) { Tokenize(expr); }
 LaundrySoupSequence::LaundrySoupSequence(const std::vector<Token>& tokens) {
   Setup(tokens);
@@ -508,9 +511,8 @@ bool LaundrySoupSequence::atLastStep() { return (readHead == (numSteps - 1)); }
 void LaundrySoupSequence::randomizePulseValue(int index) {
   workingPulseSequence[index] = (rand() % 2);
 }
-AbsoluteSequence::AbsoluteSequence() {
-  AbsoluteSequence("a", knobandinputlookup);
-}
+AbsoluteSequence::AbsoluteSequence()
+    : AbsoluteSequence("a", knobandinputlookup) {}
 AbsoluteSequence::AbsoluteSequence(std::string expr, std::string lookup) {
   std::vector<Token> defaultStack;
   defaultStack.push_back(Token("Error", "error", -1));
@@ -641,7 +643,7 @@ Parser::Parser(std::string expr) {
   expression = expr;
   inError = false;
 }
-Parser::Parser() { Parser(""); }
+Parser::Parser() : Parser("") {}
 void Parser::setForLaundryPoly() {
   Token t = tokens[0];
   while (t.type != "NULL") {
@@ -1312,7 +1314,7 @@ void whoKnowsQuantize(std::string input) {
   // printf("closest: %f\n",q.quantize(in));
   // printf("even   : %f\n",q.quantizeEven(in));
 }
-Quantizer::Quantizer() { Quantizer("2212221", 12, 0); }
+Quantizer::Quantizer() : Quantizer("2212221", 12, 0) {}
 Quantizer::Quantizer(std::string intervals, int divisions, int trans) {
   scaleParser = Parser(intervals);
   // printTokenVector(scaleParser.tokens);

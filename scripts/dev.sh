@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+SCRIPT_START=$(date +%s)
 SRC_FILES=$(find src -name "*.cpp" -o -name "*.hpp")
 CPP_FILES=$(find src -name "*.cpp")
 CMD=${1:-fast}
@@ -8,6 +9,79 @@ RACK_DIR=${RACK_DIR:-$HOME/dev/VCV-Rack/Rack}
 RACK_INCLUDE_DIR=${RACK_INCLUDE_DIR:-$RACK_DIR/include}
 RACK_DEP_INCLUDE_DIR=${RACK_DEP_INCLUDE_DIR:-$RACK_DIR/dep/include}
 CLANG_TIDY_CHECKS=${CLANG_TIDY_CHECKS:-clang-analyzer-*}
+CPPCHECK_ISSUE_ENABLE=${CPPCHECK_ISSUE_ENABLE:-all}
+ANALYSIS_JOBS=${ANALYSIS_JOBS:-}
+
+elapsed_since() {
+  START=$1
+  NOW=$(date +%s)
+  echo "$((NOW - START))s"
+}
+
+analysis_jobs() {
+  if [ -n "$ANALYSIS_JOBS" ]; then
+    echo "$ANALYSIS_JOBS"
+    return
+  fi
+
+  if command -v nproc >/dev/null 2>&1; then
+    JOBS=$(nproc 2>/dev/null || true)
+    if [ -n "$JOBS" ]; then
+      echo "$JOBS"
+      return
+    fi
+  fi
+
+  if command -v sysctl >/dev/null 2>&1; then
+    JOBS=$(sysctl -n hw.ncpu 2>/dev/null || true)
+    if [ -n "$JOBS" ]; then
+      echo "$JOBS"
+      return
+    fi
+  fi
+
+  echo 4
+}
+
+cppcheck_xml_to_warnings() {
+  awk '
+    function attr(name, value) {
+      value = $0
+      sub(".* " name "=\"", "", value)
+      sub("\".*", "", value)
+      gsub("&quot;", "\"", value)
+      gsub("&apos;", "\047", value)
+      gsub("&lt;", "<", value)
+      gsub("&gt;", ">", value)
+      gsub("&amp;", "\\&", value)
+      return value
+    }
+
+    /<error / {
+      id = attr("id")
+      msg = attr("msg")
+      pending = 1
+      next
+    }
+
+    pending && /<location / {
+      file = attr("file")
+      line = attr("line")
+      print file ":" line ": warning: " msg " [" id "]"
+      found = 1
+      pending = 0
+      next
+    }
+
+    pending && /<\/error>/ {
+      print "warning: " msg " [" id "]"
+      found = 1
+      pending = 0
+    }
+
+    END { exit found ? 1 : 0 }
+  '
+}
 
 find_clang_tidy() {
   if [ -n "${CLANG_TIDY:-}" ]; then
@@ -58,6 +132,58 @@ lint() {
   echo "    OK."
 }
 
+clang_tidy_project() {
+  echo "==> clang-tidy project analysis..."
+  CLANG_TIDY=$(find_clang_tidy)
+  if [ -z "$CLANG_TIDY" ]; then
+    echo "clang-tidy not found. Install it with: brew install llvm" >&2
+    exit 1
+  fi
+
+  "$CLANG_TIDY" --checks="$CLANG_TIDY_CHECKS" --system-headers=false \
+    --header-filter="^$(pwd)/src/.*" $CPP_FILES -- \
+    -std=c++17 -I./src -I"$RACK_INCLUDE_DIR" -I"$RACK_DEP_INCLUDE_DIR"
+  echo "    OK."
+}
+
+clang_tidy_vcv_library() {
+  echo "==> clang-tidy..."
+  STEP_START=$(date +%s)
+  CLANG_TIDY=$(find_clang_tidy)
+  if [ -z "$CLANG_TIDY" ]; then
+    echo "clang-tidy not found. Install it with: brew install llvm" >&2
+    exit 1
+  fi
+
+  JOBS=$(analysis_jobs)
+  CLANG_TIDY_VCV_CHECKS="$CLANG_TIDY_CHECKS,-clang-analyzer-security.insecureAPI.rand"
+  CLANG_TIDY_HEADER_FILTER="^$(pwd)/src/.*"
+  printf "%s\n" $CPP_FILES | xargs -n 1 -P "$JOBS" sh -c '
+    "$1" --checks="$2" --system-headers=false --header-filter="$3" "$6" -- \
+      -std=c++17 -I./src -I"$4" -I"$5"
+  ' sh "$CLANG_TIDY" "$CLANG_TIDY_VCV_CHECKS" "$CLANG_TIDY_HEADER_FILTER" \
+    "$RACK_INCLUDE_DIR" "$RACK_DEP_INCLUDE_DIR" 2>&1 |
+    awk '
+      /^.*\/src\/.* warning: / {
+        sub(/^.*\/src\//, "src/")
+        print
+        found = 1
+        next
+      }
+      /^src\/.* warning: / {
+        print
+        found = 1
+      }
+      END { exit found ? 1 : 0 }
+    '
+  STATUS=$?
+  if [ "$STATUS" -ne 0 ]; then
+    return "$STATUS"
+  fi
+
+  echo "    OK ($(elapsed_since "$STEP_START"))."
+}
+
 cppcheck_run() {
   echo "==> cppcheck..."
   cppcheck --enable=unusedFunction --suppress=missingIncludeSystem \
@@ -66,6 +192,64 @@ cppcheck_run() {
     --suppress="*:$RACK_DEP_INCLUDE_DIR/*" \
     --max-configs=1 --error-exitcode=1 src/
   echo "    OK."
+}
+
+cppcheck_vcv_library() {
+  echo "==> cppcheck..."
+  STEP_START=$(date +%s)
+  set +e
+  set -o pipefail
+  cppcheck src/ \
+    -isrc/tests -isrc/dep -isrc/third_party -isrc/third-party -isrc/thirdparty -isrc/external \
+    --std=c++11 --max-configs=1 --enable=warning \
+    --suppress=*:*/tests/* --suppress=*:*/dep/* --suppress=*:*/third_party/* \
+    --suppress=*:*/third-party/* --suppress=*:*/thirdparty/* --suppress=*:*/external/* \
+    -j "$(analysis_jobs)" -q --xml 2>&1 | cppcheck_xml_to_warnings
+  STATUS=$?
+  set +o pipefail
+  set -e
+  if [ "$STATUS" -ne 0 ]; then
+    return "$STATUS"
+  fi
+
+  echo "    OK ($(elapsed_since "$STEP_START"))."
+}
+
+cppcheck_strict() {
+  echo "==> cppcheck strict..."
+  STEP_START=$(date +%s)
+  set +e
+  set -o pipefail
+  cppcheck src/ \
+    -isrc/test.cpp -isrc/tests -isrc/dep -isrc/third_party -isrc/third-party -isrc/thirdparty -isrc/external \
+    -I./src -I"$RACK_INCLUDE_DIR" -I"$RACK_DEP_INCLUDE_DIR" \
+    --std=c++11 --max-configs=1 --enable=all --inconclusive \
+    --suppress=missingIncludeSystem \
+    --suppress=*:*/tests/* --suppress=*:*/dep/* --suppress=*:*/third_party/* \
+    --suppress=*:*/third-party/* --suppress=*:*/thirdparty/* --suppress=*:*/external/* \
+    --suppress="*:$RACK_INCLUDE_DIR/*" --suppress="*:$RACK_DEP_INCLUDE_DIR/*" \
+    -j "$(analysis_jobs)" -q --xml 2>&1 | cppcheck_xml_to_warnings
+  STATUS=$?
+  set +o pipefail
+  set -e
+  if [ "$STATUS" -ne 0 ]; then
+    return "$STATUS"
+  fi
+
+  echo "    OK ($(elapsed_since "$STEP_START"))."
+}
+
+static_analysis() {
+  set +e
+  cppcheck_vcv_library
+  CPPCHECK_STATUS=$?
+  clang_tidy_vcv_library
+  CLANG_TIDY_STATUS=$?
+  set -e
+
+  if [ "$CPPCHECK_STATUS" -ne 0 ] || [ "$CLANG_TIDY_STATUS" -ne 0 ]; then
+    exit 1
+  fi
 }
 
 build() {
@@ -107,31 +291,41 @@ full_check() {
 }
 
 usage() {
-  echo "Usage: $0 [fmt|lint|cppcheck|build|fast|check|full-check|test|all|help]"
+  echo "Usage: $0 [fmt|lint|clang-tidy-project|clang-tidy-vcv-library|cppcheck|cppcheck-vcv-library|cppcheck-strict|static|build|fast|check|full-check|test|all|help]"
   echo ""
-  echo "  fmt        Auto-format all src files in place"
-  echo "  lint       Run clang-tidy static analysis"
-  echo "  cppcheck   Run cppcheck unused-function analysis"
-  echo "  build      Build the Rack plugin"
-  echo "  fast       Auto-format + run tests for local iteration"
-  echo "  check      Alias for fast local validation"
-  echo "  full-check Prettier format check + tests"
-  echo "  test       Build + run test binary"
-  echo "  all        fmt + lint + cppcheck + build + test"
-  echo "  help       Show this help"
+  echo "  fmt                 Auto-format all src files in place"
+  echo "  lint                Run clang-tidy static analysis"
+  echo "  clang-tidy-project  Run clang-tidy with project-focused header filtering"
+  echo "  clang-tidy-vcv-library Run clang-tidy with settings close to VCV Library output"
+  echo "  cppcheck            Run cppcheck unused-function analysis"
+  echo "  cppcheck-vcv-library Run cppcheck with settings close to VCV Library output"
+  echo "  cppcheck-strict     Run broader local-only cppcheck analysis"
+  echo "  static              Run cppcheck-vcv-library + clang-tidy-vcv-library"
+  echo "  build               Build the Rack plugin"
+  echo "  fast                Auto-format + run tests for local iteration"
+  echo "  check               Alias for fast local validation"
+  echo "  full-check          Prettier format check + tests"
+  echo "  test                Build + run test binary"
+  echo "  all                 fmt + lint + cppcheck + build + test"
+  echo "  help                Show this help"
 }
 
 case $CMD in
-  fmt)      fmt ;;
-  lint)     lint ;;
-  cppcheck) cppcheck_run ;;
-  build)    build ;;
-  fast)     fast ;;
-  check)    check ;;
-  full-check) full_check ;;
-  test)     test_all ;;
-  all)      fmt && lint && cppcheck_run && test_all ;;
-  help)     usage ;;
+  fmt)                fmt ;;
+  lint)               lint ;;
+  clang-tidy-project) clang_tidy_project ;;
+  clang-tidy-vcv-library) clang_tidy_vcv_library ;;
+  cppcheck)           cppcheck_run ;;
+  cppcheck-vcv-library) cppcheck_vcv_library ;;
+  cppcheck-strict)    cppcheck_strict ;;
+  static)             static_analysis ;;
+  build)              build ;;
+  fast)               fast ;;
+  check)              check ;;
+  full-check)         full_check ;;
+  test)               test_all ;;
+  all)                fmt && lint && cppcheck_run && test_all ;;
+  help)               usage ;;
   *)
     usage
     exit 1
@@ -139,4 +333,4 @@ case $CMD in
 esac
 
 echo ""
-echo "Done."
+echo "Done ($(elapsed_since "$SCRIPT_START") total)."

@@ -666,8 +666,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       if (!hideUi) ModuleWidget::drawLayer(args, layer);
       return;
     }
-    if (layer == 1 && module && APP->scene && APP->scene->rack &&
-        renderInWindow) {
+    if (layer == 1 && m && APP->scene && APP->scene->rack && renderInWindow) {
       bool freezeCaptureRequested = m->capturePending.exchange(false);
       bool doCapture = !m->freezeMode || freezeCaptureRequested ||
                        !hasValidCache ||
@@ -675,7 +674,7 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
       bool hasConfiguredSource =
           m->sources[0].hasSource() || m->sources[1].hasSource();
 
-      if (m && (doCapture || hasConfiguredSource || hasValidCache)) {
+      if (doCapture || hasConfiguredSource || hasValidCache) {
         float baseAlpha = 1.f;
 
         // Choose live params on capture, or based on transform pre/post setting

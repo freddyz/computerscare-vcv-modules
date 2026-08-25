@@ -205,7 +205,6 @@ struct HorseSequencer {
 };
 
 struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
-  int counter = 0;
   float currentValues[16] = {0.f};
   bool atFirstStepPoly[16] = {false};
   int previousStep[16] = {-1};
@@ -798,7 +797,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 };
 
 struct NumStepsOverKnobDisplay : SmallLetterDisplay {
-  ComputerscareHorseADoodleDoo* module;
+  ComputerscareHorseADoodleDoo* module = nullptr;
   int knobConnection = 1;
   NumStepsOverKnobDisplay(int type) {
     letterSpacing = 1.f;
@@ -823,8 +822,8 @@ struct NumStepsOverKnobDisplay : SmallLetterDisplay {
 };
 
 struct setModeItem : MenuItem {
-  ComputerscareHorseADoodleDoo* horse;
-  int mySetVal;
+  ComputerscareHorseADoodleDoo* horse = nullptr;
+  int mySetVal = 0;
   setModeItem(int setVal) { mySetVal = setVal; }
 
   void onAction(const event::Action& e) override { horse->setMode(mySetVal); }
@@ -837,8 +836,8 @@ struct setModeItem : MenuItem {
 };
 
 struct HorseModeMenuItem : MenuItem {
-  ComputerscareHorseADoodleDoo* horse;
-  int mySetVal;
+  ComputerscareHorseADoodleDoo* horse = nullptr;
+  int mySetVal = 0;
   std::string description;
 
   HorseModeMenuItem(int setVal) {
@@ -931,8 +930,8 @@ struct HorseModeKnob : ScrambleSnapKnobNoRandom {
 };
 
 struct setGateModeItem : MenuItem {
-  ComputerscareHorseADoodleDoo* horse;
-  int mySetVal;
+  ComputerscareHorseADoodleDoo* horse = nullptr;
+  int mySetVal = 0;
   setGateModeItem(int setVal) { mySetVal = setVal; }
 
   void onAction(const event::Action& e) override {

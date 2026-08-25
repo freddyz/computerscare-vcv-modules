@@ -37,7 +37,7 @@ struct ComputerscareTolyPoolsV2 : Module {
   int rotationModeEnum = 0;
   int rotationBase = 16;
 
-  ComputerscareSVGPanel* panelRef;
+  ComputerscareSVGPanel* panelRef = nullptr;
   enum ParamIds {
     ROTATE_KNOB,
     NUM_CHANNELS_KNOB,
@@ -161,8 +161,8 @@ struct ComputerscareTolyPoolsV2 : Module {
   }
 };
 struct PoolsSmallDisplayV2 : SmallLetterDisplay {
-  ComputerscareTolyPoolsV2* module;
-  int ch;
+  ComputerscareTolyPoolsV2* module = nullptr;
+  int ch = 0;
   int type = 0;
   PoolsSmallDisplayV2(int someType) {
     type = someType;

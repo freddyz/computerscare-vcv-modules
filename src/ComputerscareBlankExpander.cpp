@@ -146,7 +146,7 @@ struct ComputerscareBlankExpander : Module {
   void setScrubbing(bool scrub) { scrubbing = scrub; }
 };
 struct FrameScrubKnob : SmallKnob {
-  ComputerscareBlankExpander* module;
+  ComputerscareBlankExpander* module = nullptr;
   void onDragStart(const event::DragStart& e) override {
     module->setScrubbing(true);
     SmallKnob::onDragStart(e);
@@ -240,7 +240,7 @@ struct ClockModeButton : app::SvgSwitch {
   }
 };
 struct LogoWidget : SvgWidget {
-  ComputerscareBlankExpander* module;
+  ComputerscareBlankExpander* module = nullptr;
   int motherConnected = -1;
   LogoWidget() {
     setSvg(APP->window->loadSvg(asset::plugin(
