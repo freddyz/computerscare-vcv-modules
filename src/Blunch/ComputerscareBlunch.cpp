@@ -64,6 +64,10 @@ static const std::string
         "Advance to the next block on external clock X.",
         "Advance to the next block on external clock Y.",
         "Advance to the next block on external clock Z."};
+static const int BLUNCH_RUN_INPUT_MODE_COUNT = 2;
+static const std::string
+    BLUNCH_RUN_INPUT_MODE_NAMES[BLUNCH_RUN_INPUT_MODE_COUNT] = {
+        "Gate", "Trigger toggle"};
 
 static BlunchLineInfo getLineInfo(const std::string& text, int line) {
   BlunchLineInfo info;
@@ -387,6 +391,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     RESET_INPUT = RESET_BLOCK_INPUT,
     RESET_LINE_INPUT,
     RESET_SEQUENCE_INPUT,
+    RUN_INPUT,
     NUM_INPUTS
   };
   enum OutputIds {
@@ -408,6 +413,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   dsp::SchmittTrigger resetBlockTrigger;
   dsp::SchmittTrigger resetLineTrigger;
   dsp::SchmittTrigger resetSequenceTrigger;
+  dsp::SchmittTrigger runInputTriggers[MAX_POLY_CHANNELS];
   dsp::Timer resetClockIgnoreTimer;
   BlunchSequencerRuntime sequencers[MAX_POLY_CHANNELS];
   bool syntaxError = false;
@@ -447,10 +453,14 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   bool rememberedRunning[MAX_POLY_CHANNELS] = {
       true, true, true, true, true, true, true, true,
       true, true, true, true, true, true, true, true};
+  bool runInputLatched[MAX_POLY_CHANNELS] = {true, true, true, true, true, true,
+                                             true, true, true, true, true, true,
+                                             true, true, true, true};
   bool resetClockIgnoreActive = false;
   bool externalClockHigh[4] = {false, false, false, false};
   float width = MIN_WIDTH;
   bool editorLineWrapping = true;
+  int runInputMode = 0;
 
   int clampChannel(int channel) const {
     return std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
@@ -710,6 +720,48 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     params[RUN_PARAM].setValue(params[RUN_PARAM].getValue() > 0.5f ? 0.f : 1.f);
   }
 
+  int runInputChannelCount() {
+    return inputs[RUN_INPUT].isConnected() ? inputs[RUN_INPUT].getChannels()
+                                           : 0;
+  }
+
+  bool runInputControlsChannel(int inputChannels, int channel) const {
+    return inputChannels == 1 || channel < inputChannels;
+  }
+
+  int runInputChannelForOutput(int inputChannels, int channel) const {
+    return inputChannels == 1 ? 0 : channel;
+  }
+
+  void updateRunInputState(bool masterRunHigh) {
+    int inputChannels = runInputChannelCount();
+    for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
+      if (!runInputControlsChannel(inputChannels, channel)) {
+        continue;
+      }
+      int inputChannel = runInputChannelForOutput(inputChannels, channel);
+      bool triggered = runInputTriggers[channel].process(
+          inputs[RUN_INPUT].getVoltage(inputChannel));
+      if (masterRunHigh && runInputMode == 1 && triggered) {
+        runInputLatched[channel] = !runInputLatched[channel];
+      }
+    }
+  }
+
+  bool runInputAllowsChannel(int inputChannels, int channel) {
+    if (inputChannels == 0) {
+      return true;
+    }
+    if (!runInputControlsChannel(inputChannels, channel)) {
+      return false;
+    }
+    int inputChannel = runInputChannelForOutput(inputChannels, channel);
+    if (runInputMode == 1) {
+      return runInputLatched[channel];
+    }
+    return inputs[RUN_INPUT].getVoltage(inputChannel) > 1.f;
+  }
+
   void triggerTokenMovePulse() {
     tokenMovePulses[activeContextChannel()].trigger(1e-3f);
   }
@@ -766,6 +818,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     configInput(RESET_BLOCK_INPUT, "Reset block");
     configInput(RESET_LINE_INPUT, "Reset line");
     configInput(RESET_SEQUENCE_INPUT, "Reset sequence");
+    configInput(RUN_INPUT, "Run");
     configInput(EXTERNAL_CLOCK_W_INPUT, "External clock W");
     configInput(EXTERNAL_CLOCK_X_INPUT, "External clock X");
     configInput(EXTERNAL_CLOCK_Y_INPUT, "External clock Y");
@@ -784,9 +837,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void processSequencerChannel(int channel, float scaledSampleTime,
-                               const bool externalClockEdges[4], bool runHigh,
-                               bool resetBlockPressed, bool resetLinePressed,
-                               bool resetSequencePressed,
+                               const bool externalClockEdges[4],
+                               bool channelRunHigh, bool resetBlockPressed,
+                               bool resetLinePressed, bool resetSequencePressed,
                                bool advanceLinePressed,
                                bool advanceTokenPressed) {
     int previousProcessingChannel = blunchProcessingChannel;
@@ -806,7 +859,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     int activeExternalClock = activeExternalClockInput(seq);
     int activeRepeatClock = activeRepeatExternalClockInput(seq);
     int activeTotalTickClock = activeTotalDurationExternalClockInput(seq);
-    bool running = runHigh && seq.running;
+    bool running = channelRunHigh && seq.running;
     bool previousClockHigh = seq.clockHigh;
     if (running) {
       if (activeExternalClock >= 0) {
@@ -925,17 +978,17 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                                activeTotalDurationExternalClockInput(seq) < 0);
     }
 
-    if (runHigh && resetSequencePressed) {
+    if (channelRunHigh && resetSequencePressed) {
       resetActiveSequence(true);
-    } else if (runHigh && resetLinePressed) {
+    } else if (channelRunHigh && resetLinePressed) {
       resetActiveProgram(true);
-    } else if (runHigh && resetBlockPressed) {
+    } else if (channelRunHigh && resetBlockPressed) {
       resetActiveBlock(true);
     }
-    if (runHigh && advanceLinePressed) {
+    if (channelRunHigh && advanceLinePressed) {
       moveToNextLine(false);
     }
-    if (runHigh && advanceTokenPressed) {
+    if (channelRunHigh && advanceTokenPressed) {
       advanceActiveProgramStep(seq, true);
     }
 
@@ -982,6 +1035,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       stopAllSequencersRememberingRunning();
     }
     lastRunHigh = runHigh;
+    updateRunInputState(runHigh);
+    int runInputChannels = runInputChannelCount();
     bool resetBlockPressed =
         resetBlockTrigger.process(inputs[RESET_BLOCK_INPUT].getVoltage());
     bool resetLinePressed =
@@ -1020,10 +1075,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     outputs[EOC2_OUTPUT].setChannels(polyChannels);
     outputs[EOC3_OUTPUT].setChannels(polyChannels);
     for (int channel = 0; channel < polyChannels; channel++) {
+      bool channelRunHigh =
+          runHigh && runInputAllowsChannel(runInputChannels, channel);
       processSequencerChannel(channel, scaledSampleTime, externalClockEdges,
-                              runHigh, resetBlockPressed, resetLinePressed,
-                              resetSequencePressed, advanceLinePressed,
-                              advanceTokenPressed);
+                              channelRunHigh, resetBlockPressed,
+                              resetLinePressed, resetSequencePressed,
+                              advanceLinePressed, advanceTokenPressed);
     }
     for (int channel = polyChannels; channel < MAX_POLY_CHANNELS; channel++) {
       sequencers[channel].activeClockOutputHigh = false;
@@ -1091,6 +1148,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         json_string(showingChannelsView() ? "channels" : "sequence"));
     json_object_set_new(rootJ, "editorLineWrapping",
                         json_boolean(editorLineWrapping));
+    json_object_set_new(rootJ, "runInputMode", json_integer(runInputMode));
     return rootJ;
   }
 
@@ -1176,6 +1234,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     json_t* editorLineWrappingJ = json_object_get(rootJ, "editorLineWrapping");
     if (editorLineWrappingJ) {
       editorLineWrapping = json_boolean_value(editorLineWrappingJ);
+    }
+    json_t* runInputModeJ = json_object_get(rootJ, "runInputMode");
+    if (runInputModeJ) {
+      runInputMode =
+          std::max(0, std::min((int)json_integer_value(runInputModeJ),
+                               BLUNCH_RUN_INPUT_MODE_COUNT - 1));
     }
   }
 
@@ -2502,6 +2566,22 @@ struct BlunchModeMenuItem : MenuItem {
   }
 };
 
+struct BlunchRunInputModeMenuItem : MenuItem {
+  ComputerscareBlunch* blunch = nullptr;
+  int mode = 0;
+
+  void onAction(const event::Action& e) override {
+    if (blunch) {
+      blunch->runInputMode = mode;
+    }
+  }
+
+  void step() override {
+    rightText = CHECKMARK(blunch && blunch->runInputMode == mode);
+    MenuItem::step();
+  }
+};
+
 struct BlunchModeMenuButton : ComputerscareBlankButton {
   static constexpr float DRAW_SCALE_X = 0.72f;
   ComputerscareBlunch* blunch = nullptr;
@@ -2723,6 +2803,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   PortWidget* resetBlockInput = nullptr;
   PortWidget* resetLineInput = nullptr;
   PortWidget* resetSequenceInput = nullptr;
+  PortWidget* runInput = nullptr;
   PortWidget* clockOutput = nullptr;
   PortWidget* eoc1Output = nullptr;
   PortWidget* eoc2Output = nullptr;
@@ -2857,6 +2938,9 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         Vec(68.f, 335.f), module, ComputerscareBlunch::RESET_LINE_INPUT);
     resetSequenceInput = createInput<PointingUpPentagonPort>(
         Vec(98.f, 335.f), module, ComputerscareBlunch::RESET_SEQUENCE_INPUT);
+    runInput = createInput<PointingUpPentagonPort>(
+        Vec(8.f, 335.f), module, ComputerscareBlunch::RUN_INPUT);
+    addInput(runInput);
     addInput(resetBlockInput);
     addInput(resetLineInput);
     addInput(resetSequenceInput);
@@ -2937,6 +3021,9 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       if (resetInputs[i]) {
         resetInputs[i]->box.pos = Vec(jackXs[i + 1], resetInputY);
       }
+    }
+    if (runInput) {
+      runInput->box.pos = Vec(jackXs[0], resetInputY);
     }
   }
 
@@ -3367,6 +3454,16 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     }
 
     menu->addChild(new MenuSeparator());
+    menu->addChild(createSubmenuItem(
+        "Run input", BLUNCH_RUN_INPUT_MODE_NAMES[blunch->runInputMode],
+        [=](Menu* submenu) {
+          for (int i = 0; i < BLUNCH_RUN_INPUT_MODE_COUNT; i++) {
+            submenu->addChild(construct<BlunchRunInputModeMenuItem>(
+                &MenuItem::text, BLUNCH_RUN_INPUT_MODE_NAMES[i],
+                &BlunchRunInputModeMenuItem::blunch, blunch,
+                &BlunchRunInputModeMenuItem::mode, i));
+          }
+        }));
     menu->addChild(createSubmenuItem("Editor", "", [=](Menu* submenu) {
       submenu->addChild(new MenuParamSlider(
           blunch
