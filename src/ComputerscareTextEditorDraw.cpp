@@ -38,9 +38,11 @@ void ComputerscareTextEditor::draw(const DrawArgs& args) {
 void ComputerscareTextEditor::drawLayer(const DrawArgs& args, int layer) {
   if (layer == 1) {
     drawEditorText(args);
+    nvgScissor(args.vg, RECT_ARGS(args.clipBox));
     drawHighlightForegrounds(args);
     drawHighlightDecorations(args);
     drawCursor(args);
+    nvgResetScissor(args.vg);
   }
   Widget::drawLayer(args, layer);
 }
