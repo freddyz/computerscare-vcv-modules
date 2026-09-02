@@ -33,6 +33,46 @@ float volyPectorRandomKnobPreviewValue() {
   return random::uniform() * 20.f - 10.f;
 }
 
+std::string volyPectorOutputDestinationText(ModuleWidget* moduleWidget,
+                                            int outputId) {
+  if (!moduleWidget || outputId < 0 || !APP || !APP->scene ||
+      !APP->scene->rack) {
+    return "";
+  }
+
+  PortWidget* outputPort = moduleWidget->getOutput(outputId);
+  if (!outputPort) {
+    return "";
+  }
+
+  std::string text;
+  std::vector<CableWidget*> cables =
+      APP->scene->rack->getCompleteCablesOnPort(outputPort);
+  for (auto it = cables.rbegin(); it != cables.rend(); it++) {
+    CableWidget* cable = *it;
+    if (!cable || !cable->inputPort || !cable->inputPort->module ||
+        !cable->inputPort->module->model) {
+      continue;
+    }
+
+    engine::PortInfo* portInfo = cable->inputPort->getPortInfo();
+    if (!portInfo) {
+      continue;
+    }
+
+    if (!text.empty()) {
+      text += "\n";
+    }
+    text += "to ";
+    text += cable->inputPort->module->model->getFullName();
+    text += ": ";
+    text += portInfo->getName();
+    text += " ";
+    text += "input";
+  }
+  return text;
+}
+
 }  // namespace
 
 struct ComputerscareVolyPector : ComputerscarePolyModule {
@@ -971,11 +1011,96 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
   }
 };
 
+struct VolyPectorBandParamKnobTooltip : ui::Tooltip {
+  ParamWidget* paramWidget = NULL;
+
+  void step() override {
+    engine::ParamQuantity* pq =
+        paramWidget ? paramWidget->getParamQuantity() : NULL;
+    if (pq) {
+      text = pq->getString();
+      std::string description = pq->getDescription();
+      if (!description.empty()) {
+        text += "\n";
+        text += description;
+      }
+
+      ComputerscareVolyPector* module =
+          dynamic_cast<ComputerscareVolyPector*>(paramWidget->module);
+      if (module && !module->channelViewActive()) {
+        std::string destinationText = volyPectorOutputDestinationText(
+            paramWidget->getAncestorOfType<ModuleWidget>(),
+            ComputerscareVolyPector::OUTPUT + module->normalizedOutputView());
+        if (!destinationText.empty()) {
+          text += "\n";
+          text += destinationText;
+        }
+      }
+    }
+
+    Tooltip::step();
+    if (paramWidget) {
+      box.pos = paramWidget->getAbsoluteOffset(paramWidget->box.size).round();
+    }
+    assert(parent);
+    box = box.nudge(parent->box.zeroPos());
+  }
+};
+
 struct VolyPectorNoRandomSmallKnob : SmallKnob {
+  bool showBandDestinationInTooltip = false;
+  ui::Tooltip* hoverTooltip = NULL;
   bool previewMode = false;
   float previewValue = 1.f;
 
   VolyPectorNoRandomSmallKnob() { SmallKnob(); }
+
+  ~VolyPectorNoRandomSmallKnob() { destroyHoverTooltip(); }
+
+  void createHoverTooltip() {
+    if (!showBandDestinationInTooltip) {
+      SmallKnob::createTooltip();
+      return;
+    }
+    if (!settings::tooltips || hoverTooltip || !module) {
+      return;
+    }
+
+    VolyPectorBandParamKnobTooltip* tooltip =
+        new VolyPectorBandParamKnobTooltip;
+    tooltip->paramWidget = this;
+    APP->scene->addChild(tooltip);
+    hoverTooltip = tooltip;
+  }
+
+  void updateHoverTooltip() {
+    if (hoverTooltip) {
+      VolyPectorBandParamKnobTooltip* tooltip =
+          dynamic_cast<VolyPectorBandParamKnobTooltip*>(hoverTooltip);
+      if (tooltip) {
+        tooltip->paramWidget = this;
+      }
+    }
+  }
+
+  void destroyHoverTooltip() {
+    if (!hoverTooltip) {
+      if (showBandDestinationInTooltip) {
+        return;
+      }
+      SmallKnob::destroyTooltip();
+      return;
+    }
+
+    APP->scene->removeChild(hoverTooltip);
+    delete hoverTooltip;
+    hoverTooltip = NULL;
+  }
+
+  void step() override {
+    SmallKnob::step();
+    updateHoverTooltip();
+  }
 
   void draw(const DrawArgs& args) override {
     if (previewMode && !getParamQuantity()) {
@@ -989,17 +1114,65 @@ struct VolyPectorNoRandomSmallKnob : SmallKnob {
     }
     SmallKnob::draw(args);
   }
+
+  void onEnter(const event::Enter& e) override { createHoverTooltip(); }
+
+  void onLeave(const event::Leave& e) override {
+    destroyHoverTooltip();
+    SmallKnob::onLeave(e);
+  }
+
+  void onButton(const event::Button& e) override {
+    if (showBandDestinationInTooltip && e.button == GLFW_MOUSE_BUTTON_RIGHT) {
+      destroyHoverTooltip();
+    }
+    SmallKnob::onButton(e);
+  }
 };
 
 struct VolyPectorNoRandomMediumSmallKnob : ComputerscareRoundKnob {
   std::shared_ptr<Svg> enabledSvg = APP->window->loadSvg(asset::plugin(
       pluginInstance, "res/components/computerscare-medium-small-knob.svg"));
+  bool showBandDestinationInTooltip = false;
+  ui::Tooltip* hoverTooltip = NULL;
   bool previewMode = false;
   float previewValue = 0.f;
 
   VolyPectorNoRandomMediumSmallKnob() {
     setSvg(enabledSvg);
     ComputerscareRoundKnob();
+  }
+
+  ~VolyPectorNoRandomMediumSmallKnob() { destroyHoverTooltip(); }
+
+  void createHoverTooltip() {
+    if (!showBandDestinationInTooltip) {
+      ComputerscareRoundKnob::createTooltip();
+      return;
+    }
+    if (!settings::tooltips || hoverTooltip || !module) {
+      return;
+    }
+
+    VolyPectorBandParamKnobTooltip* tooltip =
+        new VolyPectorBandParamKnobTooltip;
+    tooltip->paramWidget = this;
+    APP->scene->addChild(tooltip);
+    hoverTooltip = tooltip;
+  }
+
+  void destroyHoverTooltip() {
+    if (!hoverTooltip) {
+      if (showBandDestinationInTooltip) {
+        return;
+      }
+      ComputerscareRoundKnob::destroyTooltip();
+      return;
+    }
+
+    APP->scene->removeChild(hoverTooltip);
+    delete hoverTooltip;
+    hoverTooltip = NULL;
   }
 
   void draw(const DrawArgs& args) override {
@@ -1015,6 +1188,28 @@ struct VolyPectorNoRandomMediumSmallKnob : ComputerscareRoundKnob {
     }
     ComputerscareRoundKnob::draw(args);
   }
+
+  void onEnter(const event::Enter& e) override { createHoverTooltip(); }
+
+  void onLeave(const event::Leave& e) override {
+    destroyHoverTooltip();
+    ComputerscareRoundKnob::onLeave(e);
+  }
+
+  void onButton(const event::Button& e) override {
+    if (showBandDestinationInTooltip && e.button == GLFW_MOUSE_BUTTON_RIGHT) {
+      destroyHoverTooltip();
+    }
+    ComputerscareRoundKnob::onButton(e);
+  }
+};
+
+struct VolyPectorDisableableSmoothKnob;
+
+struct VolyPectorMainKnobTooltip : ui::Tooltip {
+  VolyPectorDisableableSmoothKnob* knob = NULL;
+
+  void step() override;
 };
 
 struct VolyPectorDisableableSmoothKnob : ComputerscareRoundKnob {
@@ -1026,6 +1221,7 @@ struct VolyPectorDisableableSmoothKnob : ComputerscareRoundKnob {
 
   int channel = 0;
   bool disabled = false;
+  ui::Tooltip* hoverTooltip = NULL;
   int mainKnobRangeRevision = -1;
   ComputerscarePolyModule* module = NULL;
   bool previewMode = false;
@@ -1038,6 +1234,77 @@ struct VolyPectorDisableableSmoothKnob : ComputerscareRoundKnob {
     setSvg(enabledSvg);
     shadow->box.size = math::Vec(0, 0);
     shadow->opacity = 0.f;
+  }
+
+  ~VolyPectorDisableableSmoothKnob() { destroyHoverTooltip(); }
+
+  int connectedOutputIndex() const {
+    ComputerscareVolyPector* pobs =
+        dynamic_cast<ComputerscareVolyPector*>(module);
+    if (!pobs) {
+      return -1;
+    }
+    if (pobs->channelViewActive()) {
+      return math::clamp(channel, 0, volyPectorNumOutputs - 1);
+    }
+    return pobs->normalizedOutputView();
+  }
+
+  std::string connectedOutputDestinationText() {
+    int outputIndex = connectedOutputIndex();
+    return volyPectorOutputDestinationText(
+        getAncestorOfType<ModuleWidget>(),
+        ComputerscareVolyPector::OUTPUT + outputIndex);
+  }
+
+  std::string tooltipText() {
+    engine::ParamQuantity* pq = getParamQuantity();
+    if (!pq) {
+      return "";
+    }
+
+    std::string text = pq->getString();
+    std::string description = pq->getDescription();
+    if (!description.empty()) {
+      text += "\n";
+      text += description;
+    }
+
+    std::string destinationText = connectedOutputDestinationText();
+    if (!destinationText.empty()) {
+      text += "\n";
+      text += destinationText;
+    }
+    return text;
+  }
+
+  void createHoverTooltip() {
+    if (!settings::tooltips || hoverTooltip || !module) {
+      return;
+    }
+
+    VolyPectorMainKnobTooltip* tooltip = new VolyPectorMainKnobTooltip;
+    tooltip->knob = this;
+    APP->scene->addChild(tooltip);
+    hoverTooltip = tooltip;
+  }
+
+  void updateHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    hoverTooltip->text = tooltipText();
+  }
+
+  void destroyHoverTooltip() {
+    if (!hoverTooltip) {
+      return;
+    }
+
+    APP->scene->removeChild(hoverTooltip);
+    delete hoverTooltip;
+    hoverTooltip = NULL;
   }
 
   void step() override {
@@ -1076,6 +1343,7 @@ struct VolyPectorDisableableSmoothKnob : ComputerscareRoundKnob {
       }
     }
     ComputerscareRoundKnob::step();
+    updateHoverTooltip();
   }
 
   void draw(const DrawArgs& args) override {
@@ -1090,7 +1358,36 @@ struct VolyPectorDisableableSmoothKnob : ComputerscareRoundKnob {
     }
     ComputerscareRoundKnob::draw(args);
   }
+
+  void onEnter(const event::Enter& e) override {
+    createHoverTooltip();
+    updateHoverTooltip();
+  }
+
+  void onLeave(const event::Leave& e) override {
+    destroyHoverTooltip();
+    ComputerscareRoundKnob::onLeave(e);
+  }
+
+  void onButton(const event::Button& e) override {
+    if (e.button == GLFW_MOUSE_BUTTON_RIGHT) {
+      destroyHoverTooltip();
+    }
+    ComputerscareRoundKnob::onButton(e);
+  }
 };
+
+void VolyPectorMainKnobTooltip::step() {
+  if (knob) {
+    text = knob->tooltipText();
+  }
+  Tooltip::step();
+  if (knob) {
+    box.pos = knob->getAbsoluteOffset(knob->box.size).round();
+  }
+  assert(parent);
+  box = box.nudge(parent->box.zeroPos());
+}
 
 struct VolyPectorKnobLabel : SmallLetterDisplay {
   ComputerscareVolyPector* module = NULL;
@@ -1196,9 +1493,17 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
     box.size.y *= yScale;
   }
 
-  std::string tooltipText() const {
+  std::string tooltipText() {
     if (outputLabel) {
-      return volyPectorNatoLabels[outputIndex] + " Band";
+      std::string text = volyPectorNatoLabels[outputIndex] + " Band";
+      std::string destinationText = volyPectorOutputDestinationText(
+          getAncestorOfType<ModuleWidget>(),
+          ComputerscareVolyPector::OUTPUT + outputIndex);
+      if (!destinationText.empty()) {
+        text += "\n";
+        text += destinationText;
+      }
+      return text;
     }
     return "Channel " + std::to_string(channelIndex + 1);
   }
@@ -1771,6 +2076,7 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
             layout.mainScalePos, module, ComputerscareVolyPector::GLOBAL_SCALE);
     scaleKnob->previewMode = previewMode;
     scaleKnob->previewValue = -2.f + random::uniform() * 4.f;
+    scaleKnob->showBandDestinationInTooltip = true;
     addParam(scaleKnob);
     VolyPectorNoRandomMediumSmallKnob* offsetKnob =
         createParam<VolyPectorNoRandomMediumSmallKnob>(
@@ -1778,6 +2084,7 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
             ComputerscareVolyPector::GLOBAL_OFFSET);
     offsetKnob->previewMode = previewMode;
     offsetKnob->previewValue = -10.f + random::uniform() * 20.f;
+    offsetKnob->showBandDestinationInTooltip = true;
     addParam(offsetKnob);
 
     addInput(createInput<TinyJack>(
