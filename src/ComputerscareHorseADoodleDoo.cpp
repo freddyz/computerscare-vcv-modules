@@ -285,6 +285,7 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
 
   int mode = 1;
   int gateMode = 1;
+  bool persistStepPosition = true;
 
   int seqVal[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
   float cvVal[16] = {0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f, 0.f,
@@ -544,6 +545,44 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
   void setMode(int newMode) { params[MODE_KNOB].setValue(newMode); }
   void setGateMode(int newGateMode) { params[GATE_MODE].setValue(newGateMode); }
 
+  void applyPendingSequenceChanges() {
+    for (int i = 0; i < 16; i++) {
+      if (seq[i].pendingChange || seq[i].forceChange) {
+        seq[i].change(seq[i].pendingPattern, seq[i].pendingNumSteps,
+                      seq[i].pendingDensity, seq[i].pendingPhase,
+                      seq[i].pendingPhase2, seq[i].pendingGatePhase);
+        seq[i].pendingChange = false;
+        seq[i].forceChange = false;
+      }
+    }
+  }
+
+  void restoreCurrentSteps(json_t* stepsJ) {
+    if (!stepsJ) {
+      return;
+    }
+
+    checkKnobChanges();
+    applyPendingSequenceChanges();
+
+    for (int i = 0; i < 16; i++) {
+      json_t* stepJ = json_array_get(stepsJ, i);
+      if (!stepJ) {
+        continue;
+      }
+
+      int step = json_integer_value(stepJ);
+      seq[i].currentStep =
+          step < 0 ? -1 : math::clamp(step, 0, seq[i].numSteps - 1);
+      previousStep[i] = seq[i].currentStep;
+      if (seq[i].currentStep >= 0) {
+        seqVal[i] = seq[i].get();
+        cvVal[i] = seq[i].getCV();
+        cv2Val[i] = seq[i].getCV2();
+      }
+    }
+  }
+
   void checkKnobChanges() {
     int pattNum = inputs[PATTERN_CV].getChannels();
     int stepsNum = inputs[STEPS_CV].getChannels();
@@ -788,6 +827,40 @@ struct ComputerscareHorseADoodleDoo : ComputerscareMenuParamModule {
     }
   }
   void checkPoly() override { checkKnobChanges(); }
+  json_t* dataToJson() override {
+    json_t* rootJ = json_object();
+    json_object_set_new(rootJ, "persistStepPosition",
+                        json_boolean(persistStepPosition));
+    if (persistStepPosition) {
+      json_t* stepsJ = json_array();
+      for (int i = 0; i < 16; i++) {
+        json_array_append_new(stepsJ, json_integer(seq[i].currentStep));
+      }
+      json_object_set_new(rootJ, "currentSteps", stepsJ);
+    }
+    return rootJ;
+  }
+
+  void dataFromJson(json_t* rootJ) override {
+    json_t* persistStepPositionJ =
+        json_object_get(rootJ, "persistStepPosition");
+    if (persistStepPositionJ) {
+      persistStepPosition = json_boolean_value(persistStepPositionJ);
+    }
+
+    if (persistStepPosition) {
+      restoreCurrentSteps(json_object_get(rootJ, "currentSteps"));
+    }
+  }
+
+  void fromJson(json_t* rootJ) override {
+    json_t* dataJ = json_object_get(rootJ, "data");
+    if (!dataJ || !json_object_get(dataJ, "persistStepPosition")) {
+      persistStepPosition = false;
+    }
+    Module::fromJson(rootJ);
+  }
+
   void paramsFromJson(json_t* rootJ) override {
     // There was no GATE_MODE param prior to v2, so set the value to 0 (clock
     // passthrough)
@@ -1192,6 +1265,9 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
     gateModeMenu->rightText = RIGHT_ARROW;
     gateModeMenu->horse = horse;
     menu->addChild(gateModeMenu);
+
+    menu->addChild(createBoolPtrMenuItem("Persist current step on save", "",
+                                         &horse->persistStepPosition));
 
     menu->addChild(construct<MenuLabel>(&MenuLabel::text, ""));
 

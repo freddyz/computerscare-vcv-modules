@@ -54,3 +54,4 @@ Enable tooltips and hover over the main "pattern" knob for a visualization of ho
 - CV Offset: Global offset voltage for all CV sequences
 - CV Scale: Global scale for all CV sequences
 - CV Phase: Change this to keep the same trigger sequences but change the CV sequence
+- Persist current step on save: Saves and restores the current step position of each polyphonic sequence with the patch. Legacy behavior resets the sequencers to step 0 on launch.
