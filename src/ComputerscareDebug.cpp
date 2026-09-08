@@ -1551,19 +1551,29 @@ void ComputerscareDebugWidget::appendContextMenu(Menu* menu) {
         }
       }));
   menu->addChild(new MenuSeparator);
+  menu->addChild(createSubmenuItem(
+      "Display",
+      DebugVisualModeNames[(int)debug->params[ComputerscareDebug::VISUAL_MODE]
+                               .getValue()],
+      [=](Menu* displayMenu) { addDebugVisualModeItems(displayMenu, debug); }));
+  menu->addChild(createSubmenuItem(
+      "Bar Style",
+      DebugBarModeNames[(int)debug->params[ComputerscareDebug::BAR_MODE]
+                            .getValue()],
+      [=](Menu* barStyleMenu) { addDebugBarModeItems(barStyleMenu, debug); }));
   menu->addChild(createSubmenuItem("Visual", "", [=](Menu* visualMenu) {
     addDebugQuickVisualSettingsItems(visualMenu, debug);
   }));
-  menu->addChild(createSubmenuItem(
-      "Text",
-      DebugTextModeNames[(int)debug->params[ComputerscareDebug::TEXT_MODE]
-                             .getValue()],
-      [=](Menu* textMenu) { addDebugTextModeItems(textMenu, debug); }));
   menu->addChild(createSubmenuItem(
       "Theme",
       DebugThemes[(int)debug->params[ComputerscareDebug::THEME].getValue()]
           .name,
       [=](Menu* submenu) { addDebugThemeItems(submenu, debug); }));
+  menu->addChild(createSubmenuItem(
+      "Text",
+      DebugTextModeNames[(int)debug->params[ComputerscareDebug::TEXT_MODE]
+                             .getValue()],
+      [=](Menu* textMenu) { addDebugTextModeItems(textMenu, debug); }));
 }
 Model* modelComputerscareDebug =
     createModel<ComputerscareDebug, ComputerscareDebugWidget>(
