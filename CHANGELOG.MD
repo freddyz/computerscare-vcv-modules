@@ -1,3 +1,8 @@
+# 2.3.12
+- Add all visual options to Debug context menu
+- Minor improvement updates
+
+
 # 2.3.11
 VolyPector:
 - 16 polyphonic signals, with a compact UI.  Edit by signal, or by channel.  Triggered randomization/wiggle per channel or signal.
