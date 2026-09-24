@@ -148,7 +148,8 @@ struct SmallIsoButton : SvgSwitch {
         frames[0] = enabledFrames[0];
         frames[1] = enabledFrames[1];
       }
-      onChange(*(new event::Change()));
+      event::Change eChange;
+      onChange(eChange);
       fb->dirty = true;
       lastDisabled = disabled;
     }
@@ -578,6 +579,8 @@ struct ComputerscareTextField : ui::TextField {
   bool inError = false;
   int textColorState = 0;
   bool dimWithRoom = false;
+  std::shared_ptr<Font> font;
+  std::string loadedFontPath;
 
   ComputerscareTextField() {
     color = nvgRGB(0xff, 0xd7, 0x14);
@@ -608,7 +611,7 @@ struct ComputerscareTextField : ui::TextField {
     Widget::drawLayer(args, layer);
   }
   void drawText(const BGPanel::DrawArgs& args) {
-    std::shared_ptr<Font> font = APP->window->loadFont(asset::system(fontPath));
+    std::shared_ptr<Font> font = getFont();
     if (font) {
       // Text
       nvgFontFaceId(args.vg, font->handle);
@@ -630,7 +633,7 @@ struct ComputerscareTextField : ui::TextField {
     }
   }
   int getTextPosition(Vec mousePos) override {
-    std::shared_ptr<Font> font = APP->window->loadFont(asset::system(fontPath));
+    std::shared_ptr<Font> font = getFont();
     if (font) {
       bndSetFont(font->handle);
       int textPos = bndIconLabelTextPosition(
@@ -645,6 +648,13 @@ struct ComputerscareTextField : ui::TextField {
                                       mousePos.y);
     }
   }
+  std::shared_ptr<Font> getFont() {
+    if (!font || loadedFontPath != fontPath) {
+      loadedFontPath = fontPath;
+      font = APP->window->loadFont(asset::system(fontPath));
+    }
+    return font;
+  }
 };
 ////////////////////////////////////
 struct SmallLetterDisplay : Widget {
@@ -655,6 +665,8 @@ struct SmallLetterDisplay : Widget {
   NVGcolor baseColor = COLOR_COMPUTERSCARE_TRANSPARENT;
   NVGcolor textColor = nvgRGB(0x10, 0x10, 0x00);
   Vec textOffset = Vec(0, 0);
+  std::shared_ptr<Font> font;
+  std::string loadedFontPath;
 
   float letterSpacing = 2.5;
   int textAlign = 1;
@@ -674,7 +686,7 @@ struct SmallLetterDisplay : Widget {
 
   void draw(const DrawArgs& ctx) override {
     // Background
-    std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
+    std::shared_ptr<Font> font = getFont();
     NVGcolor backgroundColor = COLOR_COMPUTERSCARE_RED;
     NVGcolor doubleblinkColor = COLOR_COMPUTERSCARE_YELLOW;
 
@@ -708,6 +720,14 @@ struct SmallLetterDisplay : Widget {
       nvgTextBox(ctx.vg, textPos.x, textPos.y, breakRowWidth, value.c_str(),
                  NULL);
     }
+  }
+
+  std::shared_ptr<Font> getFont() {
+    if (!font || loadedFontPath != fontPath) {
+      loadedFontPath = fontPath;
+      font = APP->window->loadFont(fontPath);
+    }
+    return font;
   }
 };
 

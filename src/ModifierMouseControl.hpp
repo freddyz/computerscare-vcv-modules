@@ -62,6 +62,15 @@ struct ComputerscareModifierMouseControl {
 
   bool shouldShowHint(Widget* owner) const { return isMouseOverOwner(owner); }
 
+  static std::shared_ptr<Font> overlayFont() {
+    static std::shared_ptr<Font> font;
+    if (!font) {
+      font = APP->window->loadFont(
+          asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    }
+    return font;
+  }
+
   static bool isMouseOverOwner(Widget* owner) {
     if (!owner || !APP || !APP->scene) return false;
     math::Vec mouse = APP->scene->getMousePos();
@@ -86,8 +95,7 @@ struct ComputerscareModifierMouseControl {
     nvgStrokeWidth(args.vg, 1.5f + pulse * 0.8f);
     nvgStrokeColor(args.vg, nvgRGB(0x21, 0x12, 0x08));
     nvgStroke(args.vg);
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    std::shared_ptr<Font> font = overlayFont();
     if (font) {
       nvgFontFaceId(args.vg, font->handle);
       nvgFontSize(args.vg, 13.f);
@@ -114,8 +122,7 @@ struct ComputerscareModifierMouseControl {
       nvgFill(args.vg);
     }
 
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    std::shared_ptr<Font> font = overlayFont();
     if (font) {
       const char* label = "Q EDIT  A MODE";
       nvgFontFaceId(args.vg, font->handle);
@@ -142,8 +149,7 @@ struct ComputerscareModifierMouseControl {
       const Widget::DrawArgs& args, float panelRight,
       const std::vector<ComputerscareMouseControlTab>& tabs) {
     if (!editKeyOn() || tabs.empty()) return;
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    std::shared_ptr<Font> font = overlayFont();
     if (!font) return;
 
     for (const ComputerscareMouseControlTab& tab : tabs) {

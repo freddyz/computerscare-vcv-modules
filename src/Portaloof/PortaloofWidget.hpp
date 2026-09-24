@@ -11,6 +11,7 @@ static const float DISPLAY_X = CONTROLS_WIDTH - RACK_GRID_WIDTH;  // 10 HP
 
 struct PortaloofKaleidModeKnob : MediumDotSnapKnob {
   static constexpr float PAD = 6.f;
+  std::shared_ptr<Font> font;
 
   PortaloofKaleidModeKnob() {
     if (!sw || !sw->svg) return;
@@ -38,8 +39,10 @@ struct PortaloofKaleidModeKnob : MediumDotSnapKnob {
     std::string label = mode == 0 ? "off"
                                   : (mode > 0 ? string::f("p%d", mode)
                                               : string::f("c%d", -mode));
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    if (!font) {
+      font = APP->window->loadFont(
+          asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    }
     if (!font) return;
 
     nvgSave(args.vg);

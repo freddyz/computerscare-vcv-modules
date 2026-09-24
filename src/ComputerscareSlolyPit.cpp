@@ -1259,6 +1259,8 @@ struct SlolyPitOutputLabels : Widget {
   ComputerscareSlolyPit* module;
   std::string fontPath =
       asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
+  std::shared_ptr<Font> font;
+  std::string loadedFontPath;
 
   float rowSpacing = 19.f;
   float rowHeight = 15.f;
@@ -2005,7 +2007,7 @@ struct SlolyPitOutputLabels : Widget {
   }
 
   void drawLabels(const DrawArgs& args) {
-    std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
+    std::shared_ptr<Font> font = getFont();
     if (!font) {
       return;
     }
@@ -2045,7 +2047,7 @@ struct SlolyPitOutputLabels : Widget {
       return;
     }
 
-    std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
+    std::shared_ptr<Font> font = getFont();
     if (!font) {
       return;
     }
@@ -2073,6 +2075,14 @@ struct SlolyPitOutputLabels : Widget {
       nvgText(args.vg, routeTextRightX, textBaselineY + routeIndex * rowSpacing,
               label.c_str(), NULL);
     }
+  }
+
+  std::shared_ptr<Font> getFont() {
+    if (!font || loadedFontPath != fontPath) {
+      loadedFontPath = fontPath;
+      font = APP->window->loadFont(fontPath);
+    }
+    return font;
   }
 };
 

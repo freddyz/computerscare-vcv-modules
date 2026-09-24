@@ -650,6 +650,8 @@ struct StringDisplayWidget3 : Widget {
   std::string fontPath = "res/fonts/Oswald-Regular.ttf";
   ComputerscareDebug* module = nullptr;
   DebugPreviewState* preview = nullptr;
+  std::shared_ptr<Font> font;
+  std::string loadedFontPath;
 
   StringDisplayWidget3() {};
 
@@ -832,8 +834,11 @@ struct StringDisplayWidget3 : Widget {
         return;
       }
 
-      std::shared_ptr<Font> font =
-          APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
+      std::shared_ptr<Font> font = getFont();
+      if (!font) {
+        Widget::drawLayer(args, layer);
+        return;
+      }
 
       // text
       nvgFontSize(args.vg, 15);
@@ -855,6 +860,14 @@ struct StringDisplayWidget3 : Widget {
       nvgTextBox(args.vg, textPos.x, textPos.y, 80, textToDraw.c_str(), NULL);
     }
     Widget::drawLayer(args, layer);
+  }
+
+  std::shared_ptr<Font> getFont() {
+    if (!font || loadedFontPath != fontPath) {
+      loadedFontPath = fontPath;
+      font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
+    }
+    return font;
   }
 };
 struct ConnectedSmallLetter : SmallLetterDisplay {
@@ -1109,6 +1122,7 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
   int control = 0;
   int menuFrame = -1;
   bool hovering = false;
+  std::shared_ptr<Font> font;
 
   enum Control {
     DISPLAY_CONTROL,
@@ -1225,8 +1239,7 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
       return;
     }
     ComputerscareBlankButton::draw(args);
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    std::shared_ptr<Font> font = getFont();
     if (!font) {
       return;
     }
@@ -1240,6 +1253,14 @@ struct DebugLabelHoverButton : ComputerscareBlankButton {
     std::string code = codeText();
     nvgText(args.vg, box.size.x * 0.32f + textXOffset,
             box.size.y * 0.50f + textYOffset, code.c_str(), NULL);
+  }
+
+  std::shared_ptr<Font> getFont() {
+    if (!font) {
+      font = APP->window->loadFont(
+          asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    }
+    return font;
   }
 
   void onDragEnd(const event::DragEnd& e) override {

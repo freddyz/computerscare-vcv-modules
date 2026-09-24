@@ -129,10 +129,15 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
   }
   void process(const ProcessArgs& args) override {
     ComputerscarePolyModule::checkCounter();
+    if (!outputs[POLY_OUTPUT].isConnected()) {
+      return;
+    }
+
     float outTrim = params[OUTPUT_TRIM].getValue();
     float outOffset = params[OUTPUT_OFFSET].getValue();
 
     float inOffset = params[INPUT_OFFSET].getValue();
+    float inputTrim = params[INPUT_TRIM].getValue();
 
     int numInputTrimChannels = inputs[INPUT_ATTENUATION_CV].getChannels();
     int numOutputTrimChannels = inputs[OUTPUT_ATTENUATION_CV].getChannels();
@@ -154,24 +159,22 @@ struct ComputerscareMolyPatrix : ComputerscarePolyModule {
     for (int outIndex = 0; outIndex < numRows; outIndex++) {
       float outVoltage = 0.f;
       for (int i = 0; i < numColumns; i++) {
+        float inputRowTrim = params[INPUT_ROW_TRIM + i].getValue();
+        float inputTrimCv =
+            numInputTrimChannels > 0
+                ? inputTrims[numInputTrimChannels == 1 ? 0 : i] / 10
+                : 1;
         outVoltage += params[KNOB + i * 16 + outIndex].getValue() *
-                      (inputVals[i] + inOffset) *
-                      params[INPUT_ROW_TRIM + i].getValue() *
-                      (params[INPUT_TRIM].getValue() *
-                       (numInputTrimChannels > 0
-                            ? inputTrims[numInputTrimChannels == 1 ? 0 : i] / 10
-                            : 1));
+                      (inputVals[i] + inOffset) * inputRowTrim * inputTrim *
+                      inputTrimCv;
       }
+      float outputColumnTrim = params[OUTPUT_COLUMN_TRIM + outIndex].getValue();
+      float outputTrimCv =
+          numOutputTrimChannels > 0
+              ? outputTrims[numOutputTrimChannels == 1 ? 0 : outIndex] / 10
+              : 1;
       outputs[POLY_OUTPUT].setVoltage(
-          params[OUTPUT_COLUMN_TRIM + outIndex].getValue() *
-                  (outTrim *
-                   (numOutputTrimChannels > 0
-                        ? outputTrims[numOutputTrimChannels == 1 ? 0
-                                                                 : outIndex] /
-                              10
-                        : 1)) *
-                  outVoltage +
-              outOffset,
+          outputColumnTrim * outTrim * outputTrimCv * outVoltage + outOffset,
           outIndex);
     }
   }

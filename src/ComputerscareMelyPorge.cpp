@@ -454,9 +454,11 @@ struct MelyPorgeBlockNumber : Widget {
   std::string value;
   std::string fontPath =
       asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
+  std::shared_ptr<Font> font;
+  std::string loadedFontPath;
 
   void draw(const DrawArgs& args) override {
-    std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
+    std::shared_ptr<Font> font = getFont();
     if (!font) {
       return;
     }
@@ -466,6 +468,14 @@ struct MelyPorgeBlockNumber : Widget {
     nvgTextAlign(args.vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, BLACK);
     nvgText(args.vg, box.size.x, box.size.y * 0.5f, value.c_str(), NULL);
+  }
+
+  std::shared_ptr<Font> getFont() {
+    if (!font || loadedFontPath != fontPath) {
+      loadedFontPath = fontPath;
+      font = APP->window->loadFont(fontPath);
+    }
+    return font;
   }
 };
 
@@ -940,6 +950,7 @@ struct MelyPorgeModeButton : ComputerscareBlankButton {
   ui::Tooltip* hoverTooltip = NULL;
   int blockIndex = 0;
   int menuFrame = -1;
+  std::shared_ptr<Font> font;
 
   MelyPorgeModeButton() {
     iconUpPos = Vec(0.f, 0.f);
@@ -1014,6 +1025,14 @@ struct MelyPorgeModeButton : ComputerscareBlankButton {
     return module && blockIndex > module->polyChannels - 1;
   }
 
+  std::shared_ptr<Font> getFont() {
+    if (!font) {
+      font = APP->window->loadFont(
+          asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    }
+    return font;
+  }
+
   void draw(const DrawArgs& args) override {
     updateMenuFrame();
     nvgSave(args.vg);
@@ -1023,8 +1042,7 @@ struct MelyPorgeModeButton : ComputerscareBlankButton {
     nvgScale(args.vg, 0.82f, 1.f);
     ComputerscareBlankButton::draw(args);
     nvgRestore(args.vg);
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    std::shared_ptr<Font> font = getFont();
     if (!font) {
       return;
     }

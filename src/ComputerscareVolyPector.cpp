@@ -1421,6 +1421,8 @@ struct VolyPectorViewTitle : Widget {
   float fontSize = 16.5f;
   std::string fontPath =
       asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf");
+  std::shared_ptr<Font> font;
+  std::string loadedFontPath;
 
   std::string title() {
     if (module) {
@@ -1436,7 +1438,7 @@ struct VolyPectorViewTitle : Widget {
   }
 
   void draw(const DrawArgs& args) override {
-    std::shared_ptr<Font> font = APP->window->loadFont(fontPath);
+    std::shared_ptr<Font> font = getFont();
     if (!font) {
       return;
     }
@@ -1454,6 +1456,14 @@ struct VolyPectorViewTitle : Widget {
     nvgFillColor(args.vg, nvgRGB(0x10, 0x10, 0x00));
     nvgText(args.vg, 0.f, 0.f, text.c_str(), NULL);
     nvgRestore(args.vg);
+  }
+
+  std::shared_ptr<Font> getFont() {
+    if (!font || loadedFontPath != fontPath) {
+      loadedFontPath = fontPath;
+      font = APP->window->loadFont(fontPath);
+    }
+    return font;
   }
 };
 
@@ -1474,6 +1484,7 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
   float xScale = 0.66f;
   float yScale = 1.46f;
   Vec weirdOffset = Vec(0.f, 0.f);
+  std::shared_ptr<Font> font;
 
   VolyPectorLabelButton() {
     iconUpPos = Vec(0.f, 0.f);
@@ -1593,8 +1604,7 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
   }
 
   void drawText(const DrawArgs& args) {
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    std::shared_ptr<Font> font = getFont();
     if (!font) {
       return;
     }
@@ -1617,6 +1627,14 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
     nvgFillColor(args.vg, labelColor);
     nvgText(args.vg, textX, textY, value.c_str(), NULL);
     nvgRestore(args.vg);
+  }
+
+  std::shared_ptr<Font> getFont() {
+    if (!font) {
+      font = APP->window->loadFont(
+          asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    }
+    return font;
   }
 
   void draw(const DrawArgs& args) override {
@@ -1696,6 +1714,7 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
   float xScale = 0.92f;
   float yScale = 1.18f;
   bool pressed = false;
+  std::shared_ptr<Font> font;
 
   VolyPectorActionButton() {
     iconUpPos = Vec(0.f, 0.f);
@@ -1761,8 +1780,7 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
     ComputerscareBlankButton::draw(args);
     nvgRestore(args.vg);
 
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    std::shared_ptr<Font> font = getFont();
     if (!font) {
       return;
     }
@@ -1774,6 +1792,14 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
     float textYOffset = pressed ? 2.9f * yScale : 0.f;
     nvgText(args.vg, box.size.x * 0.5f + textXOffset,
             box.size.y * 0.48f + textYOffset, label.c_str(), NULL);
+  }
+
+  std::shared_ptr<Font> getFont() {
+    if (!font) {
+      font = APP->window->loadFont(
+          asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    }
+    return font;
   }
 
   void step() override {
@@ -1887,6 +1913,7 @@ struct VolyPectorSelectorButton : ComputerscareBlankButton {
   int menuFrame = -1;
   float xScale = 1.85f;
   float yScale = 1.22f;
+  std::shared_ptr<Font> font;
 
   VolyPectorSelectorButton() {
     iconUpPos = Vec(0.f, 0.f);
@@ -1939,8 +1966,7 @@ struct VolyPectorSelectorButton : ComputerscareBlankButton {
     ComputerscareBlankButton::draw(args);
     nvgRestore(args.vg);
 
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    std::shared_ptr<Font> font = getFont();
     if (!font) {
       return;
     }
@@ -1956,6 +1982,14 @@ struct VolyPectorSelectorButton : ComputerscareBlankButton {
     float yOffset = pressed ? 1.5f : 0.f;
     nvgText(args.vg, box.size.x * 0.5f + xOffset, box.size.y * 0.47f + yOffset,
             text.c_str(), NULL);
+  }
+
+  std::shared_ptr<Font> getFont() {
+    if (!font) {
+      font = APP->window->loadFont(
+          asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    }
+    return font;
   }
 
   void onDragEnd(const event::DragEnd& e) override {

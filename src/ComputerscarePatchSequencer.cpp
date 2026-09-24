@@ -429,6 +429,8 @@ struct NumberDisplayWidget3 : TransparentWidget {
   int* value = nullptr;
   ComputerscarePatchSequencer* module = nullptr;
   std::string fontPath = "res/fonts/Segment7Standard.ttf";
+  std::shared_ptr<Font> font;
+  std::string loadedFontPath;
 
   NumberDisplayWidget3() {
 
@@ -450,8 +452,7 @@ struct NumberDisplayWidget3 : TransparentWidget {
     Widget::drawLayer(args, layer);
   }
   void drawText(const BGPanel::DrawArgs& args) {
-    std::shared_ptr<Font> font =
-        APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
+    std::shared_ptr<Font> font = getFont();
     if (font) {
       // text
       nvgFontSize(args.vg, 18);
@@ -470,6 +471,13 @@ struct NumberDisplayWidget3 : TransparentWidget {
       nvgFillColor(args.vg, textColor);
       nvgText(args.vg, textPos.x, textPos.y, to_display.str().c_str(), NULL);
     }
+  }
+  std::shared_ptr<Font> getFont() {
+    if (!font || loadedFontPath != fontPath) {
+      loadedFontPath = fontPath;
+      font = APP->window->loadFont(asset::plugin(pluginInstance, fontPath));
+    }
+    return font;
   }
 };
 
