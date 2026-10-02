@@ -7,7 +7,7 @@
 namespace windchimes {
 constexpr int maxSets = 8;
 constexpr int maxTubes = 12;
-constexpr int modesPerTube = 8;
+constexpr int modesPerTube = 12;
 constexpr float pi = 3.14159265358979323846f;
 inline float clamp(float x, float lo, float hi) {
   return std::max(lo, std::min(x, hi));
@@ -18,6 +18,7 @@ struct SetConfig {
   float octave = 0.f, fine = 0.f, decay = 0.55f, brightness = 0.55f;
   float hardness = 0.5f, level = 0.7f, swing = 0.5f;
   float x = 0.5f, y = 0.5f;
+  float shape = 0.35f, body = 0.65f, inharmonicity = 0.5f;
 };
 struct Stereo {
   float left, right;

@@ -1,4 +1,5 @@
 #include "Windchimes/Engine.hpp"
+#include "Windchimes/Presets.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -34,6 +35,102 @@ int main() {
       engine.configure(0, config, 0.f); engine.strike(0);
       require(std::isfinite(engine.process(0, 0, 0, 0).left), "sample rate changes remain stable");
     }
+  }
+  // Morphing must be audible in every material, continuous at profile joins,
+  // and stable while controls change during a ringing voice.
+  for (int material = 0; material < 3; ++material) {
+    config = wc::SetConfig(); config.material = material;
+    auto difference = [&](float sa, float sb, float ba, float bb) {
+      wc::Resonator a, b;
+      config.shape = sa; config.body = ba; a.configure(220.f, 48000.f, config);
+      config.shape = sb; config.body = bb; b.configure(220.f, 48000.f, config);
+      a.strike(0.8f); b.strike(0.8f);
+      double error = 0.f;
+      for (int i = 0; i < 24000; ++i) {
+        double delta = a.process() - b.process(); error += delta * delta;
+      }
+      return error;
+    };
+    require(difference(0.f, 1.f, 0.65f, 0.65f) > 0.01, "shape changes every material's modal response");
+    require(difference(0.5f, 0.5f, 0.f, 1.f) > 0.01, "body changes impact/resonance balance for every material");
+    for (float boundary : {1.f / 3.f, 2.f / 3.f})
+      require(difference(boundary - 1e-6f, boundary + 1e-6f, 0.65f, 0.65f) < 1e-4,
+        "shape profiles morph continuously across interpolation boundaries");
+    wc::Resonator sweep; config.decay = 1.f; sweep.configure(220.f, 48000.f, config); sweep.strike(1.f);
+    for (int i = 0; i < 96000; ++i) {
+      if (i % 240 == 0) { config.shape = i / 96000.f; config.body = 1.f - config.shape; sweep.configure(220.f, 48000.f, config); }
+      float sample = sweep.process();
+      require(std::isfinite(sample) && std::fabs(sample) < 4.f, "live timbre morph remains bounded");
+    }
+  }
+  wc::Resonator longWood; config = wc::SetConfig(); config.material = 1;
+  config.decay = 1.f; config.body = 1.f; longWood.configure(220.f, 48000.f, config); longWood.strike(1.f);
+  double woodTail = 0.f;
+  for (int i = 0; i < 480000; ++i) { float sample = longWood.process(); if (i >= 432000) woodTail += sample * sample; }
+  require(longWood.active() && woodTail > 1e-4, "maximum wood decay retains an audible late tail without timeout");
+  for (int i = 0; i < 960000 && longWood.active(); ++i) longWood.process();
+  require(!longWood.active(), "extended wood tail eventually sleeps at the energy threshold");
+  for (int material = 0; material < 3; ++material) {
+    auto presets = wc::soundPresets(material);
+    require(material != 1 || presets.count == 8, "wood offers eight sound presets");
+    wc::Resonator previous; bool hasPrevious = false;
+    for (int index = 0; index < presets.count; ++index) {
+      const auto& p = presets.items[index];
+      config = wc::SetConfig(); config.material = material;
+      config.decay = p.decay; config.brightness = p.brightness; config.hardness = p.hardness;
+      config.shape = p.shape; config.body = p.body; config.inharmonicity = p.inharmonicity;
+      wc::Resonator current; current.configure(220.f, 48000.f, config); current.strike(0.8f);
+      wc::Resonator saved = current;
+      double energy = 0.f, difference = 0.f;
+      for (int i = 0; i < 12000; ++i) {
+        float sample = current.process();
+        require(std::isfinite(sample) && std::fabs(sample) < 4.f, "material presets produce bounded audio");
+        energy += sample * sample;
+        if (hasPrevious) { double delta = sample - previous.process(); difference += delta * delta; }
+      }
+      require(energy > 0.01, "every preset is audible");
+      require(!hasPrevious || difference > 0.01, "neighboring presets produce distinct sound responses");
+      previous = saved; hasPrevious = true;
+    }
+  }
+  for (int material = 0; material < 3; ++material) {
+    config = wc::SetConfig(); config.material = material;
+    wc::Resonator harmonic, natural, stretched;
+    config.inharmonicity = 0.f; harmonic.configure(220.f, 48000.f, config);
+    config.inharmonicity = 0.5f; natural.configure(220.f, 48000.f, config);
+    config.inharmonicity = 1.f; stretched.configure(220.f, 48000.f, config);
+    for (int mode = 0; mode < 6; ++mode)
+      require(std::fabs(harmonic.modeFrequency(mode) - 220.f*(mode+1)) < 0.01f,
+        "inharmonicity zero gives harmonic structural spacing");
+    require(std::fabs(natural.modeFrequency(0)-220.f) < 0.01f && std::fabs(stretched.modeFrequency(0)-220.f) < 0.01f,
+      "inharmonicity preserves the tuned fundamental");
+    require(std::fabs(natural.modeFrequency(2)-stretched.modeFrequency(2)) > 1.f,
+      "inharmonicity changes higher structural modes in every material");
+    wc::Resonator striker, pair; striker.configure(220.f, 48000.f, config); pair.configure(220.f, 48000.f, config);
+    striker.strike(0.8f, wc::ContactKind::Striker, 0.3f); pair.strike(0.8f, wc::ContactKind::Tube, 0.3f);
+    double difference = 0.f;
+    for (int i = 0; i < 4800; ++i) { double d = striker.process()-pair.process(); difference += d*d; }
+    require(difference > 0.001, "tube contacts have a distinct acoustic impulse from striker contacts");
+  }
+  for (float rate : {44100.f, 48000.f, 96000.f}) {
+    config = wc::SetConfig(); config.material = 1; config.body = 0.f; config.decay = 0.5f;
+    wc::Resonator soft, hard;
+    config.hardness = 0.f; soft.configure(261.625565f, rate, config);
+    config.hardness = 1.f; hard.configure(261.625565f, rate, config);
+    soft.strike(1.f); hard.strike(1.f);
+    double softDerivative = 0.f, hardDerivative = 0.f, softEnergy = 0.f, hardEnergy = 0.f;
+    float lastSoft = 0.f, lastHard = 0.f, softPeak = 0.f, hardPeak = 0.f;
+    for (int i = 0; i < static_cast<int>(rate * 0.02f); ++i) {
+      float a = soft.process(), b = hard.process();
+      softPeak = std::max(softPeak,std::fabs(a)); hardPeak = std::max(hardPeak,std::fabs(b));
+      softEnergy += a*a; hardEnergy += b*b;
+      softDerivative += (a-lastSoft)*(a-lastSoft); hardDerivative += (b-lastHard)*(b-lastHard);
+      lastSoft=a; lastHard=b;
+    }
+    require(softPeak < hardPeak && softEnergy < hardEnergy,
+      "low hardness rounds off the dry wood attack rather than producing a louder burst");
+    require(softDerivative/softEnergy < hardDerivative/hardEnergy,
+      "soft wood contact has less high-frequency attack energy");
   }
   wc::Engine engine; engine.setSampleRate(48000);
   config = wc::SetConfig(); config.enabled = true; config.tubes = wc::maxTubes; config.level = 1.f;
@@ -156,6 +253,40 @@ int main() {
     if (position == 1.f) require(leftEnergy < rightEnergy * 1e-9, "right placement pans all tubes right");
     if (position == 0.5f) require(difference < 1e-9, "center placement pans all tubes equally");
   }
+  auto distant = std::unique_ptr<wc::Engine>(new wc::Engine);
+  auto nearby = std::unique_ptr<wc::Engine>(new wc::Engine);
+  distant->setSampleRate(48000.f); nearby->setSampleRate(48000.f);
+  config = wc::SetConfig(); config.enabled = true; config.brightness = 1.f; config.hardness = 1.f;
+  config.y = 0.f; distant->configure(0,config,0.f);
+  config.y = 1.f; nearby->configure(0,config,0.f);
+  distant->strike(0); nearby->strike(0);
+  double farEnergy=0.f,nearEnergy=0.f,farDifference=0.f,nearDifference=0.f;
+  float lastFar=0.f,lastNear=0.f;
+  for(int i=0;i<48000;++i) {
+    float a=distant->process(0.f,0.f,0.f,0.f).left;
+    float b=nearby->process(0.f,0.f,0.f,0.f).left;
+    farEnergy+=a*a; nearEnergy+=b*b;
+    farDifference+=(a-lastFar)*(a-lastFar); nearDifference+=(b-lastNear)*(b-lastNear);
+    lastFar=a;lastNear=b;
+  }
+  require(farEnergy>0.f && farEnergy<nearEnergy*0.3f,"Far is quieter than Near for the same physical strike");
+  require(farDifference/farEnergy<nearDifference/nearEnergy,"Far attenuates upper-frequency detail as well as level");
+  auto depthEnergy = [&](float nearness,float wet) {
+    auto scene=std::unique_ptr<wc::Engine>(new wc::Engine);
+    scene->setSampleRate(48000.f); scene->configureEffects(wet,0.6f,0.5f,0.5f);
+    config=wc::SetConfig(); config.enabled=true; config.y=nearness;
+    scene->configure(0,config,0.f); scene->strike(0);
+    double result=0.f;
+    for(int i=0;i<144000;++i) {
+      auto out=scene->process(0.f,0.f,0.f,0.f); result+=out.left*out.left+out.right*out.right;
+    }
+    return result;
+  };
+  double farDry=depthEnergy(0.f,0.f),nearDry=depthEnergy(1.f,0.f);
+  double farRoom=depthEnergy(0.f,1.f),nearRoom=depthEnergy(1.f,1.f);
+  require(farDry<nearDry*0.02,"far-edge direct sound falls by at least 17 dB");
+  require(farRoom>0.f && nearRoom>farRoom,"distant reflections remain audible but lower in absolute level");
+  require(farRoom/farDry>3.f*nearRoom/nearDry,"distance increases reflected-to-direct energy rather than reverberating the already attenuated dry mix");
   for (int count : {1, 6, 12}) {
     wc::Motion suspended; config.tubes = count; config.swing = 1.f;
     suspended.configure(count);

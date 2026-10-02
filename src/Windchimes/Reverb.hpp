@@ -68,7 +68,7 @@ class Reverb {
             1, std::min(4096, static_cast<int>(diffusionTimes[i] * rate)));
       }
   }
-  Stereo process(Stereo dry, float mix) {
+  Stereo processWet(Stereo dry) {
     float left = diffusers[1].process(diffusers[0].process(dry.left));
     float right = diffusers[3].process(diffusers[2].process(dry.right));
     float values[8];
@@ -97,7 +97,11 @@ class Reverb {
       line.buffer[line.write] = input + values[i] * 0.35355339f;
       if (++line.write == capacity) line.write = 0;
     }
+    return wet;
+  }
+  Stereo process(Stereo dry, float mix) {
     mix = clamp(mix, 0.f, 1.f);
+    Stereo wet = processWet(dry);
     return {dry.left * (1.f - mix) + wet.left * mix,
             dry.right * (1.f - mix) + wet.right * mix};
   }

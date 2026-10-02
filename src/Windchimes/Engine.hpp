@@ -9,6 +9,8 @@ class Engine {
   struct Set {
     SetConfig config;
     Motion motion;
+    float distanceState = 0.f, distanceState2 = 0.f, distanceCoeff = 1.f;
+    float roomLeft = 0.f, roomRight = 0.f;
     std::array<Resonator, maxTubes> tubes;
     std::array<float, maxTubes> panLeft{}, panRight{};
   };
@@ -39,6 +41,7 @@ class Engine {
       if (s.config.enabled) {
         for (auto& t : s.tubes) t.reset();
         s.motion.reset();
+        s.distanceState = s.distanceState2 = 0.f;
       }
       s.config = config;
       return;
@@ -48,11 +51,22 @@ class Engine {
     for (int t = 0; t < config.tubes; ++t) {
       s.tubes[t].configure(tubeFrequency(config, t, transpose), rate, config);
       float pan = clamp(config.x, 0.f, 1.f);
-      float gain = config.level * (0.45f + config.y * 0.55f) * 0.48f;
+      float near = clamp(config.y, 0.f, 1.f);
+      // Direct sound falls faster with distance than the diffuse room send.
+      float gain = config.level * 0.48f / (1.f + 7.f * (1.f - near));
+      float roomGain = config.level * 0.48f * (0.35f + 0.65f * near);
+      s.roomLeft = std::cos(pan * pi * 0.5f) * roomGain;
+      s.roomRight = std::sin(pan * pi * 0.5f) * roomGain;
       s.panLeft[t] = std::cos(pan * pi * 0.5f) * gain;
       s.panRight[t] = std::sin(pan * pi * 0.5f) * gain;
     }
     for (int t = config.tubes; t < maxTubes; ++t) s.tubes[t].reset();
+    s.distanceCoeff =
+        1.f -
+        std::exp(-2.f * pi *
+                 std::min(800.f * std::pow(22.5f, clamp(config.y, 0.f, 1.f)),
+                          rate * 0.4f) /
+                 rate);
     s.config = config;
   }
   void gust() {
@@ -92,10 +106,26 @@ class Engine {
         if (!s.config.enabled) continue;
         s.motion.step(
             dt, wind.x, wind.y, s.config, i,
-            [&s](int t, float velocity) { s.tubes[t].strike(velocity); },
+            [&s](int t, float velocity) {
+              auto shape = s.motion.tubeShape(t);
+              auto contact = closestPoint(s.motion.strikerPosition(),
+                                          shape.top(), shape.bottom());
+              float location = clamp((contact - shape.top()).dot(shape.axis) /
+                                         (2.f * shape.halfLength),
+                                     0.f, 1.f);
+              s.tubes[t].strike(velocity, ContactKind::Striker, location);
+            },
             [&s](int a, int b, float velocity) {
-              s.tubes[a].strike(velocity);
-              s.tubes[b].strike(velocity);
+              auto ca = s.motion.tubeShape(a), cb = s.motion.tubeShape(b);
+              auto contact = capsuleContact(ca, cb);
+              float first = clamp(
+                  (contact.a - ca.top()).dot(ca.axis) / (2.f * ca.halfLength),
+                  0.f, 1.f);
+              float second = clamp(
+                  (contact.b - cb.top()).dot(cb.axis) / (2.f * cb.halfLength),
+                  0.f, 1.f);
+              s.tubes[a].strike(velocity, ContactKind::Tube, first);
+              s.tubes[b].strike(velocity, ContactKind::Tube, second);
             });
       }
     }
@@ -105,15 +135,24 @@ class Engine {
     smoothWet += (wet - smoothWet) * smoothing;
     out.left *= smoothWindMix;
     out.right *= smoothWindMix;
+    Stereo roomSend = out;
     for (auto& s : sets) {
       if (!s.config.enabled) continue;
-      for (int t = 0; t < s.config.tubes; ++t) {
-        float audio = s.tubes[t].process();
-        out.left += audio * s.panLeft[t];
-        out.right += audio * s.panRight[t];
-      }
+      float mono = 0.f;
+      for (int t = 0; t < s.config.tubes; ++t) mono += s.tubes[t].process();
+      s.distanceState += (mono - s.distanceState) * s.distanceCoeff;
+      if (std::fabs(s.distanceState) < 1e-12f) s.distanceState = 0.f;
+      s.distanceState2 +=
+          (s.distanceState - s.distanceState2) * s.distanceCoeff;
+      if (std::fabs(s.distanceState2) < 1e-12f) s.distanceState2 = 0.f;
+      out.left += s.distanceState2 * s.panLeft[0];
+      out.right += s.distanceState2 * s.panRight[0];
+      roomSend.left += s.distanceState * s.roomLeft;
+      roomSend.right += s.distanceState * s.roomRight;
     }
-    return reverb.process(out, smoothWet);
+    Stereo reflections = reverb.processWet(roomSend);
+    return {out.left * (1.f - smoothWet) + reflections.left * smoothWet,
+            out.right * (1.f - smoothWet) + reflections.right * smoothWet};
   }
 };
 }  // namespace windchimes

@@ -3,6 +3,7 @@
 
 #include "Computerscare.hpp"
 #include "Windchimes/Engine.hpp"
+#include "Windchimes/Presets.hpp"
 
 namespace wc = windchimes;
 
@@ -33,7 +34,10 @@ struct ComputerscareWindchimes : Module {
     LEVEL,
     LEGACY_SPREAD,  // Reserved so saved patches retain their parameter IDs.
     SWING,
-    SET_PARAMS
+    SET_PARAMS,
+    SHAPE = SET_PARAMS,
+    BODY,
+    INHARMONICITY
   };
   // Append controls after the existing set parameters to preserve saved
   // patches.
@@ -42,12 +46,16 @@ struct ComputerscareWindchimes : Module {
     REVERB_SIZE,
     WIND_TONE,
     WIND_TEXTURE,
-    NUM_PARAMS
+    TIMBRE_BASE,
+    INHARM_BASE = TIMBRE_BASE + wc::maxSets * 2,
+    NUM_PARAMS = INHARM_BASE + wc::maxSets
   };
   enum Input { WIND_INPUT, TRANSPOSE_INPUT, GUST_INPUT, INPUTS };
   enum Output { LEFT_OUTPUT, RIGHT_OUTPUT, WIND_OUTPUT, OUTPUTS };
   static constexpr int param(int set, int field) {
-    return SET_BASE + set * SET_PARAMS + field;
+    return field == INHARMONICITY ? INHARM_BASE + set
+           : field >= SET_PARAMS  ? TIMBRE_BASE + set * 2 + field - SHAPE
+                                  : SET_BASE + set * SET_PARAMS + field;
   }
   wc::Engine engine;
   dsp::SchmittTrigger gustTrigger, gustButton;
@@ -84,7 +92,7 @@ struct ComputerscareWindchimes : Module {
                    name + "enabled", {"Off", "On"});
       configParam(param(i, X), 0.f, 1.f, 0.25f + (i % 3) * 0.25f, name + "pan");
       configParam(param(i, Y), 0.f, 1.f, 0.35f + (i % 2) * 0.3f,
-                  name + "distance");
+                  name + "nearness");
       configParam(param(i, TUBES), 1.f, 12.f, 6.f, name + "tubes")
           ->snapEnabled = true;
       configSwitch(param(i, MATERIAL), 0.f, 2.f, 0.f, name + "material",
@@ -111,6 +119,23 @@ struct ComputerscareWindchimes : Module {
                   "Unused legacy spread")
           ->randomizeEnabled = false;
       configParam(param(i, SWING), 0.f, 1.f, 0.5f, name + "swing");
+      configParam(param(i, SHAPE), 0.f, 1.f, 0.35f, name + "shape", "%", 0.f,
+                  100.f);
+      getParamQuantity(param(i, SHAPE))->description =
+          "Continuous morph: solid bar, block, open shell, hollow tube";
+      configParam(param(i, BODY), 0.f, 1.f, 0.65f, name + "body", "%", 0.f,
+                  100.f);
+      getParamQuantity(param(i, BODY))->description =
+          "Dry contact and clack to full resonant body";
+      getParamQuantity(param(i, DECAY))->description =
+          "Wood: natural sustain through 85%, extended decay to 12 s above; "
+          "metal 0.12–24 s, "
+          "plastic 0.07–16 s";
+      configParam(param(i, INHARMONICITY), 0.f, 1.f, 0.5f,
+                  name + "inharmonicity", "%", 0.f, 100.f);
+      getParamQuantity(param(i, INHARMONICITY))->description =
+          "Harmonic spacing through natural body modes (50%) to exaggerated "
+          "spacing";
       // Scene placement should survive Rack's global Randomize action.
       for (int field : {ENABLED, X, Y})
         getParamQuantity(param(i, field))->randomizeEnabled = false;
@@ -141,6 +166,9 @@ struct ComputerscareWindchimes : Module {
     c.hardness = value(HARDNESS);
     c.level = value(LEVEL);
     c.swing = value(SWING);
+    c.shape = value(SHAPE);
+    c.body = value(BODY);
+    c.inharmonicity = value(INHARMONICITY);
     return c;
   }
   void process(const ProcessArgs& args) override {
@@ -216,8 +244,13 @@ struct ComputerscareWindchimes : Module {
 namespace {
 using W = ComputerscareWindchimes;
 const char* materials[] = {"Metal", "Wood / bamboo", "Plastic"};
+const char* materialCaptions[] = {"Metal", "Wood", "Plastic"};
+const char* scaleCaptions[] = {"Major pent.", "Minor pent.", "Major", "Minor",
+                               "Whole tone"};
 const char* scales[] = {"Major pentatonic", "Minor pentatonic", "Major",
                         "Minor", "Whole tone"};
+constexpr float controlColumnOffset = 180.f;
+constexpr float panelWidth = 780.f;
 struct Editor {
   bool perspective = true;
   int selected = 0;
@@ -248,6 +281,7 @@ struct ActionButton : ComputerscareBlankButton {
   std::function<void()> action;
   Vec nativeSize = box.size;
   bool pressed = false;
+  bool selector = false;
   void setPressed(bool down) {
     if (pressed == down) return;
     pressed = down;
@@ -259,9 +293,33 @@ struct ActionButton : ComputerscareBlankButton {
     nvgScale(args.vg, box.size.x / nativeSize.x, box.size.y / nativeSize.y);
     ComputerscareBlankButton::draw(args);
     nvgRestore(args.vg);
-    text(args.vg, pressed ? 10.f : 8.f,
-         box.size.y * 0.5f + (pressed ? 5.f : 3.f), label(), 11.f,
-         nvgRGB(20, 39, 35));
+    auto font = APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    if (!font) return;
+    nvgFontFaceId(args.vg, font->handle);
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    std::string caption = label();
+    float fontSize = selector ? 15.f : 11.f;
+    nvgFontSize(args.vg, fontSize);
+    float width =
+        nvgTextBounds(args.vg, 0, 0, caption.c_str(), nullptr, nullptr);
+    float available = box.size.x - 16.f;
+    if (selector && width > available) {
+      while (!caption.empty() &&
+             nvgTextBounds(args.vg, 0, 0, (caption + "..").c_str(), nullptr,
+                           nullptr) > available)
+        caption.pop_back();
+      caption += "..";
+    } else if (!selector && width > available) {
+      nvgFontSize(args.vg, fontSize * available / width);
+    }
+    nvgFillColor(args.vg, nvgRGB(20, 39, 35));
+    float dx =
+        pressed ? (selector ? 1.5f : 3.6f * box.size.x / nativeSize.x) : 0.f;
+    float dy =
+        pressed ? (selector ? 1.5f : 2.9f * box.size.y / nativeSize.y) : 0.f;
+    nvgText(args.vg, box.size.x * 0.5f + dx, box.size.y * 0.47f + dy,
+            caption.c_str(), nullptr);
   }
   void onButton(const event::Button& e) override {
     if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
@@ -279,6 +337,35 @@ struct ActionButton : ComputerscareBlankButton {
     setPressed(false);
     ComputerscareBlankButton::onLeave(e);
   }
+};
+// Follow the selector behavior used by VolyPector: menu lifetime, rather
+// than mouse release, determines the depressed frame and text position.
+struct SelectorButton : ActionButton {
+  WeakPtr<ui::MenuOverlay> activeMenuOverlay;
+  std::function<Menu*()> openMenu;
+  SelectorButton() { selector = true; }
+  bool menuOpen() {
+    auto* overlay = activeMenuOverlay.get();
+    return overlay && !overlay->requestedDelete;
+  }
+  void step() override {
+    ComputerscareBlankButton::step();
+    setPressed(menuOpen());
+  }
+  void draw(const DrawArgs& args) override {
+    setPressed(menuOpen());
+    ActionButton::draw(args);
+  }
+  void onButton(const event::Button& e) override {
+    if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
+      e.consume(this);
+      Menu* menu = openMenu();
+      if (menu) activeMenuOverlay = menu->getAncestorOfType<ui::MenuOverlay>();
+      setPressed(menuOpen());
+    }
+  }
+  void onDragEnd(const event::DragEnd&) override { setPressed(menuOpen()); }
+  void onLeave(const event::Leave&) override { setPressed(menuOpen()); }
 };
 // Keep the larger hit area and knob size using the plugin's existing artwork.
 struct ChimeKnob : SmoothKnob {
@@ -304,12 +391,15 @@ struct ChimeScene : widget::OpaqueWidget {
   Editor* editor = nullptr;
   int dragging = -1;
   float oldX = 0.f, oldY = 0.f;
+  float nearness(int i) const {
+    return module ? module->params[W::param(i, W::Y)].getValue()
+                  : 0.2f + i * 0.25f;
+  }
+  float visualScale(int i) const { return 0.65f + 0.55f * nearness(i); }
   Vec position(int i) {
-    if (!module) return Vec(125.f + i * 155.f, 76.f);
-    return Vec(65.f + module->params[W::param(i, W::X)].getValue() *
-                          (box.size.x - 130.f),
-               54.f + module->params[W::param(i, W::Y)].getValue() *
-                          (box.size.y - 100.f));
+    float pan =
+        module ? module->params[W::param(i, W::X)].getValue() : 0.2f + i * 0.3f;
+    return Vec(pan * box.size.x, 35.f + nearness(i) * (box.size.y - 90.f));
   }
   bool enabled(int i) const {
     return module ? module->params[W::param(i, W::ENABLED)].getValue() > 0.5f
@@ -329,13 +419,15 @@ struct ChimeScene : widget::OpaqueWidget {
       nvgStrokeWidth(vg, 1);
       nvgStroke(vg);
     }
-    text(vg, 10, 16,
-         editor && !editor->perspective ? "2D TOP — click for 3D"
-                                        : "3D — click for 2D",
-         8);
-    text(vg, 10, box.size.y - 8, "NEAR", 8);
-    text(vg, box.size.x - 112, 16, "DRAG TO POSITION", 8);
-    for (int i = 0; i < wc::maxSets; ++i) {
+    text(vg, 10, 16, "FAR", 9);
+    text(vg, 10, box.size.y - 8, "NEAR", 9);
+    nvgSave(vg);
+    nvgIntersectScissor(vg, 0.f, 0.f, box.size.x, box.size.y);
+    std::array<int, wc::maxSets> setOrder{};
+    for (int i = 0; i < wc::maxSets; ++i) setOrder[i] = i;
+    std::sort(setOrder.begin(), setOrder.end(),
+              [this](int a, int b) { return nearness(a) < nearness(b); });
+    for (int i : setOrder) {
       if (!enabled(i)) continue;
       Vec p = position(i);
       int tubes = module
@@ -350,9 +442,9 @@ struct ChimeScene : widget::OpaqueWidget {
                        : material == 1 ? nvgRGB(218, 168, 107)
                                        : nvgRGB(191, 153, 220);
       bool selected = editor && editor->selected == i;
-      constexpr float scale = 48.f;
+      float scale = 48.f * visualScale(i);
       bool perspective = !editor || editor->perspective;
-      auto point = [p, perspective](wc::Point v) {
+      auto point = [p, perspective, scale](wc::Point v) {
         return Vec(p.x + v.x * scale,
                    perspective ? p.y + v.y * scale + v.z * scale * 0.45f
                                : p.y - 8.f + v.z * scale);
@@ -366,7 +458,8 @@ struct ChimeScene : widget::OpaqueWidget {
         nvgStroke(vg);
       };
       nvgBeginPath(vg);
-      nvgRoundedRect(vg, p.x - 62, p.y - 46, 124, 84, 8);
+      nvgRoundedRect(vg, p.x - 62 * visualScale(i), p.y - 46 * visualScale(i),
+                     124 * visualScale(i), 84 * visualScale(i), 8);
       nvgFillColor(vg, selected ? nvgRGBA(218, 239, 162, 12)
                                 : nvgRGBA(120, 170, 160, 5));
       nvgFill(vg);
@@ -462,21 +555,28 @@ struct ChimeScene : widget::OpaqueWidget {
           }
         }
       }
-      text(vg, p.x - 3, p.y + 33, std::to_string(i + 1), 10, color);
+      float numberX = wc::clamp(p.x, 10.f, box.size.x - 10.f);
+      float numberY =
+          wc::clamp(p.y + 25.f * visualScale(i), 10.f, box.size.y - 10.f);
+      nvgBeginPath(vg);
+      nvgRoundedRect(vg, numberX - 8.f, numberY - 7.f, 16.f, 14.f, 3.f);
+      nvgFillColor(vg, nvgRGB(13, 29, 28));
+      nvgFill(vg);
+      text(vg, numberX - 3.f, numberY + 3.f, std::to_string(i + 1), 10, color);
     }
+    nvgRestore(vg);
   }
   void onButton(const event::Button& e) override {
-    if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT &&
-        e.pos.y < 22.f && e.pos.x < 145.f && editor) {
-      editor->perspective = !editor->perspective;
-      e.consume(this);
-      return;
-    }
     if (!module) return;
     if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT) {
-      for (int i = wc::maxSets - 1; i >= 0; --i) {
-        if (enabled(i) && std::fabs(position(i).x - e.pos.x) < 62.f &&
-            std::fabs(position(i).y - e.pos.y) < 45.f) {
+      std::array<int, wc::maxSets> order{};
+      for (int i = 0; i < wc::maxSets; ++i) order[i] = i;
+      std::sort(order.begin(), order.end(),
+                [this](int a, int b) { return nearness(a) > nearness(b); });
+      for (int i : order) {
+        if (enabled(i) &&
+            std::fabs(position(i).x - e.pos.x) < 62.f * visualScale(i) &&
+            std::fabs(position(i).y - e.pos.y) < 46.f * visualScale(i)) {
           editor->selected = i;
           dragging = i;
           oldX = module->params[W::param(i, W::X)].getValue();
@@ -494,8 +594,8 @@ struct ChimeScene : widget::OpaqueWidget {
     for (int axis = 0; axis < 2; ++axis) {
       int id = W::param(dragging, axis == 0 ? W::X : W::Y);
       auto* q = module->getParamQuantity(id);
-      q->setValue(q->getValue() + (axis == 0 ? delta.x / (box.size.x - 130)
-                                             : delta.y / (box.size.y - 100)));
+      q->setValue(q->getValue() + (axis == 0 ? delta.x / box.size.x
+                                             : delta.y / (box.size.y - 90)));
     }
   }
   void onDragEnd(const event::DragEnd& e) override {
@@ -526,70 +626,57 @@ struct Labels : widget::TransparentWidget {
   Editor* editor = nullptr;
   void draw(const DrawArgs& args) override {
     auto* vg = args.vg;
-    text(vg, 18, 23, "WINDCHIMES", 17, nvgRGB(218, 239, 162));
-    text(vg, 464, 23, "computerscare", 12);
+    nvgSave(vg);
+    nvgTranslate(vg, controlColumnOffset, 0.f);
     int selected = editor ? editor->selected : 0;
     bool enabled =
         module
             ? module->params[W::param(selected, W::ENABLED)].getValue() > 0.5f
             : true;
-    // The selected-set area and global area have separate, continuous outlines.
     const NVGcolor selectedColor = nvgRGB(218, 239, 162);
     const NVGcolor globalColor = nvgRGB(151, 208, 232);
-    nvgBeginPath(vg);
-    nvgMoveTo(vg, 15, 213);
-    nvgLineTo(vg, 585, 213);
-    nvgLineTo(vg, 585, 263);
-    nvgLineTo(vg, 223, 263);
-    nvgLineTo(vg, 223, 321);
-    nvgLineTo(vg, 15, 321);
-    nvgClosePath(vg);
-    nvgFillColor(vg, nvgRGB(44, 53, 35));
-    nvgFill(vg);
-    nvgStrokeColor(vg, nvgRGBA(218, 239, 162, 95));
-    nvgStrokeWidth(vg, 1);
-    nvgStroke(vg);
-    nvgBeginPath(vg);
-    nvgMoveTo(vg, 230, 265);
-    nvgLineTo(vg, 585, 265);
-    nvgLineTo(vg, 585, 366);
-    nvgLineTo(vg, 15, 366);
-    nvgLineTo(vg, 15, 325);
-    nvgLineTo(vg, 230, 325);
-    nvgClosePath(vg);
-    nvgFillColor(vg, nvgRGB(27, 46, 61));
-    nvgFill(vg);
-    nvgStrokeColor(vg, nvgRGBA(151, 208, 232, 110));
-    nvgStrokeWidth(vg, 1);
-    nvgStroke(vg);
-    text(vg, 237, 274, "GLOBAL — ALL CHIME SETS", 9, globalColor);
-    text(vg, 23, 274, "SELECTED SET MIX / MOTION", 8, selectedColor);
-    text(vg, 17, 359, "GUST", 8, globalColor);
-    text(vg, 23, 222,
-         enabled ? "SELECTED CHIME SET " + std::to_string(selected + 1) +
-                       " — SOUND / TUNING"
-                 : "SELECT A SET OR ADD ONE",
+    auto group = [vg](float x, float y, float w, float h, NVGcolor fill,
+                      NVGcolor border) {
+      nvgBeginPath(vg);
+      nvgRoundedRect(vg, x, y, w, h, 5);
+      nvgFillColor(vg, fill);
+      nvgFill(vg);
+      nvgStrokeColor(vg, border);
+      nvgStrokeWidth(vg, 1);
+      nvgStroke(vg);
+    };
+    group(328, 40, 267, 93, nvgRGB(44, 53, 35), nvgRGBA(218, 239, 162, 95));
+    group(328, 138, 267, 94, nvgRGB(44, 53, 35), nvgRGBA(218, 239, 162, 95));
+    group(328, 238, 267, 132, nvgRGB(27, 46, 61), nvgRGBA(151, 208, 232, 110));
+    text(vg, 338, 50,
+         enabled ? "SET " + std::to_string(selected + 1) + " — TUNING / MOTION"
+                 : "SELECT OR ADD A SET",
          9, selectedColor);
-    const char* top[] = {"Tubes", "Root",  "Register",   "Fine",
-                         "EDO",   "Decay", "Brightness", "Hardness"};
-    const char* bottom[] = {"Set level", "Swing",      "",         "Wind",
-                            "Gustiness", "Turbulence", "Wind mix", "Output"};
-    for (int i = 0; i < 8; ++i) {
-      text(vg, 23.f + i * 73.f, 260, top[i], 9, selectedColor);
-      text(vg, 23.f + i * 73.f, 315, bottom[i], 9,
-           i < 3 ? selectedColor : globalColor);
-    }
-    text(vg, 152, 292, "PAN / DISTANCE", 7, selectedColor);
-    text(vg, 152, 306, "Drag in scene", 8, selectedColor);
+    text(vg, 338, 148, "SELECTED SET — SOUND", 9, selectedColor);
+    const char* tuning[] = {"Tubes", "Root", "Register", "Fine", "EDO"};
+    for (int i = 0; i < 5; ++i)
+      text(vg, 330.f + i * 52.f, 128, tuning[i], 8, selectedColor);
+    text(vg, 475, 93, "Set level", 8, selectedColor);
+    text(vg, 539, 93, "Swing", 8, selectedColor);
+    const char* sound[] = {"Decay", "Bright", "Hard",
+                           "Shape", "Body",   "Inharm"};
+    for (int i = 0; i < 6; ++i)
+      text(vg, 335.f + i * 45.f, 228, sound[i], 8, selectedColor);
+    text(vg, 338, 247, "GLOBAL — ALL SETS", 9, globalColor);
+    const char* wind[] = {"Wind",     "Gusts", "Turb",
+                          "Wind mix", "Tone",  "Texture"};
+    for (int i = 0; i < 6; ++i)
+      text(vg, 335.f + i * 45.f, 283, wind[i], 8, globalColor);
+    const char* effects[] = {"Output", "Rev wet", "Size"};
+    for (int i = 0; i < 3; ++i)
+      text(vg, 335.f + i * 45.f, 325, effects[i], 8, globalColor);
+    text(vg, 514, 325, "Make gust", 8, globalColor);
     const char* ports[] = {"WIND CV",  "1V/OCT",   "GUST",
                            "WIND OUT", "L / MONO", "R"};
-    const float positions[] = {176, 222, 268, 436, 526, 564};
+    const float positions[] = {347, 392, 437, 482, 530, 568};
     for (int i = 0; i < 6; ++i)
-      text(vg, positions[i] - (i == 5 ? 3.f : 20.f), 359, ports[i], 8);
-    text(vg, 63, 359, "REV WET", 8);
-    text(vg, 115, 359, "SIZE", 8);
-    text(vg, 305, 359, "WIND TONE", 8);
-    text(vg, 356, 359, "TEXTURE", 8);
+      text(vg, positions[i] - (i == 5 ? 3.f : 18.f), 365, ports[i], 7);
+    nvgRestore(vg);
   }
 };
 }  // namespace
@@ -598,7 +685,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
   Editor editor;
   ComputerscareWindchimesWidget(W* module) {
     setModule(module);
-    box.size = Vec(600, RACK_GRID_HEIGHT);
+    box.size = Vec(panelWidth, RACK_GRID_HEIGHT);
     addChild(new BGPanel(nvgRGB(22, 42, 39)));
     children.back()->box.size = box.size;
     auto* labels = new Labels;
@@ -609,7 +696,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     auto* scene = new ChimeScene;
     scene->module = module;
     scene->editor = &editor;
-    scene->box = Rect(Vec(15, 35), Vec(570, 148));
+    scene->box = Rect(Vec(5, 5), Vec(315.f + controlColumnOffset, 370));
     addChild(scene);
     auto button = [this](Vec pos, float width,
                          std::function<std::string()> label,
@@ -620,8 +707,17 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
       b->action = std::move(action);
       addChild(b);
     };
+    auto selector = [this](Vec pos, float width,
+                           std::function<std::string()> label,
+                           std::function<Menu*()> openMenu) {
+      auto* b = new SelectorButton;
+      b->box = Rect(pos, Vec(width, 23));
+      b->label = std::move(label);
+      b->openMenu = std::move(openMenu);
+      addChild(b);
+    };
     button(
-        Vec(15, 188), 98,
+        Vec(328, 10), 88,
         [module]() {
           int count = 0;
           if (module)
@@ -641,6 +737,11 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
                     module, W::param(i, f),
                     module->getParamQuantity(W::param(i, f))->getDefaultValue(),
                     action);
+              for (int f : {W::SHAPE, W::BODY, W::INHARMONICITY})
+                setWithHistory(
+                    module, W::param(i, f),
+                    module->getParamQuantity(W::param(i, f))->getDefaultValue(),
+                    action);
               setWithHistory(module, W::param(i, W::ENABLED), 1.f, action);
               APP->history->push(action);
               editor.selected = i;
@@ -648,7 +749,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
             }
         });
     button(
-        Vec(119, 188), 74, []() { return "Remove"; },
+        Vec(420, 10), 60, []() { return "Remove"; },
         [this, module]() {
           if (!module) return;
           auto* action = new history::ComplexAction;
@@ -663,29 +764,34 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
             }
         });
     button(
-        Vec(199, 188), 75, []() { return "Strike"; },
+        Vec(485, 10), 60, []() { return "Strike"; },
         [this, module]() {
           if (module)
             module->strikeRequests.fetch_or(1u << editor.selected,
                                             std::memory_order_relaxed);
         });
+    button(
+        Vec(551, 10), 38, [this]() { return editor.perspective ? "3D" : "2D"; },
+        [this]() { editor.perspective = !editor.perspective; });
     for (int field : {W::MATERIAL, W::SCALE}) {
-      button(
-          Vec(field == W::MATERIAL ? 280 : 410, 188),
-          field == W::MATERIAL ? 124 : 175,
+      selector(
+          Vec(field == W::MATERIAL ? 338 : 338,
+              field == W::MATERIAL ? 163 : 57),
+          field == W::MATERIAL ? 78 : 110,
           [this, module, field]() {
             int value =
                 module ? static_cast<int>(std::round(
                              module->params[W::param(editor.selected, field)]
                                  .getValue()))
                        : 0;
-            return std::string(field == W::MATERIAL
-                                   ? materials[std::max(0, std::min(value, 2))]
-                                   : scales[std::max(0, std::min(value, 4))]) +
+            return std::string(
+                       field == W::MATERIAL
+                           ? materialCaptions[std::max(0, std::min(value, 2))]
+                           : scaleCaptions[std::max(0, std::min(value, 4))]) +
                    "  v";
           },
-          [this, module, field]() {
-            if (!module) return;
+          [this, module, field]() -> Menu* {
+            if (!module) return nullptr;
             auto* menu = createMenu();
             int selected = editor.selected;
             for (int i = 0; i < (field == W::MATERIAL ? 3 : 5); ++i)
@@ -702,41 +808,130 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
                                    action);
                     APP->history->push(action);
                   }));
+            return menu;
           });
     }
-    const int fields[] = {W::TUBES,     W::ROOT,  W::OCTAVE,     W::FINE,
-                          W::DIVISIONS, W::DECAY, W::BRIGHTNESS, W::HARDNESS,
-                          W::LEVEL,     W::SWING};
-    for (int i = 0; i < 10; ++i) {
-      auto* knob = createParamCentered<SetKnob>(
-          Vec(42.f + (i % 8) * 73.f, i < 8 ? 237.f : 289.f), module,
-          W::param(0, fields[i]));
+    button(
+        Vec(480, 139), 105, []() { return "Random sound"; },
+        [this, module]() {
+          if (!module ||
+              module->params[W::param(editor.selected, W::ENABLED)].getValue() <
+                  0.5f)
+            return;
+          auto* action = new history::ComplexAction;
+          action->name = "Randomize windchime sound";
+          for (int field : {W::DECAY, W::BRIGHTNESS, W::HARDNESS, W::SHAPE,
+                            W::BODY, W::INHARMONICITY})
+            setWithHistory(module, W::param(editor.selected, field),
+                           random::uniform(), action);
+          APP->history->push(action);
+        });
+    selector(
+        Vec(426, 163), 130,
+        [this, module]() {
+          if (!module) return std::string("Preset  v");
+          int selected = editor.selected;
+          int material = static_cast<int>(std::round(
+              module->params[W::param(selected, W::MATERIAL)].getValue()));
+          auto presets = wc::soundPresets(material);
+          for (int i = 0; i < presets.count; ++i) {
+            const auto& p = presets.items[i];
+            const float values[] = {p.decay, p.brightness, p.hardness,
+                                    p.shape, p.body,       p.inharmonicity};
+            const int fields[] = {W::DECAY, W::BRIGHTNESS, W::HARDNESS,
+                                  W::SHAPE, W::BODY,       W::INHARMONICITY};
+            bool matches = true;
+            for (int f = 0; f < 6; ++f)
+              matches =
+                  matches &&
+                  std::fabs(
+                      module->params[W::param(selected, fields[f])].getValue() -
+                      values[f]) < 0.0001f;
+            if (matches) {
+              std::string caption = p.name;
+              if (caption == "Resonant wood block") caption = "Wood block";
+              if (caption == "Split bamboo clack") caption = "Bamboo clack";
+              if (caption == "Hard lumber knock") caption = "Lumber knock";
+              if (caption == "Dry bamboo rattle") caption = "Bamboo rattle";
+              if (caption == "Warm suspended bar") caption = "Warm bar";
+              if (caption == "Solid plastic knock") caption = "Plastic knock";
+              if (caption == "Soft plastic block") caption = "Soft block";
+              return caption + "  v";
+            }
+          }
+          return std::string("Custom  v");
+        },
+        [this, module]() -> Menu* {
+          if (!module ||
+              module->params[W::param(editor.selected, W::ENABLED)].getValue() <
+                  0.5f)
+            return nullptr;
+          int selected = editor.selected;
+          auto presets = wc::soundPresets(static_cast<int>(std::round(
+              module->params[W::param(selected, W::MATERIAL)].getValue())));
+          auto* menu = createMenu();
+          menu->addChild(createMenuLabel("Sound presets — selected material"));
+          for (int i = 0; i < presets.count; ++i) {
+            wc::SoundPreset preset = presets.items[i];
+            menu->addChild(
+                createMenuItem(preset.name, "", [module, selected, preset]() {
+                  auto* action = new history::ComplexAction;
+                  action->name = "Apply windchime sound preset";
+                  const int fields[] = {W::DECAY,    W::BRIGHTNESS,
+                                        W::HARDNESS, W::SHAPE,
+                                        W::BODY,     W::INHARMONICITY};
+                  const float values[] = {
+                      preset.decay, preset.brightness, preset.hardness,
+                      preset.shape, preset.body,       preset.inharmonicity};
+                  for (int f = 0; f < 6; ++f)
+                    setWithHistory(module, W::param(selected, fields[f]),
+                                   values[f], action);
+                  APP->history->push(action);
+                }));
+          }
+          return menu;
+        });
+    const int fields[] = {W::TUBES,     W::ROOT,  W::OCTAVE,        W::FINE,
+                          W::DIVISIONS, W::DECAY, W::BRIGHTNESS,    W::HARDNESS,
+                          W::SHAPE,     W::BODY,  W::INHARMONICITY, W::LEVEL,
+                          W::SWING};
+    for (int i = 0; i < 13; ++i) {
+      auto* knob =
+          createParamCentered<SetKnob>(Vec(i < 5    ? 347.f + i * 52.f
+                                           : i < 11 ? 349.f + (i - 5) * 45.f
+                                                    : 493.f + (i - 11) * 62.f,
+                                           i < 5    ? 107.f
+                                           : i < 11 ? 205.f
+                                                    : 72.f),
+                                       module, W::param(0, fields[i]));
       knob->editor = &editor;
       knob->field = fields[i];
       addParam(knob);
     }
-    const int globals[] = {W::WIND, W::GUSTINESS, W::TURBULENCE, W::WIND_MIX,
-                           W::MASTER};
-    for (int i = 0; i < 5; ++i)
-      addParam(createParamCentered<ChimeKnob>(Vec(261.f + i * 73.f, 289.f),
-                                              module, globals[i]));
-    addParam(createParamCentered<ComputerscareBlankButton>(Vec(45, 333), module,
-                                                           W::GUST));
-    const int effects[] = {W::REVERB_MIX, W::REVERB_SIZE, W::WIND_TONE,
-                           W::WIND_TEXTURE};
-    const float effectsX[] = {84, 128, 326, 374};
-    for (int i = 0; i < 4; ++i)
-      addParam(createParamCentered<ChimeKnob>(Vec(effectsX[i], 333), module,
-                                              effects[i]));
+    const int globals[] = {W::WIND,     W::GUSTINESS,  W::TURBULENCE,
+                           W::WIND_MIX, W::WIND_TONE,  W::WIND_TEXTURE,
+                           W::MASTER,   W::REVERB_MIX, W::REVERB_SIZE};
+    for (int i = 0; i < 9; ++i)
+      addParam(createParamCentered<ChimeKnob>(
+          Vec(i < 6 ? 349.f + i * 45.f : 349.f + (i - 6) * 45.f,
+              i < 6 ? 262.f : 304.f),
+          module, globals[i]));
+    addParam(createParamCentered<ComputerscareBlankButton>(Vec(539, 304),
+                                                           module, W::GUST));
     for (int i = 0; i < 3; ++i)
       addInput(
-          createInputCentered<InPort>(Vec(176.f + i * 46.f, 333.f), module, i));
+          createInputCentered<InPort>(Vec(347.f + i * 45.f, 345.f), module, i));
     addOutput(
-        createOutputCentered<OutPort>(Vec(436, 333), module, W::WIND_OUTPUT));
+        createOutputCentered<OutPort>(Vec(482, 345), module, W::WIND_OUTPUT));
     addOutput(
-        createOutputCentered<OutPort>(Vec(526, 333), module, W::LEFT_OUTPUT));
+        createOutputCentered<OutPort>(Vec(530, 345), module, W::LEFT_OUTPUT));
     addOutput(
-        createOutputCentered<OutPort>(Vec(564, 333), module, W::RIGHT_OUTPUT));
+        createOutputCentered<OutPort>(Vec(568, 345), module, W::RIGHT_OUTPUT));
+    // Reserve the extra module width entirely for the scene. Keep the existing
+    // compact control-column layout and translate its widgets together.
+    for (auto* child : children)
+      if (child != children.front() && child != labels && child != scene)
+        child->box.pos.x += controlColumnOffset;
   }
 };
 Model* modelComputerscareWindchimes =
