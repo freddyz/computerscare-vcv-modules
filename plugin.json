@@ -53,7 +53,6 @@
       "tags": ["Polyphonic", "Utility", "Sequencer", "Switch"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/father-and-son.md"
     },
-
     {
       "slug": "computerscare-laundry-soup",
       "name": "Laundry Soup",
@@ -61,7 +60,6 @@
       "tags": ["Sequencer", "Clock modulator", "Random", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/laundry-soup.md"
     },
-
     {
       "slug": "computerscare-i-love-cookies",
       "name": "I Love Cookies",
@@ -69,7 +67,6 @@
       "tags": ["Sequencer", "Utility", "Random", "Polyphonic", "Switch"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/i-love-cookies.md"
     },
-
     {
       "slug": "computerscare-roly-pouter",
       "name": "Roly Pouter",
@@ -77,7 +74,6 @@
       "tags": ["Polyphonic", "Utility"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#roly-pouter"
     },
-
     {
       "slug": "computerscare-toly-pools",
       "name": "Toly Pools",
@@ -93,7 +89,6 @@
       "tags": ["Polyphonic", "Utility", "Attenuator"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#toly-pools"
     },
-
     {
       "slug": "computerscare-soly-pequencer",
       "name": "Soly Pequencer",
@@ -170,6 +165,13 @@
       "description": "Polyphonic input processor with 16 insert channels",
       "tags": ["Polyphonic", "Utility", "Mixer", "Attenuator", "VCA"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#mely-porge"
+    },
+    {
+      "slug": "computerscare-windchimes",
+      "name": "Windchimes",
+      "description": "Arrange tuned wind-driven chime sets in a stereo scene",
+      "tags": ["Physical modeling", "Random", "Polyphonic"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/windchimes.md"
     }
   ]
 }
