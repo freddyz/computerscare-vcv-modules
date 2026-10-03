@@ -28,6 +28,21 @@ class Resonator {
            (profile[segment + 1] - profile[segment]) * fraction;
   }
 
+  static float woodModeShape(int mode, float location, float shape) {
+    // Free-free beam eigenfunctions for the bar end of Shape. The compact
+    // body end blends to a signed cosine approximation; no squared weights.
+    static const double beta[] = {4.73004074,  7.85320462,  10.99560784,
+                                  14.13716549, 17.27875966, 20.42035225};
+    double b = beta[mode], x = clamp(location, 0.f, 1.f);
+    double sigma = (std::cosh(b) - std::cos(b)) / (std::sinh(b) - std::sin(b));
+    double beam = 0.5 * (std::cosh(b * x) + std::cos(b * x) -
+                         sigma * (std::sinh(b * x) + std::sin(b * x)));
+    float compact = std::cos(pi * (mode + 2.f) * static_cast<float>(x));
+    float blend = std::min(shape * 2.f, 1.f);
+    return clamp(static_cast<float>(beam) * (1.f - blend) + compact * blend,
+                 -1.f, 1.f);
+  }
+
  public:
   void reset() {
     for (auto& m : modes) m.real = m.imag = 0.f;
@@ -54,8 +69,8 @@ class Resonator {
     shape = c.shape;
     body = c.body;
     inharmonicity = c.inharmonicity;
-    // Wood geometry has its own structural modes. Cavity and contact modes
-    // occupy separate slots; no high structural mode morphs into a low cavity.
+    // Wood structural and cavity modes occupy separate slots; no high
+    // structural mode morphs into a low cavity.
     static const float woodProfiles[6][4] = {{1.f, 1.f, 1.f, 1.f},
                                              {2.756f, 1.78f, 2.28f, 2.63f},
                                              {5.404f, 3.12f, 4.61f, 5.17f},
@@ -79,8 +94,7 @@ class Resonator {
                 : 1.25f * std::pow(12.f / 1.25f, (c.decay - 0.85f) / 0.15f);
       const float shapeLoss[4] = {1.f, 0.65f, 0.42f, 0.72f};
       float extension = clamp((c.decay - 0.85f) / 0.15f, 0.f, 1.f);
-      t60 *= ((1.f - extension) * interpolate(shapeLoss, c.shape) + extension) *
-             (0.18f + 0.82f * c.body);
+      t60 *= ((1.f - extension) * interpolate(shapeLoss, c.shape) + extension);
     }
     pulseSamples = std::max(
         2, static_cast<int>(rate * (0.00018f + 0.0024f * (1.f - c.hardness) *
@@ -109,29 +123,31 @@ class Resonator {
                             : 1.f + (c.inharmonicity - 0.5f) * 0.5f;
           float ratio = (i + 1.f) * std::pow(natural / (i + 1.f), morph);
           f = hz * ratio;
-          // Losses depend on actual frequency, not slot number. The long-decay
-          // extension sustains the fundamental without sustaining bright bells.
-          seconds =
-              t60 / (1.f + 0.65f * std::pow(std::max(ratio - 1.f, 0.f), 1.3f));
-          if (i > 0) seconds = std::min(seconds, 0.28f / (1.f + 0.08f * ratio));
-          const float weights[] = {0.48f, 0.3f, 0.2f, 0.12f, 0.07f, 0.04f};
-          gain = weights[i] *
+          // A common loss curve keeps the same object audible when muted.
+          // Absolute frequency supplies the wood loss; extended decay relaxes
+          // the lowest mode's intrinsic loss while upper modes remain damped.
+          float extension = clamp((c.decay - 0.85f) / 0.15f, 0.f, 1.f);
+          float muteLoss = 35.f * (1.f - c.body) * (1.f - c.body);
+          float frequencyLoss = std::pow(f / 261.625565f, 1.7f);
+          float intrinsic = 2.f * (i == 0 ? 1.f - extension : 1.f);
+          seconds = 6.907755f /
+                    (6.907755f / t60 + (intrinsic + muteLoss) * frequencyLoss);
+          static const float weights[6][4] = {
+              {0.65f, 0.58f, 0.6f, 0.55f},     {0.3f, 0.34f, 0.27f, 0.31f},
+              {0.16f, 0.22f, 0.18f, 0.16f},    {0.1f, 0.12f, 0.12f, 0.08f},
+              {0.055f, 0.065f, 0.07f, 0.045f}, {0.025f, 0.03f, 0.035f, 0.02f}};
+          gain = interpolate(weights[i], c.shape) *
                  std::pow(std::max(ratio, 1.f), -(1.f - c.brightness) * 0.65f) *
-                 (0.25f + 0.75f * c.body);
+                 (0.85f + 0.15f * c.body);
         } else if (i < 8) {
           // Broad, brief cavity color rather than prominent musical partials.
           f = hz * (i == 6 ? 1.43f : 2.71f);
-          seconds = (0.025f + 0.09f * c.body) * (i == 6 ? 1.f : 0.6f);
+          seconds = (0.065f + 0.055f * c.body) * (i == 6 ? 1.f : 0.6f);
           gain = hollow * (i == 6 ? 0.22f : 0.1f) * (0.55f + 0.45f * c.body);
         } else {
-          const float contactHz[] = {430.f, 970.f, 1830.f, 3270.f};
-          float shapeSize = 0.8f + 0.4f * c.shape;
-          f = contactHz[i - 8] * shapeSize *
-              (0.75f + 0.25f * std::sqrt(hz / 261.625565f));
-          seconds =
-              (0.014f + 0.012f * (1.f - c.hardness)) / (1.f + (i - 8) * 0.6f);
-          gain = (0.6f - 0.42f * c.body) *
-                 std::exp(-(i - 8) * (0.8f + (1.f - c.brightness) * 0.5f));
+          // No independent click bank. The short sound is the same body's
+          // structural/cavity response under increased damping.
+          gain = 0.f;
         }
       } else if (i < 8) {
         float natural = interpolate(profiles[i], c.shape) *
@@ -152,7 +168,7 @@ class Resonator {
           1.f / (1.f + f * f * std::pow((1.f - c.hardness) * 0.0006f, 2.f));
       // Fade at the upper band limit before removing a mode during morphs.
       float bandFade = clamp((rate * 0.45f - f) / (rate * 0.05f), 0.f, 1.f);
-      m.gain = gain * softness * bandFade;
+      m.gain = gain * (c.material == 1 ? 1.f : softness) * bandFade;
       float radius = std::exp(-6.907755f / (std::max(seconds, 0.002f) * rate));
       float angle = 2.f * pi * std::min(f, rate * 0.45f) / rate;
       m.a = radius * std::cos(angle);
@@ -162,7 +178,7 @@ class Resonator {
     }
     for (auto& m : modes) m.gain /= std::max(normalization, 1.f);
     if (c.material == 1) {
-      ringGain = 1.f;
+      ringGain = 1.5f;
       impactGain = 0.f;
     }
   }
@@ -172,6 +188,14 @@ class Resonator {
     int samples = kind == ContactKind::Tube
                       ? std::max(2, static_cast<int>(pulseSamples * 1.7f))
                       : pulseSamples;
+    if (material == 1) {
+      float contactHardness =
+          kind == ContactKind::Tube ? 0.72f - 0.12f * shape : hardness;
+      float duration = 0.00018f + 0.0024f * (1.f - contactHardness) *
+                                      (1.f - contactHardness);
+      duration *= std::pow(clamp(velocity, 0.05f, 1.f), -0.2f);
+      samples = std::max(2, static_cast<int>(duration * sampleRate));
+    }
     float angle = pi / (samples + 1.f);
     pulseA = std::cos(angle);
     pulseB = std::sin(angle);
@@ -185,12 +209,20 @@ class Resonator {
     pulseImag = 0.f;
     for (int i = 0; i < modesPerTube; ++i) {
       float response = 1.f;
-      if (i > 0 && (material != 1 || i < 6)) {
+      if (material == 1 && i < 6) {
+        float footprint = kind == ContactKind::Tube
+                              ? 0.08f + 0.04f * shape
+                              : 0.015f + 0.025f * (1.f - hardness);
+        float coupling = (woodModeShape(i, location - footprint, shape) +
+                          2.f * woodModeShape(i, location, shape) +
+                          woodModeShape(i, location + footprint, shape)) *
+                         0.25f;
+        float radiation = woodModeShape(i, 0.f, shape);
+        response = coupling * radiation;
+      } else if (material != 1 && i > 0) {
         float position = std::sin(pi * (i + 1.f) * clamp(location, 0.f, 1.f));
         response = 0.7f + 0.3f * position * position;
       }
-      if (kind == ContactKind::Tube && material == 1 && i >= 8)
-        response *= 0.65f;
       modes[i].driveGain = modes[i].gain * response;
     }
     transient =

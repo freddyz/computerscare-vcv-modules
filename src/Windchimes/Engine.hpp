@@ -8,6 +8,8 @@ namespace windchimes {
 class Engine {
   struct Set {
     SetConfig config;
+    int stopSamples = 0, stopLength = 1;
+    bool paused = false;
     Motion motion;
     float distanceState = 0.f, distanceState2 = 0.f, distanceCoeff = 1.f;
     float roomLeft = 0.f, roomRight = 0.f;
@@ -42,11 +44,17 @@ class Engine {
         for (auto& t : s.tubes) t.reset();
         s.motion.reset();
         s.distanceState = s.distanceState2 = 0.f;
+        s.stopSamples = 0;
+        s.paused = false;
       }
       s.config = config;
       return;
     }
-    if (!s.config.enabled) s.motion.reset();
+    if (!s.config.enabled) {
+      s.motion.reset();
+      s.paused = false;
+      s.stopSamples = 0;
+    }
     s.motion.configure(config.tubes);
     for (int t = 0; t < config.tubes; ++t) {
       s.tubes[t].configure(tubeFrequency(config, t, transpose), rate, config);
@@ -72,11 +80,26 @@ class Engine {
   void gust() {
     wind.gust();
     for (auto& s : sets)
-      if (s.config.enabled) s.motion.kick(strikes.uniform() * 2.f * pi);
+      if (s.config.enabled && !s.paused)
+        s.motion.kick(strikes.uniform() * 2.f * pi);
+  }
+  bool stopped(int index) const { return sets[index].paused; }
+  void stop(int index) {
+    auto& s = sets[index];
+    if (!s.config.enabled) return;
+    s.paused = true;
+    s.motion.reset();
+    s.motion.configure(s.config.tubes);
+    // Fade this set's existing sound before clearing its voices. Room tails
+    // belong to the shared scene and are allowed to decay normally.
+    s.stopLength = std::max(1, static_cast<int>(rate * 0.005f));
+    s.stopSamples = s.stopLength;
   }
   void strike(int index) {
     auto& s = sets[index];
     if (!s.config.enabled) return;
+    s.paused = false;
+    s.stopSamples = 0;
     int tube = std::min(static_cast<int>(strikes.uniform() * s.config.tubes),
                         s.config.tubes - 1);
     s.motion.strike(tube);
@@ -90,6 +113,7 @@ class Engine {
   float strikerAngle(int i) const { return sets[i].motion.strikerAngle(); }
   float tubeDepth(int i, int t) const { return sets[i].motion.tubeDepth(t); }
   float strikerDepth(int i) const { return sets[i].motion.strikerDepth(); }
+  Point sailAxis(int i) const { return sets[i].motion.sailAxis(); }
   float strikerFlash(int i) const { return sets[i].motion.strikerFlash(); }
   float tubeX(int i, int tube) const { return sets[i].motion.tubeX(tube); }
   float tubeY(int i, int tube) const { return sets[i].motion.tubeY(tube); }
@@ -103,7 +127,7 @@ class Engine {
       wind.step(dt, amount, gustiness, turbulence);
       for (int i = 0; i < maxSets; ++i) {
         auto& s = sets[i];
-        if (!s.config.enabled) continue;
+        if (!s.config.enabled || s.paused) continue;
         s.motion.step(
             dt, wind.x, wind.y, s.config, i,
             [&s](int t, float velocity) {
@@ -137,7 +161,7 @@ class Engine {
     out.right *= smoothWindMix;
     Stereo roomSend = out;
     for (auto& s : sets) {
-      if (!s.config.enabled) continue;
+      if (!s.config.enabled || (s.paused && s.stopSamples == 0)) continue;
       float mono = 0.f;
       for (int t = 0; t < s.config.tubes; ++t) mono += s.tubes[t].process();
       s.distanceState += (mono - s.distanceState) * s.distanceCoeff;
@@ -145,10 +169,17 @@ class Engine {
       s.distanceState2 +=
           (s.distanceState - s.distanceState2) * s.distanceCoeff;
       if (std::fabs(s.distanceState2) < 1e-12f) s.distanceState2 = 0.f;
-      out.left += s.distanceState2 * s.panLeft[0];
-      out.right += s.distanceState2 * s.panRight[0];
-      roomSend.left += s.distanceState * s.roomLeft;
-      roomSend.right += s.distanceState * s.roomRight;
+      float fade = s.stopSamples > 0
+                       ? s.stopSamples / static_cast<float>(s.stopLength)
+                       : 1.f;
+      out.left += s.distanceState2 * s.panLeft[0] * fade;
+      out.right += s.distanceState2 * s.panRight[0] * fade;
+      roomSend.left += s.distanceState * s.roomLeft * fade;
+      roomSend.right += s.distanceState * s.roomRight * fade;
+      if (s.stopSamples > 0 && --s.stopSamples == 0) {
+        for (auto& tube : s.tubes) tube.reset();
+        s.distanceState = s.distanceState2 = 0.f;
+      }
     }
     Stereo reflections = reverb.processWet(roomSend);
     return {out.left * (1.f - smoothWet) + reflections.left * smoothWet,

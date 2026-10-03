@@ -14,6 +14,35 @@ int main() {
   require(std::fabs(wc::tubeFrequency(config, 0, 1.f) / wc::tubeFrequency(config, 0, 0.f) - 2.f) < 0.001f, "1V/oct transposition");
   config.divisions = 19;
   require(std::fabs(wc::tubeFrequency(config, 1, 0.f) / wc::tubeFrequency(config, 0, 0.f) - std::exp2(3.f / 19.f)) < 0.001f, "scale maps onto selected EDO");
+  // Spread skips scale degrees, carrying across octaves rather than adding
+  // semitone offsets. Existing five scale IDs retain their tuning.
+  for (int scale = 0; scale < wc::scaleCount; ++scale) {
+    config = wc::SetConfig(); config.scale = scale;
+    for (int divisions : {12, 19, 24}) {
+      config.divisions = divisions;
+      for (int spread = 1; spread <= 4; ++spread) {
+        config.spread = spread;
+        float previous = 0.f;
+        for (int t = 0; t < 4; ++t) {
+          float frequency = wc::tubeFrequency(config, t, 0.f);
+          require(std::isfinite(frequency) && frequency > previous,
+            "new scales and degree spreads produce ordered finite pitches");
+          previous = frequency;
+        }
+      }
+    }
+  }
+  config = wc::SetConfig(); config.spread = 2;
+  require(std::fabs(wc::tubeFrequency(config, 1, 0.f) /
+      wc::tubeFrequency(config, 0, 0.f) - std::exp2(4.f / 12.f)) < 0.001f,
+    "spread two skips the second major-pentatonic scale note");
+  require(std::fabs(wc::tubeFrequency(config, 5, 0.f) /
+      wc::tubeFrequency(config, 0, 0.f) - 4.f) < 0.001f,
+    "scale-degree spread carries correctly through multiple octaves");
+  config = wc::SetConfig(); config.scale = 5;
+  require(std::fabs(wc::tubeFrequency(config, 1, 0.f) /
+      wc::tubeFrequency(config, 0, 0.f) - std::exp2(1.f / 12.f)) < 0.001f,
+    "chromatic scale includes every semitone");
   for (float rate : {44100.f, 48000.f, 96000.f}) {
     for (int material = 0; material < 3; ++material) {
       wc::Engine engine; engine.setSampleRate(rate);
@@ -132,6 +161,62 @@ int main() {
     require(softDerivative/softEnergy < hardDerivative/hardEnergy,
       "soft wood contact has less high-frequency attack energy");
   }
+  // Muting preserves a short pitched object response across the Shape range.
+  // Increasing Body must extend that response, rather than mix a separate click.
+  for (float rate : {44100.f, 48000.f, 96000.f}) {
+    for (float shape : {0.f, 0.33f, 0.67f, 1.f}) {
+      double previousTailRatio = 0.f;
+      for (float body : {0.f, 0.25f, 0.5f}) {
+        config = wc::SetConfig(); config.material = 1; config.shape = shape;
+        config.body = body; config.decay = 0.65f; config.hardness = 0.7f;
+        wc::Resonator muted; muted.configure(261.625565f, rate, config);
+        muted.strike(0.8f, wc::ContactKind::Striker, 0.4f);
+        double early = 0.f, tail = 0.f;
+        for (int i = 0; i < static_cast<int>(rate * 0.06f); ++i) {
+          float sample = muted.process();
+          if (i < rate * 0.02f) early += sample * sample;
+          else tail += sample * sample;
+        }
+        double ratio = tail / early;
+        require(early > 0.01 && ratio > 0.03,
+          "low Body retains audible wood resonance after the initial impact");
+        require(ratio > previousTailRatio,
+          "Body continuously extends the same wood object's response");
+        previousTailRatio = ratio;
+      }
+    }
+  }
+  auto stopped = std::unique_ptr<wc::Engine>(new wc::Engine);
+  auto unaffected = std::unique_ptr<wc::Engine>(new wc::Engine);
+  stopped->setSampleRate(48000); unaffected->setSampleRate(48000);
+  config = wc::SetConfig(); config.enabled = true; config.decay = 1.f;
+  config.x = 1.f; config.y = 1.f;
+  stopped->configure(1, config, 0.f); unaffected->configure(1, config, 0.f);
+  stopped->strike(1); unaffected->strike(1);
+  config.x = 0.f; stopped->configure(0, config, 0.f); stopped->strike(0);
+  double beforeStop = 0.f;
+  for (int i = 0; i < 24000; ++i) {
+    auto out = stopped->process(0, 0, 0, 0); unaffected->process(0, 0, 0, 0);
+    beforeStop += out.left * out.left;
+  }
+  require(beforeStop > 0.01, "stop test starts with an audible physical strike");
+  stopped->stop(0);
+  double rightError = 0.f;
+  for (int i = 0; i < 4800; ++i) {
+    auto out = stopped->process(0, 0, 0, 0), reference = unaffected->process(0, 0, 0, 0);
+    rightError += std::pow(out.right - reference.right, 2);
+    if (i >= 240) require(std::fabs(out.left) < 1e-6f,
+      "stop fades the selected set to silence within five milliseconds");
+  }
+  require(rightError < 1e-8, "stopping one set leaves other sets' audio unchanged");
+  for (int i = 0; i < 24000; ++i) stopped->process(1, 1, 1, 0);
+  require(stopped->stopped(0) && stopped->strikerAngle(0) == 0.f && stopped->strikerDepth(0) == 0.f,
+    "stopped chime remains at rest under continuing wind");
+  stopped->strike(0);
+  require(!stopped->stopped(0), "strike resumes a stopped set");
+  double resumed = 0.f;
+  for (int i = 0; i < 24000; ++i) { auto out = stopped->process(0, 0, 0, 0); resumed += out.left*out.left; }
+  require(resumed > 0.01, "resumed striker produces physical contact audio");
   wc::Engine engine; engine.setSampleRate(48000);
   config = wc::SetConfig(); config.enabled = true; config.tubes = wc::maxTubes; config.level = 1.f;
   for (int i = 0; i < wc::maxSets; ++i) engine.configure(i, config, 0.f);
@@ -327,6 +412,72 @@ int main() {
     suspended.strike(0);
     require(suspended.x == before.x && suspended.y == before.y, "manual strike pushes without teleporting the striker");
   }
+  // A single push creates a swinging phrase; alternating impacts can retain
+  // similar spacing without a strike scheduler or additional wind impulses.
+  wc::Motion phrase; config = wc::SetConfig(); config.tubes = 6; config.swing = 0.65f;
+  phrase.configure(6); phrase.kick(0.f);
+  float lastTime = -1.f, lastInterval = -1.f; int lastTube = -1, phraseHits = 0;
+  bool steadyRun = false;
+  for (int i = 0; i < 8000; ++i)
+    phrase.step(0.0025f, 0.f, 0.f, config, 0, [&](int tube, float) {
+      float now = i * 0.0025f, interval = now - lastTime;
+      if (tube != lastTube && lastInterval > 0.7f && interval > 0.7f &&
+          interval < 1.5f && std::fabs(interval - lastInterval) < 0.2f * lastInterval)
+        steadyRun = true;
+      lastInterval = tube != lastTube ? interval : -1.f;
+      lastTime = now; lastTube = tube; ++phraseHits;
+    }, [](int, int, float) {});
+  require(phraseHits >= 4 && steadyRun,
+    "one push sustains a phrase with consecutive nearly periodic alternating strikes");
+  float referencePeriod = 0.f, referencePosition = 0.f;
+  for (float dt : {0.00125f, 0.0025f, 0.005f}) {
+    wc::Suspension assembly; assembly.kick({1.8f, 0.f, 0.f});
+    float initialEnergy = assembly.energy(), previous = 0.f, first = 0.f, last = 0.f;
+    int crossings = 0;
+    for (int i = 0; i < static_cast<int>(10.f / dt); ++i) {
+      assembly.step(dt, {}, 0.65f);
+      float current = assembly.axis().x;
+      if (previous < 0.f && current >= 0.f) {
+        if (++crossings == 1) first = i * dt;
+        last = i * dt;
+      }
+      previous = current;
+      require(assembly.energy() <= initialEnergy + 1e-4f,
+        "unforced coupled pendulum does not generate energy");
+      auto cord = assembly.sailPosition() - assembly.position();
+      require(std::fabs(cord.dot(cord) - wc::sailLength * wc::sailLength) < 1e-5f,
+        "independent sail remains connected by a fixed-length cord");
+    }
+    require(crossings >= 4, "coupled pendulum maintains several free swing cycles");
+    float period = (last - first) / (crossings - 1);
+    if (referencePeriod > 0.f) {
+      require(std::fabs(period - referencePeriod) < referencePeriod * 0.01f &&
+          std::fabs(assembly.position().x - referencePosition) < 0.002f,
+        "pendulum cadence and trajectory converge across physics step sizes");
+    } else { referencePeriod = period; referencePosition = assembly.position().x; }
+  }
+  wc::Suspension impactAssembly; impactAssembly.kick({1.8f, 0.f, 0.4f});
+  for (int i = 0; i < 80; ++i) impactAssembly.step(0.0025f, {}, 0.65f);
+  auto velocity = impactAssembly.velocity();
+  auto normal = velocity * (1.f / std::sqrt(velocity.dot(velocity)));
+  float beforeImpact = impactAssembly.kineticEnergy();
+  float impulse = 1.48f * velocity.dot(normal) / impactAssembly.response(normal).dot(normal);
+  impactAssembly.applyImpulse(normal * -impulse);
+  require(impactAssembly.kineticEnergy() < beforeImpact,
+    "coupled effective-mass collision dissipates energy");
+  auto sailVelocity = impactAssembly.sailSpeed();
+  require(sailVelocity.dot(sailVelocity) > 0.01f,
+    "the sail retains momentum after the striker impact");
+  wc::Wind coherentWeather; wc::Motion smoothBreeze;
+  config = wc::SetConfig(); config.tubes = 6; config.swing = 0.5f;
+  int smoothHits = 0;
+  for (int i = 0; i < 24000; ++i) {
+    coherentWeather.step(0.0025f, 0.5f, 0.55f, 0.f);
+    smoothBreeze.step(0.0025f, coherentWeather.x, coherentWeather.y, config, 0,
+      [&](int, float) { ++smoothHits; }, [](int, int, float) {});
+  }
+  require(smoothHits >= 4,
+    "coherent gusts drive repeated strikes with turbulence disabled");
   wc::Motion settling; config.tubes = 8; config.swing = 1.f;
   settling.configure(config.tubes); settling.kick(wc::pi * 0.25f);
   int dissipativeHits = 0; bool movedInDepth = false;

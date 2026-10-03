@@ -1,5 +1,5 @@
 #pragma once
-#include "Geometry.hpp"
+#include "Suspension.hpp"
 namespace windchimes {
 class Motion {
   struct Pendulum {
@@ -8,10 +8,12 @@ class Motion {
   };
   std::array<Pendulum, maxTubes> tubes{};
   Pendulum striker;
+  Suspension suspension;
+  Point meanWind;
   std::array<bool, maxTubes> strikerContacts{};
   std::array<bool, maxTubes * maxTubes> pairContacts{};
   int count = 0;
-  Point meanWind;
+
   static Point tangent(Point v, Point axis) { return v - axis * v.dot(axis); }
   static void constrain(Pendulum& p, float bound) {
     float norm = std::sqrt(p.axis.dot(p.axis));
@@ -64,6 +66,8 @@ class Motion {
     constrain(b, tubeSwingLimit);
   }
   void updateStriker() {
+    striker.axis = suspension.axis();
+    striker.velocity = suspension.velocity();
     Point p = strikerPosition();
     x = p.x;
     y = p.y;
@@ -90,13 +94,14 @@ class Motion {
         tubeAnchorPoint(t, std::max(count, 1)) + tubes[t].axis * tubeLength(t),
         tubes[t].axis, tubeHalfLength(t), tubeRadius(std::max(count, 1))};
   }
-  Point strikerPosition() const {
-    return Point(0.f, pivotY, 0.f) + striker.axis * strikerLength;
-  }
+  Point strikerPosition() const { return suspension.position(); }
+  Point sailPosition() const { return suspension.sailPosition(); }
+  Point sailAxis() const { return suspension.sailAxis(); }
+  float suspensionEnergy() const { return suspension.energy(); }
   float tubeX(int t) const { return tubeShape(t).center.x; }
   float tubeY(int t) const { return tubeShape(t).center.y; }
   float kineticEnergy() const {
-    float energy = striker.velocity.dot(striker.velocity) * 0.2f;
+    float energy = suspension.kineticEnergy();
     for (int t = 0; t < count; ++t)
       energy += tubes[t].velocity.dot(tubes[t].velocity) * 0.5f;
     return energy;
@@ -105,14 +110,16 @@ class Motion {
     tubes.fill(Pendulum());
     striker = Pendulum();
     count = 0;
-    meanWind = Point();
+    suspension.reset();
+    meanWind = {};
     strikerContacts.fill(false);
     pairContacts.fill(false);
     updateStriker();
   }
   void kick(float direction) {
     Point impulse(std::cos(direction), 0.f, std::sin(direction));
-    striker.velocity = striker.velocity + tangent(impulse * 1.8f, striker.axis);
+    suspension.kick(impulse * 1.8f);
+    updateStriker();
     for (int t = 0; t < count; ++t)
       tubes[t].velocity =
           tubes[t].velocity +
@@ -123,25 +130,25 @@ class Motion {
     Point target = tubeShape(t).center - strikerPosition();
     target.y = 0.f;
     float length = std::sqrt(target.dot(target));
-    striker.velocity =
-        tangent(target * (2.8f / std::max(length, 1e-6f)), striker.axis);
+    suspension.kick(target * (2.8f / std::max(length, 1e-6f)));
+    updateStriker();
   }
   template <typename Hit, typename PairHit>
   void step(float dt, float windX, float windY, const SetConfig& c, int slot,
             Hit hit, PairHit pairHit) {
     configure(c.tubes);
     Point air(windX, 0.f, windY);
-    meanWind = meanWind + (air - meanWind) * std::min(dt * 2.f, 1.f);
-    // Gust changes impart momentum; steady wind cannot pin bodies up.
-    Point gust = air - meanWind;
+    meanWind = meanWind + (air - meanWind) * std::min(dt * 1.2f, 1.f);
+    Point tubeAir = ((air - meanWind) + air * 0.08f) *
+                    clamp(air.dot(air) * 2.f, 0.12f, 2.5f);
     float damping = 0.22f + (1.f - c.swing) * 0.65f;
-    integrate(striker, dt, strikerLength, gust * 12.f, damping,
-              strikerSwingLimit);
+    suspension.step(dt, air, c.swing);
+    striker.flash = std::max(0.f, striker.flash - dt * 5.f);
     for (int t = 0; t < count; ++t) {
       float exposure = 5.f + ((t + slot) % 3) * 3.f;
       integrate(tubes[t], dt, tubeLength(t),
-                Point(gust.x + gust.z * (t % 2 ? 0.8f : -0.8f), 0.f,
-                      gust.z + gust.x * (t % 2 ? -0.8f : 0.8f)) *
+                Point(tubeAir.x + tubeAir.z * (t % 2 ? 0.8f : -0.8f), 0.f,
+                      tubeAir.z + tubeAir.x * (t % 2 ? -0.8f : 0.8f)) *
                     exposure,
                 damping + 0.08f, tubeSwingLimit);
     }
@@ -160,8 +167,26 @@ class Motion {
           hit(t, clamp(speed * 0.8f, 0.035f, 1.f));
           striker.flash = tubes[t].flash = 1.f;
         }
-        resolve(striker, tubes[t], normal, radius - distance, strikerLength,
-                tubeLength(t), 2.5f, strikerSwingLimit);
+        Point response = suspension.response(normal);
+        Point tubeResponse = tangent(normal, tubes[t].axis);
+        float inverse = normal.dot(response) + tubeResponse.dot(tubeResponse);
+        if (inverse > 1e-6f) {
+          // Tube material changes restitution; sail momentum remains
+          // independent.
+          float restitution =
+              c.material == 0 ? 0.48f : (c.material == 1 ? 0.32f : 0.24f);
+          if (speed > 0.f) {
+            float impulse = speed * (1.f + restitution) / inverse;
+            suspension.applyImpulse(normal * -impulse);
+            tubes[t].velocity = tubes[t].velocity + tubeResponse * impulse;
+          }
+          float correction =
+              std::min(radius - distance, 0.02f) * 0.8f / inverse;
+          suspension.shift(response * -correction);
+          tubes[t].axis =
+              tubes[t].axis + tubeResponse * (correction / tubeLength(t));
+          constrain(tubes[t], tubeSwingLimit);
+        }
         strikerContacts[t] = true;
         updateStriker();
       } else if (distance > radius * 1.08f)

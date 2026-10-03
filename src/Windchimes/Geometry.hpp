@@ -3,6 +3,7 @@
 namespace windchimes {
 constexpr float pivotY = -0.8f;
 constexpr float strikerLength = 0.68f;
+constexpr float sailLength = 0.46f;
 constexpr float strikerRadius = 0.075f;
 constexpr float tubeSwingLimit = 0.65f;
 constexpr float strikerSwingLimit = 0.95f;

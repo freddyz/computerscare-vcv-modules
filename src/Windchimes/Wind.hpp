@@ -26,6 +26,7 @@ class Wind {
   Random weather{0x1948a3}, noiseLeft{0x7616ab}, noiseRight{0x915bcc};
   float elapsed = 0.f, targetX = 0.f, targetY = 0.f;
   float breezeX = 0.f, breezeY = 0.f, gustEnergy = 0.f;
+  float direction = 0.f, eddyX = 0.f, eddyY = 0.f;
   float flutter = 0.f, flutterTarget = 0.f, envelope = 0.f;
   Channel left, right;
   float rate = 0.f, tone = 0.5f, texture = 0.4f;
@@ -62,22 +63,35 @@ class Wind {
   void step(float dt, float amount, float gustiness, float turbulence) {
     elapsed -= dt;
     if (elapsed <= 0.f) {
-      elapsed = 0.4f + weather.uniform() * (4.f - gustiness * 3.f);
-      float angle = weather.uniform() * 2.f * pi;
-      float magnitude = 0.25f + weather.uniform() * (0.3f + gustiness);
+      elapsed = 4.f + weather.uniform() * (10.f - gustiness * 6.f);
+      direction += weather.bipolar() * (0.3f + turbulence * 1.2f);
+      float angle = direction;
+      float magnitude = 0.15f + weather.uniform() * (0.35f + gustiness * 0.8f);
       targetX = std::cos(angle) * magnitude;
       targetY = std::sin(angle) * magnitude;
       flutterTarget = weather.bipolar();
     }
     breezeX +=
-        (targetX - breezeX) * std::min(dt * (0.4f + turbulence * 3.f), 1.f);
+        (targetX - breezeX) * std::min(dt * (0.65f + gustiness * 0.6f), 1.f);
     breezeY +=
-        (targetY - breezeY) * std::min(dt * (0.4f + turbulence * 3.f), 1.f);
+        (targetY - breezeY) * std::min(dt * (0.65f + gustiness * 0.6f), 1.f);
     flutter += (flutterTarget - flutter) * std::min(dt * 6.f, 1.f);
     gustEnergy *= std::exp(-dt * 0.8f);
+    // Correlated gusts retain energy near pendulum time scales without a clock
+    // or phase-aware drive. Even a smooth breeze has some speed fluctuation.
+    float eddyRate = 1.2f + turbulence * 4.f;
+    float coefficient = 1.f - std::exp(-dt * eddyRate);
+    float variance = std::sqrt(3.f * (2.f - coefficient) / coefficient);
+    eddyX += (weather.bipolar() * variance - eddyX) * coefficient;
+    eddyY += (weather.bipolar() * variance - eddyY) * coefficient;
+    float gustScale = 0.18f + gustiness * 0.4f;
     float force = amount + gustEnergy;
-    x = force * (breezeX + weather.bipolar() * turbulence * 0.22f);
-    y = force * (breezeY + weather.bipolar() * turbulence * 0.22f);
+    float along = eddyX * gustScale;
+    float across = eddyY * gustScale * (0.12f + turbulence * 0.75f);
+    x = force *
+        (breezeX + std::cos(direction) * along - std::sin(direction) * across);
+    y = force *
+        (breezeY + std::sin(direction) * along + std::cos(direction) * across);
     strength = clamp(std::sqrt(x * x + y * y), 0.f, 1.5f);
     if (rate > 0.f) updateHowl();
   }

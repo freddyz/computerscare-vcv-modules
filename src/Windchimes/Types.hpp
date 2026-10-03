@@ -14,7 +14,7 @@ inline float clamp(float x, float lo, float hi) {
 }
 struct SetConfig {
   bool enabled = false;
-  int tubes = 6, material = 0, scale = 0, root = 0, divisions = 12;
+  int tubes = 6, material = 0, scale = 0, root = 0, divisions = 12, spread = 1;
   float octave = 0.f, fine = 0.f, decay = 0.55f, brightness = 0.55f;
   float hardness = 0.5f, level = 0.7f, swing = 0.5f;
   float x = 0.5f, y = 0.5f;

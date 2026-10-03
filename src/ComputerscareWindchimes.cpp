@@ -37,7 +37,8 @@ struct ComputerscareWindchimes : Module {
     SET_PARAMS,
     SHAPE = SET_PARAMS,
     BODY,
-    INHARMONICITY
+    INHARMONICITY,
+    SPREAD
   };
   // Append controls after the existing set parameters to preserve saved
   // patches.
@@ -48,20 +49,23 @@ struct ComputerscareWindchimes : Module {
     WIND_TEXTURE,
     TIMBRE_BASE,
     INHARM_BASE = TIMBRE_BASE + wc::maxSets * 2,
-    NUM_PARAMS = INHARM_BASE + wc::maxSets
+    SPREAD_BASE = INHARM_BASE + wc::maxSets,
+    NUM_PARAMS = SPREAD_BASE + wc::maxSets
   };
   enum Input { WIND_INPUT, TRANSPOSE_INPUT, GUST_INPUT, INPUTS };
   enum Output { LEFT_OUTPUT, RIGHT_OUTPUT, WIND_OUTPUT, OUTPUTS };
   static constexpr int param(int set, int field) {
-    return field == INHARMONICITY ? INHARM_BASE + set
-           : field >= SET_PARAMS  ? TIMBRE_BASE + set * 2 + field - SHAPE
-                                  : SET_BASE + set * SET_PARAMS + field;
+    return field == SPREAD          ? SPREAD_BASE + set
+           : field == INHARMONICITY ? INHARM_BASE + set
+           : field >= SET_PARAMS    ? TIMBRE_BASE + set * 2 + field - SHAPE
+                                    : SET_BASE + set * SET_PARAMS + field;
   }
   wc::Engine engine;
   dsp::SchmittTrigger gustTrigger, gustButton;
-  std::atomic<uint32_t> strikeRequests{0};
+  std::atomic<uint32_t> strikeRequests{0}, stopRequests{0};
   std::array<std::atomic<float>, wc::maxSets> visualStrikerAngle{},
-      visualStrikerFlash{}, visualStrikerDepth{};
+      visualStrikerFlash{}, visualStrikerDepth{}, visualSailX{}, visualSailY{},
+      visualSailZ{};
   std::array<std::atomic<float>, wc::maxSets * wc::maxTubes> visualTubeAngle{},
       visualTubeFlash{}, visualTubeDepth{};
   std::atomic<float> visualWind{0.f};
@@ -97,9 +101,14 @@ struct ComputerscareWindchimes : Module {
           ->snapEnabled = true;
       configSwitch(param(i, MATERIAL), 0.f, 2.f, 0.f, name + "material",
                    {"Metal", "Wood / bamboo", "Plastic"});
-      configSwitch(param(i, SCALE), 0.f, 4.f, 0.f, name + "scale",
-                   {"Major pentatonic", "Minor pentatonic", "Major", "Minor",
-                    "Whole tone"});
+      std::vector<std::string> scaleLabels;
+      for (const char* label : wc::scaleNames) scaleLabels.push_back(label);
+      configSwitch(param(i, SCALE), 0.f, wc::scaleCount - 1.f, 0.f,
+                   name + "scale", scaleLabels);
+      configParam(param(i, SPREAD), 1.f, 4.f, 1.f, name + "scale-degree spread")
+          ->snapEnabled = true;
+      getParamQuantity(param(i, SPREAD))->description =
+          "1: consecutive notes; 2: skip one; 3: skip two; 4: skip three";
       configSwitch(
           param(i, ROOT), 0.f, 11.f, 0.f, name + "root",
           {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"});
@@ -157,6 +166,7 @@ struct ComputerscareWindchimes : Module {
         std::max(1, std::min(12, static_cast<int>(std::round(value(TUBES)))));
     c.material = static_cast<int>(std::round(value(MATERIAL)));
     c.scale = static_cast<int>(std::round(value(SCALE)));
+    c.spread = static_cast<int>(std::round(value(SPREAD)));
     c.root = static_cast<int>(std::round(value(ROOT)));
     c.octave = value(OCTAVE);
     c.fine = value(FINE);
@@ -198,7 +208,11 @@ struct ComputerscareWindchimes : Module {
     bool externalGust = gustTrigger.process(inputs[GUST_INPUT].getVoltage());
     bool manualGust = gustButton.process(params[GUST].getValue());
     if (externalGust || manualGust) engine.gust();
-    uint32_t requests = strikeRequests.exchange(0, std::memory_order_relaxed);
+    uint32_t stops = stopRequests.exchange(0, std::memory_order_relaxed);
+    for (int i = 0; stops && i < wc::maxSets; ++i)
+      if (stops & (1u << i)) engine.stop(i);
+    uint32_t requests =
+        strikeRequests.exchange(0, std::memory_order_relaxed) & ~stops;
     for (int i = 0; requests && i < wc::maxSets; ++i)
       if (requests & (1u << i)) engine.strike(i);
     wc::Stereo out = engine.process(amount, gustiness, turbulence, windMix);
@@ -206,6 +220,10 @@ struct ComputerscareWindchimes : Module {
     // contacts.
     if (publishVisual) {
       for (int i = 0; i < wc::maxSets; ++i) {
+        wc::Point sail = engine.sailAxis(i);
+        visualSailX[i].store(sail.x, std::memory_order_relaxed);
+        visualSailY[i].store(sail.y, std::memory_order_relaxed);
+        visualSailZ[i].store(sail.z, std::memory_order_relaxed);
         visualStrikerDepth[i].store(engine.strikerDepth(i),
                                     std::memory_order_relaxed);
         visualStrikerAngle[i].store(engine.strikerAngle(i),
@@ -245,10 +263,6 @@ namespace {
 using W = ComputerscareWindchimes;
 const char* materials[] = {"Metal", "Wood / bamboo", "Plastic"};
 const char* materialCaptions[] = {"Metal", "Wood", "Plastic"};
-const char* scaleCaptions[] = {"Major pent.", "Minor pent.", "Major", "Minor",
-                               "Whole tone"};
-const char* scales[] = {"Major pentatonic", "Minor pentatonic", "Major",
-                        "Minor", "Whole tone"};
 constexpr float controlColumnOffset = 180.f;
 constexpr float panelWidth = 780.f;
 struct Editor {
@@ -275,6 +289,91 @@ void setWithHistory(W* module, int id, float value,
   change->oldValue = old;
   change->newValue = quantity->getValue();
   action->push(change);
+}
+bool setEnabled(W* module, int selected) {
+  return module &&
+         module->params[W::param(selected, W::ENABLED)].getValue() > 0.5f;
+}
+int vacantSet(W* module) {
+  if (module)
+    for (int i = 0; i < wc::maxSets; ++i)
+      if (!setEnabled(module, i)) return i;
+  return -1;
+}
+void editSound(W* module, int selected, bool wiggle,
+               history::ComplexAction* action) {
+  if (wiggle) {
+    int fields[] = {W::DECAY, W::BRIGHTNESS, W::HARDNESS,
+                    W::SHAPE, W::BODY,       W::INHARMONICITY};
+    // Shuffle without replacement so each chosen control changes once.
+    for (int i = 5; i > 0; --i) {
+      int j = std::min(static_cast<int>(random::uniform() * (i + 1)), i);
+      std::swap(fields[i], fields[j]);
+    }
+    int count = 1 + std::min(static_cast<int>(random::uniform() * 6.f), 5);
+    for (int i = 0; i < count; ++i) {
+      int id = W::param(selected, fields[i]);
+      auto* quantity = module->getParamQuantity(id);
+      float low = quantity->getMinValue(), high = quantity->getMaxValue();
+      float delta = (0.01f + random::uniform() * 0.04f) * (high - low);
+      float value =
+          quantity->getValue() + (random::uniform() < 0.5f ? -delta : delta);
+      // Reflect at the limits so an outward nudge still changes the knob.
+      if (value < low) value = low + (low - value);
+      if (value > high) value = high - (value - high);
+      setWithHistory(module, id, value, action);
+    }
+  } else {
+    for (int field : {W::DECAY, W::BRIGHTNESS, W::HARDNESS, W::SHAPE, W::BODY,
+                      W::INHARMONICITY})
+      setWithHistory(module, W::param(selected, field), random::uniform(),
+                     action);
+  }
+}
+void changeSound(W* module, int selected, bool wiggle) {
+  if (!setEnabled(module, selected)) return;
+  auto* action = new history::ComplexAction;
+  action->name =
+      wiggle ? "Wiggle windchime sound" : "Randomize windchime sound";
+  editSound(module, selected, wiggle, action);
+  APP->history->push(action);
+}
+void removeSet(W* module, Editor* editor, int selected) {
+  if (!setEnabled(module, selected)) return;
+  auto* action = new history::ComplexAction;
+  action->name = "Remove windchime set";
+  setWithHistory(module, W::param(selected, W::ENABLED), 0.f, action);
+  APP->history->push(action);
+  if (editor->selected == selected)
+    for (int i = 0; i < wc::maxSets; ++i)
+      if (setEnabled(module, i)) {
+        editor->selected = i;
+        break;
+      }
+}
+void copySet(W* module, Editor* editor, int source, bool divide) {
+  if (!setEnabled(module, source)) return;
+  int target = vacantSet(module);
+  if (target < 0) return;
+  auto* action = new history::ComplexAction;
+  action->name = divide ? "Divide windchime set" : "Duplicate windchime set";
+  // Include appended timbre controls and reserved fields; enable only after
+  // configuring the complete copy. No motion state or global settings are
+  // copied.
+  for (int field = W::X; field <= W::SPREAD; ++field)
+    setWithHistory(module, W::param(target, field),
+                   module->params[W::param(source, field)].getValue(), action);
+  // Place the copy nearby so both sets can immediately be selected and moved.
+  for (int field : {W::X, W::Y}) {
+    float old = module->params[W::param(source, field)].getValue();
+    float offset = field == W::X ? 0.13f : 0.05f;
+    setWithHistory(module, W::param(target, field),
+                   old + (old + offset <= 1.f ? offset : -offset), action);
+  }
+  if (divide) editSound(module, target, true, action);
+  setWithHistory(module, W::param(target, W::ENABLED), 1.f, action);
+  APP->history->push(action);
+  editor->selected = target;
 }
 struct ActionButton : ComputerscareBlankButton {
   std::function<std::string()> label;
@@ -519,8 +618,16 @@ struct ChimeScene : widget::OpaqueWidget {
           nvgFillColor(vg, nvgLerpRGBA(nvgRGB(218, 195, 144),
                                        nvgRGB(255, 250, 205), flash));
           nvgFill(vg);
-          if (perspective) {
-            Vec sail = point(center + axis * 0.46f);
+          {
+            wc::Point sailAxis = module
+                                     ? wc::Point(module->visualSailX[i].load(
+                                                     std::memory_order_relaxed),
+                                                 module->visualSailY[i].load(
+                                                     std::memory_order_relaxed),
+                                                 module->visualSailZ[i].load(
+                                                     std::memory_order_relaxed))
+                                     : wc::Point(0.f, 1.f, 0.f);
+            Vec sail = point(center + sailAxis * wc::sailLength);
             line(striker, sail, nvgRGBA(218, 227, 213, 160), 0.8f);
             nvgBeginPath(vg);
             nvgRoundedRect(vg, sail.x - 3, sail.y - 4, 6, 9, 1);
@@ -555,9 +662,10 @@ struct ChimeScene : widget::OpaqueWidget {
           }
         }
       }
-      float numberX = wc::clamp(p.x, 10.f, box.size.x - 10.f);
-      float numberY =
-          wc::clamp(p.y + 25.f * visualScale(i), 10.f, box.size.y - 10.f);
+      float numberX = wc::clamp(p.x - 62.f * visualScale(i) + 12.f, 10.f,
+                                box.size.x - 10.f);
+      float numberY = wc::clamp(p.y - 46.f * visualScale(i) + 11.f, 10.f,
+                                box.size.y - 10.f);
       nvgBeginPath(vg);
       nvgRoundedRect(vg, numberX - 8.f, numberY - 7.f, 16.f, 14.f, 3.f);
       nvgFillColor(vg, nvgRGB(13, 29, 28));
@@ -567,8 +675,9 @@ struct ChimeScene : widget::OpaqueWidget {
     nvgRestore(vg);
   }
   void onButton(const event::Button& e) override {
-    if (!module) return;
-    if (e.action == GLFW_PRESS && e.button == GLFW_MOUSE_BUTTON_LEFT) {
+    if (!module || !editor) return;
+    if (e.action == GLFW_PRESS && (e.button == GLFW_MOUSE_BUTTON_LEFT ||
+                                   e.button == GLFW_MOUSE_BUTTON_RIGHT)) {
       std::array<int, wc::maxSets> order{};
       for (int i = 0; i < wc::maxSets; ++i) order[i] = i;
       std::sort(order.begin(), order.end(),
@@ -578,6 +687,36 @@ struct ChimeScene : widget::OpaqueWidget {
             std::fabs(position(i).x - e.pos.x) < 62.f * visualScale(i) &&
             std::fabs(position(i).y - e.pos.y) < 46.f * visualScale(i)) {
           editor->selected = i;
+          if (e.button == GLFW_MOUSE_BUTTON_RIGHT) {
+            dragging = -1;
+            auto* menu = createMenu();
+            menu->addChild(
+                createMenuLabel("Chime set " + std::to_string(i + 1)));
+            menu->addChild(createMenuItem("Strike", "", [this, i]() {
+              module->strikeRequests.fetch_or(1u << i,
+                                              std::memory_order_relaxed);
+            }));
+            menu->addChild(createMenuItem("Stop", "", [this, i]() {
+              module->stopRequests.fetch_or(1u << i, std::memory_order_relaxed);
+            }));
+            menu->addChild(createMenuItem("Randomize", "", [this, i]() {
+              changeSound(module, i, false);
+            }));
+            menu->addChild(createMenuItem(
+                "Wiggle", "", [this, i]() { changeSound(module, i, true); }));
+            menu->addChild(new ui::MenuSeparator);
+            bool full = vacantSet(module) < 0;
+            menu->addChild(createMenuItem(
+                "Duplicate", full ? "8/8 sets" : "",
+                [this, i]() { copySet(module, editor, i, false); }, full));
+            menu->addChild(createMenuItem(
+                "Divide", full ? "8/8 sets" : "",
+                [this, i]() { copySet(module, editor, i, true); }, full));
+            menu->addChild(createMenuItem(
+                "Remove", "", [this, i]() { removeSet(module, editor, i); }));
+            e.consume(this);
+            return;
+          }
           dragging = i;
           oldX = module->params[W::param(i, W::X)].getValue();
           oldY = module->params[W::param(i, W::Y)].getValue();
@@ -587,6 +726,20 @@ struct ChimeScene : widget::OpaqueWidget {
       }
     }
     OpaqueWidget::onButton(e);
+  }
+  void removeActive() {
+    if (module && editor) removeSet(module, editor, editor->selected);
+  }
+  void onSelect(const event::Select& e) override { e.consume(this); }
+  void onSelectKey(const event::SelectKey& e) override {
+    if ((e.mods & RACK_MOD_MASK) == 0 &&
+        (e.key == GLFW_KEY_DELETE || e.key == GLFW_KEY_BACKSPACE)) {
+      // Consume repeats/releases too: holding Delete removes only one set.
+      if (e.action == GLFW_PRESS) removeActive();
+      e.consume(this);
+      return;
+    }
+    OpaqueWidget::onSelectKey(e);
   }
   void onDragMove(const event::DragMove& e) override {
     if (!module || dragging < 0 || e.button != GLFW_MOUSE_BUTTON_LEFT) return;
@@ -652,10 +805,12 @@ struct Labels : widget::TransparentWidget {
          enabled ? "SET " + std::to_string(selected + 1) + " — TUNING / MOTION"
                  : "SELECT OR ADD A SET",
          9, selectedColor);
-    text(vg, 338, 148, "SELECTED SET — SOUND", 9, selectedColor);
-    const char* tuning[] = {"Tubes", "Root", "Register", "Fine", "EDO"};
-    for (int i = 0; i < 5; ++i)
-      text(vg, 330.f + i * 52.f, 128, tuning[i], 8, selectedColor);
+    text(vg, 338, 148, "SET " + std::to_string(selected + 1) + " — SOUND", 9,
+         selectedColor);
+    const char* tuning[] = {"Tubes", "Root", "Register",
+                            "Fine",  "EDO",  "Spread"};
+    for (int i = 0; i < 6; ++i)
+      text(vg, 335.f + i * 45.f, 128, tuning[i], 8, selectedColor);
     text(vg, 475, 93, "Set level", 8, selectedColor);
     text(vg, 539, 93, "Swing", 8, selectedColor);
     const char* sound[] = {"Decay", "Bright", "Hard",
@@ -683,6 +838,20 @@ struct Labels : widget::TransparentWidget {
 
 struct ComputerscareWindchimesWidget : ModuleWidget {
   Editor editor;
+  ChimeScene* scene = nullptr;
+  void onHoverKey(const event::HoverKey& e) override {
+    // Rack processes module deletion before passing keys to children. Handle
+    // the scene first so an active/hovered chime cannot delete the whole
+    // module.
+    if (module && scene && scene->box.contains(e.pos) &&
+        ((e.mods & RACK_MOD_MASK) == 0 &&
+         (e.key == GLFW_KEY_DELETE || e.key == GLFW_KEY_BACKSPACE))) {
+      if (e.action == GLFW_PRESS) scene->removeActive();
+      e.consume(this);
+      return;
+    }
+    ModuleWidget::onHoverKey(e);
+  }
   ComputerscareWindchimesWidget(W* module) {
     setModule(module);
     box.size = Vec(panelWidth, RACK_GRID_HEIGHT);
@@ -693,7 +862,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     labels->module = module;
     labels->editor = &editor;
     addChild(labels);
-    auto* scene = new ChimeScene;
+    scene = new ChimeScene;
     scene->module = module;
     scene->editor = &editor;
     scene->box = Rect(Vec(5, 5), Vec(315.f + controlColumnOffset, 370));
@@ -737,7 +906,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
                     module, W::param(i, f),
                     module->getParamQuantity(W::param(i, f))->getDefaultValue(),
                     action);
-              for (int f : {W::SHAPE, W::BODY, W::INHARMONICITY})
+              for (int f : {W::SHAPE, W::BODY, W::INHARMONICITY, W::SPREAD})
                 setWithHistory(
                     module, W::param(i, f),
                     module->getParamQuantity(W::param(i, f))->getDefaultValue(),
@@ -750,21 +919,9 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         });
     button(
         Vec(420, 10), 60, []() { return "Remove"; },
-        [this, module]() {
-          if (!module) return;
-          auto* action = new history::ComplexAction;
-          action->name = "Remove windchime set";
-          setWithHistory(module, W::param(editor.selected, W::ENABLED), 0.f,
-                         action);
-          APP->history->push(action);
-          for (int i = 0; i < wc::maxSets; ++i)
-            if (module->params[W::param(i, W::ENABLED)].getValue() > 0.5f) {
-              editor.selected = i;
-              break;
-            }
-        });
+        [this, module]() { removeSet(module, &editor, editor.selected); });
     button(
-        Vec(485, 10), 60, []() { return "Strike"; },
+        Vec(428, 139), 47, []() { return "Strike"; },
         [this, module]() {
           if (module)
             module->strikeRequests.fetch_or(1u << editor.selected,
@@ -787,16 +944,18 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
             return std::string(
                        field == W::MATERIAL
                            ? materialCaptions[std::max(0, std::min(value, 2))]
-                           : scaleCaptions[std::max(0, std::min(value, 4))]) +
+                           : wc::scaleCaptions[std::max(
+                                 0, std::min(value, wc::scaleCount - 1))]) +
                    "  v";
           },
           [this, module, field]() -> Menu* {
             if (!module) return nullptr;
             auto* menu = createMenu();
             int selected = editor.selected;
-            for (int i = 0; i < (field == W::MATERIAL ? 3 : 5); ++i)
+            for (int i = 0; i < (field == W::MATERIAL ? 3 : wc::scaleCount);
+                 ++i)
               menu->addChild(createCheckMenuItem(
-                  field == W::MATERIAL ? materials[i] : scales[i], "",
+                  field == W::MATERIAL ? materials[i] : wc::scaleNames[i], "",
                   [module, selected, field, i]() {
                     return std::round(module->params[W::param(selected, field)]
                                           .getValue()) == i;
@@ -812,20 +971,11 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
           });
     }
     button(
-        Vec(480, 139), 105, []() { return "Random sound"; },
-        [this, module]() {
-          if (!module ||
-              module->params[W::param(editor.selected, W::ENABLED)].getValue() <
-                  0.5f)
-            return;
-          auto* action = new history::ComplexAction;
-          action->name = "Randomize windchime sound";
-          for (int field : {W::DECAY, W::BRIGHTNESS, W::HARDNESS, W::SHAPE,
-                            W::BODY, W::INHARMONICITY})
-            setWithHistory(module, W::param(editor.selected, field),
-                           random::uniform(), action);
-          APP->history->push(action);
-        });
+        Vec(480, 139), 52, []() { return "Wiggle"; },
+        [this, module]() { changeSound(module, editor.selected, true); });
+    button(
+        Vec(538, 139), 47, []() { return "Random"; },
+        [this, module]() { changeSound(module, editor.selected, false); });
     selector(
         Vec(426, 163), 130,
         [this, module]() {
@@ -891,17 +1041,17 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
           }
           return menu;
         });
-    const int fields[] = {W::TUBES,     W::ROOT,  W::OCTAVE,        W::FINE,
-                          W::DIVISIONS, W::DECAY, W::BRIGHTNESS,    W::HARDNESS,
-                          W::SHAPE,     W::BODY,  W::INHARMONICITY, W::LEVEL,
-                          W::SWING};
-    for (int i = 0; i < 13; ++i) {
+    const int fields[] = {W::TUBES,     W::ROOT,   W::OCTAVE, W::FINE,
+                          W::DIVISIONS, W::SPREAD, W::DECAY,  W::BRIGHTNESS,
+                          W::HARDNESS,  W::SHAPE,  W::BODY,   W::INHARMONICITY,
+                          W::LEVEL,     W::SWING};
+    for (int i = 0; i < 14; ++i) {
       auto* knob =
-          createParamCentered<SetKnob>(Vec(i < 5    ? 347.f + i * 52.f
-                                           : i < 11 ? 349.f + (i - 5) * 45.f
-                                                    : 493.f + (i - 11) * 62.f,
-                                           i < 5    ? 107.f
-                                           : i < 11 ? 205.f
+          createParamCentered<SetKnob>(Vec(i < 6    ? 349.f + i * 45.f
+                                           : i < 12 ? 349.f + (i - 6) * 45.f
+                                                    : 493.f + (i - 12) * 62.f,
+                                           i < 6    ? 107.f
+                                           : i < 12 ? 205.f
                                                     : 72.f),
                                        module, W::param(0, fields[i]));
       knob->editor = &editor;
