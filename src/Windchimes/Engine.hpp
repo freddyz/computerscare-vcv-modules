@@ -14,7 +14,8 @@ class Engine {
     float distanceState = 0.f, distanceState2 = 0.f, distanceCoeff = 1.f;
     float roomLeft = 0.f, roomRight = 0.f;
     std::array<Resonator, maxTubes> tubes;
-    std::array<float, maxTubes> panLeft{}, panRight{};
+    float panLeft = 0.f, panRight = 0.f;
+    float configuredRate = 0.f, transpose = 0.f;
   };
   std::array<Set, maxSets> sets;
   Wind wind;
@@ -23,6 +24,17 @@ class Engine {
   Random strikes{0x985fe};
   float rate = 48000.f, dt = 0.f;
   int counter = 0, interval = 120;
+
+  static bool sameConfig(const SetConfig& a, const SetConfig& b) {
+    return a.enabled == b.enabled && a.tubes == b.tubes &&
+           a.material == b.material && a.scale == b.scale && a.root == b.root &&
+           a.divisions == b.divisions && a.spread == b.spread &&
+           a.octave == b.octave && a.fine == b.fine && a.decay == b.decay &&
+           a.brightness == b.brightness && a.hardness == b.hardness &&
+           a.level == b.level && a.swing == b.swing && a.x == b.x &&
+           a.y == b.y && a.shape == b.shape && a.body == b.body &&
+           a.inharmonicity == b.inharmonicity;
+  }
 
  public:
   void setSampleRate(float sampleRate) {
@@ -39,6 +51,11 @@ class Engine {
   }
   void configure(int index, const SetConfig& config, float transpose) {
     auto& s = sets[index];
+    if (s.configuredRate == rate && s.transpose == transpose &&
+        sameConfig(s.config, config))
+      return;
+    s.configuredRate = rate;
+    s.transpose = transpose;
     if (!config.enabled) {
       if (s.config.enabled) {
         for (auto& t : s.tubes) t.reset();
@@ -56,18 +73,18 @@ class Engine {
       s.stopSamples = 0;
     }
     s.motion.configure(config.tubes);
-    for (int t = 0; t < config.tubes; ++t) {
+    for (int t = 0; t < config.tubes; ++t)
       s.tubes[t].configure(tubeFrequency(config, t, transpose), rate, config);
-      float pan = clamp(config.x, 0.f, 1.f);
-      float near = clamp(config.y, 0.f, 1.f);
-      // Direct sound falls faster with distance than the diffuse room send.
-      float gain = config.level * 0.48f / (1.f + 7.f * (1.f - near));
-      float roomGain = config.level * 0.48f * (0.35f + 0.65f * near);
-      s.roomLeft = std::cos(pan * pi * 0.5f) * roomGain;
-      s.roomRight = std::sin(pan * pi * 0.5f) * roomGain;
-      s.panLeft[t] = std::cos(pan * pi * 0.5f) * gain;
-      s.panRight[t] = std::sin(pan * pi * 0.5f) * gain;
-    }
+    float pan = clamp(config.x, 0.f, 1.f);
+    float near = clamp(config.y, 0.f, 1.f);
+    // Every tube in a set shares its scene position and output gains.
+    float gain = config.level * 0.48f / (1.f + 7.f * (1.f - near));
+    float roomGain = config.level * 0.48f * (0.35f + 0.65f * near);
+    float left = std::cos(pan * pi * .5f), right = std::sin(pan * pi * .5f);
+    s.roomLeft = left * roomGain;
+    s.roomRight = right * roomGain;
+    s.panLeft = left * gain;
+    s.panRight = right * gain;
     for (int t = config.tubes; t < maxTubes; ++t) s.tubes[t].reset();
     s.distanceCoeff =
         1.f -
@@ -172,8 +189,8 @@ class Engine {
       float fade = s.stopSamples > 0
                        ? s.stopSamples / static_cast<float>(s.stopLength)
                        : 1.f;
-      out.left += s.distanceState2 * s.panLeft[0] * fade;
-      out.right += s.distanceState2 * s.panRight[0] * fade;
+      out.left += s.distanceState2 * s.panLeft * fade;
+      out.right += s.distanceState2 * s.panRight * fade;
       roomSend.left += s.distanceState * s.roomLeft * fade;
       roomSend.right += s.distanceState * s.roomRight * fade;
       if (s.stopSamples > 0 && --s.stopSamples == 0) {

@@ -192,9 +192,13 @@ class Motion {
       } else if (distance > radius * 1.08f)
         strikerContacts[t] = false;
     }
+    // Reuse geometry for the pair sweep; collision resolution invalidates only
+    // the two bodies it actually moved. Preserve sequential solver ordering.
+    std::array<Capsule, maxTubes> pairShapes;
+    for (int t = 0; t < count; ++t) pairShapes[t] = tubeShape(t);
     for (int a = 0; a < count; ++a)
       for (int b = a + 1; b < count; ++b) {
-        Capsule ca = tubeShape(a), cb = tubeShape(b);
+        Capsule ca = pairShapes[a], cb = pairShapes[b];
         Contact contact = capsuleContact(ca, cb);
         float radius = ca.radius + cb.radius;
         int index = a * maxTubes + b;
@@ -211,6 +215,8 @@ class Motion {
           }
           resolve(tubes[a], tubes[b], normal, radius - contact.distance,
                   tubeLength(a), tubeLength(b), 1.f, tubeSwingLimit);
+          pairShapes[a] = tubeShape(a);
+          pairShapes[b] = tubeShape(b);
           pairContacts[index] = true;
         } else if (contact.distance > radius * 1.08f)
           pairContacts[index] = false;

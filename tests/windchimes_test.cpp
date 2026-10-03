@@ -101,7 +101,7 @@ int main() {
   require(!longWood.active(), "extended wood tail eventually sleeps at the energy threshold");
   for (int material = 0; material < 3; ++material) {
     auto presets = wc::soundPresets(material);
-    require(material != 1 || presets.count == 8, "wood offers eight sound presets");
+    require(presets.count == 8, "every material offers eight intentional sound presets");
     wc::Resonator previous; bool hasPrevious = false;
     for (int index = 0; index < presets.count; ++index) {
       const auto& p = presets.items[index];
@@ -128,7 +128,7 @@ int main() {
     config.inharmonicity = 0.f; harmonic.configure(220.f, 48000.f, config);
     config.inharmonicity = 0.5f; natural.configure(220.f, 48000.f, config);
     config.inharmonicity = 1.f; stretched.configure(220.f, 48000.f, config);
-    for (int mode = 0; mode < 6; ++mode)
+    for (int mode = 0; material != 0 && mode < 6; ++mode)
       require(std::fabs(harmonic.modeFrequency(mode) - 220.f*(mode+1)) < 0.01f,
         "inharmonicity zero gives harmonic structural spacing");
     require(std::fabs(natural.modeFrequency(0)-220.f) < 0.01f && std::fabs(stretched.modeFrequency(0)-220.f) < 0.01f,
@@ -184,6 +184,163 @@ int main() {
           "Body continuously extends the same wood object's response");
         previousTailRatio = ratio;
       }
+    }
+  }
+  for (float rate : {44100.f, 48000.f, 96000.f}) {
+    config = wc::SetConfig(); config.material = 0; config.shape = 1.f; config.decay = 0.7f;
+    wc::Resonator natural, shimmer;
+    config.inharmonicity = 0.5f; natural.configure(261.625565f, rate, config);
+    config.inharmonicity = 0.78f; shimmer.configure(261.625565f, rate, config);
+    float naturalSplit = natural.modeFrequency(6) - natural.modeFrequency(0);
+    float shimmerSplit = shimmer.modeFrequency(6) - shimmer.modeFrequency(0);
+    require(naturalSplit > 0.1f && naturalSplit < 0.3f && shimmerSplit > 0.3f && shimmerSplit < 0.5f,
+      "metal paired bending modes give subtle natural beating and stronger shimmer");
+    // Measured bass-tube ratios from Lukkari/Valimaki Table 2 are
+    // approximately 1/2.685/5.075/8.036/11.437, not ideal thin-beam spacing.
+    const float observed[] = {1.f, 2.685f, 5.075f, 8.036f, 11.437f};
+    for (int mode = 0; mode < 5; ++mode)
+      require(std::fabs(natural.modeFrequency(mode)/261.625565f-observed[mode]) < .18f,
+        "natural metal tube spacing follows measured compressed bending modes");
+    config.decay = 1.f; config.body = 1.f;
+    auto low = wc::MetalModel::mode(0, 220.f, config);
+    auto upper = wc::MetalModel::mode(4, 220.f, config);
+    require(low.seconds > 35.f && upper.seconds > .8f && upper.seconds < 2.5f,
+      "metal upper modes retain metallic sustain beneath the long principal ring");
+    config = wc::SetConfig(); config.material = 0; config.body = 0.f; config.shape = 0.5f;
+    config.decay = 0.7f;
+    wc::Resonator muted, full, soft, hard;
+    muted.configure(261.625565f, rate, config);
+    config.body = 1.f; full.configure(261.625565f, rate, config);
+    config.body = 0.f; config.hardness = 0.f; soft.configure(261.625565f, rate, config);
+    config.hardness = 1.f; hard.configure(261.625565f, rate, config);
+    muted.strike(0.8f); full.strike(0.8f); soft.strike(0.8f); hard.strike(0.8f);
+    double early = 0.f, mutedTail = 0.f, fullTail = 0.f;
+    double softEnergy = 0.f, hardEnergy = 0.f, softSlope = 0.f, hardSlope = 0.f;
+    float previousSoft = 0.f, previousHard = 0.f;
+    for (int i = 0; i < rate * 0.2f; ++i) {
+      float a = muted.process(), b = full.process(), c = soft.process(), d = hard.process();
+      if (i < rate * 0.02f) early += a*a;
+      else if (i < rate * 0.06f) mutedTail += a*a;
+      if (i >= rate * 0.1f) fullTail += b*b;
+      softEnergy += c*c; hardEnergy += d*d;
+      softSlope += (c-previousSoft)*(c-previousSoft); hardSlope += (d-previousHard)*(d-previousHard);
+      previousSoft = c; previousHard = d;
+    }
+    require(mutedTail > early * 0.03 && fullTail > mutedTail,
+      "low Body retains brief metallic resonance while full Body sustains it");
+    require(softEnergy < hardEnergy && softSlope/softEnergy < hardSlope/hardEnergy,
+      "soft metal strikes reduce attack energy and bandwidth without a noise burst");
+    config.body = 1.f; config.shape = 1.f; config.hardness = 0.8f;
+    wc::Resonator node, center;
+    node.configure(261.625565f,rate,config); center.configure(261.625565f,rate,config);
+    node.strike(0.8f,wc::ContactKind::Striker,0.224f);
+    center.strike(0.8f,wc::ContactKind::Striker,0.5f);
+    double nr = 0.f, ni = 0.f, cr = 0.f, ci = 0.f;
+    for (int i = 0; i < rate*0.15f; ++i) {
+      float a=node.process(), b=center.process();
+      double phase = 2.f*wc::pi*261.625565f*i/rate;
+      nr+=a*std::cos(phase); ni+=a*std::sin(phase);
+      cr+=b*std::cos(phase); ci+=b*std::sin(phase);
+    }
+    require(nr*nr+ni*ni < (cr*cr+ci*ci)*0.1,
+      "a bending-node strike suppresses the lowest metal mode relative to a central strike");
+  }
+  // Every corner of the six sound controls, at low/high pitch and all rates:
+  // preserve ordered bending spectra and finite energy under both contacts.
+  for (int material : {0,2}) {
+  for (float rate : {44100.f, 48000.f, 96000.f}) {
+    for (float hz : {110.f, 880.f}) {
+      for (int corner = 0; corner < 64; ++corner) {
+        config = wc::SetConfig(); config.material = material;
+        config.decay = (corner & 1) ? 1.f : 0.f;
+        config.brightness = (corner & 2) ? 1.f : 0.f;
+        config.hardness = (corner & 4) ? 1.f : 0.f;
+        config.shape = (corner & 8) ? 1.f : 0.f;
+        config.body = (corner & 16) ? 1.f : 0.f;
+        config.inharmonicity = (corner & 32) ? 1.f : 0.f;
+        auto second = wc::MetalModel::mode(1,hz,config);
+        require(material != 0 || (second.frequency/hz > 2.4f && second.frequency/hz < 2.76f),
+          "extreme metal controls retain a plausible bent-tube spectrum");
+        for (auto kind : {wc::ContactKind::Striker,wc::ContactKind::Tube}) {
+          wc::Resonator voice; voice.configure(hz,rate,config);
+          voice.strike(.8f,kind,.4f);
+          double energy = 0.f;
+          for (int i=0;i<rate*.08f;++i) {
+            float sample=voice.process();
+            require(std::isfinite(sample) && std::fabs(sample)<2.f,
+              "metal/plastic control corners and collision types remain bounded at every rate");
+            energy+=sample*sample;
+          }
+          require(energy>1e-5,"metal/plastic extreme settings retain an audible body response");
+        }
+      }
+    }
+  }
+  }
+  // Perceptual regressions: metal needs persistent upper ring, while plastic
+  // uses viscoelastic loss and geometry-specific short wall/cavity responses.
+  config = wc::SetConfig(); config.material = 0; config.body = .9f;
+  config.decay = .7f; config.shape = 1.f;
+  auto metalUpper = wc::MetalModel::mode(2,220.f,config);
+  config.material = 2;
+  auto plasticUpper = wc::PlasticModel::mode(2,220.f,config);
+  require(metalUpper.seconds > plasticUpper.seconds*2.f,
+    "metal retains substantially more upper-mode sustain than plastic");
+  for(float rate : {44100.f,48000.f,96000.f}) {
+    config=wc::SetConfig(); config.material=2; config.body=.8f;
+    config.shape=.7f; config.decay=.7f; config.brightness=.8f;
+    wc::Resonator soft,hard,contact;
+    config.hardness=0.f; soft.configure(220.f,rate,config);
+    contact.configure(220.f,rate,config);
+    config.hardness=1.f; hard.configure(220.f,rate,config);
+    soft.strike(.8f,wc::ContactKind::Striker,.4f);
+    hard.strike(.8f,wc::ContactKind::Striker,.4f);
+    contact.strike(.8f,wc::ContactKind::Tube,.4f);
+    double se=0,he=0,ss=0,hs=0,difference=0;float lastS=0,lastH=0;
+    for(int i=0;i<rate*.1f;++i) {
+      float a=soft.process(),b=hard.process(),c=contact.process();
+      se+=a*a; he+=b*b; ss+=(a-lastS)*(a-lastS);hs+=(b-lastH)*(b-lastH);
+      difference+=(a-c)*(a-c);lastS=a;lastH=b;
+    }
+    require(se<he && ss/se<hs/he,"plastic softness reduces attack energy and bandwidth");
+    require(difference>.001,"plastic wall contact differs from a soft striker");
+    config.body=0.f;
+    wc::Resonator first,second;
+    first.configure(220.f,rate,config);second.configure(220.f,rate,config);
+    first.strike(.8f,wc::ContactKind::Striker,.4f);
+    second.strike(.8f,wc::ContactKind::Striker,.4f);
+    double early=0,tail=0;
+    for(int i=0;i<rate*.06f;++i) {
+      float a=first.process(),b=second.process();
+      require(a==b,"plastic low Body remains deterministic with no mixed random noise");
+      if(i<rate*.02f)early+=a*a;else tail+=a*a;
+    }
+    require(tail>early*.03,"plastic low Body preserves resonance beyond its attack");
+    auto muted=wc::PlasticModel::mode(0,220.f,config);
+    config.body=1.f;auto full=wc::PlasticModel::mode(0,220.f,config);
+    auto high=wc::PlasticModel::mode(0,880.f,config);
+    require(full.seconds>muted.seconds && high.seconds<full.seconds,
+      "plastic loss increases with muting and absolute frequency");
+  }
+  // Sleeping SIMD groups must wake on a fresh contact, with no residual state
+  // resurrected when a material changes its occupied modal slots.
+  for (float rate : {44100.f,48000.f,96000.f}) {
+    for (int material=0;material<3;++material) {
+      config=wc::SetConfig();config.material=material;config.decay=0.f;
+      wc::Resonator used,fresh;
+      used.configure(220.f,rate,config);used.strike(.8f);
+      for(int i=0;i<rate*3.f;++i) used.process();
+      require(!used.active(),"quiet modal groups reach whole-voice sleep");
+      config.material=(material+1)%3;config.decay=.8f;config.body=.95f;
+      used.configure(220.f,rate,config);fresh.configure(220.f,rate,config);
+      used.strike(.8f,wc::ContactKind::Tube,.4f);
+      fresh.strike(.8f,wc::ContactKind::Tube,.4f);
+      double energy=0.f;
+      for(int i=0;i<rate*.1f;++i) {
+        float a=used.process(),b=fresh.process();energy+=a*a;
+        require(a==b,"sleeping and newly enabled modal lanes restart without stale state");
+      }
+      require(energy>.01,"fresh contacts wake sleeping modal banks");
     }
   }
   auto stopped = std::unique_ptr<wc::Engine>(new wc::Engine);
