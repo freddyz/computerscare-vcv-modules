@@ -53,7 +53,14 @@ struct ComputerscareWindchimes : Module {
     NUM_PARAMS = SPREAD_BASE + wc::maxSets
   };
   enum Input { WIND_INPUT, TRANSPOSE_INPUT, GUST_INPUT, INPUTS };
-  enum Output { LEFT_OUTPUT, RIGHT_OUTPUT, WIND_OUTPUT, OUTPUTS };
+  enum Output {
+    LEFT_OUTPUT,
+    RIGHT_OUTPUT,
+    WIND_OUTPUT,
+    REAR_LEFT_OUTPUT,
+    REAR_RIGHT_OUTPUT,
+    OUTPUTS
+  };
   static constexpr int param(int set, int field) {
     return field == SPREAD          ? SPREAD_BASE + set
            : field == INHARMONICITY ? INHARM_BASE + set
@@ -94,9 +101,10 @@ struct ComputerscareWindchimes : Module {
       std::string name = "Set " + std::to_string(i + 1) + " ";
       configSwitch(param(i, ENABLED), 0.f, 1.f, i == 0 ? 1.f : 0.f,
                    name + "enabled", {"Off", "On"});
-      configParam(param(i, X), 0.f, 1.f, 0.25f + (i % 3) * 0.25f, name + "pan");
+      configParam(param(i, X), 0.f, 1.f, 0.25f + (i % 3) * 0.25f,
+                  name + "stage horizontal");
       configParam(param(i, Y), 0.f, 1.f, 0.35f + (i % 2) * 0.3f,
-                  name + "nearness");
+                  name + "stage front / rear");
       configParam(param(i, TUBES), 1.f, 12.f, 6.f, name + "tubes")
           ->snapEnabled = true;
       configSwitch(param(i, MATERIAL), 0.f, 2.f, 0.f, name + "material",
@@ -149,8 +157,10 @@ struct ComputerscareWindchimes : Module {
     configInput(WIND_INPUT, "Wind strength (0–10 V, added to breeze)");
     configInput(TRANSPOSE_INPUT, "Transpose (1 V/oct)");
     configInput(GUST_INPUT, "Gust trigger");
-    configOutput(LEFT_OUTPUT, "Left / mono");
-    configOutput(RIGHT_OUTPUT, "Right");
+    configOutput(LEFT_OUTPUT, "Front left / automatic mixdown");
+    configOutput(RIGHT_OUTPUT, "Front right / automatic mixdown");
+    configOutput(REAR_LEFT_OUTPUT, "Rear left / automatic mixdown");
+    configOutput(REAR_RIGHT_OUTPUT, "Rear right / automatic mixdown");
     configOutput(WIND_OUTPUT, "Wind strength (0–10 V)");
     // Standard Randomize shares the selected-sound button's six controls.
     // Global, tuning, material, motion and scene controls stay fixed.
@@ -193,6 +203,24 @@ struct ComputerscareWindchimes : Module {
     c.inharmonicity = value(INHARMONICITY);
     return c;
   }
+  json_t* dataToJson() override {
+    json_t* data = json_object();
+    json_object_set_new(data, "radialStageVersion", json_integer(1));
+    return data;
+  }
+  void fromJson(json_t* root) override {
+    Module::fromJson(root);
+    json_t* data = json_object_get(root, "data");
+    if (!data || !json_object_get(data, "radialStageVersion")) {
+      for (int i = 0; i < wc::maxSets; ++i) {
+        // Preserve old distance and horizontal direction in the front half.
+        auto pos = wc::migrateStagePosition(params[param(i, X)].getValue(),
+                                            params[param(i, Y)].getValue());
+        params[param(i, X)].setValue(pos.x);
+        params[param(i, Y)].setValue(pos.y);
+      }
+    }
+  }
   void process(const ProcessArgs& args) override {
     if (sampleRate != args.sampleRate) {
       sampleRate = args.sampleRate;
@@ -227,7 +255,13 @@ struct ComputerscareWindchimes : Module {
         strikeRequests.exchange(0, std::memory_order_relaxed) & ~stops;
     for (int i = 0; requests && i < wc::maxSets; ++i)
       if (requests & (1u << i)) engine.strike(i);
-    wc::Stereo out = engine.process(amount, gustiness, turbulence, windMix);
+    const int audioIds[4] = {LEFT_OUTPUT, RIGHT_OUTPUT, REAR_LEFT_OUTPUT,
+                             REAR_RIGHT_OUTPUT};
+    unsigned mask = 0;
+    for (int ch = 0; ch < 4; ++ch)
+      if (outputs[audioIds[ch]].isConnected()) mask |= 1u << ch;
+    engine.setOutputMask(mask);
+    wc::Quad out = engine.processQuad(amount, gustiness, turbulence, windMix);
     // Publish after advancing physics and exciting audio from the same
     // contacts.
     if (publishVisual) {
@@ -261,12 +295,8 @@ struct ComputerscareWindchimes : Module {
       float x = v * smoothMaster * 3.f;
       return 5.f * x / (1.f + std::fabs(x));
     };
-    if (!outputs[RIGHT_OUTPUT].isConnected())
-      outputs[LEFT_OUTPUT].setVoltage(
-          voltage((out.left + out.right) * 0.70710678f));
-    else
-      outputs[LEFT_OUTPUT].setVoltage(voltage(out.left));
-    outputs[RIGHT_OUTPUT].setVoltage(voltage(out.right));
+    for (int ch = 0; ch < 4; ++ch)
+      outputs[audioIds[ch]].setVoltage(voltage(out.channel[ch]));
     outputs[WIND_OUTPUT].setVoltage(
         wc::clamp(engine.windStrength() * 10.f, 0.f, 10.f));
   }
@@ -503,15 +533,17 @@ struct ChimeScene : widget::OpaqueWidget {
   Editor* editor = nullptr;
   int dragging = -1;
   float oldX = 0.f, oldY = 0.f;
-  float nearness(int i) const {
-    return module ? module->params[W::param(i, W::Y)].getValue()
-                  : 0.2f + i * 0.25f;
+  float stageValue(int i, int field) const {
+    return module ? module->params[W::param(i, field)].getValue()
+                  : (field == W::X ? 0.2f + i * 0.3f : 0.25f + i * 0.2f);
   }
-  float visualScale(int i) const { return 0.65f + 0.55f * nearness(i); }
+  float nearness(int i) const {
+    return 1.f - wc::stageDistance(stageValue(i, W::X), stageValue(i, W::Y));
+  }
+  float visualScale(int i) const { return 0.35f + 0.85f * nearness(i); }
   Vec position(int i) {
-    float pan =
-        module ? module->params[W::param(i, W::X)].getValue() : 0.2f + i * 0.3f;
-    return Vec(pan * box.size.x, 35.f + nearness(i) * (box.size.y - 90.f));
+    return Vec(stageValue(i, W::X) * box.size.x,
+               stageValue(i, W::Y) * box.size.y);
   }
   bool enabled(int i) const {
     return module ? module->params[W::param(i, W::ENABLED)].getValue() > 0.5f
@@ -523,16 +555,18 @@ struct ChimeScene : widget::OpaqueWidget {
     nvgRoundedRect(vg, 0, 0, box.size.x, box.size.y, 8);
     nvgFillColor(vg, nvgRGB(13, 29, 28));
     nvgFill(vg);
-    for (int line = 1; line < 5; ++line) {
+    for (int ring = 1; ring <= 3; ++ring) {
       nvgBeginPath(vg);
-      nvgMoveTo(vg, line * box.size.x / 5, 18);
-      nvgLineTo(vg, line * box.size.x / 5, box.size.y - 18);
-      nvgStrokeColor(vg, nvgRGBA(100, 160, 140, 20));
-      nvgStrokeWidth(vg, 1);
+      nvgEllipse(vg, box.size.x * 0.5f, box.size.y * 0.5f,
+                 box.size.x * ring / 6.f, box.size.y * ring / 6.f);
+      nvgStrokeColor(vg, nvgRGBA(100, 160, 140, 35));
+      nvgStrokeWidth(vg, 1.f);
       nvgStroke(vg);
     }
-    text(vg, 10, 16, "FAR", 9);
-    text(vg, 10, box.size.y - 8, "NEAR", 9);
+    text(vg, box.size.x * 0.5f - 17.f, 16, "FRONT", 9);
+    text(vg, box.size.x * 0.5f - 14.f, box.size.y - 8.f, "REAR", 9);
+    text(vg, 8.f, box.size.y * 0.5f, "FAR", 8);
+    text(vg, box.size.x * 0.5f - 14.f, box.size.y * 0.5f, "NEAR", 8);
     nvgSave(vg);
     nvgIntersectScissor(vg, 0.f, 0.f, box.size.x, box.size.y);
     std::array<int, wc::maxSets> setOrder{};
@@ -679,7 +713,10 @@ struct ChimeScene : widget::OpaqueWidget {
             Vec sail = point(center + sailAxis * wc::sailLength);
             line(striker, sail, nvgRGBA(218, 227, 213, 160), 0.8f);
             nvgBeginPath(vg);
-            nvgRoundedRect(vg, sail.x - 3, sail.y - 4, 6, 9, 1);
+            float sailScale = visualScale(i);
+            nvgRoundedRect(vg, sail.x - 3.f * sailScale,
+                           sail.y - 4.f * sailScale, 6.f * sailScale,
+                           9.f * sailScale, sailScale);
             nvgFillColor(vg, color);
             nvgFill(vg);
           }
@@ -805,15 +842,11 @@ struct ChimeScene : widget::OpaqueWidget {
           nvgRestore(vg);
         }
       }
-      float numberX = wc::clamp(p.x - 62.f * visualScale(i) + 12.f, 10.f,
-                                box.size.x - 10.f);
-      float numberY = wc::clamp(p.y - 46.f * visualScale(i) + 11.f, 10.f,
-                                box.size.y - 10.f);
-      nvgBeginPath(vg);
-      nvgRoundedRect(vg, numberX - 8.f, numberY - 7.f, 16.f, 14.f, 3.f);
-      nvgFillColor(vg, nvgRGB(13, 29, 28));
-      nvgFill(vg);
-      text(vg, numberX - 3.f, numberY + 3.f, std::to_string(i + 1), 10, color);
+      float numberX =
+          wc::clamp(p.x - 62.f * visualScale(i) + 4.f, 4.f, box.size.x - 10.f);
+      float numberY =
+          wc::clamp(p.y - 46.f * visualScale(i) + 8.f, 10.f, box.size.y - 4.f);
+      text(vg, numberX, numberY, std::to_string(i + 1), 10, color);
     }
     nvgRestore(vg);
   }
@@ -890,8 +923,8 @@ struct ChimeScene : widget::OpaqueWidget {
     for (int axis = 0; axis < 2; ++axis) {
       int id = W::param(dragging, axis == 0 ? W::X : W::Y);
       auto* q = module->getParamQuantity(id);
-      q->setValue(q->getValue() + (axis == 0 ? delta.x / box.size.x
-                                             : delta.y / (box.size.y - 90)));
+      q->setValue(q->getValue() +
+                  (axis == 0 ? delta.x / box.size.x : delta.y / box.size.y));
     }
   }
   void onDragEnd(const event::DragEnd& e) override {
@@ -968,12 +1001,15 @@ struct Labels : widget::TransparentWidget {
     const char* effects[] = {"Output", "Rev wet", "Size"};
     for (int i = 0; i < 3; ++i)
       text(vg, 335.f + i * 45.f, 325, effects[i], 8, globalColor);
-    text(vg, 514, 325, "Make gust", 8, globalColor);
-    const char* ports[] = {"WIND CV",  "1V/OCT",   "GUST",
-                           "WIND OUT", "L / MONO", "R"};
-    const float positions[] = {347, 392, 437, 482, 530, 568};
-    for (int i = 0; i < 6; ++i)
-      text(vg, positions[i] - (i == 5 ? 3.f : 18.f), 365, ports[i], 7);
+    text(vg, 463, 325, "Make gust", 8, globalColor);
+    const char* ports[] = {"WIND CV", "1V/OCT", "GUST", "WIND OUT"};
+    for (int i = 0; i < 4; ++i)
+      text(vg, 337.f + i * 32.f - 17.f, 365, ports[i], 7);
+    // Match the stage: front above rear, left beside right.
+    text(vg, 502, 326, "FL", 8);
+    text(vg, 584, 326, "FR", 8);
+    text(vg, 502, 358, "RL", 8);
+    text(vg, 584, 358, "RR", 8);
     nvgRestore(vg);
   }
 };
@@ -1209,17 +1245,19 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
           Vec(i < 6 ? 349.f + i * 45.f : 349.f + (i - 6) * 45.f,
               i < 6 ? 262.f : 304.f),
           module, globals[i]));
-    addParam(createParamCentered<ComputerscareBlankButton>(Vec(539, 304),
+    addParam(createParamCentered<ComputerscareBlankButton>(Vec(485, 304),
                                                            module, W::GUST));
     for (int i = 0; i < 3; ++i)
       addInput(
-          createInputCentered<InPort>(Vec(347.f + i * 45.f, 345.f), module, i));
-    addOutput(
-        createOutputCentered<OutPort>(Vec(482, 345), module, W::WIND_OUTPUT));
-    addOutput(
-        createOutputCentered<OutPort>(Vec(530, 345), module, W::LEFT_OUTPUT));
-    addOutput(
-        createOutputCentered<OutPort>(Vec(568, 345), module, W::RIGHT_OUTPUT));
+          createInputCentered<InPort>(Vec(337.f + i * 32.f, 345.f), module, i));
+    addOutput(createOutputCentered<PointingUpPentagonPort>(
+        Vec(433, 345), module, W::WIND_OUTPUT));
+    const int outputIds[] = {W::LEFT_OUTPUT, W::RIGHT_OUTPUT,
+                             W::REAR_LEFT_OUTPUT, W::REAR_RIGHT_OUTPUT};
+    for (int i = 0; i < 4; ++i)
+      addOutput(createOutputCentered<PointingUpPentagonPort>(
+          Vec(530.f + (i % 2) * 38.f, 323.f + (i / 2) * 32.f), module,
+          outputIds[i]));
     // Reserve the extra module width entirely for the scene. Keep the existing
     // compact control-column layout and translate its widgets together.
     for (auto* child : children)

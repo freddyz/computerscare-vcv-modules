@@ -46,6 +46,65 @@ int main() {
     }
     require(separation / 4000 > 0.001, "identical overlapping sets develop independent striker motion");
   }
+  for(float pan:{0.f,.25f,.5f,.75f,1.f}) for(float near:{0.f,.5f,1.f}) {
+    auto p=wc::migrateStagePosition(pan,near);
+    require(std::fabs(wc::stageDistance(p.x,p.y)-(1.f-near))<1e-5f,
+      "legacy migration preserves distance");
+    require(p.y<=.50001f && (pan<=.5f ? p.x<=.50001f : p.x>=.49999f),
+      "legacy migration preserves horizontal side in the front half");
+  }
+  {
+    std::unique_ptr<wc::Reverb> room(new wc::Reverb);room->configure(48000,.6f);
+    double differences[3]={};
+    for(int i=0;i<48000;++i) {
+      auto wet=room->processWetQuad({i==0?1.f:0.f,i==0?.7f:0.f});
+      for(int ch=1;ch<4;++ch) {
+        float d=wet.channel[0]-wet.channel[ch];differences[ch-1]+=d*d;
+      }
+    }
+    for(double d:differences) require(d>1e-5,"quad room returns have distinct diffusion patterns");
+  }
+  // Every connected layout preserves source power and includes missing
+  // directions. A center source stays balanced; radial distance is symmetric.
+  for (unsigned mask = 1; mask < 16; ++mask) {
+    for (float x : {0.f, 0.5f, 1.f}) for (float y : {0.f, 0.5f, 1.f}) {
+      auto g = wc::spatialGains(x,y,mask); float power=0.f;
+      for(int ch=0;ch<4;++ch) {
+        require(std::isfinite(g[ch]) && g[ch]>=0.f,"quad gains are finite and nonnegative");
+        require((mask&(1u<<ch)) || g[ch]==0.f,"unused jacks receive no signal");
+        power+=g[ch]*g[ch];
+      }
+      require(std::fabs(power-1.f)<1e-5f,"all patch combinations preserve source power");
+    }
+  }
+  for (int ch=0;ch<4;++ch) {
+    auto g=wc::spatialGains(ch%2, ch/2, 15);
+    require(g[ch]==1.f,"speaker corner routes to its corresponding quad output");
+  }
+  auto front=wc::spatialGains(.25f,.9f,3), rear=wc::spatialGains(.25f,.1f,12);
+  require(std::fabs(front[0]-rear[2])<1e-6f && std::fabs(front[1]-rear[3])<1e-6f,
+    "front and rear stereo mixdowns preserve left/right orientation");
+  require(wc::stageDistance(.5f,.5f)==0.f && wc::stageDistance(.5f,0.f)==1.f &&
+          wc::stageDistance(.5f,1.f)==1.f && wc::stageDistance(0.f,.5f)==1.f &&
+          wc::stageDistance(1.f,.5f)==1.f,"every stage direction becomes far toward its edge");
+  {
+    std::unique_ptr<wc::Engine> scene(new wc::Engine); scene->setSampleRate(48000);
+    wc::SetConfig c;c.enabled=true;c.x=.25f;c.y=.75f;scene->configure(0,c,0);
+    scene->configureEffects(.8f,.6f,.5f,.4f);scene->strike(0);
+    double energy[4]={};
+    for(unsigned mask=1;mask<16;++mask) {
+      scene->setOutputMask(mask);
+      for(int i=0;i<2400;++i) {
+        auto out=scene->processQuad(0,0,0,0);
+        for(int ch=0;ch<4;++ch) {
+          require(std::isfinite(out.channel[ch]),"routing changes with an active room remain finite");
+          require((mask&(1u<<ch)) || out.channel[ch]==0.f,"engine skips unused outputs");
+          energy[ch]+=out.channel[ch]*out.channel[ch];
+        }
+      }
+    }
+    for(float e:energy) require(e>1e-7f,"all four room/audio outputs are audible");
+  }
   wc::SetConfig config; config.enabled = true;
   require(std::fabs(wc::tubeFrequency(config, 5, 0.f) / wc::tubeFrequency(config, 0, 0.f) - 2.f) < 0.001f, "scale repeats at the octave");
   require(std::fabs(wc::tubeFrequency(config, 0, 1.f) / wc::tubeFrequency(config, 0, 0.f) - 2.f) < 0.001f, "1V/oct transposition");
@@ -537,7 +596,7 @@ int main() {
   distant->setSampleRate(48000.f); nearby->setSampleRate(48000.f);
   config = wc::SetConfig(); config.enabled = true; config.brightness = 1.f; config.hardness = 1.f;
   config.y = 0.f; distant->configure(0,config,0.f);
-  config.y = 1.f; nearby->configure(0,config,0.f);
+  config.y = 0.5f; nearby->configure(0,config,0.f);
   distant->strike(0); nearby->strike(0);
   double farEnergy=0.f,nearEnergy=0.f,farDifference=0.f,nearDifference=0.f;
   float lastFar=0.f,lastNear=0.f;
@@ -553,7 +612,7 @@ int main() {
   auto depthEnergy = [&](float nearness,float wet) {
     auto scene=std::unique_ptr<wc::Engine>(new wc::Engine);
     scene->setSampleRate(48000.f); scene->configureEffects(wet,0.6f,0.5f,0.5f);
-    config=wc::SetConfig(); config.enabled=true; config.y=nearness;
+    config=wc::SetConfig(); config.enabled=true; config.y=0.5f - 0.5f * (1.f - nearness);
     scene->configure(0,config,0.f); scene->strike(0);
     double result=0.f;
     for(int i=0;i<144000;++i) {

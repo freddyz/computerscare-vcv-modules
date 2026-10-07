@@ -1,15 +1,16 @@
 # Windchimes
 
-Windchimes creates a stereo scene of wind-driven tuned chime sets. Start with the
-included metal set, connect **L / mono** and **R** to your mixer, and let the breeze
-move its striker. Turn **Wind mix** down for chimes without audible wind.
+Windchimes creates a quadraphonic scene of wind-driven tuned chime sets. Connect
+**FL**, **FR**, **RL**, and **RR** for four speakers, either front/rear pair for stereo,
+or any single audio jack for mono, and let the breeze move its striker. Turn **Wind mix** down for chimes without audible wind.
 
 ## Arrange the scene
 
 - **+ Add** creates a set, up to eight. Each set has one to twelve tubes.
-- Click a set to select it. Drag it horizontally to change its stereo position;
-  drag it down to bring it closer and increase its level. Each set is a stereo
-  point source: its horizontal position determines the pan of all its tubes.
+- Click a set to select it. The listener is at the center: drag outward in any
+  direction to move farther away. Top is front, bottom is rear. Position routes
+  all tubes of a set together between front-left, front-right, rear-left and rear-right.
+  Distance controls level, filtering and displayed size independently of direction.
 - Right-click a set for **Strike**, **Stop**, **Randomize**, **Wiggle**, then a divider and **Duplicate**, **Divide**, **Remove**. Duplicate copies all per-set settings and places the new set nearby; Divide makes the same copy and gently wiggles a random subset of its sound controls. The copy becomes selected. Duplicate/Divide are disabled when all eight slots are occupied. Randomize and Wiggle affect the clicked set's six sound controls. Copying, removing, and sound edits support one-step undo/redo. Strike pushes/resumes the clicked set; Stop pauses its motion and fades its direct sound and room send over 5 ms. The existing shared reverb tail decays normally. A paused set stays visible and retains its settings until Strike resumes it; this performance state is not saved in patches.
 - **Remove**, **Delete**, or **Backspace** deletes the active set. The keys act on a focused visualization or while the pointer is over it, and do not delete the module. Holding a key removes only one set per press. Add, remove, edits, and moves support Rack's
   undo/redo. Patch files save every set and its settings.
@@ -26,7 +27,7 @@ for exact entry. Material choices are metal, wood/bamboo, and plastic.
 **EDO** means equal divisions of the octave (5–24). Scale degrees are mapped from
 standard twelve-tone scales to the nearest step of the selected division. **Root**
 uses standard semitones, **Register** moves by octaves, and **Fine** is in cents.
-**Spread** is a scale-degree stride: 1 plays consecutive notes, 2 skips one note, 3 skips two, and 4 skips three, continuing through octave boundaries. It controls pitch spacing, independently of scene position and stereo pan. The scale menu offers 18 choices: the original five, Chromatic, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic minor, ascending Melodic minor, Minor blues, Major blues, half–whole Diminished, Hirajoshi, and Insen. Existing scale IDs and parameter IDs are preserved; Spread is appended with a default stride of 1. Duplicate/Divide include Spread, while sound Random/Wiggle leave tuning unchanged. Strike is in the selected sound section. This version does not import Scala files or use arbitrary ratio tunings.
+**Spread** is a scale-degree stride: 1 plays consecutive notes, 2 skips one note, 3 skips two, and 4 skips three, continuing through octave boundaries. It controls pitch spacing, independently of scene position and spatial panning. The scale menu offers 18 choices: the original five, Chromatic, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic minor, ascending Melodic minor, Minor blues, Major blues, half–whole Diminished, Hirajoshi, and Insen. Existing scale IDs and parameter IDs are preserved; Spread is appended with a default stride of 1. Duplicate/Divide include Spread, while sound Random/Wiggle leave tuning unchanged. Strike is in the selected sound section. This version does not import Scala files or use arbitrary ratio tunings.
 
 ## Wind and connections
 
@@ -39,12 +40,18 @@ only the audible filtered-noise wind, and **Output** controls the final mix.
 - **1V/oct**: transposes all tubes.
 - **Gust**: a rising trigger pushes every set, including with Wind at zero.
 - **Wind out**: 0–10 V wind-strength signal for controlling other modules.
-- **L / mono**, **R**: stereo audio. Leaving R unpatched mixes both sides into L.
+- **FL**, **FR**, **RL**, **RR**: quad audio with automatic mixdown. Either front or
+  rear pair carries the entire scene as left/right stereo. One connected audio jack
+  carries mono. A side pair preserves front/back; a diagonal pair projects onto its
+  diagonal. Three jacks redistribute the missing corner into its neighbors.
+  Routing normalizes source power, so no source disappears when a jack is absent.
+  Moving sets and reconnecting outputs smooth routing gains before the limiter.
+- **Wind out** remains a separate CV output and never counts as an audio speaker.
 
 A bounded output stage prevents dense scenes from producing excessive voltages.
-**Dry/wet** blends the complete scene into a stereo reverb. **Size** changes the
+**Dry/wet** blends the complete scene into a shared four-output reverb. **Size** changes the
 room's dimensions and tail length, from a short space to a large ambient wash.
-The stereo L/R outputs are grouped together at the lower right.
+The four audio outputs form a speaker square at the lower right: FL/FR above RL/RR.
 
 **Wind tone** moves from deep rumble to bright, airy noise. **Texture** adds
 rustling and a shifting breathy howl. These controls shape the audible wind;
@@ -81,9 +88,9 @@ Wood DSP revision: six structural modes and two broad cavity modes, with no inde
 
 Inharmonicity is continuous on every material, preserving the fundamental. Wood/plastic move from harmonic structural spacing at 0% through natural geometry at 50% to exaggerated spacing at 100%. Metal instead varies a bounded beam dispersion correction and bending-pair splitting throughout the range, retaining a chime-like spectrum even at the endpoints. The control is included in presets and sound randomization. Its parameter slots are appended after existing controls. Wood presets have been retuned for shorter natural sustain; the upper 15% of Decay retains extended sustain up to a 12-second main-mode T60 at full Body.
 
-The animation fills the left side from top to bottom; every knob, selector, button and jack sits in the right-side control column. There is no module header. Far is the top of the scene and Near is the bottom: nearer sets draw larger and in front of farther sets. Hit testing follows this visual order. Dragging horizontally sets stereo pan; vertical placement sets nearness, affecting level and a gentle distance low-pass filter. The right-side 2D/3D button changes only the view.
+The animation fills the left side from top to bottom; every knob, selector, button and jack sits in the right-side control column. There is no module header. Near is the stage center and Far is its outer ring in every direction: nearer sets draw larger and in front of farther sets. Hit testing follows this visual order. Both coordinates control speaker panning; radial distance affects level and a gentle distance low-pass filter. The right-side 2D/3D button changes only the view.
 
-The module is 52 HP wide, with all extra width allocated to the animation. The scene has no header or footer overlay; its vertical placement range allows sets nearer the top and bottom edges while retaining clearance for the hanging geometry.
+The module is 52 HP wide, with all extra width allocated to the animation. The scene allows set centers to reach every stage edge; hanging geometry is clipped at the boundary. Distant sets shrink to about 29% of the center size, including their wind sails.
 
 Audible distance uses independent direct and room paths. The far-edge direct gain is one eighth of the near-edge gain (about −18 dB), with two cascaded low-pass stages moving from 800 Hz at Far to 18 kHz at Near. The room send decreases less rapidly than direct sound, increasing the reflected-to-direct balance for distant sets. The global reverb mix still controls the room return; setting it to zero leaves distance attenuation and filtering active.
 
@@ -112,3 +119,5 @@ Chime appearance follows the sound controls: Shape morphs the solid/block profil
 Output calibration boosts wood by 2.5× and plastic by 2× relative to their original resonator levels, and applies 3× overall gain before the existing bounded output limiter. Set level and Output level can trim louder patches; distance attenuation and material dynamics are retained.
 
 Wind is sampled across the stage: position smoothly changes exposure and prevailing direction. Neighboring sets share drifting spatial eddies, with smaller independent local fluctuations even at the same position. Turbulence increases the strength and speed of these differences. Each set also has a modest fixed sail-drag variation. All forces come from weather; local eddies stop driving at zero wind, and the existing damping lets motion settle.
+
+Quad routing synthesizes each tube once and uses one eight-line reverb network with four distinct orthogonal return patterns. Disconnected outputs skip accumulation, while shared physics, voices and room tails keep running. Speaker gains and room decoder targets are cached until position or the connected layout changes. Existing left/right output IDs become FL/FR; Wind CV retains its ID, and rear outputs are appended. Older patches migrate their pan and distance into the front half of the radial stage once; new saves carry a radial-layout version marker.

@@ -1,5 +1,5 @@
 #pragma once
-#include "Types.hpp"
+#include "Spatial.hpp"
 namespace windchimes {
 // Stereo input diffusion followed by an eight-line orthogonal feedback network.
 // All buffers are fixed storage; size changes move fractional delay taps
@@ -68,11 +68,11 @@ class Reverb {
             1, std::min(4096, static_cast<int>(diffusionTimes[i] * rate)));
       }
   }
-  Stereo processWet(Stereo dry) {
+  Quad processWetQuad(Stereo dry) {
     float left = diffusers[1].process(diffusers[0].process(dry.left));
     float right = diffusers[3].process(diffusers[2].process(dry.right));
     float values[8];
-    Stereo wet;
+    Quad wet;
     for (int i = 0; i < 8; ++i) {
       auto& line = lines[i];
       line.delay += (line.target - line.delay) * slew;
@@ -80,8 +80,12 @@ class Reverb {
       line.filtered += (delayed - line.filtered) * damping;
       if (std::fabs(line.filtered) < 1e-20f) line.filtered = 0.f;
       values[i] = line.filtered * line.feedback;
-      wet.left += delayed * (i & 1 ? -0.25f : 0.25f);
-      wet.right += delayed * (i & 2 ? -0.25f : 0.25f);
+      for (int ch = 0; ch < 4; ++ch) {
+        const int patterns[4] = {1, 2, 4, 7};
+        int bits = i & patterns[ch];
+        bool odd = ((bits & 1) != 0) ^ ((bits & 2) != 0) ^ ((bits & 4) != 0);
+        wet.channel[ch] += delayed * (odd ? -0.25f : 0.25f);
+      }
     }
     // Normalized Hadamard transform preserves feedback energy.
     for (int width = 1; width < 8; width *= 2)
@@ -98,6 +102,10 @@ class Reverb {
       if (++line.write == capacity) line.write = 0;
     }
     return wet;
+  }
+  Stereo processWet(Stereo dry) {
+    Quad wet = processWetQuad(dry);
+    return {wet.channel[0], wet.channel[1]};
   }
   Stereo process(Stereo dry, float mix) {
     mix = clamp(mix, 0.f, 1.f);

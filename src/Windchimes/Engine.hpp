@@ -14,7 +14,8 @@ class Engine {
     float distanceState = 0.f, distanceState2 = 0.f, distanceCoeff = 1.f;
     float roomLeft = 0.f, roomRight = 0.f;
     std::array<Resonator, maxTubes> tubes;
-    float panLeft = 0.f, panRight = 0.f;
+    std::array<float, 4> targetGain{}, currentGain{};
+    float directGain = 0.f;
     float configuredRate = 0.f, transpose = 0.f;
   };
   std::array<Set, maxSets> sets;
@@ -24,6 +25,21 @@ class Engine {
   Random strikes{0x985fe};
   float rate = 48000.f, dt = 0.f;
   int counter = 0, interval = 120;
+  unsigned outputMask = 3u;
+  std::array<std::array<float, 4>, 4> roomDecode{};
+  std::array<float, 4> windGain{}, currentWindGain{};
+  std::array<std::array<float, 4>, 4> currentRoomDecode{};
+  void updateRouting() {
+    for (auto& s : sets)
+      s.targetGain = spatialGains(s.config.x, s.config.y, outputMask);
+    const float px[4] = {0.f, 1.f, 0.f, 1.f};
+    const float py[4] = {0.f, 0.f, 1.f, 1.f};
+    windGain = spatialGains(0.5f, 0.5f, outputMask);
+    for (int src = 0; src < 4; ++src)
+      roomDecode[src] = spatialGains(px[src], py[src], outputMask);
+    // Each return's decoder column has unit power, preserving diffuse
+    // room energy across mono, stereo and quad rather than losing channels.
+  }
 
   static bool sameConfig(const SetConfig& a, const SetConfig& b) {
     return a.enabled == b.enabled && a.tubes == b.tubes &&
@@ -37,6 +53,20 @@ class Engine {
   }
 
  public:
+  Engine() { updateRouting(); }
+  void setOutputMask(unsigned mask) {
+    mask &= 15u;
+    if (mask == outputMask) return;
+    unsigned newlyConnected = mask & ~outputMask;
+    for (int ch = 0; ch < 4; ++ch)
+      if (newlyConnected & (1u << ch)) {
+        currentWindGain[ch] = 0.f;
+        for (int src = 0; src < 4; ++src) currentRoomDecode[src][ch] = 0.f;
+        for (auto& s : sets) s.currentGain[ch] = 0.f;
+      }
+    outputMask = mask;
+    updateRouting();
+  }
   void setSampleRate(float sampleRate) {
     rate = std::max(sampleRate, 8000.f);
     interval = std::max(1, static_cast<int>(rate / 400.f));
@@ -76,22 +106,20 @@ class Engine {
     for (int t = 0; t < config.tubes; ++t)
       s.tubes[t].configure(tubeFrequency(config, t, transpose), rate, config);
     float pan = clamp(config.x, 0.f, 1.f);
-    float near = clamp(config.y, 0.f, 1.f);
+    float near = 1.f - stageDistance(config.x, config.y);
     // Every tube in a set shares its scene position and output gains.
     float gain = config.level * 0.48f / (1.f + 7.f * (1.f - near));
     float roomGain = config.level * 0.48f * (0.35f + 0.65f * near);
     float left = std::cos(pan * pi * .5f), right = std::sin(pan * pi * .5f);
     s.roomLeft = left * roomGain;
     s.roomRight = right * roomGain;
-    s.panLeft = left * gain;
-    s.panRight = right * gain;
+    s.directGain = gain;
+    s.targetGain = spatialGains(config.x, config.y, outputMask);
     for (int t = config.tubes; t < maxTubes; ++t) s.tubes[t].reset();
     s.distanceCoeff =
         1.f -
         std::exp(-2.f * pi *
-                 std::min(800.f * std::pow(22.5f, clamp(config.y, 0.f, 1.f)),
-                          rate * 0.4f) /
-                 rate);
+                 std::min(800.f * std::pow(22.5f, near), rate * 0.4f) / rate);
     s.config = config;
   }
   void gust() {
@@ -137,8 +165,8 @@ class Engine {
   float motionX(int i) const { return sets[i].motion.x; }
   float motionY(int i) const { return sets[i].motion.y; }
   float windStrength() const { return wind.strength; }
-  Stereo process(float amount, float gustiness, float turbulence,
-                 float windMix) {
+  Quad processQuad(float amount, float gustiness, float turbulence,
+                   float windMix) {
     if (++counter >= interval) {
       counter = 0;
       wind.step(dt, amount, gustiness, turbulence);
@@ -178,6 +206,13 @@ class Engine {
     out.left *= smoothWindMix;
     out.right *= smoothWindMix;
     Stereo roomSend = out;
+    Quad quad;
+    float windMono = (out.left + out.right) * 0.70710678f;
+    for (int ch = 0; ch < 4; ++ch)
+      if (outputMask & (1u << ch)) {
+        currentWindGain[ch] += (windGain[ch] - currentWindGain[ch]) * smoothing;
+        quad.channel[ch] = windMono * currentWindGain[ch];
+      }
     for (auto& s : sets) {
       if (!s.config.enabled || (s.paused && s.stopSamples == 0)) continue;
       float mono = 0.f;
@@ -190,8 +225,12 @@ class Engine {
       float fade = s.stopSamples > 0
                        ? s.stopSamples / static_cast<float>(s.stopLength)
                        : 1.f;
-      out.left += s.distanceState2 * s.panLeft * fade;
-      out.right += s.distanceState2 * s.panRight * fade;
+      float direct = s.distanceState2 * s.directGain * fade;
+      for (int ch = 0; ch < 4; ++ch) {
+        s.currentGain[ch] += (s.targetGain[ch] - s.currentGain[ch]) * smoothing;
+        if (outputMask & (1u << ch))
+          quad.channel[ch] += direct * s.currentGain[ch];
+      }
       roomSend.left += s.distanceState * s.roomLeft * fade;
       roomSend.right += s.distanceState * s.roomRight * fade;
       if (s.stopSamples > 0 && --s.stopSamples == 0) {
@@ -199,9 +238,26 @@ class Engine {
         s.distanceState = s.distanceState2 = 0.f;
       }
     }
-    Stereo reflections = reverb.processWet(roomSend);
-    return {out.left * (1.f - smoothWet) + reflections.left * smoothWet,
-            out.right * (1.f - smoothWet) + reflections.right * smoothWet};
+    // A single eight-line room supports every layout. No duplicated voices
+    // or reverbs; only connected output rows are accumulated.
+    Quad reflections = reverb.processWetQuad(roomSend);
+    for (int ch = 0; ch < 4; ++ch)
+      if (outputMask & (1u << ch)) {
+        float room = 0.f;
+        for (int src = 0; src < 4; ++src) {
+          currentRoomDecode[src][ch] +=
+              (roomDecode[src][ch] - currentRoomDecode[src][ch]) * smoothing;
+          room += reflections.channel[src] * currentRoomDecode[src][ch];
+        }
+        quad.channel[ch] =
+            quad.channel[ch] * (1.f - smoothWet) + room * smoothWet;
+      }
+    return quad;
+  }
+  Stereo process(float amount, float gustiness, float turbulence,
+                 float windMix) {
+    Quad out = processQuad(amount, gustiness, turbulence, windMix);
+    return {out.channel[0], out.channel[1]};
   }
 };
 }  // namespace windchimes

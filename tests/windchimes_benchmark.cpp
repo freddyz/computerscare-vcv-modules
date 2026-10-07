@@ -6,8 +6,8 @@ using namespace windchimes;
 volatile double sink=0;
 int main(){
  for(int material=0;material<3;++material){
-  for(int scenario=0;scenario<3;++scenario){
-   auto engine=std::unique_ptr<Engine>(new Engine);engine->setSampleRate(48000);
+  for(unsigned mask : {1u,3u,12u,15u}) for(int scenario=0;scenario<3;++scenario){
+   auto engine=std::unique_ptr<Engine>(new Engine);engine->setSampleRate(48000);engine->setOutputMask(mask);
    SetConfig c;c.material=material;c.enabled=true;c.tubes=12;c.decay=.8f;c.body=.95f;c.shape=1;
    for(int j=0;j<8;++j)engine->configure(j,c,0);
    engine->configureEffects(.4,.7,.5,.5);
@@ -15,9 +15,9 @@ int main(){
    for(int i=0;i<960000;++i){
     if(scenario!=2 && i%24000==0){engine->gust();for(int j=0;j<8;++j)engine->strike(j);}
     if(i%240==0)for(int j=0;j<8;++j)engine->configure(j,c,0);
-    auto out=engine->process(scenario==0?1.f:0.f,.7f,.5f,.1f);sum+=out.left*out.left;
+    auto out=engine->processQuad(scenario==0?1.f:0.f,.7f,.5f,.1f);for(float v:out.channel)sum+=v*v;
    }
-   sink+=sum;printf("engine material %d scenario %d %.4f energy %.9f\n",material,scenario,std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(),sum);
+   sink+=sum;printf("engine material %d mask %u scenario %d %.4f energy %.9f\n",material,mask,scenario,std::chrono::duration<double>(std::chrono::steady_clock::now()-start).count(),sum);
   }
   for(int scenario=0;scenario<2;++scenario){
    std::array<Resonator,96> voices;SetConfig c;c.material=material;c.decay=.8f;c.body=.95f;c.shape=1;
