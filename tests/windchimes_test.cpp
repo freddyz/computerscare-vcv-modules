@@ -1,5 +1,6 @@
 #include "Windchimes/Engine.hpp"
 #include "Windchimes/Presets.hpp"
+#include "Windchimes/Selection.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -104,6 +105,17 @@ int main() {
       }
     }
     for(float e:energy) require(e>1e-7f,"all four room/audio outputs are audible");
+  }
+  {
+    wc::Selection selected;
+    selected.toggle(2);selected.toggle(5);
+    require(selected.mask==37u && selected.selected==5,"modifier click adds sets and updates the primary");
+    selected.toggle(5);
+    require(selected.mask==5u && selected.contains(selected.selected),"toggling off the primary retains a selected primary");
+    selected.retain(4u);require(selected.mask==4u && selected.selected==2,"deleted sets leave the selection cleanly");
+    selected.toggle(2);require(selected.mask==0,"last selected set can be deselected");
+    selected.selectOnly(7);require(selected.mask==128u && selected.selected==7,"plain click replaces the selection");
+    selected.clear();require(selected.mask==0,"empty stage click clears selection");
   }
   wc::SetConfig config; config.enabled = true;
   require(std::fabs(wc::tubeFrequency(config, 5, 0.f) / wc::tubeFrequency(config, 0, 0.f) - 2.f) < 0.001f, "scale repeats at the octave");
