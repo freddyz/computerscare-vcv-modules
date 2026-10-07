@@ -142,7 +142,10 @@ class Motion {
     Point tubeAir = ((air - meanWind) + air * 0.08f) *
                     clamp(air.dot(air) * 2.f, 0.12f, 2.5f);
     float damping = 0.22f + (1.f - c.swing) * 0.65f;
-    suspension.step(dt, air, c.swing);
+    // Small fixed sail differences amplify natural phase drift without
+    // changing cord lengths or adding energy in still air.
+    float dragScale = 0.9f + ((slot * 5 + 3) % 8) * (0.2f / 7.f);
+    suspension.step(dt, air, c.swing, dragScale);
     striker.flash = std::max(0.f, striker.flash - dt * 5.f);
     for (int t = 0; t < count; ++t) {
       float exposure = 5.f + ((t + slot) % 3) * 3.f;

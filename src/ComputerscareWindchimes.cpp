@@ -145,9 +145,6 @@ struct ComputerscareWindchimes : Module {
       getParamQuantity(param(i, INHARMONICITY))->description =
           "Harmonic spacing through natural body modes (50%) to exaggerated "
           "spacing";
-      // Scene placement should survive Rack's global Randomize action.
-      for (int field : {ENABLED, X, Y})
-        getParamQuantity(param(i, field))->randomizeEnabled = false;
     }
     configInput(WIND_INPUT, "Wind strength (0–10 V, added to breeze)");
     configInput(TRANSPOSE_INPUT, "Transpose (1 V/oct)");
@@ -155,6 +152,21 @@ struct ComputerscareWindchimes : Module {
     configOutput(LEFT_OUTPUT, "Left / mono");
     configOutput(RIGHT_OUTPUT, "Right");
     configOutput(WIND_OUTPUT, "Wind strength (0–10 V)");
+    // Standard Randomize shares the selected-sound button's six controls.
+    // Global, tuning, material, motion and scene controls stay fixed.
+    for (auto* quantity : paramQuantities) quantity->randomizeEnabled = false;
+    for (int i = 0; i < wc::maxSets; ++i)
+      for (int field :
+           {DECAY, BRIGHTNESS, HARDNESS, SHAPE, BODY, INHARMONICITY})
+        getParamQuantity(param(i, field))->randomizeEnabled = true;
+  }
+  void onRandomize(const RandomizeEvent& e) override {
+    for (int i = 0; i < wc::maxSets; ++i) {
+      if (params[param(i, ENABLED)].getValue() <= 0.5f) continue;
+      for (int field :
+           {DECAY, BRIGHTNESS, HARDNESS, SHAPE, BODY, INHARMONICITY})
+        getParamQuantity(param(i, field))->randomize();
+    }
   }
   wc::SetConfig readSet(int i) {
     auto value = [this, i](int f) { return params[param(i, f)].getValue(); };
@@ -245,7 +257,8 @@ struct ComputerscareWindchimes : Module {
         (master - smoothMaster) * std::min(1.f, args.sampleTime * 100.f);
     // A bounded soft limiter leaves headroom for dense, simultaneous impacts.
     auto voltage = [this](float v) {
-      float x = v * smoothMaster;
+      // Bring normal scenes up to useful Rack levels before limiting.
+      float x = v * smoothMaster * 3.f;
       return 5.f * x / (1.f + std::fabs(x));
     };
     if (!outputs[RIGHT_OUTPUT].isConnected())
@@ -540,6 +553,17 @@ struct ChimeScene : widget::OpaqueWidget {
       NVGcolor color = material == 0   ? nvgRGB(120, 207, 212)
                        : material == 1 ? nvgRGB(218, 168, 107)
                                        : nvgRGB(191, 153, 220);
+      auto appearance = [this, i](int field, float fallback) {
+        return module ? wc::clamp(module->params[W::param(i, field)].getValue(),
+                                  0.f, 1.f)
+                      : fallback;
+      };
+      const float shape = appearance(W::SHAPE, 0.35f + 0.25f * i);
+      const float fullness = appearance(W::BODY, 0.65f);
+      const float bright = appearance(W::BRIGHTNESS, 0.55f);
+      const float decay = appearance(W::DECAY, 0.55f);
+      const float inharm = appearance(W::INHARMONICITY, 0.5f);
+      const float hard = appearance(W::HARDNESS, 0.5f);
       bool selected = editor && editor->selected == i;
       float scale = 48.f * visualScale(i);
       bool perspective = !editor || editor->perspective;
@@ -614,10 +638,35 @@ struct ChimeScene : widget::OpaqueWidget {
           Vec striker = point(center);
           line(support, striker, nvgRGBA(218, 227, 213, 180), 0.8f);
           nvgBeginPath(vg);
-          nvgCircle(vg, striker.x, striker.y, wc::strikerRadius * scale);
+          const float radius =
+              wc::strikerRadius * scale * (1.35f - 0.55f * hard);
+          // A padded disk gradually becomes a firm, faceted puck.
+          for (int vertex = 0; vertex < 32; ++vertex) {
+            float phase = vertex * 2.f * wc::pi / 32.f;
+            float sector =
+                std::fmod(phase + wc::pi / 8.f, wc::pi / 4.f) - wc::pi / 8.f;
+            float r =
+                radius *
+                (1.f - hard + hard * std::cos(wc::pi / 8.f) / std::cos(sector));
+            Vec v(striker.x + r * std::cos(phase),
+                  striker.y + r * std::sin(phase));
+            if (vertex == 0)
+              nvgMoveTo(vg, v.x, v.y);
+            else
+              nvgLineTo(vg, v.x, v.y);
+          }
+          nvgClosePath(vg);
           nvgFillColor(vg, nvgLerpRGBA(nvgRGB(218, 195, 144),
                                        nvgRGB(255, 250, 205), flash));
           nvgFill(vg);
+          nvgStrokeColor(vg, nvgRGBA(255, 248, 222, 100));
+          nvgStrokeWidth(vg, 0.6f + hard * 0.5f);
+          nvgStroke(vg);
+          nvgBeginPath(vg);
+          nvgCircle(vg, striker.x, striker.y, radius * 0.65f);
+          nvgStrokeColor(vg, nvgRGBA(74, 62, 45, int(150.f * (1.f - hard))));
+          nvgStrokeWidth(vg, 1.f);
+          nvgStroke(vg);
           {
             wc::Point sailAxis = module
                                      ? wc::Point(module->visualSailX[i].load(
@@ -649,17 +698,111 @@ struct ChimeScene : widget::OpaqueWidget {
           Vec top = point(body.top()), bottom = point(body.bottom());
           line(point(wc::tubeAnchorPoint(t, tubes)), top,
                nvgRGBA(205, 224, 217, 155), 0.8f);
-          NVGcolor tubeColor = nvgLerpRGBA(color, nvgRGB(255, 250, 205), flash);
-          nvgLineCap(vg, NVG_ROUND);
-          line(top, bottom, tubeColor, body.radius * scale * 2.f);
-          nvgLineCap(vg, NVG_BUTT);
-          if (!perspective) {
-            Vec v = point(body.center);
+          // These profiles are decorative; contact geometry stays tied to the
+          // published physics, so changing timbre never moves a contact point.
+          float glow =
+              std::pow(wc::clamp(flash, 0.f, 1.f), 1.6f - 1.2f * decay);
+          NVGcolor finish = nvgLerpRGBA(
+              nvgLerpRGBA(color, nvgRGB(37, 53, 49), 0.42f), color, bright);
+          NVGcolor tubeColor = nvgLerpRGBA(finish, nvgRGB(255, 250, 205), glow);
+          float block = 1.f - std::abs(shape - 0.33f) / 0.33f;
+          block = wc::clamp(block, 0.f, 1.f);
+          float width = body.radius * scale *
+                        (material == 0   ? 2.f
+                         : material == 1 ? 2.8f
+                                         : 3.1f) *
+                        (0.65f + 1.1f * fullness + 1.2f * block);
+          float hollow = wc::clamp((shape - 0.45f) / 0.55f, 0.f, 1.f);
+          // Anchor the decorative length at the suspension point. Decay and
+          // Shape now change the silhouette even when the chimes are idle.
+          float irregular = (t % 3 - 1) * 0.28f * inharm;
+          float lengthScale = (0.65f + 0.75f * decay) *
+                              (1.f - 0.35f * block + 0.18f * shape + irregular);
+          bottom = Vec(top.x + (bottom.x - top.x) * lengthScale,
+                       top.y + (bottom.y - top.y) * lengthScale);
+          Vec mid = perspective ? Vec((top.x + bottom.x) * 0.5f,
+                                      (top.y + bottom.y) * 0.5f)
+                                : point(body.center);
+          float dx = bottom.x - top.x, dy = bottom.y - top.y;
+          float length = std::sqrt(dx * dx + dy * dy);
+          // In the overhead view show a cross-section, including its rim.
+          float rotation = perspective ? std::atan2(-dx, dy) : 0.f;
+          float height = perspective ? std::max(length, width) : width;
+          float corner = material == 0   ? 0.3f
+                         : material == 1 ? 0.9f
+                                         : width * 0.4f;
+          corner += hollow * width * 0.15f;
+          nvgSave(vg);
+          nvgTranslate(vg, mid.x, mid.y);
+          nvgRotate(vg, rotation);
+          nvgBeginPath(vg);
+          nvgRoundedRect(vg, -width / 2.f, -height / 2.f, width, height,
+                         corner);
+          nvgFillColor(vg, tubeColor);
+          nvgFill(vg);
+          // An open shell has a visible recessed channel before becoming a
+          // closed tube. Plastic retains a broad molded lip, wood a split.
+          float shell =
+              wc::clamp(1.f - std::abs(shape - 0.65f) / 0.22f, 0.f, 1.f);
+          if (perspective && shell > 0.f) {
             nvgBeginPath(vg);
-            nvgCircle(vg, v.x, v.y, body.radius * scale);
-            nvgFillColor(vg, tubeColor);
+            nvgRoundedRect(vg, -width * 0.28f * shell, -height * 0.42f,
+                           width * 0.56f * shell, height * 0.84f,
+                           material == 2 ? width * 0.15f : 0.3f);
+            nvgFillColor(vg, nvgRGBA(22, 36, 33, 190));
             nvgFill(vg);
           }
+          if (glow > 0.01f) {
+            nvgStrokeColor(vg, nvgRGBA(255, 250, 205, int(glow * 85.f)));
+            nvgStrokeWidth(vg, 1.f + decay * 2.f);
+            nvgStroke(vg);
+          }
+          NVGcolor detail = nvgRGBA(30, 43, 39, 150);
+          NVGcolor highlight =
+              nvgRGBA(255, 255, 234, int(35.f + 150.f * bright));
+          if (perspective) {
+            // Metal highlight, wood grain, or a molded plastic seam.
+            float edge = material == 0   ? -0.28f
+                         : material == 1 ? -0.16f
+                                         : 0.26f;
+            line(Vec(width * edge, -height * 0.38f),
+                 Vec(width * edge, height * 0.38f),
+                 material == 1 ? detail : highlight, 0.65f);
+            if (material == 1)
+              line(Vec(width * 0.22f, -height * 0.2f),
+                   Vec(width * 0.13f, height * 0.3f), detail, 0.55f);
+            for (int band = 0; band < 2; ++band) {
+              float y =
+                  height * ((band == 0 ? -0.23f : 0.23f) +
+                            (inharm - 0.5f) * (band == 0 ? 0.22f : 0.08f));
+              line(Vec(-width * 0.4f, y), Vec(width * 0.4f, y), detail,
+                   material == 1 ? 1.f : 0.6f);
+            }
+            // A quiet sustain stripe remains readable without a strike.
+            line(Vec(width * 0.35f, height * 0.38f),
+                 Vec(width * 0.35f, height * (0.3f - 0.6f * decay)), highlight,
+                 0.8f);
+          }
+          if (hollow > 0.f) {
+            float wall = width * (0.08f + fullness * 0.2f);
+            float opening = std::max(0.3f, width / 2.f - wall) * hollow;
+            float y = perspective ? -height / 2.f + wall + opening * 0.4f : 0.f;
+            nvgBeginPath(vg);
+            nvgEllipse(vg, 0.f, y, opening,
+                       perspective ? opening * 0.4f : opening);
+            nvgFillColor(vg, detail);
+            nvgFill(vg);
+            nvgStrokeColor(vg, highlight);
+            nvgStrokeWidth(vg, material == 2 ? 1.2f : 0.65f);
+            nvgStroke(vg);
+          }
+          if (!perspective && hollow < 0.5f) {
+            line(Vec(-width * 0.25f, -width * 0.15f),
+                 Vec(width * 0.25f, -width * 0.15f), highlight, 0.7f);
+            line(Vec(-width * 0.25f, width * (inharm * 0.3f)),
+                 Vec(width * 0.25f, width * (inharm * 0.3f)), detail, 0.7f);
+          }
+          nvgRestore(vg);
         }
       }
       float numberX = wc::clamp(p.x - 62.f * visualScale(i) + 12.f, 10.f,

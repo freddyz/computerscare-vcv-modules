@@ -100,7 +100,7 @@ class Suspension {
                     strikerSwingLimit);
     projectVelocities();
   }
-  void step(float dt, Point air, float swing) {
+  void step(float dt, Point air, float swing, float dragScale = 1.f) {
     // Normalized weather is converted to a flow velocity. Drag includes the
     // sail's own velocity, so it supplies energy only from moving air.
     Point relative = air * 6.f - sailVelocity;
@@ -109,7 +109,7 @@ class Suspension {
     // flow points along its cord. The residual area represents its thickness.
     float axial = relative.dot(lower) / std::max(speed, 1e-6f);
     float exposure = 0.35f + 0.65f * (1.f - axial * axial);
-    Point sailForce = relative * (0.18f * speed * exposure);
+    Point sailForce = relative * (0.18f * dragScale * speed * exposure);
     Point primaryForce = (air * 6.f - primaryVelocity) * 0.035f;
     Point a = Point(0.f, 9.81f, 0.f) + primaryForce * primaryInverseMass;
     Point b = Point(0.f, 9.81f, 0.f) + sailForce * sailInverseMass;

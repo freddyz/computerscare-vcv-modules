@@ -145,8 +145,9 @@ class Engine {
       for (int i = 0; i < maxSets; ++i) {
         auto& s = sets[i];
         if (!s.config.enabled || s.paused) continue;
+        Stereo air = wind.flowAt(s.config.x, s.config.y, i);
         s.motion.step(
-            dt, wind.x, wind.y, s.config, i,
+            dt, air.left, air.right, s.config, i,
             [&s](int t, float velocity) {
               auto shape = s.motion.tubeShape(t);
               auto contact = closestPoint(s.motion.strikerPosition(),

@@ -120,7 +120,9 @@ class Resonator {
     pulseA = std::cos(pulseAngle);
     pulseB = std::sin(pulseAngle);
     pulseNorm = std::tan(pulseAngle * 0.5f);
-    ringGain = c.material == 1 ? 1.5f : (c.material == 0 ? 1.2f : 1.35f);
+    // Compensate for the shorter, less sustained wood/plastic responses
+    // after synthesis, preserving contact dynamics and modal damping.
+    ringGain = c.material == 1 ? 3.75f : (c.material == 0 ? 1.2f : 2.7f);
     float normalization = 0.f;
     for (int i = 0; i < modesPerTube; ++i) {
       auto& m = modes[i];

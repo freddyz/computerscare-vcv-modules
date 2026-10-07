@@ -9,6 +9,43 @@ void require(bool condition, const char* message) {
 }
 int main() {
   namespace wc = windchimes;
+  // The spatial field stays continuous, varies more with turbulence, and
+  // applies no force once weather is off. Identical sets must drift apart.
+  {
+    wc::Wind calmField, roughField;
+    double calmDifference = 0, roughDifference = 0;
+    for (int i = 0; i < 4000; ++i) {
+      calmField.step(0.0025f, 0.7f, 0.5f, 0.f);
+      roughField.step(0.0025f, 0.7f, 0.5f, 1.f);
+      auto a = calmField.flowAt(0.2f, 0.3f, 0);
+      auto b = calmField.flowAt(0.8f, 0.7f, 1);
+      auto c = roughField.flowAt(0.2f, 0.3f, 0);
+      auto d = roughField.flowAt(0.8f, 0.7f, 1);
+      calmDifference += (a.left-b.left)*(a.left-b.left) + (a.right-b.right)*(a.right-b.right);
+      roughDifference += (c.left-d.left)*(c.left-d.left) + (c.right-d.right)*(c.right-d.right);
+      auto neighbor = roughField.flowAt(0.2001f, 0.3001f, 0);
+      require(std::fabs(c.left-neighbor.left) + std::fabs(c.right-neighbor.right) < 0.01f,
+        "dragging through the wind field is continuous");
+    }
+    require(calmDifference > 0.01 && roughDifference > calmDifference * 1.5,
+      "turbulence increases variation between stage positions");
+    calmField.step(0.0025f, 0.f, 0.5f, 0.5f);
+    auto off = calmField.flowAt(0.2f, 0.3f, 0);
+    require(off.left == 0.f && off.right == 0.f, "local eddies stop driving when wind is off");
+    std::unique_ptr<wc::Engine> scene(new wc::Engine()); scene->setSampleRate(48000.f);
+    wc::SetConfig same; same.enabled = true;
+    scene->configure(0, same, 0.f); scene->configure(1, same, 0.f);
+    double separation = 0;
+    for (int i = 0; i < 480000; ++i) {
+      scene->process(0.7f, 0.5f, 0.6f, 0.f);
+      if (i % 120 == 0) {
+        float dx = scene->strikerAngle(0) - scene->strikerAngle(1);
+        float dz = scene->strikerDepth(0) - scene->strikerDepth(1);
+        separation += dx*dx + dz*dz;
+      }
+    }
+    require(separation / 4000 > 0.001, "identical overlapping sets develop independent striker motion");
+  }
   wc::SetConfig config; config.enabled = true;
   require(std::fabs(wc::tubeFrequency(config, 5, 0.f) / wc::tubeFrequency(config, 0, 0.f) - 2.f) < 0.001f, "scale repeats at the octave");
   require(std::fabs(wc::tubeFrequency(config, 0, 1.f) / wc::tubeFrequency(config, 0, 0.f) - 2.f) < 0.001f, "1V/oct transposition");
