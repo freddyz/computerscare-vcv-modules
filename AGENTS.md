@@ -8,3 +8,5 @@
 - `scripts/dev.sh` requires a subcommand. Run `scripts/dev.sh help` to list commands.
 - See `AGENTS.local.md` for local dev-server assumptions and machine-specific paths.
 - Remember Rack module widgets are constructed with `module == nullptr` in the module browser; guard all widget/render-time module access.
+- For each new module, create an SVG panel matching the existing modules. Use the distorted SVG text generator for labels and footer lettering, include a unique distorted computerscare logo and wordmark, and use the box generator for irregular pseudo-3D frames.
+- Avoid generic, vibe-coded aesthetics; follow the established computerscare plugin style for layouts, controls, typography, and artwork.
