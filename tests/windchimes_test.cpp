@@ -82,6 +82,31 @@ int main() {
     auto g=wc::spatialGains(ch%2, ch/2, 15);
     require(g[ch]==1.f,"speaker corner routes to its corresponding quad output");
   }
+  for(float x:{.4f,.5f,.6f}) {
+    auto frontOnly=wc::spatialGains(x,.2f,15);
+    auto rearOnly=wc::spatialGains(x,.8f,15);
+    require(frontOnly[2]==0.f && frontOnly[3]==0.f,"front azimuths have no dry rear leakage");
+    require(rearOnly[0]==0.f && rearOnly[1]==0.f,"rear azimuths have no dry front leakage");
+  }
+  auto nearAngle=wc::spatialGains(.55f,.3f,15);
+  auto farAngle=wc::spatialGains(.6f,.1f,15);
+  for(int ch=0;ch<4;++ch) require(std::fabs(nearAngle[ch]-farAngle[ch])<1e-5f,
+    "outside the center blend, panning depends on angle rather than distance");
+  auto center=wc::spatialGains(.5f,.5f,15);
+  auto crossing=wc::spatialGains(.500001f,.5f,15);
+  for(int ch=0;ch<4;++ch) require(center[ch]==.5f && std::fabs(center[ch]-crossing[ch])<1e-5f,
+    "listener-center crossing remains smooth and balanced");
+  {
+    std::unique_ptr<wc::Engine> dryScene(new wc::Engine);dryScene->setSampleRate(48000);
+    dryScene->setOutputMask(15);wc::SetConfig c;c.enabled=true;c.x=.5f;c.y=.2f;
+    dryScene->configure(0,c,0);dryScene->strike(0);double frontEnergy=0,rearEnergy=0;
+    for(int i=0;i<24000;++i) {
+      auto out=dryScene->processQuad(0,0,0,0);
+      frontEnergy+=out.channel[0]*out.channel[0]+out.channel[1]*out.channel[1];
+      rearEnergy+=out.channel[2]*out.channel[2]+out.channel[3]*out.channel[3];
+    }
+    require(frontEnergy>1e-5 && rearEnergy==0,"front chimes with zero reverb and wind mix are silent at the rear outputs");
+  }
   auto front=wc::spatialGains(.25f,.9f,3), rear=wc::spatialGains(.25f,.1f,12);
   require(std::fabs(front[0]-rear[2])<1e-6f && std::fabs(front[1]-rear[3])<1e-6f,
     "front and rear stereo mixdowns preserve left/right orientation");

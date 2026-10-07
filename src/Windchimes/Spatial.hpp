@@ -48,9 +48,25 @@ inline std::array<float, 4> spatialGains(float x, float y, unsigned mask) {
     g[second] = t == 0.f ? 0.f : std::sin(t * pi * 0.5f);
     return g;
   }
-  // Equal-power bilinear panning fills the center without an angle singularity.
-  g = {{std::sqrt((1.f - x) * (1.f - y)), std::sqrt(x * (1.f - y)),
-        std::sqrt((1.f - x) * y), std::sqrt(x * y)}};
+  // Speaker azimuths: FL -45°, FR +45°, RR +135°, RL +225°.
+  // Only the two speakers surrounding the source angle receive direct sound.
+  float px = 2.f * x - 1.f, py = 2.f * y - 1.f;
+  float radius = std::hypot(px, py);
+  if (radius > 1e-7f) {
+    float angle = std::atan2(px, -py) + pi * 0.25f;
+    if (angle < 0.f) angle += 2.f * pi;
+    float sector = angle / (pi * 0.5f);
+    int index = std::min(static_cast<int>(sector), 3);
+    float t = clamp(sector - index, 0.f, 1.f);
+    const int speakers[4] = {0, 1, 3, 2};
+    g[speakers[index]] = t == 1.f ? 0.f : std::cos(t * pi * 0.5f);
+    g[speakers[(index + 1) % 4]] = t == 0.f ? 0.f : std::sin(t * pi * 0.5f);
+  }
+  // Within 6% of the stage width, smoothly approach a centered image instead
+  // of making the direction jump as a source crosses the listener.
+  float blend = clamp(radius / 0.12f, 0.f, 1.f);
+  blend = blend * blend * (3.f - 2.f * blend);
+  for (float& value : g) value = 0.5f * (1.f - blend) + value * blend;
   for (int i = 0; i < 4; ++i)
     if (!(mask & (1u << i))) {
       float missing = g[i];
