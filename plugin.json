@@ -12,6 +12,13 @@
   "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/README.MD",
   "modules": [
     {
+      "slug": "computerscare-interleaver",
+      "name": "Interleaver",
+      "description": "Wave splicing and direct switching with CV, gate/trigger switching and timed A/B patterns",
+      "tags": ["Effect", "Distortion", "Granular"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/interleaver.md"
+    },
+    {
       "slug": "computerscare-knolypobs",
       "name": "Knoly Pobs",
       "description": "16 knobs with polyphonic output",

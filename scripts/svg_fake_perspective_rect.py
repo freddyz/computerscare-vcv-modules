@@ -68,6 +68,7 @@ def parse_args():
         default="#000000",
         help="Border color as #rgb, #rrggbb, or greyscale 0-255. Default: black.",
     )
+    parser.add_argument("--depth", type=float, default=None, help="Side depth; default is half the face height.")
     parser.add_argument("--seed", help="Seed for repeatable color variation.")
     return parser.parse_args()
 
@@ -197,7 +198,7 @@ def build_svg(args):
 
     top_h = args.height
     top_w = top_h * args.aspect
-    depth = top_h * 0.5
+    depth = top_h * 0.5 if args.depth is None else max(0.0, args.depth)
     angle = math.radians(args.angle)
     projection = (math.cos(angle) * depth, math.sin(angle) * depth)
 
