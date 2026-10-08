@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -41,6 +42,15 @@ inline Wav loadWav(const std::string& path) {
       wav.channels = int(word(f.data() + 2, 2));
       wav.rate = int(word(f.data() + 4, 4));
       bits = int(word(f.data() + 14, 2));
+      // Modern DAWs often wrap ordinary PCM/float in WAVE_FORMAT_EXTENSIBLE.
+      if (format == 0xfffe) {
+        const unsigned char guidTail[] = {0, 0,    0x10, 0,    0x80, 0,
+                                          0, 0xaa, 0,    0x38, 0x9b, 0x71};
+        if (length < 40 || word(f.data() + 16, 2) < 22 ||
+            std::memcmp(f.data() + 28, guidTail, 12))
+          throw std::runtime_error("Unsupported extensible WAV encoding");
+        format = int(word(f.data() + 24, 4));
+      }
     } else if (!std::memcmp(h, "data", 4)) {
       data.resize(length);
       if (!in.read(reinterpret_cast<char*>(data.data()), length))
@@ -49,19 +59,32 @@ inline Wav loadWav(const std::string& path) {
       in.seekg(length, std::ios::cur);
     if (length & 1) in.seekg(1, std::ios::cur);
   }
-  if ((wav.channels != 1 && wav.channels != 2) || wav.rate < 8000 ||
-      wav.rate > 384000 ||
-      !((format == 1 && (bits == 16 || bits == 24 || bits == 32)) ||
-        (format == 3 && bits == 32)) ||
+  if ((wav.channels < 1 || wav.channels > 64) || wav.rate < 1 ||
+      wav.rate > 768000 ||
+      !((format == 1 &&
+         (bits == 8 || bits == 16 || bits == 24 || bits == 32)) ||
+        (format == 3 && (bits == 32 || bits == 64))) ||
       data.empty())
-    throw std::runtime_error("Use mono/stereo PCM or float WAV");
+    throw std::runtime_error(
+        "Unsupported WAV encoding: use PCM 8/16/24/32-bit or float 32/64-bit "
+        "WAV (including extensible WAV)");
   int bytes = bits / 8;
+  if (data.size() % (bytes * wav.channels))
+    throw std::runtime_error("Incomplete WAV frame");
   wav.samples.resize(data.size() / bytes);
   for (size_t i = 0; i < wav.samples.size(); ++i) {
-    uint32_t v = word(data.data() + i * bytes, bytes);
+    uint32_t v = word(data.data() + i * bytes, std::min(bytes, 4));
     float x = 0;
-    if (format == 3)
+    if (format == 3 && bits == 64) {
+      uint64_t raw =
+          uint64_t(v) | (uint64_t(word(data.data() + i * bytes + 4, 4)) << 32);
+      double value;
+      std::memcpy(&value, &raw, 8);
+      x = float(value);
+    } else if (format == 3)
       std::memcpy(&x, &v, 4);
+    else if (bits == 8)
+      x = (float(v) - 128.f) / 128.f;
     else {
       int32_t signedValue = int32_t(v << (32 - bits));
       x = float(signedValue) / 2147483648.f;
