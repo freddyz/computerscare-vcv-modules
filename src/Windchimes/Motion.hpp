@@ -76,6 +76,8 @@ class Motion {
 
  public:
   float x = 0.f, y = pivotY + strikerLength, z = 0.f;
+  void setSailSize(float size) { suspension.setSailSize(size); }
+  void setWeight(float weight) { suspension.setWeight(weight); }
   void configure(int n) {
     if (count == n) return;
     count = n;
@@ -137,11 +139,15 @@ class Motion {
   void step(float dt, float windX, float windY, const SetConfig& c, int slot,
             Hit hit, PairHit pairHit) {
     configure(c.tubes);
+    setWeight(c.strikerWeight);
+    setSailSize(c.sailSize);
     Point air(windX, 0.f, windY);
     meanWind = meanWind + (air - meanWind) * std::min(dt * 1.2f, 1.f);
+    // Tube exposure and damping are independent of the pendulum's Swing
+    // control. Stronger weather can still produce clustered tube contacts.
     Point tubeAir = ((air - meanWind) + air * 0.08f) *
-                    clamp(air.dot(air) * 2.f, 0.12f, 2.5f);
-    float damping = 0.22f + (1.f - c.swing) * 0.65f;
+                    clamp(air.dot(air) * 2.f, 0.12f, 2.5f) * .25f;
+    constexpr float tubeDamping = .625f;
     // Small fixed sail differences amplify natural phase drift without
     // changing cord lengths or adding energy in still air.
     float dragScale = 0.9f + ((slot * 5 + 3) % 8) * (0.2f / 7.f);
@@ -153,7 +159,7 @@ class Motion {
                 Point(tubeAir.x + tubeAir.z * (t % 2 ? 0.8f : -0.8f), 0.f,
                       tubeAir.z + tubeAir.x * (t % 2 ? -0.8f : 0.8f)) *
                     exposure,
-                damping + 0.08f, tubeSwingLimit);
+                tubeDamping, tubeSwingLimit);
     }
     updateStriker();
     for (int t = 0; t < count; ++t) {
@@ -167,7 +173,7 @@ class Motion {
         Point normal = delta * (1.f / distance);
         float speed = (striker.velocity - tubes[t].velocity).dot(normal);
         if (!strikerContacts[t] && speed > 0.025f) {
-          hit(t, clamp(speed * 0.8f, 0.035f, 1.f));
+          hit(t, clamp(speed * 0.8f * suspension.impactScale(), 0.035f, 1.f));
           striker.flash = tubes[t].flash = 1.f;
         }
         Point response = suspension.response(normal);

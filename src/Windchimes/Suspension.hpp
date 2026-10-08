@@ -6,6 +6,9 @@ namespace windchimes {
 class Suspension {
   Point upper{0.f, 1.f, 0.f}, lower{0.f, 1.f, 0.f};
   Point primaryVelocity, sailVelocity;
+  float primaryMass = 1.2f, primaryInverseMass = 1.f / 1.2f, targetMass = 1.2f,
+        configuredWeight = .5f;
+  float sailArea = 1.f, targetArea = 1.f, configuredSize = .5f;
   static Point tangent(Point v, Point axis) { return v - axis * v.dot(axis); }
   static Point unit(Point v) {
     return v * (1.f / std::max(std::sqrt(v.dot(v)), 1e-6f));
@@ -16,6 +19,13 @@ class Suspension {
     float horizontal = std::hypot(axis.x, axis.z);
     float scale = std::sin(limit) / std::max(horizontal, 1e-6f);
     return {axis.x * scale, std::cos(limit), axis.z * scale};
+  }
+  static Point windDrive(Point force, Point velocity) {
+    // Wind can add momentum or steer it, but cannot do negative work.
+    float work = force.dot(velocity), speed2 = velocity.dot(velocity);
+    if (work < 0.f && speed2 > 1e-8f)
+      force = force - velocity * (work / speed2);
+    return force;
   }
   void projectVelocities() {
     primaryVelocity = tangent(primaryVelocity, upper);
@@ -50,10 +60,28 @@ class Suspension {
   }
 
  public:
-  static constexpr float primaryMass = 1.2f;
   static constexpr float sailMass = 0.6f;
-  static constexpr float primaryInverseMass = 1.f / primaryMass;
   static constexpr float sailInverseMass = 1.f / sailMass;
+  void setSailSize(float size) {
+    if (!std::isfinite(size)) size = .5f;
+    size = clamp(size, 0.f, 1.f);
+    if (size == configuredSize) return;
+    configuredSize = size;
+    targetArea = .25f * std::pow(16.f, size);
+  }
+  void setWeight(float weight) {
+    if (!std::isfinite(weight)) weight = .5f;
+    weight = clamp(weight, 0.f, 1.f);
+    if (weight == configuredWeight) return;
+    configuredWeight = weight;
+    targetMass = .3f * std::pow(16.f, weight);
+  }
+  float mass() const { return primaryMass; }
+  // Tube mass is normalized to one. Reduced mass scales impact excitation;
+  // 50% preserves the original contact level exactly.
+  float impactScale() const {
+    return std::sqrt((primaryMass / (primaryMass + 1.f)) * (2.2f / 1.2f));
+  }
   Point axis() const { return upper; }
   Point sailAxis() const { return lower; }
   Point velocity() const { return primaryVelocity; }
@@ -73,6 +101,9 @@ class Suspension {
                                 sailLength * (1.f - lower.y)));
   }
   void reset() {
+    sailArea = targetArea;
+    primaryMass = targetMass;
+    primaryInverseMass = 1.f / primaryMass;
     upper = lower = {0.f, 1.f, 0.f};
     primaryVelocity = sailVelocity = {};
   }
@@ -101,16 +132,19 @@ class Suspension {
     projectVelocities();
   }
   void step(float dt, Point air, float swing, float dragScale = 1.f) {
-    // Normalized weather is converted to a flow velocity. Drag includes the
-    // sail's own velocity, so it supplies energy only from moving air.
-    Point relative = air * 6.f - sailVelocity;
-    float speed = std::sqrt(relative.dot(relative));
+    primaryMass += (targetMass - primaryMass) * std::min(dt * 25.f, 1.f);
+    primaryInverseMass = 1.f / primaryMass;
+    sailArea += (targetArea - sailArea) * std::min(dt * 25.f, 1.f);
+    // Wind-only coupling: calm air supplies no drag and no sustaining force.
+    Point flow = air * 6.f;
+    float speed = std::sqrt(flow.dot(flow));
     // Side-area approximation for the hanging paddle: less exposed when the
     // flow points along its cord. The residual area represents its thickness.
-    float axial = relative.dot(lower) / std::max(speed, 1e-6f);
+    float axial = flow.dot(lower) / std::max(speed, 1e-6f);
     float exposure = 0.35f + 0.65f * (1.f - axial * axial);
-    Point sailForce = relative * (0.18f * dragScale * speed * exposure);
-    Point primaryForce = (air * 6.f - primaryVelocity) * 0.035f;
+    Point sailForce = windDrive(
+        flow * (0.06f * dragScale * speed * exposure * sailArea), sailVelocity);
+    Point primaryForce = windDrive(flow * .035f, primaryVelocity);
     Point a = Point(0.f, 9.81f, 0.f) + primaryForce * primaryInverseMass;
     Point b = Point(0.f, 9.81f, 0.f) + sailForce * sailInverseMass;
     float dot = upper.dot(lower);

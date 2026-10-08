@@ -1,4 +1,5 @@
 #include "Windchimes/Engine.hpp"
+#include "Windchimes/Delay.hpp"
 #include "Windchimes/Presets.hpp"
 #include "Windchimes/Selection.hpp"
 #include <cstdio>
@@ -10,6 +11,89 @@ void require(bool condition, const char* message) {
 }
 int main() {
   namespace wc = windchimes;
+  {
+    wc::Selection selection;
+    selection.selectAll((1u << wc::maxSets) - 1u);
+    require(selection.contains(15), "select all includes chime sixteen");
+    selection.selectOnly(15);
+    require(selection.mask == (1u << 15), "chime sixteen selects independently");
+    auto expanded = std::unique_ptr<wc::Engine>(new wc::Engine);
+    expanded->setSampleRate(48000);
+    wc::SetConfig last; last.enabled = true;
+    expanded->configure(15, last, 0.f);
+    expanded->setAudibleMask(1u << 15);
+    expanded->strike(15);
+    double lastEnergy = 0;
+    for (int i = 0; i < 48000; ++i) {
+      auto out = expanded->process(0, 0, 0, 0);
+      lastEnergy += out.left * out.left + out.right * out.right;
+    }
+    require(lastEnergy > .001, "chime sixteen produces audio when soloed");
+    expanded->setAudibleMask(0);
+    for (int i = 0; i < 10000; ++i) expanded->process(0, 0, 0, 0);
+    auto silence = expanded->process(0, 0, 0, 0);
+    require(silence.left == 0.f && silence.right == 0.f,
+      "chime sixteen can be muted");
+  }
+
+  {
+    wc::Delay delay;
+    for (float rate : {44100.f, 48000.f, 96000.f, 192000.f}) {
+      delay.setSampleRate(rate);
+      delay.configure(0.f, 1.f, .5f);
+      int length = int(std::round(rate * .01f));
+      for (int i = 0; i <= length * 3; ++i) {
+        wc::Quad in; in.channel[0] = i == 0 ? 1.f : 0.f;
+        auto out = delay.process(in, 15);
+        if (i == length) require(std::fabs(out.channel[0] - 1.f) < .001f, "Delay impulse timing");
+        if (i == length * 2) require(std::fabs(out.channel[0] - .5f) < .001f, "Delay feedback decay");
+        for (int ch = 1; ch < 4; ++ch) require(out.channel[ch] == 0.f, "Delay preserves speaker isolation");
+      }
+      for (int i = 0; i < length * 2; ++i) {
+        auto out = delay.process({}, 1);
+        require(out.channel[0] == 0.f, "Routing change clears old normalized echoes");
+      }
+    }
+    delay.setSampleRate(48000.f);
+    for (int i = 0; i <= 24000; ++i) delay.clock(i % 24000 == 0 ? 10.f : 0.f, true);
+    require(delay.synced(), "Clock acquires after two edges");
+    delay.configure(2.f / 3.f, 1.f, 0.f);
+    for (int i = 0; i <= 24000; ++i) {
+      wc::Quad in; in.channel[1] = i == 0 ? 1.f : 0.f;
+      auto out = delay.process(in, 2);
+      if (i == 24000) require(out.channel[1] == 1.f, "Clock delay matches period");
+    }
+    delay.clock(0.f, false);
+    require(!delay.synced(), "Unplugged clock returns to seconds");
+    for (int i = 0; i < 100000; ++i) {
+      if (i % 241 == 0) delay.configure(float(i % 1000) / 999.f, 1.f, 10.f);
+      wc::Quad in; in.channel[1] = std::sin(i * .13f) * 10.f;
+      auto out = delay.process(in, 2);
+      require(std::isfinite(out.channel[1]) && std::fabs(out.channel[1]) <= 8.001f, "Delay remains bounded through time changes and excessive feedback");
+    }
+  }
+
+  {
+    wc::Propagation travel;
+    for (float rate : {44100.f, 48000.f, 96000.f, 192000.f})
+      for (float distance : {0.f, .5f, 1.f}) {
+        travel.reset(); travel.configure(rate, distance);
+        int lag = int(std::round(.08f * rate * distance));
+        for (int i = 0; i <= lag + 2; ++i) {
+          float out = travel.process(i == 0 ? 1.f : 0.f);
+          if (i < lag - 1) require(out == 0.f, "Distance travel cannot arrive early");
+          if (i == lag) require(std::fabs(out - 1.f) < .002f, "Distance travel follows radius and sample rate");
+        }
+      }
+    travel.reset(); travel.configure(48000.f, 1.f);
+    for (int i = 0; i < 48000; ++i) {
+      if (i % 241 == 0) travel.configure(48000.f, float(i % 1000) / 999.f);
+      float out = travel.process(std::sin(i * .01f));
+      require(std::isfinite(out) && std::fabs(out) <= 1.001f, "Moving distance remains finite and bounded");
+    }
+    travel.reset(); travel.configure(48000.f, 0.f);
+    require(travel.process(0.f) == 0.f, "Travel reset discards buffered sound");
+  }
   // The spatial field stays continuous, varies more with turbulence, and
   // applies no force once weather is off. Identical sets must drift apart.
   {
@@ -141,6 +225,12 @@ int main() {
     selected.toggle(2);require(selected.mask==0,"last selected set can be deselected");
     selected.selectOnly(7);require(selected.mask==128u && selected.selected==7,"plain click replaces the selection");
     selected.clear();require(selected.mask==0,"empty stage click clears selection");
+    selected.selectAll(37u);
+    require(selected.mask==37u && selected.contains(selected.selected),"select all includes only enabled sets and picks a valid primary");
+    selected.selectOnly(5);selected.selectAll(37u);
+    require(selected.mask==37u && selected.selected==5,"select all preserves an enabled primary");
+    selected.selectAll(0);
+    require(selected.mask==0,"select all on an empty stage remains empty");
   }
   wc::SetConfig config; config.enabled = true;
   require(std::fabs(wc::tubeFrequency(config, 5, 0.f) / wc::tubeFrequency(config, 0, 0.f) - 2.f) < 0.001f, "scale repeats at the octave");
@@ -573,6 +663,39 @@ int main() {
       [](int, float) {}, [&](int, int, float) { ++normalPairs; });
   }
   require(normalPairs > 0, "default breeze creates tube-pair impacts without manual gusts");
+  // With no contact impulses, changing Swing cannot change a tube's motion.
+  {
+    wc::Motion shortSwing, longSwing;
+    wc::SetConfig a, b; a.tubes = b.tubes = 1; a.swing = 0.f; b.swing = 1.f;
+    for (int i = 0; i < 4000; ++i) {
+      float wind = .03f * std::sin(i * .013f);
+      auto noHit = [](int, float) { require(false, "Tube isolation probe must remain contact-free"); };
+      auto noPair = [](int, int, float) {};
+      shortSwing.step(.0025f, wind, wind * .3f, a, 0, noHit, noPair);
+      longSwing.step(.0025f, wind, wind * .3f, b, 0, noHit, noPair);
+      require(std::fabs(shortSwing.tubeAngle(0) - longSwing.tubeAngle(0)) < 1e-7f &&
+              std::fabs(shortSwing.tubeDepth(0) - longSwing.tubeDepth(0)) < 1e-7f,
+              "Swing only changes the pendulum, not tube wind response or damping");
+    }
+  }
+  // Ordinary wood settings favor individual striker hits; high wind
+  // still permit actual tube-pair collisions, rather than muting one partner.
+  {
+    int pairs[2] = {}, hits[2] = {};
+    for (int extreme = 0; extreme < 2; ++extreme) {
+      wc::Motion motion; wc::Wind weather; wc::SetConfig wood;
+      wood.material = 1; wood.swing = .5f;
+      for (int i = 0; i < 48000; ++i) {
+        weather.step(.0025f, extreme ? .9f : .5f, extreme ? .7f : .55f, extreme ? .5f : .35f);
+        motion.step(.0025f, weather.x, weather.y, wood, 0,
+          [&](int, float) { ++hits[extreme]; },
+          [&](int, int, float) { ++pairs[extreme]; });
+      }
+    }
+    require(hits[0] >= 15, "Gentler tube exposure preserves ordinary wood striker activity");
+    require(pairs[0] <= 5 && pairs[0] * 5 < hits[0], "Ordinary wooden chimes rarely excite two tubes together");
+    require(pairs[1] > 10 * (pairs[0] + 1), "Extreme wind restores clustered contacts");
+  }
   for (float rate : {44100.f, 48000.f, 96000.f}) {
     auto small = std::unique_ptr<wc::Reverb>(new wc::Reverb);
     auto large = std::unique_ptr<wc::Reverb>(new wc::Reverb);
@@ -599,6 +722,126 @@ int main() {
     }
     large->configure(rate == 96000.f ? 44100.f : 96000.f, 0.5f);
     require(large->process(wc::Stereo(), 1.f).left == 0.f, "rate changes clear incompatible delay state");
+  }
+  {
+    // All three wind-sound controls remain stable at supported rates.
+    for (float rate : {44100.f, 96000.f, 192000.f})
+      for (int corner = 0; corner < 8; ++corner) {
+        wc::Wind sound; sound.configure(rate, corner & 1, (corner >> 1) & 1, (corner >> 2) & 1);
+        for (int i=0;i<int(rate*2.f);++i) {
+          if (i % int(rate/400.f) == 0) sound.step(.0025f, 1.f, 1.f, 1.f);
+          auto out = sound.processQuad(rate,15u);
+          for (float sample : out.channel) require(std::isfinite(sample) && std::fabs(sample)<2.f, "Every wind control corner stays finite at turbulent extremes");
+        }
+      }
+    wc::Wind open, trees, quiet;
+    open.configure(48000,.3f,.1f,.3f); trees.configure(48000,.8f,.95f,.8f); quiet.configure(48000,.6f,.8f);
+    double difference=0, leftPower=0, rightPower=0, cross=0;
+    for(int i=0;i<480000;++i) {
+      if(i%120==0) {
+        open.step(.0025f,.6f,.7f,.6f); trees.step(.0025f,.6f,.7f,.6f); quiet.step(.0025f,0.f,.7f,.6f);
+        require(open.x==trees.x && open.y==trees.y, "Sound knobs do not change physical wind or chime excitation");
+      }
+      auto a=open.processQuad(48000,15), b=trees.processQuad(48000,15), z=quiet.processQuad(48000,15);
+      for(float sample:z.channel) require(sample==0.f,"Calm air generates no continuous noise floor");
+      difference+=(a.channel[0]-b.channel[0])*(a.channel[0]-b.channel[0]);
+      leftPower+=b.channel[0]*b.channel[0]; rightPower+=b.channel[1]*b.channel[1]; cross+=b.channel[0]*b.channel[1];
+    }
+    require(difference>.1,"Knob combinations produce distinct wind character");
+    require(cross/std::sqrt(leftPower*rightPower)<.98,"Spatial wind preserves independent patches instead of collapsing to mono");
+    for(unsigned mask:{0u,1u,3u,12u,15u}) {
+      auto out=trees.processQuad(48000,mask);
+      for(int ch=0;ch<4;++ch) if(!(mask&(1u<<ch))) require(out.channel[ch]==0.f,"Wind only accumulates connected speakers");
+    }
+  }
+  {
+    wc::Wind dark, bright;
+    dark.configure(48000,0.f,1.f,1.f); bright.configure(48000,1.f,1.f,1.f);
+    double power[2]={}, high[2]={}; float previous[2]={};
+    for(int i=0;i<192000;++i) {
+      if(i%120==0) { dark.step(.0025f,.8f,.7f,.6f); bright.step(.0025f,.8f,.7f,.6f); }
+      float samples[]={dark.process(48000).left,bright.process(48000).left};
+      if(i>48000) for(int j=0;j<2;++j) {
+        power[j]+=samples[j]*samples[j];
+        high[j]+=(samples[j]-previous[j])*(samples[j]-previous[j]);
+      }
+      previous[0]=samples[0];previous[1]=samples[1];
+    }
+    require(power[0]>1e-5,"Low wind Tone retains audible low airflow");
+    require(high[0]/power[0]<high[1]/power[1]/20.,"Low wind Tone strongly removes highs even at maximum Texture");
+  }
+  {
+    auto a = std::unique_ptr<wc::Engine>(new wc::Engine);
+    auto b = std::unique_ptr<wc::Engine>(new wc::Engine);
+    for(auto* e:{a.get(),b.get()}) { e->setSampleRate(48000); e->setOutputMask(15); e->configureWindRouting(true,true); }
+    a->configureEffects(0.f,.5f,.45f,.7f,0.f);
+    b->configureEffects(0.f,.5f,.45f,.7f,1.f);
+    double windPower=0;
+    for(int i=0;i<144000;++i) {
+      if(i==72000) b->configureEffects(0.f,.5f,.45f,.7f,.2f);
+      auto qa=a->processQuad(.6f,.7f,.7f,0.f);
+      auto qb=b->processQuad(.6f,.7f,.7f,1.f);
+      for(float v:qa.channel) require(v==0.f,"Excluded wind leaves quad silent without chimes");
+      for(float v:qb.channel) require(v==0.f,"Excluded wind stays silent at full Mix");
+      require(a->windAudio()==b->windAudio(),"Dedicated wind ignores Mix level and its synthesis-character changes");
+      windPower+=a->windAudio()*a->windAudio();
+    }
+    require(windPower>.01,"Dedicated wind remains audible at zero Mix and excluded quad");
+    b->configureWindRouting(false,true);
+    double quadPower=0;
+    for(int i=0;i<48000;++i) for(float v:b->processQuad(.6f,.7f,.7f,1.f).channel) quadPower+=v*v;
+    require(quadPower>.01,"Disabling exclusion restores mixed quad wind");
+  }
+  {
+    double attackRatio[2]={};
+    for(int setting=0;setting<2;++setting) {
+      float strength=setting ? 1.f : .1f;
+      wc::WindSound sound; sound.configure(48000,.4f,.5f,1.f);
+      double early=0,late=0;
+      for(int i=0;i<96000;++i) {
+        if(i%120==0) sound.step(.0025f,strength,strength,0.f,.5f);
+        float sample=sound.process(1).channel[0];
+        if(i<4800) early+=sample*sample;
+        if(i>=48000) late+=sample*sample;
+      }
+      attackRatio[setting]=early*10./late;
+    }
+    require(attackRatio[0]<attackRatio[1]*.2,"Gentle wind rises more slowly than strong wind, relative to its settled level");
+  }
+  {
+    auto audible=std::unique_ptr<wc::Engine>(new wc::Engine);
+    auto muted=std::unique_ptr<wc::Engine>(new wc::Engine);
+    wc::SetConfig set;set.enabled=true;
+    for(auto* e:{audible.get(),muted.get()}) {
+      e->setSampleRate(48000);e->configure(0,set,0.f);
+      e->configureEffects(0.f,.5f,.45f,.4f);e->gust();
+    }
+    muted->setAudibleMask(0u);
+    double sounding=0;
+    for(int i=0;i<144000;++i) {
+      auto a=audible->processQuad(.7f,.7f,.5f,0.f);
+      auto b=muted->processQuad(.7f,.7f,.5f,0.f);
+      if(i>9600) for(float sample:b.channel) require(sample==0.f,"Muted/solo-excluded chimes produce no direct audio after fade");
+      for(float sample:a.channel) sounding+=sample*sample;
+      require(audible->strikerAngle(0)==muted->strikerAngle(0),"Mute/solo routing preserves pendulum physics");
+    }
+    require(sounding>.01,"Audible chime remains active beside muted reference");
+    muted->setAudibleMask(1u);double restored=0;
+    for(int i=0;i<48000;++i) for(float sample:muted->processQuad(.7f,.7f,.5f,0.f).channel) restored+=sample*sample;
+    require(restored>.001,"Removing mute/solo exclusion restores a moving chime");
+  }
+  {
+    auto e=std::unique_ptr<wc::Engine>(new wc::Engine);
+    e->setSampleRate(48000);e->setOutputMask(15);e->configureEffects(.5f,.5f,.5f,.8f);
+    wc::Delay delay;delay.setSampleRate(48000);delay.configure(.5f,1.f,.9f);
+    double windEnergy=0;
+    for(int i=0;i<96000;++i) {
+      auto chimes=e->processQuad(.8f,.7f,.8f,1.f,true);
+      auto echoes=delay.process(chimes,15);
+      for(float sample:echoes.channel) require(sample==0.f,"Wind and its reverb never enter chime delay");
+      for(float sample:e->windWithoutDelay().channel) windEnergy+=sample*sample;
+    }
+    require(windEnergy>.01,"Wind stays audible when chime delay is fully wet");
   }
   wc::Wind deep, airy, textured;
   deep.configure(48000, 0, 0); airy.configure(48000, 1, 0); textured.configure(48000, 0, 1);
@@ -746,6 +989,68 @@ int main() {
         "pendulum cadence and trajectory converge across physics step sizes");
     } else { referencePeriod = period; referencePosition = assembly.position().x; }
   }
+  {
+    wc::Suspension light,heavy,standard;
+    light.setWeight(0.f);heavy.setWeight(1.f);light.reset();heavy.reset();
+    require(std::fabs(standard.mass()-1.2f)<1e-6f,"default weight preserves the original mass");
+    require(std::fabs(light.mass()-.3f)<1e-6f && std::fabs(heavy.mass()-4.8f)<1e-5f,"weight covers the bounded mass range");
+    light.applyImpulse({.3f,0.f,0.f});heavy.applyImpulse({.3f,0.f,0.f});
+    require(light.velocity().x>heavy.velocity().x*15.f,"heavy striker has greater inertia for the same contact impulse");
+    require(heavy.impactScale()>standard.impactScale() && standard.impactScale()>light.impactScale(),"weight scales transferred contact energy separately from hardness");
+    for(float weight:{0.f,1.f})for(float dt:{.00125f,.0025f,.005f}) {
+      wc::Suspension pendulum;pendulum.setWeight(weight);pendulum.reset();pendulum.kick({1.8f,0.f,.4f});
+      float initial=pendulum.energy();
+      for(int n=0;n<int(10.f/dt);++n) {
+        pendulum.step(dt,{},.65f);
+        require(std::isfinite(pendulum.energy()) && pendulum.energy()<=initial*1.001f+1e-4f,"weight extremes remain passive and finite without wind");
+        auto cord=pendulum.sailPosition()-pendulum.position();
+        require(std::fabs(cord.dot(cord)-wc::sailLength*wc::sailLength)<1e-5f,"weight preserves both suspension link constraints");
+      }
+    }
+    standard.kick({1.f,0.f,0.f});auto position=standard.position();standard.setWeight(1.f);
+    require(standard.position().x==position.x && standard.mass()==1.2f,"weight edits do not teleport or immediately jump the mass");
+    standard.step(.0025f,{},.5f);
+    require(standard.mass()>1.2f && standard.mass()<1.5f,"mass changes slew at the physics rate");
+    for(int n=0;n<400;++n)standard.step(.0025f,{},.5f);
+    require(std::fabs(standard.mass()-4.8f)<1e-4f,"smoothed mass reaches its target");
+    auto changed=std::unique_ptr<wc::Engine>(new wc::Engine),unchanged=std::unique_ptr<wc::Engine>(new wc::Engine);
+    wc::SetConfig c;c.enabled=true;changed->setSampleRate(48000);unchanged->setSampleRate(48000);
+    changed->configure(0,c,0);unchanged->configure(0,c,0);
+    for(int n=0;n<48000;++n){changed->process(.7f,.5f,.4f,0);unchanged->process(.7f,.5f,.4f,0);}
+    c.strikerWeight=1;changed->configure(0,c,0);double difference=0;
+    for(int n=0;n<48000;++n) {
+      changed->process(.7f,.5f,.4f,0);unchanged->process(.7f,.5f,.4f,0);
+      difference+=std::fabs(changed->strikerAngle(0)-unchanged->strikerAngle(0));
+    }
+    require(difference>1,"a weight-only change updates the engine configuration and changes the motion");
+  }
+  {
+    wc::Suspension small,large;
+    small.setSailSize(0.f);large.setSailSize(1.f);small.reset();large.reset();
+    small.kick({1.8f,0.f,.4f});large.kick({1.8f,0.f,.4f});
+    for(int n=0;n<4000;++n) {
+      small.step(.0025f,{},1.f);large.step(.0025f,{},1.f);
+      auto difference=small.position()-large.position();
+      require(difference.dot(difference)<1e-12f,"sail size adds no passive air braking to free pendulum motion");
+      require(std::isfinite(large.energy()),"unforced oversized sail remains finite");
+    }
+    small.reset();large.reset();small.step(.0025f,{.8f,0.f,0.f},.5f);large.step(.0025f,{.8f,0.f,0.f},.5f);
+    require(large.kineticEnergy()>small.kineticEnergy()*10.f,"large sail catches more wind without changing its mass");
+    wc::Suspension calm,opposed;calm.kick({1.8f,0.f,.4f});opposed.kick({1.8f,0.f,.4f});
+    calm.step(.0025f,{},.5f);opposed.step(.0025f,{-1.f,0.f,-.2f},.5f);
+    require(opposed.energy()>=calm.energy()-1e-5f,"opposing wind does not subtract the suspension's existing momentum energy");
+    for(float size:{0.f,1.f})for(float weight:{0.f,1.f}) {
+      wc::SetConfig c;c.tubes=12;c.sailSize=size;c.strikerWeight=weight;c.swing=1;
+      wc::Motion motion;
+      for(int n=0;n<8000;++n) {
+        motion.step(.0025f,std::sin(n*.019f)*2.f,std::cos(n*.013f)*2.f,c,0,[](int,float){},[](int,int,float){});
+        require(std::isfinite(motion.kineticEnergy()),"sail/weight extremes remain stable under turbulent wind");
+        auto upper=motion.strikerPosition()-wc::Point(0,wc::pivotY,0);
+        auto lower=motion.sailPosition()-motion.strikerPosition();
+        require(std::fabs(upper.dot(upper)-wc::strikerLength*wc::strikerLength)<1e-5f && std::fabs(lower.dot(lower)-wc::sailLength*wc::sailLength)<1e-5f,"large wind-catching sails preserve fixed cord lengths");
+      }
+    }
+  }
   wc::Suspension impactAssembly; impactAssembly.kick({1.8f, 0.f, 0.4f});
   for (int i = 0; i < 80; ++i) impactAssembly.step(0.0025f, {}, 0.65f);
   auto velocity = impactAssembly.velocity();
@@ -768,10 +1073,11 @@ int main() {
   }
   require(smoothHits >= 4,
     "coherent gusts drive repeated strikes with turbulence disabled");
+  // Wind coupling no longer supplies passive drag: allow the longer friction-only tail.
   wc::Motion settling; config.tubes = 8; config.swing = 1.f;
   settling.configure(config.tubes); settling.kick(wc::pi * 0.25f);
   int dissipativeHits = 0; bool movedInDepth = false;
-  for (int i = 0; i < 24000; ++i) {
+  for (int i = 0; i < 36000; ++i) {
     float impactEnergy = -1.f;
     auto impact = [&]() { impactEnergy = settling.kineticEnergy(); ++dissipativeHits; };
     settling.step(0.0025f, 0.f, 0.f, config, 0,

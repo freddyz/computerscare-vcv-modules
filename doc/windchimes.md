@@ -6,12 +6,12 @@ or any single audio jack for mono, and let the breeze move its striker. Turn **W
 
 ## Arrange the scene
 
-- **+ Add** creates a set, up to eight. Each set has one to twelve tubes.
+- **+ Add** creates a set, up to sixteen. Each set has one to twelve tubes.
 - Click a set to select it. The listener is at the center: drag outward in any
   direction to move farther away. Top is front, bottom is rear. Position routes
   all tubes of a set together between front-left, front-right, rear-left and rear-right.
   Distance controls level, filtering and displayed size independently of direction.
-- Right-click a set for **Strike**, **Stop**, **Randomize**, **Wiggle**, then a divider and **Duplicate**, **Divide**, **Remove**. Duplicate copies all per-set settings and places the new set nearby; Divide makes the same copy and gently wiggles a random subset of its sound controls. The copy becomes selected. Duplicate/Divide are disabled when all eight slots are occupied. Randomize and Wiggle affect the clicked set's six sound controls. Copying, removing, and sound edits support one-step undo/redo. Strike pushes/resumes the clicked set; Stop pauses its motion and fades its direct sound and room send over 5 ms. The existing shared reverb tail decays normally. A paused set stays visible and retains its settings until Strike resumes it; this performance state is not saved in patches.
+- Right-click a set for **Strike**, **Stop**, **Randomize**, **Wiggle**, then a divider and **Duplicate**, **Divide**, **Remove**. Duplicate copies all per-set settings and places the new set nearby; Divide makes the same copy and gently wiggles a random subset of its sound controls. The copy becomes selected. Duplicate/Divide are disabled when all sixteen slots are occupied. Randomize and Wiggle affect the clicked set's six sound controls. Copying, removing, and sound edits support one-step undo/redo. Strike pushes/resumes the clicked set; Stop pauses its motion and fades its direct sound and room send over 5 ms. The existing shared reverb tail decays normally. A paused set stays visible and retains its settings until Strike resumes it; this performance state is not saved in patches.
 - **Remove**, **Delete**, or **Backspace** deletes the active set. The keys act on a focused visualization or while the pointer is over it, and do not delete the module. Holding a key removes only one set per press. Add, remove, edits, and moves support Rack's
   undo/redo. Patch files save every set and its settings.
 - **Strike**, or double-clicking a set, pushes its suspended striker toward the
@@ -20,7 +20,7 @@ or any single audio jack for mono, and let the breeze move its striker. Turn **W
   Struck tubes briefly brighten; a matching flash marks striker impacts. The **Gust** button in the right control column pushes all sets.
 
 The highlighted set uses the material and scale menus and the **Tubes**, **Root**,
-**Register**, **Fine**, **EDO**, **Decay**, **Brightness**, **Hardness**, **Set level**,
+**Register**, **Fine**, **EDO**, **Decay**, **Brightness**, **Hardness**, **Weight**, **Set level**,
 **Spread**, and **Swing** controls. Hover over a knob to see its value; right-click
 for exact entry. Material choices are metal, wood/bamboo, and plastic.
 
@@ -33,7 +33,7 @@ uses standard semitones, **Register** moves by octaves, and **Fine** is in cents
 
 **Wind**, **Gustiness**, and **Turbulence** control a shared changing weather field.
 Each set responds to the shared weather through its own moving tubes and sail; collision strength determines strike
-volume. **Swing** controls damping and motion persistence. **Wind mix** controls
+volume. **Swing** controls damping and motion persistence of the striker-and-sail pendulum only. Tubes retain independent, fixed damping and wind exposure. **Wind mix** controls
 only the audible filtered-noise wind, and **Output** controls the final mix.
 
 - **Wind CV**: 0–10 V adds to the Wind knob; negative CV can reduce it.
@@ -53,16 +53,17 @@ A bounded output stage prevents dense scenes from producing excessive voltages.
 room's dimensions and tail length, from a short space to a large ambient wash.
 The four audio outputs form a speaker square at the lower right: FL/FR above RL/RR.
 
-**Wind tone** moves from deep rumble to bright, airy noise. **Texture** adds
-rustling and a shifting breathy howl. These controls shape the audible wind;
-the Wind, Gustiness, and Turbulence controls still determine physical movement.
+**Wind tone** moves from deep buffeting through soft moving air to bright
+surface rustle. **Texture** adds clustered rustles, flutter and intermittent
+whistles, blending continuously toward layered leaf rustle. Wind, Gustiness and
+Turbulence drive both the audible weather and physical movement.
 
 ## Implementation
 
 The engine is original modal synthesis with a fixed twelve-slot modal bank per tube and
 material-specific decay and excitation. It shares no Mutable or Audible code.
 Wind, tuning, pendulum motion, resonators, reverb, and scene mixing are separate components
-in `src/Windchimes/`. Storage is fixed at eight sets and twelve tubes each; DSP
+in `src/Windchimes/`. Storage is fixed at sixteen sets and twelve tubes each; DSP
 performs no allocation, locks, file access, or UI calls. Motion runs at approximately
 400 Hz and parameter updates at approximately 200 Hz. Resonator coefficients are
 cached and decayed voices stop processing. Tube-to-tube collision checks run at the motion rate. The simulation and renderer
@@ -94,7 +95,7 @@ The module is 52 HP wide, with all extra width allocated to the animation. The s
 
 Audible distance uses independent direct and room paths. The far-edge direct gain is one eighth of the near-edge gain (about −18 dB), with two cascaded low-pass stages moving from 800 Hz at Far to 18 kHz at Near. The room send decreases less rapidly than direct sound, increasing the reflected-to-direct balance for distant sets. The global reverb mix still controls the room return; setting it to zero leaves distance attenuation and filtering active.
 
-Striker motion revision: the clapper and wind sail are separate masses on two spherical links. Both move in two axes with fixed cord lengths. Coupled constraint forces include centripetal acceleration; collision impulses use the clapper's effective inverse mass while preserving independent sail momentum. A normalized mass ratio of 1.2 clapper : 0.6 sail and material-dependent restitution replace the previous light clapper/fixed restitution model. Swing controls friction, with nonzero damping at maximum. Wind acts primarily on the sail through quadratic relative-flow drag, with a simple projected side-area approximation based on cord orientation. Tubes have weaker mean-wind response and stronger exposure during gusts, preserving energetic tube-pair contact. No periodic strike clock or phase-aware sustaining force is used.
+Striker motion revision: the clapper and wind sail are separate masses on two spherical links. Both move in two axes with fixed cord lengths. Coupled constraint forces include centripetal acceleration; collision impulses use the clapper's effective inverse mass while preserving independent sail momentum. At Weight 50%, a normalized mass ratio of 1.2 clapper : 0.6 sail and material-dependent restitution replace the previous light clapper/fixed restitution model. Swing controls friction, with nonzero damping at maximum. Wind acts primarily on the sail through wind-only force scaled by its projected area. Any force component that would remove existing momentum is rejected; calm air applies no drag. Swing supplies the remaining friction. Tubes have weaker mean-wind response and stronger exposure during gusts, preserving energetic tube-pair contact. No periodic strike clock or phase-aware sustaining force is used.
 
 Weather retains prevailing direction through several swings, changing it gradually at 4–14-second intervals. Gusts use correlated fluctuations, including gentle along-wind variation at zero Turbulence; Turbulence adds cross-wind variation and faster eddies. The sail and clapper animation are published from the same physics state that produces audio contact events, in both views. An unforced swing has approximately a 1.92-second period with the default geometry; impacts and wind perturb its cadence. Fully constant airflow can lead to a modest tilted equilibrium; both links return to vertical when wind is removed. All physics work is fixed-size at control rate, with no allocations or locks in audio processing.
 
@@ -122,10 +123,112 @@ Wind is sampled across the stage: position smoothly changes exposure and prevail
 
 Quad routing synthesizes each tube once and uses one eight-line reverb network with four distinct orthogonal return patterns. Disconnected outputs skip accumulation, while shared physics, voices and room tails keep running. Speaker gains and room decoder targets are cached until position or the connected layout changes. Existing left/right output IDs become FL/FR; Wind CV retains its ID, and rear outputs are appended. Older patches migrate their pan and distance into the front half of the radial stage once; new saves carry a radial-layout version marker.
 
-Shift-click or Cmd/Ctrl-click a chime set to toggle it in a multiple selection. A plain click selects one set; clicking empty stage space clears the selection. Selected sets each show their selection outline. Per-set knobs retain their normal appearance when selected values agree. Only differing values highlight the knob face in amber, without an outline or extra symbols; the pointer reflects the most recently selected set. Dragging, double-click reset, exact value entry, material/scale choices, and presets set the same value on every selected set. Each knob gesture or menu edit has one grouped undo. Randomize and Wiggle vary each selected set independently, and Rack's standard Randomize (Cmd/Ctrl+R or module menu) targets the selection's six sound controls while leaving other sets and global controls alone. Strike and Stop also address the selection.
+Shift-click or Cmd/Ctrl-click a chime set to toggle it in a multiple selection. A plain click selects one set; clicking empty stage space clears the selection. Selected sets each show their selection outline. Per-set knobs retain their normal appearance when selected values agree. Only differing values highlight the knob face in amber, without an outline or extra symbols; the pointer reflects the most recently selected set. Dragging, double-click reset, exact value entry, material/scale choices, and presets set the same value on every selected set. Each knob gesture or menu edit has one grouped undo. Randomize and Wiggle vary each selected set independently, and Rack's standard Randomize (Cmd/Ctrl+R or module menu) targets the selection's seven sound/striker controls while leaving other sets and global controls alone. Strike and Stop also address the selection.
 
 The Windchimes SVG panel follows the other modules’ pale gray perspective boxes and irregular outlined lettering, with a dark animated scene. Rebuild its static panel artwork with `python3 scripts/generate-windchimes-panel.py`; this uses the shared `gen.sh`, `svg_text_randomize.py`, and `svg_fake_perspective_rect.py` generators with fixed seeds.
 
 Selection captions use “Chimes 4” for chime number four, and “4 Chimes” when four chimes are selected. Control captions are smaller to keep the panel lettering clear of controls and neighboring labels.
 
-With all four audio outputs connected, direct chimes pan by angle between adjacent speaker directions (FL −45°, FR +45°, RR +135°, RL +225°). Front-facing directions use the front pair, rear-facing directions use the rear pair, and side directions blend the front/rear speakers on that side. Outside a small central blending zone, distance changes level/filtering independently of speaker balance. The center blends evenly into all speakers to avoid a directional jump when crossing the listener. Audible wind remains diffuse across the speakers; mute Wind mix to hear isolated dry chime positioning.
+With all four audio outputs connected, direct chimes pan by angle between adjacent speaker directions (FL −45°, FR +45°, RR +135°, RL +225°). Front-facing directions use the front pair, rear-facing directions use the rear pair, and side directions blend the front/rear speakers on that side. Outside a small central blending zone, distance changes level/filtering independently of speaker balance. The center blends evenly into all speakers to avoid a directional jump when crossing the listener. Audible wind combines diffuse low air with three moving sound patches across the speakers; mute Wind mix to hear isolated dry chime positioning.
+
+**Weight** controls each set's striker mass independently of Hardness. It spans normalized masses 0.3–4.8, with the original 1.2 at 50%; the sail stays at 0.6. Light strikers respond more readily to wind and collision impulses; heavy strikers have more inertia and greater contact excitation at a given speed. Mass changes smooth over roughly 40 ms without resetting the suspension. Weight also changes the striker icon's size, works with multiple selection, Duplicate/Divide and undo, and participates in Random/Wiggle and standard Randomize. Sound presets continue to set their six timbre controls without changing Weight. Existing parameter IDs are preserved; older patches default to 50%. Click the stage and use Ctrl+A (or Cmd+A on macOS) to select all enabled sets.
+
+**Sail** controls wind-catching area from 0.25× to 4×, with 1× at 50%, and changes the paddle icon size. It smooths over roughly 40 ms without resetting the links or changing the sail mass. Larger sails build motion more readily; they do not add braking when wind drops or opposes the current swing. Wind forces add or steer momentum without negative work. This is an intentional wind-driven musical model, rather than a passive aerodynamic drag model. Swing and collisions still dissipate motion, so an unforced pendulum eventually settles. Sail is included in multi-selection editing, Duplicate/Divide and undo; sound Random/Wiggle and presets leave it unchanged. Saved parameter IDs are preserved.
+
+The chime finish combines Shape, Body, Decay and Weight into its tint, Brightness into lightness and highlights, and Inharmonicity/Hardness into variation and detail contrast. Materials retain separate palette families and their metal highlights, wood grain or molded plastic seams. Colored streaks and band density also respond to combinations of the settings. Outlines stay rectangular through ordinary settings: Shape below 12% tapers the top and above 88% flares the base; Body below 10% narrows the waist and above 92% adds a barrel profile; Inharmonicity above 90% adds a small asymmetric bend. These visual profiles do not change the capsule collision geometry.
+
+Delay follows the chime spatial mix and reverb, with an independent feedback line for
+each connected audio output. Mix defaults to dry. Time runs from 10 ms to 2 s;
+patch Clock to select 1/8, 1/6, 1/4, 1/3, 1/2, 3/4, 1, 3/2, 2, or 4 clock
+periods. Two edges acquire tempo; stopping the clock holds its last tempo,
+and unplugging it returns to seconds. The resulting delay is capped at 2 s
+(or the available buffer at exceptionally high sample rates). Feedback tops
+out at 95%. Time changes crossfade over 20 ms. Disconnected channels do no
+delay processing, and changing the output routing discards the previous
+echoes so an old mixdown cannot leak into the new speaker arrangement.
+
+Sails follow their individual suspension links, with projected tilt, shaded
+edges, and wind/motion-driven flutter. Metal sails are faceted kites, wood sails
+are curved leaves, and plastic sails are forked ribbons. Shape changes their
+taper, Body changes breadth, and Sail Size changes scale. Flutter is visual
+only and settles with the wind and pendulum movement.
+
+Stage distance also adds sound-travel time: zero at the listener, increasing
+linearly to 80 ms at the far edge (about 27 metres at the speed of sound).
+Each chime set has its own mono travel buffer before speaker routing and
+reverb sends. Moving the source crossfades timing over 20 ms. Stopping or
+removing a set clears its buffered sound after the stop fade.
+
+Audible wind combines low buffeting, three independently moving broad air
+bands, clustered surface rustles, and intermittent narrow whistles. Wind Mix
+sets their output level and presence, from sparse passing breezes to fuller
+close airflow and buffeting; Tone moves from deep air to bright surface detail;
+Texture increases clustered surface activity and catches. The layers share
+the physical weather's strength and direction without changing its random
+sequence. Turbulence adds faster uneven movement and patch variation. Silence
+remains silent when there is no wind.
+
+All wind character is controlled continuously by Wind Mix, Tone and Texture.
+There are no environment presets or context-menu sound settings. Texture
+moves from smooth open air through flutter and intermittent whistles to
+layered leaf rustle; high Tone and Texture produce shorter, drier surface
+bursts. Wind, Gustiness and Turbulence continue to drive the shared weather.
+Three sound patches move around the quad scene; mono/stereo connections
+use the same speaker normalization as the chimes. Sound synthesis uses
+fixed filter/event state and no audio-thread allocations.
+
+Broad flowing stripes visualize the local wind field behind the chimes. They
+follow the same spatial airflow as the suspension, curve with turbulence,
+and become brighter, wider and longer in strong gusts. Calm air hides them;
+The bands extend past every edge and are clipped flush to the stage. A fixed 36-stripe pool draws
+only on the UI thread, using a small published flow grid.
+
+**Wind audio** is a dedicated dry mono output, independent of Wind Mix (both
+its level and its presence shaping). Tone, Texture and the shared weather
+still apply; Output level controls its voltage. The existing Wind CV output
+remains 0–10 V. Right-click **Exclude wind from quad** to keep audible wind
+out of the main speaker mix and its reverb send; this option defaults off and
+is saved in the patch. Existing effect tails decay normally when switching.
+The dedicated synth only runs while its jack is connected.
+
+Rising gusts and high turbulence gently lift the wind bands' frequencies and
+briefly open the highs, then settle with a slower release. Low wind strength
+uses a roughly 650 ms attack, shortening toward 100 ms for strong wind.
+
+The panel is 60 HP (900 px), with the original 500 px flush stage and a wider
+control column. Buttons and dropdowns share Mely Porge's compact 15 px height
+and 10 px Oswald captions; knobs and jacks retain their sizes with expanded
+horizontal spacing.
+
+The focused chime has tiny S/M/W/R buttons (Solo/Mute/Wiggle/Random) in one
+row at the bottom left of its box. They follow the chime and stay inside the
+display at its edges.
+Solo/Mute also appear in each chime's right-click menu and the main Sound
+section alongside the existing Wiggle/Random controls. Actions apply to the
+selection and support undo. Persistent S/M badges identify soloed/muted
+chimes without requiring focus. Solo allows multiple sets; explicit Mute
+wins over Solo. Only enabled solo sets participate in solo routing. The
+controls fade the set's direct sound and new room sends while its motion
+continues; existing shared effect tails decay normally. Solo/Mute are saved
+as per-set controls and do not participate in sound randomization.
+
+Audible wind and its room return bypass the delay. Chime and wind room
+returns are kept separate so wind cannot enter the echo feedback, even with
+Reverb enabled. Delay Mix changes only the chime path.
+
+Wind bands render as continuous strokes with round joins, avoiding doubled
+segment caps. A moving brightness crest fades through each band. A fixed UI
+history adds faint ghosts lasting up to 1.65 seconds in strong wind, with
+much shorter persistence in light wind. Strong wind widens bands up to
+48 pixels; light wind keeps them narrow.
+
+Press Space while hovering over the chime display to make a gust. Holding
+the key does not repeatedly trigger gusts.
+
+While hovering over the display, M toggles mute, S toggles solo, W wiggles,
+R randomizes, and X strikes the selected chimes, including multi-selection.
+Each shortcut acts once per press.
+
+Tab selects the next enabled chime; Shift+Tab selects the previous one while
+hovering over the module. Navigation wraps at either end and replaces any
+multi-selection with the newly focused chime.

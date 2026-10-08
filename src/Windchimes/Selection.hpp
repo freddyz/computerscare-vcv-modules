@@ -10,6 +10,10 @@ struct Selection {
     mask = 1u << i;
   }
   void clear() { mask = 0; }
+  void selectAll(uint32_t enabled) {
+    mask = enabled & ((1u << maxSets) - 1u);
+    retain(mask);
+  }
   void toggle(int i) {
     mask ^= 1u << i;
     if (contains(i))
