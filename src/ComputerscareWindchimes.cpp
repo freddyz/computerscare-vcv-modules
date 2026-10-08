@@ -81,9 +81,9 @@ struct ComputerscareWindchimes : Module {
     OUTPUTS
   };
   static constexpr int param(int set, int field) {
-    if (set >= 8) return EXTRA_SET_BASE + (set - 8) * (SOLO + 1) + field;
-    return field == MUTE             ? MUTE_BASE + set
-           : field == SOLO           ? SOLO_BASE + set
+    return set >= 8        ? EXTRA_SET_BASE + (set - 8) * (SOLO + 1) + field
+           : field == MUTE ? MUTE_BASE + set
+           : field == SOLO ? SOLO_BASE + set
            : field == SAIL_SIZE      ? SAIL_BASE + set
            : field == STRIKER_WEIGHT ? WEIGHT_BASE + set
            : field == SPREAD         ? SPREAD_BASE + set
