@@ -1777,7 +1777,8 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
                            std::function<std::string()> label,
                            std::function<Menu*()> openMenu) {
       auto* b = new SelectorButton;
-      b->box = Rect(pos + Vec(0.f, 4.f), Vec(width * .82f, 15.f));
+      b->box = Rect(pos + Vec(0.f, 4.f),
+                    Vec(width * .82f, pos.y < 100.f ? 18.f : 15.f));
       b->label = std::move(label);
       b->openMenu = std::move(openMenu);
       addChild(b);
@@ -1814,7 +1815,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
             removeSet(module, &editor, editor.selected);
         });
     button(
-        Vec(428, 139), 47, []() { return "Strike"; },
+        Vec(450, 139), 43, []() { return "Strike"; },
         [this, module]() {
           if (module)
             module->strikeRequests.fetch_or(activeSelection(module, &editor),
@@ -1827,7 +1828,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
       selector(
           Vec(field == W::MATERIAL ? 338 : 338,
               field == W::MATERIAL ? 163 : 57),
-          field == W::MATERIAL ? 52 : 80,
+          field == W::MATERIAL ? 52 : 100,
           [this, module, field]() {
             int value =
                 module ? static_cast<int>(std::round(
@@ -1870,13 +1871,13 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
           });
     }
     button(
-        Vec(480, 139), 52, []() { return "Wiggle"; },
+        Vec(498, 139), 43, []() { return "Wiggle"; },
         [this, module]() { changeSelectionSound(module, &editor, true); });
     button(
-        Vec(538, 139), 47, []() { return "Random"; },
+        Vec(546, 139), 47, []() { return "Random"; },
         [this, module]() { changeSelectionSound(module, &editor, false); });
     button(
-        Vec(538, 163), 36,
+        Vec(510, 163), 36,
         [this, module]() {
           return module && module->params[W::param(editor.selected, W::SOLO)]
                                    .getValue() > .5f
@@ -1885,7 +1886,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         },
         [this, module]() { toggleSelectionFlag(module, &editor, W::SOLO); });
     button(
-        Vec(569, 163), 36,
+        Vec(555, 163), 36,
         [this, module]() {
           return module && module->params[W::param(editor.selected, W::MUTE)]
                                    .getValue() > .5f
@@ -1894,7 +1895,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         },
         [this, module]() { toggleSelectionFlag(module, &editor, W::MUTE); });
     selector(
-        Vec(426, 163), 94,
+        Vec(382, 163), 94,
         [this, module]() {
           if (!module) return std::string("Preset  v");
           int selected = editor.selected;
@@ -1971,15 +1972,14 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         W::DIVISIONS,     W::SPREAD,         W::DECAY,  W::BRIGHTNESS,
         W::HARDNESS,      W::STRIKER_WEIGHT, W::SHAPE,  W::BODY,
         W::INHARMONICITY, W::LEVEL,          W::SWING,  W::SAIL_SIZE};
+    const Vec setPositions[] = {
+        Vec(543, 70),  Vec(349, 108),   Vec(384, 108), Vec(419, 108),
+        Vec(454, 108), Vec(489, 108),   Vec(346, 205), Vec(384.5, 205),
+        Vec(423, 205), Vec(461.5, 205), Vec(500, 205), Vec(538.5, 205),
+        Vec(577, 205), Vec(580, 70),    Vec(543, 108), Vec(580, 108)};
     for (int i = 0; i < 16; ++i) {
-      auto* knob =
-          createParamCentered<SetKnob>(Vec(i < 6    ? 349.f + i * 45.f
-                                           : i < 13 ? 346.f + (i - 6) * 38.5f
-                                                    : 471.f + (i - 13) * 49.f,
-                                           i < 6    ? 107.f
-                                           : i < 13 ? 205.f
-                                                    : 72.f),
-                                       module, W::param(0, fields[i]));
+      auto* knob = createParamCentered<SetKnob>(setPositions[i], module,
+                                                W::param(0, fields[i]));
       knob->editor = &editor;
       knob->field = fields[i];
       addParam(knob);
@@ -1991,10 +1991,10 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     for (int i = 0; i < 12; ++i)
       addParam(createParamCentered<ChimeKnob>(
           Vec(i < 6 ? 349.f + i * 45.f : 349.f + (i - 6) * 45.f,
-              i < 6 ? 253.f : 292.f),
+              i < 6 ? 253.f : 289.f),
           module, globals[i]));
     addParam(
-        createParamCentered<SmallGustButton>(Vec(419, 329), module, W::GUST));
+        createParamCentered<SmallGustButton>(Vec(419, 325), module, W::GUST));
     for (int i = 0; i < 4; ++i)
       addInput(
           createInputCentered<InPort>(Vec(349.f + i * 35.f, 353.f), module, i));

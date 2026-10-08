@@ -197,7 +197,7 @@ uses a roughly 650 ms attack, shortening toward 100 ms for strong wind.
 
 The panel is 60 HP (900 px), with the original 500 px flush stage and a wider
 control column. Buttons and dropdowns share Mely Porge's compact 15 px height
-and 10 px Oswald captions; knobs and jacks retain their sizes with expanded
+and 10 px Oswald captions; the scale selector is 18 px tall. Knobs and jacks retain their sizes with expanded
 horizontal spacing.
 
 The focused chime has tiny S/M/W/R buttons (Solo/Mute/Wiggle/Random) in one
@@ -232,3 +232,9 @@ Each shortcut acts once per press.
 Tab selects the next enabled chime; Shift+Tab selects the previous one while
 hovering over the module. Navigation wraps at either end and replaces any
 multi-selection with the newly focused chime.
+
+Tuning groups Scale with Root, Register, Fine, EDO and Spread on the left;
+Tubes, Level, Swing and Sail occupy a separate grid on the right. Sound
+selectors and action buttons align in two rows above the timbre controls.
+Weather and effects share aligned knob columns above a taller connections
+block. The panel artwork has no outer top/right bevel.

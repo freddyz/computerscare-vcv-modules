@@ -15,7 +15,7 @@ helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
 svg = ET.Element(tag('svg'), width='900', height='380', viewBox='0 0 900 380')
 ET.SubElement(svg, tag('rect'), width='900', height='380', fill='#dedede')
-ET.SubElement(svg, tag('path'), d='M 0,0 L 900,0 L 900,380 L 894,376 L 894,4 L 5,4 L 5,375 L 0,380 Z', fill='#a4a4a4')
+
 
 ET.SubElement(svg, tag('rect'), x='0', y='0', width='500', height='380', fill='#0d1d1c')
 
@@ -61,20 +61,20 @@ box(507,3,127,30,'title-plaque','#cfcfcf')
 lettering('Windchimes',514,9,112,17,42)
 box(507,39,265,95,'tuning-box','#ececec')
 box(507,137,265,96,'sound-box','#d3d3d3')
-box(507,234,265,85,'weather-box','#e8e8e8')
-box(507,322,265,47,'connections-box','#e8e8e8')
-for i,label in enumerate(['Tubes','Root','Register','Fine','EDO','Spread']):
-    lettering(label,515+i*45,120,38,7)
-lettering('Level',638,87,35,8.5)
-lettering('Swing',687,87,35,8.5)
-lettering('Sail',736,87,35,8.5)
+box(507,234,265,77,'weather-box','#e8e8e8')
+box(507,314,265,56,'connections-box','#e8e8e8')
+for i,label in enumerate(['Root','Register','Fine','EDO','Spread']):
+    lettering(label,520+i*35,121,30,6.5)
+for label,x,y in [('Tubes',714,84),('Level',751,84),
+                  ('Swing',714,121),('Sail',751,121)]:
+    lettering(label,x,y,29,6.5)
 for i,label in enumerate(['Decay','Bright','Hard','Weight','Shape','Body','Inharm']):
     lettering(label,512+i*38.5,220,33,7)
-lettering('Weather',518,236,100,6,22)
+lettering('Weather',518,235,100,5,22)
 for i,label in enumerate(['Wind','Gusts','Turb','Wind mix','Tone','Texture']):
-    lettering(label,515+i*45,268,38,7)
+    lettering(label,515+i*45,267,38,6)
 for i,label in enumerate(['Output','Rev wet','Size','Delay mix','Time','Feedback']):
-    lettering(label,515+i*45,307,38,6.5)
+    lettering(label,515+i*45,302,38,6)
 for label,x in [('Wind CV',518),('1V/oct',553),('Gust',588),('Clock',623)]:
     lettering(label,x,337,27,5.5)
 lettering('Wind CV out',643,331,18,5)
