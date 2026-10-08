@@ -5,6 +5,7 @@ Plugin* pluginInstance;
 void init(Plugin* p) {
   pluginInstance = p;
 
+  p->addModel(modelComputerscarePhlooper);
   p->addModel(modelComputerscareDebug);
   p->addModel(modelComputerscarePatchSequencer);
   p->addModel(modelComputerscareLaundrySoup);

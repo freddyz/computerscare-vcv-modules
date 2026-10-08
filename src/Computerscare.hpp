@@ -735,3 +735,5 @@ struct SmallLetterDisplay : Widget {
 #include "MenuParams.hpp"
 #include "drawFunctions.hpp"
 #include "pointFunctions.hpp"
+
+extern Model* modelComputerscarePhlooper;
