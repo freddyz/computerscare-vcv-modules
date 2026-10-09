@@ -12,9 +12,11 @@ Erase removes the portion beneath each addressed head while held high. Stop free
 
 Start and Length are percentages of the original recording. A region can wrap across the original buffer boundary. Restart begins at Start. Length changes apply while playing; Start changes latch independently when each head next wraps; a Restart adopts the new Start immediately for addressed heads. Output mix blends input with the average of the active loop outputs. Stereo is retained; a mono recording is sent equally to left and right.
 
-Each loop has Mute, Solo, Pause, and direction buttons. The direction button cycles F (Forward), R (Reverse), and B (Forward then Reverse). Reverse plays the selected region backward; B alternates direction at each end. Restart begins F and B at the region start, and R at its end. End-of-loop triggers fire at each traversal boundary. Recording and erasing follow the selected direction. The direction dropdown above the knobs sets all sixteen loops together and shows Mixed when their modes differ. Direction modes and the current B leg are saved with the patch.
+Each loop has Mute, Solo, Pause, and direction buttons. The direction button cycles F (Forward), R (Reverse), and B (Forward then Reverse). Reverse plays the selected region backward; B alternates direction at each end. Restart begins F and B at the region start, and R at its end. End-of-loop triggers fire at each traversal boundary. Recording and erasing follow the selected direction. The direction dropdown above the visual sets all sixteen loops together and shows Mixed when their modes differ. Direction modes and the current B leg are saved with the patch.
 
-The header's Ctrl button hides the row buttons and expands the visual across the display. Hidden controls retain their settings. This preference is saved with the patch.
+The Ctrl button above the visual hides the row buttons and expands the visual across the display. Hidden controls retain their settings. This preference is saved with the patch.
+
+The controls above the visual select Time/Length/Speed and set all loop directions. Zoom toggles between the full recording and all visible loop regions with 10% padding on each side. Zoom follows Start, Length, and CV changes and handles regions crossing the recording boundary. While dragging a knob, the zoom stays fixed and refits when the knob is released. Waveform sampling focuses on the zoomed time range to show smaller loops in more detail. Zoom affects only the view; playback continues normally.
 
 The context menu's Visualization setting switches between Line and Waveform. Waveform shows a sampled overview of each loop's stored audio beneath the region and playhead markers, including stereo peaks without cancelling opposite-phase channels. Its bounded cache refresh runs incrementally while audio processes; very short transients in long recordings can be missed by overview sampling.
 
@@ -58,12 +60,7 @@ to −100 to +100 ms in Time mode, or −20% to +20% in Length/Speed modes; 0 V
 means no offset. Missing channels retain the knob’s spacing. A mono cable
 addresses loop 1 only. Values outside ±10 V are clamped.
 
-Hold latches phase: the button toggles it, or a gate of at least 1 V holds
-it while high. Either control enables Hold. All active loops use loop 1’s
-period and speed, including loop 1’s explicit offset CV, while playheads
-continue running. Releasing both controls restores each loop’s offsets and
-resumes drift. Hold also matches speed in Speed mode, so phasing freezes in
-all three modes.
+Hold latches phase: the button toggles it, or a gate of at least 1 V holds it. In Time and Length modes, it preserves the current offsets between playheads and matches their periods to loop 1. In Speed mode, it keeps each channel's current playback rate and pitch and captures temporary in/out points proportional to those rates. All held channels then share exactly the same repeat time and one phase clock. The shortest current channel repeat time becomes the shared repeat time. Engaging Hold keeps the current source positions, including reverse playback. Overall Speed scales held rates together; per-loop Pause and Restart still work. Releasing Hold restores the selected regions and resumes drift. Fitted regions and their shared clock are saved with the patch. Start, Length, and Offset changes take effect after releasing Speed-mode Hold.
 
 Patch saves retain every playhead and its latched Start, so reopening resumes
 the phase relationship from the saved positions. Record is a latching button;
@@ -76,8 +73,8 @@ Each display row has M (mute), S (solo), and P (pause) toggles. Multiple loops c
 
 With the pointer over Phlooper: Space toggles Stop, H toggles Hold, R toggles Record, T restarts all loops, and E erases while held. Modifier shortcuts remain available to Rack.
 
-Small IN/OUT meters show stereo RMS level (5 V = 0 dB) with a yellow right-edge border holding the peak for one second. Their upper segments indicate high levels; lit segments glow according to Rack’s halo brightness setting.
+Small IN/OUT meters show stereo RMS level (5 V = 0 dB) with a green peak line held for 0.4 seconds. They use 8–18 randomly sized segments, with the longest three times the shortest, and a 20 ms level response. Their upper segments indicate high levels; lit segments glow according to Rack’s halo brightness setting.
 
-Overall Speed CV is a mono 1 V/octave offset from the knob, clamped to ¼–4×. Rec mix and Out mix CV are mono offsets: ±10 V adds/subtracts 100 percentage points, clamped to 0–100%. Each knob/button shares one label with the jack directly below it.
+Speed CV is a polyphonic 1 V/octave offset from the knob, clamped to ¼–4× per channel. A mono cable controls all loops; channels beyond a polyphonic cable use the knob alone. Speed-mode Hold captures these per-channel rates when engaged; subsequent Speed CV changes take effect on release. Rec mix and Out mix CV are mono offsets: ±10 V adds/subtracts 100 percentage points, clamped to 0–100%. Each knob/button shares one label with the jack directly below it.
 
 Small input/output Gain knobs display dB, from silence (−∞ dB) through +12.04 dB (4×), defaulting to unity (0 dB). Input gain affects recording and dry monitoring; output gain applies to the final stereo mix. Changes are smoothed, and meters reflect the adjusted levels.

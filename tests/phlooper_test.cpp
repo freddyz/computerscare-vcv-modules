@@ -1,5 +1,6 @@
 #include "Phlooper/Engine.hpp"
 #include "Phlooper/Waveform.hpp"
+#include "Phlooper/Zoom.hpp"
 #include "Phlooper/Wav.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -107,12 +108,12 @@ int main(){
     "explicit speed offsets map to percent of nominal speed");
   s.offsetMask=0;s.mode=2;s.offset=10;s.count=3;s.speed=1;s.hold=false;e.resetHeads();
   for(int i=0;i<100;++i)e.process(in,48000,s,0,0,0,0,0,false);
-  double difference=e.head[2]-e.head[0];
+  double difference=e.head[2]/e.periods[2]-e.head[0]/e.periods[0];
   s.hold=true;
   for(int i=0;i<100;++i)e.process(in,48000,s,0,0,0,0,0,false);
-  check(std::fabs(e.head[2]-e.head[0]-difference)<.001,"hold preserves phase difference without retriggering");
+  check(std::fabs(e.head[2]/e.periods[2]-e.head[0]/e.periods[0]-difference)<1e-10,"speed hold preserves normalized phase without matching pitches");
   s.hold=false;e.process(in,48000,s,0,0,0,0,0,false);
-  check(e.head[2]-e.head[0]>difference,"release resumes normal drift");
+  check(e.head[2]/e.periods[2]-e.head[0]/e.periods[0]>difference,"release resumes normal drift");
   s.mode=0;s.offsetMask=1;s.offsets[0]=-2;s.hold=true;
   e.process(in,48000,s,0,0,0,0,0,false);
   check(e.periods[0]==e.periods[1]&&e.periods[1]==e.periods[2]&&e.periods[0]==904,
@@ -247,5 +248,92 @@ int main(){
         "waveform compression keeps headroom and bounds large peaks");
   check(phlooper::waveformAmplitude(-1)==-phlooper::waveformAmplitude(1),
         "waveform compression treats positive and negative audio symmetrically");
+  std::array<phlooper::TimeRange,16> zoomRegions{};
+  zoomRegions[0]={.2f,.21f};zoomRegions[1]={.2f,.22f};
+  auto fitted=phlooper::fitLoopZoom(zoomRegions,2);
+  check(std::fabs(fitted.start-.198f)<1e-6f&&std::fabs(fitted.end-.222f)<1e-6f,
+        "zoom fits all visible loops with ten percent padding");
+  zoomRegions[0]={.98f,1.f};zoomRegions[1]={.02f,.04f};
+  fitted=phlooper::fitLoopZoom(zoomRegions,2);
+  check(fitted.start<.98f&&fitted.end>1.04f&&fitted.end-fitted.start<.08f,
+        "zoom keeps nearby loops across the WAV boundary together");
+  check(std::fabs(phlooper::zoomPoint(.03f,fitted)-1.03f)<1e-6f,
+        "zoom maps wrapped playheads to the correct visible copy");
+  zoomRegions[0]={0,1};fitted=phlooper::fitLoopZoom(zoomRegions,1);
+  check(fitted.start==0&&fitted.end==1,"full length loops retain the full recording view");
+  wave=phlooper::sampleWaveformBin(waveformSamples.data(),1024,false,0,1023.f/1024,1025.f/1024);
+  check(wave.high==7,"zoom waveform samples the selected source tail");
+  wave=phlooper::sampleWaveformBin(waveformSamples.data(),1024,false,255,1023.f/1024,1025.f/1024);
+  check(wave.high==2&&wave.low==2,"zoom waveform wraps into the source beginning");
+  s=phlooper::Settings();s.mode=2;s.count=3;s.offset=10;s.directions[1]=1;s.directions[2]=2;
+  e.resetHeads();e.process({},48000,s,0,0,0,0,0,false);
+  e.head[0]=200;e.head[1]=330;e.head[2]=450;e.returning[2]=true;
+  std::array<double,3> beforePosition{},beforePhase{};
+  for(int v=0;v<3;++v){
+    beforePosition[v]=e.sourceStart(v)+e.playbackPosition(v,s.directions[v]);
+    beforePhase[v]=e.head[v]/e.periods[v];
+  }
+  s.hold=true;e.process({},48000,s,0,0,0,0,0,false);
+  check(e.speedHold.active,"speed hold captures a fitted loop region per channel");
+  for(int v=0;v<3;++v){
+    double speed=1.+v*.1;
+    check(std::fabs(e.speedHold.speeds[v]-speed)<1e-12,"speed hold retains distinct channel pitches");
+    check(std::fabs(e.periods[v]/speed-e.speedHold.duration)<1e-10,"fitted in/out points give every speed exactly the same repeat time");
+    double moved=e.sourceStart(v)+e.playbackPosition(v,s.directions[v])-beforePosition[v];
+    moved-=std::round(moved/e.size)*e.size;
+    check(std::fabs(moved-(v==0?speed:-speed))<1e-9,"engaging speed hold preserves forward, reverse, and returning source positions");
+  }
+  auto heldPhaseDifference=[&](int v){return phlooper::Engine::wrapPhase(e.head[v]/e.periods[v]-e.head[0]/e.periods[0]);};
+  double heldDifference=phlooper::Engine::wrapPhase(beforePhase[1]-beforePhase[0]);
+  for(int frame=0;frame<20000;++frame)e.process({},frame%2?44100:96000,s,0,0,0,0,0,false);
+  check(std::fabs(heldPhaseDifference(1)-heldDifference)<1e-10,"shared hold clock prevents phase drift through wraps and sample-rate changes");
+  double pausedPosition=e.head[1];
+  for(int frame=0;frame<100;++frame)e.process({},48000,s,0,0,0,0,2,false);
+  check(std::fabs(e.head[1]-pausedPosition)<1e-9,"per-loop pause overrides the shared hold clock");
+  e.process({},48000,s,0,0,2,0,0,false);
+  check(std::fabs(e.head[1]-1.1)<1e-9,"restart resets one held channel without changing its pitch");
+  double heldPeriod=e.periods[0];s.speed=2;
+  double phaseBefore=e.head[0]/e.periods[0];
+  e.process({},48000,s,0,0,0,0,0,false);
+  check(e.periods[0]==heldPeriod&&std::fabs(phlooper::Engine::wrapPhase(e.head[0]/e.periods[0]-phaseBefore)-2/e.speedHold.duration)<1e-10,
+        "overall speed changes scale all held pitches together without changing fitted regions");
+  resumed.size=e.size;resumed.head=e.head;resumed.periods=e.periods;resumed.activeStart=e.activeStart;
+  resumed.returning=e.returning;resumed.previousDirection=e.previousDirection;resumed.fade=e.fade;resumed.speedHold=e.speedHold;
+  for(int v=0;v<3;++v){std::copy(e.audio[v].get(),e.audio[v].get()+e.size*2,resumed.audio[v].get());resumed.stereo[v]=e.stereo[v];}
+  auto heldOutput=e.process({},48000,s,0,0,0,0,0,false);
+  auto restoredOutput=resumed.process({},48000,s,0,0,0,0,0,false);
+  check(heldOutput.l==restoredOutput.l&&e.head[1]==resumed.head[1]&&e.speedHold.clock==resumed.speedHold.clock,
+        "restored speed hold resumes the exact fitted regions and shared phase clock");
+  s.hold=false;e.process({},48000,s,0,0,0,0,0,false);
+  check(!e.speedHold.active&&e.periods[0]==e.size&&e.periods[1]==e.size,"release restores the selected loop lengths");
+  s=phlooper::Settings();s.count=16;s.mode=2;s.speed=4;s.hold=true;
+  s.offsetMask=65535;s.lengthMask=65535;
+  for(int v=0;v<16;++v){s.offsets[v]=v%2?700:-99;s.lengths[v]=.001f+.06f*v;s.directions[v]=v%3;}
+  e.resetHeads();
+  for(int frame=0;frame<200;++frame){
+    auto extreme=e.process({},44100,s,frame%2?65535:0,frame%2?0:65535,0,0,0,true);
+    check(std::isfinite(extreme.l)&&std::isfinite(extreme.r),"extreme held speeds and fractional regions remain finite while writing");
+  }
+  for(int v=0;v<16;++v)
+    check(std::fabs(e.periods[v]/e.speedHold.speeds[v]-e.speedHold.duration)<1e-10,
+          "all sixteen extreme-speed channels share the exact held repeat time");
+  for(int mode=0;mode<3;++mode){
+    s=phlooper::Settings();s.mode=mode;s.count=3;s.offset=0;s.speed=.5f;
+    s.speedMask=3;s.speeds[0]=1;s.speeds[1]=2;
+    e.resetHeads();e.process({},48000,s,0,0,0,0,0,false);
+    check(e.head[0]==1&&e.head[1]==2&&e.head[2]==.5,
+          "polyphonic speed controls each voice in every mode, with knob fallback");
+  }
+  s.hold=true;e.process({},48000,s,0,0,0,0,0,false);
+  check(e.speedHold.speeds[0]==1&&e.speedHold.speeds[1]==2&&e.speedHold.speeds[2]==.5,
+        "speed hold captures polyphonic pitches into fitted regions");
+  for(int v=0;v<3;++v)
+    check(std::fabs(e.periods[v]/e.speedHold.speeds[v]-e.speedHold.duration)<1e-10,
+          "polyphonic speed hold fits every channel to the shared repeat time");
+  s.speeds[1]=4;e.process({},48000,s,0,0,0,0,0,false);
+  check(e.speedHold.speeds[1]==2,"held pitches stay latched through speed CV changes");
+  s.hold=false;e.process({},48000,s,0,0,0,0,0,false);
+  double polyHead=e.head[1];e.process({},48000,s,0,0,0,0,0,false);
+  check(std::fabs(e.head[1]-polyHead-4)<1e-9,"speed CV changes apply after releasing hold");
   std::puts("Phlooper DSP and WAV tests passed");
 }
