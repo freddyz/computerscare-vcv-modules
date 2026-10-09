@@ -46,6 +46,7 @@ struct WarpedBlock : widget::TransparentWidget {
       nvgFillColor(args.vg, color);
       nvgFill(args.vg);
       nvgStrokeColor(args.vg, nvgRGB(0, 0, 0));
+      nvgLineJoin(args.vg, NVG_ROUND);
       nvgStrokeWidth(args.vg, .65f);
       nvgStroke(args.vg);
     };

@@ -13,6 +13,7 @@ struct Settings {
   bool hold = false;
   unsigned offsetMask = 0, startMask = 0, lengthMask = 0;
   std::array<float, voices> offsets{}, starts{}, lengths{};
+  std::array<int, voices> directions{};
   float start = 0, length = 1, offset = 1, recordMix = .5f, mix = 1, speed = 1;
 };
 class Engine {
@@ -20,8 +21,16 @@ class Engine {
   // Reserve storage outside process(). Unwritten storage is never read.
   std::array<std::unique_ptr<float[]>, voices> audio;
   std::array<double, voices> head{};
+  struct WriteSpan {
+    double from = 0, extent = 0, period = 1;
+    int base = 0, kind = 0;
+  };
+  std::array<WriteSpan, voices> writeSpans{};
+  std::array<int, voices> previousWriteKind{};
   std::array<int, voices> activeStart{};
   std::array<double, voices> periods{};
+  std::array<bool, voices> returning{};
+  std::array<int, voices> previousDirection{};
   std::array<float, voices> fade{};
   std::array<bool, voices> stereo{};
   unsigned completed = 0;
@@ -71,6 +80,13 @@ class Engine {
     activeStart.fill(-1);
     head.fill(0);
     fade.fill(0);
+    returning.fill(false);
+    previousWriteKind.fill(0);
+  }
+  double playbackPosition(int voice, int direction) const {
+    bool reverse = direction == 1 || (direction == 2 && returning[voice]);
+    return reverse ? std::max(0., periods[voice] - 1. - head[voice])
+                   : head[voice];
   }
   Frame read(int voice, double pos, int regionStart, int regionLength) const {
     if (!size || pos >= regionLength) return {};
@@ -121,6 +137,14 @@ class Engine {
         }
         ++captured;
       }
+      for (int v = 0; v < voices; ++v) {
+        writeSpans[v].from = 0;
+        writeSpans[v].extent = captured;
+        writeSpans[v].period = std::max(1, captured);
+        writeSpans[v].base = 0;
+        writeSpans[v].kind = 1;
+        previousWriteKind[v] = 0;
+      }
       if (captured == limit) finish();
       previous = input;
       return input;
@@ -146,7 +170,7 @@ class Engine {
       double period = length;
       double speed = 1;
       if (s.mode == 0)
-        period -= offset * rate / 1000.;
+        period += offset * rate / 1000.;
       else if (s.mode == 1)
         period *= 1. + offset / 100.;
       else
@@ -154,7 +178,14 @@ class Engine {
       period = std::max(48., std::min(double(limit), period));
       speed *= std::max(.25f, std::min(4.f, s.speed));
       periods[v] = period;
-      if (activeStart[v] < 0 || (restart & bit))
+      int direction = std::max(0, std::min(2, s.directions[v]));
+      if (direction != previousDirection[v] || (restart & bit)) {
+        returning[v] = false;
+        previousWriteKind[v] = 0;
+      }
+      previousDirection[v] = direction;
+      bool reverse = direction == 1 || (direction == 2 && returning[v]);
+      if (size && (activeStart[v] < 0 || (restart & bit)))
         activeStart[v] = requestedStart;
       int start = activeStart[v];
       if (restart & bit) {
@@ -162,16 +193,45 @@ class Engine {
         fade[v] = 0;
       }
       head[v] = std::fmod(head[v], period);
+      int writeKind = stop & bit ? 0 : erase & bit ? 2 : record & bit ? 1 : 0;
+      auto& span = writeSpans[v];
+      if (writeKind && (writeKind != previousWriteKind[v] || (restart & bit) ||
+                        span.base != start || span.period != period)) {
+        span.from = playbackPosition(v, direction);
+        span.extent = 0;
+        span.base = start;
+        span.period = period;
+        span.kind = writeKind;
+      }
+      if (writeKind) {
+        span.extent = std::min(period, span.extent + step * speed);
+        if (reverse) span.from = std::max(0., playbackPosition(v, direction));
+      }
+      previousWriteKind[v] = writeKind;
+
       if (size) {
-        Frame out = filteredRead(v, head[v], start,
+        Frame out = filteredRead(v, playbackPosition(v, direction), start,
                                  std::min(length, int(period)), step * speed);
         float edge = float(std::min(head[v], period - head[v]) /
                            std::min(48., period * .25));
         edge = std::max(0.f, std::min(1.f, edge));
         float target = (mute | stop) & bit ? 0.f : 1.f;
         fade[v] += (target - fade[v]) * std::min(1.f, 200.f / sampleRate);
-        sum.l += out.l * edge * fade[v];
-        sum.r += out.r * edge * fade[v];
+        out.l *= edge;
+        out.r *= edge;
+        // Monitor the operation at the moving head immediately, rather than
+        // playing its stale contents until the next pass.
+        if (writeKind == 2) {
+          out = {};
+        } else if (writeKind == 1) {
+          float retained = s.overdub == 0 ? 1.f - s.recordMix : 1.f;
+          out.l = std::max(
+              -20.f, std::min(20.f, out.l * retained + input.l * s.recordMix));
+          out.r = std::max(
+              -20.f, std::min(20.f, out.r * retained + input.r * s.recordMix));
+        }
+        sum.l += out.l * fade[v];
+        sum.r += out.r * fade[v];
         // Visit every crossed storage frame, even when playback is faster than
         // 1x.
         double end = head[v] + step * speed;
@@ -179,8 +239,10 @@ class Engine {
         for (int k = 0; k < steps && !(stop & bit) && ((record | erase) & bit);
              ++k) {
           double p = int(head[v]) + k;
-          if (p >= period || p >= length) continue;
-          int index = (start + int(p)) % size;
+          if (p >= period) continue;
+          double source = reverse ? std::max(0., period - 1. - p) : p;
+          if (source >= length) continue;
+          int index = (start + int(source)) % size;
           if (erase & bit) {
             audio[v][index * 2] = 0;
             audio[v][index * 2 + 1] = 0;
@@ -202,6 +264,9 @@ class Engine {
           if (next >= period) {
             completed |= bit;
             activeStart[v] = requestedStart;
+            if (direction == 2 && (int(std::floor(next / period)) & 1))
+              returning[v] = !returning[v];
+            if (direction == 2) previousWriteKind[v] = 0;
           }
           head[v] = std::fmod(next, period);
         }

@@ -22,11 +22,12 @@ def text(s,x,y,w,h,rand=25):
     xs=[p[0] for p in points];ys=[p[1] for p in points];bounds=(min(xs)-1,min(ys)-1,max(xs)-min(xs)+2,max(ys)-min(ys)+2)
     embed(root,x,y,min(w,h*bounds[2]/bounds[3]),h,bounds,'label-'+s.replace(' ','-'))
 # Perspective blocks are drawn by the procedural WarpedBlock component.
-text('Phlooper',16,5,144,24,48)
-for s,x in [('Start',22),('Length',74),('Offset',126),('Speed',178),('Rec mix',226),('Out mix',278)]:text(s,x,215,45,7)
-for s,x in [('Record',16),('Erase',66),('Restart',111),('Stop',168),('Hold',218),('Hold CV',253),('EOC',288)]:text(s,x,270,35,5)
-for s,x in [('L / mono',14),('R',76),('Record',117),('Erase',170),('Restart',219),('Out L',281)]:text(s,x,318,48,6)
-for s,x in [('Mute',17),('Stop',69),('Start CV',118),('Length CV',165),('Offset CV',217),('Out R',281)]:text(s,x,361,48,5.5)
+text('Phlooper',16,7,98,20,48)
+for s,x in [('Start',22),('Length',74),('Offset',126),('Speed',178),('Rec mix',226),('Out mix',278)]:
+    text(s,x,208 if s in ('Length','Speed') else 206,45,9 if s in ('Length','Speed') else 7)
+for s,x in [('L / mono',21),('R',67),('Mute',129),('Out L',179),('Out R',214),('EOC',285)]:text(s,x,360,40,5.5)
+text('Gain',88,360,25,5.5)
+text('Gain',244,360,25,5.5)
 logo=E.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
 embed(logo,94,367,12,12,name='computerscare-logo')
 text('computerscare',111,371,160,7,47)

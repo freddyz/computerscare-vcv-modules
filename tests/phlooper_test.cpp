@@ -1,4 +1,5 @@
 #include "Phlooper/Engine.hpp"
+#include "Phlooper/Waveform.hpp"
 #include "Phlooper/Wav.hpp"
 #include <cstdio>
 #include <cstdlib>
@@ -22,6 +23,8 @@ void wavFixture(const char* path, int format, int bits, int channels, bool exten
 }
 int main(){
   phlooper::Engine e(4800);phlooper::Settings s;s.count=16;s.offset=1;
+  e.process({},48000,s,0,0,0,0,0,false);
+  check(e.activeStart[0]==-1,"empty loops do not latch start points before audio loads");
   e.begin(false);
   phlooper::Frame in;in.l=1;in.r=1;
   for(int i=0;i<1000;++i)e.process(in,48000,s,0,0,0,0,0,false);
@@ -41,9 +44,9 @@ int main(){
   check(e.head[0]<.001&&e.head[1]>0,"time offsets cause phase drift");
   s.mode=2;s.offset=-20;s.start=1;s.length=.001f;
   for(int i=0;i<10000;++i){auto out=e.process(in,192000,s,0,0,0,0,0,false);check(std::isfinite(out.l)&&std::fabs(out.l)<=3,"extreme settings remain bounded");}
-  s.mode=0;s.offset=-20;s.start=0;s.length=1;e.resetHeads();
+  s.mode=0;s.offset=20;s.start=0;s.length=1;e.resetHeads();
   for(int i=0;i<1000;++i)e.process(in,48000,s,0,0,0,0,0,false);
-  check(e.head[1]>=1000,"negative time offsets add silence beyond original length");
+  check(e.head[1]>=1000,"positive time offsets add silence beyond original length");
   phlooper::saveWav("/tmp/phlooper-test.wav",e.audio[0].get(),e.size,false);
   auto wav=phlooper::loadWav("/tmp/phlooper-test.wav");
   check(wav.channels==1&&wav.samples.size()==1000&&std::fabs(wav.samples[50]-.2f)<1e-6,"mono float WAV roundtrip preserves audio scale");
@@ -80,7 +83,7 @@ int main(){
   check(e.completed==65534,"stopped head emits no EOC while other heads wrap");
   e.process(in,48000,s,0,0,65535,0,0,false);
   check(e.completed==0,"restart does not emit EOC");
-  s.speed=1;s.count=2;s.offset=1;s.start=.2f;e.resetHeads();
+  s.speed=1;s.count=2;s.offset=-1;s.start=.2f;e.resetHeads();
   e.process(in,48000,s,0,0,0,0,0,false);
   check(e.activeStart[0]==200&&e.activeStart[1]==200,"heads start at requested source location");
   s.start=.6f;
@@ -93,7 +96,7 @@ int main(){
   s.start=0;s.count=3;s.mode=0;s.offset=1;s.speed=1;
   s.offsetMask=3;s.offsets[0]=2;s.offsets[1]=-2;e.resetHeads();
   e.process(in,48000,s,0,0,0,0,0,false);
-  check(e.periods[0]==904&&e.periods[1]==1096&&e.periods[2]==904,
+  check(e.periods[0]==1096&&e.periods[1]==904&&e.periods[2]==1096,
     "explicit offsets replace index spacing, missing CV channels retain knob spacing");
   s.mode=1;s.offsets[0]=10;s.offsets[1]=-10;e.resetHeads();
   e.process(in,48000,s,0,0,0,0,0,false);
@@ -112,7 +115,7 @@ int main(){
   check(e.head[2]-e.head[0]>difference,"release resumes normal drift");
   s.mode=0;s.offsetMask=1;s.offsets[0]=-2;s.hold=true;
   e.process(in,48000,s,0,0,0,0,0,false);
-  check(e.periods[0]==e.periods[1]&&e.periods[1]==e.periods[2]&&e.periods[0]==1096,
+  check(e.periods[0]==e.periods[1]&&e.periods[1]==e.periods[2]&&e.periods[0]==904,
     "hold uses first loop period including its explicit offset");
   for(int variant=0;variant<4;++variant){
     int format=variant==1||variant==3?3:1;
@@ -136,6 +139,13 @@ int main(){
   for(int v=0;v<s.count;++v)
     check(e.head[v]==resumed.head[v]&&e.activeStart[v]==resumed.activeStart[v],
       "restored playheads continue from saved offsets and pending starts remain pending");
+  double restoredHead=resumed.head[0];
+  resumed.activeStart.fill(-1);
+  resumed.process(in,48000,s,0,0,0,0,65535u,false);
+  check(resumed.activeStart[0]==int(resumed.size*s.start),
+        "loaded regions adopt current start before the first wrap");
+  check(resumed.head[0]==restoredHead,
+        "initializing loaded regions preserves restored playhead progress");
   s.count=3;s.mode=0;s.offset=0;s.offsetMask=0;s.hold=false;
   s.start=.2f;s.length=.8f;s.startMask=3;s.lengthMask=3;
   s.starts[0]=.1f;s.starts[1]=.7f;s.lengths[0]=.3f;s.lengths[1]=.6f;
@@ -144,5 +154,98 @@ int main(){
   check(e.periods[0]==int(e.size*.3f)&&e.periods[1]==int(e.size*.6f)&&e.periods[2]==int(e.size*.8f),"per-loop length CV regions and missing-channel fallback");
   s.hold=true;e.process(in,48000,s,0,0,0,0,0,false);
   check(e.periods[0]==e.periods[1]&&e.periods[1]==e.periods[2],"hold uses loop one's CV-controlled length for all loops");
+  s.count=1;s.mode=0;s.offset=0;s.offsetMask=0;s.startMask=0;s.lengthMask=0;
+  s.start=0;s.length=1;s.speed=1;s.hold=false;e.resetHeads();
+  for(int i=0;i<10;++i)e.process(in,48000,s,1,0,0,0,0,false);
+  check(e.writeSpans[0].kind==1&&e.writeSpans[0].from==0&&e.writeSpans[0].extent==10,"record region grows from the action start");
+  for(int i=0;i<10;++i)e.process(in,48000,s,0,0,0,0,0,false);
+  check(e.writeSpans[0].extent==10,"record region stops growing when recording stops");
+  for(int i=0;i<5;++i)e.process(in,48000,s,0,1,0,0,0,false);
+  check(e.writeSpans[0].kind==2&&e.writeSpans[0].from==20&&e.writeSpans[0].extent==5,"erase region starts at its own action position");
+  e.process(in,48000,s,0,0,0,0,0,false);e.head[0]=e.size-5;
+  for(int i=0;i<10;++i)e.process(in,48000,s,1,0,0,0,0,false);
+  check(e.writeSpans[0].from==e.size-5&&e.writeSpans[0].extent==10,"record region retains its origin across a loop wrap");
+  s.count=4;s.mode=0;s.offset=0;s.mix=1;s.recordMix=.25f;s.overdub=0;
+  auto monitor=[&](unsigned record,unsigned erase,unsigned stop){
+    for(int v=0;v<s.count;++v){
+      std::fill(e.audio[v].get(),e.audio[v].get()+e.size*2,2.f);
+      e.head[v]=120;e.fade[v]=1;e.stereo[v]=true;
+    }
+    phlooper::Frame live;live.l=6;live.r=10;
+    return e.process(live,48000,s,record,erase,0,0,stop,true);
+  };
+  auto monitored=monitor(15,0,0);
+  check(std::fabs(monitored.l-3.f)<1e-5f&&std::fabs(monitored.r-4.f)<1e-5f,
+        "blend monitoring mixes live input once at record mix across all loops");
+  s.overdub=1;monitored=monitor(15,0,0);
+  check(std::fabs(monitored.l-3.5f)<1e-5f&&std::fabs(monitored.r-4.5f)<1e-5f,
+        "add monitoring retains loop audio and adds input at record mix");
+  monitored=monitor(15,15,0);
+  check(monitored.l==0&&monitored.r==0,"erase monitoring silences addressed loops and overrides recording");
+  monitored=monitor(0,1,0);
+  check(std::fabs(monitored.l-1.5f)<1e-5f,"erasing one loop leaves other loops audible at their existing gain");
+  s.mix=.5f;monitored=monitor(0,15,0);
+  check(monitored.l==3&&monitored.r==5,"output mix retains its dry input during erase");
+  s=phlooper::Settings();s.count=3;s.offset=0;s.directions[1]=1;s.directions[2]=2;
+  e.resetHeads();
+  for(int v=0;v<3;++v){
+    for(int frame=0;frame<e.size;++frame){
+      e.audio[v][frame*2]=float(frame)/1000;
+      e.audio[v][frame*2+1]=float(frame)/2000;
+    }
+    e.stereo[v]=true;e.head[v]=100;e.fade[v]=1;
+  }
+  auto directional=e.process({},48000,s,0,0,0,0,0,false);
+  check(std::fabs(directional.l-(.1f+.899f+.1f)/3)<1e-5f &&
+        std::fabs(directional.r-directional.l/2)<1e-5f,
+        "each loop independently reads forward, reverse, or the forward bounce leg");
+  check(e.playbackPosition(0,0)==101&&e.playbackPosition(1,1)==898,
+        "reverse tracker follows the actual source position");
+  e.head[2]=e.size-1;
+  e.process({},48000,s,0,0,0,0,0,false);
+  check(e.returning[2]&&e.head[2]==0&&(e.completed&4),
+        "forward then reverse turns at the region end and emits EOC");
+  e.process({},48000,s,0,0,0,0,4,false);
+  check(e.returning[2]&&e.head[2]==0,"pause holds the reverse bounce leg");
+  e.head[2]=e.size-1;
+  e.process({},48000,s,0,0,0,0,0,false);
+  check(!e.returning[2]&&e.head[2]==0,"bounce returns to forward at the region start");
+  e.returning[2]=true;
+  e.process({},48000,s,0,0,4,0,0,false);
+  check(!e.returning[2]&&e.head[2]==1,"restart begins bounce in the forward direction");
+  s.count=1;s.directions[0]=1;s.recordMix=1;
+  e.head[0]=100;e.fade[0]=1;
+  phlooper::Frame live;live.l=6;live.r=10;
+  e.process(live,48000,s,1,0,0,0,0,true);
+  check(e.audio[0][899*2]==6&&e.audio[0][899*2+1]==10&&e.audio[0][100*2]==.1f,
+        "reverse overdub writes stereo audio beneath the reverse head");
+  e.process(live,48000,s,0,1,0,0,0,true);
+  check(e.audio[0][898*2]==0&&e.audio[0][898*2+1]==0,
+        "reverse erase clears the reverse head location");
+  e.head[0]=e.size-1;e.process({},48000,s,0,0,0,0,0,false);
+  check(e.head[0]==0&&(e.completed&1)&&e.playbackPosition(0,1)==e.size-1,
+        "reverse wraps from the start back to the region end");
+  s.length=.5f;s.start=.8f;
+  e.resetHeads();e.head[0]=100;e.fade[0]=1;
+  e.process({},48000,s,0,0,0,0,0,false);
+  check(e.activeStart[0]==800&&e.periods[0]==500&&e.playbackPosition(0,1)==398,
+        "reverse respects a shortened region wrapping across the source boundary");
+  std::vector<float> waveformSamples(1024*2);
+  for(int frame=0;frame<1024;++frame){waveformSamples[frame*2]=2;waveformSamples[frame*2+1]=-3;}
+  auto wave=phlooper::sampleWaveformBin(waveformSamples.data(),1024,true,128);
+  check(wave.low==-3&&wave.high==2,"waveform retains opposite-phase stereo extrema");
+  wave=phlooper::sampleWaveformBin(waveformSamples.data(),1024,false,255);
+  check(wave.low==2&&wave.high==2,"mono waveform ignores the unused right channel");
+  waveformSamples[1023*2]=7;
+  wave=phlooper::sampleWaveformBin(waveformSamples.data(),1024,false,255);
+  check(wave.high==7,"waveform includes the last source frame");
+  wave=phlooper::sampleWaveformBin(nullptr,0,false,0);
+  check(wave.low==0&&wave.high==0,"empty waveform is silent");
+  check(phlooper::waveformAmplitude(0)==0&&phlooper::waveformAmplitude(.05f)>.05f/5,
+        "waveform compression preserves silence and lifts quiet details");
+  check(phlooper::waveformAmplitude(5)<1&&phlooper::waveformAmplitude(20)==1&&phlooper::waveformAmplitude(100)==1,
+        "waveform compression keeps headroom and bounds large peaks");
+  check(phlooper::waveformAmplitude(-1)==-phlooper::waveformAmplitude(1),
+        "waveform compression treats positive and negative audio symmetrically");
   std::puts("Phlooper DSP and WAV tests passed");
 }

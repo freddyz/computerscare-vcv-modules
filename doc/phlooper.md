@@ -6,27 +6,33 @@ A bank of up to sixteen independent loops, initially seeded by the same mono or 
 
 Connect audio to L / mono, optionally adding R for stereo. Audio inputs use only channel 1. Click Record to start and again to stop, or hold a Record gate high. The first recording establishes the buffer duration, up to 60 seconds, and seeds all sixteen loops. Subsequent recording overdubs only the addressed loops; each has its own audio storage.
 
-Record mix blends retained loop audio toward incoming audio. Blend mode replaces progressively; Add retains the old audio and adds the incoming signal at Record mix level. Internal overdub values are bounded to ±20 V.
+Record mix blends retained loop audio toward incoming audio. Overdub mode is selected in the context menu and defaults to Blend. Blend mode replaces progressively; Add retains the old audio and adds the incoming signal at Record mix level. Internal overdub values are bounded to ±20 V. While overdubbing, each addressed loop monitors the selected Blend/Add mix immediately. While erasing, addressed loops contribute silence. Other loops keep playing, and Output mix still controls the dry input.
 
 Erase removes the portion beneath each addressed head while held high. Stop freezes a head in place; Mute silences playback while the head keeps moving. A Restart rising edge resets the addressed heads to Start. Panel buttons operate on all active loops. A monophonic control cable broadcasts to all loops; a polyphonic cable addresses loops by channel, with missing channels inactive.
 
 Start and Length are percentages of the original recording. A region can wrap across the original buffer boundary. Restart begins at Start. Length changes apply while playing; Start changes latch independently when each head next wraps; a Restart adopts the new Start immediately for addressed heads. Output mix blends input with the average of the active loop outputs. Stereo is retained; a mono recording is sent equally to left and right.
 
+Each loop has Mute, Solo, Pause, and direction buttons. The direction button cycles F (Forward), R (Reverse), and B (Forward then Reverse). Reverse plays the selected region backward; B alternates direction at each end. Restart begins F and B at the region start, and R at its end. End-of-loop triggers fire at each traversal boundary. Recording and erasing follow the selected direction. The direction dropdown above the knobs sets all sixteen loops together and shows Mixed when their modes differ. Direction modes and the current B leg are saved with the patch.
+
+The header's Ctrl button hides the row buttons and expands the visual across the display. Hidden controls retain their settings. This preference is saved with the patch.
+
+The context menu's Visualization setting switches between Line and Waveform. Waveform shows a sampled overview of each loop's stored audio beneath the region and playhead markers, including stereo peaks without cancelling opposite-phase channels. Its bounded cache refresh runs incrementally while audio processes; very short transients in long recordings can be missed by overview sampling.
+
 ## Phasing
 
 Loop 1 has the selected nominal period. Each subsequent loop adds another increment of Offset:
 
-- Time ms: subtract Offset milliseconds from the period, preserving pitch.
+- Time ms: add Offset milliseconds to the period, preserving pitch.
 - Length %: add Offset percent of the selected length per loop, preserving pitch.
 - Speed %: add Offset percentage points to playback speed per loop, changing pitch.
 
-Positive time offsets shorten periods and truncate audio; negative time offsets extend periods with silence. Length % works in the opposite direction: positive offsets extend periods with silence, and negative offsets shorten periods. Speed stays forward and is bounded from 5% to 800%. Periods are bounded between 1 ms and 60 seconds. Loop joins use short fades; accelerated playback uses a windowed-sinc low-pass interpolator. Start and Length CV use 10 V for a full-range shift; Offset CV uses 10 ms per volt in Time mode and 2 percentage points per volt in Length/Speed modes.
+Positive Time ms and Length % offsets extend periods with silence; negative offsets shorten periods and truncate audio. Speed mode sets the playback rate from 5% to 800%; each loop's direction is selected separately. Periods are bounded between 1 ms and 60 seconds. Loop joins use short fades; accelerated playback uses a windowed-sinc low-pass interpolator. Start and Length CV use 10 V for a full-range shift; Offset CV uses 10 ms per volt in Time mode and 2 percentage points per volt in Length/Speed modes.
 
 ## Files and patches
 
 Load mono/stereo WAV from the context menu or drop a file onto the module. PCM 8/16/24/32-bit and 32/64-bit float WAV are supported, including WAVE_FORMAT_EXTENSIBLE. Multichannel WAV uses its first two channels. Files longer than 60 seconds are truncated; all sixteen loops receive the imported audio and restart together. WAV amplitudes of 1 map to 5 V.
 
-Rack patch storage saves sixteen independent 48 kHz float WAV files, including inactive loops, and restores them with the patch. Mono recordings save as mono WAV; a stereo overdub turns that loop stereo. Saving retains the current audio, playheads, latched starts, and Record latch state. Clear recording in the context menu empties the buffer; Erase only removes audio under moving heads.
+Rack patch storage saves sixteen independent 48 kHz float WAV files, including inactive loops, and restores them with the patch. Mono recordings save as mono WAV; a stereo overdub turns that loop stereo. Saving retains the current audio, playheads, latched starts, and Record latch state. On load, loop starts adopt the current controls and CV during the first 2 ms while restored playhead positions are retained. Subsequent Start changes latch at each loop wrap. Clear recording in the context menu empties the buffer; Erase only removes audio under moving heads.
 
 Storage reserves roughly 369 MB of virtual address space per module at the maximum stereo capacity, with memory pages touched as recording progresses. Playback and recording allocate no memory. File decoding and writing take place outside the audio callback. Replacing a file briefly passes dry input while installing its buffers. Saving copies small chunks under a nonblocking audio-thread lock; audio passes dry if a snapshot copy overlaps the callback. Save after stopping overdubs for an exact consistent recording snapshot.
 
@@ -65,3 +71,13 @@ the nearby red light indicates recording from the button or a Record gate.
 The button’s latch state is saved with the patch.
 
 Start and Length CV are polyphonic offsets from their knobs: ±10 V adds or subtracts 100 percentage points, clamped to the valid range. Mono affects all loops; poly channels address individual loops, with missing channels using the knob alone. Start changes still latch at each loop boundary; Hold uses loop 1’s CV-controlled length for every loop.
+
+Each display row has M (mute), S (solo), and P (pause) toggles. Multiple loops can be soloed together; mute still takes precedence. Pause freezes its playhead and resumes from that position. Manual toggles combine with incoming mute/stop gates and save with the patch.
+
+With the pointer over Phlooper: Space toggles Stop, H toggles Hold, R toggles Record, T restarts all loops, and E erases while held. Modifier shortcuts remain available to Rack.
+
+Small IN/OUT meters show stereo RMS level (5 V = 0 dB) with a yellow right-edge border holding the peak for one second. Their upper segments indicate high levels; lit segments glow according to Rack’s halo brightness setting.
+
+Overall Speed CV is a mono 1 V/octave offset from the knob, clamped to ¼–4×. Rec mix and Out mix CV are mono offsets: ±10 V adds/subtracts 100 percentage points, clamped to 0–100%. Each knob/button shares one label with the jack directly below it.
+
+Small input/output Gain knobs display dB, from silence (−∞ dB) through +12.04 dB (4×), defaulting to unity (0 dB). Input gain affects recording and dry monitoring; output gain applies to the final stereo mix. Changes are smoothed, and meters reflect the adjusted levels.

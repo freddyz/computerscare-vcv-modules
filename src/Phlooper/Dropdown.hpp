@@ -10,6 +10,7 @@ struct WarpedDropdown : widget::OpaqueWidget {
   float downDepth = 3.f;
   float screwup = .8f;
   unsigned shapeSeed = 1;
+  NVGcolor faceColor = nvgRGB(222, 222, 222);
   virtual std::string label() = 0;
   virtual bool isPressed() = 0;
 
@@ -45,26 +46,33 @@ struct WarpedDropdown : widget::OpaqueWidget {
       face[i] = pressed ? back[i] : front[i];
     }
     if (pressed) {
-      // Sink the face into the socket, revealing its top and left walls.
+      // The socket is at the block’s base footprint; the raised outline
+      // disappears.
       face[0] = front[0].plus(Vec(depth + inset, depth * .65f + inset * .65f));
       face[1] = Vec(back[1].x, face[0].y + front[1].y - front[0].y);
       face[3] = Vec(face[0].x + front[3].x - front[0].x, back[3].y);
     }
+    auto shade = [&](int grey) {
+      float factor = grey / 222.f;
+      return nvgRGBAf(faceColor.r * factor, faceColor.g * factor,
+                      faceColor.b * factor, faceColor.a);
+    };
     auto quad = [&](Vec a, Vec b, Vec c, Vec d, int grey) {
       nvgBeginPath(args.vg);
       nvgMoveTo(args.vg, a.x, a.y);
       for (Vec p : {b, c, d}) nvgLineTo(args.vg, p.x, p.y);
       nvgClosePath(args.vg);
-      nvgFillColor(args.vg, nvgRGB(grey, grey, grey));
+      nvgFillColor(args.vg, shade(grey));
       nvgFill(args.vg);
       nvgStrokeColor(args.vg, nvgRGB(0, 0, 0));
+      nvgLineJoin(args.vg, NVG_ROUND);
       nvgStrokeWidth(args.vg, .65f);
       nvgStroke(args.vg);
     };
     if (pressed) {
-      quad(front[0], front[1], back[2], back[3], 116);
-      quad(front[0], front[1], face[1], face[0], 125);
-      quad(front[0], face[0], face[3], back[3], 163);
+      quad(back[0], back[1], back[2], back[3], 116);
+      quad(back[0], back[1], face[1], face[0], 125);
+      quad(back[0], face[0], face[3], back[3], 163);
     } else {
       quad(front[1], back[1], back[2], front[2], 173);
       quad(front[3], front[2], back[2], back[3], 132);

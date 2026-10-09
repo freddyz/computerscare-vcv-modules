@@ -918,7 +918,41 @@ struct ConnectedSmallLetter : SmallLetterDisplay {
         }
       }
     }
+    nvgSave(ctx.vg);
+    clipToLabelColumn(ctx.vg);
     SmallLetterDisplay::draw(ctx);
+    nvgRestore(ctx.vg);
+  }
+  void clipToLabelColumn(NVGcontext* vg) {
+    // Keep the face and halo between the module edge and display border.
+    nvgIntersectScissor(vg, -box.pos.x, -9.f, DEBUG_DISPLAY_X - 1.f,
+                        box.size.y + 16.f);
+  }
+  void drawLayer(const DrawArgs& args, int layer) override {
+    if (layer == 1 && !args.fb && module &&
+        module->params[ComputerscareDebug::TRIGGER_BLINKERS].getValue() > .5f) {
+      float pulse = module->clockLabelPulses[index];
+      if (pulse > .001f) {
+        nvgSave(args.vg);
+        clipToLabelColumn(args.vg);
+        // The illuminated face is independent of the optional surrounding halo.
+        nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
+        nvgGlobalAlpha(args.vg, pulse);
+        SmallLetterDisplay::draw(args);
+        nvgGlobalAlpha(args.vg, 1.f);
+        nvgGlobalCompositeOperation(args.vg, NVG_LIGHTER);
+        nvgBeginPath(args.vg);
+        nvgRect(args.vg, -8.f, -9.f, box.size.x + 16.f, box.size.y + 16.f);
+        auto glow = nvgBoxGradient(
+            args.vg, 1.f, -1.f, box.size.x - 3.f, box.size.y - 3.f, 4.f, 13.f,
+            nvgRGBAf(.43f, .65f, .55f, .55f * pulse * settings::haloBrightness),
+            nvgRGBA(0, 0, 0, 0));
+        nvgFillPaint(args.vg, glow);
+        nvgFill(args.vg);
+        nvgRestore(args.vg);
+      }
+    }
+    SmallLetterDisplay::drawLayer(args, layer);
   }
 };
 
