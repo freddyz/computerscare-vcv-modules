@@ -20,7 +20,7 @@
     },
     {
       "slug": "computerscare-volypector",
-      "name": "VolyPector",
+      "name": "Voly Pector",
       "description": "16 polyphonic CV bands with compact UI, edit by Band or by Channel",
       "tags": ["Polyphonic", "Utility", "Random"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/volypector.md"
@@ -172,6 +172,13 @@
       "description": "Arrange tuned wind-driven chime sets in a stereo scene",
       "tags": ["Physical modeling", "Random", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/windchimes.md"
+    },
+    {
+      "slug": "computerscare-phlooper",
+      "name": "Phlooper",
+      "description": "Sixteen independent stereo loops with gradual time and speed phasing",
+      "tags": ["Looper", "Sampler", "Polyphonic"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/phlooper.md"
     }
   ]
 }

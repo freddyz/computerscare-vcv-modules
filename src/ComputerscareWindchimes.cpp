@@ -2,8 +2,11 @@
 #include <functional>
 
 #include "Computerscare.hpp"
+#include "Phlooper/Block.hpp"
+#include "Phlooper/Dropdown.hpp"
 #include "Windchimes/Delay.hpp"
 #include "Windchimes/Engine.hpp"
+#include "Windchimes/ModelCv.hpp"
 #include "Windchimes/Presets.hpp"
 #include "Windchimes/Selection.hpp"
 
@@ -70,7 +73,20 @@ struct ComputerscareWindchimes : Module {
     EXTRA_SET_BASE = SOLO_BASE + 8,
     NUM_PARAMS = EXTRA_SET_BASE + (wc::maxSets - 8) * (SOLO + 1)
   };
-  enum Input { WIND_INPUT, TRANSPOSE_INPUT, GUST_INPUT, CLOCK_INPUT, INPUTS };
+  enum Input {
+    WIND_INPUT,
+    TRANSPOSE_INPUT,
+    GUST_INPUT,
+    CLOCK_INPUT,
+    DECAY_CV,
+    BRIGHTNESS_CV,
+    HARDNESS_CV,
+    WEIGHT_CV,
+    SHAPE_CV,
+    BODY_CV,
+    INHARMONICITY_CV,
+    INPUTS
+  };
   enum Output {
     LEFT_OUTPUT,
     RIGHT_OUTPUT,
@@ -211,6 +227,12 @@ struct ComputerscareWindchimes : Module {
     configInput(WIND_INPUT, "Wind strength (0–10 V, added to breeze)");
     configInput(TRANSPOSE_INPUT, "Transpose (1 V/oct)");
     configInput(GUST_INPUT, "Gust trigger");
+    const char* modelNames[] = {"Decay",          "Brightness", "Hardness",
+                                "Striker weight", "Shape",      "Body",
+                                "Inharmonicity"};
+    for (int i = 0; i < 7; ++i)
+      configInput(DECAY_CV + i, std::string(modelNames[i]) +
+                                    " CV (±10 V, polyphonic offset)");
     configOutput(LEFT_OUTPUT, "Front left / automatic mixdown");
     configOutput(RIGHT_OUTPUT, "Front right / automatic mixdown");
     configOutput(REAR_LEFT_OUTPUT, "Rear left / automatic mixdown");
@@ -227,7 +249,19 @@ struct ComputerscareWindchimes : Module {
         getParamQuantity(param(i, field))->randomizeEnabled = true;
   }
   wc::SetConfig readSet(int i) {
-    auto value = [this, i](int f) { return params[param(i, f)].getValue(); };
+    auto value = [this, i](int f) {
+      float base = params[param(i, f)].getValue();
+      int port = f == DECAY            ? DECAY_CV
+                 : f == BRIGHTNESS     ? BRIGHTNESS_CV
+                 : f == HARDNESS       ? HARDNESS_CV
+                 : f == STRIKER_WEIGHT ? WEIGHT_CV
+                 : f == SHAPE          ? SHAPE_CV
+                 : f == BODY           ? BODY_CV
+                 : f == INHARMONICITY  ? INHARMONICITY_CV
+                                       : -1;
+      if (port < 0) return base;
+      return wc::modelCvValue(base, inputs[port], i);
+    };
     wc::SetConfig c;
     c.enabled = value(ENABLED) > 0.5f;
     c.x = value(X);
@@ -404,14 +438,21 @@ std::string DelayTimeQuantity::getDisplayValueString() {
 }
 
 namespace {
-struct SmallGustButton : ComputerscareBlankButton {
-  Vec nativeSize = box.size;
-  SmallGustButton() { box.size = Vec(12.f, 12.f); }
+struct SmallGustButton : app::Switch {
+  struct Face : phlooper::WarpedDropdown {
+    bool pressed = false;
+    std::string label() override { return "Gust"; }
+    bool isPressed() override { return pressed; }
+  } face;
+  SmallGustButton() {
+    momentary = true;
+    box.size = Vec(30, 17);
+    face.configure(30, 17, 3.f, 2.f, .7f, 39);
+    face.faceColor = nvgRGB(36, 201, 166);
+  }
   void draw(const DrawArgs& args) override {
-    nvgSave(args.vg);
-    nvgScale(args.vg, box.size.x / nativeSize.x, box.size.y / nativeSize.y);
-    ComputerscareBlankButton::draw(args);
-    nvgRestore(args.vg);
+    face.pressed = getParamQuantity() && getParamQuantity()->getValue() > .5f;
+    face.draw(args);
   }
 };
 using W = ComputerscareWindchimes;
@@ -570,50 +611,23 @@ void toggleSelectionFlag(W* module, Editor* editor, int field) {
   editSelectionField(module, mask, field, all ? 0.f : 1.f, action);
   APP->history->push(action);
 }
-struct ActionButton : ComputerscareBlankButton {
+struct ActionButton : widget::OpaqueWidget {
   std::function<std::string()> label;
   std::function<void()> action;
-  Vec nativeSize = box.size;
   bool pressed = false;
   bool selector = false;
-  void setPressed(bool down) {
-    if (pressed == down) return;
-    pressed = down;
-    sw->setSvg(frames[pressed ? 1 : 0]);
-    fb->setDirty();
-  }
+  struct Face : phlooper::WarpedDropdown {
+    ActionButton* owner = nullptr;
+    std::string label() override { return owner->label ? owner->label() : ""; }
+    bool isPressed() override { return owner->pressed; }
+  } face;
+  ActionButton() { face.owner = this; }
+  void setPressed(bool down) { pressed = down; }
   void draw(const DrawArgs& args) override {
-    nvgSave(args.vg);
-    nvgScale(args.vg, box.size.x / nativeSize.x, box.size.y / nativeSize.y);
-    ComputerscareBlankButton::draw(args);
-    nvgRestore(args.vg);
-    auto font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
-    if (!font) return;
-    nvgFontFaceId(args.vg, font->handle);
-    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    std::string caption = label();
-    float fontSize = 10.f;
-    nvgFontSize(args.vg, fontSize);
-    float width =
-        nvgTextBounds(args.vg, 0, 0, caption.c_str(), nullptr, nullptr);
-    float available = box.size.x - 6.f;
-    if (selector && width > available) {
-      while (!caption.empty() &&
-             nvgTextBounds(args.vg, 0, 0, (caption + "..").c_str(), nullptr,
-                           nullptr) > available)
-        caption.pop_back();
-      caption += "..";
-    } else if (!selector && width > available) {
-      nvgFontSize(args.vg, fontSize * available / width);
-    }
-    nvgFillColor(args.vg, nvgRGB(20, 39, 35));
-    float dx =
-        pressed ? (selector ? 1.5f : 3.6f * box.size.x / nativeSize.x) : 0.f;
-    float dy =
-        pressed ? (selector ? 1.5f : 2.9f * box.size.y / nativeSize.y) : 0.f;
-    nvgText(args.vg, box.size.x * 0.5f - 2.f + dx,
-            box.size.y * 0.47f - 1.3f + dy, caption.c_str(), nullptr);
+    face.configure(box.size.x, box.size.y, 3.f, 2.f, .8f, 37);
+    face.faceColor = nvgRGB(36, 201, 166);
+    face.textSize = 11.f;
+    face.draw(args);
   }
   void onButton(const event::Button& e) override {
     if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
@@ -624,12 +638,12 @@ struct ActionButton : ComputerscareBlankButton {
       setPressed(false);
       e.consume(this);
     } else
-      ComputerscareBlankButton::onButton(e);
+      widget::OpaqueWidget::onButton(e);
   }
   void onDragEnd(const event::DragEnd& e) override { setPressed(false); }
   void onLeave(const event::Leave& e) override {
     setPressed(false);
-    ComputerscareBlankButton::onLeave(e);
+    widget::OpaqueWidget::onLeave(e);
   }
 };
 // Follow the selector behavior used by VolyPector: menu lifetime, rather
@@ -643,7 +657,7 @@ struct SelectorButton : ActionButton {
     return overlay && !overlay->requestedDelete;
   }
   void step() override {
-    ComputerscareBlankButton::step();
+    widget::OpaqueWidget::step();
     setPressed(menuOpen());
   }
   void draw(const DrawArgs& args) override {
@@ -1674,12 +1688,20 @@ struct Labels : widget::TransparentWidget {
     std::string caption = module ? selectionCaption(editor) : "Chimes 1";
     text(vg, controlX(338), 50, caption + " — Tuning / motion", 10,
          selectedColor);
-    text(vg, controlX(338), 148, caption + " — Sound", 10, selectedColor);
+    text(vg, controlX(338), 148, "Chime model", 10, selectedColor);
     nvgRestore(vg);
   }
 };
 }  // namespace
 
+struct WindchimesBackplate : widget::TransparentWidget {
+  void draw(const DrawArgs& args) override {
+    nvgBeginPath(args.vg);
+    nvgRect(args.vg, 0, 0, box.size.x, box.size.y);
+    nvgFillColor(args.vg, nvgRGB(222, 222, 222));
+    nvgFill(args.vg);
+  }
+};
 struct ComputerscareWindchimesWidget : ModuleWidget {
   Editor editor;
   ChimeScene* scene = nullptr;
@@ -1752,6 +1774,21 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     auto* panel = new ComputerscareSVGPanel;
     panel->setBackground(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/panels/ComputerscareWindchimesPanel.svg")));
+    auto* backplate = new WindchimesBackplate;
+    backplate->box.size = box.size;
+    addChild(backplate);
+    auto block = [this](float x, float y, float width, float height,
+                        unsigned seed, int grey) {
+      auto* plaque = new phlooper::WarpedBlock;
+      plaque->configure(Rect(Vec(x, y), Vec(width, height)), 4.f, 1.2f, seed,
+                        nvgRGB(grey, grey, grey));
+      addChild(plaque);
+    };
+    block(510, 3, 185, 30, 51, 207);
+    block(510, 39, 383, 95, 52, 236);
+    block(510, 137, 383, 105, 53, 211);
+    block(510, 245, 383, 70, 54, 232);
+    block(510, 317, 383, 53, 55, 232);
     addChild(panel);
     auto* labels = new Labels;
     labels->box.size = box.size;
@@ -1974,9 +2011,9 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         W::INHARMONICITY, W::LEVEL,          W::SWING,  W::SAIL_SIZE};
     const Vec setPositions[] = {
         Vec(543, 70),  Vec(349, 108),   Vec(384, 108), Vec(419, 108),
-        Vec(454, 108), Vec(489, 108),   Vec(346, 205), Vec(384.5, 205),
-        Vec(423, 205), Vec(461.5, 205), Vec(500, 205), Vec(538.5, 205),
-        Vec(577, 205), Vec(580, 70),    Vec(543, 108), Vec(580, 108)};
+        Vec(454, 108), Vec(489, 108),   Vec(346, 193), Vec(384.5, 193),
+        Vec(423, 193), Vec(461.5, 193), Vec(500, 193), Vec(538.5, 193),
+        Vec(577, 193), Vec(580, 70),    Vec(543, 108), Vec(580, 108)};
     for (int i = 0; i < 16; ++i) {
       auto* knob = createParamCentered<SetKnob>(setPositions[i], module,
                                                 W::param(0, fields[i]));
@@ -1984,6 +2021,9 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
       knob->field = fields[i];
       addParam(knob);
     }
+    for (int i = 0; i < 7; ++i)
+      addInput(createInputCentered<InPort>(Vec(346.f + i * 38.5f, 228.f),
+                                           module, W::DECAY_CV + i));
     const int globals[] = {W::WIND,      W::GUSTINESS,  W::TURBULENCE,
                            W::WIND_MIX,  W::WIND_TONE,  W::WIND_TEXTURE,
                            W::MASTER,    W::REVERB_MIX, W::REVERB_SIZE,
@@ -1991,7 +2031,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     for (int i = 0; i < 12; ++i)
       addParam(createParamCentered<ChimeKnob>(
           Vec(i < 6 ? 349.f + i * 45.f : 349.f + (i - 6) * 45.f,
-              i < 6 ? 253.f : 289.f),
+              i < 6 ? 261.f : 297.f),
           module, globals[i]));
     addParam(
         createParamCentered<SmallGustButton>(Vec(419, 325), module, W::GUST));
@@ -2011,7 +2051,8 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     // Reserve the extra module width entirely for the scene. Keep the existing
     // compact control-column layout and translate its widgets together.
     for (auto* child : children)
-      if (child != children.front() && child != labels && child != scene) {
+      if (child != children.front() && child != labels && child != scene &&
+          child != panel && !dynamic_cast<phlooper::WarpedBlock*>(child)) {
         // Buttons anchor at their left edge; knobs and jacks keep their
         // centers.
         float anchor =

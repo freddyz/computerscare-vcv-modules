@@ -238,3 +238,7 @@ Tubes, Level, Swing and Sail occupy a separate grid on the right. Sound
 selectors and action buttons align in two rows above the timbre controls.
 Weather and effects share aligned knob columns above a taller connections
 block. The panel artwork has no outer top/right bevel.
+
+## Chime model CV
+
+Decay, Brightness, Hardness, Striker Weight, Shape, Body, and Inharmonicity each have a CV input beneath their knob. CV adds 10 percentage points per volt to each chime’s stored value, clamped to 0–100%; there are no attenuverters. A mono cable offsets all chimes. Polyphonic channels address chimes 1–16 individually, irrespective of the editor selection. Missing channels and unpatched inputs add zero. CV does not overwrite knob values or presets. Model settings refresh at 200 Hz.

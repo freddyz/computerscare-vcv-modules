@@ -2,6 +2,7 @@
 #include "Windchimes/Delay.hpp"
 #include "Windchimes/Presets.hpp"
 #include "Windchimes/Selection.hpp"
+#include "Windchimes/ModelCv.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
@@ -11,6 +12,23 @@ void require(bool condition, const char* message) {
 }
 int main() {
   namespace wc = windchimes;
+  {
+    struct Input {
+      int count = 0;
+      std::array<float,16> volts{};
+      int getChannels() const { return count; }
+      float getVoltage(int i) const { return volts[i]; }
+    } cv;
+    require(wc::modelCvValue(.4f, cv, 7)==.4f,"unpatched model CV preserves knob");
+    cv.count=1;cv.volts[0]=2;
+    for(int i=0;i<16;++i)
+      require(std::fabs(wc::modelCvValue(.4f, cv, i)-.6f)<1e-6f,"mono model CV broadcasts to all chimes");
+    cv.count=2;cv.volts[0]=-10;cv.volts[1]=10;
+    require(wc::modelCvValue(.4f, cv, 0)==0&&wc::modelCvValue(.4f, cv, 1)==1,
+            "poly model CV addresses separate chimes and clamps both limits");
+    require(wc::modelCvValue(.4f, cv, 2)==.4f,"missing poly channels retain their knob values");
+  }
+
   {
     wc::Selection selection;
     selection.selectAll((1u << wc::maxSets) - 1u);

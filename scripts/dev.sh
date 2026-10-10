@@ -259,9 +259,14 @@ build() {
 
 run_tests() {
   echo "==> Tests..."
-  g++ -std=c++17 -o /tmp/cs_test src/test.cpp src/dtpulse.cpp && /tmp/cs_test
-  g++ -std=c++11 -I src tests/polyphonic_mapping_test.cpp -o /tmp/cs_polyphonic_mapping_test && /tmp/cs_polyphonic_mapping_test
-  g++ -std=c++11 -O2 -I src tests/windchimes_test.cpp -o /tmp/cs_windchimes_test && /tmp/cs_windchimes_test
+  g++ -std=c++17 -o /tmp/cs_test src/test.cpp src/dtpulse.cpp
+  /tmp/cs_test
+  g++ -std=c++11 -I src tests/polyphonic_mapping_test.cpp -o /tmp/cs_polyphonic_mapping_test
+  /tmp/cs_polyphonic_mapping_test
+  g++ -std=c++11 -I src tests/phlooper_test.cpp -o /tmp/cs_phlooper_test
+  /tmp/cs_phlooper_test
+  g++ -std=c++11 -O2 -I src tests/windchimes_test.cpp -o /tmp/cs_windchimes_test
+  /tmp/cs_windchimes_test
   echo "    OK."
 }
 

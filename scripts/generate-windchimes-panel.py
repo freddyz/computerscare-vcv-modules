@@ -14,7 +14,7 @@ spec = importlib.util.spec_from_file_location('svg_type', ROOT / 'scripts/svg_te
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
 svg = ET.Element(tag('svg'), width='900', height='380', viewBox='0 0 900 380')
-ET.SubElement(svg, tag('rect'), width='900', height='380', fill='#dedede')
+
 
 
 ET.SubElement(svg, tag('rect'), x='0', y='0', width='500', height='380', fill='#0d1d1c')
@@ -57,30 +57,27 @@ def box(x,y,width,height,name,color):
           '--output',str(out)],check=True)
         embed(ET.parse(out).getroot(),x,y,width,height,name)
 
-box(507,3,127,30,'title-plaque','#cfcfcf')
 lettering('Windchimes',514,9,112,17,42)
-box(507,39,265,95,'tuning-box','#ececec')
-box(507,137,265,96,'sound-box','#d3d3d3')
-box(507,234,265,77,'weather-box','#e8e8e8')
-box(507,314,265,56,'connections-box','#e8e8e8')
 for i,label in enumerate(['Root','Register','Fine','EDO','Spread']):
     lettering(label,520+i*35,121,30,6.5)
 for label,x,y in [('Tubes',714,84),('Level',751,84),
                   ('Swing',714,121),('Sail',751,121)]:
     lettering(label,x,y,29,6.5)
 for i,label in enumerate(['Decay','Bright','Hard','Weight','Shape','Body','Inharm']):
-    lettering(label,512+i*38.5,220,33,7)
-lettering('Weather',518,235,100,5,22)
+    lettering(label,512+i*38.5,207,33,7)
+lettering('Weather',518,245,100,5,22)
 for i,label in enumerate(['Wind','Gusts','Turb','Wind mix','Tone','Texture']):
-    lettering(label,515+i*45,267,38,6)
+    lettering(label,515+i*45,275,38,6)
 for i,label in enumerate(['Output','Rev wet','Size','Delay mix','Time','Feedback']):
-    lettering(label,515+i*45,302,38,6)
+    lettering(label,515+i*45,311,38,6)
 for label,x in [('Wind CV',518),('1V/oct',553),('Gust',588),('Clock',623)]:
     lettering(label,x,337,27,5.5)
 lettering('Wind CV out',643,331,18,5)
 lettering('Wind audio',643,355,18,5)
 for label,x,y in [('FL',695,331),('FR',733,331),('RL',695,355),('RR',733,355)]:
     lettering(label,x,y,12,5.5)
+logo=ET.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
+embed(logo,613,369,10,10,'windchimes-logo')
 lettering('computerscare',591,373,97,6,27)
 ET.indent(svg)
 ET.ElementTree(svg).write(ROOT/'res/panels/ComputerscareWindchimesPanel.svg',encoding='utf-8',xml_declaration=True)
