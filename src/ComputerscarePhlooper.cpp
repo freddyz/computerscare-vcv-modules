@@ -72,6 +72,9 @@ struct ComputerscarePhlooper : Module {
     VISUAL_MODE = LOOP_DIRECTION + 16,
     SHOW_TRANSPORT,
     ZOOM,
+    OUTPUT_MODE,
+    UNUSED_INPUT_VCA,
+    MUTE,
     PARAMS
   };
   enum Input {
@@ -89,6 +92,7 @@ struct ComputerscarePhlooper : Module {
     SPEED_CV,
     REC_MIX_CV,
     OUT_MIX_CV,
+    VCA_CV,
     INPUTS
   };
   enum Output { OUT_L, OUT_R, EOC, OUTPUTS };
@@ -128,6 +132,7 @@ struct ComputerscarePhlooper : Module {
   };
   std::array<WriteVisual, 16> writeVisual{};
   std::atomic<bool> resetRequest{false};
+  unsigned visualDivider = 0;
   float loadRegionSettleTime = 0.f;
   bool firstGate = false;
   dsp::SchmittTrigger restartButton;
@@ -137,6 +142,8 @@ struct ComputerscarePhlooper : Module {
   ComputerscarePhlooper() {
     config(PARAMS, INPUTS, OUTPUTS, LIGHTS);
     waveformRange = packRange({});
+    configSwitch(OUTPUT_MODE, 0, 1, 0, "Output mode", {"Mix", "Polyphonic"});
+    configSwitch(MUTE, 0.f, 1.f, 0.f, "Mute all loops", {"Playing", "Muted"});
     configSwitch(ZOOM, 0, 1, 0, "Zoom", {"Full recording", "Fit loops"});
     configParam<PhlooperGainQuantity>(INPUT_GAIN, 0.f, 4.f, 1.f, "Input gain",
                                       " dB");
@@ -173,12 +180,18 @@ struct ComputerscarePhlooper : Module {
                    string::f("Loop %d pause", i + 1), {"Playing", "Paused"});
     }
     configSwitch(STOP, 0.f, 1.f, 0.f, "Stop all loops", {"Playing", "Stopped"});
+    const int shortcutParams[] = {STOP,  MUTE,    HOLD, RECORD,
+                                  ERASE, RESTART, ZOOM, SHOW_TRANSPORT};
+    const char* shortcutHints[] = {"[space]",    "[m]", "[h]", "[r]",
+                                   "[e] (hold)", "[t]", "[z]", "[c]"};
+    for (int i = 0; i < 8; ++i)
+      getParamQuantity(shortcutParams[i])->description = shortcutHints[i];
     const char* names[] = {
         "Audio left / mono", "Audio right",      "Record gates",
         "Erase gates",       "Restart triggers", "Mute gates",
         "Stop gates",        "Start CV",         "Length CV",
         "Offset CV",         "Hold phase gate",  "Overall speed CV",
-        "Record mix CV",     "Output mix CV"};
+        "Record mix CV",     "Output mix CV",    "Input VCA CV"};
     for (int i = 0; i < INPUTS; ++i) configInput(i, names[i]);
     configOutput(EOC, "End of loop triggers (polyphonic)");
     configOutput(OUT_L, "Left");
@@ -201,24 +214,52 @@ struct ComputerscarePhlooper : Module {
     float gainSlew = std::min(1.f, args.sampleTime / .005f);
     inputGain += (params[INPUT_GAIN].getValue() - inputGain) * gainSlew;
     outputGain += (params[OUTPUT_GAIN].getValue() - outputGain) * gainSlew;
-    phlooper::Frame input;
-    input.l = inputs[LEFT].getVoltage();
-    input.r =
-        inputs[RIGHT].isConnected() ? inputs[RIGHT].getVoltage() : input.l;
-    input.l *= inputGain;
-    input.r *= inputGain;
-    inputMeter.process(input.l, input.r, args.sampleTime);
+    std::array<phlooper::Frame, phlooper::voices> channelInputs{};
+    phlooper::Frame input, inputMeterFrame;
+    int inputCount = clamp(int(params[COUNT].getValue()), 1, 16);
+    for (int i = 0; i < phlooper::voices; ++i) {
+      auto voltage = [&](int port) {
+        return inputs[port].getVoltage(inputs[port].getChannels() == 1 ? 0 : i);
+      };
+      float vca = inputs[VCA_CV].isConnected()
+                      ? clamp(voltage(VCA_CV) / 10.f, 0.f, 1.f)
+                      : 1.f;
+      channelInputs[i].l = voltage(LEFT) * inputGain * vca;
+      channelInputs[i].r = inputs[RIGHT].isConnected()
+                               ? voltage(RIGHT) * inputGain * vca
+                               : channelInputs[i].l;
+      if (i < inputCount) {
+        inputMeterFrame.l =
+            std::max(inputMeterFrame.l, std::fabs(channelInputs[i].l));
+        inputMeterFrame.r =
+            std::max(inputMeterFrame.r, std::fabs(channelInputs[i].r));
+        input.l += channelInputs[i].l / inputCount;
+        input.r += channelInputs[i].r / inputCount;
+      }
+    }
+    inputMeter.process(inputMeterFrame.l, inputMeterFrame.r, args.sampleTime);
     std::unique_lock<std::mutex> lock(storage, std::try_to_lock);
     if (!lock.owns_lock()) {
-      outputs[OUT_L].setVoltage(input.l * outputGain);
-      outputs[OUT_R].setVoltage(input.r * outputGain);
-      outputMeter.process(input.l * outputGain, input.r * outputGain,
+      bool poly = params[OUTPUT_MODE].getValue() > .5f;
+      outputs[OUT_L].setChannels(poly ? inputCount : 1);
+      outputs[OUT_R].setChannels(poly ? inputCount : 1);
+      for (int i = 0; i < (poly ? inputCount : 1); ++i) {
+        outputs[OUT_L].setVoltage(
+            (poly ? channelInputs[i].l : input.l) * outputGain, i);
+        outputs[OUT_R].setVoltage(
+            (poly ? channelInputs[i].r : input.r) * outputGain, i);
+      }
+      outputMeter.process((poly ? inputMeterFrame.l : input.l) * outputGain,
+                          (poly ? inputMeterFrame.r : input.r) * outputGain,
                           args.sampleTime);
       recordVisual = 0;
       eraseVisual = 0;
       return;
     }
     if (resetRequest.exchange(false)) {
+      params[START].setValue(0.f);
+      params[LENGTH].setValue(1.f);
+      loop.resetHeads();
       loop.size = 0;
       loop.initial = false;
       params[RECORD].setValue(0.f);
@@ -253,12 +294,6 @@ struct ComputerscarePhlooper : Module {
         return inputs[port].getChannels() == 1 ? inputs[port].getVoltage()
                                                : inputs[port].getVoltage(i);
       };
-      if (inputs[SPEED_CV].getChannels() == 1 ||
-          i < inputs[SPEED_CV].getChannels()) {
-        s.speedMask |= 1u << i;
-        s.speeds[i] = std::pow(
-            2.f, clamp(params[SPEED].getValue() + cv(SPEED_CV), -2.f, 2.f));
-      }
       if (inputs[START_CV].getChannels() == 1 ||
           i < inputs[START_CV].getChannels()) {
         s.startMask |= 1u << i;
@@ -283,12 +318,15 @@ struct ComputerscarePhlooper : Module {
     s.mix =
         clamp(params[MIX].getValue() + inputs[OUT_MIX_CV].getVoltage() / 10.f,
               0.f, 1.f);
-    s.speed = std::pow(2.f, params[SPEED].getValue());
+    s.speed = std::pow(
+        2.f, clamp(params[SPEED].getValue() + inputs[SPEED_CV].getVoltage(),
+                   -2.f, 2.f));
     s.hold =
         params[HOLD].getValue() > .5f || inputs[HOLD_GATE].getVoltage() >= 1.f;
     if (loadRegionSettleTime > 0.f && loop.speedHold.active && s.mode == 2)
       s.hold = true;
-    unsigned manualMute = 0, solo = 0, paused = 0;
+    unsigned manualMute = params[MUTE].getValue() > .5f ? 65535u : 0u;
+    unsigned solo = 0, paused = 0;
     for (int i = 0; i < s.count; ++i) {
       s.directions[i] = int(params[LOOP_DIRECTION + i].getValue());
       if (params[LOOP_MUTE + i].getValue() > .5f) manualMute |= 1u << i;
@@ -309,7 +347,7 @@ struct ComputerscarePhlooper : Module {
     }
     auto out = loop.process(input, args.sampleRate, s, rec, eraseMask, restart,
                             gates(MUTE_GATE) | manualMute, stopMask,
-                            inputs[RIGHT].isConnected());
+                            inputs[RIGHT].isConnected(), &channelInputs);
     speedHoldVisual.store(loop.speedHold.active, std::memory_order_relaxed);
     recordVisual.store(loop.initial ? 65535u : rec & ~eraseMask & ~stopMask,
                        std::memory_order_relaxed);
@@ -317,9 +355,27 @@ struct ComputerscarePhlooper : Module {
                       std::memory_order_relaxed);
     out.l *= outputGain;
     out.r *= outputGain;
-    outputs[OUT_L].setVoltage(out.l);
-    outputs[OUT_R].setVoltage(out.r);
-    outputMeter.process(out.l, out.r, args.sampleTime);
+    bool polyOutput = params[OUTPUT_MODE].getValue() > .5f;
+    outputs[OUT_L].setChannels(polyOutput ? s.count : 1);
+    outputs[OUT_R].setChannels(polyOutput ? s.count : 1);
+    phlooper::Frame outputMeterFrame;
+    for (int i = 0; i < (polyOutput ? s.count : 1); ++i) {
+      outputs[OUT_L].setVoltage(
+          polyOutput ? loop.outputs[i].l * outputGain : out.l, i);
+      outputs[OUT_R].setVoltage(
+          polyOutput ? loop.outputs[i].r * outputGain : out.r, i);
+    }
+    if (polyOutput) {
+      for (int i = 0; i < s.count; ++i) {
+        outputMeterFrame.l = std::max(
+            outputMeterFrame.l, std::fabs(loop.outputs[i].l * outputGain));
+        outputMeterFrame.r = std::max(
+            outputMeterFrame.r, std::fabs(loop.outputs[i].r * outputGain));
+      }
+    } else
+      outputMeterFrame = out;
+    outputMeter.process(outputMeterFrame.l, outputMeterFrame.r,
+                        args.sampleTime);
     outputs[EOC].setChannels(s.count);
     for (int i = 0; i < 16; ++i) {
       if (loop.completed & (1u << i)) endPulse[i].trigger(.001f);
@@ -352,6 +408,9 @@ struct ComputerscarePhlooper : Module {
                  std::memory_order_relaxed);
     recording.store(loop.initial || rec, std::memory_order_relaxed);
     lights[RECORD_LIGHT].setBrightness(loop.initial || rec ? 1.f : 0.f);
+    // Publish display snapshots at 750 Hz, independently of audio/EOC timing.
+    if (++visualDivider < 64) return;
+    visualDivider = 0;
     for (int i = 0; i < 16; ++i) {
       auto& visual = writeVisual[i];
       auto& span = loop.writeSpans[i];
@@ -388,7 +447,7 @@ struct ComputerscarePhlooper : Module {
           std::memory_order_relaxed);
     }
   }
-  void load(const std::string& path) {
+  void load(const std::string& path, int voice = -1) {
     try {
       auto wav = phlooper::loadWav(path);
       int available = int(wav.samples.size() / wav.channels);
@@ -409,6 +468,30 @@ struct ComputerscarePhlooper : Module {
         }
       }
       std::lock_guard<std::mutex> lock(storage);
+      if (voice >= 0) {
+        if (voice >= phlooper::voices) throw std::runtime_error("Invalid loop");
+        if (loop.initial)
+          throw std::runtime_error(
+              "Finish initial recording before importing a loop");
+        if (!loop.size) {
+          loop.size = n;
+          for (int i = 0; i < phlooper::voices; ++i) {
+            std::fill(loop.audio[i].get(), loop.audio[i].get() + n * 2, 0.f);
+            loop.stereo[i] = false;
+          }
+          loop.resetHeads();
+          loadRegionSettleTime = .002f;
+        }
+        int copied = std::min(n, loop.size);
+        std::copy(converted.begin(), converted.begin() + copied * 2,
+                  loop.audio[voice].get());
+        std::fill(loop.audio[voice].get() + copied * 2,
+                  loop.audio[voice].get() + loop.size * 2, 0.f);
+        loop.stereo[voice] = wav.channels > 1;
+        frames = loop.size;
+        error.clear();
+        return;
+      }
       for (int i = 0; i < 16; ++i) {
         std::copy(converted.begin(), converted.end(), loop.audio[i].get());
         loop.stereo[i] = wav.channels > 1;
@@ -520,6 +603,51 @@ struct ComputerscarePhlooper : Module {
         state.active = true;
         loop.speedHold = state;
       }
+    }
+  }
+  void exportWavs(const std::string& path, int voice) {
+    try {
+      int n;
+      {
+        std::lock_guard<std::mutex> lock(storage);
+        n = loop.initial ? loop.captured : loop.size;
+      }
+      if (!n) throw std::runtime_error("No recorded audio to export");
+      std::string base = path;
+      if (base.size() >= 4 && base.substr(base.size() - 4) == ".wav")
+        base.resize(base.size() - 4);
+      std::vector<std::string> paths;
+      int first = voice < 0 ? 0 : voice, last = voice < 0 ? 16 : voice + 1;
+      bool overwrite = false;
+      for (int i = first; i < last; ++i) {
+        paths.push_back(voice < 0
+                            ? base + "-loop-" + std::to_string(i + 1) + ".wav"
+                            : base + ".wav");
+        overwrite |= system::exists(paths.back());
+      }
+      if (overwrite && !osdialog_message(OSDIALOG_WARNING, OSDIALOG_YES_NO,
+                                         "Replace existing export WAV files?"))
+        return;
+      std::vector<float> snapshot(n * 2);
+      for (int i = first; i < last; ++i) {
+        bool stereo;
+        for (int start = 0; start < n * 2; start += 4096) {
+          std::lock_guard<std::mutex> lock(storage);
+          if ((loop.initial ? loop.captured : loop.size) < n)
+            throw std::runtime_error(
+                "Recording changed during export; try again");
+          int end = std::min(n * 2, start + 4096);
+          std::copy(loop.audio[i].get() + start, loop.audio[i].get() + end,
+                    snapshot.begin() + start);
+        }
+        {
+          std::lock_guard<std::mutex> lock(storage);
+          stereo = loop.stereo[i];
+        }
+        phlooper::saveWav(paths[i - first], snapshot.data(), n, stereo);
+      }
+    } catch (const std::exception& e) {
+      osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK, e.what());
     }
   }
   void onSave(const SaveEvent&) override {
@@ -641,10 +769,18 @@ struct PhlooperRecordIndicator : widget::TransparentWidget {
     box.size = Vec(15, 20);
     face.configure(15, 20, 2.f, 2.f, .8f, 31);
   }
+  float pulse() const {
+    return .5f +
+           .5f * std::sin(float(std::fmod(glfwGetTime(), 1.25)) * 5.026548f);
+  }
   void draw(const DrawArgs& args) override {
     bool on = module && module->recording.load(std::memory_order_relaxed);
     face.pressed = false;
-    face.faceColor = on ? nvgRGB(255, 76, 80) : nvgRGBA(235, 205, 212, 210);
+    float brightness = pulse();
+    face.faceColor =
+        on ? nvgRGB(238 + int(17 * brightness), 62 + int(14 * brightness),
+                    67 + int(13 * brightness))
+           : nvgRGBA(235, 205, 212, 210);
     face.draw(args);
   }
   void drawLayer(const DrawArgs& args, int layer) override {
@@ -657,7 +793,8 @@ struct PhlooperRecordIndicator : widget::TransparentWidget {
       nvgRect(args.vg, -12.f, -12.f, box.size.x + 24.f, box.size.y + 24.f);
       auto glow = nvgBoxGradient(
           args.vg, 1.f, 1.f, box.size.x - 2.f, box.size.y - 2.f, 3.f, 18.f,
-          nvgRGBAf(1.f, .12f, .15f, .55f * settings::haloBrightness),
+          nvgRGBAf(1.f, .12f, .15f,
+                   (.49f + .06f * pulse()) * settings::haloBrightness),
           nvgRGBA(255, 30, 38, 0));
       nvgFillPaint(args.vg, glow);
       nvgFill(args.vg);
@@ -851,9 +988,10 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
 struct PhlooperTransportButton : ParamWidget {
   const char* letter = "M";
   bool directionButton = false;
+  bool externallyActive = false;
   void draw(const DrawArgs& args) override {
     auto* quantity = getParamQuantity();
-    bool active = quantity && quantity->getValue() > .5f;
+    bool active = externallyActive || (quantity && quantity->getValue() > .5f);
     nvgBeginPath(args.vg);
     nvgRect(args.vg, .3f, .3f, box.size.x - .6f, box.size.y - .6f);
     nvgFillColor(args.vg, active ? nvgRGB(192, 218, 172) : nvgRGB(35, 59, 54));
@@ -1065,11 +1203,24 @@ struct PhlooperView : widget::Widget {
                   int(module->params[ComputerscarePhlooper::COUNT].getValue()),
                   1, 16)
             : 2;
+    unsigned externalMute = 0, solo = 0;
+    if (module) {
+      externalMute = module->gates(ComputerscarePhlooper::MUTE_GATE);
+      if (module->params[ComputerscarePhlooper::MUTE].getValue() > .5f)
+        externalMute = 65535u;
+      for (int i = 0; i < count; ++i)
+        if (module->params[ComputerscarePhlooper::LOOP_SOLO + i].getValue() >
+            .5f)
+          solo |= 1u << i;
+      if (solo) externalMute |= ((1u << count) - 1u) & ~solo;
+    }
     float row = (box.size.y - 12.f) / count;
     float height = std::min(12.f, row - .7f);
     for (int i = 0; i < 16; ++i)
       for (int j = 0; j < 4; ++j) {
         if (!transport[i][j]) continue;
+        transport[i][j]->externallyActive =
+            j == 0 && (externalMute & (1u << i));
         transport[i][j]->visible = showTransport() && i < count;
         transport[i][j]->box =
             Rect(Vec(3 + j * 10, 6 + row * (i + .5f) - height * .5f),
@@ -1094,6 +1245,8 @@ struct PhlooperView : widget::Widget {
         soloMask |= 1u << i;
     unsigned muteMask =
         module ? module->gates(ComputerscarePhlooper::MUTE_GATE) : 0;
+    if (module && module->params[ComputerscarePhlooper::MUTE].getValue() > .5f)
+      muteMask = 65535u;
     unsigned pauseMask =
         module ? module->gates(ComputerscarePhlooper::STOP_GATE) : 0;
     float rowHeight = (box.size.y - 12.f) / count;
@@ -1306,10 +1459,71 @@ struct PhlooperBackplate : widget::TransparentWidget {
     widget::TransparentWidget::draw(args);
   }
 };
+// Rack draws cables on layer 3 after module lights. A rack-level sibling
+// placed after the cable container keeps shortcut badges above the cables.
+struct PhlooperShortcutOverlay : widget::TransparentWidget {
+  std::weak_ptr<std::function<void(const DrawArgs&)>> drawShortcuts;
+  void step() override {
+    if (drawShortcuts.expired()) requestDelete();
+    widget::TransparentWidget::step();
+  }
+  void drawLayer(const DrawArgs& args, int layer) override {
+    if (layer == 3)
+      if (auto draw = drawShortcuts.lock()) (*draw)(args);
+  }
+};
 struct ComputerscarePhlooperWidget : ModuleWidget {
+  std::shared_ptr<std::function<void(const DrawArgs&)>> shortcutDraw;
+  void drawShortcuts(const DrawArgs& args) {
+    if (args.fb || !module || !APP->window->win ||
+        glfwGetKey(APP->window->win, GLFW_KEY_GRAVE_ACCENT) != GLFW_PRESS)
+      return;
+    auto font =
+        APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
+    if (!font) return;
+    const int ids[] = {
+        ComputerscarePhlooper::STOP,  ComputerscarePhlooper::MUTE,
+        ComputerscarePhlooper::HOLD,  ComputerscarePhlooper::RECORD,
+        ComputerscarePhlooper::ERASE, ComputerscarePhlooper::RESTART,
+        ComputerscarePhlooper::ZOOM,  ComputerscarePhlooper::SHOW_TRANSPORT};
+    const char* keys[] = {"[space]", "[m]", "[h]", "[r]",
+                          "[e]",     "[t]", "[z]", "[c]"};
+    nvgSave(args.vg);
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, 12.f);
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    for (int i = 0; i < 8; ++i) {
+      auto* control = getParam(ids[i]);
+      if (!control) continue;
+      float x = control->box.pos.x + control->box.size.x - 2.f;
+      float y = control->box.pos.y + 1.f;
+      float width =
+          nvgTextBounds(args.vg, 0, 0, keys[i], nullptr, nullptr) + 8.f;
+      nvgBeginPath(args.vg);
+      nvgRoundedRect(args.vg, x - width * .5f, y - 8.f, width, 16.f, 3.f);
+      nvgFillColor(args.vg, nvgRGBA(13, 29, 28, 185));
+      nvgFill(args.vg);
+      nvgFillColor(args.vg, nvgRGB(220, 243, 228));
+      nvgText(args.vg, x, y, keys[i], nullptr);
+    }
+    nvgRestore(args.vg);
+  }
   bool eraseKeyHeld = false;
   bool restartKeyHeld = false;
   void step() override {
+    if (module && parent && !shortcutDraw) {
+      shortcutDraw = std::make_shared<std::function<void(const DrawArgs&)>>(
+          [this](const DrawArgs& args) {
+            nvgSave(args.vg);
+            Vec offset = getRelativeOffset(Vec(), APP->scene->rack);
+            nvgTranslate(args.vg, offset.x, offset.y);
+            drawShortcuts(args);
+            nvgRestore(args.vg);
+          });
+      auto* overlay = new PhlooperShortcutOverlay;
+      overlay->drawShortcuts = shortcutDraw;
+      APP->scene->rack->addChild(overlay);
+    }
     if (module && APP->window->win) {
       if (eraseKeyHeld &&
           glfwGetKey(APP->window->win, GLFW_KEY_E) != GLFW_PRESS) {
@@ -1334,6 +1548,15 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     switch (e.key) {
       case GLFW_KEY_SPACE:
         param = ComputerscarePhlooper::STOP;
+        break;
+      case GLFW_KEY_Z:
+        param = ComputerscarePhlooper::ZOOM;
+        break;
+      case GLFW_KEY_C:
+        param = ComputerscarePhlooper::SHOW_TRANSPORT;
+        break;
+      case GLFW_KEY_M:
+        param = ComputerscarePhlooper::MUTE;
         break;
       case GLFW_KEY_H:
         param = ComputerscarePhlooper::HOLD;
@@ -1399,7 +1622,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     block(Rect(Vec(9, 313), Vec(153, 58)), 4.f, 1.8f, 15, 232);
     block(Rect(Vec(168, 313), Vec(153, 58)), 4.f, 2.2f, 16, 175);
     for (int i = 0; i < 2; ++i)
-      block(Rect(Vec(21 + i * 156, 316), Vec(92, 18)), 2.5f, .9f,
+      block(Rect(Vec(18 + i * 159, 316), Vec(135, 18)), 2.5f, .9f,
             unsigned(17 + i), 205);
     auto* panel = new ComputerscareSVGPanel;
     panel->setBackground(APP->window->loadSvg(asset::plugin(
@@ -1486,7 +1709,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
                  : nullptr;
       meter->label = "";
       meter->shapeSeed = random::u32();
-      meter->box = Rect(Vec(24 + i * 156, 319), Vec(84, 12));
+      meter->box = Rect(Vec(21 + i * 159, 319), Vec(127, 12));
       addChild(meter);
     }
     const int knobs[] = {
@@ -1494,26 +1717,34 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         ComputerscarePhlooper::OFFSET,  ComputerscarePhlooper::SPEED,
         ComputerscarePhlooper::REC_MIX, ComputerscarePhlooper::MIX};
     for (int i = 0; i < 6; ++i)
-      addParam(createParamCentered<SmoothKnob>(Vec(35 + i * 52, 193), module,
+      addParam(createParamCentered<SmoothKnob>(Vec(35 + i * 52, 190), module,
                                                knobs[i]));
     const int buttons[] = {
-        ComputerscarePhlooper::RECORD, ComputerscarePhlooper::ERASE,
+        ComputerscarePhlooper::RECORD,  ComputerscarePhlooper::ERASE,
         ComputerscarePhlooper::RESTART, ComputerscarePhlooper::STOP,
-        ComputerscarePhlooper::HOLD};
+        ComputerscarePhlooper::MUTE,    ComputerscarePhlooper::HOLD};
     const int controlInputs[] = {
-        ComputerscarePhlooper::REC_GATE, ComputerscarePhlooper::ERASE_GATE,
+        ComputerscarePhlooper::REC_GATE,     ComputerscarePhlooper::ERASE_GATE,
         ComputerscarePhlooper::RESTART_TRIG, ComputerscarePhlooper::STOP_GATE,
-        ComputerscarePhlooper::HOLD_GATE};
-    for (int i = 0; i < 5; ++i) {
-      auto* b = createParamCentered<PhlooperButton>(Vec(35 + i * 65, 266),
-                                                    module, buttons[i]);
+        ComputerscarePhlooper::MUTE_GATE,    ComputerscarePhlooper::HOLD_GATE};
+    for (int i = 0; i < 6; ++i) {
+      float x = i == 0 ? 35.f : 104.f + (i - 1) * 46.f;
+      auto* b =
+          createParamCentered<PhlooperButton>(Vec(x, 266), module, buttons[i]);
+      if (i > 0) {
+        float width = i == 2 ? 38.f : 34.f;
+        b->box.size.x = width;
+        b->box.pos.x = x - width * .5f;
+        b->face.configure(width, 20, 4.f, 3.f, 1.2f, unsigned(i + 4));
+      }
       b->momentary = i == 1 || i == 2;
-      const char* captions[] = {"Record", "Erase", "Restart", "Stop", "Hold"};
+      const char* captions[] = {"Record", "Erase", "Restart",
+                                "Stop",   "Mute",  "Hold"};
       b->face.caption = captions[i];
       b->face.shapeSeed = unsigned(i + 4);
       addParam(b);
-      addInput(createInputCentered<InPort>(Vec(35 + i * 65, 290), module,
-                                           controlInputs[i]));
+      addInput(
+          createInputCentered<InPort>(Vec(x, 290), module, controlInputs[i]));
     }
     auto* recordIndicator = new PhlooperRecordIndicator;
     recordIndicator->module = module;
@@ -1524,17 +1755,18 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         ComputerscarePhlooper::OFFSET_CV,  ComputerscarePhlooper::SPEED_CV,
         ComputerscarePhlooper::REC_MIX_CV, ComputerscarePhlooper::OUT_MIX_CV};
     for (int i = 0; i < 6; ++i)
-      addInput(createInputCentered<InPort>(Vec(35 + i * 52, 230), module,
+      addInput(createInputCentered<InPort>(Vec(35 + i * 52, 227), module,
                                            regionInputs[i]));
     addParam(createParamCentered<SmallKnob>(Vec(97, 347), module,
                                             ComputerscarePhlooper::INPUT_GAIN));
     addParam(createParamCentered<SmallKnob>(
-        Vec(253, 347), module, ComputerscarePhlooper::OUTPUT_GAIN));
-    const float inputX[] = {35.f, 70.f, 139.f};
+        Vec(233, 347), module, ComputerscarePhlooper::OUTPUT_GAIN));
+    addInput(createInputCentered<InPort>(Vec(139, 347), module,
+                                         ComputerscarePhlooper::VCA_CV));
+    const float inputX[] = {35.f, 70.f};
     const int audioInputs[] = {ComputerscarePhlooper::LEFT,
-                               ComputerscarePhlooper::RIGHT,
-                               ComputerscarePhlooper::MUTE_GATE};
-    for (int i = 0; i < 3; ++i) {
+                               ComputerscarePhlooper::RIGHT};
+    for (int i = 0; i < 2; ++i) {
       if (i == 1)
         addInput(createInputCentered<PointingUpPentagonPort>(
             Vec(inputX[i], 347), module, audioInputs[i]));
@@ -1542,7 +1774,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         addInput(createInputCentered<InPort>(Vec(inputX[i], 347), module,
                                              audioInputs[i]));
     }
-    const float outputX[] = {191.f, 226.f, 295.f};
+    const float outputX[] = {261.f, 295.f, 191.f};
     const int audioOutputs[] = {ComputerscarePhlooper::OUT_L,
                                 ComputerscarePhlooper::OUT_R,
                                 ComputerscarePhlooper::EOC};
@@ -1566,6 +1798,27 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     auto* m = dynamic_cast<ComputerscarePhlooper*>(module);
     if (!m) return;
     menu->addChild(new MenuSeparator);
+    menu->addChild(createSubmenuItem("Output", "", [m](Menu* submenu) {
+      for (int value = 0; value < 2; ++value)
+        submenu->addChild(createCheckMenuItem(
+            value ? "Polyphonic" : "Mix", "",
+            [m, value]() {
+              return m->params[ComputerscarePhlooper::OUTPUT_MODE].getValue() ==
+                     value;
+            },
+            [m, value]() {
+              auto* change = new history::ParamChange;
+              change->name = "Output mode";
+              change->moduleId = m->id;
+              change->paramId = ComputerscarePhlooper::OUTPUT_MODE;
+              change->oldValue =
+                  m->params[ComputerscarePhlooper::OUTPUT_MODE].getValue();
+              change->newValue = float(value);
+              m->params[ComputerscarePhlooper::OUTPUT_MODE].setValue(
+                  float(value));
+              APP->history->push(change);
+            }));
+    }));
     menu->addChild(createSubmenuItem("Visualization", "", [m](Menu* submenu) {
       for (int value = 0; value < 2; ++value)
         submenu->addChild(createCheckMenuItem(
@@ -1607,7 +1860,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
               APP->history->push(change);
             }));
     }));
-    menu->addChild(createMenuItem("Load WAV…", "", [m]() {
+    menu->addChild(createMenuItem("Import WAV to all loops…", "", [m]() {
       char* path = osdialog_file(OSDIALOG_OPEN, nullptr, nullptr, nullptr);
       if (path) {
         m->load(path);
@@ -1615,6 +1868,43 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         if (!m->error.empty())
           osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK, m->error.c_str());
       }
+    }));
+    menu->addChild(
+        createSubmenuItem("Import WAV to loop", "", [m](Menu* submenu) {
+          for (int i = 0; i < phlooper::voices; ++i)
+            submenu->addChild(createMenuItem(
+                "Loop " + std::to_string(i + 1) + "…", "", [m, i]() {
+                  char* path =
+                      osdialog_file(OSDIALOG_OPEN, nullptr, nullptr, nullptr);
+                  if (path) {
+                    m->load(path, i);
+                    std::free(path);
+                    if (!m->error.empty())
+                      osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK,
+                                       m->error.c_str());
+                  }
+                }));
+        }));
+    menu->addChild(createSubmenuItem("Export WAV", "", [m](Menu* submenu) {
+      auto exportVoice = [m](int voice) {
+        std::string filename =
+            voice < 0 ? "phlooper.wav"
+                      : "loop-" + std::to_string(voice + 1) + ".wav";
+        char* path =
+            osdialog_file(OSDIALOG_SAVE, nullptr, filename.c_str(), nullptr);
+        if (path) {
+          std::string destination = path;
+          std::free(path);
+          m->exportWavs(destination, voice);
+        }
+      };
+      submenu->addChild(createMenuItem("All 16 loops (separate files)…", "",
+                                       [exportVoice]() { exportVoice(-1); }));
+      submenu->addChild(new MenuSeparator);
+      for (int i = 0; i < 16; ++i)
+        submenu->addChild(
+            createMenuItem("Loop " + std::to_string(i + 1) + "…", "",
+                           [exportVoice, i]() { exportVoice(i); }));
     }));
     menu->addChild(createMenuItem("Clear recording", "",
                                   [m]() { m->resetRequest = true; }));

@@ -317,23 +317,58 @@ int main(){
   for(int v=0;v<16;++v)
     check(std::fabs(e.periods[v]/e.speedHold.speeds[v]-e.speedHold.duration)<1e-10,
           "all sixteen extreme-speed channels share the exact held repeat time");
-  for(int mode=0;mode<3;++mode){
-    s=phlooper::Settings();s.mode=mode;s.count=3;s.offset=0;s.speed=.5f;
-    s.speedMask=3;s.speeds[0]=1;s.speeds[1]=2;
-    e.resetHeads();e.process({},48000,s,0,0,0,0,0,false);
-    check(e.head[0]==1&&e.head[1]==2&&e.head[2]==.5,
-          "polyphonic speed controls each voice in every mode, with knob fallback");
-  }
-  s.hold=true;e.process({},48000,s,0,0,0,0,0,false);
-  check(e.speedHold.speeds[0]==1&&e.speedHold.speeds[1]==2&&e.speedHold.speeds[2]==.5,
-        "speed hold captures polyphonic pitches into fitted regions");
+  std::array<phlooper::Frame,phlooper::voices> inputs{};
+  for(int v=0;v<phlooper::voices;++v){inputs[v].l=v+1;inputs[v].r=-(v+1);}
+  s=phlooper::Settings();s.count=3;s.recordMix=1;
+  e.begin(true);
+  for(int i=0;i<64;++i)e.process({},48000,s,65535,0,0,0,0,true,&inputs);
+  e.finish();
+  for(int v=0;v<16;++v)
+    check(e.audio[v][20]==v+1&&e.audio[v][21]==-(v+1),
+          "initial recording captures separate stereo input channels");
+  e.resetHeads();
+  for(int v=0;v<3;++v){inputs[v].l=10+v;inputs[v].r=15+v;}
+  e.process({},48000,s,7,0,0,0,0,true,&inputs);
   for(int v=0;v<3;++v)
-    check(std::fabs(e.periods[v]/e.speedHold.speeds[v]-e.speedHold.duration)<1e-10,
-          "polyphonic speed hold fits every channel to the shared repeat time");
-  s.speeds[1]=4;e.process({},48000,s,0,0,0,0,0,false);
-  check(e.speedHold.speeds[1]==2,"held pitches stay latched through speed CV changes");
-  s.hold=false;e.process({},48000,s,0,0,0,0,0,false);
-  double polyHead=e.head[1];e.process({},48000,s,0,0,0,0,0,false);
-  check(std::fabs(e.head[1]-polyHead-4)<1e-9,"speed CV changes apply after releasing hold");
+    check(e.audio[v][0]==10+v&&e.audio[v][1]==15+v,
+          "overdubbing uses each loop's corresponding stereo input");
+  s.mix=0;
+  e.process({},48000,s,0,0,0,0,0,true,&inputs);
+  for(int v=0;v<3;++v)
+    check(e.outputs[v].l==inputs[v].l&&e.outputs[v].r==inputs[v].r,
+          "polyphonic dry output retains independent stereo channels");
+  s.mix=1;s.offset=0;e.resetHeads();
+  phlooper::Frame mixed;
+  for(int frame=0;frame<24;++frame)
+    mixed=e.process({},48000,s,0,0,0,0,0,true,&inputs);
+  float channelLeft=0,channelRight=0;
+  for(int v=0;v<3;++v){channelLeft+=e.outputs[v].l;channelRight+=e.outputs[v].r;}
+  check(std::fabs(mixed.l-channelLeft/3)<1e-6&&std::fabs(mixed.r-channelRight/3)<1e-6,
+        "mixed output equals the average of separate wet loop outputs");
+  for(int frame=0;frame<1000;++frame)e.process({},48000,s,0,0,0,2,0,true,&inputs);
+  check(e.outputs[1].l<e.outputs[0].l*.1f,"per-channel mute affects polyphonic output");
+  e.begin(false);
+  e.process({},96000,s,65535,0,0,0,0,false,&inputs);
+  e.process({},96000,s,65535,0,0,0,0,true,&inputs);
+  check(e.stereo[0]&&e.audio[0][0]==inputs[0].l&&e.audio[0][1]==inputs[0].r,
+        "connecting stereo during initial recording retains the right channel");
+  e.begin(false);
+  e.process({},96000,s,65535,0,0,0,0,false);
+  e.process({},96000,s,65535,0,0,0,0,false);
+  check(e.audio[0][0]==0,"a new recording cannot interpolate stale previous input");
+  e.finish();e.size=64;e.resetHeads();s=phlooper::Settings();s.count=2;s.speed=4;s.offset=0;
+  for(int v=0;v<2;++v)for(int i=0;i<128;++i)e.audio[v][i]=1;
+  e.process({},48000,s,0,0,0,0,0,false);
+  double movingHead=e.head[1];
+  for(int i=0;i<1000;++i)e.process({},48000,s,0,0,0,2,0,false);
+  check(std::fabs(e.head[1]-std::fmod(movingHead+4000,64))<1e-9,
+        "silent interpolation bypass preserves muted head timing");
+  for(int i=0;i<100;++i)e.process({},48000,s,0,0,0,0,0,false);
+  check(e.outputs[1].l>0,"muted voices resume audio after interpolation bypass");
+  e.size=0;s.mix=.25f;
+  phlooper::Frame dry;dry.l=4;dry.r=-2;
+  auto emptyOutput=e.process(dry,48000,s,0,0,0,0,0,true);
+  check(emptyOutput.l==3&&emptyOutput.r==-1.5f&&e.outputs[1].l==3,
+        "empty fast path preserves mixed and polyphonic dry monitoring");
   std::puts("Phlooper DSP and WAV tests passed");
 }

@@ -24,10 +24,11 @@ def text(s,x,y,w,h,rand=25):
 # Perspective blocks are drawn by the procedural WarpedBlock component.
 text('Phlooper',16,5,144,24,48)
 for s,x in [('Start',22),('Length',74),('Offset',126),('Speed',178),('Rec mix',226),('Out mix',278)]:
-    text(s,x,208 if s in ('Length','Speed') else 206,45,9 if s in ('Length','Speed') else 7)
-for s,x in [('L / mono',21),('R',67),('Mute',129),('Out L',179),('Out R',214),('EOC',285)]:text(s,x,360,40,5.5)
+    text(s,x,205 if s in ('Length','Speed') else 203,45,9 if s in ('Length','Speed') else 7)
+for s,x in [('L / mono',21),('R',67),('Out L',249),('Out R',283),('EOC',181)]:text(s,x,360,40,5.5)
 text('Gain',88,360,25,5.5)
-text('Gain',244,360,25,5.5)
+text('VCA',129,360,30,5.5)
+text('Gain',224,360,25,5.5)
 logo=E.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
 embed(logo,94,367,12,12,name='computerscare-logo')
 text('computerscare',111,371,160,7,47)
