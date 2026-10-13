@@ -370,5 +370,48 @@ int main(){
   auto emptyOutput=e.process(dry,48000,s,0,0,0,0,0,true);
   check(emptyOutput.l==3&&emptyOutput.r==-1.5f&&e.outputs[1].l==3,
         "empty fast path preserves mixed and polyphonic dry monitoring");
+  e.size=64;s=phlooper::Settings();s.count=2;s.offset=0;s.oneShot=true;
+  s.directions[0]=0;s.directions[1]=3;e.resetHeads();
+  e.process({},48000,s,0,0,0,0,0,false);
+  check(e.isReverse(1,3),"reverse-forward transport starts in reverse");
+  for(int frame=1;frame<64;++frame)e.process({},48000,s,0,0,0,0,0,false);
+  check(e.shotFinished[0]&&!e.shotFinished[1]&&!e.isReverse(1,3),
+        "one-shot forward finishes once while reverse-forward begins its forward leg");
+  for(int frame=0;frame<64;++frame)e.process({},48000,s,0,0,0,0,0,false);
+  check(e.shotFinished[1],"alternating one-shot completes both legs");
+  double stoppedHead=e.head[1];
+  for(int frame=0;frame<100;++frame)e.process({},48000,s,0,0,0,0,0,false);
+  check(e.head[1]==stoppedHead&&e.completed==0,"finished one-shots stop without repeated EOC");
+  e.process({},48000,s,0,0,2,0,0,false);
+  check(!e.shotFinished[1]&&e.isReverse(1,3)&&e.head[1]==1,
+        "per-channel restart rearms one-shot with reverse-first playback");
+  s.oneShot=false;e.process({},48000,s,0,0,0,0,0,false);
+  check(!e.shotFinished[0]&&e.head[0]>0,"disabling one-shot resumes continuous looping");
+  s.oneShot=true;s.mode=2;s.hold=true;s.offset=10;e.resetHeads();
+  for(int frame=0;frame<300;++frame)e.process({},48000,s,0,0,0,0,0,false);
+  check(e.shotFinished[0]&&e.shotFinished[1],"one-shot completes with the shared Speed Hold clock");
+  e.size=1000;s=phlooper::Settings();s.count=3;s.mode=1;s.offset=10;s.length=.5f;s.start=.2f;s.alignEnd=true;
+  e.resetHeads();e.process({},48000,s,0,0,7,0,0,false);
+  for(int v=0;v<3;++v)
+    check(std::fabs(e.sourceStart(v)+e.periods[v]-700)<1e-9,
+          "end alignment shifts different-length audio regions to a common end");
+  s.alignEnd=false;e.process({},48000,s,0,0,0,0,0,false);
+  check(e.sourceStart(0)==200&&e.sourceStart(1)==200,"start alignment restores common starts");
+  s.alignEnd=true;s.start=0;s.length=.1f;s.offset=50;e.resetHeads();
+  e.process({},48000,s,0,0,7,0,0,false);
+  check(e.sourceStart(1)==950&&e.sourceStart(2)==900,
+        "end-aligned regions wrap safely across the recording boundary");
+  e.size=1000;e.resetHeads();e.periods[0]=100;e.head[0]=25;
+  check(e.phase(0,0)==.25&&e.phase(0,1)==.75,
+        "phase output follows source position in forward and reverse loops");
+  e.returning[0]=false;
+  check(e.phase(0,2)==.25&&e.phase(0,3)==.75,"alternating phase starts in the selected direction");
+  e.returning[0]=true;
+  check(e.phase(0,2)==.75&&e.phase(0,3)==.25,"phase reverses on the returning leg");
+  e.wasOneShot=true;e.shotFinished[0]=true;
+  check(e.phase(0,0)==1&&e.phase(0,1)==0&&e.phase(0,2)==0&&e.phase(0,3)==1,
+        "completed one-shots hold their final phase endpoint");
+  e.size=0;
+  check(e.phase(0,1)==0,"empty loops produce zero phase");
   std::puts("Phlooper DSP and WAV tests passed");
 }
