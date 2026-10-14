@@ -2552,6 +2552,64 @@ struct BlunchChannelLabel : phlooper::WarpedDropdown {
   ComputerscareBlunch* module = nullptr;
   WeakPtr<ui::MenuOverlay> activeMenu;
   std::array<std::unique_ptr<widget::SvgWidget>, 17> captions;
+  // Keep complete paths explicit so packaged-asset validation checks every
+  // caption.
+  std::string captionPath(int channel) {
+    switch (channel) {
+      case 0:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-0.svg");
+      case 1:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-1.svg");
+      case 2:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-2.svg");
+      case 3:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-3.svg");
+      case 4:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-4.svg");
+      case 5:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-5.svg");
+      case 6:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-6.svg");
+      case 7:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-7.svg");
+      case 8:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-8.svg");
+      case 9:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-9.svg");
+      case 10:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-10.svg");
+      case 11:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-11.svg");
+      case 12:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-12.svg");
+      case 13:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-13.svg");
+      case 14:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-14.svg");
+      case 15:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-15.svg");
+      case 16:
+        return asset::plugin(pluginInstance,
+                             "res/components/blunch-channels/channel-16.svg");
+    }
+    return "";
+  }
   std::string label() override { return ""; }
   bool isPressed() override {
     auto* overlay = activeMenu.get();
@@ -2568,9 +2626,7 @@ struct BlunchChannelLabel : phlooper::WarpedDropdown {
     channel = clamp(channel, 0, 16);
     if (!captions[channel]) {
       captions[channel].reset(new widget::SvgWidget);
-      captions[channel]->setSvg(APP->window->loadSvg(asset::plugin(
-          pluginInstance, "res/components/blunch-channels/channel-" +
-                              std::to_string(channel) + ".svg")));
+      captions[channel]->setSvg(APP->window->loadSvg(captionPath(channel)));
     }
     nvgSave(args.vg);
     nvgIntersectScissor(args.vg, 3, 3, 56, 19);
