@@ -281,6 +281,8 @@ run_tests() {
   /tmp/cs_blunch_editor_views_test
   g++ -std=c++11 -I src tests/blunch_language_test.cpp src/Blunch/BlunchRandomProgram.cpp src/BlunchLanguage/Tokenizer.cpp src/BlunchLanguage/Parser.cpp src/BlunchLanguage/Evaluator.cpp -o /tmp/cs_blunch_language_test
   /tmp/cs_blunch_language_test
+  g++ -std=c++11 -I src tests/text_editor_undo_test.cpp -o /tmp/cs_text_editor_undo_test
+  /tmp/cs_text_editor_undo_test
   echo "    OK."
 }
 

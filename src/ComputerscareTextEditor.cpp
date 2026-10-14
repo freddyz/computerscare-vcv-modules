@@ -21,6 +21,11 @@ void ComputerscareTextEditor::syncFromState() {
     return;
   }
 
+  bool switched = histories.switchState(state, undoStack, redoStack);
+  if (!switched && text != state->text) {
+    pushUndoSnapshot(captureSnapshot());
+    redoStack.clear();
+  }
   suppressChangeTracking = true;
   setText(state->text);
   suppressChangeTracking = false;
@@ -29,7 +34,6 @@ void ComputerscareTextEditor::syncFromState() {
   state->cursor = cursor;
   state->selection = selection;
   state->dirty = false;
-  clearHistory();
   lastSnapshot = captureSnapshot();
 }
 
@@ -123,23 +127,16 @@ void ComputerscareTextEditor::clearHistory() {
 }
 
 void ComputerscareTextEditor::undo() {
-  if (undoStack.empty()) {
-    return;
-  }
-  redoStack.push_back(captureSnapshot());
-  ComputerscareTextEditorSnapshot snapshot = undoStack.back();
-  undoStack.pop_back();
-  restoreSnapshot(snapshot);
+  ComputerscareTextEditorSnapshot restored;
+  if (ComputerscareTextEditorHistory::move(undoStack, redoStack,
+                                           captureSnapshot(), restored))
+    restoreSnapshot(restored);
 }
-
 void ComputerscareTextEditor::redo() {
-  if (redoStack.empty()) {
-    return;
-  }
-  undoStack.push_back(captureSnapshot());
-  ComputerscareTextEditorSnapshot snapshot = redoStack.back();
-  redoStack.pop_back();
-  restoreSnapshot(snapshot);
+  ComputerscareTextEditorSnapshot restored;
+  if (ComputerscareTextEditorHistory::move(redoStack, undoStack,
+                                           captureSnapshot(), restored))
+    restoreSnapshot(restored);
 }
 
 int ComputerscareTextEditor::getLineStartPosition(int line) const {

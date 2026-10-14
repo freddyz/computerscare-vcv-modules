@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <vector>
 
 #include "Computerscare.hpp"
@@ -36,11 +37,15 @@ struct ComputerscareTextEditor : ui::TextField {
   void setCursorLine(int line);
   void setCursorLineEdge(int line, bool end);
 
+  void undo();
+  void redo();
+
  protected:
   bool suppressChangeTracking = false;
   bool handlingTrackedInput = false;
   bool lockingWordSelection = false;
   Vec lastPrimaryClickPos = Vec(0.f, 0.f);
+  ComputerscareTextEditorHistory histories;
   ComputerscareTextEditorSnapshot lastSnapshot;
   std::vector<ComputerscareTextEditorSnapshot> undoStack;
   std::vector<ComputerscareTextEditorSnapshot> redoStack;
@@ -49,8 +54,6 @@ struct ComputerscareTextEditor : ui::TextField {
   void restoreSnapshot(const ComputerscareTextEditorSnapshot& snapshot);
   void pushUndoSnapshot(const ComputerscareTextEditorSnapshot& snapshot);
   void clearHistory();
-  void undo();
-  void redo();
   void selectWordAtPosition(int position);
   int getLineStartPosition(int line) const;
   int getLineEndPosition(int line) const;

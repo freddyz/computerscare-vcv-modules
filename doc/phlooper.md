@@ -46,7 +46,7 @@ Speed-mode Hold captures Start, Length, and Offset into fitted regions; changes 
 
 ## Phasing
 
-Loop 1 has the selected nominal period. Each subsequent loop adds another increment of Offset:
+Loop 1 has the selected nominal period. New modules default to Time mode with −5 ms of Offset per loop. Each subsequent loop adds another increment of Offset:
 
 - Time ms: add Offset milliseconds to the period, preserving pitch.
 - Length %: add Offset percent of the selected length per loop, preserving pitch.
@@ -94,7 +94,7 @@ Start and Length CV are polyphonic offsets from their knobs: ±10 V adds or subt
 
 Each display row has M (mute), S (solo), P (pause), and F/R/B (direction) controls. Multiple loops can be soloed together; mute still takes precedence. Pause freezes its playhead and resumes from that position. Manual toggles combine with incoming mute/stop gates and save with the patch.
 
-With the pointer over Phlooper: Space toggles Stop, M toggles Mute, H toggles Hold, R toggles Record, T restarts all loops, E erases while held, Z toggles Zoom, and C toggles per-channel controls. Controls with shortcuts show their key in the hover tooltip. Hold the tilde/backtick key to display all shortcuts beside their controls. Modifier shortcuts remain available to Rack.
+With the pointer over Phlooper: Space toggles Stop, M toggles Mute, H toggles Hold, R toggles Record, T restarts all loops, E erases while held, Z toggles Zoom, and C toggles per-channel controls. Controls with shortcuts show their key in the hover tooltip. Hold the tilde/backtick key while hovering, interacting with, or selecting Phlooper to display its shortcuts beside their controls. Modifier shortcuts remain available to Rack.
 
 Small IN/OUT meters show stereo RMS level (5 V = 0 dB) with a green peak line held for 0.4 seconds. They use 8–18 randomly sized segments, with the longest three times the shortest, and a 20 ms level response. Their upper segments indicate high levels; lit segments glow according to Rack’s halo brightness setting.
 

@@ -169,7 +169,7 @@ struct ComputerscarePhlooper : Module {
     configParam<PhlooperLengthQuantity>(LENGTH, .001, 1, 1, "Length", "%", 0,
                                         100);
     configParam(SPEED, -2.f, 2.f, 0.f, "Overall playback speed", "×", 2.f);
-    configParam<PhlooperOffsetQuantity>(OFFSET, -20, 20, 1, "Phase offset");
+    configParam<PhlooperOffsetQuantity>(OFFSET, -20, 20, -1, "Phase offset");
     configParam<PhlooperRecordMixQuantity>(REC_MIX, 0, 1, .5, "Record mix", "%",
                                            0, 100);
     configParam<PhlooperOutputMixQuantity>(MIX, 0, 1, 1, "Output mix", "%", 0,
@@ -213,8 +213,8 @@ struct ComputerscarePhlooper : Module {
         "Offset CV",         "Hold phase gate",  "Overall speed CV",
         "Record mix CV",     "Output mix CV",    "Input VCA CV"};
     for (int i = 0; i < INPUTS; ++i) configInput(i, names[i]);
-    configOutput(PHASE, "Loop phase (0–10 V, polyphonic)");
-    configOutput(EOC, "End of loop triggers (polyphonic)");
+    configOutput(PHASE, "Loop phase (0–10 V)");
+    configOutput(EOC, "End of loop triggers");
     configOutput(OUT_L, "Left");
     configOutput(OUT_R, "Right");
     configBypass(LEFT, OUT_L);
@@ -1510,6 +1510,16 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     if (args.fb || !module || !APP->window->win ||
         glfwGetKey(APP->window->win, GLFW_KEY_GRAVE_ACCENT) != GLFW_PRESS)
       return;
+    auto belongsToModule = [this](widget::Widget* widget) {
+      for (auto* current = widget; current; current = current->parent)
+        if (current == this) return true;
+      return false;
+    };
+    bool active = belongsToModule(APP->event->getHoveredWidget()) ||
+                  belongsToModule(APP->event->getSelectedWidget()) ||
+                  belongsToModule(APP->event->getDraggedWidget()) ||
+                  APP->scene->rack->isSelected(this);
+    if (!active) return;
     auto font =
         APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
     if (!font) return;
@@ -1652,7 +1662,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     block(Rect(Vec(9, 171), Vec(312, 78)), 4.f, 2.5f, 13, 236);
     block(Rect(Vec(9, 251), Vec(312, 62)), 4.f, 1.7f, 14, 210);
     block(Rect(Vec(9, 313), Vec(145, 58)), 4.f, 1.8f, 15, 232);
-    block(Rect(Vec(160, 313), Vec(161, 58)), 4.f, 2.2f, 16, 175);
+    block(Rect(Vec(160, 313), Vec(169, 58)), 4.f, 2.2f, 16, 175);
     for (int i = 0; i < 2; ++i)
       block(Rect(Vec(i == 0 ? 18.f : 169.f, 316),
                  Vec(i == 0 ? 127.f : 143.f, 18)),

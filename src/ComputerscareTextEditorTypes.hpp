@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "Computerscare.hpp"
+#include "ComputerscareTextEditorHistory.hpp"
 
 struct ComputerscareTextHighlight {
   int begin = 0;
@@ -64,10 +65,4 @@ struct ComputerscareTextEditorStyle {
   float fontHeightOffset = 0.f;
   float letterSpacing = 0.f;
   bool lineWrapping = true;
-};
-
-struct ComputerscareTextEditorSnapshot {
-  std::string text;
-  int cursor = 0;
-  int selection = 0;
 };
