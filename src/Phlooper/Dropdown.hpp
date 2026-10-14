@@ -6,6 +6,7 @@ namespace phlooper {
 // A raised face and a recessed face share the same warped panel footprint.
 // Text follows the face geometry, rather than a separately tuned state offset.
 struct WarpedDropdown : widget::OpaqueWidget {
+  float textSize = 13.f;
   float upDepth = 4.f;
   float downDepth = 3.f;
   float screwup = .8f;
@@ -90,7 +91,7 @@ struct WarpedDropdown : widget::OpaqueWidget {
         asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
     if (font) {
       nvgFontFaceId(args.vg, font->handle);
-      nvgFontSize(args.vg, 13.f);
+      nvgFontSize(args.vg, textSize);
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
       nvgFillColor(args.vg, nvgRGB(15, 42, 36));
       nvgText(args.vg, face[0].x + 2.f, (face[0].y + face[3].y) * .5f,

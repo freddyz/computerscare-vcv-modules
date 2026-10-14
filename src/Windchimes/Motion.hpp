@@ -1,0 +1,236 @@
+#pragma once
+#include "Suspension.hpp"
+namespace windchimes {
+class Motion {
+  struct Pendulum {
+    Point axis{0.f, 1.f, 0.f}, velocity;
+    float flash = 0.f;
+  };
+  std::array<Pendulum, maxTubes> tubes{};
+  Pendulum striker;
+  Suspension suspension;
+  Point meanWind;
+  std::array<bool, maxTubes> strikerContacts{};
+  std::array<bool, maxTubes * maxTubes> pairContacts{};
+  int count = 0;
+
+  static Point tangent(Point v, Point axis) { return v - axis * v.dot(axis); }
+  static void constrain(Pendulum& p, float bound) {
+    float norm = std::sqrt(p.axis.dot(p.axis));
+    p.axis = p.axis * (1.f / std::max(norm, 1e-6f));
+    float horizontal = std::sqrt(p.axis.x * p.axis.x + p.axis.z * p.axis.z);
+    if (p.axis.y < std::cos(bound)) {
+      float scale = std::sin(bound) / std::max(horizontal, 1e-6f);
+      p.axis = {p.axis.x * scale, std::cos(bound), p.axis.z * scale};
+      Point outward = tangent({p.axis.x, 0.f, p.axis.z}, p.axis);
+      float squared = outward.dot(outward);
+      float speed = p.velocity.dot(outward);
+      if (speed > 0.f && squared > 1e-6f)
+        p.velocity = p.velocity - outward * (speed / squared);
+    }
+    p.velocity = tangent(p.velocity, p.axis);
+    float speed = std::sqrt(p.velocity.dot(p.velocity));
+    if (speed > 4.f) p.velocity = p.velocity * (4.f / speed);
+  }
+  static void integrate(Pendulum& p, float dt, float length, Point force,
+                        float damping, float bound) {
+    Point acceleration = tangent(Point(0.f, 9.81f, 0.f) + force, p.axis);
+    p.velocity = (p.velocity + acceleration * dt) * std::exp(-damping * dt);
+    p.axis = p.axis + p.velocity * (dt / length);
+    constrain(p, bound);
+    p.flash = std::max(0.f, p.flash - dt * 5.f);
+  }
+  static float angleComponent(const Pendulum& p, bool depth) {
+    float horizontal = std::sqrt(p.axis.x * p.axis.x + p.axis.z * p.axis.z);
+    return horizontal > 1e-6f ? std::atan2(horizontal, p.axis.y) *
+                                    (depth ? p.axis.z : p.axis.x) / horizontal
+                              : 0.f;
+  }
+  // Impulses act in each body's permitted tangent plane. Low restitution
+  // dissipates impact energy rather than driving an endless pendulum.
+  static void resolve(Pendulum& a, Pendulum& b, Point normal, float penetration,
+                      float la, float lb, float massA, float boundA) {
+    Point ta = tangent(normal, a.axis), tb = tangent(normal, b.axis);
+    float inverse = massA * ta.dot(ta) + tb.dot(tb);
+    if (inverse < 1e-6f) return;
+    float speed = (a.velocity - b.velocity).dot(normal);
+    if (speed > 0.f) {
+      float impulse = speed * 1.25f / inverse;
+      a.velocity = a.velocity - ta * (impulse * massA);
+      b.velocity = b.velocity + tb * impulse;
+    }
+    float correction = std::min(penetration, 0.02f) * 0.8f / inverse;
+    a.axis = a.axis - ta * (correction * massA / la);
+    b.axis = b.axis + tb * (correction / lb);
+    constrain(a, boundA);
+    constrain(b, tubeSwingLimit);
+  }
+  void updateStriker() {
+    striker.axis = suspension.axis();
+    striker.velocity = suspension.velocity();
+    Point p = strikerPosition();
+    x = p.x;
+    y = p.y;
+    z = p.z;
+  }
+
+ public:
+  float x = 0.f, y = pivotY + strikerLength, z = 0.f;
+  void setSailSize(float size) { suspension.setSailSize(size); }
+  void setWeight(float weight) { suspension.setWeight(weight); }
+  void configure(int n) {
+    if (count == n) return;
+    count = n;
+    tubes.fill(Pendulum());
+    strikerContacts.fill(false);
+    pairContacts.fill(false);
+  }
+  float tubeAngle(int t) const { return angleComponent(tubes[t], false); }
+  float tubeDepth(int t) const { return angleComponent(tubes[t], true); }
+  float strikerAngle() const { return angleComponent(striker, false); }
+  float strikerDepth() const { return angleComponent(striker, true); }
+  float tubeFlash(int t) const { return tubes[t].flash; }
+  float strikerFlash() const { return striker.flash; }
+  Capsule tubeShape(int t) const {
+    return {
+        tubeAnchorPoint(t, std::max(count, 1)) + tubes[t].axis * tubeLength(t),
+        tubes[t].axis, tubeHalfLength(t), tubeRadius(std::max(count, 1))};
+  }
+  Point strikerPosition() const { return suspension.position(); }
+  Point sailPosition() const { return suspension.sailPosition(); }
+  Point sailAxis() const { return suspension.sailAxis(); }
+  float suspensionEnergy() const { return suspension.energy(); }
+  float tubeX(int t) const { return tubeShape(t).center.x; }
+  float tubeY(int t) const { return tubeShape(t).center.y; }
+  float kineticEnergy() const {
+    float energy = suspension.kineticEnergy();
+    for (int t = 0; t < count; ++t)
+      energy += tubes[t].velocity.dot(tubes[t].velocity) * 0.5f;
+    return energy;
+  }
+  void reset() {
+    tubes.fill(Pendulum());
+    striker = Pendulum();
+    count = 0;
+    suspension.reset();
+    meanWind = {};
+    strikerContacts.fill(false);
+    pairContacts.fill(false);
+    updateStriker();
+  }
+  void kick(float direction) {
+    Point impulse(std::cos(direction), 0.f, std::sin(direction));
+    suspension.kick(impulse * 1.8f);
+    updateStriker();
+    for (int t = 0; t < count; ++t)
+      tubes[t].velocity =
+          tubes[t].velocity +
+          tangent(impulse * (0.08f + (t % 3) * 0.04f), tubes[t].axis);
+  }
+  void strike(int t) {
+    if (count <= 0) return;
+    Point target = tubeShape(t).center - strikerPosition();
+    target.y = 0.f;
+    float length = std::sqrt(target.dot(target));
+    suspension.kick(target * (2.8f / std::max(length, 1e-6f)));
+    updateStriker();
+  }
+  template <typename Hit, typename PairHit>
+  void step(float dt, float windX, float windY, const SetConfig& c, int slot,
+            Hit hit, PairHit pairHit) {
+    configure(c.tubes);
+    setWeight(c.strikerWeight);
+    setSailSize(c.sailSize);
+    Point air(windX, 0.f, windY);
+    meanWind = meanWind + (air - meanWind) * std::min(dt * 1.2f, 1.f);
+    // Tube exposure and damping are independent of the pendulum's Swing
+    // control. Stronger weather can still produce clustered tube contacts.
+    Point tubeAir = ((air - meanWind) + air * 0.08f) *
+                    clamp(air.dot(air) * 2.f, 0.12f, 2.5f) * .25f;
+    constexpr float tubeDamping = .625f;
+    // Small fixed sail differences amplify natural phase drift without
+    // changing cord lengths or adding energy in still air.
+    float dragScale = 0.9f + ((slot * 5 + 3) % 8) * (0.2f / 7.f);
+    suspension.step(dt, air, c.swing, dragScale);
+    striker.flash = std::max(0.f, striker.flash - dt * 5.f);
+    for (int t = 0; t < count; ++t) {
+      float exposure = 5.f + ((t + slot) % 3) * 3.f;
+      integrate(tubes[t], dt, tubeLength(t),
+                Point(tubeAir.x + tubeAir.z * (t % 2 ? 0.8f : -0.8f), 0.f,
+                      tubeAir.z + tubeAir.x * (t % 2 ? -0.8f : 0.8f)) *
+                    exposure,
+                tubeDamping, tubeSwingLimit);
+    }
+    updateStriker();
+    for (int t = 0; t < count; ++t) {
+      Capsule shape = tubeShape(t);
+      Point center = strikerPosition(),
+            near = closestPoint(center, shape.top(), shape.bottom());
+      Point delta = near - center;
+      float distance = std::sqrt(delta.dot(delta)),
+            radius = strikerRadius + shape.radius;
+      if (distance <= radius && distance > 1e-6f) {
+        Point normal = delta * (1.f / distance);
+        float speed = (striker.velocity - tubes[t].velocity).dot(normal);
+        if (!strikerContacts[t] && speed > 0.025f) {
+          hit(t, clamp(speed * 0.8f * suspension.impactScale(), 0.035f, 1.f));
+          striker.flash = tubes[t].flash = 1.f;
+        }
+        Point response = suspension.response(normal);
+        Point tubeResponse = tangent(normal, tubes[t].axis);
+        float inverse = normal.dot(response) + tubeResponse.dot(tubeResponse);
+        if (inverse > 1e-6f) {
+          // Tube material changes restitution; sail momentum remains
+          // independent.
+          float restitution =
+              c.material == 0 ? 0.48f : (c.material == 1 ? 0.32f : 0.24f);
+          if (speed > 0.f) {
+            float impulse = speed * (1.f + restitution) / inverse;
+            suspension.applyImpulse(normal * -impulse);
+            tubes[t].velocity = tubes[t].velocity + tubeResponse * impulse;
+          }
+          float correction =
+              std::min(radius - distance, 0.02f) * 0.8f / inverse;
+          suspension.shift(response * -correction);
+          tubes[t].axis =
+              tubes[t].axis + tubeResponse * (correction / tubeLength(t));
+          constrain(tubes[t], tubeSwingLimit);
+        }
+        strikerContacts[t] = true;
+        updateStriker();
+      } else if (distance > radius * 1.08f)
+        strikerContacts[t] = false;
+    }
+    // Reuse geometry for the pair sweep; collision resolution invalidates only
+    // the two bodies it actually moved. Preserve sequential solver ordering.
+    std::array<Capsule, maxTubes> pairShapes;
+    for (int t = 0; t < count; ++t) pairShapes[t] = tubeShape(t);
+    for (int a = 0; a < count; ++a)
+      for (int b = a + 1; b < count; ++b) {
+        Capsule ca = pairShapes[a], cb = pairShapes[b];
+        Contact contact = capsuleContact(ca, cb);
+        float radius = ca.radius + cb.radius;
+        int index = a * maxTubes + b;
+        if (contact.distance <= radius) {
+          Point delta = contact.distance > 1e-6f ? contact.b - contact.a
+                                                 : cb.center - ca.center;
+          float length = std::sqrt(delta.dot(delta));
+          Point normal =
+              length > 1e-6f ? delta * (1.f / length) : Point(1.f, 0.f, 0.f);
+          float speed = (tubes[a].velocity - tubes[b].velocity).dot(normal);
+          if (!pairContacts[index] && speed > 0.015f) {
+            pairHit(a, b, clamp(speed * 0.7f, 0.025f, 0.8f));
+            tubes[a].flash = tubes[b].flash = 1.f;
+          }
+          resolve(tubes[a], tubes[b], normal, radius - contact.distance,
+                  tubeLength(a), tubeLength(b), 1.f, tubeSwingLimit);
+          pairShapes[a] = tubeShape(a);
+          pairShapes[b] = tubeShape(b);
+          pairContacts[index] = true;
+        } else if (contact.distance > radius * 1.08f)
+          pairContacts[index] = false;
+      }
+    updateStriker();
+  }
+};
+}  // namespace windchimes

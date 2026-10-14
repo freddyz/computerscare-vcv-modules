@@ -19,11 +19,14 @@ Use `RACK_DIR=/path/to/Rack-SDK` when the Rack SDK is not in the default local p
 - [Father & Son Patch Sequencer](./doc/father-and-son.md): 16 scene, polyphonic patch matrix
 - [Debug](./doc/debug.md): Polyphonic volt meter / sample & hold / and noise source
 - [Laundry Soup](./doc/laundry-soup.md): Polyphonic, text-based trigger sequencer
+- [Blunch](./doc/blunch.md): Text-based polyphonic trigger sequencer
 - [I Love Cookies](./doc/i-love-cookies.md): Signal/CV sequencer, programmed by text input
 - [Oh Peas! Quad Quantenuverter](./doc/oh-peas.md): Polyphonic 4-Channel attenuverter, offsetter, quantizer
 - [Horse a Doodle Doo](./doc/horse-a-doodle-do.md): Polyphonic complex trigger & CV Sequencer. Turn one knob, generate a trigger and CV sequence
 
 ## Audio
+
+- [Windchimes](./doc/windchimes.md): Up to sixteen wind-driven chime sets in a quadraphonic scene
 
 - [Phlooper](./doc/phlooper.md): Up to sixteen independent audio loops, with [input voltage ranges and channel mapping](./doc/phlooper.md#input-reference)
 

@@ -1,6 +1,6 @@
 {
   "slug": "computerscare",
-  "version": "2.3.12",
+  "version": "2.4.0",
   "name": "computerscare",
   "brand": "computerscare",
   "author": "computerscare",
@@ -160,11 +160,25 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/sloly-pit.md"
     },
     {
+      "slug": "computerscare-blunch",
+      "name": "Blunch",
+      "description": "Text-based polyphonic trigger sequencer with programmable patterns",
+      "tags": ["Sequencer", "Clock modulator"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/blunch.md"
+    },
+    {
       "slug": "computerscare-mely-porge",
       "name": "Mely Porge",
       "description": "Polyphonic input processor with 16 insert channels",
       "tags": ["Polyphonic", "Utility", "Mixer", "Attenuator", "VCA"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#mely-porge"
+    },
+    {
+      "slug": "computerscare-windchimes",
+      "name": "Windchimes",
+      "description": "Arrange tuned wind-driven chime sets in a quadraphonic scene",
+      "tags": ["Physical modeling", "Random", "Polyphonic"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/windchimes.md"
     },
     {
       "slug": "computerscare-phlooper",

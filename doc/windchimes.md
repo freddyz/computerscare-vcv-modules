@@ -1,0 +1,244 @@
+# Windchimes
+
+Windchimes creates a quadraphonic scene of wind-driven tuned chime sets. Connect
+**FL**, **FR**, **RL**, and **RR** for four speakers, either front/rear pair for stereo,
+or any single audio jack for mono, and let the breeze move its striker. Turn **Wind mix** down for chimes without audible wind.
+
+## Arrange the scene
+
+- **+ Add** creates a set, up to sixteen. Each set has one to twelve tubes.
+- Click a set to select it. The listener is at the center: drag outward in any
+  direction to move farther away. Top is front, bottom is rear. Position routes
+  all tubes of a set together between front-left, front-right, rear-left and rear-right.
+  Distance controls level, filtering and displayed size independently of direction.
+- Right-click a set for **Strike**, **Stop**, **Randomize**, **Wiggle**, then a divider and **Duplicate**, **Divide**, **Remove**. Duplicate copies all per-set settings and places the new set nearby; Divide makes the same copy and gently wiggles a random subset of its sound controls. The copy becomes selected. Duplicate/Divide are disabled when all sixteen slots are occupied. Randomize and Wiggle affect the clicked set's six sound controls. Copying, removing, and sound edits support one-step undo/redo. Strike pushes/resumes the clicked set; Stop pauses its motion and fades its direct sound and room send over 5 ms. The existing shared reverb tail decays normally. A paused set stays visible and retains its settings until Strike resumes it; this performance state is not saved in patches.
+- **Remove**, **Delete**, or **Backspace** deletes the active set. The keys act on a focused visualization or while the pointer is over it, and do not delete the module. Holding a key removes only one set per press. Add, remove, edits, and moves support Rack's
+  undo/redo. Patch files save every set and its settings.
+- **Strike**, or double-clicking a set, pushes its suspended striker toward the
+  tubes. Audio starts on physical contact. Tubes hang from a shared support on
+  fixed-length strings, swing within bounded arcs, and can strike one another.
+  Struck tubes briefly brighten; a matching flash marks striker impacts. The **Gust** button in the right control column pushes all sets.
+
+The highlighted set uses the material and scale menus and the **Tubes**, **Root**,
+**Register**, **Fine**, **EDO**, **Decay**, **Brightness**, **Hardness**, **Weight**, **Set level**,
+**Spread**, and **Swing** controls. Hover over a knob to see its value; right-click
+for exact entry. Material choices are metal, wood/bamboo, and plastic.
+
+**EDO** means equal divisions of the octave (5–24). Scale degrees are mapped from
+standard twelve-tone scales to the nearest step of the selected division. **Root**
+uses standard semitones, **Register** moves by octaves, and **Fine** is in cents.
+**Spread** is a scale-degree stride: 1 plays consecutive notes, 2 skips one note, 3 skips two, and 4 skips three, continuing through octave boundaries. It controls pitch spacing, independently of scene position and spatial panning. The scale menu offers 18 choices: the original five, Chromatic, Dorian, Phrygian, Lydian, Mixolydian, Locrian, Harmonic minor, ascending Melodic minor, Minor blues, Major blues, half–whole Diminished, Hirajoshi, and Insen. Existing scale IDs and parameter IDs are preserved; Spread is appended with a default stride of 1. Duplicate/Divide include Spread, while sound Random/Wiggle leave tuning unchanged. Strike is in the selected sound section. This version does not import Scala files or use arbitrary ratio tunings.
+
+## Wind and connections
+
+**Wind**, **Gustiness**, and **Turbulence** control a shared changing weather field.
+Each set responds to the shared weather through its own moving tubes and sail; collision strength determines strike
+volume. **Swing** controls damping and motion persistence of the striker-and-sail pendulum only. Tubes retain independent, fixed damping and wind exposure. **Wind mix** controls
+only the audible filtered-noise wind, and **Output** controls the final mix.
+
+- **Wind CV**: 0–10 V adds to the Wind knob; negative CV can reduce it.
+- **1V/oct**: transposes all tubes.
+- **Gust**: a rising trigger pushes every set, including with Wind at zero.
+- **Wind out**: 0–10 V wind-strength signal for controlling other modules.
+- **FL**, **FR**, **RL**, **RR**: quad audio with automatic mixdown. Either front or
+  rear pair carries the entire scene as left/right stereo. One connected audio jack
+  carries mono. A side pair preserves front/back; a diagonal pair projects onto its
+  diagonal. Three jacks redistribute the missing corner into its neighbors.
+  Routing normalizes source power, so no source disappears when a jack is absent.
+  Moving sets and reconnecting outputs smooth routing gains before the limiter.
+- **Wind out** remains a separate CV output and never counts as an audio speaker.
+
+A bounded output stage prevents dense scenes from producing excessive voltages.
+**Dry/wet** blends the complete scene into a shared four-output reverb. **Size** changes the
+room's dimensions and tail length, from a short space to a large ambient wash.
+The four audio outputs form a speaker square at the lower right: FL/FR above RL/RR.
+
+**Wind tone** moves from deep buffeting through soft moving air to bright
+surface rustle. **Texture** adds clustered rustles, flutter and intermittent
+whistles, blending continuously toward layered leaf rustle. Wind, Gustiness and
+Turbulence drive both the audible weather and physical movement.
+
+## Implementation
+
+The engine is original modal synthesis with a fixed twelve-slot modal bank per tube and
+material-specific decay and excitation. It shares no Mutable or Audible code.
+Wind, tuning, pendulum motion, resonators, reverb, and scene mixing are separate components
+in `src/Windchimes/`. Storage is fixed at sixteen sets and twelve tubes each; DSP
+performs no allocation, locks, file access, or UI calls. Motion runs at approximately
+400 Hz and parameter updates at approximately 200 Hz. Resonator coefficients are
+cached and decayed voices stop processing. Tube-to-tube collision checks run at the motion rate. The simulation and renderer
+share the same suspended-capsule geometry, string lengths, and striker size.
+Manual strikes apply a physical push; resonators are excited only by contacts.
+Visual snapshots are published after the corresponding audio/physics update. The reverb uses fixed delay
+buffers and an eight-line feedback network with stereo input diffusion. New effect
+controls are appended to the parameter list to preserve older patch settings.
+UI motion snapshots and strike requests
+use atomics; editable settings use Rack parameters.
+
+The tubes hang around a circular support. The central striker and each tube swing in two horizontal axes with fixed cord lengths. Impacts dissipate momentum, and gravity plus damping return the assembly to rest when wind stops. Click the 2D/3D button in the right control column to switch between the 2D top view and the pseudo-3D view. Both show the same simulated geometry; the 3D view draws distant bodies first.
+
+Shape and Body are continuous per-set controls on every material. For wood/plastic, Shape morphs solid bar (0%), compact block (33%), open shell (67%), and hollow tube (100%); these are sound-design profiles rather than exact geometry measurements. Body controls muting of the object resonances for all three materials. Hardness controls the finite contact pulse duration; Brightness controls relative modal color. Wood starts darker and loses upper modes faster than metal. Decay maps to natural wood sustain with an extended upper range, and logarithmically to 0.12–40 seconds for the metal principal mode. For plastic, the main Decay range covers 0.045–2 seconds at 220 Hz and full Body, with the top 15% extending to 8 seconds; frequency and muting shorten it. Actual wood decay also depends on frequency, Shape, and Body. Voices sleep when total residual energy falls below the quietness threshold, with no fixed tail cutoff. Existing parameter IDs are preserved; Shape and Body are appended in separate per-set slots.
+
+Rack’s standard Randomize action randomizes only Decay, Brightness, Hardness, Shape, Body, and Inharmonicity for every enabled chime set. It preserves global controls, all tuning controls (including tube count and pitch Spread), material, level, swing, scene placement, and enabled/disabled state. Disabled sets retain their saved sound settings. Rack’s standard undo restores the action.
+
+The selected-set Random button randomizes Decay, Brightness, Hardness, Shape, Body, and Inharmonicity together. One undo restores all six settings. The adjacent Wiggle button chooses one to six of those controls without repetition, nudging each by a random 1–5% of its range in either direction. Nudges reflect at the control limits. One undo restores the entire wiggle; other sets and tuning/motion/global controls are unaffected.
+
+Sound presets are filtered by the selected material. Wood provides Hollow bamboo, Split bamboo clack, Deep bamboo, Dry bamboo rattle, Resonant wood block, Hard lumber knock, Soft timber, and Singing hardwood. Metal offers Bright tube, Soft tube, Warm bar, Thin strip, Muted clink, Shell ping, Singing bar, and Shimmering tube. Plastic provides Hollow plastic, Solid plastic knock, Soft plastic block, Rigid pipe, Thin cup, Bottle pop, Dry toy clack, and Resonant bar. Applying a preset changes only Decay, Brightness, Hardness, Shape, Body, and Inharmonicity in the selected set, with one undo. The dropdown shows Custom when those values no longer match a preset, including after automation or randomization. Sound controls and their material/preset selectors share a panel group; scale and tuning share another. Global wind and reverb controls are grouped below, with jacks along the bottom.
+
+Wood DSP revision: six structural modes and two broad cavity modes, with no independent click bank or directly mixed noise burst. Body adds frequency-dependent damping to the same structural modes instead of replacing them with unrelated transients. A normalized half-sine contact-force pulse supplies the attack. Its duration depends on hardness and collision speed; tube contact uses material/Shape hardness and a broader contact footprint, independently of the striker Hardness control. Signed mode-shape weights account for collision position and contact width. Bar profiles use free-free beam eigenfunctions, morphing to cosine approximations for compact/hollow profiles. These are analytic, research-informed sound-design approximations, not profiles fitted to measured recordings. Structural loss increases with absolute frequency, keeping upper modes short even at extended Decay. Coefficients update only when settings change; mode shapes and contact duration are evaluated on collisions, with no audio-rate allocation.
+
+Inharmonicity is continuous on every material, preserving the fundamental. Wood/plastic move from harmonic structural spacing at 0% through natural geometry at 50% to exaggerated spacing at 100%. Metal instead varies a bounded beam dispersion correction and bending-pair splitting throughout the range, retaining a chime-like spectrum even at the endpoints. The control is included in presets and sound randomization. Its parameter slots are appended after existing controls. Wood presets have been retuned for shorter natural sustain; the upper 15% of Decay retains extended sustain up to a 12-second main-mode T60 at full Body.
+
+The animation fills the full height of the left side; every knob, selector, button and jack sits in the right-side control column. A compact skewed Windchimes title plaque sits at the top of the right control column. Near is the stage center and Far is its outer ring in every direction: nearer sets draw larger and in front of farther sets. Hit testing follows this visual order. Both coordinates control speaker panning; radial distance affects level and a gentle distance low-pass filter. The right-side 2D/3D button changes only the view.
+
+The module is 52 HP wide, with all extra width allocated to the animation. The scene allows set centers to reach every stage edge; hanging geometry is clipped at the boundary. Distant sets shrink to about 29% of the center size, including their wind sails.
+
+Audible distance uses independent direct and room paths. The far-edge direct gain is one eighth of the near-edge gain (about −18 dB), with two cascaded low-pass stages moving from 800 Hz at Far to 18 kHz at Near. The room send decreases less rapidly than direct sound, increasing the reflected-to-direct balance for distant sets. The global reverb mix still controls the room return; setting it to zero leaves distance attenuation and filtering active.
+
+Striker motion revision: the clapper and wind sail are separate masses on two spherical links. Both move in two axes with fixed cord lengths. Coupled constraint forces include centripetal acceleration; collision impulses use the clapper's effective inverse mass while preserving independent sail momentum. At Weight 50%, a normalized mass ratio of 1.2 clapper : 0.6 sail and material-dependent restitution replace the previous light clapper/fixed restitution model. Swing controls friction, with nonzero damping at maximum. Wind acts primarily on the sail through wind-only force scaled by its projected area. Any force component that would remove existing momentum is rejected; calm air applies no drag. Swing supplies the remaining friction. Tubes have weaker mean-wind response and stronger exposure during gusts, preserving energetic tube-pair contact. No periodic strike clock or phase-aware sustaining force is used.
+
+Weather retains prevailing direction through several swings, changing it gradually at 4–14-second intervals. Gusts use correlated fluctuations, including gentle along-wind variation at zero Turbulence; Turbulence adds cross-wind variation and faster eddies. The sail and clapper animation are published from the same physics state that produces audio contact events, in both views. An unforced swing has approximately a 1.92-second period with the default geometry; impacts and wind perturb its cadence. Fully constant airflow can lead to a modest tilted equilibrium; both links return to vertical when wind is removed. All physics work is fixed-size at control rate, with no allocations or locks in audio processing.
+
+Metal DSP revision: six pairs of bending modes replace the shell-tone bank. Shape varies beam dispersion and cross-section asymmetry continuously from a thicker bar toward a slender tube; it no longer inserts low cavity/shell notes. A bounded shear/rotary-inertia approximation compresses ideal Euler–Bernoulli ratios toward observed metal-chime ratios. Inharmonicity controls that compression and subtle pair splitting; its endpoints remain bending spectra rather than harmonic strings or exaggerated bell spectra. The first member of the lowest pair retains the tuning pitch. Pair frequencies remain stable across strikes.
+
+Metal loss separates common sustain/support damping from frequency-dependent internal loss. Upper partials have enough audible ringing to preserve the metallic character at moderate Decay and low Body, while still fading before the principal mode. The previous steep ratio-to-the-power-1.8 loss and long contact pulse were too soft and wooden. Decay sets the principal mode's T60 from 0.12 to 40 seconds at full Body; upper modes stay much shorter. Body adds gentler muting to these same modes with no independent noise burst. Brightness retains a high-frequency radiation floor, with stronger upper-mode weights. The normalized raised-cosine force pulse has smooth endpoints, with duration determined by striker hardness, pitch-dependent size, and impact speed. Metal striker duration spans approximately 0.08–1.28 ms at 220 Hz before impact-speed scaling. Tube contact has a shorter, firmer impulse and different contact width, independent of striker hardness. Signed free-free bending eigenfunctions weight the actual collision position.
+
+Research: Lukkari and Välimäki, _Modal Synthesis of Wind Chime Sounds with Stochastic Event Triggering_ (NORSIG 2004), Tables 2–4; Stepanishen, _Acoustic transients from the impact force excitation of beams and wind chimes_ (ASA 2019); O'Brien, Shen and Gatchalian, _Synthesizing Sounds from Rigid-Body Simulations_ (SCA 2002). The NORSIG tube frequencies were measured, but its decay times were assigned from spectrogram inspection. This model uses original analytic approximations informed by those findings, not copied implementation code, a full shell/FEM solve, or a recording-fitted alloy model. All coefficients are cached and all per-sample storage and work remain fixed.
+
+Plastic DSP: a separate fixed twelve-mode model contains six bending/body modes, four short wall modes and two broad cavity modes. Shape continuously varies solid bar/block versus open shell/tube response, while the wall and cavity families keep separate slots rather than dragging high structural frequencies into low notes. Inharmonicity morphs only the structural spacing and modest wall spacing; the tuned principal mode is preserved. Wall/cavity ratios are analytic perceptual approximations, not a geometry-calibrated shell solve.
+
+Plastic structural damping uses the complex-modulus relationship (amplitude loss rate pi × frequency × loss factor), with mild frequency dispersion and added Body muting. At normal settings upper modes fade quickly but leave a round object response. High Decay allows deliberately extended rigid-plastic tones. The smooth normalized force pulse depends on contact stiffness, speed and object size. Plastic-to-plastic contact has its own firmness and width independent of striker Hardness. Signed spatial response weights the bending and wall modes at the actual collision point. There is no directly mixed noise burst or double application of striker softness. Preset names describe object/attack roles rather than exact polymer chemistry. Storage, mode count, and collision/control-rate coefficient evaluation remain fixed; all materials sleep when residual modal energy is quiet.
+
+Plastic and revised metal references: Aramaki and Kronland-Martinet, _Analysis-Synthesis of Impact Sounds by Real-Time Dynamic Filtering_, IEEE TASLP 14(2), 695–705 (2006), discusses damping/spectral content and excitator filtering for material perception; Woodhouse, _Material damping and complex moduli_, Euphonics 10.3.3, gives the viscoelastic modal-loss relationship. _Non-Hertzian behavior in binary collisions of plastic balls derived from impact acoustics_ (2010), motivates treating contact time as an approximation rather than assuming an exact universal Hertz law. These are research-informed original models, not copied library implementations or recording-fitted polymer profiles.
+
+Performance revision: resonators use three fixed four-lane SIMD banks (SSE on x64, NEON on ARM64), keeping all twelve original modal slots, coefficients, tuning and excitation. Passive ringing avoids repeated saturation work; dense impulses retain the previous clamp behavior through a per-bank headroom guard. Individual modes below 1e-16 squared state amplitude are cleared during the existing 256-sample silence check, and fully quiet banks skip audio work. The total worst-case removed amplitude is below 1.2e-7 before ring gain; the original whole-voice sleep threshold is retained. Strikes wake the configured banks again. Metal bending-pair contact weights are evaluated once per pair, and fixed beam-shape constants are precomputed.
+
+Scene configuration is cached across identical control updates, including sample rate and transpose, and pan/distance gains are computed once per set. Pair-collision geometry is reused during each motion step, with the two affected shapes refreshed immediately after a collision resolution to preserve solver order. No new allocation or thread synchronization is introduced. `tests/windchimes_benchmark.cpp` provides a standalone optional workload for comparing materials, dense scenes, quiet scenes and sustained voices; benchmark timings are informational rather than CI assertions. Before/after renders should be compared when changing this kernel or collision caching.
+
+Chime appearance follows the sound controls: Shape morphs the solid/block profile toward an open tube, Body increases fullness and rim thickness, Brightness strengthens highlights, Decay extends the strike glow and sustain stripe, and Inharmonicity changes surface-band spacing. Metal uses narrow crisp profiles, wood uses thicker slats with grain marks, and plastic uses rounded molded profiles with seams and heavier lips. Hardness changes the striker from a padded disk toward a faceted puck. These are decorative sound cues; collision geometry and motion remain unchanged. The overhead view shows compact cross-sections and hollow rims.
+
+Output calibration boosts wood by 2.5× and plastic by 2× relative to their original resonator levels, and applies 3× overall gain before the existing bounded output limiter. Set level and Output level can trim louder patches; distance attenuation and material dynamics are retained.
+
+Wind is sampled across the stage: position smoothly changes exposure and prevailing direction. Neighboring sets share drifting spatial eddies, with smaller independent local fluctuations even at the same position. Turbulence increases the strength and speed of these differences. Each set also has a modest fixed sail-drag variation. All forces come from weather; local eddies stop driving at zero wind, and the existing damping lets motion settle.
+
+Quad routing synthesizes each tube once and uses one eight-line reverb network with four distinct orthogonal return patterns. Disconnected outputs skip accumulation, while shared physics, voices and room tails keep running. Speaker gains and room decoder targets are cached until position or the connected layout changes. Existing left/right output IDs become FL/FR; Wind CV retains its ID, and rear outputs are appended. Older patches migrate their pan and distance into the front half of the radial stage once; new saves carry a radial-layout version marker.
+
+Shift-click or Cmd/Ctrl-click a chime set to toggle it in a multiple selection. A plain click selects one set; clicking empty stage space clears the selection. Selected sets each show their selection outline. Per-set knobs retain their normal appearance when selected values agree. Only differing values highlight the knob face in amber, without an outline or extra symbols; the pointer reflects the most recently selected set. Dragging, double-click reset, exact value entry, material/scale choices, and presets set the same value on every selected set. Each knob gesture or menu edit has one grouped undo. Randomize and Wiggle vary each selected set independently, and Rack's standard Randomize (Cmd/Ctrl+R or module menu) targets the selection's seven sound/striker controls while leaving other sets and global controls alone. Strike and Stop also address the selection.
+
+The Windchimes SVG panel follows the other modules’ pale gray perspective boxes and irregular outlined lettering, with a dark animated scene. Rebuild its static panel artwork with `python3 scripts/generate-windchimes-panel.py`; this uses the shared `gen.sh`, `svg_text_randomize.py`, and `svg_fake_perspective_rect.py` generators with fixed seeds.
+
+Selection captions use “Chimes 4” for chime number four, and “4 Chimes” when four chimes are selected. Control captions are smaller to keep the panel lettering clear of controls and neighboring labels.
+
+With all four audio outputs connected, direct chimes pan by angle between adjacent speaker directions (FL −45°, FR +45°, RR +135°, RL +225°). Front-facing directions use the front pair, rear-facing directions use the rear pair, and side directions blend the front/rear speakers on that side. Outside a small central blending zone, distance changes level/filtering independently of speaker balance. The center blends evenly into all speakers to avoid a directional jump when crossing the listener. Audible wind combines diffuse low air with three moving sound patches across the speakers; mute Wind mix to hear isolated dry chime positioning.
+
+**Weight** controls each set's striker mass independently of Hardness. It spans normalized masses 0.3–4.8, with the original 1.2 at 50%; the sail stays at 0.6. Light strikers respond more readily to wind and collision impulses; heavy strikers have more inertia and greater contact excitation at a given speed. Mass changes smooth over roughly 40 ms without resetting the suspension. Weight also changes the striker icon's size, works with multiple selection, Duplicate/Divide and undo, and participates in Random/Wiggle and standard Randomize. Sound presets continue to set their six timbre controls without changing Weight. Existing parameter IDs are preserved; older patches default to 50%. Click the stage and use Ctrl+A (or Cmd+A on macOS) to select all enabled sets.
+
+**Sail** controls wind-catching area from 0.25× to 4×, with 1× at 50%, and changes the paddle icon size. It smooths over roughly 40 ms without resetting the links or changing the sail mass. Larger sails build motion more readily; they do not add braking when wind drops or opposes the current swing. Wind forces add or steer momentum without negative work. This is an intentional wind-driven musical model, rather than a passive aerodynamic drag model. Swing and collisions still dissipate motion, so an unforced pendulum eventually settles. Sail is included in multi-selection editing, Duplicate/Divide and undo; sound Random/Wiggle and presets leave it unchanged. Saved parameter IDs are preserved.
+
+The chime finish combines Shape, Body, Decay and Weight into its tint, Brightness into lightness and highlights, and Inharmonicity/Hardness into variation and detail contrast. Materials retain separate palette families and their metal highlights, wood grain or molded plastic seams. Colored streaks and band density also respond to combinations of the settings. Outlines stay rectangular through ordinary settings: Shape below 12% tapers the top and above 88% flares the base; Body below 10% narrows the waist and above 92% adds a barrel profile; Inharmonicity above 90% adds a small asymmetric bend. These visual profiles do not change the capsule collision geometry.
+
+Delay follows the chime spatial mix and reverb, with an independent feedback line for
+each connected audio output. Mix defaults to dry. Time runs from 10 ms to 2 s;
+patch Clock to select 1/8, 1/6, 1/4, 1/3, 1/2, 3/4, 1, 3/2, 2, or 4 clock
+periods. Two edges acquire tempo; stopping the clock holds its last tempo,
+and unplugging it returns to seconds. The resulting delay is capped at 2 s
+(or the available buffer at exceptionally high sample rates). Feedback tops
+out at 95%. Time changes crossfade over 20 ms. Disconnected channels do no
+delay processing, and changing the output routing discards the previous
+echoes so an old mixdown cannot leak into the new speaker arrangement.
+
+Sails follow their individual suspension links, with projected tilt, shaded
+edges, and wind/motion-driven flutter. Metal sails are faceted kites, wood sails
+are curved leaves, and plastic sails are forked ribbons. Shape changes their
+taper, Body changes breadth, and Sail Size changes scale. Flutter is visual
+only and settles with the wind and pendulum movement.
+
+Stage distance also adds sound-travel time: zero at the listener, increasing
+linearly to 80 ms at the far edge (about 27 metres at the speed of sound).
+Each chime set has its own mono travel buffer before speaker routing and
+reverb sends. Moving the source crossfades timing over 20 ms. Stopping or
+removing a set clears its buffered sound after the stop fade.
+
+Audible wind combines low buffeting, three independently moving broad air
+bands, clustered surface rustles, and intermittent narrow whistles. Wind Mix
+sets their output level and presence, from sparse passing breezes to fuller
+close airflow and buffeting; Tone moves from deep air to bright surface detail;
+Texture increases clustered surface activity and catches. The layers share
+the physical weather's strength and direction without changing its random
+sequence. Turbulence adds faster uneven movement and patch variation. Silence
+remains silent when there is no wind.
+
+All wind character is controlled continuously by Wind Mix, Tone and Texture.
+There are no environment presets or context-menu sound settings. Texture
+moves from smooth open air through flutter and intermittent whistles to
+layered leaf rustle; high Tone and Texture produce shorter, drier surface
+bursts. Wind, Gustiness and Turbulence continue to drive the shared weather.
+Three sound patches move around the quad scene; mono/stereo connections
+use the same speaker normalization as the chimes. Sound synthesis uses
+fixed filter/event state and no audio-thread allocations.
+
+Broad flowing stripes visualize the local wind field behind the chimes. They
+follow the same spatial airflow as the suspension, curve with turbulence,
+and become brighter, wider and longer in strong gusts. Calm air hides them;
+The bands extend past every edge and are clipped flush to the stage. A fixed 36-stripe pool draws
+only on the UI thread, using a small published flow grid.
+
+**Wind audio** is a dedicated dry mono output, independent of Wind Mix (both
+its level and its presence shaping). Tone, Texture and the shared weather
+still apply; Output level controls its voltage. The existing Wind CV output
+remains 0–10 V. Right-click **Exclude wind from quad** to keep audible wind
+out of the main speaker mix and its reverb send; this option defaults off and
+is saved in the patch. Existing effect tails decay normally when switching.
+The dedicated synth only runs while its jack is connected.
+
+Rising gusts and high turbulence gently lift the wind bands' frequencies and
+briefly open the highs, then settle with a slower release. Low wind strength
+uses a roughly 650 ms attack, shortening toward 100 ms for strong wind.
+
+The panel is 60 HP (900 px), with the original 500 px flush stage and a wider
+control column. Buttons and dropdowns share Mely Porge's compact 15 px height
+and 10 px Oswald captions; the scale selector is 18 px tall. Knobs and jacks retain their sizes with expanded
+horizontal spacing.
+
+The focused chime has tiny S/M/W/R buttons (Solo/Mute/Wiggle/Random) in one
+row at the bottom left of its box. They follow the chime and stay inside the
+display at its edges.
+Solo/Mute also appear in each chime's right-click menu and the main Sound
+section alongside the existing Wiggle/Random controls. Actions apply to the
+selection and support undo. Persistent S/M badges identify soloed/muted
+chimes without requiring focus. Solo allows multiple sets; explicit Mute
+wins over Solo. Only enabled solo sets participate in solo routing. The
+controls fade the set's direct sound and new room sends while its motion
+continues; existing shared effect tails decay normally. Solo/Mute are saved
+as per-set controls and do not participate in sound randomization.
+
+Audible wind and its room return bypass the delay. Chime and wind room
+returns are kept separate so wind cannot enter the echo feedback, even with
+Reverb enabled. Delay Mix changes only the chime path.
+
+Wind bands render as continuous strokes with round joins, avoiding doubled
+segment caps. A moving brightness crest fades through each band. A fixed UI
+history adds faint ghosts lasting up to 1.65 seconds in strong wind, with
+much shorter persistence in light wind. Strong wind widens bands up to
+48 pixels; light wind keeps them narrow.
+
+Press Space while hovering over the chime display to make a gust. Holding
+the key does not repeatedly trigger gusts.
+
+While hovering over the display, M toggles mute, S toggles solo, W wiggles,
+R randomizes, and X strikes the selected chimes, including multi-selection.
+Each shortcut acts once per press.
+
+Tab selects the next enabled chime; Shift+Tab selects the previous one while
+hovering over the module. Navigation wraps at either end and replaces any
+multi-selection with the newly focused chime.
+
+Tuning groups Scale with Root, Register, Fine, EDO and Spread on the left;
+Tubes, Level, Swing and Sail occupy a separate grid on the right. Sound
+selectors and action buttons align in two rows above the timbre controls.
+Weather and effects share aligned knob columns above a taller connections
+block. The panel artwork has no outer top/right bevel.
+
+## Chime model CV
+
+Decay, Brightness, Hardness, Striker Weight, Shape, Body, and Inharmonicity each have a CV input beneath their knob. CV adds 10 percentage points per volt to each chime’s stored value, clamped to 0–100%; there are no attenuverters. A mono cable offsets all chimes. Polyphonic channels address chimes 1–16 individually, irrespective of the editor selection. Missing channels and unpatched inputs add zero. CV does not overwrite knob values or presets. Model settings refresh at 200 Hz.

@@ -1,7 +1,15 @@
-# 2.3.12
-- Add all visual options to Debug context menu
-- Minor improvement updates
+# 2.4.0
 
+New modules:
+- **Windchimes:** Arrange up to sixteen tuned, physically modeled chime sets in a quadraphonic scene. Includes material and sound presets, polyphonic chime-model CV, wind synthesis, reverb, and clockable delay.
+- **Phlooper:** Up to sixteen independent stereo audio loops with Time, Length, and Speed phasing; per-loop transport, reverse and alternating directions, one-shot playback, exact Speed Hold, start/end region alignment, waveform zoom, polyphonic recording/output, and phase/EOC outputs. Import WAV to all loops or an individual loop; export one or all loops.
+- **Blunch:** Text-based polyphonic trigger sequencer with a programmable pattern language, editor shortcuts, and per-channel Run gating or trigger-toggle control.
+
+Debug:
+- Add all visualization options to the context menu.
+
+Development:
+- Build and test all three new modules together, including the shared text editor and sequencer language/runtime tests.
 
 # 2.3.11
 VolyPector:

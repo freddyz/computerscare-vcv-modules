@@ -46,4 +46,4 @@ sleep .1
 if vcvmon invalid > /dev/null 2>&1; then exit 1;fi
 vcvmon > "$local_root/default-log" 2>&1
 if vcvmon dev extra > /dev/null 2>&1; then exit 1;fi
-print 'vcvmon mode and build-failure tests passed' 
+print 'vcvmon mode and build-failure tests passed'
