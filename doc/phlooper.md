@@ -58,7 +58,7 @@ Positive Time ms and Length % offsets extend periods with silence; negative offs
 
 Load mono/stereo WAV from the context menu or drop a file onto the module. PCM 8/16/24/32-bit and 32/64-bit float WAV are supported, including WAVE_FORMAT_EXTENSIBLE. Multichannel WAV uses its first two channels. Files longer than 60 seconds are truncated; all sixteen loops receive the imported audio and restart together. WAV amplitudes of 1 map to 5 V.
 
-Rack patch storage saves sixteen independent 48 kHz float WAV files, including inactive loops, and restores them with the patch. Mono recordings save as mono WAV; a stereo overdub turns that loop stereo. Saving retains the current audio, playheads, latched starts, and Record latch state. On load, loop starts adopt the current controls and CV during the first 2 ms while restored playhead positions are retained. Subsequent Start changes latch at each loop wrap. Clear recording in the context menu empties the buffer, resets playheads and Hold’s captured regions, and returns Start to 0% and Length to 100% (patched CV still applies); Erase only removes audio under moving heads.
+Rack patch storage saves sixteen independent 48 kHz float WAV files, including inactive loops, and restores them with the patch. Mono recordings save as mono WAV; a stereo overdub turns that loop stereo. Saving retains the current audio, playheads, and latched starts. Record is always off when loading a patch or preset. On load, loop starts adopt the current controls and CV during the first 2 ms while restored playhead positions are retained. Subsequent Start changes latch at each loop wrap. Clear recording in the context menu empties the buffer, resets playheads and Hold’s captured regions, and returns Start to 0% and Length to 100% (patched CV still applies); Erase only removes audio under moving heads.
 
 Storage reserves roughly 369 MB of virtual address space per module at the maximum stereo capacity, with memory pages touched as recording progresses. Playback and recording allocate no memory. File decoding and writing take place outside the audio callback. Replacing a file briefly passes dry input while installing its buffers. Saving copies small chunks under a nonblocking audio-thread lock; audio passes dry if a snapshot copy overlaps the callback. Save after stopping overdubs for an exact consistent recording snapshot.
 
@@ -88,7 +88,7 @@ Hold latches phase: the button toggles it, or a gate of at least 1 V holds it. I
 Patch saves retain every playhead and its latched Start, so reopening resumes
 the phase relationship from the saved positions. Record is a latching button;
 the nearby red light indicates recording from the button or a Record gate.
-The button’s latch state is saved with the patch.
+Record’s latch state is not saved; it always loads off.
 
 Start and Length CV are polyphonic offsets from their knobs: ±10 V adds or subtracts 100 percentage points, clamped to the valid range. Mono affects all loops; poly channels address individual loops, with missing channels using the knob alone. Start changes still latch at each loop boundary; Time/Length Hold uses loop 1’s CV-controlled length for every loop; Speed Hold fits each channel’s region.
 
@@ -123,3 +123,5 @@ One-shot in the visual toolbar restarts all active loops when enabled. Forward/R
 Ends in the visual toolbar toggles audio-region alignment. Off aligns starts; on preserves loop 1’s selected region and shifts each other region’s start so its end matches loop 1’s end. Time/Length Offset and per-channel Length CV therefore extend or shorten backward from that common end. Per-channel Start CV still shifts that channel’s region; wrapped starts remain valid. Speed Hold retains its captured regions until released. This changes audio regions, not their playback-time phase.
 
 Phase, immediately right of EOC, outputs one 0–10 V channel per active loop. 0 V is the selected region’s beginning and 10 V its end, independent of where it lies in the recording. Forward ramps upward, Reverse downward, and alternating transport follows each leg. Pause freezes phase; completed one-shots retain their final endpoint. Empty buffers and initial recording output 0 V. Output gain and audio output mode do not affect Phase.
+
+While Hold is active, smaller yellow brackets show the original regions selected by the controls/CV without Hold. White brackets show the held regions.

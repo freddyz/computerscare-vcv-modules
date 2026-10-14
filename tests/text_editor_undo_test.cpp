@@ -1,5 +1,6 @@
 #include "ComputerscareTextEditorHistory.hpp"
 #include "Blunch/ClockPhase.hpp"
+#include "Blunch/ControlCv.hpp"
 #include <cassert>
 #include <cstdio>
 int main() {
@@ -22,5 +23,11 @@ int main() {
   phase.process(.5,true);phase.process(.25,false);assert(phase.phase()==.5f);
   phase.process(.25,true);assert(phase.phase()==0);
   phase.process(1,false);assert(phase.phase()==1);
+  assert(computerscare::blunch::timeScaleWithCv(0,1)==2);
+  assert(computerscare::blunch::timeScaleWithCv(0,-1)==.5f);
+  assert(computerscare::blunch::timeScaleWithCv(5,10)==32);
+  assert(!computerscare::blunch::usesSeed(computerscare::blunch::seedWithCv(2,-3)));
+  assert(computerscare::blunch::usesSeed(computerscare::blunch::seedWithCv(-2,3)));
+  assert(!computerscare::blunch::usesSeed(0));
   std::puts("text editor undo and clock phase tests passed");
 }

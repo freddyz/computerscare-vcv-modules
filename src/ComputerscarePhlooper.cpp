@@ -533,6 +533,21 @@ struct ComputerscarePhlooper : Module {
       error = e.what();
     }
   }
+  json_t* toJson() override {
+    json_t* root = Module::toJson();
+    auto* savedParams = json_object_get(root, "params");
+    for (size_t i = json_array_size(savedParams); i > 0; --i) {
+      auto* saved = json_array_get(savedParams, i - 1);
+      if (json_integer_value(json_object_get(saved, "id")) == RECORD)
+        json_array_remove(savedParams, i - 1);
+    }
+    return root;
+  }
+  void fromJson(json_t* root) override {
+    Module::fromJson(root);
+    params[RECORD].setValue(0.f);
+    recording.store(false, std::memory_order_relaxed);
+  }
   json_t* dataToJson() override {
     std::lock_guard<std::mutex> lock(storage);
     auto* root = json_object();
@@ -1116,9 +1131,9 @@ struct PhlooperView : widget::Widget {
     return position > 0.f && (wrapped < .00001f || wrapped > .99999f) ? 1.f
                                                                       : wrapped;
   }
-  Vec requestedRegion(int voice) const {
+  Vec requestedRegion(int voice, bool original = false) const {
     if (!module) return Vec(.2f, 1.f);
-    if (module->speedHoldVisual.load(std::memory_order_relaxed) &&
+    if (!original && module->speedHoldVisual.load(std::memory_order_relaxed) &&
         int(module->params[ComputerscarePhlooper::MODE].getValue()) == 2)
       return Vec(module->starts[voice].load(), module->ends[voice].load());
     auto cv = [&](int port, int channel) {
@@ -1128,8 +1143,9 @@ struct PhlooperView : widget::Widget {
                                              : 0.f;
     };
     bool hold =
-        module->params[ComputerscarePhlooper::HOLD].getValue() > .5f ||
-        module->inputs[ComputerscarePhlooper::HOLD_GATE].getVoltage() >= 1.f;
+        !original &&
+        (module->params[ComputerscarePhlooper::HOLD].getValue() > .5f ||
+         module->inputs[ComputerscarePhlooper::HOLD_GATE].getVoltage() >= 1.f);
     float start =
         clamp(module->params[ComputerscarePhlooper::START].getValue() +
                   cv(ComputerscarePhlooper::START_CV, voice) / 10.f,
@@ -1160,14 +1176,14 @@ struct PhlooperView : widget::Widget {
     start = float(std::min(frames - 1, int(start * frames))) / frames;
     if (voice > 0 &&
         module->params[ComputerscarePhlooper::ALIGN_END].getValue() > .5f) {
-      Vec reference = requestedRegion(0);
+      Vec reference = requestedRegion(0, original);
       start += (reference.y - reference.x) - float(period / frames);
       start -= std::floor(start);
     }
     return Vec(start, start + float(period / frames));
   }
   void drawLoopMarker(const DrawArgs& args, float x, float y, float height,
-                      bool start) {
+                      bool start, NVGcolor color = nvgRGB(240, 243, 240)) {
     float tip = x + (start ? 1.f : -1.f) * std::min(3.f, height);
     nvgBeginPath(args.vg);
     nvgMoveTo(args.vg, tip, y - height);
@@ -1177,9 +1193,25 @@ struct PhlooperView : widget::Widget {
     nvgStrokeColor(args.vg, nvgRGB(13, 29, 28));
     nvgStrokeWidth(args.vg, 3.f);
     nvgStroke(args.vg);
-    nvgStrokeColor(args.vg, nvgRGB(240, 243, 240));
+    nvgStrokeColor(args.vg, color);
     nvgStrokeWidth(args.vg, 1.2f);
     nvgStroke(args.vg);
+  }
+  void drawOriginalMarkers(const DrawArgs& args, int voice, float y,
+                           float height) {
+    if (!module ||
+        !(module->speedHoldVisual.load(std::memory_order_relaxed) ||
+          module->params[ComputerscarePhlooper::HOLD].getValue() > .5f ||
+          module->inputs[ComputerscarePhlooper::HOLD_GATE].getVoltage() >= 1.f))
+      return;
+    Vec original = requestedRegion(voice, true);
+    auto xAt = [&](float point) {
+      return visualX(phlooper::zoomPoint(point, zoomRange));
+    };
+    NVGcolor yellow = nvgRGB(235, 208, 70);
+    drawLoopMarker(args, xAt(original.x), y, height * .78f, true, yellow);
+    drawLoopMarker(args, xAt(endPoint(original.y)), y, height * .78f, false,
+                   yellow);
   }
   void drawSpan(const DrawArgs& args, float from, float to, float y,
                 float width, NVGcolor color) {
@@ -1404,6 +1436,7 @@ struct PhlooperView : widget::Widget {
       }
       drawLoopMarker(args, xAt(requested.x), y, tickHeight, true);
       drawLoopMarker(args, xAt(endPoint(requested.y)), y, tickHeight, false);
+      drawOriginalMarkers(args, i, y, tickHeight);
       float position = module ? module->positions[i].load() : start + i * .1f;
       float x = xAt(wrapWav(position));
       drawTracker(args, i, x, y, dotScaleX, dotScaleY);
@@ -1458,6 +1491,7 @@ struct PhlooperView : widget::Widget {
         Vec requested = requestedRegion(i);
         drawLoopMarker(args, xAt(requested.x), y, row * .46f, true);
         drawLoopMarker(args, xAt(endPoint(requested.y)), y, row * .46f, false);
+        drawOriginalMarkers(args, i, y, row * .46f);
         float scaleY = std::min(1.f, row * .36f / 7.f);
         drawTracker(args, i, x, y, std::max(.65f, scaleY), scaleY);
       }

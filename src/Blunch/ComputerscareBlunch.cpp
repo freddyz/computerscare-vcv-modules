@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cctype>
 #include <cmath>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,7 @@
 #include "BlunchSequencerEngine.hpp"
 #include "BlunchSequencerRuntime.hpp"
 #include "ClockPhase.hpp"
+#include "ControlCv.hpp"
 
 struct BlunchLineInfo {
   int begin = 0;
@@ -360,7 +362,7 @@ struct BlunchAdvanceModeParamQuantity : SwitchQuantity {
 struct ComputerscareBlunch : ComputerscarePolyModule {
   static constexpr float CLOCK_BPM = 120.f;
   static constexpr float CLOCK_HZ = CLOCK_BPM / 60.f;
-  static constexpr float MIN_WIDTH = 210.f;
+  static constexpr float MIN_WIDTH = 240.f;
   static constexpr int MAX_POLY_CHANNELS = 16;
   enum SeededRandomRole {
     SEEDED_RANDOM_CLOCK = 1,
@@ -396,6 +398,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     RESET_LINE_INPUT,
     RESET_SEQUENCE_INPUT,
     RUN_INPUT,
+    TIME_CV_INPUT,
+    SEED_CV_INPUT,
     NUM_INPUTS
   };
   enum OutputIds {
@@ -486,9 +490,14 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     return sequencerForChannel(activeContextChannel());
   }
 
-  float seedValue() { return params[SEED_PARAM].getValue(); }
+  float seedValue() {
+    return computerscare::blunch::seedWithCv(
+        params[SEED_PARAM].getValue(), inputs[SEED_CV_INPUT].getVoltage());
+  }
 
-  bool seededRandomEnabled() { return seedValue() > 0.f; }
+  bool seededRandomEnabled() {
+    return computerscare::blunch::usesSeed(seedValue());
+  }
 
   BlunchSequencerRuntime& sequencerForChannel(int channel) {
     return sequencers[clampChannel(channel)];
@@ -826,6 +835,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     configInput(RESET_LINE_INPUT, "Reset line");
     configInput(RESET_SEQUENCE_INPUT, "Reset sequence");
     configInput(RUN_INPUT, "Run");
+    configInput(TIME_CV_INPUT, "Time CV (1 V/oct)");
+    configInput(SEED_CV_INPUT, "Seed CV");
     configInput(EXTERNAL_CLOCK_W_INPUT, "External clock W");
     configInput(EXTERNAL_CLOCK_X_INPUT, "External clock X");
     configInput(EXTERNAL_CLOCK_Y_INPUT, "External clock Y");
@@ -2108,7 +2119,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   float getTimeScale() {
-    return std::pow(2.f, params[SPEED_OF_TIME_PARAM].getValue());
+    return computerscare::blunch::timeScaleWithCv(
+        params[SPEED_OF_TIME_PARAM].getValue(),
+        inputs[TIME_CV_INPUT].getVoltage());
   }
 
   void advanceActiveProgramBeat(BlunchSequencerRuntime& seq,
@@ -2507,25 +2520,79 @@ struct BlunchSeedLabel : TransparentWidget {
   }
 };
 
-struct BlunchChannelLabel : TransparentWidget {
+struct BlunchChannelChoiceItem : MenuItem {
   ComputerscareBlunch* module = nullptr;
-
+  int channel = -1;
+  void step() override {
+    rightText = CHECKMARK(
+        module && (channel < 0 ? module->showingChannelsView()
+                               : !module->showingChannelsView() &&
+                                     module->focusedChannel == channel));
+    MenuItem::step();
+  }
   void draw(const DrawArgs& args) override {
-    std::shared_ptr<Font> font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
-    if (!font || font->handle < 0) {
-      return;
+    nvgSave(args.vg);
+    if (module && channel >= module->selectedOutputChannelCount())
+      nvgGlobalAlpha(args.vg, .4f);
+    MenuItem::draw(args);
+    nvgRestore(args.vg);
+  }
+  void onAction(const event::Action&) override {
+    if (!module) return;
+    if (channel < 0) {
+      if (!module->showingChannelsView()) module->switchEditorView();
+    } else {
+      module->channelsCursorChannel = channel;
+      module->openFocusedChannelEditPage();
     }
-
-    nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, 13.f);
-    nvgFillColor(args.vg, nvgRGB(0x18, 0x18, 0x18));
-    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_TOP);
-    int channel = module ? module->focusedChannel : 0;
-    std::string label = module && module->showingChannelsView()
-                            ? "All"
-                            : "Ch." + std::to_string(channel + 1) + " Sequence";
-    nvgText(args.vg, box.size.x * 0.5f, 0.f, label.c_str(), NULL);
+  }
+};
+struct BlunchChannelLabel : phlooper::WarpedDropdown {
+  ComputerscareBlunch* module = nullptr;
+  WeakPtr<ui::MenuOverlay> activeMenu;
+  std::array<std::unique_ptr<widget::SvgWidget>, 17> captions;
+  std::string label() override { return ""; }
+  bool isPressed() override {
+    auto* overlay = activeMenu.get();
+    return overlay && !overlay->requestedDelete;
+  }
+  void draw(const DrawArgs& args) override {
+    configure(60.f, 25.f, 2.5f, 1.5f, .7f, 105);
+    faceColor = nvgRGB(215, 215, 215);
+    textSize = 10;
+    phlooper::WarpedDropdown::draw(args);
+    int channel = module && module->showingChannelsView() ? 0
+                  : module ? module->focusedChannel + 1
+                           : 1;
+    channel = clamp(channel, 0, 16);
+    if (!captions[channel]) {
+      captions[channel].reset(new widget::SvgWidget);
+      captions[channel]->setSvg(APP->window->loadSvg(asset::plugin(
+          pluginInstance, "res/components/blunch-channels/channel-" +
+                              std::to_string(channel) + ".svg")));
+    }
+    nvgSave(args.vg);
+    nvgIntersectScissor(args.vg, 3, 3, 56, 19);
+    nvgTranslate(args.vg, box.size.x - 7.f - captions[channel]->box.size.x,
+                 (box.size.y - captions[channel]->box.size.y) * .5f +
+                     (isPressed() ? 1.f : -1.f));
+    captions[channel]->draw(args);
+    nvgRestore(args.vg);
+  }
+  void onButton(const event::Button& e) override {
+    if (!module || e.button != GLFW_MOUSE_BUTTON_LEFT || e.action != GLFW_PRESS)
+      return;
+    auto* menu = createMenu();
+    activeMenu = menu->getAncestorOfType<ui::MenuOverlay>();
+    for (int channel = -1; channel < 16; ++channel) {
+      auto* item = new BlunchChannelChoiceItem;
+      item->module = module;
+      item->channel = channel;
+      item->text =
+          channel < 0 ? "All" : "Channel " + std::to_string(channel + 1);
+      menu->addChild(item);
+    }
+    e.consume(this);
   }
 };
 
@@ -2784,6 +2851,12 @@ struct BlunchModeMenuButton : ComputerscareBlankButton {
   }
 };
 
+struct BlunchReverseTinyJack : ComputerscareSvgPort {
+  BlunchReverseTinyJack() {
+    setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/tiny-jack-reversed.svg")));
+  }
+};
 struct BlunchPanel : Widget {
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
@@ -2795,9 +2868,9 @@ struct BlunchPanel : Widget {
       block.configure(Rect(Vec(i == 1 ? 1.f : 4.f, i == 0   ? 3
                                                    : i == 1 ? 276
                                                             : 332),
-                           Vec(box.size.x - 8, i == 0   ? 23
-                                               : i == 1 ? 54
-                                                        : 43)),
+                           Vec(i == 0 ? 135.f : box.size.x - 8, i == 0   ? 25
+                                                                : i == 1 ? 54
+                                                                         : 43)),
                       i == 2 ? 4.f : 3.f, i == 2 ? 2.8f : 1.8f, 81 + i,
                       nvgRGB(i == 1   ? 232
                              : i == 2 ? 175
@@ -2896,14 +2969,18 @@ struct ComputerscareBlunchWidget : ModuleWidget {
 
     channelLabel = new BlunchChannelLabel();
     channelLabel->module = module;
-    channelLabel->box.pos = Vec(105.f, 7.f);
-    channelLabel->box.size = Vec(box.size.x, 13.f);
+    channelLabel->box.pos = Vec(box.size.x - 63.f, 3.f);
+    channelLabel->box.size = Vec(60.f, 25.f);
     addChild(channelLabel);
 
-    addParam(createParam<SmallKnob>(Vec(41.f, 280.f), module,
+    addParam(createParam<SmallKnob>(Vec(46.f, 280.f), module,
                                     ComputerscareBlunch::SPEED_OF_TIME_PARAM));
-    addParam(createParam<SmallKnob>(Vec(47.f, 305.f), module,
+    addParam(createParam<SmallKnob>(Vec(76.f, 280.f), module,
                                     ComputerscareBlunch::SEED_PARAM));
+    addInput(createInput<BlunchReverseTinyJack>(
+        Vec(47.f, 306.f), module, ComputerscareBlunch::TIME_CV_INPUT));
+    addInput(createInput<BlunchReverseTinyJack>(
+        Vec(77.f, 306.f), module, ComputerscareBlunch::SEED_CV_INPUT));
 
     externalClockLabels = new BlunchExternalClockLabels();
     externalClockLabels->box.pos = Vec(0.f, 282.f);
@@ -2935,7 +3012,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     addParam(runButton);
 
     polyChannelsWidget = new PolyOutputChannelsWidget(
-        Vec(168.f, 337.f), module, ComputerscareBlunch::POLY_CHANNELS_PARAM);
+        Vec(198.f, 337.f), module, ComputerscareBlunch::POLY_CHANNELS_PARAM);
     addChild(polyChannelsWidget);
 
     externalClockWInput = createInput<TinyJack>(
@@ -2983,7 +3060,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       auto* reset = new BlunchManualReset;
       reset->module = module;
       reset->mask = 1u << i;
-      reset->box = Rect(Vec(73.5f + i * 30.f, 280), Vec(28, 18));
+      reset->box = Rect(Vec(103.5f + i * 30.f, 280), Vec(28, 18));
       reset->face.configure(28, 18, 3.f, 2.f, .7f, 91 + i);
       reset->face.caption = i == 0 ? "Block" : i == 1 ? "Line" : "All";
       reset->face.textSize = 10;
@@ -3009,8 +3086,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       seedLabel->box.pos = Vec(101.f, 4.f);
     }
     if (channelLabel) {
-      channelLabel->box.pos = Vec(105.f, 7.f);
-      channelLabel->box.size.x = box.size.x - 109.f;
+      channelLabel->box.pos = Vec(box.size.x - 63.f, 3.f);
+      channelLabel->box.size = Vec(60.f, 25.f);
     }
     if (externalClockLabels) {
       externalClockLabels->box.size.x = box.size.x;
@@ -3022,17 +3099,17 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     if (polyChannelsWidget) {
       polyChannelsWidget->box.pos = Vec(0.f, 0.f);
       if (polyChannelsWidget->channelCountDisplay) {
-        polyChannelsWidget->channelCountDisplay->box.pos = Vec(168.f, 337.f);
+        polyChannelsWidget->channelCountDisplay->box.pos = Vec(198.f, 337.f);
       }
       if (polyChannelsWidget->channelsKnob) {
-        polyChannelsWidget->channelsKnob->box.pos = Vec(175.f, 340.f);
+        polyChannelsWidget->channelsKnob->box.pos = Vec(205.f, 340.f);
       }
     }
     if (rightHandle) {
       rightHandle->box.pos.x = box.size.x - rightHandle->box.size.x;
     }
 
-    const float resetInputY = 297.f;
+    const float resetInputY = 295.f;
     const float outputY = 335.f;
     PortWidget* externalInputs[] = {externalClockWInput, externalClockXInput,
                                     externalClockYInput, externalClockZInput};
@@ -3040,18 +3117,18 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                                  resetSequenceInput};
     PortWidget* outputs[] = {clockOutput, phaseOutput, eoc1Output, eoc2Output,
                              eoc3Output};
-    const float jackXs[] = {8.f, 38.f, 74.f, 104.f, 134.f};
+    const float jackXs[] = {8.f, 38.f, 104.f, 134.f, 164.f};
     for (int i = 0; i < 4; i++) {
       if (externalInputs[i]) {
         externalInputs[i]->box.pos =
-            Vec(166.f + (i % 2) * 18.f, 284.f + (i / 2) * 18.f);
+            Vec(196.f + (i % 2) * 18.f, 284.f + (i / 2) * 18.f);
       }
     }
     for (int i = 0; i < 5; ++i) outputs[i]->box.pos = Vec(jackXs[i], outputY);
     for (int i = 0; i < 3; i++) {
       if (resetInputs[i]) {
         resetInputs[i]->box.pos = Vec(
-            87.5f + i * 30.f - resetInputs[i]->box.size.x * .5f, resetInputY);
+            117.5f + i * 30.f - resetInputs[i]->box.size.x * .5f, resetInputY);
       }
     }
     if (runInput) {

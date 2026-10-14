@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ns1="http://www.inkscape.org/namespaces/inkscape" xmlns:ns2="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:ns4="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" width="16" height="16" viewBox="0 0 4.2333334 4.2333334" version="1.1" id="svg4524" ns1:version="0.92.2 5c3e80d, 2017-08-06" ns2:docname="tiny-jack.svg">
+  <defs id="defs4518">
+    <ns1:perspective ns2:type="inkscape:persp3d" ns1:vp_x="0 : 100 : 1" ns1:vp_y="0 : 1000 : 0" ns1:vp_z="200 : 100 : 1" ns1:persp3d-origin="100 : 66.666669 : 1" id="perspective5087" />
+  </defs>
+  <ns2:namedview id="base" pagecolor="#ffffff" bordercolor="#666666" borderopacity="1.0" ns1:pageopacity="0.0" ns1:pageshadow="2" ns1:zoom="22.4" ns1:cx="13.294017" ns1:cy="8.9912468" ns1:document-units="mm" ns1:current-layer="layer1" showgrid="false" ns1:window-width="1440" ns1:window-height="830" ns1:window-x="0" ns1:window-y="1" ns1:window-maximized="1" units="px" />
+  <metadata id="metadata4521">
+    <rdf:RDF>
+      <ns4:Work rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </ns4:Work>
+    </rdf:RDF>
+  </metadata>
+  <g transform="translate(4.2333334,4.2333334) rotate(180)"><g ns1:label="Layer 1" ns1:groupmode="layer" id="layer1" transform="translate(0,-292.76666)">
+    <path style="fill:#eaeaea;fill-opacity:1;stroke:#000000;stroke-width:0.08723263;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" ns1:transform-center-y="-0.20230449" d="m 2.1424996,292.95455 -2.01488796,1.46389 0.76961871,2.36866 H 3.387769 l 0.7696188,-2.36866 z" id="path5105" ns1:connector-curvature="0" />
+    <path style="fill:#000000;fill-opacity:1;stroke:#198c73;stroke-width:0.26169786;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" d="m 3.3604072,295.19724 a 1.2179075,1.2179075 0 0 0 -1.2179076,-1.21791 1.2179075,1.2179075 0 0 0 -1.21790752,1.21791 1.2179075,1.2179075 0 0 0 1.21790752,1.21791 1.2179075,1.2179075 0 0 0 1.2179076,-1.21791 z" id="path5129" ns1:connector-curvature="0" />
+  </g>
+</g></svg>
