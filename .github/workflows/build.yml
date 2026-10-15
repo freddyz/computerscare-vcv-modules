@@ -25,7 +25,7 @@ defaults:
 jobs:
   validate:
     name: Validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
         with:
@@ -41,10 +41,10 @@ jobs:
 
       - name: Cache cppcheck
         id: cache-cppcheck
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ${{ runner.temp }}/cppcheck-install
-          key: cppcheck-${{ runner.os }}-${{ env.cppcheck-version }}
+          key: cppcheck-${{ runner.os }}-${{ runner.arch }}-ubuntu-24.04-${{ env.cppcheck-version }}
 
       - name: Build cppcheck
         if: steps.cache-cppcheck.outputs.cache-hit != 'true'
@@ -79,7 +79,7 @@ jobs:
   # a fixed older glibc (avoiding GLIBC compatibility issues) and a consistent MinGW toolchain.
   build:
     name: ${{ matrix.platform }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: ghcr.io/qno/rack-plugin-toolchain-win-linux
       options: --user root
@@ -203,7 +203,7 @@ jobs:
   validate-packaged-assets:
     name: Validate packaged assets
     needs: [build, build-mac, mac-universal]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
@@ -220,7 +220,7 @@ jobs:
     name: Publish
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [build, build-mac, mac-universal, validate-packaged-assets]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
