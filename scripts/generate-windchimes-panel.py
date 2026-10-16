@@ -80,19 +80,19 @@ lettering('Reverb',620,245,65,7)
 lettering('Delay',620,289,65,7)
 for label,center,y in [('Strength',351.25,277),('Gusts',398.25,277),
                        ('Turb',351.25,315),('Mix',398.25,315),
-                       ('Tone',351.25,352),('Texture',398.25,352),
+                       ('Tone',351.25,350),('Texture',398.25,350),
                        ('Mix',457.25,277),('Size',495.25,277),
                        ('Mix',457.25,321),('Time',495.25,321),
                        ('Feedback',457.25,364)]:
     caption(label,center,y,width=30,height=6)
 caption('Clock',487,364,width=30,height=6)
-caption('Wind',553,247,width=55,height=8)
+caption('Wind',553,245,width=55,height=8)
 caption('Gain',538,294,width=28,height=6)
-caption('Chimes',553,312,width=55,height=7)
+caption('Chimes',553,309,width=55,height=6)
 for label,center in [('CV',538),('Audio',568)]:
-    caption(label,center,257,width=29,height=5.5)
+    caption(label,center,254,width=29,height=5.5)
 # Outside captions frame a tight square of chime sockets.
-for label,x,y,right in [('Front L',713,321,False),('Front R',763,321,True),
+for label,x,y,right in [('Front L',713,316,False),('Front R',763,316,True),
                          ('Rear L',713,370,False),('Rear R',763,370,True)]:
     lettering(label,x,y,30,5.5,right=right)
 ET.indent(svg)

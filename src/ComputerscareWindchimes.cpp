@@ -2,6 +2,7 @@
 #include <functional>
 
 #include "Computerscare.hpp"
+#include "PerspectivePentagonJack.hpp"
 #include "Phlooper/Block.hpp"
 #include "Phlooper/Dropdown.hpp"
 #include "Windchimes/Delay.hpp"
@@ -791,21 +792,17 @@ struct ChimeKnob : SmoothKnob {
 };
 template <typename Port>
 struct CompactChimePort : Port {
-  CompactChimePort() { this->box.size = this->box.size.mult(.75f); }
-  void draw(const widget::Widget::DrawArgs& args) override {
-    nvgSave(args.vg);
-    nvgScale(args.vg, .75f, .75f);
-    Port::draw(args);
-    nvgRestore(args.vg);
+  CompactChimePort() {
+    this->box.size = Vec(28, 30);
+    this->depth = 5.f;
+    this->distortion = 1.2f;
   }
 };
-struct WindchimesCompactJackPointingDown : JackLargePointingDown {
-  WindchimesCompactJackPointingDown() { box.size = box.size.mult(.65f); }
-  void draw(const DrawArgs& args) override {
-    nvgSave(args.vg);
-    nvgScale(args.vg, .65f, .65f);
-    JackLargePointingDown::draw(args);
-    nvgRestore(args.vg);
+struct WindchimesRaisedJackPointingDown : JackPerspectiveRaisedPointingDown {
+  WindchimesRaisedJackPointingDown() {
+    box.size = Vec(30, 32);
+    depth = 5.f;
+    distortion = 1.2f;
   }
 };
 struct GroupValueField : ui::TextField {
@@ -2146,22 +2143,26 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     const int tuningInputs[] = {W::ROOT_CV, W::REGISTER_CV, W::FINE_CV,
                                 W::EDO_CV, W::SPREAD_CV};
     for (int i = 0; i < 5; ++i)
-      addInput(createInputCentered<CompactChimePort<JackLargePointingDown>>(
+      addInput(createInputCentered<
+               CompactChimePort<JackPerspectiveRecessedPointingDown>>(
           Vec(357.5f + i * 42.f, 77.f), module, tuningInputs[i]));
     const int cvInputs[] = {
         W::TUBES_CV, W::LEVEL_CV,      W::SWING_CV,        W::SAIL_CV,
         W::DECAY_CV, W::BRIGHTNESS_CV, W::HARDNESS_CV,     W::WEIGHT_CV,
         W::SHAPE_CV, W::BODY_CV,       W::INHARMONICITY_CV};
     for (int i = 0; i < 11; ++i)
-      addInput(createInputCentered<CompactChimePort<JackLargePointingDown>>(
+      addInput(createInputCentered<
+               CompactChimePort<JackPerspectiveRecessedPointingDown>>(
           Vec(357.5f + (i % 6) * 42.f, i < 6 ? 181.f : 218.f), module,
           cvInputs[i]));
     const int actionInputs[] = {W::STRIKE_INPUT, W::WIGGLE_INPUT,
                                 W::RANDOM_INPUT, W::SOLO_INPUT, W::MUTE_INPUT};
     for (int i = 0; i < 5; ++i)
-      addInput(createInputCentered<CompactChimePort<JackLargePointingDown>>(
+      addInput(createInputCentered<
+               CompactChimePort<JackPerspectiveRecessedPointingDown>>(
           Vec(419.f + i * 36.f, 154.f), module, actionInputs[i]));
-    addInput(createInputCentered<CompactChimePort<JackLargePointingDown>>(
+    addInput(createInputCentered<
+             CompactChimePort<JackPerspectiveRecessedPointingDown>>(
         Vec(567.5f, 77), module, W::TRANSPOSE_INPUT));
     const int globals[] = {W::WIND,      W::GUSTINESS,  W::TURBULENCE,
                            W::WIND_MIX,  W::WIND_TONE,  W::WIND_TEXTURE,
@@ -2173,31 +2174,33 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         W::RESERVED_GAIN_INPUT, W::REVERB_MIX_CV, W::REVERB_SIZE_CV,
         W::DELAY_MIX_CV,        W::DELAY_TIME_CV, W::DELAY_FEEDBACK_CV};
     const Vec globalPositions[] = {Vec(343, 264), Vec(390, 264), Vec(343, 302),
-                                   Vec(390, 302), Vec(343, 340), Vec(390, 340),
+                                   Vec(390, 302), Vec(343, 337), Vec(390, 337),
                                    Vec(568, 297), Vec(449, 264), Vec(487, 264),
                                    Vec(449, 308), Vec(487, 308), Vec(449, 351)};
     for (int i = 0; i < 12; ++i) {
       addParam(createParamCentered<ChimeKnob>(globalPositions[i], module,
                                               globals[i]));
       if (globals[i] != W::MASTER)
-        addInput(createInputCentered<CompactChimePort<JackLargePointingDown>>(
+        addInput(createInputCentered<
+                 CompactChimePort<JackPerspectiveRecessedPointingDown>>(
             globalPositions[i] + Vec(16.5f, 0), module, globalInputs[i]));
     }
-    addParam(
-        createParamCentered<SmallGustButton>(Vec(355, 367), module, W::GUST));
-    addInput(createInputCentered<CompactChimePort<JackLargePointingDown>>(
-        Vec(390, 367), module, W::GUST_INPUT));
+    addParam(createParamCentered<SmallGustButton>(Vec(355, 364.5f), module,
+                                                  W::GUST));
+    addInput(createInputCentered<
+             CompactChimePort<JackPerspectiveRecessedPointingDown>>(
+        Vec(390, 364.5f), module, W::GUST_INPUT));
     addInput(createInputCentered<JackSmallPointingUp>(Vec(487, 351), module,
                                                       W::CLOCK_INPUT));
-    addOutput(createOutputCentered<WindchimesCompactJackPointingDown>(
-        Vec(538, 273), module, W::WIND_OUTPUT));
-    addOutput(createOutputCentered<WindchimesCompactJackPointingDown>(
-        Vec(568, 273), module, W::WIND_AUDIO_OUTPUT));
+    addOutput(createOutputCentered<WindchimesRaisedJackPointingDown>(
+        Vec(538, 269), module, W::WIND_OUTPUT));
+    addOutput(createOutputCentered<WindchimesRaisedJackPointingDown>(
+        Vec(568, 269), module, W::WIND_AUDIO_OUTPUT));
     const int outputIds[] = {W::LEFT_OUTPUT, W::RIGHT_OUTPUT,
                              W::REAR_LEFT_OUTPUT, W::REAR_RIGHT_OUTPUT};
     for (int i = 0; i < 4; ++i)
-      addOutput(createOutputCentered<WindchimesCompactJackPointingDown>(
-          Vec(544.f + (i % 2) * 18.f, 336.f + (i / 2) * 23.f), module,
+      addOutput(createOutputCentered<WindchimesRaisedJackPointingDown>(
+          Vec(544.f + (i % 2) * 18.f, 331.f + (i / 2) * 23.f), module,
           outputIds[i]));
     // Reserve the extra module width entirely for the scene. Keep the existing
     // compact control-column layout and translate its widgets together.
