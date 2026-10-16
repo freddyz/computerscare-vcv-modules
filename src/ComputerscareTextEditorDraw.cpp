@@ -67,14 +67,16 @@ void ComputerscareTextEditor::draw(const DrawArgs& args) {
 
   drawHighlightBackgrounds(args);
 
-  nvgBeginPath(args.vg);
-  nvgRoundedRect(args.vg, 0.5f, 0.5f, box.size.x - 1.f, box.size.y - 1.f,
-                 style.cornerRadius);
-  NVGcolor border = style.borderColor;
-  border.a = this == APP->event->selectedWidget ? 0.95f : 0.45f;
-  nvgStrokeColor(args.vg, border);
-  nvgStrokeWidth(args.vg, 1.2f);
-  nvgStroke(args.vg);
+  if (style.drawBorder) {
+    nvgBeginPath(args.vg);
+    nvgRoundedRect(args.vg, 0.5f, 0.5f, box.size.x - 1.f, box.size.y - 1.f,
+                   style.cornerRadius);
+    NVGcolor border = style.borderColor;
+    border.a = this == APP->event->selectedWidget ? 0.95f : 0.45f;
+    nvgStrokeColor(args.vg, border);
+    nvgStrokeWidth(args.vg, 1.2f);
+    nvgStroke(args.vg);
+  }
 
   nvgResetScissor(args.vg);
 }

@@ -21,6 +21,7 @@
 #include <ui/common.hpp>
 
 using namespace rack;
+#include "windchimes-checks.hpp"
 
 namespace {
 struct PreviewContainer : widget::Widget {
@@ -248,7 +249,7 @@ int main(int argc, char** argv) {
   if (argc < 5 || argc > 7) {
     std::fprintf(stderr,
                  "Usage: phlooper-preview REPO RACK_ASSETS OUTPUT_DIR SCALE "
-                 "[browser|scenarios] [phlooper|blunch]\n");
+                 "[browser|scenarios] [phlooper|blunch|windchimes]\n");
     return 2;
   }
   try {
@@ -281,10 +282,15 @@ int main(int argc, char** argv) {
     pluginInstance = &plugin;
     modelPhlooperPreview->plugin = &plugin;
     if (argc >= 6 && std::string(argv[5]) == "browser") {
-      plugin::Model* browserModel =
-          argc == 7 && std::string(argv[6]) == "blunch" ? modelBlunchPreview
-                                                        : modelPhlooperPreview;
+      plugin::Model* browserModel = modelPhlooperPreview;
+      if (argc == 7 && std::string(argv[6]) == "blunch")
+        browserModel = modelBlunchPreview;
+      if (argc == 7 && std::string(argv[6]) == "windchimes")
+        browserModel = modelComputerscareWindchimes;
       browserModel->plugin = &plugin;
+      if (browserModel == modelComputerscareWindchimes &&
+          std::getenv("WINDCHIMES_PREVIEW_CHECKS"))
+        checkWindchimesCv(browserModel);
       auto browserWidget = std::unique_ptr<app::ModuleWidget>(
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",

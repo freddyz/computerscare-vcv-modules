@@ -1,131 +1,112 @@
 # Phlooper
 
-A bank of up to sixteen independent loops, recording corresponding channels from the mono or polyphonic left/right inputs. Small differences in loop length or speed let the repetitions gradually drift apart.
+Phlooper plays up to sixteen independent audio loops. Small differences in loop length or speed let their repetitions drift apart. Each loop can store different mono or stereo audio.
 
-## Recording and playback
+## Quick start
 
-Connect audio to L / mono, optionally adding R for stereo. Mono audio cables feed all loops; polyphonic cables feed corresponding loops. Click Record to start and again to stop, or hold a Record gate high. The first recording establishes the buffer duration, up to 60 seconds, and seeds all sixteen loops. Subsequent recording overdubs only the addressed loops; each has its own audio storage.
+1. Connect audio to **L / mono**, optionally adding **R** for stereo.
+2. Press **Record** to begin; press again to finish. The first recording sets the shared duration, up to 60 seconds.
+3. Choose the number of loops and adjust **Offset** to hear them drift.
+4. Choose **Time ms**, **Length %**, or **Speed %** above the display.
 
-Record mix blends retained loop audio toward incoming audio. Overdub mode is selected in the context menu and defaults to Blend. Blend mode replaces progressively; Add retains the old audio and adds the incoming signal at Record mix level. Internal overdub values are bounded to ±20 V. While overdubbing, each addressed loop monitors the selected Blend/Add mix immediately. While erasing, addressed loops contribute silence. Other loops keep playing, and Output mix still controls the dry input.
+A mono input feeds every loop. Polyphonic inputs feed matching loops; missing channels are silent. An unpatched R copies the corresponding L channel. The first recording fills all sixteen loops, including those outside the selected loop count.
 
-Erase removes the portion beneath each addressed head while held high. Stop freezes a head in place; Mute silences playback while the head keeps moving. A Restart rising edge resets the addressed heads to Start. Panel buttons operate on all active loops. A monophonic control cable broadcasts to all loops; a polyphonic cable addresses loops by channel, with missing channels inactive.
+## Recording and transport
 
-Start and Length are percentages of the original recording. A region can wrap across the original buffer boundary. Restart begins at Start. Length changes apply while playing; Start changes latch independently when each head next wraps; a Restart adopts the new Start immediately for addressed heads. Output mix blends input with the average of the active loop outputs. Stereo is retained; a mono recording is sent equally to left and right.
+- **Record:** overdub addressed loops after the first recording. **Rec mix** sets how much input replaces the stored audio. The context menu’s default **Blend** mode progressively replaces it; **Add** retains the old audio and adds input at the selected amount.
+- **Erase:** silence the portion beneath moving heads while held. Erasing takes priority over recording.
+- **Restart:** return addressed heads to their region’s starting point.
+- **Stop:** freeze playback, recording, and erasing; release to resume from the same position.
+- **Mute:** silence loops while heads, recording, and EOC continue. Dry input remains audible according to **Out mix**.
 
-Each loop has Mute, Solo, Pause, and direction buttons. The direction button cycles F (Forward), R (Reverse), and B (Forward then Reverse). Reverse plays the selected region backward; B alternates direction at each end. Restart begins F and B at the region start, and R at its end. End-of-loop triggers fire at each traversal boundary. Recording and erasing follow the selected direction. The direction dropdown above the visual sets all sixteen loops together and shows Mixed when their modes differ. Direction modes and the current B leg are saved with the patch.
+Panel buttons affect all active loops. Mono gate/trigger cables affect all loops; polyphonic cables address matching loops, with missing channels inactive. Hold is global and uses channel 1 only.
 
-The Ctrl button above the visual hides the row buttons and expands the visual across the display. Hidden controls retain their settings. This preference is saved with the patch.
+Each row has **M** (Mute), **S** (Solo), **P** (Pause), and direction controls. Multiple loops can be soloed; Mute takes priority. **Ctrl** hides these controls and gives the waveform the full display width.
 
-The controls above the visual select Time/Length/Speed and set all loop directions. Zoom toggles between the full recording and all visible loop regions with 10% padding on each side. Zoom follows Start, Length, and CV changes and handles regions crossing the recording boundary. While dragging a knob, the zoom stays fixed and refits when the knob is released. Waveform sampling focuses on the zoomed time range to show smaller loops in more detail. Zoom affects only the view; playback continues normally.
+Directions are **Forward**, **Reverse**, **Forward then Reverse**, and **Reverse then Forward**. Restart begins the first leg of the chosen direction. The direction menu sets every loop together and shows **Mixed** when they differ. Recording and erasing follow playback direction.
 
-The display shows a sampled overview of each loop's stored audio beneath the region and playhead markers, including stereo peaks without cancelling opposite-phase channels. Its bounded cache refresh runs incrementally while audio processes; very short transients in long recordings can be missed by overview sampling.
+**1-shot** restarts active loops when enabled. Forward or Reverse plays one traversal; alternating directions play both legs, then stop. Restart rearms a shot. Disabling 1-shot resumes looping.
 
-## Input reference
+## Regions and phasing
 
-All polyphonic inputs support up to 16 channels. “Broadcast” means a one-channel cable applies to all loops; a cable with two or more channels addresses matching loops.
+**Start** and **Length** select a region of the original recording. Regions can cross its end. Length applies immediately; ordinary Start changes take effect when each loop next wraps or restarts. Brackets show requested points immediately.
 
-| Input      | Voltage range and behavior                                                                                                                                                  | Channel mapping / unpatched behavior                                                                                                                                         |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| L / mono   | Audio voltage, scaled by Input gain (0–4×) and VCA. ±5 V is the nominal audio reference; initial capture does not clamp audio, while overdubs clamp stored values to ±20 V. | Broadcast mono; poly channels record corresponding loops; missing channels are silent. Unpatched is silent.                                                                  |
-| R          | Same audio scaling and range as L.                                                                                                                                          | Broadcast mono; poly channels record corresponding loops; missing channels are silent. Unpatched copies each corresponding L channel.                                        |
-| Record     | High at ≥1 V; low below 1 V. Starts initial recording or overdubs addressed loops. Panel Record also enables recording.                                                     | Broadcast mono; poly addresses individual loops, missing channels inactive. Initial recording establishes the shared duration and seeds all buffers from their audio inputs. |
-| Erase      | High at ≥1 V; low below 1 V. Erases under moving heads; takes precedence over overdubbing.                                                                                  | Broadcast mono; poly addresses individual loops, missing channels inactive.                                                                                                  |
-| Restart    | Rising edge at ≥1 V, rearmed at ≤0 V. Resets addressed heads; holding high does not repeatedly restart.                                                                     | Broadcast mono; poly addresses individual loops, missing channels inactive. A high signal on initial connection arms the trigger; it must go low then high to trigger.       |
-| Stop       | High at ≥1 V; low below 1 V. Freezes addressed heads and suspends their recording/erasing.                                                                                  | Broadcast mono; poly addresses individual loops, missing channels inactive. Combines with global Stop and per-loop Pause.                                                    |
-| Mute       | High at ≥1 V; low below 1 V. Silences loop playback while heads, recording, and EOC continue; dry monitoring remains audible according to Output mix.                       | Broadcast mono; poly addresses individual loops, missing channels inactive. Combines with global/per-loop Mute and Solo.                                                     |
-| Hold       | High at ≥1 V; low below 1 V. Enables phase Hold, also enabled by the panel latch.                                                                                           | Channel 1 only; global behavior. Unpatched leaves the button in control.                                                                                                     |
-| Start CV   | Adds 10 percentage points per volt to Start; result clamped to 0–100%. Playback adopts Start at wrap or Restart.                                                            | Broadcast mono; poly offsets individual loops, missing channels use the knob alone.                                                                                          |
-| Length CV  | Adds 10 percentage points per volt to Length; result clamped to 0.1–100%. Applies immediately; Time/Length Hold uses loop 1’s length.                                       | Broadcast mono; poly offsets individual loops, missing channels use the knob alone.                                                                                          |
-| Offset CV  | Replaces knob spacing: ±10 V maps to ±100 ms in Time mode or ±20 percentage points in Length/Speed modes. Voltage is clamped to ±10 V; 0 V means zero offset.               | Each supplied channel addresses one loop; **mono addresses loop 1 only**. Missing channels use knob spacing.                                                                 |
-| Speed CV   | 1 V/octave added to Overall Speed: +1 V doubles, −1 V halves. Combined knob/CV rate clamped to ¼–4×, then multiplied by Speed-mode Offset.                                  | Channel 1 only; controls all loops. Unpatched uses the knob.                                                                                                                 |
-| Rec mix CV | Adds 10 percentage points per volt to Record mix; result clamped to 0–100%.                                                                                                 | Channel 1 only; controls all loops. Unpatched uses the knob.                                                                                                                 |
-| Out mix CV | Adds 10 percentage points per volt to Output mix; result clamped to 0–100% (dry to loops).                                                                                  | Channel 1 only; controls all loops. Unpatched uses the knob.                                                                                                                 |
-| VCA        | 0–10 V maps to 0–100% input level, multiplied by Input gain. Negative voltages give silence; above 10 V gives full level. Affects recording and dry monitoring.             | Broadcast mono; poly controls individual loops, missing channels give silence. Unpatched passes full level.                                                                  |
+**Offset** adds an increment for each successive loop:
 
-Speed-mode Hold captures Start, Length, and Offset into fitted regions; changes to those inputs apply on release. Overall Speed CV continues to scale all held pitches together. Gate inputs without a cable are inactive.
+| Mode     | Effect                                                         |
+| -------- | -------------------------------------------------------------- |
+| Time ms  | Add milliseconds to the period without changing pitch          |
+| Length % | Add a percentage of the selected length without changing pitch |
+| Speed %  | Change playback speed and pitch                                |
 
-## Phasing
+Positive Time/Length offsets extend the period with silence; negative offsets shorten it and truncate audio. Speed-mode offsets range from 5% to 800% playback speed. Loop periods stay between 1 ms and 60 seconds. New modules start in Time mode with −5 ms per loop.
 
-Loop 1 has the selected nominal period. New modules default to Time mode with −5 ms of Offset per loop. Each subsequent loop adds another increment of Offset:
+**Speed** multiplies all playback rates from ¼× to 4×, with 1× at the center, changing pitch in every mode.
 
-- Time ms: add Offset milliseconds to the period, preserving pitch.
-- Length %: add Offset percent of the selected length per loop, preserving pitch.
-- Speed %: add Offset percentage points to playback speed per loop, changing pitch.
+**Ends** aligns region ends instead of starts. It keeps loop 1’s region and shifts other starts backward or forward to match that end. Per-channel Start CV still shifts its corresponding region. Ends changes the audio regions, not the phase relationship of playback.
 
-Positive Time ms and Length % offsets extend periods with silence; negative offsets shorten periods and truncate audio. Speed mode sets the playback rate from 5% to 800%; each loop's direction is selected separately. Periods are bounded between 1 ms and 60 seconds. Loop joins use short fades; accelerated playback uses a windowed-sinc low-pass interpolator. Start and Length CV use 10 V for a full-range shift; Offset CV uses 10 ms per volt in Time mode and 2 percentage points per volt in Length/Speed modes.
+### Hold
 
-## Files and patches
+**Hold** stops the drift. In Time/Length modes it preserves the current spacing between heads and matches their periods to loop 1. In Speed mode it preserves pitches and fits temporary regions so every loop repeats in exactly the same time. The shortest current repeat time becomes the shared period.
 
-Load mono/stereo WAV from the context menu or drop a file onto the module. PCM 8/16/24/32-bit and 32/64-bit float WAV are supported, including WAVE_FORMAT_EXTENSIBLE. Multichannel WAV uses its first two channels. Files longer than 60 seconds are truncated; all sixteen loops receive the imported audio and restart together. WAV amplitudes of 1 map to 5 V.
+Releasing Hold restores the selected regions. Start, Length, and Offset changes wait until release in Speed Hold; overall Speed continues to scale the held loops together. Smaller yellow brackets show the original regions while white brackets show the held regions.
 
-Rack patch storage saves sixteen independent 48 kHz float WAV files, including inactive loops, and restores them with the patch. Mono recordings save as mono WAV; a stereo overdub turns that loop stereo. Saving retains the current audio, playheads, and latched starts. Record is always off when loading a patch or preset. On load, loop starts adopt the current controls and CV during the first 2 ms while restored playhead positions are retained. Subsequent Start changes latch at each loop wrap. Clear recording in the context menu empties the buffer, resets playheads and Hold’s captured regions, and returns Start to 0% and Length to 100% (patched CV still applies); Erase only removes audio under moving heads.
+### Waveform and loop points
 
-Storage reserves roughly 369 MB of virtual address space per module at the maximum stereo capacity, with memory pages touched as recording progresses. Playback and recording allocate no memory. File decoding and writing take place outside the audio callback. Replacing a file briefly passes dry input while installing its buffers. Saving copies small chunks under a nonblocking audio-thread lock; audio passes dry if a snapshot copy overlaps the callback. Save after stopping overdubs for an exact consistent recording snapshot.
+The display shows stored audio, playheads, loop brackets, and the original recording’s boundaries. Audio repeats beyond those boundaries so extended loop points stay on a continuous timeline.
 
-Overall Speed multiplies all playback rates from ¼× to 4×, with 1× at the
-center. It changes pitch in every phase mode without changing the first
-recording duration. EOC sends a 10 V, 1 ms trigger when a head wraps, with
-one polyphonic channel per active loop. Muted loops still emit EOC; stopped
-loops do not. Restarting a head does not emit EOC.
+Drag a bracket to edit a loop’s start or end while keeping its opposite point fixed. Edited points turn yellow and take effect immediately. Right-click a bracket to restore that point to its knob-defined position. Knobs and mono CV continue adjusting custom regions relative to their normal layout.
 
-The display shows the original buffer duration in seconds, each loop’s
-start/end brackets, and playheads moving from their latched starts. Brackets follow requested points immediately, while playheads retain their latched starts until wrap.
-Length’s tooltip includes the selected duration in seconds below its percent
-value. Dropdowns stay visually pressed while their menus are open.
+Polyphonic Start, Length, or Offset CV temporarily takes over the regions and locks all handles. Unpatching restores custom edits. Hold also locks editing. **Reset custom loop points** in the context menu clears all edits; importing or clearing audio does the same. Custom points support Undo/Redo and save with the patch.
 
-The Stop button toggles all active loops between stopped and playing. Heads
-resume from their held positions. Individual Stop gates remain effective
-when the button is released; the button state is saved with the patch.
+**Zoom** fits the selected regions with padding; press again for the full recording. Zoom waits until a knob or bracket drag ends before refitting. The waveform is an overview, so very short transients in long recordings may not appear.
 
-Offset CV is polyphonic and sets explicit per-loop offsets, replacing the
-knob’s evenly spaced offset for each supplied channel. −10 V to +10 V maps
-to −100 to +100 ms in Time mode, or −20% to +20% in Length/Speed modes; 0 V
-means no offset. Missing poly channels retain the knob’s spacing. A mono cable
-adds its offset to every loop’s knob-defined spacing. Values outside ±10 V are clamped.
+## Inputs
 
-Hold latches phase: the button toggles it, or a gate of at least 1 V holds it. In Time and Length modes, it preserves the current offsets between playheads and matches their periods to loop 1. In Speed mode, it keeps each channel's current playback rate and pitch and captures temporary in/out points proportional to those rates. All held channels then share exactly the same repeat time and one phase clock. The shortest current channel repeat time becomes the shared repeat time. Engaging Hold keeps the current source positions, including reverse playback. Overall Speed scales held rates together; per-loop Pause and Restart still work. Releasing Hold restores the selected regions and resumes drift. Fitted regions and their shared clock are saved with the patch. Start, Length, and Offset changes take effect after releasing Speed-mode Hold.
+Inputs support up to sixteen channels unless marked mono. For per-loop controls, a mono cable broadcasts to all loops and polyphonic channels address corresponding loops.
 
-Patch saves retain every playhead and its latched Start, so reopening resumes
-the phase relationship from the saved positions. Record is a latching button;
-the nearby red light indicates recording from the button or a Record gate.
-Record’s latch state is not saved; it always loads off.
+| Input       | Range and behavior                                                                                                                                                                                             |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L / mono, R | Audio, scaled by input Gain and VCA. ±5 V is the nominal reference. Missing poly channels are silent; unpatched R copies L                                                                                     |
+| Record      | Gate high at ≥1 V enables recording; the panel latch also enables it                                                                                                                                           |
+| Erase       | Gate high at ≥1 V erases under addressed heads                                                                                                                                                                 |
+| Restart     | Rising edge at ≥1 V, rearmed at ≤0 V. A cable initially high must go low then high                                                                                                                             |
+| Stop        | Gate high at ≥1 V freezes addressed heads; combines with panel Stop and row Pause                                                                                                                              |
+| Mute        | Gate high at ≥1 V silences addressed loops; combines with panel/row Mute and Solo                                                                                                                              |
+| Hold        | Mono gate high at ≥1 V enables global Hold; combines with the panel latch                                                                                                                                      |
+| Start CV    | Adds 10 percentage points per volt, clamped to 0–100%. Missing poly channels use the knob                                                                                                                      |
+| Length CV   | Adds 10 percentage points per volt, clamped to 0.1–100%. Missing poly channels use the knob                                                                                                                    |
+| Offset CV   | ±10 V maps to ±100 ms in Time mode or ±20 percentage points in Length/Speed mode. Mono adds to every loop’s knob spacing; poly replaces spacing for supplied channels. Missing channels keep knob spacing      |
+| Speed CV    | Mono, 1 V/octave; +1 V doubles speed, −1 V halves it. Combined Speed knob/CV is limited to ¼–4× before Speed-mode Offset                                                                                       |
+| Rec mix CV  | Mono; adds 10 percentage points per volt, clamped to 0–100%                                                                                                                                                    |
+| Out mix CV  | Mono; adds 10 percentage points per volt, clamped to 0–100%                                                                                                                                                    |
+| VCA         | 0–10 V controls 0–100% input level, multiplied by input Gain. Negative CV gives silence; above 10 V gives full level. Mono controls all loops; missing poly channels give silence. Unpatched passes full level |
 
-Start and Length CV are polyphonic offsets from their knobs: ±10 V adds or subtracts 100 percentage points, clamped to the valid range. Mono affects all loops; poly channels address individual loops, with missing channels using the knob alone. Start changes latch at each loop boundary for regular regions and update immediately for Custom regions; Time/Length Hold uses loop 1’s CV-controlled length for every loop; Speed Hold fits each channel’s region.
+Unpatched gates are inactive. Gate inputs go low below 1 V. Unpatched CV adds zero, except VCA’s full-level normalization. VCA affects recording and dry monitoring. Time/Length Hold uses loop 1’s Length CV; Speed Hold captures its regions until released.
 
-Each display row has M (mute), S (solo), P (pause), and F/R/B (direction) controls. Multiple loops can be soloed together; mute still takes precedence. Pause freezes its playhead and resumes from that position. Manual toggles combine with incoming mute/stop gates and save with the patch.
+## Outputs and levels
 
-With the pointer over Phlooper: Space toggles Stop, M toggles Mute, H toggles Hold, R toggles Record, T restarts all loops, E erases while held, Z toggles Zoom, and C toggles per-channel controls. Controls with shortcuts show their key in the hover tooltip. Hold the tilde/backtick key while hovering, interacting with, or selecting Phlooper to display its shortcuts beside their controls. Modifier shortcuts remain available to Rack.
+**Out mix** blends dry input with the average loop signal. The context menu’s **Output mode** defaults to **Mix**, giving stereo mixdown. **Polyphonic** sends one loop per channel on both outputs, using the selected loop count.
 
-Small IN/OUT meters show stereo RMS level (5 V = 0 dB) with a green peak line held for 0.4 seconds. They use 8–18 randomly sized segments, with the longest three times the shortest, and a 20 ms level response. Their upper segments indicate high levels; lit segments glow according to Rack’s halo brightness setting.
+Input and output **Gain** range from silence to +18 dB, with 0 dB at unity. Input Gain affects recording and dry monitoring; output Gain affects mixed and polyphonic audio. Overdubs are bounded to ±20 V.
 
-Overall Speed CV is a mono 1 V/octave offset from the knob, clamped to ¼–4×. Rec mix and Out mix CV are mono offsets: ±10 V adds/subtracts 100 percentage points, clamped to 0–100%. The main knobs and buttons share labels with their CV/gate jacks.
+- **EOC:** one 10 V, 1 ms trigger per traversal boundary, with a channel per active loop. Muted loops still trigger; stopped loops do not. Restart does not produce EOC.
+- **Phase:** one 0–10 V channel per active loop, from region beginning to end. Forward ramps upward; Reverse downward. Pause holds the voltage; completed one-shots keep their endpoint. Empty buffers and initial recording output 0 V.
 
-Small input/output Gain knobs display dB, from silence (−∞ dB) through +18 dB (about 7.94×), defaulting to unity (0 dB). Input gain affects recording and dry monitoring; output gain applies to both mixed and polyphonic outputs. Changes are smoothed, and meters reflect the adjusted levels.
+Gain and audio output mode do not affect Phase or EOC. Meters follow the loudest channel on each side for polyphonic audio; Mix mode meters the actual stereo mix. Peak lines hold briefly above the moving level.
 
-Audio inputs broadcast a mono cable to all loops. Polyphonic cables record channel 1 into loop 1, channel 2 into loop 2, and so on; missing channels are silent. An unconnected right input copies the corresponding left channel. Initial recording and overdubbing both use this mapping. Outputs default to a stereo mix of the active loops.
+## WAV files and patches
 
-Output mode in the context menu defaults to Mix (stereo mixdown). Polyphonic sends one loop per channel on both outputs, using the selected loop count. Output gain applies in both modes.
+Use **Import WAV to all loops** or drop a WAV onto the module. Both copy the file into all sixteen loops and restart them. Mono/stereo PCM and floating-point WAV are supported; multichannel files use their first two channels. Files longer than 60 seconds are truncated. A WAV amplitude of 1 corresponds to 5 V.
 
-Input VCA multiplies input gain before recording and overdubbing. With no CV cable, it passes full level. Patched VCA CV uses 0–10 V for 0–100%, multiplied by Input gain; mono CV controls all loops and polyphonic CV addresses individual loops. Zero passes no input into the buffer.
+**Export WAV** saves one loop or all sixteen as separate files, including inactive loops. Exports contain the full stored audio as 48 kHz float WAV, preserving mono/stereo, without playback gain, speed, direction, or region cropping. Stop recording before saving or exporting for a consistent snapshot.
 
-Meters follow the loudest instantaneous channel on each side for polyphonic inputs and outputs, avoiding cancellation between channels. Mix output mode meters the actual stereo mix.
+Patches save all audio, loop settings, playhead positions, custom regions, and held regions. Record always loads off. **Clear recording** empties all loops and resets Start to 0%, Length to 100%, custom points, and held regions; patched CV still applies.
 
-Import WAV to all loops always copies the same file into all sixteen loops; dropping a WAV does the same. Export WAV lets you save any individual loop, or all sixteen (including inactive loops) as separate files named `<chosen name>-loop-1.wav` through `-loop-16.wav`. Exports contain the full stored buffers as 48 kHz float WAV, preserving mono/stereo, without playback gain, pitch, direction, or region cropping. Stop recording/overdubbing before export for a consistent snapshot.
+Randomize preserves loop count, 1-shot, Ctrl, Zoom, Out mix, and custom loop points.
 
-Display playhead/region snapshots publish every 64 audio samples; audio and EOC timing remain sample-rate accurate. Empty buffers bypass playback calculations, and fully faded muted/stopped voices skip interpolation while preserving head and recording behavior.
+## Keyboard shortcuts
 
-The Mute button and jack sit after Stop. The button latches mute for all loops while their playheads, recording, and EOC timing continue. Dry monitoring remains controlled by Output mix.
+With the pointer over Phlooper: **Space** toggles Stop, **M** toggles Mute, **H** toggles Hold, **R** toggles Record, **T** restarts, **E** erases while held, **Z** toggles Zoom, and **C** toggles row controls.
 
-One-shot in the visual toolbar restarts all active loops when enabled. Forward/Reverse play one traversal; Forward then Reverse and Reverse then Forward play both legs, then stop. Restart rearms addressed loops; disabling One-shot resumes looping. Pause/Mute retain their usual behavior, and completed shots and remaining legs save with the patch. Reverse then Forward (RF) begins in reverse on Restart, then alternates forward/reverse.
-
-Ends in the visual toolbar toggles audio-region alignment. Off aligns starts; on preserves loop 1’s selected region and shifts each other region’s start so its end matches loop 1’s end. Time/Length Offset and per-channel Length CV therefore extend or shorten backward from that common end. Per-channel Start CV still shifts that channel’s region; wrapped starts remain valid. Speed Hold retains its captured regions until released. This changes audio regions, not their playback-time phase.
-
-Phase, immediately right of EOC, outputs one 0–10 V channel per active loop. 0 V is the selected region’s beginning and 10 V its end, independent of where it lies in the recording. Forward ramps upward, Reverse downward, and alternating transport follows each leg. Pause freezes phase; completed one-shots retain their final endpoint. Empty buffers and initial recording output 0 V. Output gain and audio output mode do not affect Phase.
-
-While Hold is active, smaller yellow brackets show the original regions selected by the controls/CV without Hold. White brackets show the held regions.
-
-The waveform view includes repeated audio beyond the source boundaries. Loop brackets stay on the same continuous timeline, so positive length offsets extend to the right of the original end rather than wrapping to the left.
-
-Drag a row’s start or end bracket to set a custom loop region. Moving the start keeps the end fixed; moving the end keeps the start fixed. Edited points turn yellow, and changes take effect immediately. Hover an editable bracket for the horizontal drag cursor; right-click it to restore that point to its knob/CV-defined position while keeping the opposite point fixed. Start, Length, and Offset knobs and mono CV continue adjusting the custom region relative to their regular layout. In Speed mode, Offset still changes speed/pitch rather than region length.
-
-Patching polyphonic Start, Length, or Offset CV temporarily takes control of the regular regions and locks all bracket handles, including rows with no matching CV channel. Saved custom edits remain available after unpatching; the regular CV-controlled points display in white while edits are bypassed. Bracket editing is also locked during Hold. Use **Reset custom loop points** in the context menu to restore the normal knob layout. Custom edits are saved in the patch, support Undo/Redo, and are excluded from Randomize. Importing or clearing audio resets them.
+Hover tooltips show shortcuts in brackets. Hold backtick/tilde while hovering over or interacting with Phlooper to show them beside their controls.

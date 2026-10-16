@@ -16,13 +16,14 @@ while (($#)); do
   case "$1" in
     phlooper) MODULE=phlooper; shift ;;
     blunch) MODULE=blunch; PREVIEW_MODE=browser; shift ;;
+    windchimes) MODULE=windchimes; PREVIEW_MODE=browser; shift ;;
     --output) OUTPUT_DIR=$2; shift 2 ;;
     --scale) SCALE=$2; shift 2 ;;
     --browser) PREVIEW_MODE=browser; shift ;;
     --controls) PREVIEW_MODE=controls; shift ;;
     --no-build) BUILD_PLUGIN=0; shift ;;
     -h|--help)
-      echo "Usage: scripts/preview-module.sh [phlooper|blunch] [--output DIR] [--scale 2] [--no-build] [--browser] [--controls]"
+      echo "Usage: scripts/preview-module.sh [phlooper|blunch|windchimes] [--output DIR] [--scale 2] [--no-build] [--browser] [--controls]"
       echo "RACK_DIR must contain a built Rack library and res/. No audio device or patch is opened."
       echo "Images and the preview executable default to ignored build/previews/."
       exit 0 ;;

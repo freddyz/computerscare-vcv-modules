@@ -5,6 +5,35 @@
 #include "../Computerscare.hpp"
 
 namespace phlooper {
+// Display glass stays rectangular for accurate mouse coordinates. Its thin,
+// irregular surround and two exposed sides form the front of a down-left box.
+inline void drawDisplayFrame(NVGcontext* vg, Vec size) {
+  nvgSave(vg);
+  const Vec front[] = {Vec(-.55f, -.65f), Vec(size.x + .45f, -.25f),
+                       Vec(size.x + .65f, size.y + .45f),
+                       Vec(-.3f, size.y + .85f)};
+  const Vec extrusion(-4.f, 3.f);
+  auto quad = [&](Vec a, Vec b, Vec c, Vec d, NVGcolor color) {
+    nvgBeginPath(vg);
+    nvgMoveTo(vg, a.x, a.y);
+    for (Vec p : {b, c, d}) nvgLineTo(vg, p.x, p.y);
+    nvgClosePath(vg);
+    nvgFillColor(vg, color);
+    nvgFill(vg);
+    nvgStrokeColor(vg, nvgRGB(0, 0, 0));
+    nvgStrokeWidth(vg, .7f);
+    // Bevel acute extrusion joins so the stroke cannot form a spike.
+    nvgLineJoin(vg, NVG_BEVEL);
+    nvgStroke(vg);
+  };
+  quad(front[0], front[3], front[3] + extrusion, front[0] + extrusion,
+       nvgRGB(128, 134, 130));
+  quad(front[3], front[2], front[2] + extrusion, front[3] + extrusion,
+       nvgRGB(85, 94, 90));
+  quad(front[0], front[1], front[2], front[3], nvgRGB(25, 34, 31));
+  nvgRestore(vg);
+}
+
 // Static perspective plaque, with a deterministic warp and separately shaded
 // sides.
 struct WarpedBlock : widget::TransparentWidget {

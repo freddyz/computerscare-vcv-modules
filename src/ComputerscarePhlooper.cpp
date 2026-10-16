@@ -1246,7 +1246,7 @@ struct PhlooperView : widget::Widget {
     if (dragVoice < 0 || !canEdit()) return;
     float delta = (APP->scene->rack->getMousePos().x - dragMouse.x) *
                   (zoomRange.end - zoomRange.start) /
-                  (box.size.x - visualLeft() - 10.f);
+                  (box.size.x - visualLeft());
     int frames = module->frames.load();
     if (frames <= 0) return;
     auto edited = phlooper::dragLoopPoint({dragRegion.x, dragRegion.y},
@@ -1286,9 +1286,9 @@ struct PhlooperView : widget::Widget {
            module->params[ComputerscarePhlooper::SHOW_TRANSPORT].getValue() >
                .5f;
   }
-  float visualLeft() const { return showTransport() ? 52.f : 10.f; }
+  float visualLeft() const { return showTransport() ? 52.f : 0.f; }
   float visualX(float position) const {
-    return visualLeft() + (box.size.x - visualLeft() - 10.f) *
+    return visualLeft() + (box.size.x - visualLeft()) *
                               (position - zoomRange.start) /
                               (zoomRange.end - zoomRange.start);
   }
@@ -1527,6 +1527,7 @@ struct PhlooperView : widget::Widget {
     widget::Widget::step();
   }
   void draw(const DrawArgs& args) override {
+    phlooper::drawDisplayFrame(args.vg, box.size);
     nvgBeginPath(args.vg);
     nvgRect(args.vg, 0, 0, box.size.x, box.size.y);
     nvgFillColor(args.vg, nvgRGB(13, 29, 28));
@@ -1584,8 +1585,8 @@ struct PhlooperView : widget::Widget {
         }
       }
       nvgSave(args.vg);
-      nvgIntersectScissor(args.vg, visualLeft(), 0.f,
-                          box.size.x - visualLeft() - 10.f, box.size.y);
+      nvgIntersectScissor(args.vg, visualLeft(), 0.f, box.size.x - visualLeft(),
+                          box.size.y);
       float start = module ? module->starts[i].load() : requested.x;
       if (module || preview) {
         nvgBeginPath(args.vg);
@@ -1594,7 +1595,7 @@ struct PhlooperView : widget::Widget {
           if (module && module->waveform[i].range[bin].load(
                             std::memory_order_acquire) != waveformRange)
             continue;
-          float x = visualLeft() + (box.size.x - visualLeft() - 10.f) *
+          float x = visualLeft() + (box.size.x - visualLeft()) *
                                        ((bin + .5f) / phlooper::waveformBins);
           auto sample = preview
                             ? preview->sampleWaveform(
@@ -1656,6 +1657,19 @@ struct PhlooperView : widget::Widget {
       drawOriginalMarkers(args, i, y, tickHeight);
       nvgRestore(args.vg);
     }
+    // Mark both source boundaries inside the repeated waveform padding.
+    nvgSave(args.vg);
+    nvgIntersectScissor(args.vg, visualLeft(), 0.f, box.size.x - visualLeft(),
+                        box.size.y);
+    nvgBeginPath(args.vg);
+    for (float boundary : {0.f, 1.f}) {
+      nvgMoveTo(args.vg, visualX(boundary), 3.f);
+      nvgLineTo(args.vg, visualX(boundary), box.size.y - 3.f);
+    }
+    nvgStrokeColor(args.vg, nvgRGBA(205, 213, 205, 140));
+    nvgStrokeWidth(args.vg, .8f);
+    nvgStroke(args.vg);
+    nvgRestore(args.vg);
     widget::Widget::draw(args);
   }
   void drawLayer(const DrawArgs& args, int layer) override {
@@ -1667,21 +1681,12 @@ struct PhlooperView : widget::Widget {
         return visualX(phlooper::zoomPoint(position, zoomRange));
       };
       nvgSave(args.vg);
-      nvgIntersectScissor(args.vg, visualLeft(), 0.f,
-                          box.size.x - visualLeft() - 10.f, box.size.y);
+      nvgIntersectScissor(args.vg, visualLeft(), 0.f, box.size.x - visualLeft(),
+                          box.size.y);
       nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
       auto stroke = [&](float left, float right, float y, NVGcolor color) {
         drawSpan(args, left, right, y, std::min(4.f, row * .45f), color);
       };
-      // Mark both source boundaries inside the repeated waveform padding.
-      nvgBeginPath(args.vg);
-      for (float boundary : {0.f, 1.f}) {
-        nvgMoveTo(args.vg, visualX(boundary), 3.f);
-        nvgLineTo(args.vg, visualX(boundary), box.size.y - 3.f);
-      }
-      nvgStrokeColor(args.vg, nvgRGBA(205, 213, 205, 140));
-      nvgStrokeWidth(args.vg, .8f);
-      nvgStroke(args.vg);
       for (int i = 0; i < count; ++i) {
         float y = 6.f + row * (i + .5f);
         auto& visual = module->writeVisual[i];
@@ -1955,7 +1960,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     auto* view = new PhlooperView;
     view->module = module;
     view->preview = preview;
-    view->box = Rect(Vec(10, 60), Vec(310, 108));
+    view->box = Rect(Vec(10, 60), Vec(310, 105));
     const int transportParams[] = {ComputerscarePhlooper::LOOP_MUTE,
                                    ComputerscarePhlooper::LOOP_SOLO,
                                    ComputerscarePhlooper::LOOP_PAUSE,

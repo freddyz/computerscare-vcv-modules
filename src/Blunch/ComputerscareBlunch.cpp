@@ -2693,6 +2693,10 @@ static bool blunchShortcutHelpHeld(bool controlMode = false) {
 }
 
 struct BlunchTextEditor : ComputerscareTextEditor {
+  void draw(const DrawArgs& args) override {
+    phlooper::drawDisplayFrame(args.vg, box.size);
+    ComputerscareTextEditor::draw(args);
+  }
   ComputerscareBlunch* module = nullptr;
   void updatePolicy() {
     readOnly =
@@ -3549,16 +3553,17 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     externalClockLabels->visible = false;
     addChild(externalClockLabels);
 
-    auto* blunchEditor = createWidget<BlunchTextEditor>(Vec(3.f, 43.f));
+    auto* blunchEditor = createWidget<BlunchTextEditor>(Vec(7.f, 30.f));
     blunchEditor->module = module;
     editor = blunchEditor;
     editControlToggle->changed = [this]() {
       APP->event->setSelectedWidget(editor);
     };
-    editor->box.size = Vec(box.size.x - 6.f, 245.f);
+    editor->box.size = Vec(box.size.x - 10.f, 243.f);
     editor->placeholder = "type a sequence...";
+    editor->style.cornerRadius = 0.f;
     editor->style.backgroundColor = nvgRGB(0x05, 0x06, 0x08);
-    editor->style.borderColor = nvgRGB(0x55, 0x5b, 0x64);
+    editor->style.drawBorder = false;
     editor->style.textColor = nvgRGB(0xee, 0xee, 0xea);
     editor->style.selectionColor = nvgRGBA(0xe4, 0xc4, 0x21, 0x66);
     editor->style.placeholderColor = nvgRGBA(0xee, 0xee, 0xea, 0x66);
@@ -3661,8 +3666,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       externalClockLabels->box.size.x = box.size.x;
     }
     if (editor) {
-      editor->box.pos = Vec(3, 29);
-      editor->box.size = Vec(box.size.x - 6.f, 247);
+      editor->box.pos = Vec(7, 30);
+      editor->box.size = Vec(box.size.x - 10.f, 243);
     }
     if (polyChannelsWidget) {
       polyChannelsWidget->box.pos = Vec(0.f, 0.f);

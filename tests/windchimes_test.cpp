@@ -20,9 +20,21 @@ int main() {
       float getVoltage(int i) const { return volts[i]; }
     } cv;
     require(wc::modelCvValue(.4f, cv, 7)==.4f,"unpatched model CV preserves knob");
+    require(wc::chimeGate(true,cv,4),"unpatched gate preserves manual state");
+    cv.count=1;cv.volts[0]=0;
+    require(!wc::chimeGate(true,cv,4),"patched low gate overrides manual state");
+    cv.volts[0]=10;
+    require(wc::chimeGate(false,cv,15),"mono gate broadcasts to last chime");
+    cv.count=2;cv.volts[0]=0;cv.volts[1]=10;
+    require(!wc::chimeGate(true,cv,0)&&wc::chimeGate(false,cv,1)&&
+            !wc::chimeGate(true,cv,2),"poly gates address individual chimes, absent channels low");
+    cv.count=1;cv.volts[0]=5;
+    require(wc::modelCvValue(0.f,cv,0,-100.f,100.f)==100.f,"fine CV spans signed range");
+    require(wc::modelCvValue(-2.f,cv,0,-2.f,2.f)==0.f,"register CV offsets signed range");
     cv.count=1;cv.volts[0]=2;
     for(int i=0;i<16;++i)
       require(std::fabs(wc::modelCvValue(.4f, cv, i)-.6f)<1e-6f,"mono model CV broadcasts to all chimes");
+    require(std::fabs(wc::modelCvValue(6.f, cv, 0, 1.f, 12.f)-8.2f)<1e-5f,"tube CV offsets the tube-count range");
     cv.count=2;cv.volts[0]=-10;cv.volts[1]=10;
     require(wc::modelCvValue(.4f, cv, 0)==0&&wc::modelCvValue(.4f, cv, 1)==1,
             "poly model CV addresses separate chimes and clamps both limits");

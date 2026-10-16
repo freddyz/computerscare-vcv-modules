@@ -63,6 +63,7 @@ struct ComputerscareTextEditorStyle {
   NVGcolor textColor = nvgRGB(0xd8, 0xf3, 0xec);
   NVGcolor selectionColor = nvgRGBA(0x24, 0xc9, 0xa6, 0x85);
   NVGcolor placeholderColor = nvgRGBA(0xd8, 0xf3, 0xec, 0x61);
+  bool drawBorder = true;
   float cornerRadius = 3.f;
   float fontSize = BND_LABEL_FONT_SIZE;
   float fontWidthOffset = 0.f;

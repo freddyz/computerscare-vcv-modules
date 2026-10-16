@@ -11,7 +11,8 @@ This builds the plugin and, when needed, a small development runner, then render
 The default output is `build/previews/phlooper/`, already excluded from Git by the repository's `build` rule. Six PNGs show the empty module, four-loop playback, sixteen-loop playback, a zoomed region, overdubbing, and muted playback with per-channel controls hidden. Audio is generated and recorded through the module's real processing code. The runner uses isolated scratch storage under the output directory.
 
 ```sh
-# Render Blunch's actual browser widget.
+# Render Windchimes or Blunch using their actual browser widgets.
+scripts/preview-module.sh windchimes
 scripts/preview-module.sh blunch
 
 # Exercise Blunch's real Control-mode keyboard/mouse, transport, and row layout,
@@ -28,7 +29,7 @@ scripts/preview-module.sh --no-build
 scripts/preview-module.sh --scale 3 --output /tmp/phlooper-previews
 ```
 
-`RACK_SOURCE_DIR` can select a built Rack source checkout containing `libRack.dylib`, `include/`, `dep/include/`, and `res/`. Otherwise the script uses `RACK_DIR`, or `~/dev/VCV-Rack/Rack`. If `RACK_DIR` points at the SDK, it looks for the adjacent `Rack` source checkout because the SDK does not include system artwork/fonts. The current runner supports macOS, Phlooper, and Blunch.
+`RACK_SOURCE_DIR` can select a built Rack source checkout containing `libRack.dylib`, `include/`, `dep/include/`, and `res/`. Otherwise the script uses `RACK_DIR`, or `~/dev/VCV-Rack/Rack`. If `RACK_DIR` points at the SDK, it looks for the adjacent `Rack` source checkout because the SDK does not include system artwork/fonts. The current runner supports macOS, Phlooper, Blunch, and Windchimes.
 
 The `--browser` option renders only `00-browser.png`, using the exact null-module widget created by Rack’s module browser. Its loop count and region controls are randomized once per widget, with a randomly shifted and stretched speech waveform shared across rows, plus random input/output meter levels and Time/Length/Speed and transport choices. Per-loop controls are hidden in browser previews. It does not construct a DSP module.
 
@@ -45,3 +46,8 @@ python3 scripts/preview/generate-browser-waveform.py /tmp/browser-speech.wav
 Only the small extrema table is included in the plugin. Audio files and preview images remain local.
 
 The window helper derives a preview-only constructor from the matching Rack source tree. It keeps Rack’s private layout intact while omitting monitor lookup and interactive window setup. It writes generated code only under ignored `build/previews/`, and never edits the Rack checkout.
+
+Regenerate screenshots whenever requested; do not serve older captures. The compiled runner remains cached for fast renders.
+
+For optional Windchimes trigger-routing integration checks, run
+`WINDCHIMES_PREVIEW_CHECKS=1 scripts/preview-module.sh windchimes --no-build`.

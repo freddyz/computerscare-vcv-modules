@@ -85,6 +85,31 @@ struct ComputerscareWindchimes : Module {
     SHAPE_CV,
     BODY_CV,
     INHARMONICITY_CV,
+    TUBES_CV,
+    LEVEL_CV,
+    SWING_CV,
+    SAIL_CV,
+    STRIKE_INPUT,
+    WIGGLE_INPUT,
+    RANDOM_INPUT,
+    SOLO_INPUT,
+    MUTE_INPUT,
+    GUSTINESS_CV,
+    TURBULENCE_CV,
+    WIND_MIX_CV,
+    WIND_TONE_CV,
+    WIND_TEXTURE_CV,
+    REVERB_MIX_CV,
+    REVERB_SIZE_CV,
+    RESERVED_GAIN_INPUT,  // Preserve subsequent input IDs.
+    DELAY_MIX_CV,
+    DELAY_TIME_CV,
+    DELAY_FEEDBACK_CV,
+    ROOT_CV,
+    REGISTER_CV,
+    FINE_CV,
+    EDO_CV,
+    SPREAD_CV,
     INPUTS
   };
   enum Output {
@@ -114,6 +139,33 @@ struct ComputerscareWindchimes : Module {
   wc::Delay delay;
   std::atomic<bool> delaySynced{false};
   dsp::SchmittTrigger gustTrigger, gustButton;
+  std::array<std::array<dsp::SchmittTrigger, wc::maxSets>, 3> actionTriggers;
+  float globalValue(int parameter, int input) {
+    return wc::clamp(
+        params[parameter].getValue() + inputs[input].getVoltage() / 10.f, 0.f,
+        1.f);
+  }
+  void cvSoundAction(int chime, bool wiggle) {
+    int fields[] = {DECAY, BRIGHTNESS, HARDNESS,     STRIKER_WEIGHT,
+                    SHAPE, BODY,       INHARMONICITY};
+    int count = wiggle ? 1 + int(random::uniform() * 6.f) : 7;
+    for (int j = 0; j < count; ++j) {
+      if (wiggle) {
+        int other = j + std::min(6 - j, int(random::uniform() * (7 - j)));
+        std::swap(fields[j], fields[other]);
+      }
+      auto& parameter = params[param(chime, fields[j])];
+      float value = random::uniform();
+      if (wiggle) {
+        float delta = .01f + value * .04f;
+        value =
+            parameter.getValue() + (random::uniform() < .5f ? -delta : delta);
+        if (value < 0.f) value = -value;
+        if (value > 1.f) value = 2.f - value;
+      }
+      parameter.setValue(value);
+    }
+  }
   std::atomic<uint32_t> strikeRequests{0}, stopRequests{0};
   std::array<std::atomic<float>, wc::maxSets> visualStrikerAngle{},
       visualStrikerFlash{}, visualStrikerDepth{}, visualSailX{}, visualSailY{},
@@ -136,7 +188,7 @@ struct ComputerscareWindchimes : Module {
     getParamQuantity(WIND_MIX)->description =
         "Wind level and presence: sparse passing breezes to fuller close air "
         "and buffeting";
-    configParam(MASTER, 0.f, 1.f, 0.8f, "Output level", "%", 0.f, 100.f);
+    configParam(MASTER, 0.f, 1.f, 0.8f, "Gain", "%", 0.f, 100.f);
     configButton(GUST, "Make a gust");
     configParam(DELAY_MIX, 0.f, 1.f, 0.f, "Delay mix", "%", 0.f, 100.f);
     configParam<DelayTimeQuantity>(DELAY_TIME, 0.f, 1.f, 2.f / 3.f,
@@ -233,6 +285,28 @@ struct ComputerscareWindchimes : Module {
     for (int i = 0; i < 7; ++i)
       configInput(DECAY_CV + i, std::string(modelNames[i]) +
                                     " CV (±10 V, polyphonic offset)");
+    const char* motionNames[] = {"Tubes", "Level", "Swing", "Sail size"};
+    for (int i = 0; i < 4; ++i)
+      configInput(TUBES_CV + i,
+                  std::string(motionNames[i]) + " CV (±10 V offset)");
+    const int actionInputs[] = {STRIKE_INPUT, WIGGLE_INPUT, RANDOM_INPUT,
+                                SOLO_INPUT, MUTE_INPUT};
+    const char* actionNames[] = {"Strike trigger", "Wiggle trigger",
+                                 "Random trigger", "Solo gate", "Mute gate"};
+    for (int i = 0; i < 5; ++i) configInput(actionInputs[i], actionNames[i]);
+    const char* globalNames[] = {"Gustiness",   "Turbulence",    "Wind mix",
+                                 "Wind tone",   "Wind texture",  "Reverb mix",
+                                 "Reverb size", "Gain",          "Delay mix",
+                                 "Delay time",  "Delay feedback"};
+    for (int i = 0; i < 11; ++i) {
+      if (GUSTINESS_CV + i == RESERVED_GAIN_INPUT) continue;
+      configInput(GUSTINESS_CV + i,
+                  std::string(globalNames[i]) + " CV (±10 V offset)");
+    }
+    const char* tuningNames[] = {"Root", "Register", "Fine", "EDO", "Spread"};
+    for (int i = 0; i < 5; ++i)
+      configInput(ROOT_CV + i,
+                  std::string(tuningNames[i]) + " CV (±10 V offset)");
     configOutput(LEFT_OUTPUT, "Front left / automatic mixdown");
     configOutput(RIGHT_OUTPUT, "Front right / automatic mixdown");
     configOutput(REAR_LEFT_OUTPUT, "Rear left / automatic mixdown");
@@ -258,9 +332,14 @@ struct ComputerscareWindchimes : Module {
                  : f == SHAPE          ? SHAPE_CV
                  : f == BODY           ? BODY_CV
                  : f == INHARMONICITY  ? INHARMONICITY_CV
+                 : f == TUBES          ? TUBES_CV
+                 : f == LEVEL          ? LEVEL_CV
+                 : f == SWING          ? SWING_CV
+                 : f == SAIL_SIZE      ? SAIL_CV
                                        : -1;
       if (port < 0) return base;
-      return wc::modelCvValue(base, inputs[port], i);
+      return wc::modelCvValue(base, inputs[port], i, f == TUBES ? 1.f : 0.f,
+                              f == TUBES ? 12.f : 1.f);
     };
     wc::SetConfig c;
     c.enabled = value(ENABLED) > 0.5f;
@@ -270,11 +349,17 @@ struct ComputerscareWindchimes : Module {
         std::max(1, std::min(12, static_cast<int>(std::round(value(TUBES)))));
     c.material = static_cast<int>(std::round(value(MATERIAL)));
     c.scale = static_cast<int>(std::round(value(SCALE)));
-    c.spread = static_cast<int>(std::round(value(SPREAD)));
-    c.root = static_cast<int>(std::round(value(ROOT)));
-    c.octave = value(OCTAVE);
-    c.fine = value(FINE);
-    c.divisions = static_cast<int>(std::round(value(DIVISIONS)));
+    auto tuning = [this, i](int field, int port, float low, float high) {
+      return wc::modelCvValue(params[param(i, field)].getValue(), inputs[port],
+                              i, low, high);
+    };
+    c.spread =
+        static_cast<int>(std::round(tuning(SPREAD, SPREAD_CV, 1.f, 4.f)));
+    c.root = static_cast<int>(std::round(tuning(ROOT, ROOT_CV, 0.f, 11.f)));
+    c.octave = std::round(tuning(OCTAVE, REGISTER_CV, -2.f, 2.f));
+    c.fine = tuning(FINE, FINE_CV, -100.f, 100.f);
+    c.divisions =
+        static_cast<int>(std::round(tuning(DIVISIONS, EDO_CV, 5.f, 24.f)));
     c.decay = value(DECAY);
     c.brightness = value(BRIGHTNESS);
     c.hardness = value(HARDNESS);
@@ -334,34 +419,52 @@ struct ComputerscareWindchimes : Module {
     bool publishVisual = refresh <= 0;
     if (refresh-- <= 0) {
       refresh = std::max(1, static_cast<int>(sampleRate / 200.f)) - 1;
-      float transpose =
-          wc::clamp(inputs[TRANSPOSE_INPUT].getVoltage(), -5.f, 5.f);
       for (int i = 0; i < wc::maxSets; ++i)
-        engine.configure(i, readSet(i), transpose);
+        engine.configure(
+            i, readSet(i),
+            wc::clamp(wc::chimeVoltage(inputs[TRANSPOSE_INPUT], i), -5.f, 5.f));
       amount = wc::clamp(
           params[WIND].getValue() + inputs[WIND_INPUT].getVoltage() / 10.f, 0.f,
           1.f);
-      gustiness = params[GUSTINESS].getValue();
-      turbulence = params[TURBULENCE].getValue();
-      engine.configureEffects(
-          params[REVERB_MIX].getValue(), params[REVERB_SIZE].getValue(),
-          params[WIND_TONE].getValue(), params[WIND_TEXTURE].getValue(),
-          params[WIND_MIX].getValue());
-      windMix = params[WIND_MIX].getValue();
+      gustiness = globalValue(GUSTINESS, GUSTINESS_CV);
+      turbulence = globalValue(TURBULENCE, TURBULENCE_CV);
+      engine.configureEffects(globalValue(REVERB_MIX, REVERB_MIX_CV),
+                              globalValue(REVERB_SIZE, REVERB_SIZE_CV),
+                              globalValue(WIND_TONE, WIND_TONE_CV),
+                              globalValue(WIND_TEXTURE, WIND_TEXTURE_CV),
+                              globalValue(WIND_MIX, WIND_MIX_CV));
+      windMix = globalValue(WIND_MIX, WIND_MIX_CV);
       master = params[MASTER].getValue();
       unsigned enabledMask = 0, soloMask = 0, muteMask = 0;
       for (int i = 0; i < wc::maxSets; ++i) {
         if (params[param(i, ENABLED)].getValue() > .5f) enabledMask |= 1u << i;
-        if (params[param(i, SOLO)].getValue() > .5f) soloMask |= 1u << i;
-        if (params[param(i, MUTE)].getValue() > .5f) muteMask |= 1u << i;
+        if (wc::chimeGate(params[param(i, SOLO)].getValue() > .5f,
+                          inputs[SOLO_INPUT], i))
+          soloMask |= 1u << i;
+        if (wc::chimeGate(params[param(i, MUTE)].getValue() > .5f,
+                          inputs[MUTE_INPUT], i))
+          muteMask |= 1u << i;
       }
       soloMask &= enabledMask;
       engine.setAudibleMask((soloMask ? soloMask : enabledMask) & ~muteMask);
       delaySynced.store(delay.synced(), std::memory_order_relaxed);
-      delay.configure(params[DELAY_TIME].getValue(),
-                      params[DELAY_MIX].getValue(),
-                      params[DELAY_FEEDBACK].getValue());
+      delay.configure(globalValue(DELAY_TIME, DELAY_TIME_CV),
+                      globalValue(DELAY_MIX, DELAY_MIX_CV),
+                      globalValue(DELAY_FEEDBACK, DELAY_FEEDBACK_CV));
     }
+    const int actionInputs[] = {STRIKE_INPUT, WIGGLE_INPUT, RANDOM_INPUT};
+    for (int action = 0; action < 3; ++action)
+      for (int i = 0; i < wc::maxSets; ++i)
+        if (actionTriggers[action][i].process(
+                wc::chimeVoltage(inputs[actionInputs[action]], i)) &&
+            params[param(i, ENABLED)].getValue() > .5f) {
+          if (action == 0)
+            strikeRequests.fetch_or(1u << i, std::memory_order_relaxed);
+          else {
+            cvSoundAction(i, action == 1);
+            refresh = 0;
+          }
+        }
     bool externalGust = gustTrigger.process(inputs[GUST_INPUT].getVoltage());
     bool manualGust = gustButton.process(params[GUST].getValue());
     bool keyboardGust = gustRequest.exchange(false, std::memory_order_relaxed);
@@ -531,7 +634,7 @@ void editSound(W* module, int selected, bool wiggle,
       int j = std::min(static_cast<int>(random::uniform() * (i + 1)), i);
       std::swap(fields[i], fields[j]);
     }
-    int count = 1 + std::min(static_cast<int>(random::uniform() * 7.f), 6);
+    int count = 1 + std::min(static_cast<int>(random::uniform() * 6.f), 5);
     for (int i = 0; i < count; ++i) {
       int id = W::param(selected, fields[i]);
       auto* quantity = module->getParamQuantity(id);
@@ -675,14 +778,33 @@ struct SelectorButton : ActionButton {
   void onDragEnd(const event::DragEnd&) override { setPressed(menuOpen()); }
   void onLeave(const event::Leave&) override { setPressed(menuOpen()); }
 };
-// Keep the larger hit area and knob size using the plugin's existing artwork.
+// Compact controls leave room for captions and CV sockets within each plaque.
 struct ChimeKnob : SmoothKnob {
-  static constexpr float scale = 1.14f;
+  static constexpr float scale = .95f;
   ChimeKnob() { box.size = box.size.mult(scale); }
   void draw(const DrawArgs& args) override {
     nvgSave(args.vg);
     nvgScale(args.vg, scale, scale);
     SmoothKnob::draw(args);
+    nvgRestore(args.vg);
+  }
+};
+template <typename Port>
+struct CompactChimePort : Port {
+  CompactChimePort() { this->box.size = this->box.size.mult(.75f); }
+  void draw(const widget::Widget::DrawArgs& args) override {
+    nvgSave(args.vg);
+    nvgScale(args.vg, .75f, .75f);
+    Port::draw(args);
+    nvgRestore(args.vg);
+  }
+};
+struct DownwardChimeOutput : InPort {
+  DownwardChimeOutput() { box.size = box.size.mult(.65f); }
+  void draw(const DrawArgs& args) override {
+    nvgSave(args.vg);
+    nvgScale(args.vg, .65f, .65f);
+    InPort::draw(args);
     nvgRestore(args.vg);
   }
 };
@@ -1686,9 +1808,8 @@ struct Labels : widget::TransparentWidget {
     nvgTranslate(vg, controlColumnOffset, 0.f);
     const NVGcolor selectedColor = nvgRGB(27, 31, 23);
     std::string caption = module ? selectionCaption(editor) : "Chimes 1";
-    text(vg, controlX(338), 50, caption + " — Tuning / motion", 10,
-         selectedColor);
-    text(vg, controlX(338), 148, "Chime model", 10, selectedColor);
+    text(vg, controlX(338), 50, caption + " — Tuning", 10, selectedColor);
+    text(vg, controlX(338), 116, "Chime model", 10, selectedColor);
     nvgRestore(vg);
   }
 };
@@ -1785,10 +1906,11 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
       addChild(plaque);
     };
     block(510, 3, 185, 30, 51, 207);
-    block(510, 39, 383, 95, 52, 236);
-    block(510, 137, 383, 105, 53, 211);
-    block(510, 245, 383, 70, 54, 232);
-    block(510, 317, 383, 53, 55, 232);
+    block(510, 39, 383, 62, 52, 236);
+    block(510, 106, 383, 135, 53, 211);
+    block(510, 243, 150, 135, 54, 232);
+    block(668, 243, 119, 135, 57, 211);
+    block(795, 243, 98, 135, 56, 175);
     addChild(panel);
     auto* labels = new Labels;
     labels->box.size = box.size;
@@ -1852,7 +1974,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
             removeSet(module, &editor, editor.selected);
         });
     button(
-        Vec(450, 139), 43, []() { return "Strike"; },
+        Vec(407, 123), 43, []() { return "Strike"; },
         [this, module]() {
           if (module)
             module->strikeRequests.fetch_or(activeSelection(module, &editor),
@@ -1863,8 +1985,8 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         [this]() { editor.perspective = !editor.perspective; });
     for (int field : {W::MATERIAL, W::SCALE}) {
       selector(
-          Vec(field == W::MATERIAL ? 338 : 338,
-              field == W::MATERIAL ? 163 : 57),
+          Vec(field == W::MATERIAL ? 338 : 529,
+              field == W::MATERIAL ? 125 : 40),
           field == W::MATERIAL ? 52 : 100,
           [this, module, field]() {
             int value =
@@ -1908,13 +2030,13 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
           });
     }
     button(
-        Vec(498, 139), 43, []() { return "Wiggle"; },
+        Vec(443, 123), 43, []() { return "Wiggle"; },
         [this, module]() { changeSelectionSound(module, &editor, true); });
     button(
-        Vec(546, 139), 47, []() { return "Random"; },
+        Vec(479, 123), 47, []() { return "Random"; },
         [this, module]() { changeSelectionSound(module, &editor, false); });
     button(
-        Vec(510, 163), 36,
+        Vec(515, 123), 36,
         [this, module]() {
           return module && module->params[W::param(editor.selected, W::SOLO)]
                                    .getValue() > .5f
@@ -1923,7 +2045,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         },
         [this, module]() { toggleSelectionFlag(module, &editor, W::SOLO); });
     button(
-        Vec(555, 163), 36,
+        Vec(551, 123), 36,
         [this, module]() {
           return module && module->params[W::param(editor.selected, W::MUTE)]
                                    .getValue() > .5f
@@ -1932,7 +2054,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         },
         [this, module]() { toggleSelectionFlag(module, &editor, W::MUTE); });
     selector(
-        Vec(382, 163), 94,
+        Vec(338, 146), 94,
         [this, module]() {
           if (!module) return std::string("Preset  v");
           int selected = editor.selected;
@@ -2010,10 +2132,10 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         W::HARDNESS,      W::STRIKER_WEIGHT, W::SHAPE,  W::BODY,
         W::INHARMONICITY, W::LEVEL,          W::SWING,  W::SAIL_SIZE};
     const Vec setPositions[] = {
-        Vec(543, 70),  Vec(349, 108),   Vec(384, 108), Vec(419, 108),
-        Vec(454, 108), Vec(489, 108),   Vec(346, 193), Vec(384.5, 193),
-        Vec(423, 193), Vec(461.5, 193), Vec(500, 193), Vec(538.5, 193),
-        Vec(577, 193), Vec(580, 70),    Vec(543, 108), Vec(580, 108)};
+        Vec(341, 181), Vec(341, 77),  Vec(383, 77),  Vec(425, 77),
+        Vec(467, 77),  Vec(509, 77),  Vec(509, 181), Vec(551, 181),
+        Vec(341, 218), Vec(383, 218), Vec(425, 218), Vec(467, 218),
+        Vec(509, 218), Vec(383, 181), Vec(425, 181), Vec(467, 181)};
     for (int i = 0; i < 16; ++i) {
       auto* knob = createParamCentered<SetKnob>(setPositions[i], module,
                                                 W::param(0, fields[i]));
@@ -2021,32 +2143,61 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
       knob->field = fields[i];
       addParam(knob);
     }
-    for (int i = 0; i < 7; ++i)
-      addInput(createInputCentered<InPort>(Vec(346.f + i * 38.5f, 228.f),
-                                           module, W::DECAY_CV + i));
+    const int tuningInputs[] = {W::ROOT_CV, W::REGISTER_CV, W::FINE_CV,
+                                W::EDO_CV, W::SPREAD_CV};
+    for (int i = 0; i < 5; ++i)
+      addInput(createInputCentered<CompactChimePort<InPort>>(
+          Vec(357.5f + i * 42.f, 77.f), module, tuningInputs[i]));
+    const int cvInputs[] = {
+        W::TUBES_CV, W::LEVEL_CV,      W::SWING_CV,        W::SAIL_CV,
+        W::DECAY_CV, W::BRIGHTNESS_CV, W::HARDNESS_CV,     W::WEIGHT_CV,
+        W::SHAPE_CV, W::BODY_CV,       W::INHARMONICITY_CV};
+    for (int i = 0; i < 11; ++i)
+      addInput(createInputCentered<CompactChimePort<InPort>>(
+          Vec(357.5f + (i % 6) * 42.f, i < 6 ? 181.f : 218.f), module,
+          cvInputs[i]));
+    const int actionInputs[] = {W::STRIKE_INPUT, W::WIGGLE_INPUT,
+                                W::RANDOM_INPUT, W::SOLO_INPUT, W::MUTE_INPUT};
+    for (int i = 0; i < 5; ++i)
+      addInput(createInputCentered<CompactChimePort<InPort>>(
+          Vec(419.f + i * 36.f, 154.f), module, actionInputs[i]));
+    addInput(createInputCentered<CompactChimePort<InPort>>(
+        Vec(567.5f, 77), module, W::TRANSPOSE_INPUT));
     const int globals[] = {W::WIND,      W::GUSTINESS,  W::TURBULENCE,
                            W::WIND_MIX,  W::WIND_TONE,  W::WIND_TEXTURE,
                            W::MASTER,    W::REVERB_MIX, W::REVERB_SIZE,
                            W::DELAY_MIX, W::DELAY_TIME, W::DELAY_FEEDBACK};
-    for (int i = 0; i < 12; ++i)
-      addParam(createParamCentered<ChimeKnob>(
-          Vec(i < 6 ? 349.f + i * 45.f : 349.f + (i - 6) * 45.f,
-              i < 6 ? 261.f : 297.f),
-          module, globals[i]));
+    const int globalInputs[] = {
+        W::WIND_INPUT,          W::GUSTINESS_CV,  W::TURBULENCE_CV,
+        W::WIND_MIX_CV,         W::WIND_TONE_CV,  W::WIND_TEXTURE_CV,
+        W::RESERVED_GAIN_INPUT, W::REVERB_MIX_CV, W::REVERB_SIZE_CV,
+        W::DELAY_MIX_CV,        W::DELAY_TIME_CV, W::DELAY_FEEDBACK_CV};
+    const Vec globalPositions[] = {Vec(343, 264), Vec(390, 264), Vec(343, 302),
+                                   Vec(390, 302), Vec(343, 340), Vec(390, 340),
+                                   Vec(568, 297), Vec(449, 264), Vec(487, 264),
+                                   Vec(449, 308), Vec(487, 308), Vec(449, 351)};
+    for (int i = 0; i < 12; ++i) {
+      addParam(createParamCentered<ChimeKnob>(globalPositions[i], module,
+                                              globals[i]));
+      if (globals[i] != W::MASTER)
+        addInput(createInputCentered<CompactChimePort<InPort>>(
+            globalPositions[i] + Vec(16.5f, 0), module, globalInputs[i]));
+    }
     addParam(
-        createParamCentered<SmallGustButton>(Vec(419, 325), module, W::GUST));
-    for (int i = 0; i < 4; ++i)
-      addInput(
-          createInputCentered<InPort>(Vec(349.f + i * 35.f, 353.f), module, i));
-    addOutput(createOutputCentered<PointingUpPentagonPort>(
-        Vec(491, 334), module, W::WIND_OUTPUT));
-    addOutput(createOutputCentered<PointingUpPentagonPort>(
-        Vec(491, 358), module, W::WIND_AUDIO_OUTPUT));
+        createParamCentered<SmallGustButton>(Vec(355, 367), module, W::GUST));
+    addInput(createInputCentered<CompactChimePort<InPort>>(
+        Vec(390, 367), module, W::GUST_INPUT));
+    addInput(
+        createInputCentered<TinyJack>(Vec(487, 351), module, W::CLOCK_INPUT));
+    addOutput(createOutputCentered<DownwardChimeOutput>(Vec(538, 273), module,
+                                                        W::WIND_OUTPUT));
+    addOutput(createOutputCentered<DownwardChimeOutput>(Vec(568, 273), module,
+                                                        W::WIND_AUDIO_OUTPUT));
     const int outputIds[] = {W::LEFT_OUTPUT, W::RIGHT_OUTPUT,
                              W::REAR_LEFT_OUTPUT, W::REAR_RIGHT_OUTPUT};
     for (int i = 0; i < 4; ++i)
-      addOutput(createOutputCentered<PointingUpPentagonPort>(
-          Vec(530.f + (i % 2) * 38.f, 334.f + (i / 2) * 24.f), module,
+      addOutput(createOutputCentered<DownwardChimeOutput>(
+          Vec(544.f + (i % 2) * 18.f, 336.f + (i / 2) * 23.f), module,
           outputIds[i]));
     // Reserve the extra module width entirely for the scene. Keep the existing
     // compact control-column layout and translate its widgets together.
