@@ -8,6 +8,7 @@
 #include "Computerscare.hpp"
 #include "ComputerscareMeter.hpp"
 #include "Phlooper/Block.hpp"
+#include "Phlooper/BrowserPreview.hpp"
 #include "Phlooper/Dropdown.hpp"
 #include "Phlooper/Engine.hpp"
 #include "Phlooper/Wav.hpp"
@@ -89,7 +90,10 @@ struct ComputerscarePhlooper : Module {
     MUTE,
     ONE_SHOT,
     ALIGN_END,
-    PARAMS
+    CUSTOM_START,
+    CUSTOM_LENGTH = CUSTOM_START + 16,
+    CUSTOM_ACTIVE = CUSTOM_LENGTH + 16,
+    PARAMS = CUSTOM_ACTIVE + 16
   };
   enum Input {
     LEFT,
@@ -138,7 +142,8 @@ struct ComputerscarePhlooper : Module {
     return range;
   }
 
-  std::atomic<bool> recording{false}, speedHoldVisual{false};
+  std::atomic<bool> recording{false}, initialRecording{false},
+      speedHoldVisual{false};
   std::atomic<unsigned> recordVisual{0}, eraseVisual{0};
   struct WriteVisual {
     std::atomic<float> from{0}, extent{0}, base{0}, period{1};
@@ -186,6 +191,14 @@ struct ComputerscarePhlooper : Module {
     configButton(RESTART, "Restart all");
     configSwitch(HOLD, 0.f, 1.f, 0.f, "Hold phase", {"Drifting", "Held"});
     for (int i = 0; i < 16; ++i) {
+      configParam(CUSTOM_START + i, -60000.f, 60000.f, 0.f,
+                  string::f("Loop %d custom start", i + 1));
+      configParam(CUSTOM_LENGTH + i, -60000.f, 60000.f, 0.f,
+                  string::f("Loop %d custom length", i + 1));
+      configSwitch(CUSTOM_ACTIVE + i, 0.f, 1.f, 0.f,
+                   string::f("Loop %d custom region", i + 1));
+      for (int base : {CUSTOM_START, CUSTOM_LENGTH, CUSTOM_ACTIVE})
+        getParamQuantity(base + i)->randomizeEnabled = false;
       configSwitch(LOOP_DIRECTION + i, 0.f, 3.f, 0.f,
                    string::f("Loop %d direction", i + 1),
                    {"Forward", "Reverse", "Forward then reverse",
@@ -219,6 +232,24 @@ struct ComputerscarePhlooper : Module {
     configOutput(OUT_R, "Right");
     configBypass(LEFT, OUT_L);
     configBypass(RIGHT, OUT_R);
+  }
+  bool regionPolyControlled() {
+    return inputs[START_CV].getChannels() > 1 ||
+           inputs[LENGTH_CV].getChannels() > 1 ||
+           inputs[OFFSET_CV].getChannels() > 1;
+  }
+  bool customRegion(int voice) {
+    return params[CUSTOM_ACTIVE + voice].getValue() > .5f &&
+           !regionPolyControlled();
+  }
+  void clearCustomRegions() {
+    for (int i = CUSTOM_START; i < PARAMS; ++i) params[i].setValue(0.f);
+  }
+  float offsetFor(int voice, int mode, bool hold) {
+    auto& input = inputs[OFFSET_CV];
+    return phlooper::controlOffset(
+        voice, mode, hold, params[OFFSET].getValue(), input.getChannels(),
+        input.getVoltage(input.getChannels() == 1 ? 0 : voice));
   }
   unsigned gates(int port) {
     unsigned mask = 0;
@@ -281,6 +312,7 @@ struct ComputerscarePhlooper : Module {
     if (resetRequest.exchange(false)) {
       params[START].setValue(0.f);
       params[LENGTH].setValue(1.f);
+      clearCustomRegions();
       loop.resetHeads();
       loop.size = 0;
       loop.initial = false;
@@ -328,11 +360,14 @@ struct ComputerscarePhlooper : Module {
       }
     }
     s.offset = params[OFFSET].getValue() * (s.mode == 0 ? 5.f : 1.f);
-    for (int i = 0; i < std::min(16, inputs[OFFSET_CV].getChannels()); ++i) {
+    for (int i = 0; i < 16; ++i) {
       s.offsetMask |= 1u << i;
-      float range = s.mode == 0 ? 100.f : 20.f;
-      s.offsets[i] =
-          clamp(inputs[OFFSET_CV].getVoltage(i) / 10.f, -1.f, 1.f) * range;
+      s.offsets[i] = offsetFor(i, s.mode, false);
+      if (customRegion(i)) {
+        s.customMask |= 1u << i;
+        s.customStarts[i] = params[CUSTOM_START + i].getValue();
+        s.customLengths[i] = params[CUSTOM_LENGTH + i].getValue();
+      }
     }
     s.recordMix = clamp(
         params[REC_MIX].getValue() + inputs[REC_MIX_CV].getVoltage() / 10.f,
@@ -432,6 +467,7 @@ struct ComputerscarePhlooper : Module {
     }
     frames.store(loop.initial ? loop.captured : loop.size,
                  std::memory_order_relaxed);
+    initialRecording.store(loop.initial, std::memory_order_relaxed);
     recording.store(loop.initial || rec, std::memory_order_relaxed);
     lights[RECORD_LIGHT].setBrightness(loop.initial || rec ? 1.f : 0.f);
     // Publish display snapshots at 750 Hz, independently of audio/EOC timing.
@@ -473,7 +509,7 @@ struct ComputerscarePhlooper : Module {
           std::memory_order_relaxed);
     }
   }
-  void load(const std::string& path, int voice = -1) {
+  void load(const std::string& path) {
     try {
       auto wav = phlooper::loadWav(path);
       int available = int(wav.samples.size() / wav.channels);
@@ -494,34 +530,11 @@ struct ComputerscarePhlooper : Module {
         }
       }
       std::lock_guard<std::mutex> lock(storage);
-      if (voice >= 0) {
-        if (voice >= phlooper::voices) throw std::runtime_error("Invalid loop");
-        if (loop.initial)
-          throw std::runtime_error(
-              "Finish initial recording before importing a loop");
-        if (!loop.size) {
-          loop.size = n;
-          for (int i = 0; i < phlooper::voices; ++i) {
-            std::fill(loop.audio[i].get(), loop.audio[i].get() + n * 2, 0.f);
-            loop.stereo[i] = false;
-          }
-          loop.resetHeads();
-          loadRegionSettleTime = .002f;
-        }
-        int copied = std::min(n, loop.size);
-        std::copy(converted.begin(), converted.begin() + copied * 2,
-                  loop.audio[voice].get());
-        std::fill(loop.audio[voice].get() + copied * 2,
-                  loop.audio[voice].get() + loop.size * 2, 0.f);
-        loop.stereo[voice] = wav.channels > 1;
-        frames = loop.size;
-        error.clear();
-        return;
-      }
       for (int i = 0; i < 16; ++i) {
         std::copy(converted.begin(), converted.end(), loop.audio[i].get());
         loop.stereo[i] = wav.channels > 1;
       }
+      clearCustomRegions();
       loop.size = n;
       loop.initial = false;
       loop.resetHeads();
@@ -950,6 +963,7 @@ struct PhlooperDescribedChoiceItem : MenuItem {
 };
 
 struct PhlooperChoice : phlooper::WarpedDropdown {
+  std::shared_ptr<const phlooper::BrowserPreview> preview;
   ComputerscarePhlooper* module = nullptr;
   int param = 0;
   WeakPtr<ui::MenuOverlay> activeMenuOverlay;
@@ -984,9 +998,16 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
     }
   }
   std::string label() override {
-    int value = module ? int(module->params[param].getValue()) : 0;
+    int value =
+        module    ? int(module->params[param].getValue())
+        : preview ? (param == ComputerscarePhlooper::MODE ? preview->mode
+                                                          : preview->direction)
+                  : 0;
     if (param == ComputerscarePhlooper::COUNT)
-      return std::to_string(module ? value : 2) + " loops";
+      return std::to_string(module    ? value
+                            : preview ? preview->count
+                                      : 2) +
+             " loops";
     if (param == ComputerscarePhlooper::MODE)
       return std::string(value == 0   ? "Time ms"
                          : value == 1 ? "Length %"
@@ -1105,12 +1126,163 @@ struct PhlooperTransportButton : ParamWidget {
   }
 };
 struct PhlooperView : widget::Widget {
+  std::shared_ptr<const phlooper::BrowserPreview> preview;
   ComputerscarePhlooper* module = nullptr;
   PhlooperTransportButton* transport[16][4]{};
   phlooper::TimeRange zoomRange;
   uint64_t waveformRange = 0;
+  int dragVoice = -1;
+  bool dragStartPoint = false;
+  Vec dragMouse, dragRegion;
+  float dragOld[3]{};
+  bool canEdit() const {
+    return module && module->frames.load() > 0 &&
+           !module->initialRecording.load() &&
+           !module->regionPolyControlled() &&
+           module->params[ComputerscarePhlooper::HOLD].getValue() < .5f &&
+           module->inputs[ComputerscarePhlooper::HOLD_GATE].getVoltage() <
+               1.f &&
+           !module->speedHoldVisual.load();
+  }
+  GLFWcursor* pointCursor = nullptr;
+  bool cursorActive = false;
+  ~PhlooperView() override {
+    if (pointCursor) glfwDestroyCursor(pointCursor);
+  }
+  void setPointCursor(bool active) {
+    if (active == cursorActive) return;
+    if (active && !pointCursor)
+      pointCursor = glfwCreateStandardCursor(GLFW_HRESIZE_CURSOR);
+    glfwSetCursor(APP->window->win, active ? pointCursor : nullptr);
+    cursorActive = active;
+  }
+  int hitPoint(Vec pos, bool& startPoint) const {
+    if (!canEdit() || pos.x < visualLeft()) return -1;
+    int count = clamp(
+        int(module->params[ComputerscarePhlooper::COUNT].getValue()), 1, 16);
+    float row = (box.size.y - 12.f) / count;
+    int voice = int(std::floor((pos.y - 6.f) / row));
+    if (voice < 0 || voice >= count) return -1;
+    Vec region = requestedRegion(voice);
+    float startDistance = std::fabs(pos.x - markerX(region.x, region.x));
+    float endDistance = std::fabs(pos.x - markerX(region.x, region.y));
+    if (std::min(startDistance, endDistance) > 7.f) return -1;
+    startPoint = startDistance < endDistance;
+    return voice;
+  }
+  void onHover(const event::Hover& e) override {
+    widget::Widget::onHover(e);
+    bool startPoint = false;
+    bool hit = dragVoice >= 0 || hitPoint(e.pos, startPoint) >= 0;
+    setPointCursor(hit);
+    if (hit) e.consume(this);
+  }
+  void onEnter(const event::Enter& e) override {
+    widget::Widget::onEnter(e);
+    if (cursorActive) glfwSetCursor(APP->window->win, pointCursor);
+  }
+  void onLeave(const event::Leave& e) override {
+    widget::Widget::onLeave(e);
+    if (dragVoice < 0) setPointCursor(false);
+  }
+  void rememberDrag(int voice, bool startPoint) {
+    dragVoice = voice;
+    dragStartPoint = startPoint;
+    dragRegion = requestedRegion(voice);
+    int bases[] = {ComputerscarePhlooper::CUSTOM_START,
+                   ComputerscarePhlooper::CUSTOM_LENGTH,
+                   ComputerscarePhlooper::CUSTOM_ACTIVE};
+    for (int j = 0; j < 3; ++j)
+      dragOld[j] = module->params[bases[j] + voice].getValue();
+  }
+  void applyRegion(Vec edited) {
+    float oldLength = dragRegion.y - dragRegion.x;
+    module->params[ComputerscarePhlooper::CUSTOM_ACTIVE + dragVoice].setValue(
+        1.f);
+    module->params[ComputerscarePhlooper::CUSTOM_LENGTH + dragVoice].setValue(
+        clamp(dragOld[1] + edited.y - edited.x - oldLength, -60000.f, 60000.f));
+    Vec current = requestedRegion(dragVoice);
+    auto& startParam =
+        module->params[ComputerscarePhlooper::CUSTOM_START + dragVoice];
+    startParam.setValue(
+        clamp(startParam.getValue() + edited.x - current.x, -60000.f, 60000.f));
+    Vec defaults = requestedRegion(dragVoice, false, dragVoice);
+    if (std::fabs(edited.x - defaults.x) < 1e-6f &&
+        std::fabs(edited.y - defaults.y) < 1e-6f)
+      for (int base : {ComputerscarePhlooper::CUSTOM_START,
+                       ComputerscarePhlooper::CUSTOM_LENGTH,
+                       ComputerscarePhlooper::CUSTOM_ACTIVE})
+        module->params[base + dragVoice].setValue(0.f);
+  }
+  void onButton(const event::Button& e) override {
+    widget::Widget::onButton(e);
+    if (e.isConsumed() || e.action != GLFW_PRESS ||
+        (e.button != GLFW_MOUSE_BUTTON_LEFT &&
+         e.button != GLFW_MOUSE_BUTTON_RIGHT))
+      return;
+    bool startPoint = false;
+    int voice = hitPoint(e.pos, startPoint);
+    if (voice < 0) return;
+    rememberDrag(voice, startPoint);
+    if (e.button == GLFW_MOUSE_BUTTON_RIGHT) {
+      Vec defaults = requestedRegion(voice, false, voice);
+      float delta =
+          startPoint ? defaults.x - dragRegion.x : defaults.y - dragRegion.y;
+      int frames = module->frames.load();
+      auto edited = phlooper::dragLoopPoint({dragRegion.x, dragRegion.y},
+                                            startPoint, delta, 48.f / frames,
+                                            float(phlooper::capacity) / frames);
+      applyRegion({edited.start, edited.end});
+      onDragEnd(event::DragEnd{});
+    }
+    e.consume(this);
+  }
+  void onDragStart(const event::DragStart& e) override {
+    if (dragVoice < 0 || !module) return;
+    dragMouse = APP->scene->rack->getMousePos();
+    setPointCursor(true);
+  }
+  void onDragMove(const event::DragMove& e) override {
+    if (dragVoice < 0 || !canEdit()) return;
+    float delta = (APP->scene->rack->getMousePos().x - dragMouse.x) *
+                  (zoomRange.end - zoomRange.start) /
+                  (box.size.x - visualLeft() - 10.f);
+    int frames = module->frames.load();
+    if (frames <= 0) return;
+    auto edited = phlooper::dragLoopPoint({dragRegion.x, dragRegion.y},
+                                          dragStartPoint, delta, 48.f / frames,
+                                          float(phlooper::capacity) / frames);
+    applyRegion({edited.start, edited.end});
+  }
+  void onDragEnd(const event::DragEnd& e) override {
+    if (dragVoice < 0 || !module) return;
+    auto* changes = new history::ComplexAction;
+    changes->name = "Edit Phlooper loop points";
+    int bases[] = {ComputerscarePhlooper::CUSTOM_START,
+                   ComputerscarePhlooper::CUSTOM_LENGTH,
+                   ComputerscarePhlooper::CUSTOM_ACTIVE};
+    bool changed = false;
+    for (int j = 0; j < 3; ++j) {
+      int id = bases[j] + dragVoice;
+      float value = module->params[id].getValue();
+      if (value == dragOld[j]) continue;
+      auto* change = new history::ParamChange;
+      change->moduleId = module->id;
+      change->paramId = id;
+      change->oldValue = dragOld[j];
+      change->newValue = value;
+      changes->push(change);
+      changed = true;
+    }
+    if (changed)
+      APP->history->push(changes);
+    else
+      delete changes;
+    dragVoice = -1;
+    setPointCursor(false);
+  }
   bool showTransport() const {
-    return !module ||
+    return module &&
            module->params[ComputerscarePhlooper::SHOW_TRANSPORT].getValue() >
                .5f;
   }
@@ -1124,15 +1296,15 @@ struct PhlooperView : widget::Widget {
   static float wrapWav(float position) {
     return position - std::floor(position);
   }
-  static float endPoint(float position) {
-    float wrapped = wrapWav(position);
-    // Exact source-boundary endpoints belong at the right edge, not under
-    // Start.
-    return position > 0.f && (wrapped < .00001f || wrapped > .99999f) ? 1.f
-                                                                      : wrapped;
+  float markerX(float start, float end) const {
+    return visualX(phlooper::loopRegionPoint(start, end, zoomRange));
   }
-  Vec requestedRegion(int voice, bool original = false) const {
-    if (!module) return Vec(.2f, 1.f);
+  Vec requestedRegion(int voice, bool original = false,
+                      int defaultVoice = -1) const {
+    if (!module) {
+      float start = preview ? preview->regionStart(voice) : .2f;
+      return Vec(start, start + (preview ? preview->length : .8f));
+    }
     if (!original && module->speedHoldVisual.load(std::memory_order_relaxed) &&
         int(module->params[ComputerscarePhlooper::MODE].getValue()) == 2)
       return Vec(module->starts[voice].load(), module->ends[voice].load());
@@ -1158,29 +1330,40 @@ struct PhlooperView : widget::Widget {
     if (frames <= 0) return Vec(start, start + length);
     int mode = int(module->params[ComputerscarePhlooper::MODE].getValue());
     int offsetVoice = hold ? 0 : voice;
-    auto& offsetCV = module->inputs[ComputerscarePhlooper::OFFSET_CV];
-    float offset =
-        offsetVoice < offsetCV.getChannels()
-            ? clamp(offsetCV.getVoltage(offsetVoice) / 10.f, -1.f, 1.f) *
-                  (mode == 0 ? 100.f : 20.f)
-        : hold
-            ? 0.f
-            : voice * module->params[ComputerscarePhlooper::OFFSET].getValue() *
-                  (mode == 0 ? 5.f : 1.f);
+    float offset = module->offsetFor(offsetVoice, mode, hold);
     double period = std::max(1, int(length * frames));
     if (mode == 0)
       period += offset * phlooper::rate / 1000.;
     else if (mode == 1)
       period *= 1. + offset / 100.;
+    if (module->customRegion(hold ? 0 : voice) &&
+        (hold ? 0 : voice) != defaultVoice)
+      period += module
+                    ->params[ComputerscarePhlooper::CUSTOM_LENGTH +
+                             (hold ? 0 : voice)]
+                    .getValue() *
+                frames;
     period = std::max(48., std::min(double(phlooper::capacity), period));
     start = float(std::min(frames - 1, int(start * frames))) / frames;
     if (voice > 0 &&
         module->params[ComputerscarePhlooper::ALIGN_END].getValue() > .5f) {
-      Vec reference = requestedRegion(0, original);
+      Vec reference = requestedRegion(0, original, defaultVoice);
       start += (reference.y - reference.x) - float(period / frames);
-      start -= std::floor(start);
     }
+    if (voice != defaultVoice && module->customRegion(voice))
+      start += module->params[ComputerscarePhlooper::CUSTOM_START + voice]
+                   .getValue();
     return Vec(start, start + float(period / frames));
+  }
+  NVGcolor pointColor(int voice, bool start) const {
+    if (module && module->customRegion(voice)) {
+      Vec current = requestedRegion(voice);
+      Vec defaults = requestedRegion(voice, false, voice);
+      if (std::fabs((start ? current.x : current.y) -
+                    (start ? defaults.x : defaults.y)) > 1e-6f)
+        return nvgRGB(235, 208, 70);
+    }
+    return nvgRGB(240, 243, 240);
   }
   void drawLoopMarker(const DrawArgs& args, float x, float y, float height,
                       bool start, NVGcolor color = nvgRGB(240, 243, 240)) {
@@ -1205,13 +1388,11 @@ struct PhlooperView : widget::Widget {
           module->inputs[ComputerscarePhlooper::HOLD_GATE].getVoltage() >= 1.f))
       return;
     Vec original = requestedRegion(voice, true);
-    auto xAt = [&](float point) {
-      return visualX(phlooper::zoomPoint(point, zoomRange));
-    };
     NVGcolor yellow = nvgRGB(235, 208, 70);
-    drawLoopMarker(args, xAt(original.x), y, height * .78f, true, yellow);
-    drawLoopMarker(args, xAt(endPoint(original.y)), y, height * .78f, false,
-                   yellow);
+    drawLoopMarker(args, markerX(original.x, original.x), y, height * .78f,
+                   true, yellow);
+    drawLoopMarker(args, markerX(original.x, original.y), y, height * .78f,
+                   false, yellow);
   }
   void drawSpan(const DrawArgs& args, float from, float to, float y,
                 float width, NVGcolor color) {
@@ -1277,12 +1458,23 @@ struct PhlooperView : widget::Widget {
   void step() override {
     auto* draggedKnob =
         dynamic_cast<app::Knob*>(APP->event->getDraggedWidget());
-    bool movingKnob = module && draggedKnob && draggedKnob->module == module;
+    bool movingKnob = dragVoice >= 0 ||
+                      (module && draggedKnob && draggedKnob->module == module);
     bool zoomed =
         module && module->params[ComputerscarePhlooper::ZOOM].getValue() > .5f;
-    if (!zoomed)
-      zoomRange = {};
-    else if (!movingKnob) {
+    if (!zoomed && !movingKnob) {
+      zoomRange = {-.06f, 1.06f};
+      if (module) {
+        int count =
+            clamp(int(module->params[ComputerscarePhlooper::COUNT].getValue()),
+                  1, 16);
+        for (int i = 0; i < count; ++i) {
+          Vec region = requestedRegion(i);
+          zoomRange.start = std::min(zoomRange.start, region.x - .06f);
+          zoomRange.end = std::max(zoomRange.end, region.y + .06f);
+        }
+      }
+    } else if (zoomed && !movingKnob) {
       std::array<phlooper::TimeRange, 16> regions{};
       int count = clamp(
           int(module->params[ComputerscarePhlooper::COUNT].getValue()), 1, 16);
@@ -1291,6 +1483,13 @@ struct PhlooperView : widget::Widget {
         regions[i] = {region.x, region.y};
       }
       zoomRange = phlooper::fitLoopZoom(regions, count);
+      if (zoomRange.start == 0.f && zoomRange.end == 1.f) {
+        zoomRange = {-.06f, 1.06f};
+        for (int i = 0; i < count; ++i) {
+          zoomRange.start = std::min(zoomRange.start, regions[i].start - .06f);
+          zoomRange.end = std::max(zoomRange.end, regions[i].end + .06f);
+        }
+      }
     }
     waveformRange = ComputerscarePhlooper::packRange(zoomRange);
     if (module)
@@ -1300,7 +1499,8 @@ struct PhlooperView : widget::Widget {
             ? clamp(
                   int(module->params[ComputerscarePhlooper::COUNT].getValue()),
                   1, 16)
-            : 2;
+        : preview ? preview->count
+                  : 2;
     unsigned externalMute = 0, solo = 0;
     if (module) {
       externalMute = module->gates(ComputerscarePhlooper::MUTE_GATE);
@@ -1336,7 +1536,8 @@ struct PhlooperView : widget::Widget {
             ? clamp(
                   int(module->params[ComputerscarePhlooper::COUNT].getValue()),
                   1, 16)
-            : 2;
+        : preview ? preview->count
+                  : 2;
     unsigned soloMask = 0;
     for (int i = 0; module && i < count; ++i)
       if (module->params[ComputerscarePhlooper::LOOP_SOLO + i].getValue() > .5f)
@@ -1352,7 +1553,7 @@ struct PhlooperView : widget::Widget {
     float dotScaleX = std::max(.65f, dotScaleY);
     float tickHeight = rowHeight * .46f;
     float lineWidth = std::min(4.f, rowHeight * .45f);
-    // Keep a fixed source-WAV scale; wrapped spans continue from the left.
+    // Playback positions wrap; loop brackets retain the region’s full extent.
     auto xAt = [&](float position) {
       return visualX(phlooper::zoomPoint(position, zoomRange));
     };
@@ -1385,20 +1586,29 @@ struct PhlooperView : widget::Widget {
       nvgSave(args.vg);
       nvgIntersectScissor(args.vg, visualLeft(), 0.f,
                           box.size.x - visualLeft() - 10.f, box.size.y);
-      float start = module ? module->starts[i].load() : .2f;
-      if (module) {
+      float start = module ? module->starts[i].load() : requested.x;
+      if (module || preview) {
         nvgBeginPath(args.vg);
         float amplitude = std::max(.5f, rowHeight * .5f - .45f);
         for (int bin = 0; bin < phlooper::waveformBins; ++bin) {
-          if (module->waveform[i].range[bin].load(std::memory_order_acquire) !=
-              waveformRange)
+          if (module && module->waveform[i].range[bin].load(
+                            std::memory_order_acquire) != waveformRange)
             continue;
           float x = visualLeft() + (box.size.x - visualLeft() - 10.f) *
                                        ((bin + .5f) / phlooper::waveformBins);
+          auto sample = preview
+                            ? preview->sampleWaveform(
+                                  zoomRange.start +
+                                  (zoomRange.end - zoomRange.start) *
+                                      ((bin + .5f) / phlooper::waveformBins))
+                            : phlooper::WaveformBin{};
           float low =
-              module->waveform[i].low[bin].load(std::memory_order_relaxed);
-          float high =
-              module->waveform[i].high[bin].load(std::memory_order_relaxed);
+              module
+                  ? module->waveform[i].low[bin].load(std::memory_order_relaxed)
+                  : sample.low;
+          float high = module ? module->waveform[i].high[bin].load(
+                                    std::memory_order_relaxed)
+                              : sample.high;
           nvgMoveTo(args.vg, x,
                     y - phlooper::waveformAmplitude(high) * amplitude);
           nvgLineTo(args.vg, x,
@@ -1434,12 +1644,16 @@ struct PhlooperView : widget::Widget {
           }
         }
       }
-      drawLoopMarker(args, xAt(requested.x), y, tickHeight, true);
-      drawLoopMarker(args, xAt(endPoint(requested.y)), y, tickHeight, false);
-      drawOriginalMarkers(args, i, y, tickHeight);
-      float position = module ? module->positions[i].load() : start + i * .1f;
+      float position = module    ? module->positions[i].load()
+                       : preview ? preview->position(i)
+                                 : start + i * .1f;
       float x = xAt(wrapWav(position));
       drawTracker(args, i, x, y, dotScaleX, dotScaleY);
+      drawLoopMarker(args, markerX(requested.x, requested.x), y, tickHeight,
+                     true, pointColor(i, true));
+      drawLoopMarker(args, markerX(requested.x, requested.y), y, tickHeight,
+                     false, pointColor(i, false));
+      drawOriginalMarkers(args, i, y, tickHeight);
       nvgRestore(args.vg);
     }
     widget::Widget::draw(args);
@@ -1459,10 +1673,12 @@ struct PhlooperView : widget::Widget {
       auto stroke = [&](float left, float right, float y, NVGcolor color) {
         drawSpan(args, left, right, y, std::min(4.f, row * .45f), color);
       };
-      // The right-hand marker is always the actual source WAV boundary.
+      // Mark both source boundaries inside the repeated waveform padding.
       nvgBeginPath(args.vg);
-      nvgMoveTo(args.vg, xAt(1.f), 3.f);
-      nvgLineTo(args.vg, xAt(1.f), box.size.y - 3.f);
+      for (float boundary : {0.f, 1.f}) {
+        nvgMoveTo(args.vg, visualX(boundary), 3.f);
+        nvgLineTo(args.vg, visualX(boundary), box.size.y - 3.f);
+      }
       nvgStrokeColor(args.vg, nvgRGBA(205, 213, 205, 140));
       nvgStrokeWidth(args.vg, .8f);
       nvgStroke(args.vg);
@@ -1489,11 +1705,13 @@ struct PhlooperView : widget::Widget {
         float x = xAt(wrapWav(module->positions[i].load()));
         nvgGlobalCompositeOperation(args.vg, NVG_SOURCE_OVER);
         Vec requested = requestedRegion(i);
-        drawLoopMarker(args, xAt(requested.x), y, row * .46f, true);
-        drawLoopMarker(args, xAt(endPoint(requested.y)), y, row * .46f, false);
-        drawOriginalMarkers(args, i, y, row * .46f);
         float scaleY = std::min(1.f, row * .36f / 7.f);
         drawTracker(args, i, x, y, std::max(.65f, scaleY), scaleY);
+        drawLoopMarker(args, markerX(requested.x, requested.x), y, row * .46f,
+                       true, pointColor(i, true));
+        drawLoopMarker(args, markerX(requested.x, requested.y), y, row * .46f,
+                       false, pointColor(i, false));
+        drawOriginalMarkers(args, i, y, row * .46f);
       }
       nvgRestore(args.vg);
     }
@@ -1501,6 +1719,7 @@ struct PhlooperView : widget::Widget {
   }
 };
 struct PhlooperTiming : widget::TransparentWidget {
+  std::shared_ptr<const phlooper::BrowserPreview> preview;
   ComputerscarePhlooper* module = nullptr;
   void draw(const DrawArgs& args) override {
     auto font =
@@ -1508,11 +1727,15 @@ struct PhlooperTiming : widget::TransparentWidget {
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 8.5f);
     nvgFillColor(args.vg, nvgRGB(15, 42, 36));
-    float base = module ? module->frames.load() / 48000.f : 0.f;
+    float base = module    ? module->frames.load() / 48000.f
+                 : preview ? preview->seconds
+                           : 0.f;
     float length =
-        module ? module->params[ComputerscarePhlooper::LENGTH].getValue() : 1.f;
-    nvgText(args.vg, 0, 9, string::f("Base: %.3fs", base).c_str(), nullptr);
-    nvgText(args.vg, 0, 21, string::f("Loop: %.2fs", base * length).c_str(),
+        module    ? module->params[ComputerscarePhlooper::LENGTH].getValue()
+        : preview ? preview->length
+                  : 1.f;
+    nvgText(args.vg, 0, 7, string::f("Base: %.2fs", base).c_str(), nullptr);
+    nvgText(args.vg, 0, 19, string::f("Loop: %.2fs", base * length).c_str(),
             nullptr);
   }
 };
@@ -1539,6 +1762,9 @@ struct PhlooperShortcutOverlay : widget::TransparentWidget {
   }
 };
 struct ComputerscarePhlooperWidget : ModuleWidget {
+  std::shared_ptr<const phlooper::BrowserPreview> preview;
+  SmoothKnob* previewKnobs[3]{};
+  ComputerscareMeterSignal previewMeters[2];
   std::shared_ptr<std::function<void(const DrawArgs&)>> shortcutDraw;
   void drawShortcuts(const DrawArgs& args) {
     if (args.fb || !module || !APP->window->win ||
@@ -1613,6 +1839,22 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       }
     }
     ModuleWidget::step();
+    if (preview) {
+      const float values[] = {preview->start, preview->length,
+                              .5f + preview->offset * preview->seconds / .2f};
+      for (int i = 0; i < 3; ++i) {
+        auto* knob = previewKnobs[i];
+        if (!knob) continue;
+        float angle =
+            math::rescale(values[i], 0.f, 1.f, knob->minAngle, knob->maxAngle);
+        Vec center = knob->sw->box.getCenter();
+        knob->tw->identity();
+        knob->tw->translate(center);
+        knob->tw->rotate(angle);
+        knob->tw->translate(center.neg());
+        knob->fb->setDirty();
+      }
+    }
   }
   void onHoverKey(const event::HoverKey& e) override {
     if (!module || e.isConsumed() || (e.mods & RACK_MOD_MASK)) {
@@ -1680,6 +1922,11 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
   }
   ComputerscarePhlooperWidget(ComputerscarePhlooper* module) {
     setModule(module);
+    if (!module)
+      preview = std::make_shared<phlooper::BrowserPreview>(
+          random::uniform(), random::uniform(), random::uniform(),
+          random::uniform(), random::uniform(), random::uniform(),
+          random::uniform());
     box.size = Vec(330, 380);
     auto* backplate = new PhlooperBackplate;
     backplate->box.size = box.size;
@@ -1707,6 +1954,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     addChild(panel);
     auto* view = new PhlooperView;
     view->module = module;
+    view->preview = preview;
     view->box = Rect(Vec(10, 60), Vec(310, 108));
     const int transportParams[] = {ComputerscarePhlooper::LOOP_MUTE,
                                    ComputerscarePhlooper::LOOP_SOLO,
@@ -1756,11 +2004,13 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     addParam(showControls);
     auto* timing = new PhlooperTiming;
     timing->module = module;
+    timing->preview = preview;
     timing->box = Rect(Vec(181, 7), Vec(72, 24));
     addChild(timing);
     for (int i = 0; i < 3; ++i) {
       auto* choice = new PhlooperChoice;
       choice->module = module;
+      choice->preview = preview;
       choice->param = i == 0   ? ComputerscarePhlooper::COUNT
                       : i == 1 ? ComputerscarePhlooper::MODE
                                : ComputerscarePhlooper::LOOP_DIRECTION;
@@ -1801,7 +2051,12 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       auto* meter = new ComputerscareMeter;
       meter->signal =
           module ? (i == 0 ? &module->inputMeter : &module->outputMeter)
-                 : nullptr;
+                 : &previewMeters[i];
+      if (!module) {
+        float level = .15f + 2.9f * random::uniform();
+        previewMeters[i].level = level;
+        previewMeters[i].peak = level + .35f + 1.2f * random::uniform();
+      }
       meter->label = "";
       meter->shapeSeed = random::u32();
       meter->box = Rect(Vec(i == 0 ? 21.f : 172.f, 319),
@@ -1812,9 +2067,12 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         ComputerscarePhlooper::START,   ComputerscarePhlooper::LENGTH,
         ComputerscarePhlooper::OFFSET,  ComputerscarePhlooper::SPEED,
         ComputerscarePhlooper::REC_MIX, ComputerscarePhlooper::MIX};
-    for (int i = 0; i < 6; ++i)
-      addParam(createParamCentered<SmoothKnob>(Vec(35 + i * 52, 190), module,
-                                               knobs[i]));
+    for (int i = 0; i < 6; ++i) {
+      auto* knob = createParamCentered<SmoothKnob>(Vec(35 + i * 52, 190),
+                                                   module, knobs[i]);
+      addParam(knob);
+      if (i < 3) previewKnobs[i] = knob;
+    }
     const int buttons[] = {
         ComputerscarePhlooper::RECORD,  ComputerscarePhlooper::ERASE,
         ComputerscarePhlooper::RESTART, ComputerscarePhlooper::STOP,
@@ -1947,22 +2205,6 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
           osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK, m->error.c_str());
       }
     }));
-    menu->addChild(
-        createSubmenuItem("Import WAV to loop", "", [m](Menu* submenu) {
-          for (int i = 0; i < phlooper::voices; ++i)
-            submenu->addChild(createMenuItem(
-                "Loop " + std::to_string(i + 1) + "…", "", [m, i]() {
-                  char* path =
-                      osdialog_file(OSDIALOG_OPEN, nullptr, nullptr, nullptr);
-                  if (path) {
-                    m->load(path, i);
-                    std::free(path);
-                    if (!m->error.empty())
-                      osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK,
-                                       m->error.c_str());
-                  }
-                }));
-        }));
     menu->addChild(createSubmenuItem("Export WAV", "", [m](Menu* submenu) {
       auto exportVoice = [m](int voice) {
         std::string filename =
@@ -1983,6 +2225,28 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         submenu->addChild(
             createMenuItem("Loop " + std::to_string(i + 1) + "…", "",
                            [exportVoice, i]() { exportVoice(i); }));
+    }));
+    menu->addChild(createMenuItem("Reset custom loop points", "", [m]() {
+      auto* changes = new history::ComplexAction;
+      changes->name = "Reset custom loop points";
+      bool changed = false;
+      for (int id = ComputerscarePhlooper::CUSTOM_START;
+           id < ComputerscarePhlooper::PARAMS; ++id) {
+        float old = m->params[id].getValue();
+        if (old == 0.f) continue;
+        auto* change = new history::ParamChange;
+        change->moduleId = m->id;
+        change->paramId = id;
+        change->oldValue = old;
+        change->newValue = 0.f;
+        m->params[id].setValue(0.f);
+        changes->push(change);
+        changed = true;
+      }
+      if (changed)
+        APP->history->push(changes);
+      else
+        delete changes;
     }));
     menu->addChild(createMenuItem("Clear recording", "",
                                   [m]() { m->resetRequest = true; }));

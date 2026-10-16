@@ -87,6 +87,47 @@ void testRunToggleShortcutDoesNotStartAll() {
 }  // namespace
 
 int main() {
+  using namespace computerscare::blunch;
+  require(isShortcutHelpKey(GLFW_KEY_GRAVE_ACCENT, "`", 0), "backtick opens shortcut help");
+  require(!isShortcutHelpKey(GLFW_KEY_GRAVE_ACCENT, "~", GLFW_MOD_SHIFT), "shifted backtick remains available for the rest operator");
+  require(isShortcutHelpKey(GLFW_KEY_UNKNOWN, "`", 0), "localized key name recognizes backtick");
+  require(!isShortcutHelpKey(GLFW_KEY_GRAVE_ACCENT, "`", GLFW_MOD_CONTROL), "modified OS shortcuts remain available");
+  require(!isShortcutHelpKey(GLFW_KEY_A, "a", 0), "ordinary typing does not invoke help");
+  require(isShortcutHelpCharacter('`') && !isShortcutHelpCharacter('~'), "backtick is reserved while tilde remains available for rests");
+  require(!isShortcutHelpCharacter('a'), "ordinary editor characters are retained");
+  ControlSelection selection;
+  require(selection.targets()==1u,"control selection starts nonempty");
+  auto key=[&](int key,int mods=0,int action=GLFW_PRESS) {
+    return handleControlShortcut(key,mods,action,selection);
+  };
+  key(GLFW_KEY_DOWN);
+  require(selection.focus==1&&selection.targets()==2u,"singleton selection follows cursor");
+  key(GLFW_KEY_DOWN,GLFW_MOD_SHIFT); key(GLFW_KEY_DOWN,GLFW_MOD_SHIFT);
+  require(selection.targets()==14u,"shift arrows select channels two through four");
+  key(GLFW_KEY_UP,GLFW_MOD_SHIFT);
+  require(selection.targets()==6u,"shift reversing shrinks a range");
+  key(GLFW_KEY_DOWN,GLFW_MOD_SHIFT);
+  for(int i=0;i<11;++i) key(GLFW_KEY_DOWN);
+  require(selection.focus==14&&selection.targets()==14u,"moving focus preserves a selected range");
+  key(GLFW_KEY_ENTER,GLFW_MOD_CONTROL);
+  require(selection.targets()==(14u|(1u<<14)),"modifier Enter adds a distant channel");
+  key(GLFW_KEY_ENTER,GLFW_MOD_SUPER);
+  require(selection.targets()==14u,"platform modifier Enter removes a selected channel");
+  auto preserved=selection.targets();
+  require(key(GLFW_KEY_ESCAPE)==ControlCommand::Unhandled&&selection.targets()==preserved,"Escape retains selection and uses normal view navigation");
+  require(key(GLFW_KEY_ENTER)==ControlCommand::Unhandled,"plain Enter retains normal open-channel behavior");
+  require(key(GLFW_KEY_TAB)==ControlCommand::Unhandled,"Tab retains normal view switching");
+  require(key(GLFW_KEY_SPACE)==ControlCommand::TogglePlayback,"space toggles selected channels");
+  require(key(GLFW_KEY_SPACE,0,GLFW_REPEAT)==ControlCommand::None,"held space does not retrigger toggles");
+  require(key(GLFW_KEY_R)==ControlCommand::Reset,"R resets selected channels");
+  selection.selectOnly(4); selection.toggleFocused();
+  require(selection.targets()==(1u<<4),"cannot remove the final selected channel");
+  selection.selectOnly(9);
+  require(selection.targets()==(1u<<9)&&selection.focus==9,"plain click replaces selection");
+  selection.focus=3; selection.toggleFocused();
+  require(selection.targets()==((1u<<9)|(1u<<3)),"modifier click adds a row");
+  selection.toggleFocused();
+  require(selection.targets()==(1u<<9),"modifier click removes a row");
   testBracketChannelNavigationDirection();
   testSubmitEnterModifiers();
   testRunToggleShortcutDoesNotStartAll();

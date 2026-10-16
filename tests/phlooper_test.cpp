@@ -1,4 +1,5 @@
 #include "Phlooper/Engine.hpp"
+#include "Phlooper/BrowserPreview.hpp"
 #include "Phlooper/Waveform.hpp"
 #include "Phlooper/Zoom.hpp"
 #include "Phlooper/Wav.hpp"
@@ -23,6 +24,33 @@ void wavFixture(const char* path, int format, int bits, int channels, bool exten
   }
 }
 int main(){
+  for (int seed=0;seed<100;++seed) {
+    phlooper::BrowserPreview preview(seed/100.f, .3f, .6f, seed/100.f);
+    check(preview.count>=2&&preview.count<=5,"browser preview has two to five loops");
+    for(int voice=0;voice<preview.count;++voice) {
+      check(preview.regionStart(voice)>=0&&preview.regionStart(voice)+preview.length<=1,
+            "browser preview regions remain within the waveform");
+      check(preview.position(voice)>=preview.regionStart(voice)&&preview.position(voice)<=preview.regionStart(voice)+preview.length,
+            "browser preview playheads remain within their loops");
+    }
+  }
+  phlooper::BrowserPreview previewA(.2f,.3f,.4f,.5f,.1f), previewB(.2f,.3f,.4f,.5f,.8f);
+  float variantDifference=0.f;
+  for(int bin=0;bin<phlooper::waveformBins;++bin) {
+    float position=(bin+.5f)/phlooper::waveformBins;
+    variantDifference+=std::fabs(previewA.sampleWaveform(position).high-previewB.sampleWaveform(position).high);
+  }
+  check(variantDifference>10.f,"browser instances vary their speech waveform");
+  int quietBins=0,loudBins=0;
+  for(int bin=0;bin<phlooper::waveformBins;++bin) {
+    auto value=phlooper::BrowserPreview::waveform((bin+.5f)/phlooper::waveformBins);
+    float peak=std::max(-value.low,value.high);
+    if(peak<.01f) ++quietBins;
+    if(peak>1.f) ++loudBins;
+  }
+  check(quietBins>10&&loudBins>20,"browser speech waveform includes silences and louder passages");
+  check(std::fabs(phlooper::BrowserPreview::waveform(.19f).high-phlooper::BrowserPreview::waveform(1.19f).high)<.001f,
+        "browser waveform repeats identically beyond recording boundaries");
   phlooper::Engine e(4800);phlooper::Settings s;s.count=16;s.offset=1;
   e.process({},48000,s,0,0,0,0,0,false);
   check(e.activeStart[0]==-1,"empty loops do not latch start points before audio loads");
@@ -259,6 +287,12 @@ int main(){
         "zoom keeps nearby loops across the WAV boundary together");
   check(std::fabs(phlooper::zoomPoint(.03f,fitted)-1.03f)<1e-6f,
         "zoom maps wrapped playheads to the correct visible copy");
+  check(std::fabs(phlooper::loopRegionPoint(0.f,1.02f,{-.06f,1.08f})-1.02f)<1e-6f,
+        "positive offsets keep end brackets beyond the source boundary");
+  check(std::fabs(phlooper::loopRegionPoint(.98f,1.04f,{.97f,1.05f})-1.04f)<1e-6f,
+        "zoom preserves boundary-crossing region lengths");
+  check(std::fabs(phlooper::loopRegionPoint(.02f,.04f,{.97f,1.05f})-1.04f)<1e-6f,
+        "zoom shifts both brackets to the same repeated copy");
   zoomRegions[0]={0,1};fitted=phlooper::fitLoopZoom(zoomRegions,1);
   check(fitted.start==0&&fitted.end==1,"full length loops retain the full recording view");
   wave=phlooper::sampleWaveformBin(waveformSamples.data(),1024,false,0,1023.f/1024,1025.f/1024);
@@ -411,6 +445,59 @@ int main(){
   e.wasOneShot=true;e.shotFinished[0]=true;
   check(e.phase(0,0)==1&&e.phase(0,1)==0&&e.phase(0,2)==0&&e.phase(0,3)==1,
         "completed one-shots hold their final phase endpoint");
+  s=phlooper::Settings();s.count=2;s.start=.1f;s.length=.5f;s.offset=0;
+  s.customMask=1;s.customStarts[0]=.1f;s.customLengths[0]=-.2f;
+  e.size=1000;e.resetHeads();e.process({},48000,s,0,0,0,0,65535,false);
+  check(std::fabs(e.periods[0]-300)<.001&&std::fabs(e.sourceStart(0)-200)<.001,
+        "custom start and end modify the audio region independently");
+  check(e.periods[1]==500&&e.sourceStart(1)==100,
+        "custom edits leave the other loops unchanged");
+  s.length=.6f;s.start=.2f;e.resetHeads();e.process({},48000,s,0,0,0,0,65535,false);
+  check(std::fabs(e.periods[0]-400)<.001&&std::fabs(e.sourceStart(0)-300)<.001,
+        "global knobs adjust custom points relative to the normal layout");
+  s.start=0;s.length=1;s.customStarts[0]=-.02f;s.customLengths[0]=.02f;
+  e.resetHeads();e.process({},48000,s,0,0,0,0,65535,false);
+  check(std::fabs(e.periods[0]-1020)<.001&&std::fabs(e.sourceStart(0)-980)<.001,
+        "custom regions extend across source boundaries without clipping audio");
+  s.customMask=0;e.resetHeads();e.process({},48000,s,0,0,0,0,65535,false);
+  check(e.periods[0]==1000&&e.sourceStart(0)==0,
+        "bypassing custom points restores CV or knob regions without deleting edits");
+  s=phlooper::Settings();s.count=2;s.offset=0;s.start=.1f;s.length=.5f;s.alignEnd=true;
+  s.customMask=2;s.customStarts[1]=.05f;s.customLengths[1]=-.1f;
+  e.resetHeads();e.process({},48000,s,0,0,0,0,65535,false);
+  check(std::fabs(e.periods[1]-400)<.001&&std::fabs(e.sourceStart(1)-250)<.001,
+        "custom start shifts combine with end alignment in the audio engine");
+  s.start=.2f;e.process({},48000,s,0,0,0,0,65535,false);
+  check(std::fabs(e.sourceStart(1)-350)<.001,
+        "custom points follow Start knob and mono CV changes immediately");
+  s.mode=2;s.alignEnd=false;s.offset=20;
+  e.resetHeads();e.process({},48000,s,0,0,0,0,0,false);
+  s.hold=true;e.process({},48000,s,0,0,0,0,0,false);
+  check(e.speedHold.active&&std::fabs(e.periods[0]/e.speedHold.speeds[0]-
+        e.periods[1]/e.speedHold.speeds[1])<1e-6,
+        "Speed Hold fits custom regions while retaining shared repeat timing");
+  s.hold=false;e.process({},48000,s,0,0,0,0,65535,false);
+  check(!e.speedHold.active&&std::fabs(e.periods[1]-400)<.001,
+        "releasing Hold restores custom region lengths");
+  auto dragged=phlooper::dragLoopPoint({.2f,.7f},true,.1f,.048f,60.f);
+  check(std::fabs(dragged.start-.3f)<1e-6f&&dragged.end==.7f,
+        "dragging start keeps end fixed");
+  dragged=phlooper::dragLoopPoint({.2f,.7f},false,.4f,.048f,60.f);
+  check(dragged.start==.2f&&std::fabs(dragged.end-1.1f)<1e-6f,
+        "dragging end preserves start and extends past the source boundary");
+  dragged=phlooper::dragLoopPoint({.2f,.7f},true,2.f,.048f,60.f);
+  check(std::fabs(dragged.end-dragged.start-.048f)<1e-6f,
+        "brackets cannot cross or shrink below the minimum loop length");
+  dragged=phlooper::dragLoopPoint({.2f,.7f},false,100.f,.048f,60.f);
+  check(std::fabs(dragged.end-dragged.start-60.f)<1e-6f,
+        "dragging respects recording storage capacity");
+  check(phlooper::controlOffset(3,0,false,-1,1,2)==5,
+        "mono offset CV adds equally to knob-defined per-loop spacing");
+  check(phlooper::controlOffset(3,0,false,-1,4,2)==20&&
+        phlooper::controlOffset(4,0,false,-1,4,2)==-20,
+        "poly offset CV replaces each supplied channel and missing channels keep knob spacing");
+  check(phlooper::controlOffset(3,2,false,1,1,20)==23,
+        "mono speed-mode offset adds a clamped percent to knob spacing");
   e.size=0;
   check(e.phase(0,1)==0,"empty loops produce zero phase");
   std::puts("Phlooper DSP and WAV tests passed");

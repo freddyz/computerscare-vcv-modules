@@ -80,8 +80,8 @@ when the button is released; the button state is saved with the patch.
 Offset CV is polyphonic and sets explicit per-loop offsets, replacing the
 knob’s evenly spaced offset for each supplied channel. −10 V to +10 V maps
 to −100 to +100 ms in Time mode, or −20% to +20% in Length/Speed modes; 0 V
-means no offset. Missing channels retain the knob’s spacing. A mono cable
-addresses loop 1 only. Values outside ±10 V are clamped.
+means no offset. Missing poly channels retain the knob’s spacing. A mono cable
+adds its offset to every loop’s knob-defined spacing. Values outside ±10 V are clamped.
 
 Hold latches phase: the button toggles it, or a gate of at least 1 V holds it. In Time and Length modes, it preserves the current offsets between playheads and matches their periods to loop 1. In Speed mode, it keeps each channel's current playback rate and pitch and captures temporary in/out points proportional to those rates. All held channels then share exactly the same repeat time and one phase clock. The shortest current channel repeat time becomes the shared repeat time. Engaging Hold keeps the current source positions, including reverse playback. Overall Speed scales held rates together; per-loop Pause and Restart still work. Releasing Hold restores the selected regions and resumes drift. Fitted regions and their shared clock are saved with the patch. Start, Length, and Offset changes take effect after releasing Speed-mode Hold.
 
@@ -90,7 +90,7 @@ the phase relationship from the saved positions. Record is a latching button;
 the nearby red light indicates recording from the button or a Record gate.
 Record’s latch state is not saved; it always loads off.
 
-Start and Length CV are polyphonic offsets from their knobs: ±10 V adds or subtracts 100 percentage points, clamped to the valid range. Mono affects all loops; poly channels address individual loops, with missing channels using the knob alone. Start changes still latch at each loop boundary; Time/Length Hold uses loop 1’s CV-controlled length for every loop; Speed Hold fits each channel’s region.
+Start and Length CV are polyphonic offsets from their knobs: ±10 V adds or subtracts 100 percentage points, clamped to the valid range. Mono affects all loops; poly channels address individual loops, with missing channels using the knob alone. Start changes latch at each loop boundary for regular regions and update immediately for Custom regions; Time/Length Hold uses loop 1’s CV-controlled length for every loop; Speed Hold fits each channel’s region.
 
 Each display row has M (mute), S (solo), P (pause), and F/R/B (direction) controls. Multiple loops can be soloed together; mute still takes precedence. Pause freezes its playhead and resumes from that position. Manual toggles combine with incoming mute/stop gates and save with the patch.
 
@@ -112,8 +112,6 @@ Meters follow the loudest instantaneous channel on each side for polyphonic inpu
 
 Import WAV to all loops always copies the same file into all sixteen loops; dropping a WAV does the same. Export WAV lets you save any individual loop, or all sixteen (including inactive loops) as separate files named `<chosen name>-loop-1.wav` through `-loop-16.wav`. Exports contain the full stored buffers as 48 kHz float WAV, preserving mono/stereo, without playback gain, pitch, direction, or region cropping. Stop recording/overdubbing before export for a consistent snapshot.
 
-Import WAV to loop lets you replace any individual loop while retaining the other audio and playheads. The existing shared buffer duration is preserved: shorter files are padded with silence and longer files trimmed. On an empty module, the imported file establishes the duration and other loops start silent. Finish initial recording before importing into an individual loop.
-
 Display playhead/region snapshots publish every 64 audio samples; audio and EOC timing remain sample-rate accurate. Empty buffers bypass playback calculations, and fully faded muted/stopped voices skip interpolation while preserving head and recording behavior.
 
 The Mute button and jack sit after Stop. The button latches mute for all loops while their playheads, recording, and EOC timing continue. Dry monitoring remains controlled by Output mix.
@@ -125,3 +123,9 @@ Ends in the visual toolbar toggles audio-region alignment. Off aligns starts; on
 Phase, immediately right of EOC, outputs one 0–10 V channel per active loop. 0 V is the selected region’s beginning and 10 V its end, independent of where it lies in the recording. Forward ramps upward, Reverse downward, and alternating transport follows each leg. Pause freezes phase; completed one-shots retain their final endpoint. Empty buffers and initial recording output 0 V. Output gain and audio output mode do not affect Phase.
 
 While Hold is active, smaller yellow brackets show the original regions selected by the controls/CV without Hold. White brackets show the held regions.
+
+The waveform view includes repeated audio beyond the source boundaries. Loop brackets stay on the same continuous timeline, so positive length offsets extend to the right of the original end rather than wrapping to the left.
+
+Drag a row’s start or end bracket to set a custom loop region. Moving the start keeps the end fixed; moving the end keeps the start fixed. Edited points turn yellow, and changes take effect immediately. Hover an editable bracket for the horizontal drag cursor; right-click it to restore that point to its knob/CV-defined position while keeping the opposite point fixed. Start, Length, and Offset knobs and mono CV continue adjusting the custom region relative to their regular layout. In Speed mode, Offset still changes speed/pitch rather than region length.
+
+Patching polyphonic Start, Length, or Offset CV temporarily takes control of the regular regions and locks all bracket handles, including rows with no matching CV channel. Saved custom edits remain available after unpatching; the regular CV-controlled points display in white while edits are bypassed. Bracket editing is also locked during Hold. Use **Reset custom loop points** in the context menu to restore the normal knob layout. Custom edits are saved in the patch, support Undo/Redo, and are excluded from Randomize. Importing or clearing audio resets them.

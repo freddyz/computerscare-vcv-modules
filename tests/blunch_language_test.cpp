@@ -1,3 +1,5 @@
+#include <sstream>
+#include <stdexcept>
 #include "BlunchLanguage/BlunchLanguage.hpp"
 #include "Blunch/BlunchRandomProgram.hpp"
 
@@ -840,7 +842,7 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("({3|2|{6|9}}hz@7 ~(1 2 3)s)#12s");
   require(result.ok(), "nested random rest total duration parses");
-  require(result.program.blocks.size() == 4,
+  require(result.program.blocks.size() == 6,
           "nested random rest total duration count");
   for (size_t i = 0; i < result.program.blocks.size(); i++) {
     requireTotalDurationGroup(result.program.blocks[i], 0, 12.0,
@@ -876,7 +878,7 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("({3|2|{6|9}}hz@7 ~(1 2 3)s)");
   require(result.ok(), "nested random rest interleave parses");
-  require(result.program.blocks.size() == 4,
+  require(result.program.blocks.size() == 6,
           "nested random rest interleave block count");
   require(result.program.blocks[0].literal.kind ==
                 lang::ClockLiteralKind::RandomRange,
@@ -887,11 +889,12 @@ void testProgramAst() {
           "nested random rest interleave repeat");
   require(!result.program.blocks[0].rest,
           "nested random rest interleave random not rest");
-  for (size_t i = 1; i < result.program.blocks.size(); i++) {
-    require(result.program.blocks[i].rest,
-            "nested random rest interleave rest block");
-    require(result.program.blocks[i].literal.unit == lang::ClockUnit::Seconds,
-            "nested random rest interleave rest seconds");
+  for (size_t i = 0; i < result.program.blocks.size(); i++) {
+    require(result.program.blocks[i].rest == (i % 2 == 1),
+            "nested random and rest lanes alternate");
+    if (i % 2 == 1)
+      require(result.program.blocks[i].literal.unit == lang::ClockUnit::Seconds,
+              "nested random rest interleave rest seconds");
   }
 
   result = lang::parseClockLiteral("2hz (2hz 4hz)");
@@ -942,7 +945,7 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("(2 1 (3 2)@2)hz");
   require(result.ok(), "nested paren suffix repeat parses");
-  requireProgramValues(result, {2.0, 1.0, 3.0, 2.0},
+  requireProgramValues(result, {2.0, 1.0, 3.0, 2.0, 1.0, 2.0},
                        "nested paren suffix repeat values");
   requireNear(result.program.blocks[0].literal.value, 2.0,
               "nested paren suffix repeat block 0 value");
@@ -962,12 +965,12 @@ void testProgramAst() {
           "nested paren suffix repeat block 3 hz");
   require(result.program.blocks[2].repeat == 2,
           "nested paren suffix repeat block 2 repeat");
-  require(result.program.blocks[3].repeat == 2,
-          "nested paren suffix repeat block 3 repeat");
+  require(result.program.blocks[5].repeat == 2,
+          "nested paren suffix repeat block 5 repeat");
 
   result = lang::parseClockLiteral("(3 4 (5 4 3))hz");
   require(result.ok(), "spread interleave parses");
-  requireProgramValues(result, {3.0, 4.0, 5.0, 4.0, 3.0},
+  requireProgramValues(result, {3.0, 4.0, 5.0, 3.0, 4.0, 4.0, 3.0, 4.0, 3.0},
                        "spread interleave values");
   for (size_t i = 0; i < result.program.blocks.size(); i++) {
     require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
@@ -976,7 +979,7 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("(3 3 (2 1 5))hz?69");
   require(result.ok(), "spread interleave suffix probability parses");
-  requireProgramValues(result, {3.0, 3.0, 2.0, 1.0, 5.0},
+  requireProgramValues(result, {3.0, 3.0, 2.0, 3.0, 3.0, 1.0, 3.0, 3.0, 5.0},
                        "spread interleave suffix probability values");
   for (size_t i = 0; i < result.program.blocks.size(); i++) {
     require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
@@ -989,7 +992,7 @@ void testProgramAst() {
 
   result = lang::parseClockLiteral("(3@2 (3 1)@2 (2 1 5))hz?80");
   require(result.ok(), "spread interleave suffix probability parses");
-  requireProgramValues(result, {3.0, 3.0, 1.0, 2.0, 1.0, 5.0},
+  requireProgramValues(result, {3.0, 3.0, 2.0, 3.0, 1.0, 1.0, 3.0, 3.0, 5.0, 3.0, 1.0, 2.0, 3.0, 3.0, 1.0, 3.0, 1.0, 5.0},
                        "spread interleave suffix probability values");
   for (size_t i = 0; i < result.program.blocks.size(); i++) {
     require(result.program.blocks[i].literal.unit == lang::ClockUnit::Hertz,
@@ -999,49 +1002,37 @@ void testProgramAst() {
     requireRange(result.program.blocks[i].probabilityRange, 23, 26,
                  "spread interleave suffix probability range");
   }
-  require(result.program.blocks[0].repeat == 2,
-          "spread interleave suffix probability block 0 repeat");
-  require(result.program.blocks[1].repeat == 2,
-          "spread interleave suffix probability block 1 repeat");
-  require(result.program.blocks[2].repeat == 2,
-          "spread interleave suffix probability block 2 repeat");
-  require(result.program.blocks[3].repeat == 1,
-          "spread interleave suffix probability block 3 repeat");
-  require(result.program.blocks[4].repeat == 1,
-          "spread interleave suffix probability block 4 repeat");
-  require(result.program.blocks[5].repeat == 1,
-          "spread interleave suffix probability block 5 repeat");
+  for (size_t i = 0; i < result.program.blocks.size(); ++i)
+    require(result.program.blocks[i].repeat == (i % 3 == 2 ? 1 : 2),
+            "round-robin expansion preserves each lane's repeat modifiers");
 
   result = lang::parseClockLiteral("(3 (5 4 3))hz");
   require(result.ok(), "single lane spread interleave parses");
-  requireProgramValues(result, {3.0, 5.0, 4.0, 3.0},
+  requireProgramValues(result, {3.0, 5.0, 3.0, 4.0, 3.0, 3.0},
                        "single lane spread interleave values");
 
   result = lang::parseClockLiteral("((1 2) (3 4 5))hz");
   require(result.ok(), "two nested lane spread interleave parses");
-  requireProgramValues(result, {1.0, 2.0, 3.0, 4.0, 5.0},
+  requireProgramValues(result, {1.0, 3.0, 2.0, 4.0, 1.0, 5.0, 2.0, 3.0, 1.0, 4.0, 2.0, 5.0},
                        "two nested lane spread interleave values");
 
   result = lang::parseClockLiteral("([1 2] (3 4 5))hz");
   require(result.ok(), "bracket lane spread interleave parses");
-  requireProgramValues(result, {1.0, 2.0, 3.0, 4.0, 5.0},
+  requireProgramValues(result, {1.0, 3.0, 2.0, 4.0, 1.0, 5.0, 2.0, 3.0, 1.0, 4.0, 2.0, 5.0},
                        "bracket lane spread interleave values");
 
   result = lang::parseClockLiteral("120 (3hz [4hz 5hz])");
   require(result.ok(), "nested interleave program parses");
-  require(result.program.blocks.size() == 6, "nested interleave block count");
-  requireRange(result.program.blocks[0].literal.range, 0, 3,
-               "nested interleave block 0 range");
-  requireRange(result.program.blocks[1].literal.range, 5, 8,
-               "nested interleave block 1 range");
-  requireRange(result.program.blocks[2].literal.range, 0, 3,
-               "nested interleave block 2 range");
-  requireRange(result.program.blocks[3].literal.range, 10, 13,
-               "nested interleave block 3 range");
-  requireRange(result.program.blocks[4].literal.range, 0, 3,
-               "nested interleave block 4 range");
-  requireRange(result.program.blocks[5].literal.range, 14, 17,
-               "nested interleave block 5 range");
+  requireProgramValues(result, {120,3,120,4,120,3,120,5}, "nested interleave advances child lanes");
+  const int sourceBegins[] = {0,5,0,10,0,5,0,14};
+  for (size_t i = 0; i < result.program.blocks.size(); ++i)
+    require(result.program.blocks[i].literal.range.begin == sourceBegins[i],
+            "interleaved copies retain the original highlight source");
+  result = lang::parseClockLiteral("(.5 .7 (.3 .4))s");
+  require(result.ok(), "nested seconds example parses");
+  requireProgramValues(result, {.5,.7,.3,.5,.7,.4}, "inner sequence advances once per outer pass");
+  for (const auto& block : result.program.blocks)
+    require(block.literal.unit == lang::ClockUnit::Seconds, "nested unit suffix reaches every expanded step");
 
   result = lang::parseClockLiteral("[3 2 1]s");
   require(result.ok(), "bracket suffix seconds parses");
@@ -1552,15 +1543,93 @@ void testInvalidInputs() {
 }
 
 void testRandomProgramGenerator() {
-  for (unsigned int entropy = 0; entropy < 128; entropy++) {
-    std::string program =
-        blunch::random_program::generateMusicalClockProgram(entropy);
-    lang::ParseResult result = lang::parseClockLiteral(program);
-    require(result.ok(), "generated musical clock program parses");
-    require(!result.program.blocks.empty(),
-            "generated musical clock program has blocks");
+  using namespace blunch::random_program;
+  Catalogue catalogue = testRandomCatalogue();
+  int lineCounts[5] = {}, simple = 0, bpm = 0, hz = 0, ms = 0, seconds = 0, longClocks = 0;
+  for (unsigned int entropy = 0; entropy < 2048; entropy++) {
+    std::string program = expandTemplate(catalogue, catalogue.randomize, entropy);
+    require(program == expandTemplate(catalogue, catalogue.randomize, entropy),
+            "template expansion is reproducible for the same entropy");
+    auto parsed = lang::parseClockLiteral(program);
+    require(parsed.ok(), "shipped random recipe produces valid Blunch");
+    for (const auto& block : parsed.program.blocks) {
+      if (block.literal.kind != lang::ClockLiteralKind::Numeric) continue;
+      auto evaluated = lang::evaluateClockLiteral(block.literal);
+      require(evaluated.ok(), "generated numeric clocks evaluate");
+      double period = evaluated.spec.periodSeconds;
+      if (period > 1.21) {
+        require(block.literal.unit == lang::ClockUnit::Seconds && period <= 8.,
+                "long clock periods use seconds and remain bounded");
+        ++longClocks;
+      } else require(period >= .333 - 1e-6 && period <= 1.21,
+                     "ordinary clocks remain around 50..180 BPM equivalents");
+    }
+    require(program.size() <= 48 && program.find('\n') == std::string::npos,
+            "randomized lines remain short and on one line");
+    if (program.find_first_of("[{@") == std::string::npos) ++simple;
+    if (program.find("bpm") != std::string::npos) ++bpm;
+    else if (program.find("hz") != std::string::npos) ++hz;
+    else if (program.find("ms") != std::string::npos) ++ms;
+    else if (program.find('s') != std::string::npos) ++seconds;
+    std::string startup = expandTemplate(catalogue, catalogue.startup, entropy);
+    std::istringstream lines(startup);
+    std::string line;
+    int count = 0;
+    while (std::getline(lines, line)) {
+      require(lang::parseClockLiteral(line).ok(), "startup line parses");
+      ++count;
+    }
+    require(count >= 1 && count <= 4, "startup contains one to four formulas");
+    ++lineCounts[count];
   }
+  require(simple > 1000, "simple clocks dominate randomization");
+  require(longClocks > 0 && longClocks < 50, "long clocks are available but rare");
+  require(bpm > 0 && hz > 0 && ms > 0 && seconds > 0, "all clock units appear");
+  require(lineCounts[1] > lineCounts[2] && lineCounts[2] > lineCounts[3] && lineCounts[3] > lineCounts[4],
+          "startup favors fewer formula lines");
+  require(expandTemplate(catalogue, "(nrange 180 180)bpm", 1) == "180bpm",
+          "integer ranges include their endpoints");
+  require(expandTemplate(catalogue, "(frange 1.25 1.25 2)hz", 1) == "1.25hz",
+          "decimal ranges honor precision");
+  require(expandTemplate(catalogue, "(wpick 0 bad 1 good)", 1) == "good",
+          "zero-weight branches are never selected");
+  require(expandTemplate(catalogue, "(pick ok)", 1) == "ok", "discrete choices expand");
+  require(expandTemplate(catalogue, "(repeat x 3 ,)", 1) == "x,x,x",
+          "repeat supports custom separators");
+  require(expandTemplate(catalogue, "(repeat \"(nrange 1 1000000)\" 4 ,)", 42) !=
+          expandTemplate(catalogue, "(repeat \"(nrange 1 1000000)\" 4 ,)", 43),
+          "different seeds draw different repeated expressions");
+  catalogue.definitions["cycle"].emplace_back(1, "(ref cycle)");
+  const char* invalid[] = {"(ref missing)", "(ref cycle)", "(repeat x 1000000)",
+      "(wpick -1 x 2 y)", "(wpick 0 x)", "(nrange 1)", "(nrange 0.5 3)",
+      "(frange 1 2 9)", "(unknown x)", "(pick", "(pick \"unterminated)",
+      "(nrange 0 1000000000)", "(repeat \"(repeat x 16)\" 16 ,"};
+  for (auto text : invalid) {
+    bool rejected = false;
+    try { expandTemplate(catalogue, text, 1); }
+    catch (const std::runtime_error&) { rejected = true; }
+    require(rejected, "invalid and cyclic templates are rejected");
+  }
+  bool tooLong = false;
+  try { expandTemplate(catalogue, std::string(4097, 'x'), 1); }
+  catch (const std::runtime_error&) { tooLong = true; }
+  require(tooLong, "oversized template text is rejected");
+  catalogue.definitions["zero"].emplace_back(0, "x");
+  bool emptyWeight = false;
+  try { expandTemplate(catalogue, "(ref zero)", 1); }
+  catch (const std::runtime_error&) { emptyWeight = true; }
+  require(emptyWeight, "references with no positive weight fail safely");
+  require(expandTemplate(catalogue, "(repeat \"(nrange 1 1000000)\" 4 ,)", 42).find(',') != std::string::npos,
+          "quoted nested expressions work inside repeated templates");
+  catalogue.definitions["bulk"].emplace_back(1, std::string(1000, 'x'));
+  bool expandedTooLong = false;
+  try { expandTemplate(catalogue, "(repeat \"(ref bulk)\" 5)", 1); }
+  catch (const std::runtime_error&) { expandedTooLong = true; }
+  require(expandedTooLong, "expanded output respects the byte limit");
+  require(expandTemplate(catalogue, "(wpick 0 \"(ref missing)\" 1 ok)", 3) == "ok",
+          "unselected branches are not evaluated");
 }
+
 }  // namespace
 
 int main() {

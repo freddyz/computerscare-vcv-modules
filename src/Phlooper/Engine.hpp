@@ -13,6 +13,8 @@ struct Settings {
   bool hold = false, oneShot = false, alignEnd = false;
   unsigned offsetMask = 0, startMask = 0, lengthMask = 0;
   std::array<float, voices> offsets{}, starts{}, lengths{};
+  unsigned customMask = 0;
+  std::array<float, voices> customStarts{}, customLengths{};
   std::array<int, voices> directions{};
   float start = 0, length = 1, offset = 1, recordMix = .5f, mix = 1, speed = 1;
 };
@@ -325,6 +327,11 @@ class Engine {
         period *= 1. + offset / 100.;
       else
         speed = std::max(.05, std::min(8., 1. + offset / 100.));
+      if (s.customMask & (1u << lengthVoice)) {
+        period += s.customLengths[lengthVoice] * size;
+        length = std::max(
+            1, int(std::ceil(std::max(48., std::min(double(limit), period)))));
+      }
       period = std::max(48., std::min(double(limit), period));
       speed *= std::max(.25f, std::min(4.f, s.speed));
       if (speedHold.active) {
@@ -336,6 +343,8 @@ class Engine {
       periods[v] = period;
       regionShift[v] =
           s.alignEnd && !speedHold.active ? periods[0] - period : 0.;
+      if (!speedHold.active && (s.customMask & bit))
+        regionShift[v] += s.customStarts[v] * size;
       int direction = std::max(0, std::min(3, s.directions[v]));
       if (direction != previousDirection[v] || (restart & bit)) {
         returning[v] = false;
@@ -346,7 +355,8 @@ class Engine {
       previousDirection[v] = direction;
       bool reverse = isReverse(v, direction);
       if (s.oneShot && shotFinished[v]) stop |= bit;
-      if (size && (activeStart[v] < 0 || (restart & bit)))
+      if (size &&
+          (activeStart[v] < 0 || (restart & bit) || (s.customMask & bit)))
         activeStart[v] = requestedStart;
       double start = sourceStart(v);
       if (restart & bit) {

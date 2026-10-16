@@ -11,7 +11,7 @@ def embed(root,x,y,w,h,bounds=None,name='asset'):
     a,b,c,d=bounds or map(float,root.get('viewBox').split())
     group=E.SubElement(svg,tag('g'),id=name,transform=f'translate({x},{y}) scale({w/c},{h/d}) translate({-a},{-b})')
     for child in root:group.append(child)
-def text(s,x,y,w,h,rand=25,center=False):
+def text(s,x,y,w,h,rand=25,center=False,stretch=1):
     with tempfile.TemporaryDirectory() as tmp:
         out=Path(tmp)/'text.svg'
         subprocess.run([str(ROOT/'scripts/gen.sh'),s,'--rand',str(rand),'--seed','blunch-'+s,'--output',str(out)],check=True,stdout=subprocess.DEVNULL)
@@ -20,19 +20,18 @@ def text(s,x,y,w,h,rand=25,center=False):
     for path in root.iter(tag('path')):
         for seg in helper.parse_path(path.get('d')):points.extend(seg['points'])
     xs=[p[0] for p in points];ys=[p[1] for p in points];bounds=(min(xs)-1,min(ys)-1,max(xs)-min(xs)+2,max(ys)-min(ys)+2)
-    actual_width=min(w,h*bounds[2]/bounds[3])
+    actual_width=min(w,h*bounds[2]/bounds[3])*stretch
     embed(root,x-actual_width/2 if center else x,y,actual_width,h,bounds,'label-'+s.replace(' ','-'))
 # Perspective boxes are rendered with the shared WarpedBlock component.
 text('BLunch',11,5,92,18,48)
-text('Time',55,300,27,6,center=True)
-text('Seed',85,300,27,6,center=True)
-text('ext',213,318,36,7,40,center=True)
-for i,label in enumerate(['W','X','Y','Z']):
-    text(label,195+(i%2)*18,283+(i//2)*18,13,5,40)
-for label,x in [('out',21.5),('phase',51.5),('block',117.5),('EOL',147.5),('EOP',177.5)]:
-    text(label,x,363,28,6,40,center=True)
-text('poly',212,363,28,6,40,center=True)
+text('Time',55,303,27,6,center=True)
+text('Seed',85,303,27,6,center=True)
+text('ext',213,319,36,8.5,40,center=True,stretch=1.3)
+for label,x,y in [('W',194,282),('X',228,282),('Y',194,315),('Z',228,315)]:
+    text(label,x,y,13,5,40)
+for label,x in [('out',21.5),('phase',51.5),('EOB',117.5),('EOL',147.5),('EOP',177.5)]:
+    text(label,x,366,28,6,40,center=True)
+text('poly',212,366,28,6,40,center=True)
 logo=E.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
 embed(logo,104,4,24,24,name='computerscare-blunch-logo')
-text('computerscare',29,377,140,3,42)
 E.indent(svg);E.ElementTree(svg).write(ROOT/'res/panels/ComputerscareBlunchPanel.svg',encoding='utf-8',xml_declaration=True)

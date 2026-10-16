@@ -24,9 +24,11 @@ void captureBaseStepState(BlunchProgramStep& step);
 void restoreBaseStepState(BlunchProgramStep& step);
 bool isBranchLocalTotalDuration(const BlunchProgramStep& step);
 
-bool compileLineProgram(const std::string& lineText, int lineBegin,
-                        ExternalClockInputMapper externalClockInputIndex,
-                        std::vector<BlunchProgramStep>& program);
+bool compileLineProgram(
+    const std::string& lineText, int lineBegin,
+    ExternalClockInputMapper externalClockInputIndex,
+    std::vector<BlunchProgramStep>& program,
+    blunch::language::ClockUnit defaultUnit = blunch::language::ClockUnit::Bpm);
 
 }  // namespace program
 }  // namespace blunch

@@ -1,108 +1,141 @@
 # 2.4.0
 
 New modules:
+
 - **Windchimes:** Arrange up to sixteen tuned, physically modeled chime sets in a quadraphonic scene. Includes material and sound presets, polyphonic chime-model CV, wind synthesis, reverb, and clockable delay.
-- **Phlooper:** Up to sixteen independent stereo audio loops with Time, Length, and Speed phasing; per-loop transport, reverse and alternating directions, one-shot playback, exact Speed Hold, start/end region alignment, waveform zoom, polyphonic recording/output, and phase/EOC outputs. Import WAV to all loops or an individual loop; export one or all loops.
-- **Blunch:** Text-based polyphonic trigger sequencer with a programmable pattern language, editor shortcuts, and per-channel Run gating or trigger-toggle control.
+- **Phlooper:** Up to sixteen independent stereo audio loops with Time, Length, and Speed phasing; per-loop transport, reverse and alternating directions, one-shot playback, exact Speed Hold, start/end region alignment, draggable loop points, waveform zoom, polyphonic recording/output, and phase/EOC outputs. Import WAV to all loops; export one or all loops.
+- **Blunch:** Text-based polyphonic trigger sequencer with nested patterns, editable randomization recipes, an editable channel overview, keyboard/mouse Control mode, independent text/row height, selectable default clock units and playback displays, and per-channel Run gating or trigger-toggle control.
 
 Debug:
+
 - Add all visualization options to the context menu.
 
 Development:
+
 - Build and test all three new modules together, including the shared text editor and sequencer language/runtime tests.
+- Add cached offscreen module previews for panel development, including Blunch interaction checks. Generated screenshots stay outside source control.
 
 # 2.3.11
+
 VolyPector:
-- 16 polyphonic signals, with a compact UI.  Edit by signal, or by channel.  Triggered randomization/wiggle per channel or signal.
+
+- 16 polyphonic signals, with a compact UI. Edit by signal, or by channel. Triggered randomization/wiggle per channel or signal.
 
 Knoly Pobs:
+
 - Fix saved bipolar main knob values loading as 0 when they were negative
 
 Sloly Pit:
+
 - Add blank routes and randomization defaults
 
 Debug:
+
 - Note name / midi note number mode to display, eg: "Db3" or "F#5 - 43"
 
 Development:
+
 - Add portable vcvmon watcher script
 - Static analysis checker scripts, and CI integration
 
 # 2.3.2
+
 Sloly Pit:
+
 - Polyphonic splitter/router, split a poly signal into multiple poly signals
 
 Mely Porge:
+
 - Polyphonic merge / insert / vca utility / comparison utility
 
 Portaloof:
+
 - Draw all sources at full alpha
 - Drag/Mouse wheel control
 - Blend modes
 
 Debug:
+
 - Add "bars" graphic as optional additional visualization
 - Additional visualization settings
 
 Custom Blank:
+
 - gifs continue animating during crossfade
 - Slideshow keyboard toggle
 
 Knoly Pobs:
+
 - Add unipolar/bipolar main knob range option
 
 Father & Son:
+
 - Performance improvements
 
 Horse a Doodle Doo:
+
 - "Ch1 triggers all sequences" mode: now emits exact same gates for all channels
 - Performance improvements
 
-
 # 2.2.5
+
 Portaloof: Visual Tranformation Module
 
 Oh Peas!
+
 - Add VCA mode (Unipolar Gain), configurable per-channel
 
 Custom Blank:
+
 - Allow drag & drop image file from filesystem
 - show resize handles at module boundaries when hovering pointer
 - fix bug when switching gif and animation enabled
 - Crossfade for slideshow / image switching
 
 Foly Pace & Stoly Fick Pigure
+
 - Fix bug where randomizing "froze" the module
 
 # 2.1.16
+
 - Code re-org, update build
 
 # 2.1.11
+
 - Horse a Doodle Doo don't randomize the menu params on module randomize
 
 # 2.1.7
+
 - Update build to use plugin build toolchain github actions image
 - Toly Pools v2 adds CV values to knob values as is the standard
 - Fix Toly Pools v2 crash when disconnecting input cable
 
 # 2.1.1
+
 Toly Pools
+
 - Make a new module with new slug, Toly Pools v2 with better rotation options and behavior
 - New Toly Pools v2 has Auto output channels mode by default, and positive/negative rotation
-- Deprecate the old Toly Pools.  It will still work in old patches, but won't show up in browser
+- Deprecate the old Toly Pools. It will still work in old patches, but won't show up in browser
 
 # 2.1.0
+
 Father & Son Patch Sequencer
+
 - changed font to one with license suitable for cardinal
 
 # 2.0.x and before
+
 - a bunch of stuff
 
 # 1.2.0
+
 Laundry Soup
+
 - Fix regression which made patches load incorrectly
 - Add right-click options for polyphony
 - Move JSON loading to module
 
 Father & Son Patch Sequencer
+
 - Add right-click options for polyphony

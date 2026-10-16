@@ -106,9 +106,10 @@ bool isBranchLocalTotalDuration(const BlunchProgramStep& step) {
 
 bool compileLineProgram(const std::string& lineText, int lineBegin,
                         ExternalClockInputMapper externalClockInputIndex,
-                        std::vector<BlunchProgramStep>& program) {
+                        std::vector<BlunchProgramStep>& program,
+                        blunch::language::ClockUnit defaultUnit) {
   blunch::language::ParseResult parse =
-      blunch::language::parseClockLiteral(lineText);
+      blunch::language::parseClockLiteral(lineText, defaultUnit);
   if (!parse.ok()) {
     return false;
   }

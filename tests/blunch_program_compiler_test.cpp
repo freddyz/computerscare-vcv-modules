@@ -57,6 +57,29 @@ int main() {
   namespace language = blunch::language;
   namespace program = blunch::program;
 
+  std::vector<BlunchProgramStep> unitProgram;
+  const language::ClockUnit units[] = {language::ClockUnit::Bpm, language::ClockUnit::Seconds,
+      language::ClockUnit::Milliseconds, language::ClockUnit::Hertz,
+      language::ClockUnit::Minutes, language::ClockUnit::Millihertz, language::ClockUnit::Kilohertz};
+  const double periods[] = {30., 2., .002, .5, 120., 500., .0005};
+  for (size_t i = 0; i < 7; ++i) {
+    require(program::compileLineProgram("2@4", 0, mapExternalClock, unitProgram, units[i]),
+            "bare clock compiles with each supported default unit");
+    requireNear(unitProgram[0].spec.periodSeconds, periods[i], "default unit controls bare clock timing");
+    require(program::compileLineProgram("[2 3]ms", 0, mapExternalClock, unitProgram, units[i]),
+            "explicit group unit overrides default");
+    requireNear(unitProgram[0].spec.periodSeconds, .002, "explicit group timing is unchanged");
+    require(program::compileLineProgram("(.5 .7 (.3 .4))", 0, mapExternalClock, unitProgram, language::ClockUnit::Seconds),
+            "nested bare clocks inherit default seconds");
+    requireNear(unitProgram[2].spec.periodSeconds, .3, "nested bare timing uses default");
+  }
+
+  auto nested = requireCompiles("(.5 .7 (.3 .4))s");
+  const double expected[] = {.5,.7,.3,.5,.7,.4};
+  require(nested.size() == 6, "nested sequence compiles a complete six-step cycle");
+  for (size_t i = 0; i < nested.size(); ++i)
+    requireNear(nested[i].spec.periodSeconds, expected[i], "compiled playback follows the nested sequence in seconds");
+
   std::vector<BlunchProgramStep> compiled = requireCompiles("x@3y", 40);
   require(compiled.size() == 1, "external repeat compiles to one step");
   require(compiled[0].externalClockInput == 11,
@@ -243,9 +266,9 @@ int main() {
           "rest random total-duration first block preserves rest choice");
 
   compiled = requireCompiles("(3@6 (2 3.5 5))hz#11");
-  if (compiled.size() != 4) {
+  if (compiled.size() != 6) {
     std::fprintf(stderr,
-                 "FAIL: nested repeated total-duration group expected 4 steps "
+                 "FAIL: nested repeated total-duration group expected 6 steps "
                  "got %zu\n",
                  compiled.size());
     std::exit(1);
@@ -261,9 +284,22 @@ int main() {
             "nested repeated total-duration keeps total ticks");
     require(compiled[i].totalDurationGroupStart == 0,
             "nested repeated total-duration starts at first child");
-    require(compiled[i].totalDurationGroupEnd == 4,
+    require(compiled[i].totalDurationGroupEnd == 6,
             "nested repeated total-duration ends after final child");
   }
+
+  const char* manualExamples[] = {
+    "120bpm", "2hz", "500ms", ".5s", "2min", "1:30min", "120",
+    "300ms 400ms 500ms", "[300 400 500]ms", "[300ms 2hz]s",
+    "(.5 .7 (.3 .4))s", "((1 2) (3 4 5))s", "500ms (300ms 400ms)",
+    "120bpm@4", "120bpm@2s", "120bpm@{2|4|8}", "120bpm@(2 4)",
+    "[300 400]ms@2", "500ms ~500ms", "~500ms@4", "~@2s",
+    "120bpm?75", "120bpm?75@4", "{90|120|150}bpm", "{90-150}bpm",
+    "{300ms|.5s|2hz}", "{2hz|~2hz}", "120bpm#8", "[300 400]ms#4s",
+    "120bpm#4x", "120bpm#{4|8}", "120bpm?75@2#4s", "x", "x@4",
+    "120bpm@4x", "[120 90]bpm#4x"
+  };
+  for (auto example : manualExamples) requireCompiles(example);
 
   BlunchProgramStep step;
   step.hasTotalDurationGroup = true;

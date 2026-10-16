@@ -22,7 +22,7 @@ def text(s,x,y,w,h,rand=25):
     xs=[p[0] for p in points];ys=[p[1] for p in points];bounds=(min(xs)-1,min(ys)-1,max(xs)-min(xs)+2,max(ys)-min(ys)+2)
     embed(root,x,y,min(w,h*bounds[2]/bounds[3]),h,bounds,'label-'+s.replace(' ','-'))
 # Perspective blocks are drawn by the procedural WarpedBlock component.
-text('Phlooper',16,5,144,24,48)
+text('Phlooper',16,5,119,24,48)
 for s,x in [('Start',22),('Length',74),('Offset',126),('Speed',178),('Rec mix',226),('Out mix',278)]:
     text(s,x,205 if s in ('Length','Speed') else 203,45,9 if s in ('Length','Speed') else 7)
 for s,x in [('L / mono',21),('R',67),('Out L',263),('Out R',291),('EOC',174),('Phase',201)]:text(s,x,360,40,5.5)
@@ -30,6 +30,7 @@ text('Gain',88,360,25,5.5)
 text('VCA',123,360,30,5.5)
 text('Gain',238,360,25,5.5)
 logo=E.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
-embed(logo,94,367,12,12,name='computerscare-logo')
-text('computerscare',111,371,160,7,47)
+embed(logo,141,7,17,21,name='computerscare-logo')
+logo_group=svg[-1]
+logo_group.set('transform','translate(149.5,17.5) rotate(-8) skewX(-6) translate(-149.5,-17.5) '+logo_group.get('transform'))
 E.indent(svg);E.ElementTree(svg).write(ROOT/'res/panels/ComputerscarePhlooperPanel.svg',encoding='utf-8',xml_declaration=True)

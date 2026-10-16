@@ -11,7 +11,17 @@ ComputerscareTextEditorMetrics getEditorMetrics(
   ComputerscareTextEditorMetrics metrics;
   metrics.visibleWidth = std::max(1.f, boxSize.x - 2.f * BND_TEXT_RADIUS);
   metrics.width = style.lineWrapping ? metrics.visibleWidth : 100000.f;
-  nvgTextMetrics(vg, NULL, &metrics.desc, &metrics.lineHeight);
+  float ascender = 0.f;
+  nvgTextMetrics(vg, &ascender, &metrics.desc, &metrics.lineHeight);
+  if (style.lineHeight > 0.f) {
+    float scaleY = std::max(.5f, 1.f + style.fontHeightOffset);
+    float rowTop = 2.f / scaleY;
+    metrics.lineHeight = style.lineHeight / scaleY;
+    metrics.baselineY =
+        rowTop + metrics.lineHeight * .5f + (ascender + metrics.desc) * .5f;
+    // Geometry uses desc to locate the row top, independent of glyph height.
+    metrics.desc = metrics.baselineY - metrics.lineHeight - rowTop;
+  }
   return metrics;
 }
 

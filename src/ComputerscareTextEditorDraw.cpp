@@ -11,6 +11,50 @@ enum HighlightDrawMode {
   HIGHLIGHT_BORDER,
   HIGHLIGHT_PROGRESS
 };
+void highlightBorderPath(NVGcontext* vg, float x, float y, float width,
+                         float height, float distortion, unsigned seed) {
+  if (distortion <= 0.f) {
+    nvgRoundedRect(vg, x, y, width, height, 2.f);
+    return;
+  }
+  float amount = std::min(distortion, std::min(width, height) * .08f);
+  auto jitter = [&](unsigned corner) {
+    unsigned bits = seed * 0x9e3779b9u + corner * 0x85ebca6bu;
+    bits ^= bits >> 16;
+    bits *= 0x7feb352du;
+    return (float(bits & 1023u) / 1023.f - .5f) * amount * 2.f;
+  };
+  Vec corners[] = {Vec(x + jitter(0), y + jitter(1)),
+                   Vec(x + width + jitter(2), y + jitter(3)),
+                   Vec(x + width + jitter(4), y + height + jitter(5)),
+                   Vec(x + jitter(6), y + height + jitter(7))};
+  bool curved = jitter(17) > 0.f;
+  if (curved) {
+    Vec entry[4], exit[4];
+    for (int i = 0; i < 4; ++i) {
+      entry[i] =
+          corners[i].plus(corners[(i + 3) % 4].minus(corners[i]).mult(.12f));
+      exit[i] =
+          corners[i].plus(corners[(i + 1) % 4].minus(corners[i]).mult(.12f));
+    }
+    nvgMoveTo(vg, entry[0].x, entry[0].y);
+    for (int i = 0; i < 4; ++i) {
+      nvgQuadTo(vg, corners[i].x, corners[i].y, exit[i].x, exit[i].y);
+      Vec edge = entry[(i + 1) % 4].minus(exit[i]);
+      float length = std::max(.01f, edge.norm());
+      Vec bend = Vec(-edge.y, edge.x).mult(jitter(20 + i) / length);
+      Vec first = exit[i].plus(edge.mult(1.f / 3.f)).plus(bend);
+      Vec second = exit[i].plus(edge.mult(2.f / 3.f)).plus(bend);
+      Vec end = entry[(i + 1) % 4];
+      nvgBezierTo(vg, first.x, first.y, second.x, second.y, end.x, end.y);
+    }
+  } else {
+    nvgMoveTo(vg, corners[0].x, corners[0].y);
+    for (int i = 1; i < 4; ++i) nvgLineTo(vg, corners[i].x, corners[i].y);
+  }
+  nvgClosePath(vg);
+  nvgLineJoin(vg, curved ? NVG_ROUND : NVG_MITER);
+}
 }  // namespace
 
 void ComputerscareTextEditor::draw(const DrawArgs& args) {
@@ -160,8 +204,26 @@ void ComputerscareTextEditor::drawEditorText(const DrawArgs& args) {
         if (row.end <= row.begin) {
           continue;
         }
+        bool italic = false;
+        float textOpacity = 1.f;
+        if (state)
+          for (const auto& highlight : state->highlights) {
+            if (highlight.begin < row.end && highlight.end > row.begin) {
+              italic = italic || highlight.italic;
+              textOpacity = std::min(textOpacity, highlight.textOpacity);
+            }
+          }
+        nvgSave(args.vg);
+        NVGcolor textColor = style.textColor;
+        textColor.a *= std::max(0.f, std::min(1.f, textOpacity));
+        nvgFillColor(args.vg, textColor);
+        // Lean the glyphs around their baseline without changing caret
+        // advances.
+        if (italic)
+          nvgTransform(args.vg, 1.f, 0.f, -.18f, 1.f, .18f * row.y, 0.f);
         nvgText(args.vg, layout.metrics.textX, row.y, text.c_str() + row.begin,
                 text.c_str() + row.end);
+        nvgRestore(args.vg);
       }
     } else if (!placeholder.empty()) {
       nvgFillColor(args.vg, style.placeholderColor);
@@ -203,7 +265,7 @@ void ComputerscareTextEditor::drawHighlightDecorations(const DrawArgs& args) {
 }
 
 void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
-  if (this != APP->event->selectedWidget || cursor != selection) {
+  if (hideCursor || this != APP->event->selectedWidget || cursor != selection) {
     return;
   }
 
@@ -288,6 +350,15 @@ void ComputerscareTextEditor::drawHighlightSpan(
                      layout.metrics.lineHeight + 1.f, 2.f);
       nvgFillColor(args.vg, highlight.background);
       nvgFill(args.vg);
+    } else if (mode == HIGHLIGHT_BORDER) {
+      nvgBeginPath(args.vg);
+      highlightBorderPath(args.vg, layout.metrics.textX - 2.5f, topY + .5f,
+                          layout.metrics.visibleWidth + 5.f,
+                          layout.metrics.lineHeight - .5f,
+                          highlight.borderDistortion, unsigned(begin));
+      nvgStrokeColor(args.vg, highlight.border);
+      nvgStrokeWidth(args.vg, highlight.borderWidth);
+      nvgStroke(args.vg);
     }
     nvgRestore(args.vg);
     bndSetFont(APP->window->uiFont->handle);
@@ -330,10 +401,11 @@ void ComputerscareTextEditor::drawHighlightSpan(
         nvgFill(args.vg);
       } else if (mode == HIGHLIGHT_BORDER) {
         nvgBeginPath(args.vg);
-        nvgRoundedRect(args.vg, startX - 1.5f, topY + 0.5f, endX - startX + 3.f,
-                       bottomY - topY - 0.5f, 2.f);
+        highlightBorderPath(args.vg, startX - 1.5f, topY + .5f,
+                            endX - startX + 3.f, bottomY - topY - .5f,
+                            highlight.borderDistortion, unsigned(begin));
         nvgStrokeColor(args.vg, highlight.border);
-        nvgStrokeWidth(args.vg, 1.2f);
+        nvgStrokeWidth(args.vg, highlight.borderWidth);
         nvgStroke(args.vg);
       } else if (mode == HIGHLIGHT_PROGRESS) {
         float progress = std::max(0.f, std::min(highlight.progress, 1.f));
@@ -398,10 +470,11 @@ void ComputerscareTextEditor::drawHighlightSpan(
       nvgFill(args.vg);
     } else if (mode == HIGHLIGHT_BORDER) {
       nvgBeginPath(args.vg);
-      nvgRoundedRect(args.vg, startX - 1.5f, topY + 0.5f, endX - startX + 3.f,
-                     layout.metrics.lineHeight, 2.f);
+      highlightBorderPath(args.vg, startX - 1.5f, topY + .5f,
+                          endX - startX + 3.f, layout.metrics.lineHeight,
+                          highlight.borderDistortion, unsigned(begin));
       nvgStrokeColor(args.vg, highlight.border);
-      nvgStrokeWidth(args.vg, 1.2f);
+      nvgStrokeWidth(args.vg, highlight.borderWidth);
       nvgStroke(args.vg);
     } else if (mode == HIGHLIGHT_PROGRESS) {
       float progress = std::max(0.f, std::min(highlight.progress, 1.f));

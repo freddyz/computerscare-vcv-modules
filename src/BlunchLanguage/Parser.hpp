@@ -9,8 +9,10 @@
 namespace blunch {
 namespace language {
 
-ParseResult parseClockLiteral(const std::string& source);
-ParseResult parseClockLiteral(const std::vector<Token>& tokens);
+ParseResult parseClockLiteral(const std::string& source,
+                              ClockUnit defaultUnit = ClockUnit::Bpm);
+ParseResult parseClockLiteral(const std::vector<Token>& tokens,
+                              ClockUnit defaultUnit = ClockUnit::Bpm);
 ClockUnit parseClockUnit(const std::string& unit);
 
 }  // namespace language

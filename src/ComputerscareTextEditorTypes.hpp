@@ -18,6 +18,10 @@ struct ComputerscareTextHighlight {
   bool hasBorder = false;
   bool hasProgress = false;
   bool fullLine = false;
+  bool italic = false;
+  float textOpacity = 1.f;
+  float borderWidth = 1.2f;
+  float borderDistortion = 0.f;
   float progress = 0.f;
   int progressSegments = 0;
 };
@@ -64,5 +68,8 @@ struct ComputerscareTextEditorStyle {
   float fontWidthOffset = 0.f;
   float fontHeightOffset = 0.f;
   float letterSpacing = 0.f;
+  // Physical pixels, independent of font scaling. Zero retains font-based
+  // spacing.
+  float lineHeight = 0.f;
   bool lineWrapping = true;
 };

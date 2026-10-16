@@ -279,7 +279,8 @@ run_tests() {
   /tmp/cs_blunch_keyboard_shortcuts_test
   g++ -std=c++11 -I src tests/blunch_editor_views_test.cpp src/Blunch/BlunchEditorViews.cpp -o /tmp/cs_blunch_editor_views_test
   /tmp/cs_blunch_editor_views_test
-  g++ -std=c++11 -I src tests/blunch_language_test.cpp src/Blunch/BlunchRandomProgram.cpp src/BlunchLanguage/Tokenizer.cpp src/BlunchLanguage/Parser.cpp src/BlunchLanguage/Evaluator.cpp -o /tmp/cs_blunch_language_test
+  python3 scripts/generate-blunch-random-test-fixture.py /tmp/cs_blunch_random_fixture.hpp
+  g++ -std=c++11 -I src -include /tmp/cs_blunch_random_fixture.hpp tests/blunch_language_test.cpp src/Blunch/BlunchRandomProgram.cpp src/BlunchLanguage/Tokenizer.cpp src/BlunchLanguage/Parser.cpp src/BlunchLanguage/Evaluator.cpp -o /tmp/cs_blunch_language_test
   /tmp/cs_blunch_language_test
   g++ -std=c++11 -I src tests/text_editor_undo_test.cpp -o /tmp/cs_text_editor_undo_test
   /tmp/cs_text_editor_undo_test

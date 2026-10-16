@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "../Computerscare.hpp"
 
 namespace phlooper {
@@ -9,6 +11,7 @@ struct WarpedBlock : widget::TransparentWidget {
   float depth = 4.f;
   float screwup = 1.f;
   unsigned shapeSeed = 1;
+  std::array<Vec, 4> cornerOffsets{};
   NVGcolor faceColor = nvgRGB(222, 222, 222);
 
   void configure(Rect bounds, float thickness, float distortion, unsigned seed,
@@ -18,6 +21,7 @@ struct WarpedBlock : widget::TransparentWidget {
     screwup = distortion;
     shapeSeed = seed;
     faceColor = color;
+    cornerOffsets = {};
   }
 
   void draw(const DrawArgs& args) override {
@@ -35,7 +39,9 @@ struct WarpedBlock : widget::TransparentWidget {
                    Vec(margin, box.size.y - d * .65f - margin)};
     Vec back[4];
     for (int i = 0; i < 4; ++i) {
-      face[i] = face[i].plus(Vec(jitter(i * 2), jitter(i * 2 + 1)));
+      face[i] = face[i]
+                    .plus(Vec(jitter(i * 2), jitter(i * 2 + 1)))
+                    .plus(cornerOffsets[i]);
       back[i] = face[i].plus(Vec(d, d * .65f));
     }
     auto quad = [&](Vec a, Vec b, Vec c, Vec e, NVGcolor color) {

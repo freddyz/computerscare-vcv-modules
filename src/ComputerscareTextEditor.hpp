@@ -15,6 +15,7 @@ struct ComputerscareTextEditor : ui::TextField {
   bool openOnEnter = false;
   bool stopShortcutEnabled = false;
   bool readOnly = false;
+  bool hideCursor = false;
 
   ComputerscareTextEditor();
 

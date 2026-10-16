@@ -26,4 +26,28 @@ inline float zoomPoint(float position, TimeRange range) {
   if (range.start == 0.f && range.end == 1.f) return position;
   return position + std::round((range.start + range.end) * .5f - position);
 }
+// Keep the opposite point fixed and prevent crossing or exceeding storage.
+inline TimeRange dragLoopPoint(TimeRange region, bool startPoint, float delta,
+                               float minimumLength, float maximumLength) {
+  float length =
+      std::max(minimumLength,
+               std::min(maximumLength, region.end - region.start +
+                                           (startPoint ? -delta : delta)));
+  return startPoint ? TimeRange(region.end - length, region.end)
+                    : TimeRange(region.start, region.start + length);
+}
+inline float controlOffset(int voice, int mode, bool hold, float knob,
+                           int channels, float voltage) {
+  float spacing = hold ? 0.f : voice * knob * (mode == 0 ? 5.f : 1.f);
+  float cv = std::max(-1.f, std::min(1.f, voltage / 10.f)) *
+             (mode == 0 ? 100.f : 20.f);
+  if (channels == 1) return spacing + cv;
+  return voice < channels ? cv : spacing;
+}
+// Shift a whole region together; never wrap its end independently of its start.
+inline float loopRegionPoint(float start, float point, TimeRange range) {
+  float shift =
+      range.end - range.start < 1.f ? zoomPoint(start, range) - start : 0.f;
+  return point + shift;
+}
 }  // namespace phlooper

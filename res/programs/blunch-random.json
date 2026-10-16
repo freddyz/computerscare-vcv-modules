@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "startup": "(repeat \"(ref line)\" (wpick 6 1 4 2 2 3 1 4) \"\\n\")",
+  "randomize": "(ref line)",
+  "definitions": {
+    "tempo": "(nrange 50 180)",
+    "repeats": "(pick 2 3 4 6 8)",
+    "clock": [
+      { "weight": 8, "template": "(ref tempo)bpm" },
+      { "weight": 3, "template": "(frange 0.84 3 2)hz" },
+      { "weight": 3, "template": "(nrange 333 1000)ms" },
+      { "weight": 1, "template": "(frange 1 1.2 2)s" },
+      { "weight": 0.15, "template": "(nrange 2 8)s" }
+    ],
+    "line": [
+      { "weight": 12, "template": "(ref clock)" },
+      { "weight": 3, "template": "[(ref tempo) (ref tempo)]bpm" },
+      { "weight": 3, "template": "[(nrange 333 1000) (nrange 333 1000)]ms" },
+      { "weight": 1, "template": "(ref clock)@(ref repeats)" },
+      { "weight": 1, "template": "{(ref tempo)|(ref tempo)}bpm" }
+    ]
+  }
+}

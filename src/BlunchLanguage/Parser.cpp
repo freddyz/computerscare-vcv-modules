@@ -93,13 +93,8 @@ void applyUnitToUnitlessBlock(ClockBlockAst& block, ClockUnit unit,
   }
 }
 
-std::vector<ClockBlockAst> interleaveBlocks(
-    const std::vector<ClockBlockAst>& left,
-    const std::vector<ClockBlockAst>& right) {
-  std::vector<std::vector<ClockBlockAst>> lanes;
-  lanes.push_back(left);
-  lanes.push_back(right);
-
+std::vector<ClockBlockAst> interleaveLanes(
+    const std::vector<std::vector<ClockBlockAst>>& lanes) {
   std::vector<ClockBlockAst> output;
   std::vector<size_t> indices(lanes.size(), 0);
   size_t laneIndex = 0;
@@ -122,9 +117,16 @@ std::vector<ClockBlockAst> interleaveBlocks(
   return output;
 }
 
+std::vector<ClockBlockAst> interleaveBlocks(
+    const std::vector<ClockBlockAst>& left,
+    const std::vector<ClockBlockAst>& right) {
+  return interleaveLanes({left, right});
+}
+
 class Parser {
  public:
-  explicit Parser(const std::vector<Token>& tokens) : tokens(tokens) {}
+  explicit Parser(const std::vector<Token>& tokens, ClockUnit defaultUnit)
+      : tokens(tokens), defaultUnit(defaultUnit) {}
 
   ParseResult parse() {
     ParseResult result;
@@ -151,6 +153,7 @@ class Parser {
 
  private:
   const std::vector<Token>& tokens;
+  ClockUnit defaultUnit;
   size_t current = 0;
   int nextTotalDurationGroupId = 0;
 
@@ -381,7 +384,7 @@ class Parser {
       block.range.begin = begin;
       block.range.end = end;
       block.literal.kind = ClockLiteralKind::RandomRange;
-      block.literal.unit = ClockUnit::Bpm;
+      block.literal.unit = defaultUnit;
       block.literal.range.begin = begin;
       block.literal.range.end = end;
       for (size_t laneIndex = 0; laneIndex < lanes.size(); laneIndex++) {
@@ -598,18 +601,18 @@ class Parser {
 
       if (!lane.empty()) {
         lanes.push_back(lane);
-        for (size_t i = 0; i < lane.size(); i++) {
-          sequence.push_back(lane[i]);
-        }
       }
     }
+    // Each direct child is a lane; short lanes wrap while longer lanes advance.
+    sequence = interleaveLanes(lanes);
   }
 
   std::vector<ClockBlockAst> parseParenthesizedSequenceLane(
       ParseResult& result) {
     Token leftParen = advance();
     std::vector<ClockBlockAst> lane;
-    parseSequenceUntil(result, lane, TokenType::RightParen);
+    std::vector<std::vector<ClockBlockAst>> lanes;
+    parseInterleaveContent(result, lane, lanes);
 
     Token rightParen;
     if (peek().type == TokenType::RightParen) {
@@ -805,7 +808,7 @@ class Parser {
                                       const Token& valueToken) {
     ClockLiteralAst ast;
     ast.kind = ClockLiteralKind::Numeric;
-    ast.unit = ClockUnit::Bpm;
+    ast.unit = defaultUnit;
     ast.value = parseDouble(valueToken.lexeme);
     ast.valueLexeme = valueToken.lexeme;
     ast.range.begin = valueToken.begin;
@@ -819,7 +822,7 @@ class Parser {
     Token leftBrace = advance();
     ClockLiteralAst ast;
     ast.kind = ClockLiteralKind::RandomRange;
-    ast.unit = ClockUnit::Bpm;
+    ast.unit = defaultUnit;
     ast.range.begin = leftBrace.begin;
 
     while (!isAtEnd() && peek().type != TokenType::RightBrace) {
@@ -1638,12 +1641,14 @@ class Parser {
 };
 }  // namespace
 
-ParseResult parseClockLiteral(const std::string& source) {
-  return parseClockLiteral(tokenize(source));
+ParseResult parseClockLiteral(const std::string& source,
+                              ClockUnit defaultUnit) {
+  return parseClockLiteral(tokenize(source), defaultUnit);
 }
 
-ParseResult parseClockLiteral(const std::vector<Token>& tokens) {
-  Parser parser(tokens);
+ParseResult parseClockLiteral(const std::vector<Token>& tokens,
+                              ClockUnit defaultUnit) {
+  Parser parser(tokens, defaultUnit);
   return parser.parse();
 }
 
