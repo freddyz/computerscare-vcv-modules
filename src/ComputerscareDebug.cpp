@@ -1357,12 +1357,12 @@ struct ComputerscareDebugWidget : ModuleWidget {
     setPanel(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/panels/ComputerscareDebugPanel.svg")));
 
-    addInput(createInput<InPort>(Vec(2, 339), module,
-                                 ComputerscareDebug::TRG_INPUT));
-    addInput(createInput<InPort>(Vec(61, 339), module,
-                                 ComputerscareDebug::VAL_INPUT));
-    addInput(createInput<InPort>(Vec(31, 339), module,
-                                 ComputerscareDebug::CLR_INPUT));
+    addInput(createInput<JackLargePointingDown>(Vec(2, 339), module,
+                                                ComputerscareDebug::TRG_INPUT));
+    addInput(createInput<JackLargePointingDown>(Vec(61, 339), module,
+                                                ComputerscareDebug::VAL_INPUT));
+    addInput(createInput<JackLargePointingDown>(Vec(31, 339), module,
+                                                ComputerscareDebug::CLR_INPUT));
 
     addParam(createParam<ComputerscareClockButton>(
         Vec(2, 325), module, ComputerscareDebug::MANUAL_TRIGGER));
@@ -1398,8 +1398,8 @@ struct ComputerscareDebugWidget : ModuleWidget {
     inputKnob->hackIndex = 1;
     addParam(inputKnob);
 
-    addOutput(createOutput<OutPort>(Vec(56, 1), module,
-                                    ComputerscareDebug::POLY_OUTPUT));
+    addOutput(createOutput<JackLargeOutlinePointingUp>(
+        Vec(56, 1), module, ComputerscareDebug::POLY_OUTPUT));
 
     for (int i = 0; i < 16; i++) {
       ConnectedSmallLetter* sld = new ConnectedSmallLetter(i);

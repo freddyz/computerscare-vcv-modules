@@ -280,6 +280,23 @@ int main(int argc, char** argv) {
     plugin.path = argv[1];
     plugin.slug = "computerscare";
     pluginInstance = &plugin;
+    if (std::getenv("JACK_PREVIEW_CHECKS")) {
+      std::unique_ptr<widget::Widget> jacks[] = {
+          std::unique_ptr<widget::Widget>(new JackSmallPointingUp),
+          std::unique_ptr<widget::Widget>(new JackSmallPointingDown),
+          std::unique_ptr<widget::Widget>(new JackLargePointingUp),
+          std::unique_ptr<widget::Widget>(new JackLargePointingDown),
+          std::unique_ptr<widget::Widget>(new JackLargeOutlinePointingUp),
+          std::unique_ptr<widget::Widget>(new JackLargeOutlinePointingDown)};
+      const Vec sizes[] = {Vec(16, 16), Vec(16, 16), Vec(27, 29),
+                           Vec(27, 29), Vec(32, 34), Vec(32, 34)};
+      for (int i = 0; i < 6; ++i)
+        if (std::fabs(jacks[i]->box.size.x - sizes[i].x) > .01f ||
+            std::fabs(jacks[i]->box.size.y - sizes[i].y) > .01f)
+          throw std::runtime_error(
+              "Jack artwork did not load at its original size");
+      std::puts("All six jack variants load at their expected sizes");
+    }
     modelPhlooperPreview->plugin = &plugin;
     if (argc >= 6 && std::string(argv[5]) == "browser") {
       plugin::Model* browserModel = modelPhlooperPreview;
@@ -287,6 +304,12 @@ int main(int argc, char** argv) {
         browserModel = modelBlunchPreview;
       if (argc == 7 && std::string(argv[6]) == "windchimes")
         browserModel = modelComputerscareWindchimes;
+      if (argc == 7 && std::string(argv[6]) == "mely-porge")
+        browserModel = modelComputerscareMelyPorge;
+      if (argc == 7 && std::string(argv[6]) == "voly-pector")
+        browserModel = modelComputerscareVolyPector;
+      if (argc == 7 && std::string(argv[6]) == "laundry-soup")
+        browserModel = modelComputerscareLaundrySoup;
       browserModel->plugin = &plugin;
       if (browserModel == modelComputerscareWindchimes &&
           std::getenv("WINDCHIMES_PREVIEW_CHECKS"))

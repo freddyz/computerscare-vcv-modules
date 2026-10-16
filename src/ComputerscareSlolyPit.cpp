@@ -2193,10 +2193,10 @@ struct ComputerscareSlolyPitWidget : ModuleWidget {
       addChild(panel);
     }
 
-    addInput(createInput<InPort>(Vec(4, 31), module,
-                                 ComputerscareSlolyPit::POLY_INPUT));
-    addInput(createInput<TinyJack>(Vec(31, 25), module,
-                                   ComputerscareSlolyPit::RANDOMIZE_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        Vec(4, 31), module, ComputerscareSlolyPit::POLY_INPUT));
+    addInput(createInput<JackSmallPointingUp>(
+        Vec(31, 25), module, ComputerscareSlolyPit::RANDOMIZE_INPUT));
     SlolyPitModeButton* modeButton = createParam<SlolyPitModeButton>(
         Vec(33, 43), module, ComputerscareSlolyPit::MODE_BUTTON_PARAM);
     modeButton->slolyPit = module;
@@ -2205,9 +2205,9 @@ struct ComputerscareSlolyPitWidget : ModuleWidget {
     addChild(new SlolyPitOutputLabels(module));
 
     for (int i = 0; i < 16; i++) {
-      addOutput(
-          createOutput<TinyJack>(Vec(41, 64 + i * 19), module,
-                                 ComputerscareSlolyPit::CHANNEL_OUTPUT + i));
+      addOutput(createOutput<JackSmallPointingUp>(
+          Vec(41, 64 + i * 19), module,
+          ComputerscareSlolyPit::CHANNEL_OUTPUT + i));
     }
   }
 

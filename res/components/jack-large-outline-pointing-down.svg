@@ -1,0 +1,21 @@
+<?xml version='1.0' encoding='utf-8'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ns1="http://www.inkscape.org/namespaces/inkscape" xmlns:ns2="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:ns4="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" width="32" height="34" viewBox="0 0 8.4666666 8.9958332" version="1.1" id="svg4524" ns1:version="0.92.2 5c3e80d, 2017-08-06" ns2:docname="computerscare-pentagon-jack-1-outline-flipped.svg">
+  <defs id="defs4518">
+    <ns1:perspective ns2:type="inkscape:persp3d" ns1:vp_x="0 : 99.999997 : 1" ns1:vp_y="0 : 999.99997 : 0" ns1:vp_z="200 : 99.999997 : 1" ns1:persp3d-origin="99.999998 : 66.666666 : 1" id="perspective5087" />
+  </defs>
+  <ns2:namedview id="base" pagecolor="#ffffff" bordercolor="#666666" borderopacity="1.0" ns1:pageopacity="0.0" ns1:pageshadow="2" ns1:zoom="15.839192" ns1:cx="17.38478" ns1:cy="14.146193" ns1:document-units="mm" ns1:current-layer="layer1" showgrid="false" ns1:window-width="1440" ns1:window-height="855" ns1:window-x="0" ns1:window-y="1" ns1:window-maximized="1" units="px" />
+  <metadata id="metadata4521">
+    <rdf:RDF>
+      <ns4:Work rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title />
+      </ns4:Work>
+    </rdf:RDF>
+  </metadata>
+  <g transform="translate(8.4666666,8.9958332) rotate(180)"><g ns1:label="Layer 1" ns1:groupmode="layer" id="layer1" transform="translate(0,-288.00418)" style="display:inline">
+    <path style="fill:#eaeaea;fill-opacity:1;stroke:#000000;stroke-width:0.235;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" ns1:transform-center-y="-0.32699901" d="m 4.2550057,289.04768 -3.25680009,2.36619 1.24398689,3.82863 H 6.267819 l 1.2439871,-3.82863 z" id="path5105" ns1:connector-curvature="0" />
+    <path style="fill:#000000;fill-opacity:1;stroke:#198c73;stroke-width:0.44999999;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" d="m 6.3492468,292.70726 a 2.094241,2.094241 0 0 0 -2.0942411,-2.09425 2.094241,2.094241 0 0 0 -2.094241,2.09425 2.094241,2.094241 0 0 0 2.094241,2.09424 2.094241,2.094241 0 0 0 2.0942411,-2.09424 z" id="path5129" ns1:connector-curvature="0" />
+    <path ns1:connector-curvature="0" id="path894" d="m 4.2609653,288.31605 -3.98869272,2.89794 1.52354502,4.68902 h 4.9302956 l 1.5235452,-4.68902 z" ns1:transform-center-y="-0.40048513" style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:0.368;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+  </g>
+</g></svg>

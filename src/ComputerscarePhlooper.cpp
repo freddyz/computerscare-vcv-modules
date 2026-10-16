@@ -15,14 +15,6 @@
 #include "Phlooper/Waveform.hpp"
 #include "Phlooper/Zoom.hpp"
 
-struct PhlooperRightOutputPort : ComputerscareSvgPort {
-  PhlooperRightOutputPort() {
-    setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance,
-        "res/components/computerscare-pentagon-jack-1-outline.svg")));
-  }
-};
-
 struct PhlooperRecordMixQuantity : ParamQuantity {
   std::string getDisplayValueString() override;
   std::string getUnit() override { return ""; }
@@ -2103,8 +2095,8 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       b->face.shapeSeed = unsigned(i + 4);
       addParam(b);
       if (i < 6)
-        addInput(
-            createInputCentered<InPort>(Vec(x, 290), module, controlInputs[i]));
+        addInput(createInputCentered<JackLargePointingDown>(Vec(x, 290), module,
+                                                            controlInputs[i]));
     }
     auto* recordIndicator = new PhlooperRecordIndicator;
     recordIndicator->module = module;
@@ -2115,26 +2107,26 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         ComputerscarePhlooper::OFFSET_CV,  ComputerscarePhlooper::SPEED_CV,
         ComputerscarePhlooper::REC_MIX_CV, ComputerscarePhlooper::OUT_MIX_CV};
     for (int i = 0; i < 6; ++i)
-      addInput(createInputCentered<InPort>(Vec(35 + i * 52, 227), module,
-                                           regionInputs[i]));
+      addInput(createInputCentered<JackLargePointingDown>(
+          Vec(35 + i * 52, 227), module, regionInputs[i]));
     addParam(createParamCentered<SmallKnob>(Vec(97, 347), module,
                                             ComputerscarePhlooper::INPUT_GAIN));
     addParam(createParamCentered<SmallKnob>(
         Vec(247, 347), module, ComputerscarePhlooper::OUTPUT_GAIN));
-    addInput(createInputCentered<InPort>(Vec(133, 347), module,
-                                         ComputerscarePhlooper::VCA_CV));
+    addInput(createInputCentered<JackLargePointingDown>(
+        Vec(133, 347), module, ComputerscarePhlooper::VCA_CV));
     const float inputX[] = {35.f, 70.f};
     const int audioInputs[] = {ComputerscarePhlooper::LEFT,
                                ComputerscarePhlooper::RIGHT};
     for (int i = 0; i < 2; ++i) {
       if (i == 1)
-        addInput(createInputCentered<PointingUpPentagonPort>(
+        addInput(createInputCentered<JackLargePointingUp>(
             Vec(inputX[i], 347), module, audioInputs[i]));
       else
-        addInput(createInputCentered<InPort>(Vec(inputX[i], 347), module,
-                                             audioInputs[i]));
+        addInput(createInputCentered<JackLargePointingDown>(
+            Vec(inputX[i], 347), module, audioInputs[i]));
     }
-    addOutput(createOutputCentered<PhlooperRightOutputPort>(
+    addOutput(createOutputCentered<JackLargePointingDown>(
         Vec(213, 347), module, ComputerscarePhlooper::PHASE));
     const float outputX[] = {275.f, 303.f, 184.f};
     const int audioOutputs[] = {ComputerscarePhlooper::OUT_L,
@@ -2142,10 +2134,10 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
                                 ComputerscarePhlooper::EOC};
     for (int i = 0; i < 3; ++i) {
       if (i == 1)
-        addOutput(createOutputCentered<PhlooperRightOutputPort>(
+        addOutput(createOutputCentered<JackLargePointingDown>(
             Vec(outputX[i], 347), module, audioOutputs[i]));
       else
-        addOutput(createOutputCentered<PointingUpPentagonPort>(
+        addOutput(createOutputCentered<JackLargePointingUp>(
             Vec(outputX[i], 347), module, audioOutputs[i]));
     }
   }

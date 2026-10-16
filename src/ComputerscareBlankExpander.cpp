@@ -285,22 +285,25 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
     addParam(
         createParam<ClockModeButton>(Vec(0.5, inStartY + .25 * dY), module,
                                      ComputerscareBlankExpander::CLOCK_MODE));
-    addInput(createInput<InPort>(Vec(2, inStartY + 0.75 * dY), module,
-                                 ComputerscareBlankExpander::SYNC_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        Vec(2, inStartY + 0.75 * dY), module,
+        ComputerscareBlankExpander::SYNC_INPUT));
 
     addParam(createParam<ComputerscareResetButton>(
         Vec(0, inStartY + 1.75 * dY), module,
         ComputerscareBlankExpander::MANUAL_RESET_BUTTON));
-    addInput(createInput<InPort>(Vec(2, inStartY + 2.25 * dY), module,
-                                 ComputerscareBlankExpander::RESET_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        Vec(2, inStartY + 2.25 * dY), module,
+        ComputerscareBlankExpander::RESET_INPUT));
 
     addParam(createParam<ComputerscareNextButton>(
         Vec(0, inStartY + 3.25 * dY), module,
         ComputerscareBlankExpander::MANUAL_NEXT_FILE_BUTTON));
-    addInput(createInput<InPort>(Vec(2, inStartY + 3.75 * dY), module,
-                                 ComputerscareBlankExpander::NEXT_FILE_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        Vec(2, inStartY + 3.75 * dY), module,
+        ComputerscareBlankExpander::NEXT_FILE_INPUT));
 
-    addOutput(createOutput<PointingUpPentagonPort>(
+    addOutput(createOutput<JackLargePointingUp>(
         Vec(2, 236), module, ComputerscareBlankExpander::EACH_FRAME_OUTPUT));
 
     frameOffsetKnob = createParam<FrameScrubKnob>(
@@ -308,7 +311,7 @@ struct ComputerscareBlankExpanderWidget : ModuleWidget {
     frameOffsetKnob->module = module;
 
     addParam(frameOffsetKnob);
-    addOutput(createOutput<PointingUpPentagonPort>(
+    addOutput(createOutput<JackLargePointingUp>(
         Vec(2, 320), module, ComputerscareBlankExpander::EOC_OUTPUT));
   }
   void step() { ModuleWidget::step(); }

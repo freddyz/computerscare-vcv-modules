@@ -373,38 +373,52 @@ struct ComputerscareSmallLight : BASE {
   ComputerscareSmallLight() { this->box.size = mm2px(Vec(3, 3)); }
 };
 
-struct OutPort : ComputerscareSvgPort {
-  OutPort() {
+// Appearance only: choose independently of input/output signal direction.
+// Outline variants add a second outer pentagon; regular variants use one
+// border.
+struct JackSmallPointingDown : ComputerscareSvgPort {
+  JackSmallPointingDown() {
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance,
-        "res/components/computerscare-pentagon-jack-1-outline-flipped.svg")));
-    // background->wrap();
+        pluginInstance, "res/components/jack-small-pointing-down.svg")));
   }
 };
-
-struct TinyJack : ComputerscareSvgPort {
-  TinyJack() {
+struct JackLargeOutlinePointingDown : ComputerscareSvgPort {
+  JackLargeOutlinePointingDown() {
     setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/components/tiny-jack.svg")));
+        asset::plugin(pluginInstance,
+                      "res/components/jack-large-outline-pointing-down.svg")));
+  }
+};
+
+struct JackLargeOutlinePointingUp : ComputerscareSvgPort {
+  JackLargeOutlinePointingUp() {
+    setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/jack-large-outline-pointing-up.svg")));
     // background->wrap();
   }
 };
 
-struct PointingUpPentagonPort : ComputerscareSvgPort {
-  PointingUpPentagonPort() {
+struct JackSmallPointingUp : ComputerscareSvgPort {
+  JackSmallPointingUp() {
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance,
-        "res/components/computerscare-pentagon-jack-pointing-up.svg")));
+        pluginInstance, "res/components/jack-small-pointing-up.svg")));
+    // background->wrap();
+  }
+};
+
+struct JackLargePointingUp : ComputerscareSvgPort {
+  JackLargePointingUp() {
+    setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/jack-large-pointing-up.svg")));
     // background->wrap();
     // box.size = background->box.size;
   }
 };
 
-struct InPort : ComputerscareSvgPort {
-  InPort() {
+struct JackLargePointingDown : ComputerscareSvgPort {
+  JackLargePointingDown() {
     setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance,
-        "res/components/computerscare-pentagon-jack-1-outline.svg")));
+        pluginInstance, "res/components/jack-large-pointing-down.svg")));
     // background->wrap();
     // box.size = background->box.size;
   }

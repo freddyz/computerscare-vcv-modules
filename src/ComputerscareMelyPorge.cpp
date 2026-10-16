@@ -554,7 +554,7 @@ struct MelyPorgeDisableableSmoothKnob : ComputerscareRoundKnob {
   }
 };
 
-struct MelyPorgeInsertPort : PointingUpPentagonPort {
+struct MelyPorgeInsertPort : JackLargePointingUp {
   int blockIndex = 0;
 
   void step() override {
@@ -573,7 +573,7 @@ struct MelyPorgeInsertPort : PointingUpPentagonPort {
       }
     }
 
-    PointingUpPentagonPort::step();
+    JackLargePointingUp::step();
   }
 };
 
@@ -1112,8 +1112,8 @@ struct ComputerscareMelyPorgeWidget : ModuleWidget {
 
     addChild(new PolyOutputChannelsWidget(
         Vec(119.f, 4.f), module, ComputerscareMelyPorge::POLY_CHANNELS));
-    addOutput(createOutput<InPort>(Vec(144.f, 3.f), module,
-                                   ComputerscareMelyPorge::POLY_OUTPUT));
+    addOutput(createOutput<JackLargePointingDown>(
+        Vec(144.f, 3.f), module, ComputerscareMelyPorge::POLY_OUTPUT));
 
     addMainInputRow(module, 20.f, 23.f);
 
@@ -1142,7 +1142,7 @@ struct ComputerscareMelyPorgeWidget : ModuleWidget {
   }
 
   void addMainInputRow(ComputerscareMelyPorge* module, float x, float y) {
-    addInput(createInput<PointingUpPentagonPort>(
+    addInput(createInput<JackLargePointingUp>(
         Vec(x, y), module, ComputerscareMelyPorge::POLY_INPUT));
     addParam(createParam<SmallKnob>(Vec(x + 38.f, y + 4.f), module,
                                     ComputerscareMelyPorge::GLOBAL_ATTEN));

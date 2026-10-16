@@ -349,8 +349,8 @@ struct StolyFickPigureWidget : ModuleWidget {
       addChild(display);
     }
 
-    addInput(createInput<PointingUpPentagonPort>(Vec(1, 353), module,
-                                                 StolyFickPigure::X_INPUT));
+    addInput(createInput<JackLargePointingUp>(Vec(1, 353), module,
+                                              StolyFickPigure::X_INPUT));
     addParam(
         createParam<SmallKnob>(Vec(31, 357), module, StolyFickPigure::TRIM));
     addParam(

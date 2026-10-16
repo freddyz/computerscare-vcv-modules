@@ -213,7 +213,7 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
         Vec(2, 8), module, ComputerscareRolyPouter::POLY_CHANNELS);
     addChild(channelWidget);
 
-    addInput(createInput<PointingUpPentagonPort>(
+    addInput(createInput<JackLargePointingUp>(
         Vec(22, 52), module, ComputerscareRolyPouter::ROUTING_CV));
 
     float xx;
@@ -224,9 +224,9 @@ struct ComputerscareRolyPouterWidget : ModuleWidget {
       addLabeledKnob(std::to_string(i + 1), xx, yy, module, i,
                      (i - i % 8) * 1.3 - 5, i < 8 ? 4 : 0);
     }
-    addInput(createInput<InPort>(Vec(1, 36), module,
-                                 ComputerscareRolyPouter::POLY_INPUT));
-    addOutput(createOutput<PointingUpPentagonPort>(
+    addInput(createInput<JackLargePointingDown>(
+        Vec(1, 36), module, ComputerscareRolyPouter::POLY_INPUT));
+    addOutput(createOutput<JackLargePointingUp>(
         Vec(32, 18), module, ComputerscareRolyPouter::POLY_OUTPUT));
   }
   void addLabeledKnob(std::string label, int x, int y,

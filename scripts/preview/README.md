@@ -51,3 +51,7 @@ Regenerate screenshots whenever requested; do not serve older captures. The comp
 
 For optional Windchimes trigger-routing integration checks, run
 `WINDCHIMES_PREVIEW_CHECKS=1 scripts/preview-module.sh windchimes --no-build`.
+
+Set `JACK_PREVIEW_CHECKS=1` when running a preview to verify that all six shared jack variants load at their expected dimensions. Jack names and artwork are listed in [Jack artwork](../../doc/development/jacks.md).
+
+For jack-style comparisons, browser previews also support `mely-porge`, `voly-pector`, and `laundry-soup`.

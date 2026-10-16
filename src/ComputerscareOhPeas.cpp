@@ -331,14 +331,15 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
     for (int i = 0; i < numChannels; i++) {
       xx = x + dx * i + randAmt * (2 * random::uniform() - .5);
       y += randAmt * (random::uniform() - .5);
-      addInput(createInput<InPort>(mm2px(Vec(xx, y - 0.8)), module,
-                                   ComputerscareOhPeas::CHANNEL_INPUT + i));
+      addInput(createInput<JackLargePointingDown>(
+          mm2px(Vec(xx, y - 0.8)), module,
+          ComputerscareOhPeas::CHANNEL_INPUT + i));
 
       addParam(createParam<SmallKnob>(mm2px(Vec(xx + 2, y + 34)), module,
                                       ComputerscareOhPeas::SCALE_TRIM + i));
 
-      addInput(createInput<InPort>(mm2px(Vec(xx, y + 40)), module,
-                                   ComputerscareOhPeas::SCALE_CV + i));
+      addInput(createInput<JackLargePointingDown>(
+          mm2px(Vec(xx, y + 40)), module, ComputerscareOhPeas::SCALE_CV + i));
 
       addParam(createParam<SmoothKnob>(mm2px(Vec(xx, y + 50)), module,
                                        ComputerscareOhPeas::SCALE_VAL + i));
@@ -347,18 +348,19 @@ struct ComputerscareOhPeasWidget : ModuleWidget {
           mm2px(Vec(xx + 2, y + 64)), module,
           ComputerscareOhPeas::OFFSET_TRIM + i));
 
-      addInput(createInput<InPort>(mm2px(Vec(xx, y + 70)), module,
-                                   ComputerscareOhPeas::OFFSET_CV + i));
+      addInput(createInput<JackLargePointingDown>(
+          mm2px(Vec(xx, y + 70)), module, ComputerscareOhPeas::OFFSET_CV + i));
 
       addParam(createParam<SmoothKnob>(mm2px(Vec(xx, y + 80)), module,
                                        ComputerscareOhPeas::OFFSET_VAL + i));
 
-      addOutput(createOutput<OutPort>(mm2px(Vec(xx, y + 93)), module,
-                                      ComputerscareOhPeas::SCALED_OUTPUT + i));
+      addOutput(createOutput<JackLargeOutlinePointingUp>(
+          mm2px(Vec(xx, y + 93)), module,
+          ComputerscareOhPeas::SCALED_OUTPUT + i));
 
-      addOutput(
-          createOutput<InPort>(mm2px(Vec(xx + 1, y + 108)), module,
-                               ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
+      addOutput(createOutput<JackLargePointingDown>(
+          mm2px(Vec(xx + 1, y + 108)), module,
+          ComputerscareOhPeas::QUANTIZED_OUTPUT + i));
     }
     peas = module;
   }

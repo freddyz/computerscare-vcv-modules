@@ -427,8 +427,8 @@ struct FolyPaceWidget : ModuleWidget {
       addChild(display);
     }
 
-    addInput(createInput<PointingUpPentagonPort>(Vec(1, 353), module,
-                                                 FolyPace::X_INPUT));
+    addInput(createInput<JackLargePointingUp>(Vec(1, 353), module,
+                                              FolyPace::X_INPUT));
     addParam(createParam<SmallKnob>(Vec(31, 357), module, FolyPace::TRIM));
     addParam(createParam<SmoothKnob>(Vec(51, 353), module, FolyPace::OFFSET));
     addParam(

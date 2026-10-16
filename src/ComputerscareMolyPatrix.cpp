@@ -289,13 +289,13 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
 
     float inX = 28;
 
-    addInput(createInput<PointingUpPentagonPort>(
+    addInput(createInput<JackLargePointingUp>(
         Vec(inX + 0, 12), module, ComputerscareMolyPatrix::POLY_INPUT));
     addKnob(inX + 28, 12, module, ComputerscareMolyPatrix::INPUT_TRIM, 0, 0, 1,
             0);
-    addInput(
-        createInput<TinyJack>(Vec(inX + 41, 25), module,
-                              ComputerscareMolyPatrix::INPUT_ATTENUATION_CV));
+    addInput(createInput<JackSmallPointingUp>(
+        Vec(inX + 41, 25), module,
+        ComputerscareMolyPatrix::INPUT_ATTENUATION_CV));
 
     inputOffsetKnob = createParam<SmoothKnobNoRandom>(
         Vec(inX + 58, 14), module, ComputerscareMolyPatrix::INPUT_OFFSET);
@@ -320,9 +320,9 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
 
     addKnob(outX + 0, 1, module, ComputerscareMolyPatrix::OUTPUT_TRIM, 0, 0, 1,
             0);
-    addInput(
-        createInput<TinyJack>(Vec(outX + 10, 15), module,
-                              ComputerscareMolyPatrix::OUTPUT_ATTENUATION_CV));
+    addInput(createInput<JackSmallPointingUp>(
+        Vec(outX + 10, 15), module,
+        ComputerscareMolyPatrix::OUTPUT_ATTENUATION_CV));
 
     outputOffsetKnob = createParam<SmoothKnobNoRandom>(
         Vec(outX + 28, 4), module, ComputerscareMolyPatrix::OUTPUT_OFFSET);
@@ -333,8 +333,8 @@ struct ComputerscareMolyPatrixWidget : ModuleWidget {
         Vec(outX + 55, 1), module, ComputerscareMolyPatrix::POLY_CHANNELS);
     addChild(channelWidget);
 
-    addOutput(createOutput<InPort>(Vec(outX + 80, 1), module,
-                                   ComputerscareMolyPatrix::POLY_OUTPUT));
+    addOutput(createOutput<JackLargePointingDown>(
+        Vec(outX + 80, 1), module, ComputerscareMolyPatrix::POLY_OUTPUT));
   }
 
   void randomizePreviewKnob(ComputerscareRoundKnob* previewKnob) {

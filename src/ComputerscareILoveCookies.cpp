@@ -585,11 +585,11 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
         inputindex = numInputColumns * k + m;
 
         if (m % 2) {
-          addInput(createInput<InPort>(
+          addInput(createInput<JackLargePointingDown>(
               mm2px(Vec(inputPosX, inputPosY)), module,
               ComputerscareILoveCookies::SIGNAL_INPUT + inputindex));
         } else {
-          addInput(createInput<PointingUpPentagonPort>(
+          addInput(createInput<JackLargePointingUp>(
               mm2px(Vec(inputPosX, inputPosY)), module,
               ComputerscareILoveCookies::SIGNAL_INPUT + inputindex));
         }
@@ -606,14 +606,14 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
     }
 
     // global clock input
-    addInput(
-        createInput<InPort>(mm2px(Vec(2 + xStart, 0)), module,
-                            ComputerscareILoveCookies::GLOBAL_CLOCK_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        mm2px(Vec(2 + xStart, 0)), module,
+        ComputerscareILoveCookies::GLOBAL_CLOCK_INPUT));
 
     // global reset input
-    addInput(
-        createInput<InPort>(mm2px(Vec(12 + xStart, 0)), module,
-                            ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        mm2px(Vec(12 + xStart, 0)), module,
+        ComputerscareILoveCookies::GLOBAL_RESET_INPUT));
     addParam(createParam<ComputerscareResetButton>(
         mm2px(Vec(12 + xStart, 9)), module,
         ComputerscareILoveCookies::MANUAL_RESET_PARAM));
@@ -623,22 +623,22 @@ struct ComputerscareILoveCookiesWidget : ModuleWidget {
 
     for (int i = 0; i < numFields; i++) {
       // first-step output
-      addOutput(createOutput<OutPort>(
+      addOutput(createOutput<JackLargeOutlinePointingUp>(
           mm2px(Vec(42 + xStart, verticalStart + verticalSpacing * i - 11)),
           module, ComputerscareILoveCookies::FIRST_STEP_OUTPUT + i));
 
       // individual output
-      addOutput(createOutput<OutPort>(
+      addOutput(createOutput<JackLargeOutlinePointingUp>(
           mm2px(Vec(54 + xStart, verticalStart + verticalSpacing * i - 11)),
           module, ComputerscareILoveCookies::TRG_OUTPUT + i));
 
       // individual clock input
-      addInput(createInput<InPort>(
+      addInput(createInput<JackLargePointingDown>(
           mm2px(Vec(2 + xStart, verticalStart + verticalSpacing * i - 10)),
           module, ComputerscareILoveCookies::CLOCK_INPUT + i));
 
       // individual reset input
-      addInput(createInput<InPort>(
+      addInput(createInput<JackLargePointingDown>(
           mm2px(Vec(12 + xStart, verticalStart + verticalSpacing * i - 10)),
           module, ComputerscareILoveCookies::RESET_INPUT + i));
 

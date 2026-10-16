@@ -1108,31 +1108,33 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
     addParam(createParam<ComputerscareClockButton>(
         Vec(2, inputY - 6), module,
         ComputerscareHorseADoodleDoo::MANUAL_CLOCK_BUTTON));
-    addInput(createInput<InPort>(Vec(2, inputY + 10), module,
-                                 ComputerscareHorseADoodleDoo::CLOCK_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        Vec(2, inputY + 10), module,
+        ComputerscareHorseADoodleDoo::CLOCK_INPUT));
 
     addParam(createParam<ComputerscareResetButton>(
         Vec(2, inputY + dy + 16), module,
         ComputerscareHorseADoodleDoo::MANUAL_RESET_BUTTON));
 
-    addInput(createInput<InPort>(Vec(2, inputY + 2 * dy), module,
-                                 ComputerscareHorseADoodleDoo::RESET_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        Vec(2, inputY + 2 * dy), module,
+        ComputerscareHorseADoodleDoo::RESET_INPUT));
 
     channelWidget =
         new PolyOutputChannelsWidget(Vec(outputX + 18, inputY - 22), module,
                                      ComputerscareHorseADoodleDoo::POLY_KNOB);
     addChild(channelWidget);
 
-    addOutput(createOutput<PointingUpPentagonPort>(
+    addOutput(createOutput<JackLargePointingUp>(
         Vec(outputX, outputY), module,
         ComputerscareHorseADoodleDoo::TRIGGER_OUTPUT));
-    addOutput(createOutput<PointingUpPentagonPort>(
+    addOutput(createOutput<JackLargePointingUp>(
         Vec(outputX, outputY + dy), module,
         ComputerscareHorseADoodleDoo::EOC_OUTPUT));
-    addOutput(createOutput<PointingUpPentagonPort>(
+    addOutput(createOutput<JackLargePointingUp>(
         Vec(outputX, outputY + dy * 2), module,
         ComputerscareHorseADoodleDoo::CV_OUTPUT));
-    addOutput(createOutput<PointingUpPentagonPort>(
+    addOutput(createOutput<JackLargePointingUp>(
         Vec(outputX, outputY + dy * 3), module,
         ComputerscareHorseADoodleDoo::CV2_OUTPUT));
   }
@@ -1167,13 +1169,14 @@ struct ComputerscareHorseADoodleDooWidget : ModuleWidget {
       if (knobType == 1) {
         // trim knob
         // addParam(createParam<SmallKnob>(Vec(x + 30, y), module, knobIndex +
-        // 1)); addInput(createInput<TinyJack>(Vec(x + 40, y), module,
-        // inputIndex)); addParam(createParam<ScrambleKnob>(Vec(x+30, y+20),
-        // module, scrambleIndex));
+        // 1)); addInput(createInput<JackSmallPointingUp>(Vec(x + 40, y),
+        // module, inputIndex)); addParam(createParam<ScrambleKnob>(Vec(x+30,
+        // y+20), module, scrambleIndex));
       }
     }
     addParam(createParam<SmallKnob>(Vec(x + 32, y + 5), module, knobIndex + 1));
-    addInput(createInput<TinyJack>(Vec(x + 54, y + 6), module, inputIndex));
+    addInput(createInput<JackSmallPointingUp>(Vec(x + 54, y + 6), module,
+                                              inputIndex));
     if (allowScrambleRandom) {
       addParam(createParam<ScrambleKnob>(Vec(x + 55, y - 15), module,
                                          scrambleIndex));

@@ -241,8 +241,8 @@ struct ComputerscareGolyPeneratorWidget : ModuleWidget {
         Vec(28, 309), module, ComputerscareGolyPenerator::POLY_CHANNELS);
     addChild(channelWidget);
 
-    addOutput(createOutput<InPort>(Vec(28, 329), module,
-                                   ComputerscareGolyPenerator::POLY_OUTPUT));
+    addOutput(createOutput<JackLargePointingDown>(
+        Vec(28, 329), module, ComputerscareGolyPenerator::POLY_OUTPUT));
   }
   void appendContextMenu(Menu* menu) override {
     ComputerscareGolyPenerator* penerator =

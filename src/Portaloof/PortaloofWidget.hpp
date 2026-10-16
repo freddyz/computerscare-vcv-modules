@@ -262,8 +262,8 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
         pluginInstance, "res/panels/ComputerscarePortaloofPanel.svg"));
     minimizedPanelSvg = APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/panels/ComputerscarePortaloofMinimized.svg"));
-    tinyJackSvg = APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/components/tiny-jack.svg"));
+    tinyJackSvg = APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/jack-small-pointing-up.svg"));
     {
       auto* svgBg = new PortaloofPanelWidget();
       svgBg->fullSvg = panelSvg;
@@ -309,17 +309,17 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
     addParam(createParam<SmallIsoButton>(
         Vec(CONT_JACK_X + HDR_BTN_DX, HDR_JACK_Y + HDR_BTN_DY), module,
         ComputerscarePortaloof::FREEZE_TOGGLE));
-    trackInputPort(
-        createInput<InPort>(Vec(CONT_JACK_X, HDR_JACK_Y), module,
-                            ComputerscarePortaloof::FREEZE_GATE_INPUT));
+    trackInputPort(createInput<JackLargePointingDown>(
+        Vec(CONT_JACK_X, HDR_JACK_Y), module,
+        ComputerscarePortaloof::FREEZE_GATE_INPUT));
 
     addHdrLabel(MIX_JACK_X + HDR_BTN_DX - 4.f, "MIX");
     addParam(createParam<DarkSmallKnob>(
         Vec(MIX_JACK_X + HDR_BTN_DX - 3.f, HDR_JACK_Y + HDR_BTN_DY + 7.f),
         module, ComputerscarePortaloof::INPUT_SOURCE_MIX));
-    trackInputPort(
-        createInput<InPort>(Vec(MIX_JACK_X, MIX_INPUT_JACK_Y), module,
-                            ComputerscarePortaloof::INPUT_SOURCE_MIX_INPUT));
+    trackInputPort(createInput<JackLargePointingDown>(
+        Vec(MIX_JACK_X, MIX_INPUT_JACK_Y), module,
+        ComputerscarePortaloof::INPUT_SOURCE_MIX_INPUT));
     {
       mixLeftLabel = new SmallLetterDisplay();
       mixLeftLabel->box.pos =
@@ -431,10 +431,10 @@ struct ComputerscarePortaloofWidget : ModuleWidget {
 
       addParam(createParam<SmallIsoButton>(Vec(2.f, y - 14.f), module,
                                            toggleIds[i]));
-      trackInputPort(
-          createInput<OutPort>(Vec(30.f, y - 17.f), module, gateInputIds[i]));
-      trackInputPort(
-          createInput<InPort>(Vec(68.f, y - 14.f), module, cvInputIds[i]));
+      trackInputPort(createInput<JackLargeOutlinePointingUp>(
+          Vec(30.f, y - 17.f), module, gateInputIds[i]));
+      trackInputPort(createInput<JackLargePointingDown>(Vec(68.f, y - 14.f),
+                                                        module, cvInputIds[i]));
       addParam(createParam<SmallKnob>(Vec(98.f, y - 9.f), module, attenIds[i]));
       if (knobIds[i] == ComputerscarePortaloof::KALEIDO_KNOB) {
         addParam(createParam<PortaloofKaleidModeKnob>(

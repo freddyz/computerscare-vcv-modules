@@ -2121,14 +2121,14 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     offsetKnob->showBandDestinationInTooltip = true;
     addParam(offsetKnob);
 
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.randomizeCvX,
             layout.randomizeProbabilityY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::RANDOMIZE_PROBABILITY_CV_INPUT));
     addParam(createParam<ScrambleKnob>(
         Vec(layout.randomizeKnobX, layout.randomizeProbabilityY), module,
         ComputerscareVolyPector::RANDOMIZE_PROBABILITY_CONTROL));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.randomizeCvX,
             layout.randomizeRangeY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::RANDOMIZE_RANGE_CV_INPUT));
@@ -2137,14 +2137,14 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
             Vec(layout.randomizeKnobX, layout.randomizeRangeY), module,
             ComputerscareVolyPector::RANDOMIZE_RANGE_CONTROL);
     addParam(randomizeRangeKnob);
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.wiggleCvX,
             layout.wiggleProbabilityY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::WIGGLE_PROBABILITY_CV_INPUT));
     addParam(createParam<ScrambleKnob>(
         Vec(layout.wiggleKnobX, layout.wiggleProbabilityY), module,
         ComputerscareVolyPector::WIGGLE_PROBABILITY_CONTROL));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.wiggleCvX, layout.wiggleRangeY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::WIGGLE_RANGE_CV_INPUT));
     VolyPectorNoRandomSmallKnob* wiggleRangeKnob =
@@ -2180,42 +2180,42 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     initializeAllButton->setXScale(layout.bottomRightActionScale);
     addChild(initializeAllButton);
 
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.bottomAllJackX,
             layout.bottomRandY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::RANDOMIZE_ALL_INPUT));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.bottomChannelJackX,
             layout.bottomRandY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::CHANNEL_RANDOMIZE_INPUT));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.bottomBandJackX,
             layout.bottomRandY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::OUTPUT_RANDOMIZE_INPUT));
-    addInput(createInput<TinyJack>(Vec(layout.bottomAllJackX, layout.focusCvY),
-                                   module,
-                                   ComputerscareVolyPector::FOCUS_CV_INPUT));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
+        Vec(layout.bottomAllJackX, layout.focusCvY), module,
+        ComputerscareVolyPector::FOCUS_CV_INPUT));
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.bottomAllJackX,
             layout.bottomWiggleY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::WIGGLE_ALL_INPUT));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.bottomChannelJackX,
             layout.bottomWiggleY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::CHANNEL_WIGGLE_INPUT));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.bottomBandJackX,
             layout.bottomWiggleY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::OUTPUT_WIGGLE_INPUT));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.bottomAllJackX,
             layout.bottomInitY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::INITIALIZE_ALL_INPUT));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.bottomChannelJackX,
             layout.bottomInitY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::CHANNEL_INITIALIZE_INPUT));
-    addInput(createInput<TinyJack>(
+    addInput(createInput<JackSmallPointingUp>(
         Vec(layout.bottomBandJackX,
             layout.bottomInitY + layout.bottomJackYOffset),
         module, ComputerscareVolyPector::OUTPUT_INITIALIZE_INPUT));
@@ -2360,8 +2360,8 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
     outputDisplay->value = label;
     addChild(outputDisplay);
 
-    addOutput(
-        createOutput<TinyJack>(Vec(x, y) + outputJackOffset, module, outputId));
+    addOutput(createOutput<JackSmallPointingUp>(Vec(x, y) + outputJackOffset,
+                                                module, outputId));
   }
 };
 

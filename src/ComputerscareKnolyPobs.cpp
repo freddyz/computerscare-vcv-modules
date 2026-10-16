@@ -172,7 +172,7 @@ struct ComputerscareKnolyPobsWidget : ModuleWidget {
     }
     channelWidget = new PolyOutputChannelsWidget(
         Vec(1, 24), module, ComputerscareKnolyPobs::POLY_CHANNELS);
-    addOutput(createOutput<PointingUpPentagonPort>(
+    addOutput(createOutput<JackLargePointingUp>(
         Vec(30, 22), module, ComputerscareKnolyPobs::POLY_OUTPUT));
 
     addChild(channelWidget);

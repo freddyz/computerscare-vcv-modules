@@ -239,12 +239,12 @@ struct ComputerscareBolyPuttonsWidget : ModuleWidget {
       addLabeledButton(std::to_string(i + 1), xx, yy, module, i, dx, dy);
     }
 
-    addInput(createInput<InPort>(Vec(9, 58), module,
-                                 ComputerscareBolyPuttons::A_INPUT));
-    addInput(createInput<PointingUpPentagonPort>(
+    addInput(createInput<JackLargePointingDown>(
+        Vec(9, 58), module, ComputerscareBolyPuttons::A_INPUT));
+    addInput(createInput<JackLargePointingUp>(
         Vec(33, 55), module, ComputerscareBolyPuttons::B_INPUT));
 
-    addOutput(createOutput<PointingUpPentagonPort>(
+    addOutput(createOutput<JackLargePointingUp>(
         Vec(1, 24), module, ComputerscareBolyPuttons::POLY_OUTPUT));
     bolyPuttons = module;
   }

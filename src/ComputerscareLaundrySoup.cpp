@@ -537,12 +537,14 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
         pluginInstance, "res/panels/ComputerscareLaundrySoupPanel.svg")));
 
     // global clock input
-    addInput(createInput<InPort>(mm2px(Vec(2, 0)), module,
-                                 ComputerscareLaundrySoup::GLOBAL_CLOCK_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        mm2px(Vec(2, 0)), module,
+        ComputerscareLaundrySoup::GLOBAL_CLOCK_INPUT));
 
     // global reset input
-    addInput(createInput<InPort>(mm2px(Vec(12, 0)), module,
-                                 ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        mm2px(Vec(12, 0)), module,
+        ComputerscareLaundrySoup::GLOBAL_RESET_INPUT));
 
     // momentary clock and reset buttons
     addParam(createParam<ComputerscareClockButton>(
@@ -554,22 +556,22 @@ struct ComputerscareLaundrySoupWidget : ModuleWidget {
 
     for (int i = 0; i < numFields; i++) {
       // first-step output
-      addOutput(createOutput<OutPort>(
+      addOutput(createOutput<JackLargeOutlinePointingUp>(
           mm2px(Vec(42, verticalStart + verticalSpacing * i - 11)), module,
           ComputerscareLaundrySoup::FIRST_STEP_OUTPUT + i));
 
       // individual output
-      addOutput(createOutput<OutPort>(
+      addOutput(createOutput<JackLargeOutlinePointingUp>(
           mm2px(Vec(54, verticalStart + verticalSpacing * i - 11)), module,
           ComputerscareLaundrySoup::TRG_OUTPUT + i));
 
       // individual clock input
-      addInput(createInput<InPort>(
+      addInput(createInput<JackLargePointingDown>(
           mm2px(Vec(2, verticalStart + verticalSpacing * i - 10)), module,
           ComputerscareLaundrySoup::CLOCK_INPUT + i));
 
       // individual reset input
-      addInput(createInput<InPort>(
+      addInput(createInput<JackLargePointingDown>(
           mm2px(Vec(12, verticalStart + verticalSpacing * i - 10)), module,
           ComputerscareLaundrySoup::RESET_INPUT + i));
 

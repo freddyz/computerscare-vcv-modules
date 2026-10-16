@@ -17,3 +17,5 @@
 - When the user asks for a screenshot, regenerate it with the preview script and inspect the fresh render before showing it. Do not reuse an earlier image or maintain a latest-screenshot shortcut directory. Reuse the compiled runner to keep rendering fast.
 
 - When working remotely on visual module changes, generally finish by sending fresh, inspected screenshots inline so the user can see the result without asking again. After completing preview-script work, show a freshly generated example as well.
+
+- Use appearance-based jack names: `JackSmallPointingUp/Down`, `JackLargePointingUp/Down`, and `JackLargeOutlinePointingUp/Down` (spell out the full class name in code). `Outline` means an extra outer pentagon border. Names do not imply input/output routing. See `doc/development/jacks.md`; preserve a module’s chosen artwork when refactoring.

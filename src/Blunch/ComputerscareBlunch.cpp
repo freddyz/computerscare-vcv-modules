@@ -3334,12 +3334,6 @@ struct BlunchModeMenuButton : ComputerscareBlankButton {
   }
 };
 
-struct BlunchReverseTinyJack : ComputerscareSvgPort {
-  BlunchReverseTinyJack() {
-    setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/tiny-jack-reversed.svg")));
-  }
-};
 struct BlunchPanel : Widget {
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
@@ -3542,9 +3536,9 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                                     ComputerscareBlunch::SPEED_OF_TIME_PARAM));
     addParam(createParam<SmallKnob>(Vec(76.f, 283.f), module,
                                     ComputerscareBlunch::SEED_PARAM));
-    addInput(createInput<BlunchReverseTinyJack>(
+    addInput(createInput<JackSmallPointingDown>(
         Vec(47.f, 312.f), module, ComputerscareBlunch::TIME_CV_INPUT));
-    addInput(createInput<BlunchReverseTinyJack>(
+    addInput(createInput<JackSmallPointingDown>(
         Vec(77.f, 312.f), module, ComputerscareBlunch::SEED_CV_INPUT));
 
     externalClockLabels = new BlunchExternalClockLabels();
@@ -3586,41 +3580,41 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         Vec(198.f, 340.f), module, ComputerscareBlunch::POLY_CHANNELS_PARAM);
     addChild(polyChannelsWidget);
 
-    externalClockWInput = createInput<TinyJack>(
+    externalClockWInput = createInput<JackSmallPointingUp>(
         Vec(8.f, 290.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_W_INPUT);
-    externalClockXInput = createInput<TinyJack>(
+    externalClockXInput = createInput<JackSmallPointingUp>(
         Vec(38.f, 290.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_X_INPUT);
-    externalClockYInput = createInput<TinyJack>(
+    externalClockYInput = createInput<JackSmallPointingUp>(
         Vec(68.f, 290.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_Y_INPUT);
-    externalClockZInput = createInput<TinyJack>(
+    externalClockZInput = createInput<JackSmallPointingUp>(
         Vec(98.f, 290.f), module, ComputerscareBlunch::EXTERNAL_CLOCK_Z_INPUT);
     addInput(externalClockWInput);
     addInput(externalClockXInput);
     addInput(externalClockYInput);
     addInput(externalClockZInput);
 
-    resetBlockInput = createInput<InPort>(
+    resetBlockInput = createInput<JackLargePointingDown>(
         Vec(38.f, 335.f), module, ComputerscareBlunch::RESET_BLOCK_INPUT);
-    resetLineInput = createInput<InPort>(Vec(68.f, 335.f), module,
-                                         ComputerscareBlunch::RESET_LINE_INPUT);
-    resetSequenceInput = createInput<InPort>(
+    resetLineInput = createInput<JackLargePointingDown>(
+        Vec(68.f, 335.f), module, ComputerscareBlunch::RESET_LINE_INPUT);
+    resetSequenceInput = createInput<JackLargePointingDown>(
         Vec(98.f, 335.f), module, ComputerscareBlunch::RESET_SEQUENCE_INPUT);
-    runInput = createInput<InPort>(Vec(8.f, 335.f), module,
-                                   ComputerscareBlunch::RUN_INPUT);
+    runInput = createInput<JackLargePointingDown>(
+        Vec(8.f, 335.f), module, ComputerscareBlunch::RUN_INPUT);
     addInput(runInput);
     addInput(resetBlockInput);
     addInput(resetLineInput);
     addInput(resetSequenceInput);
 
-    clockOutput = createOutput<PointingUpPentagonPort>(
+    clockOutput = createOutput<JackLargePointingUp>(
         Vec(8.f, 356.f), module, ComputerscareBlunch::CLOCK_OUTPUT);
-    eoc1Output = createOutput<PointingUpPentagonPort>(
+    eoc1Output = createOutput<JackLargePointingUp>(
         Vec(38.f, 356.f), module, ComputerscareBlunch::EOC1_OUTPUT);
-    eoc2Output = createOutput<PointingUpPentagonPort>(
+    eoc2Output = createOutput<JackLargePointingUp>(
         Vec(68.f, 356.f), module, ComputerscareBlunch::EOC2_OUTPUT);
-    eoc3Output = createOutput<PointingUpPentagonPort>(
+    eoc3Output = createOutput<JackLargePointingUp>(
         Vec(98.f, 356.f), module, ComputerscareBlunch::EOC3_OUTPUT);
-    phaseOutput = createOutput<PointingUpPentagonPort>(
+    phaseOutput = createOutput<JackLargePointingUp>(
         Vec(38, 335), module, ComputerscareBlunch::PHASE_OUTPUT);
     addOutput(phaseOutput);
     addOutput(clockOutput);

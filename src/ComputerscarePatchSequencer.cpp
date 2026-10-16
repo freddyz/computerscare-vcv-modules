@@ -532,28 +532,28 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
             ComputerscarePatchSequencer::SWITCH_LIGHTS + i + j * 10 + 100));
       }
 
-      addInput(
-          createInput<InPort>(Vec(3, i * row_spacing + top_row), module,
-                              ComputerscarePatchSequencer::INPUT_JACKS + i));
+      addInput(createInput<JackLargePointingDown>(
+          Vec(3, i * row_spacing + top_row), module,
+          ComputerscarePatchSequencer::INPUT_JACKS + i));
 
       if (i % 2) {
-        addOutput(createOutput<PointingUpPentagonPort>(
+        addOutput(createOutput<JackLargePointingUp>(
             Vec(33 + i * column_spacing, top_row + 10 * row_spacing), module,
             ComputerscarePatchSequencer::OUTPUTS + i));
       } else {
-        addOutput(createOutput<InPort>(
+        addOutput(createOutput<JackLargePointingDown>(
             Vec(33 + i * column_spacing, top_row + 10 * row_spacing), module,
             ComputerscarePatchSequencer::OUTPUTS + i));
       }
     }
 
     // clock input
-    addInput(createInput<InPort>(Vec(24, 37), module,
-                                 ComputerscarePatchSequencer::TRG_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        Vec(24, 37), module, ComputerscarePatchSequencer::TRG_INPUT));
 
     // reset input
-    addInput(createInput<InPort>(Vec(24, 3), module,
-                                 ComputerscarePatchSequencer::RESET_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        Vec(24, 3), module, ComputerscarePatchSequencer::RESET_INPUT));
 
     // manual clock button
     addParam(createParam<LEDButton>(
@@ -564,8 +564,8 @@ struct ComputerscarePatchSequencerWidget : ModuleWidget {
                                     ComputerscarePatchSequencer::RESET_PARAM));
 
     // randomize input
-    addInput(createInput<InPort>(Vec(270, 0), module,
-                                 ComputerscarePatchSequencer::RANDOMIZE_INPUT));
+    addInput(createInput<JackLargePointingDown>(
+        Vec(270, 0), module, ComputerscarePatchSequencer::RANDOMIZE_INPUT));
 
     // active step display
     NumberDisplayWidget3* display = new NumberDisplayWidget3();
