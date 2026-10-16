@@ -662,6 +662,30 @@ int main() {
     }
     require(count == 1 ? collisions == 0 : collisions > 0, "moving tubes collide only within multi-tube sets");
   }
+  {
+    int hits[3] = {};
+    const float amounts[] = {.1f, .3f, .4f};
+    for(int setting=0;setting<3;++setting) {
+      wc::Wind weather; wc::Motion motion; wc::SetConfig gentle;
+      for(int i=0;i<96000;++i) {
+        weather.step(.0025f,amounts[setting],.55f,.35f);
+        auto flow=weather.flowAt(.5f,.5f,0);
+        motion.step(.0025f,flow.left,flow.right,gentle,0,
+          [&](int,float){++hits[setting];},[](int,int,float){});
+      }
+    }
+    require(hits[0]>0 && hits[0]<20,"Ten percent breeze occasionally reaches a tube without scheduled strikes");
+    require(hits[1]>hits[0]*3 && hits[2]>hits[1],"Moderate wind produces progressively more chimes");
+    wc::Wind low, high, zero;
+    low.gust(); high.gust(); zero.gust();
+    for(int i=0;i<800;++i) {
+      low.step(.0025f,.1f,.55f,.35f);
+      high.step(.0025f,.8f,.55f,.35f);
+      zero.step(.0025f,0.f,.55f,.35f);
+      require(std::fabs(low.strength*8.f-high.strength)<1e-5f,"Gust force scales with base Strength");
+      require(zero.strength==0.f,"Gust does not create full wind at zero Strength");
+    }
+  }
   // Strong wind alone must excite tube pairs, including sparse two-tube sets.
   for (int count = 2; count <= wc::maxTubes; ++count) {
     wc::Motion windyMotion, calmMotion; wc::Wind weather;
@@ -821,6 +845,41 @@ int main() {
     double quadPower=0;
     for(int i=0;i<48000;++i) for(float v:b->processQuad(.6f,.7f,.7f,1.f).channel) quadPower+=v*v;
     require(quadPower>.01,"Disabling exclusion restores mixed quad wind");
+  }
+  {
+    // Falling weather must leave a decaying audio tail at every Texture.
+    for(float texture : {0.f, 1.f}) {
+      wc::WindSound sound; sound.configure(48000,.8f,texture,1.f);
+      double before=0, tail=0, late=0;
+      for(int i=0;i<240000;++i) {
+        float strength=i<96000 ? .8f : 0.f;
+        if(i%120==0) sound.step(.0025f,strength,strength,0.f,.4f);
+        float sample=sound.process(1).channel[0];
+        if(i>=72000 && i<96000) before+=sample*sample;
+        if(i>=108000 && i<132000) tail+=sample*sample;
+        if(i>=216000) late+=sample*sample;
+      }
+      require(tail>before*.04,"Wind retains a soft release after strength falls to zero");
+      require(late<tail*.15,"Wind release decays instead of sustaining indefinitely");
+    }
+  }
+  {
+    double power[2]={}, high[2]={};
+    for(int setting=0;setting<2;++setting) {
+      wc::WindSound sound; sound.configure(48000,.8f,.8f,1.f);
+      float strength=setting ? .8f : .1f, previous=0.f;
+      for(int i=0;i<192000;++i) {
+        if(i%120==0) sound.step(.0025f,strength,strength,0.f,.5f);
+        float sample=sound.process(1).channel[0];
+        if(i>48000) {
+          power[setting]+=sample*sample;
+          high[setting]+=(sample-previous)*(sample-previous);
+        }
+        previous=sample;
+      }
+    }
+    require(power[0]<power[1]*.001,"Light breeze is substantially quieter than strong airflow");
+    require(high[0]/power[0]<high[1]/power[1]*.5,"Light breeze has softer spectral character, beyond gain alone");
   }
   {
     double attackRatio[2]={};

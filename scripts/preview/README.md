@@ -8,7 +8,7 @@ scripts/preview-module.sh phlooper
 
 This builds the plugin and, when needed, a small development runner, then renders the **real module widget** with Rack's OpenGL/NanoVG framebuffer renderer. It does not start the Rack application, open an audio device, load a patch, or change your Rack settings. It creates a hidden graphics window; macOS graphics access is required. Its preview-only window initialization also works when no physical monitor is active. This is an offscreen renderer, not a display-server-free renderer.
 
-The default output is `build/previews/phlooper/`, already excluded from Git by the repository's `build` rule. Six PNGs show the empty module, four-loop playback, sixteen-loop playback, a zoomed region, overdubbing, and muted playback with per-channel controls hidden. Audio is generated and recorded through the module's real processing code. The runner uses isolated scratch storage under the output directory.
+The default output is `build/previews/phlooper/`, already excluded from Git by the repository's `build` rule. Seven PNGs show the empty module, four-loop playback, sixteen-loop playback, a zoomed region, overdubbing, muted playback with per-channel controls hidden, and a mute/solo background comparison. Audio is generated and recorded through the module's real processing code. The runner uses isolated scratch storage under the output directory.
 
 ```sh
 # Render Windchimes or Blunch using their actual browser widgets.

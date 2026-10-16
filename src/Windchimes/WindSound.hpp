@@ -22,13 +22,13 @@ class WindSound {
     }
   };
   struct Patch {
-    Band breath, rustle, whistle;
+    Band breath, airDetail, whistle;
     float drift = 0.f, grain = 0.f, grainSmooth = 0.f, grainDecay = .999f;
     float catchLevel = 0.f, catchTarget = 0.f;
     std::array<float, 4> gains{}, currentGains{};
   };
   struct Profile {
-    float low, breath, rustle, whistle, flutter, dry;
+    float low, breath, airDetail, whistle, flutter;
   };
   Random control{0x42c716}, noise{0xab7125};
   std::array<Patch, 3> patches{};
@@ -38,12 +38,13 @@ class WindSound {
   float targetTone = .45f, targetTexture = .4f, targetPresence = .5f,
         presence = .5f;
   float turbulence = 0.f, heading = 0.f;
-  Profile profile{1.f, 1.f, .15f, .1f, .1f, 0.f};
+  float targetActivity = 0.f, activity = 0.f;
+  Profile profile{1.f, 1.f, .15f, .1f, .1f};
   unsigned mask = 0;
   std::array<float, 4> centerGains{};
   std::array<std::array<float, 4>, 4> toneFilter{};
-  float toneCoeff = .9f, attackCoeff = .001f, previousStrength = 0.f,
-        lift = 0.f;
+  float toneCoeff = .9f, attackCoeff = .001f, releaseCoeff = .00003f,
+        previousStrength = 0.f, lift = 0.f;
 
  public:
   void configure(float sampleRate, float tone, float texture, float mix) {
@@ -55,7 +56,7 @@ class WindSound {
       speed = 0.f;
     }
     smoothing = 1.f - std::exp(-1.f / (.12f * rate));
-    grainAttack = 1.f - std::exp(-1.f / (.002f * rate));
+    grainAttack = 1.f - std::exp(-1.f / (.09f * rate));
     targetTone = clamp(tone, 0.f, 1.f);
     targetTexture = clamp(texture, 0.f, 1.f);
     targetPresence = clamp(mix, 0.f, 1.f);
@@ -78,34 +79,29 @@ class WindSound {
     currentTexture +=
         (targetTexture - currentTexture) * std::min(1.f, dt * 8.f);
     presence += (targetPresence - presence) * std::min(1.f, dt * 8.f);
-    // Continuous surface character: smooth exposed air -> catches/whistles ->
-    // layered leaf rustle. Tone sets depth versus dry, bright surface detail.
-    profile.low = .5f +
-                  1.2f * (1.f - currentTone) * (1.f - .4f * currentTexture) +
-                  .4f * presence;
-    profile.breath = 1.2f - .6f * currentTexture;
-    profile.rustle =
-        2.f * currentTexture * currentTexture * (.25f + .75f * currentTone);
-    profile.whistle = 5.6f * currentTexture * (1.f - currentTexture) *
-                      (1.f - .5f * currentTone);
-    profile.flutter = .6f * currentTexture;
-    profile.dry = currentTexture * currentTexture * currentTone;
-    targetSpeed = std::pow(clamp(strength, 0.f, 1.5f), 1.35f);
+    // Texture adds overlapping, softly shaped air swells, never dry grains.
+    profile.low = 1.f + 1.1f * (1.f - currentTone) + .3f * presence;
+    profile.breath = .85f;
+    profile.airDetail = .7f * currentTone * currentTone;
+    profile.whistle = .65f * currentTone;
+    profile.flutter = .35f * currentTexture;
+    // Release follows the air mass rather than the instantaneous weather.
+    // Texture contributes gently; even smooth air has a substantial tail.
+    float releaseTime = .7f + .45f * currentTexture + .25f * lift;
+    releaseCoeff = 1.f - std::exp(-1.f / (releaseTime * rate));
+    // Acoustic energy rises much faster than flow speed. Gentle breezes
+    // expose sparse soft air; buffeting and resonances emerge with speed.
+    targetActivity = clamp(strength / .65f, 0.f, 1.f);
+    targetSpeed = std::pow(clamp(strength, 0.f, 1.5f), 2.1f);
     // Low Mix reveals passing breezes; raising it fills in quieter airflow
     // and increases close buffeting, alongside the downstream level control.
     float opening =
         clamp((strength - .18f * (1.f - presence)) / .32f, 0.f, 1.f);
     targetSpeed *= presence + (1.f - presence) * opening * opening;
-    // Four low-pass stages remove high-frequency surface detail at low Tone,
-    // opening exponentially into the airy range instead of only tilting layers.
-    float openingTone =
-        std::pow(clamp((currentTone + lift * .3f) / .65f, 0.f, 1.f), .8f);
-    float cutoff = 60.f * std::pow(300.f, openingTone);
-    // Keep the deep end intact, then gently limit the upper range to ~8 kHz.
-    if (cutoff > 3500.f)
-      cutoff = 3500.f + 4500.f * (1.f - std::exp(-(cutoff - 3500.f) / 4500.f));
-    cutoff = std::min(rate * .35f, cutoff);
-    toneCoeff = 1.f - std::exp(-2.f * pi * cutoff / rate);
+    // A fixed upper roll-off keeps brightness in the moving layers, rather
+    // than making Tone a filter sweep across the entire wind signal.
+    toneCoeff =
+        1.f - std::exp(-2.f * pi * std::min(rate * .35f, 6500.f) / rate);
     if (strength > .02f) heading = std::atan2(windY, windX);
     lowCoeff =
         1.f - std::exp(-2.f * pi *
@@ -118,24 +114,25 @@ class WindSound {
       p.drift += (control.bipolar() * variance * .35f - p.drift) * driftStep;
       p.drift = clamp(p.drift, -.8f, .8f);
       float swell = clamp(1.f + p.drift * (.4f + roughness), .25f, 1.8f);
-      p.breath.configure(rate,
-                         (180.f + currentTone * 1450.f) *
-                             (1.f + .35f * strength + lift * .65f) * swell,
-                         .6f);
-      p.rustle.configure(rate,
-                         (1200.f + currentTone * 3600.f + profile.dry * 800.f) *
-                             (1.f + lift * .35f),
-                         .65f);
+      p.breath.configure(
+          rate,
+          (140.f + currentTone * (220.f + 1230.f * targetActivity)) *
+              (1.f + .35f * strength + lift * .65f) * swell,
+          .6f);
+      p.airDetail.configure(
+          rate, (900.f + currentTone * 3200.f) * (1.f + lift * .35f), .65f);
       p.whistle.configure(
           rate,
           (190.f + i * 173.f + currentTone * 750.f) *
               (1.f + .55f * strength + .2f * p.drift + lift * .4f),
           3.f + currentTexture * 8.f);
-      // Random clusters of leaf/fabric activity, not a permanently open hiss.
+      // Slow overlapping envelopes let brighter air pass intermittently.
       if (control.uniform() <
-          dt * strength * (2.f + currentTexture * 28.f) * (1.f + roughness)) {
+          dt * strength * (.25f + currentTone * 1.8f + currentTexture * 1.2f) *
+              (1.f + roughness * .4f)) {
         p.grain = std::max(p.grain, .2f + control.uniform() * .8f);
-        float duration = .018f + control.uniform() * (.16f - .1f * profile.dry);
+        float duration =
+            .25f + control.uniform() * (.65f + .5f * currentTexture);
         p.grainDecay = std::exp(-1.f / (rate * duration));
       }
       if (control.uniform() < dt * (.4f + roughness * 2.f))
@@ -158,8 +155,8 @@ class WindSound {
     }
     Quad out;
     if (!mask) return out;
-    speed +=
-        (targetSpeed - speed) * (targetSpeed > speed ? attackCoeff : smoothing);
+    speed += (targetSpeed - speed) *
+             (targetSpeed > speed ? attackCoeff : releaseCoeff);
     if (speed < 1e-12f) {
       speed = 0.f;
       if (targetSpeed == 0.f) {
@@ -167,13 +164,15 @@ class WindSound {
         return out;
       }
     }
+    activity += (targetActivity - activity) *
+                (targetActivity > activity ? attackCoeff : releaseCoeff * .2f);
     float common = noise.bipolar();
     low1 += (common - low1) * lowCoeff;
     low2 += (low1 - low2) * lowCoeff;
     if (std::fabs(low1) < 1e-15f) low1 = 0.f;
     if (std::fabs(low2) < 1e-15f) low2 = 0.f;
-    float rumble =
-        low2 * 7.f * profile.low * (1.f - .6f * currentTone) * speed * .32f;
+    float rumble = low2 * 7.f * profile.low * (1.f - .2f * currentTone) *
+                   (.08f + .92f * activity * activity) * speed * .32f;
     for (int ch = 0; ch < 4; ++ch)
       if (mask & (1u << ch)) out.channel[ch] = rumble * centerGains[ch];
     for (auto& p : patches) {
@@ -182,17 +181,21 @@ class WindSound {
       if (p.grain < 1e-12f) p.grain = 0.f;
       p.grainSmooth += (p.grain - p.grainSmooth) * grainAttack;
       if (p.grainSmooth < 1e-12f) p.grainSmooth = 0.f;
-      float detail = (.06f + .94f * currentTexture) * p.grainSmooth;
+      float detail = p.grainSmooth * activity * activity;
       float moving = 1.f + p.drift * (.4f + turbulence * .6f);
-      float air = p.breath.process(n) * profile.breath *
-                  (.4f + .6f * currentTone) * moving;
-      float rustle = p.rustle.process(n) * profile.rustle * detail *
-                     (.35f + currentTone) * 2.f;
-      float whistle = p.whistle.process(n) * profile.whistle * currentTexture *
-                      p.catchLevel * clamp((speed - .12f) * 2.f, 0.f, 1.f);
-      // Rigging/fabric catches modulate the broad band without a cyclic LFO.
+      float air =
+          p.breath.process(n) * profile.breath * (.55f + .25f * currentTone) *
+          moving * (.15f + .85f * activity) *
+          (activity +
+           (1.f - activity) * clamp(.25f + p.drift + p.grainSmooth, .03f, 1.f));
+      float airDetail = p.airDetail.process(n) * profile.airDetail * detail *
+                        (.35f + currentTexture * .65f);
+      float whistle = p.whistle.process(n) * profile.whistle *
+                      (.25f + .75f * currentTexture) * detail * p.catchLevel *
+                      clamp((speed - .12f) * 2.f, 0.f, 1.f);
+      // Broad swells add movement without sharp flutter or a cyclic LFO.
       air *= 1.f + profile.flutter * currentTexture * (p.grainSmooth - .15f);
-      float source = (air + rustle + whistle) * speed * .28f;
+      float source = (air + airDetail + whistle) * speed * .28f;
       for (int ch = 0; ch < 4; ++ch)
         if (mask & (1u << ch)) {
           p.currentGains[ch] += (p.gains[ch] - p.currentGains[ch]) * smoothing;

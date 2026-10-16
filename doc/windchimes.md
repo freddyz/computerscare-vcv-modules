@@ -25,6 +25,19 @@ Click a set to select it. Shift-click adds or removes sets from the selection; C
 
 A set’s right-click menu also offers **Stop**, **Duplicate**, and **Divide**. Stop pauses its motion and fades its sound; Strike resumes it. Duplicate copies its settings nearby. Divide duplicates it with a gentle sound variation. Stop is temporary; sound settings and Solo/Mute are saved with the patch. Panel edits, moves, and sound changes support Undo/Redo.
 
+## Scene randomization
+
+The top **Randomize all** button replaces the scene with 2–8 chime sets in random
+positions. It randomizes their tuning, tube counts, level, and motion settings.
+Each set gets a preset, a gently wiggled preset, or a completely random sound.
+New sets start unmuted and unsoloed. Wind, effects, and output Gain stay unchanged.
+One Undo restores the previous scene settings.
+
+Top **Random** and **Wiggle** change the selected chimes’ sounds without replacing
+the scene, moving sets, or changing tuning. With no selection they affect all
+enabled chimes. **Shift-click** affects all chimes regardless of selection;
+right-click either button to choose **Selected chimes** or **All chimes**.
+
 ## Tuning
 
 | Control  | Use                                                                       |
@@ -70,13 +83,13 @@ Rack’s Randomize action changes the selected sets’ sound controls and preser
 
 Wind is shared across the scene. Each chime responds according to its position, motion, and sail.
 
-- **Strength:** steady wind level.
+- **Strength:** steady wind level. Light breezes produce rare chimes; stronger wind increases activity and brings out buffeting and brighter air.
 - **Gusts:** variation in wind strength.
 - **Turb:** uneven movement and changing wind direction.
 - **Mix:** audible wind level and presence in the main outputs.
-- **Tone:** deep buffeting through brighter air and surface rustle.
-- **Texture:** smooth air through flutter, whistles, and leaf-like rustle.
-- **Gust:** push all sets, even with Strength at zero. The jack accepts a mono rising-edge trigger at about 1 V.
+- **Tone:** emphasizes low buffeting at the bottom; adds more frequent bright swells at the top while keeping the low body.
+- **Texture:** adds overlapping air swells and soft whistles, with slightly longer tails.
+- **Gust:** briefly boost the current wind. Gusts scale with Strength; at zero there is no push. The jack accepts a mono rising-edge trigger at about 1 V.
 
 All six knobs have additive mono CV: +10 V adds the full control range, negative CV subtracts, and results clamp to 0–100%. Only the first channel of a polyphonic cable is used.
 

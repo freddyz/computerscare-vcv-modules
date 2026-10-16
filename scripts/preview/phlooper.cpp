@@ -374,6 +374,12 @@ int main(int argc, char** argv) {
     module->params[ComputerscarePhlooper::SHOW_TRANSPORT].setValue(0.f);
     simulate(*module, .12f, frame);
     save("06-muted-controls-hidden");
+    module->params[ComputerscarePhlooper::MUTE].setValue(0.f);
+    module->params[ComputerscarePhlooper::ZOOM].setValue(0.f);
+    module->params[ComputerscarePhlooper::SHOW_TRANSPORT].setValue(1.f);
+    module->params[ComputerscarePhlooper::LOOP_SOLO + 1].setValue(1.f);
+    module->params[ComputerscarePhlooper::LOOP_MUTE + 2].setValue(1.f);
+    save("07-mute-solo-backgrounds");
     widget.reset();
 
     // Context destroys graphics before terminating GLFW. No settings are saved.

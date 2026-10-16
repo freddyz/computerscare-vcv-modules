@@ -3,7 +3,8 @@
 // Optional integration checks against the plugin's actual Rack module.
 inline void checkWindchimesCv(rack::plugin::Model* model) {
   using namespace rack;
-  std::unique_ptr<engine::Module> module(model->createModule());
+  std::unique_ptr<engine::Module> moduleOwner(model->createModule());
+  auto* module = moduleOwner.get();
   auto require = [](bool ok, const char* message) {
     if (!ok) throw std::runtime_error(message);
   };
@@ -69,5 +70,63 @@ inline void checkWindchimesCv(rack::plugin::Model* model) {
   require(changed >= 1 && changed <= 6 &&
               first == parameter("Chimes 1 decay").getValue(),
           "Poly wiggle must nudge one to six controls of its own chime");
-  std::puts("Windchimes native CV checks passed");
+  APP->engine->addModule(module);
+  auto widget =
+      std::unique_ptr<app::ModuleWidget>(model->createModuleWidget(module));
+  // ModuleWidget owns and unregisters its module on destruction.
+  moduleOwner.release();
+  widget->step();
+  auto pressTop = [&](float x, int modifiers = 0) {
+    for (auto* child : widget->children) {
+      if (std::fabs(child->box.pos.x - x) < 1.f &&
+          std::fabs(child->box.pos.y - 22.f) < .1f) {
+        event::Button event;
+        event.pos = Vec(5, 5);
+        event.button = GLFW_MOUSE_BUTTON_LEFT;
+        event.action = GLFW_PRESS;
+        event.mods = modifiers;
+        child->onButton(event);
+        event.action = GLFW_RELEASE;
+        child->onButton(event);
+        return;
+      }
+    }
+    throw std::runtime_error("Missing top-level randomization button");
+  };
+  std::vector<float> original;
+  for (auto& p : module->params) original.push_back(p.getValue());
+  for (int trial = 0; trial < 16; ++trial) {
+    pressTop(705.9f);
+    int enabled = 0;
+    for (int ch = 1; ch <= 16; ++ch) {
+      auto prefix = std::string("Chimes ") + std::to_string(ch) + " ";
+      if (parameter(prefix + "enabled").getValue() > .5f) ++enabled;
+      require(parameter(prefix + "mute").getValue() == 0 &&
+                  parameter(prefix + "solo").getValue() == 0,
+              "New scenes must start unmuted and unsoloed");
+    }
+    require(enabled >= 2 && enabled <= 8,
+            "Randomize all must create two to eight chimes");
+    for (size_t i = 0; i < module->params.size(); ++i) {
+      auto* q = module->getParamQuantity(i);
+      require(module->params[i].getValue() >= q->getMinValue() &&
+                  module->params[i].getValue() <= q->getMaxValue(),
+              "Scene settings must stay within control ranges");
+    }
+    step(500);
+    APP->history->undo();
+    for (size_t i = 0; i < original.size(); ++i)
+      require(module->params[i].getValue() == original[i],
+              "One undo must restore all previous scene settings");
+    widget->step();
+  }
+  float position = parameter("Chimes 1 stage horizontal").getValue();
+  float tuning = parameter("Chimes 1 root").getValue();
+  pressTop(837.85f, GLFW_MOD_SHIFT);
+  require(position == parameter("Chimes 1 stage horizontal").getValue() &&
+              tuning == parameter("Chimes 1 root").getValue(),
+          "Top Wiggle must preserve scene position and tuning");
+  APP->history->undo();
+  std::puts(
+      "Windchimes native CV, scene randomization, and undo checks passed");
 }

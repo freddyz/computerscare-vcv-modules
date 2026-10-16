@@ -151,7 +151,12 @@ class Motion {
     // Small fixed sail differences amplify natural phase drift without
     // changing cord lengths or adding energy in still air.
     float dragScale = 0.9f + ((slot * 5 + 3) % 8) * (0.2f / 7.f);
-    suspension.step(dt, air, c.swing, dragScale);
+    // A more responsive sail brings gentle breezes into the useful range;
+    // compress the boost toward strong wind, preserving silence at zero.
+    float airSpeed = std::sqrt(air.dot(air));
+    float sensitivity =
+        std::min(12.f, .95f * std::pow(std::max(.001f, airSpeed), -.7f));
+    suspension.step(dt, air * sensitivity, c.swing, dragScale);
     striker.flash = std::max(0.f, striker.flash - dt * 5.f);
     for (int t = 0; t < count; ++t) {
       float exposure = 5.f + ((t + slot) % 3) * 3.f;

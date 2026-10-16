@@ -1570,8 +1570,8 @@ struct PhlooperView : widget::Widget {
           nvgBeginPath(args.vg);
           nvgRect(args.vg, 1.f, y - rowHeight * .5f + .35f, box.size.x - 2.f,
                   rowHeight - .7f);
-          nvgFillColor(args.vg, muted    ? nvgRGBA(154, 46, 52, 45)
-                                : soloed ? nvgRGBA(47, 104, 180, 55)
+          nvgFillColor(args.vg, muted    ? nvgRGBA(154, 46, 52, 72)
+                                : soloed ? nvgRGBA(47, 104, 180, 82)
                                          : nvgRGBA(157, 164, 157, 26));
           nvgFill(args.vg);
         }

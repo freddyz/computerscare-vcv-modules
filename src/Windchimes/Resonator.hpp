@@ -207,7 +207,9 @@ class Resonator {
     if (material == 1) {
       float contactHardness =
           kind == ContactKind::Tube ? 0.72f - 0.12f * shape : hardness;
-      float duration = 0.00018f + 0.0024f * (1.f - contactHardness) *
+      // Even hard wood contacts occupy a finite patch. Avoid near-impulse
+      // attacks that become sharp ticks when many contacts coincide.
+      float duration = 0.00035f + 0.00223f * (1.f - contactHardness) *
                                       (1.f - contactHardness);
       duration *= std::pow(clamp(velocity, 0.05f, 1.f), -0.2f);
       samples = std::max(2, static_cast<int>(duration * sampleRate));
@@ -228,7 +230,7 @@ class Resonator {
     float angle = (material != 1 ? 2.f : 1.f) * pi / (samples + 1.f);
     pulseA = std::cos(angle);
     pulseB = std::sin(angle);
-    pulseNorm = material != 1 ? 2.f / (samples + 1.f) : std::tan(angle * 0.5f);
+    pulseNorm = 2.f / (samples + 1.f);
     pulseLevel = clamp(
         pulseBudget + velocity * (kind == ContactKind::Tube ? 0.85f : 1.f), 0.f,
         2.f);
@@ -295,8 +297,11 @@ class Resonator {
       float real = pulseA * pulseReal - pulseB * pulseImag;
       pulseImag = pulseB * pulseReal + pulseA * pulseImag;
       pulseReal = real;
-      excitation = pulseLevel * pulseNorm *
-                   (material != 1 ? .5f * (1.f - pulseReal) : pulseImag);
+      // Raised-cosine/sine-squared force has zero slope at both ends.
+      // The old wood half-sine had sharper edges, especially on hard hits.
+      excitation =
+          pulseLevel * pulseNorm *
+          (material != 1 ? .5f * (1.f - pulseReal) : pulseImag * pulseImag);
       pulseBudget = std::max(0.f, pulseBudget - excitation);
       if (--pulseLeft == 0) pulseBudget = pulseLevel = 0.f;
     }

@@ -61,7 +61,10 @@ class Wind {
     float variance = std::sqrt(3.f * (2.f - coefficient) / coefficient);
     eddyX += (weather.bipolar() * variance - eddyX) * coefficient;
     eddyY += (weather.bipolar() * variance - eddyY) * coefficient;
-    fieldForce = amount + gustEnergy;
+    // Gusts reinforce the base breeze instead of becoming full-strength
+    // weather even with Strength turned down.
+    float force = amount * (1.f + gustEnergy);
+    fieldForce = force;
     fieldTurbulence = clamp(turbulence, 0.f, 1.f);
     // Correlated random flow, never an oscillator or a phase-aware drive.
     auto drift = [this, dt](Stereo& state, float speed) {
@@ -74,7 +77,7 @@ class Wind {
       drift(field[mode], 0.3f + mode * 0.18f + fieldTurbulence * 1.4f);
     for (auto& state : local) drift(state, 0.45f + fieldTurbulence * 2.5f);
     float gustScale = 0.18f + gustiness * 0.4f;
-    float force = amount + gustEnergy;
+
     float along = eddyX * gustScale;
     float across = eddyY * gustScale * (0.12f + turbulence * 0.75f);
     x = force *

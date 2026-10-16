@@ -44,7 +44,7 @@ with depth 3 and distortion 0.6. Each instance gets a stable random variation. P
 Raised faces extrude toward that direction; recessed faces expose an inner well.
 Changing perspective does not move the cable connection point.
 
-Windchimes uses recessed CV/trigger jacks and raised audio/Wind CV outputs as a
-visual trial. Its tiny Clock jack and every other module retain their flat styles.
+The perspective variants are available for future layouts. Windchimes and the
+other modules currently use the regular flat jack styles.
 
 The pentagonal surround varies per instance, while the socket and its rim remain circular. Recessed sockets sit down the perspective line on the well floor; the near walls can slightly obscure the circular rim.
