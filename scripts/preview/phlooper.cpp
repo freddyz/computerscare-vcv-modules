@@ -11,6 +11,10 @@
 #include <algorithm>
 #include <app/Scene.hpp>
 #include <cstdio>
+#include <ctime>
+#include <fstream>
+#include <thread>
+#include <chrono>
 #include <engine/Engine.hpp>
 #include <history.hpp>
 #include <memory>
@@ -51,9 +55,10 @@ void simulate(ComputerscarePhlooper& module, float seconds, int64_t& frame) {
   }
 }
 
-void capture(app::ModuleWidget* widget, const std::string& path, float scale) {
+void capture(widget::Widget* widget, const std::string& path, float scale,
+             bool advance = true) {
   // Step while unattached so the Rack-only keyboard overlay isn't installed.
-  widget->step();
+  if (advance) widget->step();
   auto framebuffer =
       std::unique_ptr<widget::FramebufferWidget>(new widget::FramebufferWidget);
   framebuffer->oversample = 2.f;
@@ -102,10 +107,104 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
             "preview formula must compile");
     module->sequencers[ch].running = true;
   }
+  {
+    auto line = getLineInfo(module->sequenceEditorStates[0].text, 0);
+    auto displaySequence = module->sequencers[0];
+    displaySequence.activeClockDisplayPulse = 1.f;
+    for (int style = 0; style < 4; ++style) for (bool bars : {false, true}) {
+      std::vector<ComputerscareTextHighlight> highlights;
+      addBlunchSequencerHighlights(highlights, displaySequence, line, line, true, style, bars);
+      require(!highlights.empty(), "Blinker style retains the active token");
+      if (style == 3)
+        for (const auto& highlight : highlights)
+          require(!highlight.hasBorder && !highlight.hasForeground && !highlight.hasBackground,
+                  "Off removes blinkers while leaving Bars independent");
+      require(highlights.front().hasBorder == (style == 0) &&
+                  highlights.front().hasForeground == (style == 2),
+              "Bars do not change the chosen blinker style");
+      bool hasBars = false;
+      for (const auto& highlight : highlights) hasBars |= highlight.hasProgress;
+      require(hasBars == bars, "Bars switch works with every blinker style");
+    }
+  }
   module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(8.f);
   module->setControlMode(true);
   widget->step();
   auto* editor = static_cast<BlunchTextEditor*>(widget->editor);
+  if (std::getenv("VCVMON_PREVIEW_CHECKS")) {
+    const char* path = std::getenv("VCVMON_CONTROL");
+    require(path, "Watcher checks need a control path");
+    std::string control(path);
+    widget::Widget* toolbar = nullptr;
+    for (auto* child : APP->scene->children)
+      if (child->box.size == Vec(370, 28)) toolbar = child;
+    require(toolbar, "Watcher toolbar attaches to the Rack scene");
+    auto pollState = [&](const char* state) {
+      { std::ofstream status(control + ".status"); status << state << " " << std::time(nullptr); }
+      std::this_thread::sleep_for(std::chrono::milliseconds(300));
+      toolbar->step();
+    };
+    auto click = [&](const char* name, const char* expected) {
+      std::remove((control + ".command").c_str());
+      bool found = false;
+      for (auto* child : toolbar->children) {
+        auto* button = dynamic_cast<ui::Button*>(child);
+        if (!button || button->text != name) continue;
+        widget::Widget::ActionEvent event;
+        button->onAction(event);
+        found = true;
+      }
+      require(found, "Watcher toolbar button has the correct state label");
+      std::ifstream command(control + ".command");
+      std::string value; command >> value;
+      require(value == expected, "Watcher toolbar sends the requested command");
+    };
+    auto renderToolbar = [&](const char* name) {
+      Vec position = toolbar->box.pos;
+      APP->scene->removeChild(toolbar);
+      toolbar->box.pos = Vec();
+      capture(toolbar, output + "/" + name, scale, false);
+      toolbar->box.pos = position;
+      APP->scene->addChild(toolbar);
+    };
+    pollState("watching"); renderToolbar("02-watcher-watching.png"); click("Pause", "pause");
+    pollState("queued"); renderToolbar("03-watcher-paused.png"); click("Resume", "resume");
+    pollState("watching"); click("Rebuild", "rebuild");
+    pollState("building"); click("Rebuild", "");
+    pollState("failed"); click("Rebuild", "rebuild");
+    std::puts("Watcher toolbar state and command checks passed");
+  }
+  // The preview scene can retain Rack's startup menus; dismiss them before
+  // testing panel focus rather than intentionally deferring focus to a menu.
+  for (auto* child : APP->scene->children)
+    if (auto* overlay = dynamic_cast<ui::MenuOverlay*>(child))
+      overlay->requestDelete();
+  APP->event->setSelectedWidget(nullptr);
+  {
+    widget::EventContext context;
+    widget::Widget::HoverKeyEvent event;
+    event.context = &context;
+    event.key = GLFW_KEY_SPACE;
+    event.action = GLFW_PRESS;
+    event.pos = Vec(3, 180);
+    widget->onHoverKey(event);
+    require(module->controlToggleRequests.load() == 0 && !widget->controlFocused(),
+            "Hover alone does not activate Control shortcuts");
+  }
+  {
+    widget::EventContext context;
+    widget::Widget::ButtonEvent event;
+    event.context = &context;
+    event.button = GLFW_MOUSE_BUTTON_LEFT;
+    event.action = GLFW_PRESS;
+    event.pos = Vec(3, 180);
+    widget->onButton(event);
+    widget->step();
+    require(APP->event->getSelectedWidget() == editor && widget->controlFocused(),
+            "Clicking the panel in Control mode focuses its editor");
+    APP->event->setSelectedWidget(nullptr);
+    require(!widget->controlFocused(), "Focus indicator clears on focus loss");
+  }
   APP->event->setSelectedWidget(editor);
   auto key = [&](int code, int mods = 0) {
     widget::EventContext context;
@@ -134,6 +233,48 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   module->processControlRequests();
   require(module->sequencers[1].running && module->sequencers[14].running,
           "space restarts selected channels");
+  {
+    auto pressTransport = [&](BlunchChannelTransport* button) {
+      widget::EventContext context;
+      widget::Widget::ButtonEvent event;
+      event.context = &context;
+      event.button = GLFW_MOUSE_BUTTON_LEFT;
+      event.action = GLFW_PRESS;
+      button->onButton(event);
+      event.action = GLFW_RELEASE;
+      button->onButton(event);
+      module->processControlRequests();
+      widget->step();
+    };
+    module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(16.f);
+    pressTransport(widget->channelStop);
+    require(!module->sequencers[14].running && module->sequencers[1].running &&
+                !widget->channelPlay->isPressed(),
+            "Stop button affects only the focused channel and clears Play state");
+    pressTransport(widget->channelPlay);
+    require(module->sequencers[14].running && widget->channelPlay->isPressed(),
+            "Play button starts the focused channel and reflects playback");
+    require(module->sequencers[14].activeHighlightEnd >
+                module->sequencers[14].activeHighlightBegin &&
+                module->sequencers[14].clockStartHighPending,
+            "Play immediately restores the first highlight and schedules its trigger");
+    engine::Module::ProcessArgs startArgs;
+    startArgs.sampleRate = 48000.f;
+    startArgs.sampleTime = 1.f / 48000.f;
+    bool firstTrigger = false;
+    for (int i = 0; i < 8; ++i) {
+      startArgs.frame = i;
+      module->process(startArgs);
+      firstTrigger |= module->sequencers[14].activeClockOutputHigh;
+    }
+    require(firstTrigger && module->sequencers[14].activeClockDisplayPulse > .9f,
+            "Play emits its initial trigger and display blink without waiting a beat");
+    pressTransport(widget->channelPlay);
+    require(!module->sequencers[14].running,
+            "Play button toggles like the transport keyboard shortcut");
+    pressTransport(widget->channelPlay);
+    module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(8.f);
+  }
   require(module->commitLineForChannel(1, 1, true), "second line must compile");
   module->stopSequencer(1, true);
   key(GLFW_KEY_R);
@@ -207,6 +348,42 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
                     normalHeight) < .001f,
           "text height does not change row spacing");
   module->params[ComputerscareBlunch::EDITOR_FONT_HEIGHT_PARAM].setValue(0.f);
+  module->params[ComputerscareBlunch::EDITOR_LINE_HEIGHT_PARAM].setValue(.75f);
+  widget->step();
+  auto spacedRows = layout();
+  float scaleY = std::max(.5f, 1.f + editor->style.fontHeightOffset);
+  require(std::fabs(spacedRows.metrics.lineHeight * scaleY - normalHeight) < .001f,
+          "Steady line height ignores the spacing slider");
+  module->params[ComputerscareBlunch::EDITOR_LINE_HEIGHT_PARAM].setValue(0.f);
+  module->editorFitLines = false;
+  widget->step();
+  auto natural = layout();
+  module->params[ComputerscareBlunch::EDITOR_LINE_HEIGHT_PARAM].setValue(.5f);
+  widget->step();
+  require(std::fabs(layout().metrics.lineHeight - natural.metrics.lineHeight * 1.5f) < .001f,
+          "Line height adjusts text-sized rows when steady height is off");
+  module->params[ComputerscareBlunch::EDITOR_LINE_HEIGHT_PARAM].setValue(0.f);
+  widget->step();
+  {
+    auto saved = std::unique_ptr<json_t, void(*)(json_t*)>(module->dataToJson(), json_decref);
+    auto restored = std::unique_ptr<ComputerscareBlunch>(
+        static_cast<ComputerscareBlunch*>(modelBlunchPreview->createModule()));
+    restored->dataFromJson(saved.get());
+    require(!restored->editorFitLines, "Fit lines preference survives patch saving");
+  }
+  module->params[ComputerscareBlunch::EDITOR_FONT_SIZE_PARAM].setValue(20.f);
+  widget->step();
+  require(layout().metrics.lineHeight > natural.metrics.lineHeight,
+          "Unfitted rows follow font size");
+  module->params[ComputerscareBlunch::EDITOR_FONT_SIZE_PARAM].setValue(14.f);
+  module->params[ComputerscareBlunch::EDITOR_FONT_HEIGHT_PARAM].setValue(.3f);
+  widget->step();
+  auto naturalTall = layout();
+  require(naturalTall.metrics.lineHeight * (1.f + editor->style.fontHeightOffset) >
+              natural.metrics.lineHeight * (1.f + BLUNCH_FONT_HEIGHT_BASE),
+          "Unfitted rows follow text height");
+  module->params[ComputerscareBlunch::EDITOR_FONT_HEIGHT_PARAM].setValue(0.f);
+  module->editorFitLines = true;
   widget->step();
   // Hit testing must agree with the displayed, independently spaced rows.
   auto click = [&](int row, int mods) {

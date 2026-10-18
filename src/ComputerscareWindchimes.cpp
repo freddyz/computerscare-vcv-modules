@@ -146,26 +146,37 @@ struct ComputerscareWindchimes : Module {
         params[parameter].getValue() + inputs[input].getVoltage() / 10.f, 0.f,
         1.f);
   }
+  static std::array<int, 11> randomModelFields() {
+    return {{DECAY, BRIGHTNESS, HARDNESS, STRIKER_WEIGHT, SHAPE, BODY,
+             INHARMONICITY, TUBES, LEVEL, SWING, SAIL_SIZE}};
+  }
+  float randomModelValue(int chime, int field) {
+    auto* q = getParamQuantity(param(chime, field));
+    float low = field == LEVEL ? .3f : q->getMinValue();
+    float high = q->getMaxValue();
+    if (q->snapEnabled)
+      return std::min(high,
+                      low + std::floor(random::uniform() * (high - low + 1.f)));
+    return low + random::uniform() * (high - low);
+  }
+  float wiggleModelValue(int chime, int field) {
+    auto* q = getParamQuantity(param(chime, field));
+    float low = field == LEVEL ? .3f : q->getMinValue();
+    float high = q->getMaxValue();
+    float delta =
+        q->snapEnabled ? 1.f : (.01f + random::uniform() * .04f) * (high - low);
+    float value = wc::clamp(q->getValue(), low, high) +
+                  (random::uniform() < .5f ? -delta : delta);
+    // Reflect at the limits so every control receives a useful small change.
+    if (value < low) value = low + (low - value);
+    if (value > high) value = high - (value - high);
+    return wc::clamp(value, low, high);
+  }
   void cvSoundAction(int chime, bool wiggle) {
-    int fields[] = {DECAY, BRIGHTNESS, HARDNESS,     STRIKER_WEIGHT,
-                    SHAPE, BODY,       INHARMONICITY};
-    int count = wiggle ? 1 + int(random::uniform() * 6.f) : 7;
-    for (int j = 0; j < count; ++j) {
-      if (wiggle) {
-        int other = j + std::min(6 - j, int(random::uniform() * (7 - j)));
-        std::swap(fields[j], fields[other]);
-      }
-      auto& parameter = params[param(chime, fields[j])];
-      float value = random::uniform();
-      if (wiggle) {
-        float delta = .01f + value * .04f;
-        value =
-            parameter.getValue() + (random::uniform() < .5f ? -delta : delta);
-        if (value < 0.f) value = -value;
-        if (value > 1.f) value = 2.f - value;
-      }
-      parameter.setValue(value);
-    }
+    for (int field : randomModelFields())
+      params[param(chime, field)].setValue(
+          wiggle ? wiggleModelValue(chime, field)
+                 : randomModelValue(chime, field));
   }
   std::atomic<uint32_t> strikeRequests{0}, stopRequests{0};
   std::array<std::atomic<float>, wc::maxSets> visualStrikerAngle{},
@@ -286,12 +297,11 @@ struct ComputerscareWindchimes : Module {
     configOutput(WIND_OUTPUT, "Wind strength (0–10 V)");
     configOutput(WIND_AUDIO_OUTPUT,
                  "Wind audio (mono, independent of Wind Mix)");
-    // Standard Randomize shares the selected-sound button's sound and striker
-    // controls. Global, tuning, material, swing and scene controls stay fixed.
+    // Standard Randomize shares the selected Chime Model controls.
+    // Global settings, tuning, material and scene position stay fixed.
     for (auto* quantity : paramQuantities) quantity->randomizeEnabled = false;
     for (int i = 0; i < wc::maxSets; ++i)
-      for (int field : {DECAY, BRIGHTNESS, HARDNESS, STRIKER_WEIGHT, SHAPE,
-                        BODY, INHARMONICITY})
+      for (int field : randomModelFields())
         getParamQuantity(param(i, field))->randomizeEnabled = true;
   }
   wc::SetConfig readSet(int i) {
@@ -348,9 +358,9 @@ struct ComputerscareWindchimes : Module {
     uint32_t mask = editSelection.load(std::memory_order_relaxed);
     for (int i = 0; i < wc::maxSets; ++i)
       if ((mask & (1u << i)) && params[param(i, ENABLED)].getValue() > 0.5f)
-        for (int field : {DECAY, BRIGHTNESS, HARDNESS, STRIKER_WEIGHT, SHAPE,
-                          BODY, INHARMONICITY})
-          getParamQuantity(param(i, field))->setValue(random::uniform());
+        for (int field : randomModelFields())
+          getParamQuantity(param(i, field))
+              ->setValue(randomModelValue(i, field));
   }
   json_t* dataToJson() override {
     json_t* data = json_object();
@@ -609,33 +619,11 @@ int vacantSet(W* module) {
 }
 void editSound(W* module, int selected, bool wiggle,
                history::ComplexAction* action) {
-  if (wiggle) {
-    int fields[] = {W::DECAY, W::BRIGHTNESS, W::HARDNESS,     W::STRIKER_WEIGHT,
-                    W::SHAPE, W::BODY,       W::INHARMONICITY};
-    // Shuffle without replacement so each chosen control changes once.
-    for (int i = 6; i > 0; --i) {
-      int j = std::min(static_cast<int>(random::uniform() * (i + 1)), i);
-      std::swap(fields[i], fields[j]);
-    }
-    int count = 1 + std::min(static_cast<int>(random::uniform() * 6.f), 5);
-    for (int i = 0; i < count; ++i) {
-      int id = W::param(selected, fields[i]);
-      auto* quantity = module->getParamQuantity(id);
-      float low = quantity->getMinValue(), high = quantity->getMaxValue();
-      float delta = (0.01f + random::uniform() * 0.04f) * (high - low);
-      float value =
-          quantity->getValue() + (random::uniform() < 0.5f ? -delta : delta);
-      // Reflect at the limits so an outward nudge still changes the knob.
-      if (value < low) value = low + (low - value);
-      if (value > high) value = high - (value - high);
-      setWithHistory(module, id, value, action);
-    }
-  } else {
-    for (int field : {W::DECAY, W::BRIGHTNESS, W::HARDNESS, W::STRIKER_WEIGHT,
-                      W::SHAPE, W::BODY, W::INHARMONICITY})
-      setWithHistory(module, W::param(selected, field), random::uniform(),
-                     action);
-  }
+  for (int field : W::randomModelFields())
+    setWithHistory(module, W::param(selected, field),
+                   wiggle ? module->wiggleModelValue(selected, field)
+                          : module->randomModelValue(selected, field),
+                   action);
 }
 void changeSelectionSound(W* module, Editor* editor, bool wiggle) {
   uint32_t mask = activeSelection(module, editor);
@@ -768,10 +756,13 @@ struct ActionButton : widget::OpaqueWidget {
   std::function<Menu*()> contextMenu;
   bool pressed = false;
   bool selector = false;
+  std::function<bool()> active;
   struct Face : phlooper::WarpedDropdown {
     ActionButton* owner = nullptr;
     std::string label() override { return owner->label ? owner->label() : ""; }
-    bool isPressed() override { return owner->pressed; }
+    bool isPressed() override {
+      return owner->pressed || (owner->active && owner->active());
+    }
   } face;
   ActionButton() { face.owner = this; }
   void setPressed(bool down) { pressed = down; }
@@ -2165,24 +2156,19 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     button(
         Vec(479, 123), 47, []() { return "Random"; },
         [this, module]() { changeSelectionSound(module, &editor, false); });
-    button(
-        Vec(515, 123), 36,
-        [this, module]() {
-          return module && module->params[W::param(editor.selected, W::SOLO)]
-                                   .getValue() > .5f
-                     ? "Solo*"
-                     : "Solo";
-        },
-        [this, module]() { toggleSelectionFlag(module, &editor, W::SOLO); });
-    button(
-        Vec(551, 123), 36,
-        [this, module]() {
-          return module && module->params[W::param(editor.selected, W::MUTE)]
-                                   .getValue() > .5f
-                     ? "Mute*"
-                     : "Mute";
-        },
-        [this, module]() { toggleSelectionFlag(module, &editor, W::MUTE); });
+    for (int field : {W::SOLO, W::MUTE}) {
+      auto* toggle = button(
+          Vec(field == W::SOLO ? 515 : 551, 123), 36,
+          [field]() { return field == W::SOLO ? "Solo" : "Mute"; },
+          [this, module, field]() {
+            toggleSelectionFlag(module, &editor, field);
+          });
+      toggle->active = [this, module, field]() {
+        return module &&
+               module->params[W::param(editor.selected, field)].getValue() >
+                   .5f;
+      };
+    }
     selector(
         Vec(338, 146), 94,
         [this, module]() {

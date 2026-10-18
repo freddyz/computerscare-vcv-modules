@@ -20,8 +20,8 @@ Click a set to select it. Shift-click adds or removes sets from the selection; C
 - **Remove**, **Delete**, or **Backspace:** remove the selected set.
 - **Strike**, or double-click a set: push its striker. Sound starts when it contacts a tube.
 - **Solo / Mute:** isolate or silence selected sets. Motion continues, and existing effect tails decay. Mute takes priority over Solo.
-- **Random:** choose new Decay, Brightness, Hardness, Weight, Shape, Body, and Inharmonicity values.
-- **Wiggle:** nudge one to six of those controls by up to 5% of their range.
+- **Random:** randomize all Chime Model knobs, including Tubes, Level, Swing, and Sail. Material stays unchanged; Level stays between 30% and 100%.
+- **Wiggle:** nudge every Chime Model knob by up to 5% of its range; Tubes changes by one. Material stays unchanged and Level stays between 30% and 100%.
 
 A set’s right-click menu also offers **Stop**, **Duplicate**, and **Divide**. Stop pauses its motion and fades its sound; Strike resumes it. Duplicate copies its settings nearby. Divide duplicates it with a gentle sound variation. Stop is temporary; sound settings and Solo/Mute are saved with the patch. Panel edits, moves, and sound changes support Undo/Redo.
 
@@ -77,7 +77,7 @@ Each control has CV beside its knob. CV adds 10 percentage points per volt, clam
 
 **Solo** and **Mute** accept gates: high at 1 V or more, low below 1 V. While patched, the gates replace the manual button states. Mono controls all sets; poly controls corresponding sets, with missing channels low. Unpatching restores the manual states.
 
-Rack’s Randomize action changes the selected sets’ sound controls and preserves tuning, material, position, level, and motion settings.
+Rack’s Randomize action changes the selected sets’ sound controls and preserves tuning, material, and position. Level stays between 30% and 100%.
 
 ## Wind
 

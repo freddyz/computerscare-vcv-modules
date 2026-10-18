@@ -192,8 +192,8 @@ void ComputerscareTextEditor::drawEditorText(const DrawArgs& args) {
         float startX = row.carets[localBegin];
         float endX = row.carets[localEnd];
         nvgBeginPath(args.vg);
-        nvgRoundedRect(args.vg, startX - 1.f, row.top, endX - startX + 2.f,
-                       layout.metrics.lineHeight + 1.f, 2.f);
+        nvgRect(args.vg, startX - 1.f, row.top, endX - startX + 2.f,
+                layout.metrics.lineHeight);
         nvgFillColor(args.vg, style.selectionColor);
         nvgFill(args.vg);
       }
@@ -297,7 +297,11 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
   color.b = color.b + (1.f - color.b) * blink * 0.48f;
   color.a = 0.72f + 0.28f * blink;
   nvgBeginPath(args.vg);
-  nvgRect(args.vg, caret.x, caret.top, 2.2f, caret.bottom - caret.top);
+  // Center the insertion marker on the measured character boundary instead
+  // of placing its entire width to the right of that boundary.
+  float cursorWidth = 1.5f / getFontScaleX();
+  nvgRect(args.vg, caret.x - cursorWidth * .5f, caret.top, cursorWidth,
+          caret.bottom - caret.top);
   nvgFillColor(args.vg, color);
   nvgFill(args.vg);
 
@@ -336,41 +340,10 @@ void ComputerscareTextEditor::drawHighlightSpan(
   nvgScale(args.vg, getFontScaleX(), getFontScaleY());
   applyTextStyle(args.vg, font);
 
-  if (highlight.fullLine && (text.empty() || begin == end)) {
-    float topY = layout.rows.empty() ? 0.f : layout.rows.front().top;
-    for (size_t rowIndex = 0; rowIndex < layout.rows.size(); rowIndex++) {
-      const ComputerscareTextEditorLayoutRow& row = layout.rows[rowIndex];
-      if (row.begin == begin && row.end == begin) {
-        topY = row.top;
-        break;
-      }
-    }
-    if (mode == HIGHLIGHT_BACKGROUND) {
-      nvgBeginPath(args.vg);
-      nvgRoundedRect(args.vg, layout.metrics.textX - 2.f, topY,
-                     layout.metrics.visibleWidth + 4.f,
-                     layout.metrics.lineHeight + 1.f, 2.f);
-      nvgFillColor(args.vg, highlight.background);
-      nvgFill(args.vg);
-    } else if (mode == HIGHLIGHT_BORDER) {
-      nvgBeginPath(args.vg);
-      highlightBorderPath(args.vg, layout.metrics.textX - 2.5f, topY + .5f,
-                          layout.metrics.visibleWidth + 5.f,
-                          layout.metrics.lineHeight - .5f,
-                          highlight.borderDistortion, unsigned(begin));
-      nvgStrokeColor(args.vg, highlight.border);
-      nvgStrokeWidth(args.vg, highlight.borderWidth);
-      nvgStroke(args.vg);
-    }
-    nvgRestore(args.vg);
-    bndSetFont(APP->window->uiFont->handle);
-    return;
-  }
-
   if (highlight.fullLine) {
     float topY = 0.f;
-    float bottomY = 0.f;
-    bool foundRow = false;
+    float bottomY = layout.metrics.lineHeight;
+    bool foundRow = layout.rows.empty();
 
     for (size_t rowIndex = 0; rowIndex < layout.rows.size(); rowIndex++) {
       const ComputerscareTextEditorLayoutRow& row = layout.rows[rowIndex];
@@ -384,28 +357,33 @@ void ComputerscareTextEditor::drawHighlightSpan(
 
       if (!foundRow) {
         topY = row.top;
-        bottomY = row.bottom;
+        bottomY = row.top + layout.metrics.lineHeight;
         foundRow = true;
       } else {
         topY = std::min(topY, row.top);
-        bottomY = std::max(bottomY, row.bottom);
+        bottomY = std::max(bottomY, row.top + layout.metrics.lineHeight);
       }
     }
 
     if (foundRow) {
-      float startX = layout.metrics.textX - 2.f;
-      float endX = layout.metrics.textX + layout.metrics.visibleWidth + 2.f;
+      // Full-row decoration geometry belongs to the editor, not individual
+      // highlight producers. Text padding never shrinks an edge-to-edge row.
+      float startX = style.fullWidthRows ? 0.f : layout.metrics.textX - 3.f;
+      float endX = style.fullWidthRows ? getScaledBoxSize().x
+                                       : layout.metrics.textX +
+                                             layout.metrics.visibleWidth + 3.f;
       if (mode == HIGHLIGHT_BACKGROUND) {
         nvgBeginPath(args.vg);
-        nvgRoundedRect(args.vg, startX - 1.f, topY, endX - startX + 2.f,
-                       bottomY - topY, 2.f);
+        nvgRect(args.vg, startX, topY, endX - startX, bottomY - topY);
         nvgFillColor(args.vg, highlight.background);
         nvgFill(args.vg);
       } else if (mode == HIGHLIGHT_BORDER) {
         nvgBeginPath(args.vg);
-        highlightBorderPath(args.vg, startX - 1.5f, topY + .5f,
-                            endX - startX + 3.f, bottomY - topY - .5f,
-                            highlight.borderDistortion, unsigned(begin));
+        nvgLineJoin(args.vg, NVG_MITER);
+        float inset = highlight.borderWidth * .5f;
+        nvgRect(args.vg, startX + inset, topY + inset,
+                std::max(0.f, endX - startX - 2.f * inset),
+                std::max(0.f, bottomY - topY - 2.f * inset));
         nvgStrokeColor(args.vg, highlight.border);
         nvgStrokeWidth(args.vg, highlight.borderWidth);
         nvgStroke(args.vg);
@@ -466,8 +444,8 @@ void ComputerscareTextEditor::drawHighlightSpan(
       nvgText(args.vg, startX, row.y, spanText.c_str(), NULL);
     } else if (mode == HIGHLIGHT_BACKGROUND) {
       nvgBeginPath(args.vg);
-      nvgRoundedRect(args.vg, startX - 1.f, topY, endX - startX + 2.f,
-                     layout.metrics.lineHeight + 1.f, 2.f);
+      nvgRect(args.vg, startX - 1.f, topY, endX - startX + 2.f,
+              layout.metrics.lineHeight);
       nvgFillColor(args.vg, highlight.background);
       nvgFill(args.vg);
     } else if (mode == HIGHLIGHT_BORDER) {

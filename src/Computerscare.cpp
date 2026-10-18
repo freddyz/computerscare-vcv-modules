@@ -1,9 +1,12 @@
 #include "Computerscare.hpp"
 
+#include "DevWatcherToolbar.hpp"
+
 Plugin* pluginInstance;
 
 void init(Plugin* p) {
   pluginInstance = p;
+  installDevWatcherToolbar();
 
   p->addModel(modelComputerscarePhlooper);
   p->addModel(modelComputerscareDebug);

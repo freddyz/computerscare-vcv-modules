@@ -107,6 +107,16 @@ struct ComputerscareModifierMouseControl {
     nvgRestore(args.vg);
   }
 
+  static void drawFocusStripe(const Widget::DrawArgs& args,
+                              math::Rect panelRect, float opacity = 1.f) {
+    nvgSave(args.vg);
+    nvgBeginPath(args.vg);
+    nvgRect(args.vg, panelRect.pos.x, panelRect.pos.y, 3.f, panelRect.size.y);
+    nvgFillColor(args.vg, nvgRGBAf(1.f, 123.f / 255.f, 44.f / 255.f, opacity));
+    nvgFill(args.vg);
+    nvgRestore(args.vg);
+  }
+
   static void drawPanelHint(const Widget::DrawArgs& args, math::Rect panelRect,
                             Widget* owner) {
     if (!isMouseOverOwner(owner)) return;
@@ -115,12 +125,7 @@ struct ComputerscareModifierMouseControl {
         isActive ? nvgRGB(0xff, 0x7b, 0x2c) : nvgRGBA(0xff, 0xfb, 0xf2, 0x9c);
 
     nvgSave(args.vg);
-    if (isActive) {
-      nvgBeginPath(args.vg);
-      nvgRect(args.vg, panelRect.pos.x, panelRect.pos.y, 3.f, panelRect.size.y);
-      nvgFillColor(args.vg, accent);
-      nvgFill(args.vg);
-    }
+    if (isActive) drawFocusStripe(args, panelRect);
 
     std::shared_ptr<Font> font = overlayFont();
     if (font) {

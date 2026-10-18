@@ -7,7 +7,9 @@
 namespace phlooper {
 // Display glass stays rectangular for accurate mouse coordinates. Its thin,
 // irregular surround and two exposed sides form the front of a down-left box.
-inline void drawDisplayFrame(NVGcontext* vg, Vec size) {
+inline void drawDisplayFrame(NVGcontext* vg, Vec size, float focusTop = -1.f,
+                             float focusBottom = -1.f,
+                             float leftWallSkew = 0.f) {
   nvgSave(vg);
   const Vec front[] = {Vec(-.55f, -.65f), Vec(size.x + .45f, -.25f),
                        Vec(size.x + .65f, size.y + .45f),
@@ -26,8 +28,22 @@ inline void drawDisplayFrame(NVGcontext* vg, Vec size) {
     nvgLineJoin(vg, NVG_BEVEL);
     nvgStroke(vg);
   };
-  quad(front[0], front[3], front[3] + extrusion, front[0] + extrusion,
-       nvgRGB(128, 134, 130));
+  Vec outerTop = front[0] + extrusion + Vec(-leftWallSkew, 0.f);
+  Vec outerBottom = front[3] + extrusion;
+  quad(front[0], front[3], outerBottom, outerTop, nvgRGB(128, 134, 130));
+  if (focusBottom > focusTop && focusBottom > 0.f && focusTop < size.y) {
+    auto wallPoint = [&](float y) {
+      float t = clamp(y / size.y, 0.f, 1.f);
+      return front[0] + (front[3] - front[0]) * t;
+    };
+    Vec top = wallPoint(focusTop), bottom = wallPoint(focusBottom);
+    auto outerPoint = [&](float y) {
+      float t = clamp(y / size.y, 0.f, 1.f);
+      return outerTop + (outerBottom - outerTop) * t;
+    };
+    quad(top, bottom, outerPoint(focusBottom), outerPoint(focusTop),
+         nvgRGB(255, 238, 154));
+  }
   quad(front[3], front[2], front[2] + extrusion, front[3] + extrusion,
        nvgRGB(85, 94, 90));
   quad(front[0], front[1], front[2], front[3], nvgRGB(25, 34, 31));

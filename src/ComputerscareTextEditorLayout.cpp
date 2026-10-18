@@ -13,10 +13,13 @@ ComputerscareTextEditorMetrics getEditorMetrics(
   metrics.width = style.lineWrapping ? metrics.visibleWidth : 100000.f;
   float ascender = 0.f;
   nvgTextMetrics(vg, &ascender, &metrics.desc, &metrics.lineHeight);
-  if (style.lineHeight > 0.f) {
+  if (style.lineHeight > 0.f || style.fullWidthRows ||
+      style.lineHeightScale != 1.f) {
     float scaleY = std::max(.5f, 1.f + style.fontHeightOffset);
-    float rowTop = 2.f / scaleY;
-    metrics.lineHeight = style.lineHeight / scaleY;
+    float rowTop = style.rowTopPadding / scaleY;
+    metrics.lineHeight = (style.lineHeight > 0.f ? style.lineHeight / scaleY
+                                                 : metrics.lineHeight) *
+                         style.lineHeightScale;
     metrics.baselineY =
         rowTop + metrics.lineHeight * .5f + (ascender + metrics.desc) * .5f;
     // Geometry uses desc to locate the row top, independent of glyph height.
@@ -115,7 +118,7 @@ void ComputerscareTextEditorLayout::setRowGeometry(
   row.x = metrics.textX;
   row.y = metrics.baselineY + visualRowIndex * metrics.lineHeight;
   row.top = row.y - metrics.lineHeight - metrics.desc;
-  row.bottom = row.top + metrics.lineHeight + 1.f;
+  row.bottom = row.top + metrics.lineHeight;
 }
 
 void ComputerscareTextEditorLayout::buildCaretPositions(

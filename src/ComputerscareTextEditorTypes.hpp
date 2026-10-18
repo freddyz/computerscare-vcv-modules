@@ -72,5 +72,9 @@ struct ComputerscareTextEditorStyle {
   // Physical pixels, independent of font scaling. Zero retains font-based
   // spacing.
   float lineHeight = 0.f;
+  float rowTopPadding = 2.f;
+  float lineHeightScale = 1.f;
+  // Row backgrounds, focus outlines and progress share the viewport bounds.
+  bool fullWidthRows = false;
   bool lineWrapping = true;
 };

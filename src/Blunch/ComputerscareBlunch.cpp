@@ -15,6 +15,7 @@
 #include "../ComputerscareResizableHandle.hpp"
 #include "../ComputerscareTextEditor.hpp"
 #include "../ComputerscareTextEditorLayout.hpp"
+#include "../ModifierMouseControl.hpp"
 #include "../Phlooper/Block.hpp"
 #include "../Phlooper/Dropdown.hpp"
 #include "BlunchEditorViews.hpp"
@@ -184,7 +185,7 @@ static void addBlunchSequencerHighlights(
     std::vector<ComputerscareTextHighlight>& highlights,
     const BlunchSequencerRuntime& seq, const BlunchLineInfo& sourceLine,
     const BlunchLineInfo& visibleLine, bool includeClockProgress,
-    int displayStyle) {
+    int displayStyle, bool showBars) {
   ComputerscareTextHighlight tokenHighlight;
   tokenHighlight.begin = mapBlunchSourceOffsetToVisibleLine(
       sourceLine, visibleLine, seq.activeHighlightBegin);
@@ -192,7 +193,8 @@ static void addBlunchSequencerHighlights(
       std::max(tokenHighlight.begin,
                mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
                                                   seq.activeHighlightEnd));
-  tokenHighlight.hasBackground = seq.activeClockDisplayPulse > 0.001f;
+  tokenHighlight.hasBackground =
+      displayStyle != 3 && seq.activeClockDisplayPulse > 0.001f;
   unsigned char pulseAlpha = (unsigned char)std::min(
       0xbb, 0x30 + (int)(seq.activeClockDisplayPulse * 0x75));
   tokenHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, pulseAlpha);
@@ -201,7 +203,7 @@ static void addBlunchSequencerHighlights(
   tokenHighlight.borderDistortion = .75f;
   tokenHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
   tokenHighlight.hasProgress =
-      displayStyle == 0 && includeClockProgress && seq.running &&
+      showBars && includeClockProgress && seq.running &&
       !blunch::sequencer::activeStepUsesExternalClock(seq);
   if (displayStyle == 2) {
     tokenHighlight.hasBackground = false;
@@ -219,7 +221,7 @@ static void addBlunchSequencerHighlights(
 
   if (!seq.activeProgram.empty() && seq.activeProgramIndex >= 0 &&
       seq.activeProgramIndex < (int)seq.activeProgram.size() &&
-      seq.activeExternalTimingDisplayPulse > 0.001f) {
+      displayStyle != 3 && seq.activeExternalTimingDisplayPulse > 0.001f) {
     const BlunchProgramStep& step = seq.activeProgram[seq.activeProgramIndex];
     int externalTimingBegin = 0;
     int externalTimingEnd = 0;
@@ -257,7 +259,7 @@ static void addBlunchSequencerHighlights(
     }
   }
 
-  if (displayStyle != 0) return;
+  if (!showBars) return;
 
   std::vector<blunch::sequencer::TimingScopeProgress> scopeProgress =
       blunch::sequencer::getActiveTimingScopeProgressHighlights(seq);
@@ -472,7 +474,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   bool startAllRequested = false;
   bool controlMode = false;
   computerscare::blunch::ControlSelection controlSelection;
-  std::atomic<unsigned> controlToggleRequests{0}, controlResetRequests{0};
+  std::atomic<unsigned> controlToggleRequests{0}, controlResetRequests{0},
+      controlStopRequests{0};
   int lastSwitchViewCount = 0;
   int lastNavigateChannelCount = 0;
   int lastNavigateChannelForwardCount = 0;
@@ -494,10 +497,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   bool externalClockHigh[4] = {false, false, false, false};
   float width = MIN_WIDTH;
   bool editorLineWrapping = true;
+  bool editorFitLines = true;
   int runInputMode = 0;
   blunch::language::ClockUnit defaultNumberUnit =
       blunch::language::ClockUnit::Bpm;
   int playbackDisplayStyle = 0;
+  bool playbackBars = true;
 
   int clampChannel(int channel) const {
     return std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
@@ -752,7 +757,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   void processControlRequests() {
     unsigned toggle = controlToggleRequests.exchange(0);
     unsigned reset = controlResetRequests.exchange(0);
-    if (!(toggle | reset)) return;
+    unsigned stop = controlStopRequests.exchange(0);
+    if (!(toggle | reset | stop)) return;
     bool allRunning = params[RUN_PARAM].getValue() > .5f;
     for (int ch = 0; ch < MAX_POLY_CHANNELS; ++ch)
       if (toggle & (1u << ch))
@@ -765,13 +771,19 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     int previous = blunchProcessingChannel;
     for (int ch = 0; ch < MAX_POLY_CHANNELS; ++ch) {
       unsigned bit = 1u << ch;
-      if (!((toggle | reset) & bit)) continue;
+      if (!((toggle | reset | stop) & bit)) continue;
       blunchProcessingChannel = ch;
       if (toggle & bit) {
         if (allRunning)
           stopSequencer(ch, true);
         else {
-          if (sequencers[ch].activeProgram.empty()) resetActiveSequence(true);
+          if (sequencers[ch].activeProgram.empty()) {
+            resetActiveSequence(true);
+          } else {
+            // Stop clears the current highlight and the scheduled start tick.
+            // Restore both before running, just as submitting a line does.
+            applyActiveProgramStep(sequencers[ch]);
+          }
           if (!sequencers[ch].activeProgram.empty()) startSequencer(ch);
         }
       }
@@ -783,6 +795,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         sequencers[ch].activeClockOutputHigh = false;
         sequencers[ch].activeClockDisplayPulse = 0.f;
       }
+      if (stop & bit) stopSequencer(ch, true);
     }
     blunchProcessingChannel = previous;
   }
@@ -1353,6 +1366,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     json_object_set_new(
         rootJ, "editorViewMode",
         json_string(showingChannelsView() ? "channels" : "sequence"));
+    json_object_set_new(rootJ, "editorFitLines", json_boolean(editorFitLines));
     json_object_set_new(rootJ, "editorLineWrapping",
                         json_boolean(editorLineWrapping));
     json_object_set_new(rootJ, "runInputMode", json_integer(runInputMode));
@@ -1362,10 +1376,13 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
             blunch::language::clockUnitName(defaultNumberUnit).c_str()));
     json_object_set_new(rootJ, "playbackDisplayStyle",
                         json_integer(playbackDisplayStyle));
+    json_object_set_new(rootJ, "playbackBars", json_boolean(playbackBars));
     return rootJ;
   }
 
   void dataFromJson(json_t* rootJ) override {
+    json_t* fitLinesJ = json_object_get(rootJ, "editorFitLines");
+    editorFitLines = !json_is_boolean(fitLinesJ) || json_is_true(fitLinesJ);
     json_t* unitJ = json_object_get(rootJ, "defaultNumberUnit");
     if (json_is_string(unitJ)) {
       auto unit = blunch::language::parseClockUnit(json_string_value(unitJ));
@@ -1375,7 +1392,11 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     json_t* styleJ = json_object_get(rootJ, "playbackDisplayStyle");
     if (json_is_integer(styleJ))
       playbackDisplayStyle =
-          std::max(0, std::min(2, (int)json_integer_value(styleJ)));
+          std::max(0, std::min(3, (int)json_integer_value(styleJ)));
+    json_t* barsJ = json_object_get(rootJ, "playbackBars");
+    // Preserve the appearance of older patches that coupled bars to Full.
+    playbackBars = json_is_boolean(barsJ) ? json_is_true(barsJ)
+                                          : playbackDisplayStyle == 0;
     json_t* channelTextsJ = json_object_get(rootJ, "channelTexts");
     if (channelTextsJ) {
       size_t index;
@@ -2694,7 +2715,24 @@ static bool blunchShortcutHelpHeld(bool controlMode = false) {
 
 struct BlunchTextEditor : ComputerscareTextEditor {
   void draw(const DrawArgs& args) override {
-    phlooper::drawDisplayFrame(args.vg, box.size);
+    float top = -1.f, bottom = -1.f;
+    if (module) {
+      auto font = loadEditorFont();
+      if (font) {
+        nvgSave(args.vg);
+        applyTextStyle(args.vg, font);
+        auto layout = ComputerscareTextEditorLayout::build(
+            args.vg, text, getScaledBoxSize(), style);
+        nvgRestore(args.vg);
+        for (const auto& row : layout.rows)
+          if (row.begin <= cursor && cursor <= row.end) {
+            top = row.top * getFontScaleY();
+            bottom = row.bottom * getFontScaleY();
+            break;
+          }
+      }
+    }
+    phlooper::drawDisplayFrame(args.vg, box.size, top, bottom, 1.f);
     ComputerscareTextEditor::draw(args);
   }
   ComputerscareBlunch* module = nullptr;
@@ -3024,7 +3062,7 @@ struct BlunchChannelLabel : phlooper::WarpedDropdown {
   }
 };
 
-// UI-only placeholder for the future editing/control view switch.
+// Editing/control mode selector.
 struct BlunchEditControlToggle : phlooper::WarpedDropdown {
   ComputerscareBlunch* blunch = nullptr;
   std::function<void()> changed;
@@ -3039,14 +3077,15 @@ struct BlunchEditControlToggle : phlooper::WarpedDropdown {
   std::string label() override { return ""; }
   bool isPressed() override { return control(); }
   void draw(const DrawArgs& args) override {
-    configure(32.f, 18.f, 2.f, 1.5f, .7f, 106);
+    configure(28.f, 12.f, 1.5f, 1.f, .7f, 106);
     faceColor = nvgRGB(205, 205, 205);
     phlooper::WarpedDropdown::draw(args);
     auto& caption = captions[control() ? 1 : 0];
     nvgSave(args.vg);
-    nvgTranslate(
-        args.vg, (box.size.x - caption.box.size.x) * .5f,
-        (box.size.y - caption.box.size.y) * .5f + (control() ? 1.f : -1.f));
+    nvgTranslate(args.vg, (box.size.x - caption.box.size.x * .8f) * .5f - .5f,
+                 (box.size.y - caption.box.size.y * .8f) * .5f +
+                     (control() ? .5f : -.5f));
+    nvgScale(args.vg, .8f, .8f);
     caption.draw(args);
     nvgRestore(args.vg);
   }
@@ -3059,6 +3098,51 @@ struct BlunchEditControlToggle : phlooper::WarpedDropdown {
       e.consume(this);
     }
   }
+};
+
+struct BlunchChannelTransport : phlooper::WarpedDropdown {
+  ComputerscareBlunch* blunch = nullptr;
+  bool stop = false, pressed = false;
+  int channel() const {
+    return blunch->showingChannelsView() ? blunch->channelsCursorChannel
+                                         : blunch->focusedChannel;
+  }
+  std::string label() override { return ""; }
+  bool isPressed() override {
+    return pressed || (!stop && blunch && blunch->channelPlaying(channel()));
+  }
+  void draw(const DrawArgs& args) override {
+    configure(14.f, 13.f, 2.f, 1.f, .6f, stop ? 111 : 110);
+    faceColor = nvgRGB(36, 201, 166);
+    phlooper::WarpedDropdown::draw(args);
+    float shift = isPressed() ? 1.5f : 0.f;
+    nvgBeginPath(args.vg);
+    if (stop)
+      nvgRect(args.vg, 4.f + shift, 3.f + shift * .65f, 5.f, 5.f);
+    else {
+      nvgMoveTo(args.vg, 4.f + shift, 2.5f + shift * .65f);
+      nvgLineTo(args.vg, 9.f + shift, 5.5f + shift * .65f);
+      nvgLineTo(args.vg, 4.f + shift, 8.5f + shift * .65f);
+      nvgClosePath(args.vg);
+    }
+    nvgFillColor(args.vg, nvgRGB(15, 42, 36));
+    nvgFill(args.vg);
+  }
+  void onButton(const ButtonEvent& e) override {
+    if (!blunch || e.button != GLFW_MOUSE_BUTTON_LEFT) return;
+    if (e.action == GLFW_PRESS) {
+      pressed = true;
+      unsigned bit = 1u << channel();
+      if (stop)
+        blunch->controlStopRequests.fetch_or(bit);
+      else
+        blunch->controlToggleRequests.fetch_or(bit);
+    } else if (e.action == GLFW_RELEASE)
+      pressed = false;
+    e.consume(this);
+  }
+  void onDragEnd(const DragEndEvent&) override { pressed = false; }
+  void onLeave(const LeaveEvent&) override { pressed = false; }
 };
 
 struct BlunchSquareFace : phlooper::WarpedDropdown {
@@ -3387,7 +3471,50 @@ struct BlunchShortcutOverlay : widget::TransparentWidget {
       if (auto draw = drawPopup.lock()) (*draw)(args);
   }
 };
+struct BlunchLineHeightSlider : MenuParamSlider {
+  ComputerscareBlunch* blunch;
+  BlunchLineHeightSlider(ComputerscareBlunch* owner)
+      : MenuParamSlider(owner->paramQuantities
+                            [ComputerscareBlunch::EDITOR_LINE_HEIGHT_PARAM]),
+        blunch(owner) {}
+  void draw(const DrawArgs& args) override {
+    nvgSave(args.vg);
+    if (blunch->editorFitLines) nvgGlobalAlpha(args.vg, .35f);
+    MenuParamSlider::draw(args);
+    nvgRestore(args.vg);
+  }
+  void onDragStart(const DragStartEvent& e) override {
+    if (!blunch->editorFitLines)
+      MenuParamSlider::onDragStart(e);
+    else
+      e.consume(this);
+  }
+  void onDragMove(const DragMoveEvent& e) override {
+    if (!blunch->editorFitLines) MenuParamSlider::onDragMove(e);
+  }
+  void onDoubleClick(const DoubleClickEvent& e) override {
+    if (!blunch->editorFitLines)
+      MenuParamSlider::onDoubleClick(e);
+    else
+      e.consume(this);
+  }
+};
+
 struct ComputerscareBlunchWidget : ModuleWidget {
+  bool controlFocusRequested = false;
+  bool controlFocused() const {
+    if (!inControlMode()) return false;
+    auto* selected = APP->event->getSelectedWidget();
+    for (auto* current = selected; current; current = current->parent)
+      if (current == this) return true;
+    return false;
+  }
+  void onButton(const ButtonEvent& e) override {
+    ModuleWidget::onButton(e);
+    if (inControlMode() && e.button == GLFW_MOUSE_BUTTON_LEFT &&
+        e.action == GLFW_PRESS)
+      controlFocusRequested = true;
+  }
   bool inControlMode() const {
     auto* blunch = dynamic_cast<ComputerscareBlunch*>(module);
     return blunch && blunch->controlMode;
@@ -3453,6 +3580,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   BlunchSeedLabel* seedLabel = nullptr;
   BlunchChannelLabel* channelLabel = nullptr;
   BlunchEditControlToggle* editControlToggle = nullptr;
+  BlunchChannelTransport* channelPlay = nullptr;
+  BlunchChannelTransport* channelStop = nullptr;
   PolyOutputChannelsWidget* polyChannelsWidget = nullptr;
   BlunchExternalClockLabels* externalClockLabels = nullptr;
   ComputerscareTextEditor* editor = nullptr;
@@ -3523,9 +3652,15 @@ struct ComputerscareBlunchWidget : ModuleWidget {
 
     editControlToggle = new BlunchEditControlToggle;
     editControlToggle->blunch = module;
-    editControlToggle->box =
-        Rect(Vec(box.size.x - 93.f, 6.5f), Vec(32.f, 18.f));
+    editControlToggle->box = Rect(Vec(box.size.x - 93.f, 1.f), Vec(28.f, 12.f));
     addChild(editControlToggle);
+    channelPlay = new BlunchChannelTransport;
+    channelStop = new BlunchChannelTransport;
+    channelPlay->blunch = channelStop->blunch = module;
+    channelStop->stop = true;
+    channelPlay->box.size = channelStop->box.size = Vec(14.f, 13.f);
+    addChild(channelPlay);
+    addChild(channelStop);
     channelLabel = new BlunchChannelLabel();
     channelLabel->module = module;
     channelLabel->box.pos = Vec(box.size.x - 57.f, 3.f);
@@ -3556,10 +3691,12 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     editor->box.size = Vec(box.size.x - 10.f, 243.f);
     editor->placeholder = "type a sequence...";
     editor->style.cornerRadius = 0.f;
+    editor->style.rowTopPadding = 0.f;
+    editor->style.fullWidthRows = true;
     editor->style.backgroundColor = nvgRGB(0x05, 0x06, 0x08);
     editor->style.drawBorder = false;
     editor->style.textColor = nvgRGB(0xee, 0xee, 0xea);
-    editor->style.selectionColor = nvgRGBA(0xe4, 0xc4, 0x21, 0x66);
+    editor->style.selectionColor = nvgRGBA(0x24, 0xc9, 0xa6, 0x85);
     editor->style.placeholderColor = nvgRGBA(0xee, 0xee, 0xea, 0x66);
     editor->submitOnEnter = true;
     if (module) {
@@ -3651,7 +3788,9 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       seedLabel->box.pos = Vec(101.f, 4.f);
     }
     if (editControlToggle)
-      editControlToggle->box.pos = Vec(box.size.x - 93.f, 6.5f);
+      editControlToggle->box.pos = Vec(box.size.x - 93.f, 1.f);
+    if (channelPlay) channelPlay->box.pos = Vec(box.size.x - 93.f, 15.f);
+    if (channelStop) channelStop->box.pos = Vec(box.size.x - 78.f, 15.f);
     if (channelLabel) {
       channelLabel->box.pos = Vec(box.size.x - 57.f, 3.f);
       channelLabel->box.size = Vec(54.f, 25.f);
@@ -3718,6 +3857,19 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       APP->scene->rack->addChild(overlay);
     }
     ModuleWidget::step();
+    if (controlFocusRequested) {
+      bool menuOpen = false;
+      for (auto* child : APP->scene->children)
+        if (auto* overlay = dynamic_cast<ui::MenuOverlay*>(child))
+          menuOpen |= !overlay->requestedDelete;
+      // Rack assigns focus to the clicked child after its Button event.
+      // Transfer it on the next step, after normal knob/button/cable handling.
+      // Menus retain their own keyboard focus until they close.
+      if (!menuOpen) {
+        if (inControlMode() && editor) APP->event->setSelectedWidget(editor);
+        controlFocusRequested = false;
+      }
+    }
     box.size.x = std::max(box.size.x, ComputerscareBlunch::MIN_WIDTH);
 
     ComputerscareBlunch* blunch = dynamic_cast<ComputerscareBlunch*>(module);
@@ -3759,9 +3911,14 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             blunch->params[ComputerscareBlunch::EDITOR_LETTER_SPACING_PARAM]
                 .getValue();
         editor->style.lineHeight =
-            (editor->box.size.y - 4.f) / 16.f *
-            (1.f + blunch->params[ComputerscareBlunch::EDITOR_LINE_HEIGHT_PARAM]
-                       .getValue());
+            blunch->editorFitLines ? editor->box.size.y / 16.f : 0.f;
+        editor->style.lineHeightScale =
+            blunch->editorFitLines
+                ? 1.f
+                : 1.f + blunch
+                            ->params
+                                [ComputerscareBlunch::EDITOR_LINE_HEIGHT_PARAM]
+                            .getValue();
         editor->style.lineWrapping =
             blunch->showingSequenceView() && blunch->editorLineWrapping;
         editor->openOnEnter = blunch->showingChannelsView();
@@ -3967,7 +4124,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         editor->hideCursor = false;
         editor->style.fontSize = 14.f;
         editor->style.fontHeightOffset = BLUNCH_FONT_HEIGHT_BASE;
-        editor->style.lineHeight = (editor->box.size.y - 4.f) / 16.f;
+        editor->style.lineHeight = editor->box.size.y / 16.f;
+        editor->style.lineHeightScale = 1.f;
         state = &browserEditorState;
         float browserPhase = std::fmod(
             (float)rack::system::getTime() * ComputerscareBlunch::CLOCK_HZ,
@@ -4082,7 +4240,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
               channelLineInfo.text == channelSequencer.activeLineText)
             addBlunchSequencerHighlights(state->highlights, channelSequencer,
                                          sourceLineInfo, channelLineInfo, true,
-                                         blunch->playbackDisplayStyle);
+                                         blunch->playbackDisplayStyle,
+                                         blunch->playbackBars);
         }
       } else if (blunch) {
         BlunchLineInfo sourceLineInfo =
@@ -4092,7 +4251,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             !showingPendingActiveLine && !showingInvalidActiveLine) {
           addBlunchSequencerHighlights(
               state->highlights, blunch->activeSequencer(), sourceLineInfo,
-              sourceLineInfo, true, blunch->playbackDisplayStyle);
+              sourceLineInfo, true, blunch->playbackDisplayStyle,
+              blunch->playbackBars);
         }
       } else {
         ComputerscareTextHighlight activeHighlight;
@@ -4119,6 +4279,10 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     if (layer != 1) {
       return;
     }
+
+    if (!args.fb && controlFocused())
+      ComputerscareModifierMouseControl::drawFocusStripe(
+          args, Rect(Vec(0.f, 1.f), Vec(box.size.x, box.size.y - 2.f)), .6f);
 
     ComputerscareBlunch* blunch = dynamic_cast<ComputerscareBlunch*>(module);
     if (!blunch || !editor || !blunch->showingChannelsView()) {
@@ -4183,7 +4347,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       return;
     }
     auto* blunchControl = dynamic_cast<ComputerscareBlunch*>(module);
-    if (!e.isConsumed() && blunchControl &&
+    if (!e.isConsumed() && blunchControl && controlFocused() &&
         blunchControl->handleControlKey(e.key, e.mods, e.action)) {
       e.consume(this);
       return;
@@ -4288,18 +4452,21 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                 [=]() { blunch->defaultNumberUnit = unit; }));
           }
         }));
-    const char* styles[] = {"Full", "Minimal", "Text"};
-    menu->addChild(createSubmenuItem(
-        "Playback display", styles[blunch->playbackDisplayStyle],
-        [=](Menu* submenu) {
-          const char* names[] = {"Full", "Minimal", "Text"};
-          for (int i = 0; i < 3; ++i) {
-            submenu->addChild(createCheckMenuItem(
-                names[i], "",
-                [=]() { return blunch->playbackDisplayStyle == i; },
-                [=]() { blunch->playbackDisplayStyle = i; }));
-          }
-        }));
+    menu->addChild(new MenuSeparator());
+    menu->addChild(createSubmenuItem("Visual", "", [=](Menu* visual) {
+      const char* styles[] = {"Full", "Minimal", "Text", "Off"};
+      visual->addChild(createSubmenuItem(
+          "Blinkers", styles[blunch->playbackDisplayStyle], [=](Menu* submenu) {
+            const char* names[] = {"Full", "Minimal", "Text", "Off"};
+            for (int i = 0; i < 4; ++i)
+              submenu->addChild(createCheckMenuItem(
+                  names[i], "",
+                  [=]() { return blunch->playbackDisplayStyle == i; },
+                  [=]() { blunch->playbackDisplayStyle = i; }));
+          }));
+      visual->addChild(
+          createBoolPtrMenuItem("Bars", "", &blunch->playbackBars));
+    }));
     menu->addChild(createSubmenuItem("Editor", "", [=](Menu* submenu) {
       submenu->addChild(new MenuParamSlider(
           blunch
@@ -4310,9 +4477,11 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       submenu->addChild(new MenuParamSlider(
           blunch->paramQuantities
               [ComputerscareBlunch::EDITOR_FONT_HEIGHT_PARAM]));
-      submenu->addChild(new MenuParamSlider(
-          blunch->paramQuantities
-              [ComputerscareBlunch::EDITOR_LINE_HEIGHT_PARAM]));
+      submenu->addChild(new MenuSeparator());
+      submenu->addChild(createBoolPtrMenuItem("Steady line height", "",
+                                              &blunch->editorFitLines));
+      submenu->addChild(new BlunchLineHeightSlider(blunch));
+      submenu->addChild(new MenuSeparator());
       submenu->addChild(new MenuParamSlider(
           blunch->paramQuantities
               [ComputerscareBlunch::EDITOR_LETTER_SPACING_PARAM]));

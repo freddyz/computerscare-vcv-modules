@@ -58,8 +58,17 @@ inline void checkWindchimesCv(rack::plugin::Model* model) {
   std::array<float, 7> before{};
   for (int i = 0; i < 7; ++i)
     before[i] = parameter(std::string("Chimes 2 ") + names[i]).getValue();
+  float previousTubes = parameter("Chimes 2 tubes").getValue();
+  float materialBefore = parameter("Chimes 2 material").getValue();
+  parameter("Chimes 2 level").setValue(0.f);
   first = parameter("Chimes 1 decay").getValue();
   step(500);
+  require(std::fabs(parameter("Chimes 2 tubes").getValue() - previousTubes) == 1.f,
+          "Wiggle changes Tubes by one");
+  require(parameter("Chimes 2 level").getValue() >= .3f &&
+              parameter("Chimes 2 level").getValue() <= 1.f &&
+              parameter("Chimes 2 material").getValue() == materialBefore,
+          "Wiggle bounds Level and preserves Material");
   int changed = 0;
   for (int i = 0; i < 7; ++i) {
     float difference = std::fabs(
@@ -67,9 +76,9 @@ inline void checkWindchimesCv(rack::plugin::Model* model) {
     require(difference <= .050001f, "Wiggle must stay within five percent");
     if (difference > 0.f) ++changed;
   }
-  require(changed >= 1 && changed <= 6 &&
+  require(changed == 7 &&
               first == parameter("Chimes 1 decay").getValue(),
-          "Poly wiggle must nudge one to six controls of its own chime");
+          "Poly wiggle must nudge every sound control of its own chime");
   APP->engine->addModule(module);
   auto widget =
       std::unique_ptr<app::ModuleWidget>(model->createModuleWidget(module));
@@ -95,6 +104,24 @@ inline void checkWindchimesCv(rack::plugin::Model* model) {
   };
   std::vector<float> original;
   for (auto& p : module->params) original.push_back(p.getValue());
+  for (int trial = 0; trial < 12; ++trial) {
+    float material = parameter("Chimes 1 material").getValue();
+    float secondLevel = parameter("Chimes 2 level").getValue();
+    pressTop(782.75f);
+    require(parameter("Chimes 1 level").getValue() >= .3f &&
+                parameter("Chimes 1 level").getValue() <= 1.f,
+            "Random keeps Level between thirty percent and full");
+    require(parameter("Chimes 1 material").getValue() == material &&
+                parameter("Chimes 2 level").getValue() == secondLevel,
+            "Random preserves material and unselected chimes");
+    float tubes = parameter("Chimes 1 tubes").getValue();
+    require(tubes >= 1.f && tubes <= 12.f && tubes == std::floor(tubes),
+            "Random chooses whole tube counts");
+    APP->history->undo();
+    for (size_t i = 0; i < original.size(); ++i)
+      require(module->params[i].getValue() == original[i],
+              "One undo restores a selected model randomization");
+  }
   for (int trial = 0; trial < 16; ++trial) {
     pressTop(705.9f);
     int enabled = 0;

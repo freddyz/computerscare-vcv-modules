@@ -169,7 +169,7 @@ Undo with **Cmd/Ctrl+Z**; redo with **Cmd/Ctrl+Shift+Z** or **Cmd/Ctrl+Y**. Subm
 - **Polyphony:** choose 1–16 output channels, or Auto. Auto extends to the highest channel with an activated formula. New modules default to 1.
 - **Edit/Ctrl:** switch between formula editing and keyboard/mouse control of channels.
 
-The module starts at 16 HP. Drag either panel edge to resize it in 1 HP steps. The width is saved with the patch. Editor font, spacing, and line wrapping are available in the context menu. Text height and line height are independent: changing the glyph height does not move the rows. Default line height fits all 16 channels in the editor; adjust **Editor line height** for more or less row spacing. Disabled channels retain alternating background stripes.
+The module starts at 16 HP. Drag either panel edge to resize it in 1 HP steps. The width is saved with the patch. Editor font, spacing, and line wrapping are available in the context menu. Text height and line height are independent: changing the glyph height does not move the rows. **Steady line height** is on by default, sizing 16 rows to the display. Turn it off to size rows from the font size and text height. **Editor line height** adjusts spacing only when Steady line height is off; the slider is disabled while it is on. Disabled channels retain alternating background stripes.
 
 ## Inputs
 
@@ -199,7 +199,9 @@ For an external clock, phase estimates the period from incoming edges. It needs 
 
 ## Control mode
 
-Click **Edit/Ctrl** to enter Control mode. It opens All view, disables text editing, and selects the cursor’s channel. Selected rows have a green background; the focused row has a thin yellow outline. At least one channel stays selected.
+The header’s **Play** button starts or stops the focused channel and stays pressed while it plays. **Stop** stops that channel. The yellow segment on the display’s left wall marks the focused row.
+
+Click **Edit/Ctrl** to enter Control mode. Click anywhere on Blunch to give it keyboard focus; a subtle orange stripe on the left marks focus. Hovering alone does not activate Control shortcuts. It opens All view, disables text editing, and selects the cursor’s channel. Selected rows have a green background; the focused row has a thin yellow outline. At least one channel stays selected.
 
 | Control                | Action                                                                                               |
 | ---------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -220,11 +222,14 @@ Selection stays intact when switching views. To replace it, click a row. Removin
 
 ## Playback display
 
-Choose **Playback display** in the context menu:
+Choose **Visual → Blinkers** in the context menu:
 
-- **Full:** trigger flashes, yellow outlines, and timing progress bars.
-- **Minimal:** trigger flashes only, with no outlines or progress bars.
-- **Text:** the active clock text is yellow, flashes green on each trigger, and fades back to yellow, with no background, outlines, or progress bars.
+- **Full:** trigger flashes and yellow outlines.
+- **Minimal:** trigger flashes without outlines.
+- **Text:** the active clock text is yellow, flashes green on each trigger, and fades back to yellow, with no background or outlines.
+- **Off:** no playback blinks, text flashes, or outlines.
+
+**Visual → Bars** independently shows or hides timing progress bars in any blinker mode.
 
 Display style and default number unit are saved with the patch.
 

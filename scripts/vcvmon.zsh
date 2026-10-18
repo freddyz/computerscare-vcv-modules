@@ -15,7 +15,7 @@
 
 : ${VCVMON_PAUSE:=/tmp/vcvmon.pause}
 : ${VCVMON_RACK:=$HOME/dev/VCV-Rack/Rack}
-: ${VCVMON_VERSION:=polling-v3}
+: ${VCVMON_VERSION:=toolbar-v4}
 : ${VCVMON_SDK:=$HOME/dev/VCV-Rack/Rack-SDK}
 : ${VCVMON_APP:=/Applications/VCV Rack 2 Pro.app}
 : ${VCVMON_USER_DIR:=${RACK_USER_DIR:-$HOME/Library/Application Support/Rack2}}
@@ -84,9 +84,13 @@ vcvmon () {
 			return 1
 		fi
 	fi
-	rm -f "$VCVMON_PAUSE"
+	rm -f "$VCVMON_PAUSE" "$VCVMON_PAUSE.command"
 
-	local key runner_pid=0 stamp next_stamp dirty=0
+	local key runner_pid=0 stamp next_stamp dirty=0 failed=0 command
+	_vcvmon_status () {
+		print -r -- "$1 $(date +%s)" > "$VCVMON_PAUSE.status.tmp"
+		mv -f "$VCVMON_PAUSE.status.tmp" "$VCVMON_PAUSE.status"
+	}
 	local last_scan=0 now=0
 
 	_vcvmon_dist_pids () {
@@ -117,13 +121,13 @@ vcvmon () {
 
 	_vcvmon_start_rack () {
 		if [[ "$mode" == dist ]]; then
-			(cd "$VCVMON_APP/Contents/MacOS" && RACK_USER_DIR="$VCVMON_USER_DIR" ./Rack) &!
+			(cd "$VCVMON_APP/Contents/MacOS" && VCVMON_CONTROL="$VCVMON_PAUSE" RACK_USER_DIR="$VCVMON_USER_DIR" ./Rack) &!
 			runner_pid=$!
 			return
 		fi
 		(
 			cd "$VCVMON_RACK" || exit 1
-			make plugins run
+			VCVMON_CONTROL="$VCVMON_PAUSE" make run
 		) &!
 		runner_pid=$!
 	}
@@ -144,6 +148,8 @@ vcvmon () {
 	_vcvmon_restart_rack () {
 		local message="$*" build_stamp=$(_vcvmon_stamp)
 		[[ -n "$message" ]] && _vcvmon_banner "1;30;42" "$message"
+		_vcvmon_status building
+		failed=0
 		if [[ "$mode" == dist ]]; then
 			local arch package plugins_dir
 			case $(uname -m) in
@@ -153,86 +159,94 @@ vcvmon () {
 			esac
 			if ! (cd "$VCVMON_REPO" && make RACK_DIR="$VCVMON_SDK" dist); then
 				_vcvmon_banner "1;97;41" "VCVMON BUILD FAILED - Rack left running   [r] retry"
+				failed=1; dirty=0; _vcvmon_status failed
 				return 1
 			fi
 			local packages=("$VCVMON_REPO"/dist/*-mac-$arch.vcvplugin(N))
 			if (( ${#packages} != 1 )); then
 				print -u2 "vcvmon: expected one dist package for mac-$arch"
+				failed=1; dirty=0; _vcvmon_status failed
 				return 1
 			fi
 			package=$packages[1]
-			_vcvmon_close_dist || return 1
+			_vcvmon_close_dist || { failed=1; dirty=0; _vcvmon_status failed; return 1; }
 			runner_pid=0
 			plugins_dir="$VCVMON_USER_DIR/plugins-mac-$arch"
 			if ! mkdir -p "$plugins_dir" || ! cp -f "$package" "$plugins_dir/"; then
 				print -u2 "vcvmon: install failed"
 				_vcvmon_start_rack
+				failed=1; dirty=0; _vcvmon_status failed
 				return 1
 			fi
 		else
+			if ! (cd "$VCVMON_RACK" && make plugins all); then
+				failed=1; dirty=0; _vcvmon_status failed
+				_vcvmon_banner "1;97;41" "VCVMON BUILD FAILED - Rack left running   [r] retry"
+				return 1
+			fi
 			_vcvmon_stop_rack
 		fi
 		_vcvmon_start_rack
 		stamp=$build_stamp
 		dirty=0
+		_vcvmon_status watching
 	}
 
 	_vcvmon_banner "1;30;42" "VCVMON $VCVMON_VERSION $mode RUNNING   [space] pause/resume   [r] rebuild   [q] quit"
 	stamp=$(_vcvmon_stamp)
-	if [[ "$mode" == dist ]]; then
-		_vcvmon_restart_rack "VCVMON dist - building plugin + launching installed Rack"
-	else
-		_vcvmon_start_rack
-	fi
+	_vcvmon_restart_rack "VCVMON $mode - building + launching Rack" || true
 
 	{
 		while true; do
+			command=""
 			if read -t 0.5 -sk1 key; then
 				case $key in
-					' ')
-						if [[ -f "$VCVMON_PAUSE" ]]; then
-							rm -f "$VCVMON_PAUSE"
-							if (( dirty )); then
-								_vcvmon_restart_rack "VCVMON RUNNING - rebuilding queued changes   [space] to pause"
-							else
-								_vcvmon_banner "1;30;42" "VCVMON RUNNING   [space] to pause"
-							fi
-						else
-							touch "$VCVMON_PAUSE"
-							_vcvmon_banner "1;30;43" "VCVMON PAUSED   [space] to resume + rebuild"
-						fi
-						;;
-					r|R)
-						rm -f "$VCVMON_PAUSE"
-						_vcvmon_restart_rack "VCVMON REBUILD"
-						;;
-					q|Q)
-						break
-						;;
+					' ') command=toggle ;;
+					r|R) command=rebuild ;;
+					q|Q) break ;;
 				esac
 			fi
+			if [[ -f "$VCVMON_PAUSE.command" ]]; then
+				command=$(<"$VCVMON_PAUSE.command")
+				rm -f "$VCVMON_PAUSE.command"
+			fi
+			if [[ "$command" == toggle ]]; then
+				if [[ -f "$VCVMON_PAUSE" ]]; then command=resume; else command=pause; fi
+			fi
+			case "$command" in
+				pause) touch "$VCVMON_PAUSE"; _vcvmon_banner "1;30;43" "VCVMON PAUSED" ;;
+				resume) rm -f "$VCVMON_PAUSE"; _vcvmon_banner "1;30;42" "VCVMON RUNNING" ;;
+				rebuild)
+					rm -f "$VCVMON_PAUSE"
+					_vcvmon_restart_rack "VCVMON REBUILD" || true
+					;;
+			esac
 
 			now=$(date +%s)
-			if (( now == last_scan )); then
-				continue
-			fi
-			last_scan=$now
-			next_stamp=$(_vcvmon_stamp)
-			if [[ "$next_stamp" != "$stamp" ]]; then
-				stamp="$next_stamp"
-				if [[ -f "$VCVMON_PAUSE" ]]; then
-					if (( ! dirty )); then
-						_vcvmon_banner "1;30;43" "VCVMON PAUSED - rebuild queued   [space] to resume + rebuild"
-					fi
+			if (( now != last_scan )); then
+				last_scan=$now
+				next_stamp=$(_vcvmon_stamp)
+				if [[ "$next_stamp" != "$stamp" ]]; then
+					stamp="$next_stamp"
 					dirty=1
-				else
-					_vcvmon_restart_rack "VCVMON CHANGE - rebuilding   [space] to pause"
 				fi
+			fi
+			# Also handles the pause file being removed by another terminal/UI.
+			if (( dirty )) && [[ ! -f "$VCVMON_PAUSE" ]]; then
+				_vcvmon_restart_rack "VCVMON RUNNING - rebuilding queued changes" || true
+			fi
+			if [[ -f "$VCVMON_PAUSE" ]]; then
+				if (( dirty )); then _vcvmon_status queued; else _vcvmon_status paused; fi
+			elif (( failed )); then
+				_vcvmon_status failed
+			else
+				_vcvmon_status watching
 			fi
 		done
 	} always {
 		_vcvmon_stop_rack
-		rm -f "$VCVMON_PAUSE"
+		rm -f "$VCVMON_PAUSE" "$VCVMON_PAUSE.command"
+		_vcvmon_status stopped
 		_vcvmon_banner "1;97;41" "VCVMON STOPPED"
 	}
 }
