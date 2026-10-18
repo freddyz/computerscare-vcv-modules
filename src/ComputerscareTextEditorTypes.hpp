@@ -22,6 +22,7 @@ struct ComputerscareTextHighlight {
   float textOpacity = 1.f;
   float borderWidth = 1.2f;
   float borderDistortion = 0.f;
+  float backgroundDistortion = 0.f;
   float progress = 0.f;
   int progressSegments = 0;
 };

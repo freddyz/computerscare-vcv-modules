@@ -18,6 +18,24 @@ inline void checkWindchimesCv(rack::plugin::Model* model) {
       if (module->getParamQuantity(i)->name == name) return module->params[i];
     throw std::runtime_error("Missing parameter: " + name);
   };
+  for (size_t i = 0; i < module->params.size(); ++i) {
+    auto* gain = module->getParamQuantity(i);
+    if (gain->name != "Gain") continue;
+    float original = gain->getValue();
+    require(gain->getUnit() == " dB" && std::fabs(original - .8f) < .0001f,
+            "Gain uses dB while preserving the previous default level");
+    gain->setDisplayValue(18.f);
+    require(std::fabs(gain->getValue() - 7.94328235f) < .0001f &&
+                std::fabs(gain->getDisplayValue() - 18.f) < .001f,
+            "Gain reaches +18 dB and accepts typed decibel values");
+    gain->setDisplayValue(0.f);
+    require(std::fabs(gain->getValue() - 1.f) < .0001f,
+            "Zero dB gives unity gain");
+    gain->setDisplayValue(-80.f);
+    require(gain->getValue() == 0.f && gain->getDisplayValueString() == "−∞",
+            "Minimum gain is silence");
+    gain->setValue(original);
+  }
   engine::Module::ProcessArgs args;
   args.sampleRate = 48000.f;
   args.sampleTime = 1.f / args.sampleRate;

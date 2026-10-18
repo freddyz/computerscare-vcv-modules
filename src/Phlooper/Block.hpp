@@ -5,6 +5,35 @@
 #include "../Computerscare.hpp"
 
 namespace phlooper {
+// Color a row-sized segment on the display's left perspective wall.
+inline void drawDisplayWallIndicator(NVGcontext* vg, Vec size, float top,
+                                     float bottom, NVGcolor color,
+                                     float skew = 0.f) {
+  if (bottom <= top || bottom <= 0.f || top >= size.y) return;
+  const Vec a(-.55f, -.65f), b(-.3f, size.y + .85f);
+  const Vec outerA = a + Vec(-4.f - skew, 3.f);
+  const Vec outerB = b + Vec(-4.f, 3.f);
+  auto point = [&](Vec start, Vec end, float y) {
+    return start + (end - start) * clamp(y / size.y, 0.f, 1.f);
+  };
+  nvgSave(vg);
+  nvgBeginPath(vg);
+  for (int i = 0; i < 4; ++i) {
+    Vec p = i == 0   ? point(a, b, top)
+            : i == 1 ? point(a, b, bottom)
+            : i == 2 ? point(outerA, outerB, bottom)
+                     : point(outerA, outerB, top);
+    if (i == 0)
+      nvgMoveTo(vg, p.x, p.y);
+    else
+      nvgLineTo(vg, p.x, p.y);
+  }
+  nvgClosePath(vg);
+  nvgFillColor(vg, color);
+  nvgFill(vg);
+  nvgRestore(vg);
+}
+
 // Display glass stays rectangular for accurate mouse coordinates. Its thin,
 // irregular surround and two exposed sides form the front of a down-left box.
 inline void drawDisplayFrame(NVGcontext* vg, Vec size, float focusTop = -1.f,

@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <functional>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -194,14 +195,25 @@ static void addBlunchSequencerHighlights(
                mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
                                                   seq.activeHighlightEnd));
   tokenHighlight.hasBackground =
-      displayStyle != 3 && seq.activeClockDisplayPulse > 0.001f;
+      displayStyle <= 1 && seq.activeClockDisplayPulse > 0.001f;
   unsigned char pulseAlpha = (unsigned char)std::min(
       0xbb, 0x30 + (int)(seq.activeClockDisplayPulse * 0x75));
   tokenHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, pulseAlpha);
-  tokenHighlight.hasBorder = displayStyle == 0;
+  tokenHighlight.hasBorder =
+      displayStyle == 0 ||
+      (displayStyle == 4 && seq.activeClockDisplayPulse > .001f);
   tokenHighlight.borderWidth = .8f;
   tokenHighlight.borderDistortion = .75f;
-  tokenHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
+  tokenHighlight.backgroundDistortion =
+      (displayStyle <= 1 || displayStyle == 4) ? 2.f : 0.f;
+  tokenHighlight.border = nvgRGBA(
+      0xff, 0xee, 0x9a,
+      displayStyle == 4
+          ? (unsigned char)(221.f *
+                            std::max(
+                                0.f,
+                                std::min(1.f, seq.activeClockDisplayPulse)))
+          : 0xdd);
   tokenHighlight.hasProgress =
       showBars && includeClockProgress && seq.running &&
       !blunch::sequencer::activeStepUsesExternalClock(seq);
@@ -242,7 +254,11 @@ static void addBlunchSequencerHighlights(
           std::max(externalTimingHighlight.begin,
                    mapBlunchSourceOffsetToVisibleLine(sourceLine, visibleLine,
                                                       externalTimingEnd));
-      externalTimingHighlight.hasBackground = displayStyle != 2;
+      externalTimingHighlight.hasBackground = displayStyle <= 1;
+      externalTimingHighlight.hasBorder = displayStyle == 4;
+      externalTimingHighlight.borderWidth = .8f;
+      externalTimingHighlight.backgroundDistortion =
+          (displayStyle <= 1 || displayStyle == 4) ? 2.f : 0.f;
       externalTimingHighlight.hasForeground = displayStyle == 2;
       externalTimingHighlight.foreground = COLOR_COMPUTERSCARE_GREEN;
       float externalTimingFade =
@@ -253,6 +269,8 @@ static void addBlunchSequencerHighlights(
           (unsigned char)(0xbb * externalTimingFade);
       externalTimingHighlight.background =
           nvgRGBA(0xc8, 0x9f, 0x16, externalTimingAlpha);
+      externalTimingHighlight.border = nvgRGBA(
+          0xff, 0xee, 0x9a, (unsigned char)(221.f * externalTimingFade));
       if (externalTimingHighlight.begin < externalTimingHighlight.end) {
         highlights.push_back(externalTimingHighlight);
       }
@@ -455,11 +473,28 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   bool randomizeCursorRestorePending = false;
   int randomizeCursorRestoreLine = 0;
   bool randomizeCursorRestoreAtEnd = false;
-  int pendingLine = -1;
-  std::string pendingLineText;
-  std::vector<BlunchProgramStep> pendingProgram;
-  bool viewingPendingLine = true;
-  bool pendingActivationArmed = false;
+  struct PendingFormula {
+    int line = -1;
+    std::string text;
+    std::vector<BlunchProgramStep> program;
+    bool viewing = true;
+    bool armed = false;
+  };
+  PendingFormula pendingFormulas[MAX_POLY_CHANNELS];
+  std::map<int, std::string> runningLineTexts[MAX_POLY_CHANNELS];
+  PendingFormula& pendingEdit() {
+    return pendingFormulas[activeContextChannel()];
+  }
+  bool channelHasPendingFormula(int channel) {
+    channel = clampChannel(channel);
+    for (const auto& line : runningLineTexts[channel])
+      if (getLineInfo(sequenceEditorStates[channel].text, line.first).text !=
+          line.second)
+        return true;
+    const auto& pending = pendingFormulas[channel];
+    return pending.line >= 0 &&
+           pending.text != sequencers[channel].activeLineText;
+  }
   int errorLine = -1;
   int errorLineRevertLine = -1;
   std::string errorLineRevertText;
@@ -501,7 +536,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   int runInputMode = 0;
   blunch::language::ClockUnit defaultNumberUnit =
       blunch::language::ClockUnit::Bpm;
-  int playbackDisplayStyle = 0;
+  int playbackDisplayStyle = 1;
   bool playbackBars = true;
 
   int clampChannel(int channel) const {
@@ -680,7 +715,6 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     focusedChannel =
         std::max(0, std::min(channelsCursorChannel, MAX_POLY_CHANNELS - 1));
     if (focusedChannel != previousFocusedChannel) {
-      clearPendingLine();
       clearSyntaxError();
       checkedFocusedLineText.clear();
       randomizeCursorRestorePending = false;
@@ -696,7 +730,6 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     focusedChannel =
         (focusedChannel + direction + MAX_POLY_CHANNELS) % MAX_POLY_CHANNELS;
     if (focusedChannel != previousFocusedChannel) {
-      clearPendingLine();
       clearSyntaxError();
       checkedFocusedLineText.clear();
       randomizeCursorRestorePending = false;
@@ -937,7 +970,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     polyChannels = 1;
     configParam<BlunchSpeedOfTimeParamQuantity>(SPEED_OF_TIME_PARAM, -5.f, 5.f,
                                                 0.f, "Speed of time");
-    configSwitch(POLY_CHANNELS_PARAM, 0.f, 16.f, 1.f, "Poly Channels",
+    configSwitch(POLY_CHANNELS_PARAM, 0.f, 16.f, 0.f, "Poly Channels",
                  polyChannelLabels(true));
     configSwitch<BlunchAdvanceModeParamQuantity>(
         AUTO_ADVANCE_PARAM, 0.f, BLUNCH_ADVANCE_MODE_COUNT - 1, 1.f,
@@ -1381,6 +1414,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void dataFromJson(json_t* rootJ) override {
+    for (int ch = 0; ch < MAX_POLY_CHANNELS; ++ch) {
+      runningLineTexts[ch].clear();
+      pendingFormulas[ch] = PendingFormula{};
+    }
     json_t* fitLinesJ = json_object_get(rootJ, "editorFitLines");
     editorFitLines = !json_is_boolean(fitLinesJ) || json_is_true(fitLinesJ);
     json_t* unitJ = json_object_get(rootJ, "defaultNumberUnit");
@@ -1392,11 +1429,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     json_t* styleJ = json_object_get(rootJ, "playbackDisplayStyle");
     if (json_is_integer(styleJ))
       playbackDisplayStyle =
-          std::max(0, std::min(3, (int)json_integer_value(styleJ)));
+          std::max(0, std::min(4, (int)json_integer_value(styleJ)));
     json_t* barsJ = json_object_get(rootJ, "playbackBars");
     // Preserve the appearance of older patches that coupled bars to Full.
-    playbackBars = json_is_boolean(barsJ) ? json_is_true(barsJ)
-                                          : playbackDisplayStyle == 0;
+    playbackBars = json_is_boolean(barsJ)
+                       ? json_is_true(barsJ)
+                       : !json_is_integer(styleJ) || playbackDisplayStyle == 0;
     json_t* channelTextsJ = json_object_get(rootJ, "channelTexts");
     if (channelTextsJ) {
       size_t index;
@@ -1567,8 +1605,16 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         seq.activeProgramIndex, role, eventIndex, drawIndex);
   }
 
-  bool commitLine(int line, bool resetPhase) {
+  bool commitLine(int line, bool resetPhase, bool acceptEdits = true) {
     BlunchLineInfo lineInfo = getLineInfo(sequenceEditorState().text, line);
+    auto& running = runningLineTexts[activeContextChannel()];
+    if (running.empty()) {
+      for (int i = 0; i < getLineCount(sequenceEditorState().text); ++i)
+        running[i] = getLineInfo(sequenceEditorState().text, i).text;
+    }
+    auto existing = running.find(line);
+    if (!acceptEdits && existing != running.end())
+      lineInfo.text = existing->second;
     std::vector<BlunchProgramStep> program;
     if (!parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
       setSyntaxError(line, line == activeSequencer().activeLine
@@ -1578,12 +1624,13 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
 
     clearSyntaxError();
+    running[line] = lineInfo.text;
     activeSequencer().loadActiveProgram(line, lineInfo.text, program,
                                         resetPhase);
     if (seededRandomEnabled()) {
       resetSeededRandomSerials(activeSequencer());
     }
-    if (pendingLine == line && pendingLineText == lineInfo.text) {
+    if (pendingEdit().line == line && pendingEdit().text == lineInfo.text) {
       clearPendingLine();
     }
     applyActiveProgramStep(activeSequencer());
@@ -1591,19 +1638,19 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void queuePendingActivation() {
-    if (pendingLine < 0 || pendingProgram.empty()) {
+    if (pendingEdit().line < 0 || pendingEdit().program.empty()) {
       return;
     }
-    pendingActivationArmed = waitMode() != WAIT_IMMEDIATE;
-    viewingPendingLine = true;
+    pendingEdit().armed = waitMode() != WAIT_IMMEDIATE;
+    pendingEdit().viewing = true;
   }
 
   void clearPendingLine() {
-    pendingLine = -1;
-    pendingLineText.clear();
-    pendingProgram.clear();
-    viewingPendingLine = true;
-    pendingActivationArmed = false;
+    pendingEdit().line = -1;
+    pendingEdit().text.clear();
+    pendingEdit().program.clear();
+    pendingEdit().viewing = true;
+    pendingEdit().armed = false;
   }
 
   void replaceLineText(int line, const std::string& replacement) {
@@ -1623,6 +1670,32 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     sequenceEditorStates[channel].dirty = true;
   }
 
+  void discardChannelPending(int channel) {
+    channel = clampChannel(channel);
+    if (!channelHasPendingFormula(channel)) return;
+    const auto& running = runningLineTexts[channel];
+    std::string restored;
+    if (!running.empty()) {
+      for (int line = 0; line <= running.rbegin()->first; ++line) {
+        if (line) restored += "\n";
+        auto found = running.find(line);
+        if (found != running.end()) restored += found->second;
+      }
+    }
+    auto& state = sequenceEditorStates[channel];
+    state.text = restored;
+    state.cursor = std::min(state.cursor, int(restored.size()));
+    state.selection = state.cursor;
+    state.dirty = true;
+    pendingFormulas[channel] = PendingFormula{};
+    if (channel == focusedChannel) {
+      clearSyntaxError();
+      checkedFocusedLineText = getLineInfo(restored, selectedLine).text;
+    }
+    refreshChannelsEditorState(true);
+    editorViewDirty = true;
+  }
+
   void syncChannelsEditorEdit(int channel) {
     if (!channelsEditorEditingEnabled(channel)) {
       return;
@@ -1635,7 +1708,6 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       return;
     }
 
-    BlunchSequencerRuntime& seq = sequencerForChannel(channel);
     BlunchLineInfo rowInfo = getLineInfo(channelsEditorState.text, channel);
     int activeLine = channelOverviewLine(channel);
     if (rowInfo.text ==
@@ -1647,11 +1719,6 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     int column = std::max(0, channelsEditorState.cursor - rowInfo.begin);
     source.cursor = updated.begin + std::min(column, int(rowInfo.text.size()));
     source.selection = source.cursor;
-    if (activeLine == seq.activeLine && isBlankLine(rowInfo.text)) {
-      seq.activeProgram.clear();
-      seq.activeClockOutputHigh = false;
-      seq.clockHigh = false;
-    }
   }
 
   std::string randomTemplateError;
@@ -1724,10 +1791,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
     std::vector<BlunchProgramStep> parsedProgram;
     if (parseLineProgram(line, newLineInfo.begin, program, parsedProgram)) {
-      pendingLine = line;
-      pendingLineText = program;
-      pendingProgram = parsedProgram;
-      viewingPendingLine = true;
+      pendingEdit().line = line;
+      pendingEdit().text = program;
+      pendingEdit().program = parsedProgram;
+      pendingEdit().viewing = true;
       queuePendingActivation();
     }
     focusedChannel = previousFocusedChannel;
@@ -1748,13 +1815,13 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       std::string revertText;
       if (line == activeSequencer().activeLine) {
         revertText = activeSequencer().activeLineText;
-      } else if (pendingLine == line && !pendingLineText.empty()) {
-        revertText = pendingLineText;
+      } else if (pendingEdit().line == line && !pendingEdit().text.empty()) {
+        revertText = pendingEdit().text;
       } else if (errorLineRevertLine == line) {
         revertText = errorLineRevertText;
       }
       replaceLineText(line, revertText);
-      if (pendingLine == line && line == activeSequencer().activeLine) {
+      if (pendingEdit().line == line && line == activeSequencer().activeLine) {
         clearPendingLine();
       }
       checkedFocusedLineText =
@@ -1763,7 +1830,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       return;
     }
 
-    if (pendingLine == line) {
+    if (pendingEdit().line == line) {
       if (line == activeSequencer().activeLine) {
         replaceLineText(line, activeSequencer().activeLineText);
       }
@@ -1773,24 +1840,24 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void showPendingLine() {
-    if (pendingLine < 0 || pendingLineText.empty()) {
+    if (pendingEdit().line < 0 || pendingEdit().text.empty()) {
       return;
     }
 
-    replaceLineText(pendingLine, pendingLineText);
-    checkedFocusedLineText = pendingLineText;
-    viewingPendingLine = true;
+    replaceLineText(pendingEdit().line, pendingEdit().text);
+    checkedFocusedLineText = pendingEdit().text;
+    pendingEdit().viewing = true;
   }
 
   void showActiveLineVersion() {
-    if (pendingLine != activeSequencer().activeLine) {
+    if (pendingEdit().line != activeSequencer().activeLine) {
       return;
     }
 
     replaceLineText(activeSequencer().activeLine,
                     activeSequencer().activeLineText);
     checkedFocusedLineText = activeSequencer().activeLineText;
-    viewingPendingLine = false;
+    pendingEdit().viewing = false;
   }
 
   void togglePendingView() {
@@ -1799,15 +1866,15 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                       activeSequencer().activeLineText);
       checkedFocusedLineText = activeSequencer().activeLineText;
       clearSyntaxError();
-      viewingPendingLine = false;
+      pendingEdit().viewing = false;
       return;
     }
 
-    if (pendingLine != activeSequencer().activeLine) {
+    if (pendingEdit().line != activeSequencer().activeLine) {
       return;
     }
 
-    if (viewingPendingLine) {
+    if (pendingEdit().viewing) {
       showActiveLineVersion();
     } else {
       showPendingLine();
@@ -1826,25 +1893,26 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       checkedFocusedLineText = lineInfo.text;
       std::vector<BlunchProgramStep> program;
       if (parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
-        pendingLine = line;
-        pendingLineText = lineInfo.text;
-        pendingProgram = program;
-        pendingActivationArmed = false;
+        pendingEdit().line = line;
+        pendingEdit().text = lineInfo.text;
+        pendingEdit().program = program;
+        pendingEdit().armed = false;
         if (errorLine == line) {
           clearSyntaxError();
         }
         syntaxError = false;
       } else {
-        std::string revertText = pendingLine == line && !pendingLineText.empty()
-                                     ? pendingLineText
-                                     : previousCheckedLineText;
+        std::string revertText =
+            pendingEdit().line == line && !pendingEdit().text.empty()
+                ? pendingEdit().text
+                : previousCheckedLineText;
         setSyntaxError(line, revertText);
       }
       return;
     }
 
     if (lineInfo.text == activeSequencer().activeLineText) {
-      if (pendingLine == line && viewingPendingLine) {
+      if (pendingEdit().line == line && pendingEdit().viewing) {
         clearPendingLine();
       }
       if (errorLine == line) {
@@ -1854,25 +1922,25 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       return;
     }
 
-    if (pendingLine == line && lineInfo.text == pendingLineText) {
+    if (pendingEdit().line == line && lineInfo.text == pendingEdit().text) {
       checkedFocusedLineText = lineInfo.text;
-      viewingPendingLine = true;
+      pendingEdit().viewing = true;
       return;
     }
 
     if (lineInfo.text == checkedFocusedLineText &&
-        (pendingLine == line || errorLine == line)) {
+        (pendingEdit().line == line || errorLine == line)) {
       return;
     }
 
     checkedFocusedLineText = lineInfo.text;
     std::vector<BlunchProgramStep> program;
     if (parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
-      pendingLine = line;
-      pendingLineText = lineInfo.text;
-      pendingProgram = program;
-      viewingPendingLine = true;
-      pendingActivationArmed = false;
+      pendingEdit().line = line;
+      pendingEdit().text = lineInfo.text;
+      pendingEdit().program = program;
+      pendingEdit().viewing = true;
+      pendingEdit().armed = false;
       if (errorLine == line) {
         clearSyntaxError();
       }
@@ -1899,12 +1967,14 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void commitPendingLine(bool resetPhase) {
-    if (pendingLine < 0 || pendingProgram.empty()) {
+    if (pendingEdit().line < 0 || pendingEdit().program.empty()) {
       return;
     }
 
-    activeSequencer().loadActiveProgram(pendingLine, pendingLineText,
-                                        pendingProgram, resetPhase);
+    runningLineTexts[activeContextChannel()][pendingEdit().line] =
+        pendingEdit().text;
+    activeSequencer().loadActiveProgram(pendingEdit().line, pendingEdit().text,
+                                        pendingEdit().program, resetPhase);
     if (seededRandomEnabled()) {
       resetSeededRandomSerials(activeSequencer());
     }
@@ -1914,8 +1984,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool activatePendingLineIfArmed(bool resetPhase) {
-    if (!pendingActivationArmed || pendingLine < 0 || pendingProgram.empty() ||
-        activeContextChannel() != clampChannel(focusedChannel)) {
+    if (!pendingEdit().armed || pendingEdit().line < 0 ||
+        pendingEdit().program.empty()) {
       return false;
     }
 
@@ -1926,7 +1996,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool activatePendingLineAtBoundary(WaitBoundary boundary, bool resetPhase) {
-    if (!pendingActivationArmed) {
+    if (!pendingEdit().armed) {
       return false;
     }
 
@@ -1943,7 +2013,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool activatePendingLineAtExternalClock(int externalClock, bool resetPhase) {
-    if (!pendingActivationArmed || externalClock < 0 || externalClock > 3) {
+    if (!pendingEdit().armed || externalClock < 0 || externalClock > 3) {
       return false;
     }
 
@@ -1971,10 +2041,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       return false;
     }
 
-    pendingLine = line;
-    pendingLineText = lineInfo.text;
-    pendingProgram = program;
-    viewingPendingLine = true;
+    pendingEdit().line = line;
+    pendingEdit().text = lineInfo.text;
+    pendingEdit().program = program;
+    pendingEdit().viewing = true;
     clearSyntaxError();
 
     if (!shouldDelayExecution()) {
@@ -2543,7 +2613,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool moveToNextLine(bool resetPhase, bool emitTokenMove = true) {
-    int lineCount = getLineCount(sequenceEditorState().text);
+    const auto& running = runningLineTexts[activeContextChannel()];
+    int lineCount = running.empty() ? getLineCount(sequenceEditorState().text)
+                                    : running.rbegin()->first + 1;
     if (lineCount <= 0) {
       return false;
     }
@@ -2561,6 +2633,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
       BlunchLineInfo lineInfo =
           getLineInfo(sequenceEditorState().text, nextLine);
+      auto submitted = running.find(nextLine);
+      if (submitted == running.end()) continue;
+      lineInfo.text = submitted->second;
       if (isBlankLine(lineInfo.text)) {
         continue;
       }
@@ -2571,7 +2646,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         return true;
       }
 
-      if (!commitLine(nextLine, resetPhase)) {
+      if (!commitLine(nextLine, resetPhase, false)) {
         return false;
       }
 
@@ -2713,26 +2788,46 @@ static bool blunchShortcutHelpHeld(bool controlMode = false) {
            (APP->window->getMods() & RACK_MOD_MASK) == GLFW_MOD_SHIFT));
 }
 
+static float blunchPendingPulse() {
+  return .35f + .55f * (.5f + .5f * std::sin(float(rack::system::getTime()) *
+                                             2.f * float(M_PI) / 2.4f));
+}
+
 struct BlunchTextEditor : ComputerscareTextEditor {
   void draw(const DrawArgs& args) override {
     float top = -1.f, bottom = -1.f;
+    std::vector<std::pair<float, float>> pendingRows;
     if (module) {
       auto font = loadEditorFont();
       if (font) {
         nvgSave(args.vg);
+        nvgScale(args.vg, getFontScaleX(), getFontScaleY());
         applyTextStyle(args.vg, font);
         auto layout = ComputerscareTextEditorLayout::build(
             args.vg, text, getScaledBoxSize(), style);
         nvgRestore(args.vg);
-        for (const auto& row : layout.rows)
+        for (size_t i = 0; i < layout.rows.size(); ++i) {
+          const auto& row = layout.rows[i];
           if (row.begin <= cursor && cursor <= row.end) {
             top = row.top * getFontScaleY();
             bottom = row.bottom * getFontScaleY();
-            break;
           }
+          if (module->showingChannelsView() &&
+              i < ComputerscareBlunch::MAX_POLY_CHANNELS &&
+              module->channelHasPendingFormula(i))
+            pendingRows.emplace_back(row.top * getFontScaleY(),
+                                     row.bottom * getFontScaleY());
+        }
       }
     }
-    phlooper::drawDisplayFrame(args.vg, box.size, top, bottom, 1.f);
+    phlooper::drawDisplayFrame(args.vg, box.size, -1.f, -1.f, 1.f);
+    phlooper::drawDisplayWallIndicator(args.vg, box.size, top, bottom,
+                                       COLOR_COMPUTERSCARE_GREEN, 1.f);
+    float pulse = blunchPendingPulse();
+    for (const auto& row : pendingRows)
+      phlooper::drawDisplayWallIndicator(args.vg, box.size, row.first,
+                                         row.second,
+                                         nvgRGBAf(1.f, .93f, .6f, pulse), 1.f);
     ComputerscareTextEditor::draw(args);
   }
   ComputerscareBlunch* module = nullptr;
@@ -3102,47 +3197,108 @@ struct BlunchEditControlToggle : phlooper::WarpedDropdown {
 
 struct BlunchChannelTransport : phlooper::WarpedDropdown {
   ComputerscareBlunch* blunch = nullptr;
-  bool stop = false, pressed = false;
+  bool stop = false, cancel = false, pressed = false;
+  widget::SvgWidget icons[2];
+  WeakPtr<ui::Tooltip> hoverTooltip;
+  BlunchChannelTransport() {
+    icons[0].setSvg(APP->window->loadSvg(
+        asset::plugin(pluginInstance, "res/components/blunch-play.svg")));
+    icons[1].setSvg(APP->window->loadSvg(
+        asset::plugin(pluginInstance, "res/components/blunch-stop.svg")));
+  }
+  void destroyTooltip() {
+    if (auto* tooltip = hoverTooltip.get()) tooltip->requestDelete();
+    hoverTooltip = nullptr;
+  }
+  ~BlunchChannelTransport() override { destroyTooltip(); }
+  std::string tooltipText() const {
+    if (!blunch) return "";
+    int ch = channel();
+    if (cancel)
+      return pending()
+                 ? string::f("Discard pending changes for channel %d", ch + 1)
+                 : string::f("Channel %d: no pending changes", ch + 1);
+    if (!stop && pending())
+      return string::f("Apply pending changes to channel %d", ch + 1);
+    return stop ? string::f("Stop channel %d", ch + 1)
+                : string::f("Channel %d: %s", ch + 1,
+                            blunch->channelPlaying(ch) ? "playing" : "stopped");
+  }
+  void onEnter(const EnterEvent& e) override {
+    phlooper::WarpedDropdown::onEnter(e);
+    if (!blunch || !settings::tooltips || hoverTooltip.get()) return;
+    auto* tooltip = new ui::Tooltip;
+    tooltip->text = tooltipText();
+    APP->scene->addChild(tooltip);
+    hoverTooltip = tooltip;
+  }
+  void step() override {
+    phlooper::WarpedDropdown::step();
+    if (auto* tooltip = hoverTooltip.get()) tooltip->text = tooltipText();
+  }
   int channel() const {
     return blunch->showingChannelsView() ? blunch->channelsCursorChannel
                                          : blunch->focusedChannel;
   }
-  std::string label() override { return ""; }
+  bool pending() const {
+    return blunch && blunch->channelHasPendingFormula(channel());
+  }
+  std::string label() override { return cancel ? "x" : ""; }
   bool isPressed() override {
-    return pressed || (!stop && blunch && blunch->channelPlaying(channel()));
+    if (!stop && !cancel && pending()) return false;
+    return pressed ||
+           (!stop && !cancel && blunch && blunch->channelPlaying(channel()));
   }
   void draw(const DrawArgs& args) override {
-    configure(14.f, 13.f, 2.f, 1.f, .6f, stop ? 111 : 110);
-    faceColor = nvgRGB(36, 201, 166);
+    configure(cancel ? 11.f : 14.f, 13.f, 2.5f, 1.25f, .6f,
+              cancel ? 112
+              : stop ? 111
+                     : 110);
+    textSize = 11.f;
+    faceColor = cancel ? nvgRGB(190, 190, 190) : COLOR_COMPUTERSCARE_GREEN;
+    if (!stop && !cancel && pending())
+      faceColor = nvgLerpRGBA(COLOR_COMPUTERSCARE_GREEN, nvgRGB(255, 238, 154),
+                              blunchPendingPulse());
     phlooper::WarpedDropdown::draw(args);
-    float shift = isPressed() ? 1.5f : 0.f;
-    nvgBeginPath(args.vg);
-    if (stop)
-      nvgRect(args.vg, 4.f + shift, 3.f + shift * .65f, 5.f, 5.f);
-    else {
-      nvgMoveTo(args.vg, 4.f + shift, 2.5f + shift * .65f);
-      nvgLineTo(args.vg, 9.f + shift, 5.5f + shift * .65f);
-      nvgLineTo(args.vg, 4.f + shift, 8.5f + shift * .65f);
-      nvgClosePath(args.vg);
-    }
-    nvgFillColor(args.vg, nvgRGB(15, 42, 36));
-    nvgFill(args.vg);
+    if (cancel) return;
+    float shift = isPressed() ? upDepth + downDepth : 0.f;
+    nvgSave(args.vg);
+    nvgTranslate(args.vg, (stop ? 3.f : 2.5f) + shift, 2.f + shift * .65f);
+    icons[stop ? 1 : 0].draw(args);
+    nvgRestore(args.vg);
   }
   void onButton(const ButtonEvent& e) override {
     if (!blunch || e.button != GLFW_MOUSE_BUTTON_LEFT) return;
     if (e.action == GLFW_PRESS) {
       pressed = true;
       unsigned bit = 1u << channel();
-      if (stop)
+      if (cancel)
+        blunch->discardChannelPending(channel());
+      else if (stop)
         blunch->controlStopRequests.fetch_or(bit);
-      else
+      else if (pending()) {
+        int target = channel();
+        int line = blunch->pendingFormulas[target].line;
+        if (line < 0)
+          line = blunch->showingChannelsView()
+                     ? blunch->channelOverviewLine(target)
+                     : blunch->selectedLine;
+        int previous = blunch->focusedChannel;
+        blunch->focusedChannel = target;
+        if (blunch->executeLine(line, true)) blunch->startSequencer(target);
+        blunch->focusedChannel = previous;
+      } else
         blunch->controlToggleRequests.fetch_or(bit);
     } else if (e.action == GLFW_RELEASE)
       pressed = false;
     e.consume(this);
   }
   void onDragEnd(const DragEndEvent&) override { pressed = false; }
-  void onLeave(const LeaveEvent&) override { pressed = false; }
+  void onLeave(const LeaveEvent& e) override {
+    pressed = false;
+    destroyTooltip();
+    phlooper::WarpedDropdown::onLeave(e);
+  }
 };
 
 struct BlunchSquareFace : phlooper::WarpedDropdown {
@@ -3446,6 +3602,7 @@ struct BlunchPanel : Widget {
                           : 205));
       nvgSave(args.vg);
       nvgTranslate(args.vg, block.box.pos.x, block.box.pos.y);
+      if (i == 0) block.cornerOffsets[1] = Vec(.4f, -2.f);
       if (i == 1) {
         // Mirroring turns this corner into the input frame's upper right.
         block.cornerOffsets[0] = Vec(-.6f, -1.8f);
@@ -3582,6 +3739,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   BlunchEditControlToggle* editControlToggle = nullptr;
   BlunchChannelTransport* channelPlay = nullptr;
   BlunchChannelTransport* channelStop = nullptr;
+  BlunchChannelTransport* channelCancel = nullptr;
   PolyOutputChannelsWidget* polyChannelsWidget = nullptr;
   BlunchExternalClockLabels* externalClockLabels = nullptr;
   ComputerscareTextEditor* editor = nullptr;
@@ -3656,11 +3814,15 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     addChild(editControlToggle);
     channelPlay = new BlunchChannelTransport;
     channelStop = new BlunchChannelTransport;
-    channelPlay->blunch = channelStop->blunch = module;
+    channelCancel = new BlunchChannelTransport;
+    channelPlay->blunch = channelStop->blunch = channelCancel->blunch = module;
+    channelCancel->cancel = true;
+    channelCancel->box.size = Vec(11.f, 13.f);
     channelStop->stop = true;
     channelPlay->box.size = channelStop->box.size = Vec(14.f, 13.f);
     addChild(channelPlay);
     addChild(channelStop);
+    addChild(channelCancel);
     channelLabel = new BlunchChannelLabel();
     channelLabel->module = module;
     channelLabel->box.pos = Vec(box.size.x - 57.f, 3.f);
@@ -3789,8 +3951,9 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     }
     if (editControlToggle)
       editControlToggle->box.pos = Vec(box.size.x - 93.f, 1.f);
-    if (channelPlay) channelPlay->box.pos = Vec(box.size.x - 93.f, 15.f);
-    if (channelStop) channelStop->box.pos = Vec(box.size.x - 78.f, 15.f);
+    if (channelPlay) channelPlay->box.pos = Vec(box.size.x - 100.f, 15.f);
+    if (channelStop) channelStop->box.pos = Vec(box.size.x - 85.f, 15.f);
+    if (channelCancel) channelCancel->box.pos = Vec(box.size.x - 70.f, 15.f);
     if (channelLabel) {
       channelLabel->box.pos = Vec(box.size.x - 57.f, 3.f);
       channelLabel->box.size = Vec(54.f, 25.f);
@@ -4191,19 +4354,19 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       bool showingSequenceView = !blunch || blunch->showingSequenceView();
       bool showingPendingActiveLine =
           blunch && showingSequenceView &&
-          blunch->pendingLine == blunch->activeSequencer().activeLine &&
-          blunch->viewingPendingLine;
+          blunch->pendingEdit().line == blunch->activeSequencer().activeLine &&
+          blunch->pendingEdit().viewing;
       bool showingActiveVersionOfPending =
           blunch && showingSequenceView &&
-          blunch->pendingLine == blunch->activeSequencer().activeLine &&
-          !blunch->viewingPendingLine;
+          blunch->pendingEdit().line == blunch->activeSequencer().activeLine &&
+          !blunch->pendingEdit().viewing;
       bool showingInvalidActiveLine =
           blunch && showingSequenceView &&
           blunch->errorLine == blunch->activeSequencer().activeLine;
-      if (blunch && showingSequenceView && blunch->pendingLine >= 0 &&
-          blunch->pendingActivationArmed && !showingActiveVersionOfPending) {
+      if (blunch && showingSequenceView && blunch->pendingEdit().line >= 0 &&
+          blunch->pendingEdit().armed && !showingActiveVersionOfPending) {
         BlunchLineInfo pendingLineInfo =
-            getLineInfo(state->text, blunch->pendingLine);
+            getLineInfo(state->text, blunch->pendingEdit().line);
         float pendingPulse =
             0.5f + 0.5f * std::sin((float)rack::system::getTime() * 2.2f);
         ComputerscareTextHighlight pendingHighlight;
@@ -4260,7 +4423,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         activeHighlight.end = lineInfo.end;
         activeHighlight.hasBackground = blinkHigh;
         activeHighlight.background = nvgRGBA(0xc8, 0x9f, 0x16, 0x66);
-        activeHighlight.hasBorder = true;
+        activeHighlight.hasBorder = false;
+        activeHighlight.backgroundDistortion = 2.f;
         activeHighlight.borderWidth = .8f;
         activeHighlight.borderDistortion = .75f;
         activeHighlight.border = nvgRGBA(0xff, 0xee, 0x9a, 0xdd);
@@ -4315,6 +4479,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     float fontScaleY = std::max(0.5f, 1.f + editor->style.fontHeightOffset);
     Vec scaledBox(editor->box.size.x / fontScaleX,
                   editor->box.size.y / fontScaleY);
+    nvgScale(args.vg, fontScaleX, fontScaleY);
     ComputerscareTextEditorLayout layout = ComputerscareTextEditorLayout::build(
         args.vg, editor->text, scaledBox, editor->style);
     if (!layout.rows.empty()) {
@@ -4324,7 +4489,6 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       float alpha = std::max(0.f, std::min(1.f, 1.f - (float)elapsed));
       std::string number = std::to_string(channelsIndicatorChannel + 1);
 
-      nvgScale(args.vg, fontScaleX, fontScaleY);
       nvgFontFaceId(args.vg, font->handle);
       nvgFontSize(args.vg, std::max(14.f, editor->style.fontSize + 7.f));
       nvgTextLetterSpacing(args.vg, 0.f);
@@ -4454,11 +4618,11 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         }));
     menu->addChild(new MenuSeparator());
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* visual) {
-      const char* styles[] = {"Full", "Minimal", "Text", "Off"};
+      const char* styles[] = {"Full", "Minimal", "Text", "Off", "Border"};
       visual->addChild(createSubmenuItem(
           "Blinkers", styles[blunch->playbackDisplayStyle], [=](Menu* submenu) {
-            const char* names[] = {"Full", "Minimal", "Text", "Off"};
-            for (int i = 0; i < 4; ++i)
+            const char* names[] = {"Full", "Minimal", "Text", "Off", "Border"};
+            for (int i : {0, 1, 2, 4, 3})
               submenu->addChild(createCheckMenuItem(
                   names[i], "",
                   [=]() { return blunch->playbackDisplayStyle == i; },

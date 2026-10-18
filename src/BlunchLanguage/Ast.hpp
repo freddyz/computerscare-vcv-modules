@@ -89,6 +89,8 @@ struct ClockLiteralAst {
 };
 
 struct ClockBlockAst {
+  // A bracket sequence advances as one lane item inside parentheses.
+  int sequenceGroupId = -1;
   ClockLiteralAst literal;
   bool rest = false;
   int repeat = 1;

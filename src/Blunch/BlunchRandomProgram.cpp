@@ -199,16 +199,28 @@ class Expander {
       for (const auto& choice : found->second) weights.push_back(choice.weight);
       return expand(found->second[weighted(weights)].text, depth + 1);
     }
-    if (name == "repeat") {
+    if (name == "repeat" || name == "distinct") {
       arity(args, 2, 3);
       int count = integer(args[1], depth);
       if (count < 0 || count > maxRepeat)
         throw std::runtime_error("Template repeat count must be 0..16");
       std::string result,
           separator = args.size() == 3 ? expand(args[2], depth + 1) : " ";
+      std::vector<std::string> values;
       for (int i = 0; i < count; ++i) {
+        std::string value;
+        bool fresh = false;
+        for (int attempt = 0; attempt < 64; ++attempt) {
+          value = expand(args[0], depth + 1);
+          fresh =
+              std::find(values.begin(), values.end(), value) == values.end();
+          if (name == "repeat" || fresh) break;
+        }
+        if (name == "distinct" && !fresh)
+          throw std::runtime_error("Not enough distinct template values");
+        values.push_back(value);
         if (i) append(result, separator);
-        append(result, expand(args[0], depth + 1));
+        append(result, value);
       }
       return result;
     }

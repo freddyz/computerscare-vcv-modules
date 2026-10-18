@@ -108,9 +108,9 @@ All reverb and delay knobs have additive mono CV, using the same ±10 V full-ran
 - Wind **CV:** 0–10 V wind strength.
 - Wind **Audio:** dry mono wind, independent of Wind Mix. Tone, Texture, weather, and Gain still apply.
 - **Front L / Front R / Rear L / Rear R:** spatial audio. A front or rear pair carries the whole scene in stereo; any single jack carries mono. Other combinations redistribute the scene across the connected speakers.
-- **Gain:** final audio level, including the dedicated Wind Audio output. It has no CV input.
+- **Gain:** audio gain from silence to +18 dB, including the dedicated Wind Audio output. It has no CV input.
 
-The context option **Exclude wind from quad** removes wind from the main audio outputs and their reverb, leaving it available at Wind Audio. This setting is saved with the patch.
+The context option **Exclude wind from main output** removes wind from the main audio outputs and their reverb, leaving it available at Wind Audio. This setting is saved with the patch.
 
 ## Keyboard shortcuts
 

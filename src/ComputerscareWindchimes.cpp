@@ -12,6 +12,18 @@
 
 namespace wc = windchimes;
 
+struct WindchimesGainQuantity : ParamQuantity {
+  float getDisplayValue() override {
+    return 20.f * std::log10(std::max(.0001f, getValue()));
+  }
+  void setDisplayValue(float db) override {
+    setValue(db <= -80.f ? 0.f : std::pow(10.f, db / 20.f));
+  }
+  std::string getDisplayValueString() override {
+    return getValue() == 0.f ? "−∞" : string::f("%+.1f", getDisplayValue());
+  }
+};
+
 struct DelayTimeQuantity : ParamQuantity {
   std::string getDisplayValueString() override;
 };
@@ -197,7 +209,8 @@ struct ComputerscareWindchimes : Module {
     configParam(GUSTINESS, 0.f, 1.f, 0.55f, "Gustiness", "%", 0.f, 100.f);
     configParam(TURBULENCE, 0.f, 1.f, 0.35f, "Turbulence", "%", 0.f, 100.f);
     configParam(WIND_MIX, 0.f, 1.f, 0.12f, "Audible wind", "%", 0.f, 100.f);
-    configParam(MASTER, 0.f, 1.f, 0.8f, "Gain", "%", 0.f, 100.f);
+    configParam<WindchimesGainQuantity>(MASTER, 0.f, 7.94328235f, .8f, "Gain",
+                                        " dB");
     configButton(GUST, "Make a gust");
     configParam(DELAY_MIX, 0.f, 1.f, 0.f, "Delay mix", "%", 0.f, 100.f);
     configParam<DelayTimeQuantity>(DELAY_TIME, 0.f, 1.f, 2.f / 3.f,
@@ -2333,7 +2346,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     if (!m) return;
     menu->addChild(new MenuSeparator);
     menu->addChild(createCheckMenuItem(
-        "Exclude wind from quad", "",
+        "Exclude wind from main output", "",
         [m]() {
           return m->excludeWindFromQuad.load(std::memory_order_relaxed);
         },

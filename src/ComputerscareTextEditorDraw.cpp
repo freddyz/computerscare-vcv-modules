@@ -11,6 +11,26 @@ enum HighlightDrawMode {
   HIGHLIGHT_BORDER,
   HIGHLIGHT_PROGRESS
 };
+void highlightFillPath(NVGcontext* vg, float x, float y, float width,
+                       float height, float distortion, unsigned seed) {
+  if (distortion <= 0.f) {
+    nvgRect(vg, x, y, width, height);
+    return;
+  }
+  float amount = std::min(distortion, std::min(width, height) * .2f);
+  auto offset = [&](unsigned corner) {
+    unsigned bits = seed * 0x9e3779b9u + corner * 0x85ebca6bu;
+    bits ^= bits >> 16;
+    bits *= 0x7feb352du;
+    return float(bits & 1023u) / 1023.f * amount;
+  };
+  // Keep all four corners inside the row, with stable asymmetric edges.
+  nvgMoveTo(vg, x + offset(0), y + offset(1));
+  nvgLineTo(vg, x + width - offset(2), y + offset(3));
+  nvgLineTo(vg, x + width - offset(4), y + height - offset(5));
+  nvgLineTo(vg, x + offset(6), y + height - offset(7));
+  nvgClosePath(vg);
+}
 void highlightBorderPath(NVGcontext* vg, float x, float y, float width,
                          float height, float distortion, unsigned seed) {
   if (distortion <= 0.f) {
@@ -101,7 +121,7 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
     nvgSave(vg);
     nvgResetTransform(vg);
     float rackZoom = std::max(0.001f, getAbsoluteZoom());
-    nvgScale(vg, rackZoom, rackZoom);
+    nvgScale(vg, rackZoom * getFontScaleX(), rackZoom * getFontScaleY());
     applyTextStyle(vg, font);
     Vec scaledBox = getScaledBoxSize();
     Vec scaledMouse(mousePos.x / getFontScaleX(), mousePos.y / getFontScaleY());
@@ -164,6 +184,7 @@ void ComputerscareTextEditor::drawEditorText(const DrawArgs& args) {
     bndSetFont(font->handle);
     Vec scaledBox = getScaledBoxSize();
     nvgSave(args.vg);
+    nvgScale(args.vg, getFontScaleX(), getFontScaleY());
     applyTextStyle(args.vg, font);
     ComputerscareTextEditorLayout layout =
         ComputerscareTextEditorLayout::build(args.vg, text, scaledBox, style);
@@ -279,6 +300,9 @@ void ComputerscareTextEditor::drawCursor(const DrawArgs& args) {
   bndSetFont(font->handle);
   int cursorOffset = std::max(0, std::min(cursor, (int)text.size()));
   nvgSave(args.vg);
+  // NanoVG quantizes glyph advances using the current transform. Measure
+  // under the same font scaling used to render, or spacing drifts per glyph.
+  nvgScale(args.vg, getFontScaleX(), getFontScaleY());
   applyTextStyle(args.vg, font);
   ComputerscareTextEditorLayout layout = ComputerscareTextEditorLayout::build(
       args.vg, text, getScaledBoxSize(), style);
@@ -331,6 +355,9 @@ void ComputerscareTextEditor::drawHighlightSpan(
 
   bndSetFont(font->handle);
   nvgSave(args.vg);
+  // NanoVG quantizes glyph advances using the current transform. Measure
+  // under the same font scaling used to render, or spacing drifts per glyph.
+  nvgScale(args.vg, getFontScaleX(), getFontScaleY());
   applyTextStyle(args.vg, font);
   ComputerscareTextEditorLayout layout = ComputerscareTextEditorLayout::build(
       args.vg, text, getScaledBoxSize(), style);
@@ -438,21 +465,30 @@ void ComputerscareTextEditor::drawHighlightSpan(
       endX = layout.metrics.textX + layout.metrics.visibleWidth + 2.f;
     }
 
+    // Filled and outlined token feedback must use the identical path, seed
+    // and bounds whenever the outline is enabled.
+    auto tokenPath = [&]() {
+      if (highlight.backgroundDistortion > 0.f || !highlight.hasBorder)
+        highlightFillPath(args.vg, startX - 1.f, topY, endX - startX + 2.f,
+                          layout.metrics.lineHeight,
+                          highlight.backgroundDistortion, unsigned(begin));
+      else
+        highlightBorderPath(args.vg, startX - 1.5f, topY + .5f,
+                            endX - startX + 3.f, layout.metrics.lineHeight,
+                            highlight.borderDistortion, unsigned(begin));
+    };
     if (mode == HIGHLIGHT_FOREGROUND) {
       std::string spanText = text.substr(spanBegin, spanEnd - spanBegin);
       nvgFillColor(args.vg, highlight.foreground);
       nvgText(args.vg, startX, row.y, spanText.c_str(), NULL);
     } else if (mode == HIGHLIGHT_BACKGROUND) {
       nvgBeginPath(args.vg);
-      nvgRect(args.vg, startX - 1.f, topY, endX - startX + 2.f,
-              layout.metrics.lineHeight);
+      tokenPath();
       nvgFillColor(args.vg, highlight.background);
       nvgFill(args.vg);
     } else if (mode == HIGHLIGHT_BORDER) {
       nvgBeginPath(args.vg);
-      highlightBorderPath(args.vg, startX - 1.5f, topY + .5f,
-                          endX - startX + 3.f, layout.metrics.lineHeight,
-                          highlight.borderDistortion, unsigned(begin));
+      tokenPath();
       nvgStrokeColor(args.vg, highlight.border);
       nvgStrokeWidth(args.vg, highlight.borderWidth);
       nvgStroke(args.vg);

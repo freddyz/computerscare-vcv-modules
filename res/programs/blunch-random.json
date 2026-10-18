@@ -1,23 +1,162 @@
 {
   "schemaVersion": 1,
-  "startup": "(repeat \"(ref line)\" (wpick 6 1 4 2 2 3 1 4) \"\\n\")",
+  "startup": "(ref modified)(repeat \"\\n(ref line)\" (wpick 6 0 4 1 2 2 1 3) \"\")",
   "randomize": "(ref line)",
   "definitions": {
-    "tempo": "(nrange 50 180)",
+    "tempo": [
+      {
+        "weight": 16,
+        "template": "(pick 50 60 70 75 80 90 100 110 120 130 140 150 160 180)"
+      },
+      {
+        "weight": 4,
+        "template": "(nrange 50 180)"
+      },
+      {
+        "weight": 0.2,
+        "template": "(frange 50 180 2)"
+      }
+    ],
     "repeats": "(pick 2 3 4 6 8)",
     "clock": [
-      { "weight": 8, "template": "(ref tempo)bpm" },
-      { "weight": 3, "template": "(frange 0.84 3 2)hz" },
-      { "weight": 3, "template": "(nrange 333 1000)ms" },
-      { "weight": 1, "template": "(frange 1 1.2 2)s" },
-      { "weight": 0.15, "template": "(nrange 2 8)s" }
+      {
+        "weight": 8,
+        "template": "(ref tempo)bpm"
+      },
+      {
+        "weight": 3,
+        "template": "(ref hertz)hz"
+      },
+      {
+        "weight": 3,
+        "template": "(ref milliseconds)ms"
+      },
+      {
+        "weight": 1,
+        "template": "(ref seconds)s"
+      },
+      {
+        "weight": 0.15,
+        "template": "(nrange 2 8)s"
+      }
     ],
     "line": [
-      { "weight": 12, "template": "(ref clock)" },
-      { "weight": 3, "template": "[(ref tempo) (ref tempo)]bpm" },
-      { "weight": 3, "template": "[(nrange 333 1000) (nrange 333 1000)]ms" },
-      { "weight": 1, "template": "(ref clock)@(ref repeats)" },
-      { "weight": 1, "template": "{(ref tempo)|(ref tempo)}bpm" }
-    ]
+      {
+        "weight": 8,
+        "template": "(ref modified)"
+      },
+      {
+        "weight": 1,
+        "template": "(ref clock)"
+      },
+      {
+        "weight": 0.5,
+        "template": "[(distinct \"(ref tempo)\" 2)]bpm"
+      },
+      {
+        "weight": 0.5,
+        "template": "[(distinct \"(ref milliseconds)\" 2)]ms"
+      }
+    ],
+    "milliseconds": [
+      {
+        "weight": 16,
+        "template": "(pick 350 375 400 450 500 600 625 750 800 900 1000)"
+      },
+      {
+        "weight": 4,
+        "template": "(nrange 334 1000)"
+      },
+      {
+        "weight": 0.2,
+        "template": "(frange 334 1000 2)"
+      }
+    ],
+    "hertz": [
+      {
+        "weight": 16,
+        "template": "(pick 1 1.25 1.5 2 2.5 3)"
+      },
+      {
+        "weight": 4,
+        "template": "(frange 0.84 3 1)"
+      },
+      {
+        "weight": 0.2,
+        "template": "(frange 0.84 3 3)"
+      }
+    ],
+    "seconds": [
+      {
+        "weight": 16,
+        "template": "(pick 1 1.1 1.2)"
+      },
+      {
+        "weight": 4,
+        "template": "(frange 1 1.2 1)"
+      },
+      {
+        "weight": 0.2,
+        "template": "(frange 1 1.2 3)"
+      }
+    ],
+    "duration": "(pick 2 3 4 5 6)s",
+    "modified": [
+      {
+        "weight": 3,
+        "template": "(distinct \"(ref tempo)bpm@(ref repeats)\" 2)"
+      },
+      {
+        "weight": 3,
+        "template": "{(distinct \"(ref tempo)\" 2 \"|\")}bpm@(ref repeats)"
+      },
+      {
+        "weight": 3,
+        "template": "(ref clock)@(ref duration)"
+      },
+      {
+        "weight": 3,
+        "template": "{(distinct \"(ref tempo)\" 2 \"|\")}bpm#(ref repeats)"
+      },
+      {
+        "weight": 3,
+        "template": "[(distinct \"(ref milliseconds)\" 2)]ms#(ref duration)"
+      },
+      {
+        "weight": 3,
+        "template": "{(pick 80-120 100-120 90-140 120-160)}bpm@(ref repeats)"
+      },
+      {
+        "weight": 3,
+        "template": "(ref nested)hz(pick \"@(pick 5 7 9)\" \"#(ref repeats)\" \"#(ref duration)\")"
+      },
+      {
+        "weight": 3,
+        "template": "(ref milliseconds)ms (ref hertz)hz@(ref repeats)"
+      }
+    ],
+    "nested": [
+      {
+        "weight": 1,
+        "template": "\\((pick 1 2 3) \\((ref inner)\\)\\)"
+      },
+      {
+        "weight": 1,
+        "template": "\\(\\((ref inner)\\) (pick 1 2 3)\\)"
+      },
+      {
+        "weight": 1,
+        "template": "\\((pick 1 2 3) [(ref inner)]\\)"
+      },
+      {
+        "weight": 1,
+        "template": "\\([(ref inner)] (pick 1 2 3)\\)"
+      },
+      {
+        "weight": 0.5,
+        "template": "\\((pick 1 2 3) \\((pick 1 2 3) [(ref inner)]\\)\\)"
+      }
+    ],
+    "inner": "(distinct \"(pick 1 2 3)\" (wpick 3 2 1 3))"
   }
 }

@@ -93,6 +93,59 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   modelBlunchPreview->plugin = &plugin;
   auto* module =
       static_cast<ComputerscareBlunch*>(modelBlunchPreview->createModule());
+  require(module->playbackDisplayStyle == 1, "New modules default to Minimal blinkers");
+  require(module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].getValue() == 0.f,
+          "New modules default to automatic polyphony");
+  {
+    auto draft = std::unique_ptr<ComputerscareBlunch>(
+        static_cast<ComputerscareBlunch*>(modelBlunchPreview->createModule()));
+    for (int ch = 0; ch < 2; ++ch) {
+      draft->runningLineTexts[ch].clear();
+      draft->sequenceEditorStates[ch].text = "120bpm";
+      require(draft->commitLineForChannel(ch, 0, true), "pending test baseline compiles");
+      draft->focusedChannel = ch;
+      draft->sequenceEditorStates[ch].text = "140bpm";
+      draft->inspectFocusedLine(0, false);
+      require(draft->channelHasPendingFormula(ch), "edited formula marks channel pending");
+      for (int loop = 0; loop < 3; ++loop) draft->moveToNextLine(false);
+      require(draft->sequencers[ch].activeLineText == "120bpm",
+              "looping never submits edited text automatically");
+    }
+    draft->sequenceEditorStates[0].text = "120bpm";
+    draft->focusedChannel = 0;
+    draft->inspectFocusedLine(0, false);
+    require(!draft->channelHasPendingFormula(0), "reverting an edit clears pending");
+    draft->sequenceEditorStates[0].text = "140bpm";
+    draft->inspectFocusedLine(0, false);
+    draft->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_CLOCK);
+    for (int ch = 0; ch < 2; ++ch) {
+      draft->focusedChannel = ch;
+      require(draft->executeLine(0, true), "submitted drafts queue independently");
+      require(draft->sequencers[ch].activeLineText == "120bpm", "Wait keeps old formula until boundary");
+    }
+    draft->focusedChannel = 1;
+    blunchProcessingChannel = 0;
+    require(draft->activatePendingLineAtBoundary(ComputerscareBlunch::WAIT_BOUNDARY_CLOCK, true),
+            "queued channel activates even while another channel is focused");
+    require(!draft->channelHasPendingFormula(0) && draft->channelHasPendingFormula(1),
+            "activation clears only its own pending indicator");
+    blunchProcessingChannel = 1;
+    require(draft->activatePendingLineAtBoundary(ComputerscareBlunch::WAIT_BOUNDARY_CLOCK, true),
+            "second channel retains its queued formula");
+    blunchProcessingChannel = -1;
+    draft->focusedChannel = 0;
+    draft->runningLineTexts[0].clear();
+    draft->sequenceEditorStates[0].text = "120bpm\n90bpm";
+    draft->commitLine(0, true);
+    draft->sequenceEditorStates[0].text = "120bpm\n150bpm";
+    draft->moveToNextLine(false);
+    require(draft->sequencers[0].activeLineText == "90bpm" && draft->channelHasPendingFormula(0),
+            "page advance retains the submitted version of edited lines");
+    draft->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_IMMEDIATE);
+    draft->executeLine(1, true);
+    require(draft->sequencers[0].activeLineText == "150bpm" && !draft->channelHasPendingFormula(0),
+            "explicit submit applies edits and clears pending");
+  }
   APP->engine->addModule(module);
   auto widget = std::unique_ptr<ComputerscareBlunchWidget>(
       static_cast<ComputerscareBlunchWidget*>(
@@ -101,6 +154,7 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
                             "90bpm@4", "{100|140}bpm",  "250ms ~250ms",
                             "2hz",     "[110 130]bpm@2"};
   for (int ch = 0; ch < 16; ++ch) {
+    module->runningLineTexts[ch].clear();
     module->sequenceEditorStates[ch].text = formulas[ch % 8];
     if (ch == 1) module->sequenceEditorStates[ch].text += "\n180bpm";
     require(module->commitLineForChannel(ch, 0, true),
@@ -111,7 +165,7 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
     auto line = getLineInfo(module->sequenceEditorStates[0].text, 0);
     auto displaySequence = module->sequencers[0];
     displaySequence.activeClockDisplayPulse = 1.f;
-    for (int style = 0; style < 4; ++style) for (bool bars : {false, true}) {
+    for (int style = 0; style < 5; ++style) for (bool bars : {false, true}) {
       std::vector<ComputerscareTextHighlight> highlights;
       addBlunchSequencerHighlights(highlights, displaySequence, line, line, true, style, bars);
       require(!highlights.empty(), "Blinker style retains the active token");
@@ -119,13 +173,25 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
         for (const auto& highlight : highlights)
           require(!highlight.hasBorder && !highlight.hasForeground && !highlight.hasBackground,
                   "Off removes blinkers while leaving Bars independent");
-      require(highlights.front().hasBorder == (style == 0) &&
+      require((highlights.front().backgroundDistortion > 0.f) == (style <= 1 || style == 4),
+              "Full and Minimal share the polygon geometry");
+      require(highlights.front().hasBorder == (style == 0 || style == 4) &&
                   highlights.front().hasForeground == (style == 2),
               "Bars do not change the chosen blinker style");
       bool hasBars = false;
       for (const auto& highlight : highlights) hasBars |= highlight.hasProgress;
       require(hasBars == bars, "Bars switch works with every blinker style");
     }
+  }
+  {
+    auto sequence = module->sequencers[0];
+    sequence.activeClockDisplayPulse = 0.f;
+    auto line = getLineInfo(module->sequenceEditorStates[0].text, 0);
+    std::vector<ComputerscareTextHighlight> highlights;
+    addBlunchSequencerHighlights(highlights, sequence, line, line, true, 4, false);
+    for (const auto& highlight : highlights)
+      require(!highlight.hasBorder && !highlight.hasBackground && !highlight.hasForeground,
+              "Border blinker disappears between triggers");
   }
   module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(8.f);
   module->setControlMode(true);
@@ -248,12 +314,18 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
     };
     module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(16.f);
     pressTransport(widget->channelStop);
+    require(widget->channelPlay->tooltipText() == "Channel 15: stopped" &&
+                widget->channelStop->tooltipText() == "Stop channel 15",
+            "Transport tooltips identify the focused channel and playback state");
     require(!module->sequencers[14].running && module->sequencers[1].running &&
                 !widget->channelPlay->isPressed(),
             "Stop button affects only the focused channel and clears Play state");
     pressTransport(widget->channelPlay);
     require(module->sequencers[14].running && widget->channelPlay->isPressed(),
             "Play button starts the focused channel and reflects playback");
+    require(widget->channelPlay->tooltipText() == "Channel 15: playing",
+            "Play tooltip follows the channel playback state");
+    capture(widget.get(), output + "/02-playing-transport.png", scale);
     require(module->sequencers[14].activeHighlightEnd >
                 module->sequencers[14].activeHighlightBegin &&
                 module->sequencers[14].clockStartHighPending,
@@ -323,6 +395,46 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
             "invalid restored formula does not retain a previous program");
   }
   // Physical row spacing stays fixed while the glyph height changes.
+  // Compare mouse/caret boundaries with actual rendered glyph advances, not
+  // another unscaled layout. Long lines expose cumulative spacing errors.
+  {
+    auto savedStyle = editor->style;
+    auto savedText = editor->text;
+    editor->style.lineWrapping = false;
+    editor->text = "120bpm 300ms 4hz 120bpm 300ms 4hz 120bpm 300ms";
+    auto font = APP->window->loadFont(asset::system(editor->style.fontPath));
+    NVGcontext* vg = APP->window->vg;
+    for (float width : {0.f, .23f, -.19f}) {
+      for (float height : {0.f, .069f, .3f}) {
+        editor->style.fontWidthOffset = width;
+        editor->style.fontHeightOffset = height;
+        float sx = 1.f + width, sy = 1.f + height;
+        nvgSave(vg);
+        nvgResetTransform(vg);
+        float zoom = editor->getAbsoluteZoom();
+        nvgScale(vg, zoom * sx, zoom * sy);
+        nvgFontFaceId(vg, font->handle);
+        nvgFontSize(vg, editor->style.fontSize);
+        nvgTextLetterSpacing(vg, editor->style.letterSpacing);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+        auto rendered = ComputerscareTextEditorLayout::build(
+            vg, editor->text, Vec(10000.f, editor->box.size.y / sy), editor->style);
+        const auto& row = rendered.rows.front();
+        NVGglyphPosition glyphs[128];
+        int count = nvgTextGlyphPositions(vg, row.x, row.y,
+                                        editor->text.c_str(), nullptr, glyphs, 128);
+        nvgRestore(vg);
+        for (int g = 1; g < count; ++g) {
+          int offset = glyphs[g].str - editor->text.c_str();
+          Vec mouse(glyphs[g].x * sx, (row.top + row.bottom) * .5f * sy);
+          require(editor->getTextPosition(mouse) == offset,
+                  "mouse caret matches rendered glyphs across font scales and long lines");
+        }
+      }
+    }
+    editor->style = savedStyle;
+    editor->text = savedText;
+  }
   auto layout = [&]() {
     auto font = APP->window->loadFont(asset::system(editor->style.fontPath));
     nvgFontFaceId(APP->window->vg, font->handle);
@@ -416,6 +528,50 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   require(editor->getCursorLine() == module->controlSelection.focus,
           "focus border follows the control cursor after a programmatic move");
   capture(widget.get(), output + "/01-control-mode.png", scale);
+  module->sequenceEditorStates[0].text = "140bpm";
+  module->sequenceEditorStates[2].text = "100bpm";
+  module->refreshChannelsEditorState();
+  widget->step();
+  require(module->channelHasPendingFormula(0) && module->channelHasPendingFormula(2),
+          "All view marks pending edits on multiple channels");
+  require(!widget->channelPlay->pending(),
+          "other channels' pending edits do not affect the focused Play button");
+  module->controlSelection.selectOnly(0);
+  module->focusControlRow();
+  widget->step();
+  require(widget->channelPlay->tooltipText() == "Apply pending changes to channel 1" &&
+              widget->channelCancel->tooltipText() == "Discard pending changes for channel 1",
+          "pending tooltips describe the action and target channel");
+  require(widget->channelPlay->pending() && !widget->channelPlay->isPressed(),
+          "Play stays raised for its channel's pending formula while playback continues");
+  require(widget->channelCancel->visible &&
+              widget->channelCancel->box.pos.x > widget->channelStop->box.pos.x,
+          "Cancel is always present to the right of Stop");
+  capture(widget.get(), output + "/03-pending-formulas.png", scale);
+  widget::Widget::ButtonEvent pendingClick;
+  pendingClick.button = GLFW_MOUSE_BUTTON_LEFT;
+  pendingClick.action = GLFW_PRESS;
+  module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_IMMEDIATE);
+  widget->channelPlay->onButton(pendingClick);
+  require(module->sequencers[0].activeLineText == "140bpm" &&
+              !module->channelHasPendingFormula(0),
+          "Play submits pending text instead of stopping the old formula");
+  module->sequenceEditorStates[0].text = "150bpm";
+  module->refreshChannelsEditorState();
+  widget->step();
+  widget->channelCancel->onButton(pendingClick);
+  pendingClick.action = GLFW_RELEASE;
+  widget->channelCancel->onButton(pendingClick);
+  widget->step();
+  require(module->sequenceEditorStates[0].text == "140bpm" &&
+              module->sequencers[0].activeLineText == "140bpm" &&
+              !module->channelHasPendingFormula(0) &&
+              module->channelHasPendingFormula(2),
+          "Cancel restores only its channel's submitted text without interrupting playback");
+  require(widget->channelCancel->tooltipText() == "Channel 1: no pending changes",
+          "Cancel tooltip updates after reverting");
+  require(widget->channelCancel->visible && !widget->channelPlay->pending(),
+          "Cancel remains visible when no changes are pending");
   std::puts(
       "Blunch Control-mode UI, transport, mouse, and layout checks passed.");
 }

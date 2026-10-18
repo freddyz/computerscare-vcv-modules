@@ -103,8 +103,13 @@ std::vector<ClockBlockAst> interleaveLanes(
 
   while (!lanes.empty() && ((!allAtStart && steps < 6000) || steps == 0)) {
     if (!lanes[laneIndex].empty()) {
-      output.push_back(lanes[laneIndex][indices[laneIndex]]);
-      indices[laneIndex] = (indices[laneIndex] + 1) % lanes[laneIndex].size();
+      const auto& lane = lanes[laneIndex];
+      int group = lane[indices[laneIndex]].sequenceGroupId;
+      do {
+        output.push_back(lane[indices[laneIndex]]);
+        indices[laneIndex] = (indices[laneIndex] + 1) % lane.size();
+      } while (group >= 0 && indices[laneIndex] != 0 &&
+               lane[indices[laneIndex]].sequenceGroupId == group);
     }
     laneIndex = (laneIndex + 1) % lanes.size();
     steps++;
@@ -156,6 +161,7 @@ class Parser {
   ClockUnit defaultUnit;
   size_t current = 0;
   int nextTotalDurationGroupId = 0;
+  int nextSequenceGroupId = 0;
 
   const Token& peek() const { return tokens[current]; }
 
@@ -365,7 +371,9 @@ class Parser {
     applyGroupModifiers(result, groupBlocks, repeatBlock, suffixUnit,
                         suffixUnitRange);
     applyTotalDurationGroup(groupBlocks, totalDurationBlock);
+    int sequenceGroup = nextSequenceGroupId++;
     for (size_t i = 0; i < groupBlocks.size(); i++) {
+      groupBlocks[i].sequenceGroupId = sequenceGroup;
       blocks.push_back(groupBlocks[i]);
     }
   }
@@ -519,7 +527,9 @@ class Parser {
     }
 
     applyTotalDurationGroup(groupBlocks, totalDurationBlock);
+    int sequenceGroup = nextSequenceGroupId++;
     for (size_t i = 0; i < groupBlocks.size(); i++) {
+      groupBlocks[i].sequenceGroupId = sequenceGroup;
       blocks.push_back(groupBlocks[i]);
     }
   }

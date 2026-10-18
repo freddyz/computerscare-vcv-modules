@@ -10,7 +10,9 @@ The file contains:
 - `randomize`: an expression that produces one formula line.
 - `definitions`: named strings or arrays of `{ "weight": ..., "template": ... }` choices. Larger weights make a choice more frequent; zero disables it. Weights need not sum to 100.
 
-For example, change `tempo` from `(nrange 50 180)` to `(nrange 90 140)` to narrow the BPM range. Add a weighted entry to `line` to introduce a new pattern, or change its weight to adjust how often it appears. `clock` controls the simple clock vocabulary; `line` adds sequences and other structures.
+The numeric definitions (`tempo`, `milliseconds`, `hertz`, and `seconds`) favor familiar values, with less frequent arbitrary values and rare extra decimals. Adjust their weighted choices to change that balance. Add a weighted entry to `line` to introduce a new pattern, or change its weight to adjust how often it appears. `clock` controls the simple clock vocabulary; `modified` supplies short `@` and `#` examples. Most randomized lines use `modified`, and startup always begins with one. `line` also allows occasional plain clocks and pairs.
+
+Counted-repeat examples use two successive clocks or a compound choice, such as `80bpm@3 120bpm@2` or `{100|120}bpm@5`. Timed repeats use a duration, such as `120bpm@3s`. Inner cycles usually contain two values and occasionally three. Some use bracketed runs, such as `(2 [3 1])hz#6`, which play the whole run on its turn. These recipes are available at startup too. Other short recipes demonstrate ranges (`{100-120}bpm@4`), nested cycles with either group position (`(2 (3 1))hz@9` or `((3 1) 2)hz#6`), and mixed units (`440ms 1.1hz@2`).
 
 The small template language is independent of Blunch’s clock parser:
 
@@ -22,6 +24,8 @@ The small template language is independent of Blunch’s clock parser:
 | `(wpick 6 1 4 2 2 3 1 4)`      | One value from weight/value pairs                    |
 | `(ref tempo)`                  | Expand a named definition or weighted recipe         |
 | `(repeat "(ref tempo)" 2 " ")` | Two independently drawn tempos, separated by a space |
+
+`(distinct "(ref tempo)" 2 "|")` draws different values, for choices such as `{100|120}bpm`. It retries duplicates up to 64 times per value and reports an error if the recipe cannot produce enough distinct results.
 
 Literal text surrounds expressions: `[(nrange 333 1000) (nrange 333 1000)]ms` can become `[397 602]ms`. Quote arguments containing spaces; `\n` inside a quoted argument inserts a newline (written as `\\n` inside a JSON string). Templates can nest. Escape literal parentheses with a backslash, doubled for JSON.
 

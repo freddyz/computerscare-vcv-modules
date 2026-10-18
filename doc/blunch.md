@@ -78,7 +78,7 @@ The full pattern is `1, 3, 2, 4, 1, 5, 2, 3, 1, 4, 2, 5` seconds. It repeats whe
 
 A parenthesized sequence immediately following a block alternates with that preceding block. For example, `500ms (300ms 400ms)` plays `500, 300, 500, 400` ms.
 
-Use brackets for a straight sequence; use nested parentheses when items should advance on successive turns.
+Use brackets for a straight sequence; use nested parentheses when items should advance on successive turns. A bracketed sequence plays all its values when its turn arrives: `(1 (2 3 [3 2 1]))hz` plays `1, 2, 1, 3, 1, 3, 2, 1`, then repeats.
 
 ### Repeats: `@`
 
@@ -156,7 +156,7 @@ Direct editing in All view is allowed when a channel is stopped/paused or has on
 
 Stopped channels show their edited text immediately, even if they have never played. Playing multi-line channels show their current active formula. Channels beyond the selected polyphony use faded italic text and a lighter grey background; they remain selectable and editable.
 
-Press **Ctrl+Enter** or **Cmd+Enter** to submit a line. The **Wait** setting determines when it becomes active. Invalid text is marked in red so you can correct it. **Esc** cancels or returns to All view.
+Press **Ctrl+Enter** or **Cmd+Enter** to submit a line. The **Wait** setting determines when submitted text becomes active; editing alone does not replace a running formula, even when it loops. In All view, the left side marker is green for the focused channel. A slow yellow pulse marks channels whose edited formulas differ from their submitted formulas. The pulse clears once those changes take over. Play is raised and pulses yellow when its channel has pending changes; click it to submit them using Wait. The **x** button to the right of Stop discards that channel’s pending edits and restores its submitted formulas without interrupting playback. Invalid text is marked in red so you can correct it. **Esc** cancels or returns to All view.
 
 Undo with **Cmd/Ctrl+Z**; redo with **Cmd/Ctrl+Shift+Z** or **Cmd/Ctrl+Y**. Submit restored text to apply it to playback.
 
@@ -166,7 +166,7 @@ Undo with **Cmd/Ctrl+Z**; redo with **Cmd/Ctrl+Shift+Z** or **Cmd/Ctrl+Y**. Subm
 - **Block / Line / Page:** momentary reset buttons for the current block, line, or whole channel page. Their inputs perform the same resets.
 - **Time:** speeds up or slows down internal timing. Each +1 doubles the speed; each −1 halves it.
 - **Seed:** positive values give repeatable random choices. Zero, or a negative combined value from CV, uses fresh randomness. The knob itself ranges from 0 to 10.
-- **Polyphony:** choose 1–16 output channels, or Auto. Auto extends to the highest channel with an activated formula. New modules default to 1.
+- **Polyphony:** choose 1–16 output channels, or Auto. Auto extends to the highest channel with an activated formula. New modules default to Auto.
 - **Edit/Ctrl:** switch between formula editing and keyboard/mouse control of channels.
 
 The module starts at 16 HP. Drag either panel edge to resize it in 1 HP steps. The width is saved with the patch. Editor font, spacing, and line wrapping are available in the context menu. Text height and line height are independent: changing the glyph height does not move the rows. **Steady line height** is on by default, sizing 16 rows to the display. Turn it off to size rows from the font size and text height. **Editor line height** adjusts spacing only when Steady line height is off; the slider is disabled while it is on. Disabled channels retain alternating background stripes.
@@ -225,9 +225,10 @@ Selection stays intact when switching views. To replace it, click a row. Removin
 Choose **Visual → Blinkers** in the context menu:
 
 - **Full:** trigger flashes and yellow outlines.
-- **Minimal:** trigger flashes without outlines.
+- **Minimal** (default): subtly uneven polygon flashes without outlines.
 - **Text:** the active clock text is yellow, flashes green on each trigger, and fades back to yellow, with no background or outlines.
 - **Off:** no playback blinks, text flashes, or outlines.
+- **Border:** the polygon outline flashes and fades on each trigger, disappearing between triggers.
 
 **Visual → Bars** independently shows or hides timing progress bars in any blinker mode.
 
