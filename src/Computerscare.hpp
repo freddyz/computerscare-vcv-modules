@@ -20,6 +20,7 @@ extern Model* modelComputerscareILoveCookies;
 extern Model* modelComputerscareOhPeas;
 extern Model* modelComputerscareKnolyPobs;
 extern Model* modelComputerscareVolyPector;
+extern Model* modelComputerscareTolyPensor;
 extern Model* modelComputerscareBolyPuttons;
 extern Model* modelComputerscareRolyPouter;
 extern Model* modelComputerscareTolyPools;

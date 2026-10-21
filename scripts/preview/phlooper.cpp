@@ -6,6 +6,9 @@
 #include "../../src/Blunch/ComputerscareBlunch.cpp"
 #undef modelComputerscareBlunch
 
+#define modelComputerscareTolyPensor modelTolyPreview
+#include "../../src/ComputerscareTolyPensor.cpp"
+#undef modelComputerscareTolyPensor
 #include <stb_image_write.h>
 
 #include <algorithm>
@@ -91,6 +94,8 @@ void capture(widget::Widget* widget, const std::string& path, float scale,
   container->removeChild(widget);
   std::printf("%s (%d x %d)\n", path.c_str(), width, height);
 }
+#include "toly-pensor-checks.hpp"
+
 void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
                           float scale) {
   auto require = [](bool value, const char* message) {
@@ -748,6 +753,8 @@ int main(int argc, char** argv) {
     modelPhlooperPreview->plugin = &plugin;
     if (argc >= 6 && std::string(argv[5]) == "browser") {
       plugin::Model* browserModel = modelPhlooperPreview;
+      if (argc == 7 && std::string(argv[6]) == "toly-pensor")
+        browserModel = modelTolyPreview;
       if (argc == 7 && std::string(argv[6]) == "blunch")
         browserModel = modelBlunchPreview;
       if (argc == 7 && std::string(argv[6]) == "32nd-and-columbus")
@@ -766,6 +773,8 @@ int main(int argc, char** argv) {
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",
               scale);
+      if (browserModel == modelTolyPreview && std::getenv("TOLY_PENSOR_PREVIEW_CHECKS"))
+        renderTolyPensorChecks(browserModel, argv[3], scale);
       if (browserModel == modelComputerscareWindchimes) {
         {
           windchimes::ForestGraphic::Debris bit;

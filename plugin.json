@@ -186,6 +186,13 @@
       "description": "Sixteen independent stereo loops with gradual time and speed phasing",
       "tags": ["Looper", "Sampler", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/phlooper.md"
+    },
+    {
+      "slug": "computerscare-toly-pensor",
+      "name": "Toly Pensor",
+      "description": "Polyphonic tensor mix matrix with sixteen inputs and sixteen outputs",
+      "tags": ["Polyphonic", "Mixer", "Utility"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/toly-pensor.md"
     }
   ]
 }

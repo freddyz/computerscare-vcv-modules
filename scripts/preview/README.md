@@ -70,3 +70,7 @@ The `32nd-and-columbus` preview also writes `01-forest.png`, showing the Forest 
 Forest previews also render `02-forest-open.png` and `03-forest-thicket.png` with contrasting Forest settings. The fixture simulates wind through the real module before capturing the scene.
 
 Set `FOREST_STORM_PREVIEW=1` for a short live storm and settling sequence (`04-storm-ground.png`, `05-storm-settled.png`). The native fixture also checks that debris settles at its tree’s radial ground position and leaves the scene without wrapping.
+
+### Toly Pensor
+
+`scripts/preview-module.sh toly-pensor` renders the null-module browser widget. Set `TOLY_PENSOR_PREVIEW_CHECKS=1` to exercise the real SIMD engine, scope actions, trigger edges, persistence, Undo/Redo, mouse routing, contextual views, and a sparse/dense benchmark. Additional captures show sixteen controls, a connected grid, and hidden controls.

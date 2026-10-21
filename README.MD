@@ -39,6 +39,7 @@ Use `RACK_DIR=/path/to/Rack-SDK` when the Rack SDK is not in the default local p
 - [Soly Pequencer](./doc/poly-utilities.md): Sequentially outputs the individual channel voltages of a polyphonic signal
 - [Toly Pools](./doc/poly-utilities.md): Rotate a polyphonic signal, set/get/display polyphonic channel count
 - [Moly Patrix](./doc/moly-patrix.md): Polyphonic matrix mixer
+- [Toly Pensor](./doc/toly-pensor.md): Sixteen-port polyphonic tensor mix matrix
 - [Goly Penerator](./doc/goly-penerator.md): Generate constant polyphonic CV via various algorithms
 - [Sloly Pit](./doc/sloly-pit.md): Split and route a polyphonic input to 16 outputs
 - [Mely Porge](./doc/mely-porge.md): Polyphonic merge / insert / vca utility

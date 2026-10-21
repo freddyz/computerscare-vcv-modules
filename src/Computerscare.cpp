@@ -17,6 +17,7 @@ void init(Plugin* p) {
 
   p->addModel(modelComputerscareKnolyPobs);
   p->addModel(modelComputerscareVolyPector);
+  p->addModel(modelComputerscareTolyPensor);
   p->addModel(modelComputerscareBolyPuttons);
   p->addModel(modelComputerscareRolyPouter);
   p->addModel(modelComputerscareTolyPools);
