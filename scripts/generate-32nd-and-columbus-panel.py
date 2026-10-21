@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rebuild Windchimes artwork using the shared distorted type/perspective tools."""
+"""Rebuild 32nd & Columbus artwork using the shared distorted type/perspective tools."""
 import importlib.util
 from pathlib import Path
 import subprocess
@@ -59,7 +59,7 @@ def box(x,y,width,height,name,color):
           '--output',str(out)],check=True)
         embed(ET.parse(out).getroot(),x,y,width,height,name)
 
-lettering('Windchimes',514,9,98,17,42)
+lettering('32nd & Columbus',514,9,98,17,42)
 logo=ET.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
 embed(logo,669,9,17,17,'windchimes-logo')
 # Captions share their controls' center coordinates before the column stretch.
@@ -75,17 +75,16 @@ for i,label in enumerate(['Tubes','Level','Swing','Sail','Decay','Bright',
             height=7.5 if label=='Swing' else 6.5)
 caption('1V/oct',567.5,90,height=6)
 caption('Scale',511,49,width=30,height=6.5)
-lettering('Wind',518,245,75,7)
-lettering('Reverb',620,245,65,7)
-lettering('Delay',620,289,65,7)
-for label,center,y in [('Strength',351.25,277),('Gusts',398.25,277),
-                       ('Turb',351.25,315),('Mix',398.25,315),
-                       ('Tone',351.25,350),('Texture',398.25,350),
-                       ('Mix',457.25,277),('Size',495.25,277),
-                       ('Mix',457.25,321),('Time',495.25,321),
-                       ('Feedback',457.25,364)]:
-    caption(label,center,y,width=30,height=6)
-caption('Clock',487,364,width=30,height=6)
+lettering('Wind',515,247,75,7)
+lettering('Forest',620,245,65,7)
+lettering('FX',620,344,35,7)
+for label,center,y in [('Strength',351.25,288),('Gusts',398.25,288),
+                       ('Turb',351.25,326),('Mix',398.25,326),
+                       ('Tone',351.25,364),('Texture',398.25,364),
+                       ('Expanse',457.25,288),('Thicket',495.25,288),
+                       ('Undergrowth',457.25,326),('Canopy',495.25,326),
+                       ('Dry/wet',475.25,370)]:
+    caption(label,center,y,width=42 if label=='Undergrowth' else 34,height=6)
 caption('Wind',553,245,width=55,height=8)
 caption('Gain',538,294,width=28,height=6)
 caption('Chimes',553,309,width=55,height=6)
@@ -96,4 +95,4 @@ for label,x,y,right in [('Front L',713,316,False),('Front R',763,316,True),
                          ('Rear L',713,370,False),('Rear R',763,370,True)]:
     lettering(label,x,y,30,5.5,right=right)
 ET.indent(svg)
-ET.ElementTree(svg).write(ROOT/'res/panels/ComputerscareWindchimesPanel.svg',encoding='utf-8',xml_declaration=True)
+ET.ElementTree(svg).write(ROOT/'res/panels/Computerscare32ndAndColumbusPanel.svg',encoding='utf-8',xml_declaration=True)

@@ -1,6 +1,6 @@
-# Windchimes
+# 32nd & Columbus
 
-Windchimes places up to sixteen wind-driven chime sets around a listener. Each set has its own tuning, material, sound, and position. Connect one audio output for mono, a front or rear pair for stereo, or all four for quad.
+32nd & Columbus places up to sixteen wind-driven chime sets around a listener. Each set has its own tuning, material, sound, and position. Connect one audio output for mono, a front or rear pair for stereo, or all four for quad.
 
 ## Quick start
 
@@ -93,15 +93,20 @@ Wind is shared across the scene. Each chime responds according to its position, 
 
 All six knobs have additive mono CV: +10 V adds the full control range, negative CV subtracts, and results clamp to 0–100%. Only the first channel of a polyphonic cable is used.
 
-## Reverb and delay
+## Forest and FX
 
-Reverb **Mix** blends the chimes and audible wind with a shared room. **Size** changes its dimensions and tail length.
+**Forest** combines chime-linked reflections with a diffuse tail. Each chime’s pitch, material, and position shape its reflection paths.
 
-Delay **Mix**, **Time**, and **Feedback** affect the chimes and their reverb. Audible wind bypasses delay. Time ranges from 10 ms to 2 seconds; Feedback reaches 95%.
+| Control         | Sound                                                              |
+| --------------- | ------------------------------------------------------------------ |
+| **Expanse**     | Reflection distances, from short taps to roughly one-second echoes |
+| **Thicket**     | Sparse echoes to dense, diffuse reflections                        |
+| **Undergrowth** | Resonance, interaction, and tails up to roughly 28 seconds         |
+| **Canopy**      | Absorption: higher values darken and shorten the tail              |
 
-Patch **Clock** to select divisions or multiples of its period: 1/8, 1/6, 1/4, 1/3, 1/2, 3/4, 1, 3/2, 2, or 4. The delay remains capped at 2 seconds. Two rising edges establish tempo; stopping the clock holds it. Unpatch to return to seconds. Clock uses channel 1 and triggers around 1 V. Changing the connected output arrangement clears old echoes.
+**FX Dry/wet** blends the direct scene with its Forest reflections. At zero, the original direct sound is preserved. All five controls have additive mono CV; ±10 V covers the full knob range.
 
-All reverb and delay knobs have additive mono CV, using the same ±10 V full-range mapping as Wind. Time CV follows the knob’s free-time or clock-division range.
+The four Forest values also combine loosely to shape tree density, species, lighting, color, spacing, and terrain. Dry/wet affects only the audio blend.
 
 ## Outputs
 
@@ -110,10 +115,26 @@ All reverb and delay knobs have additive mono CV, using the same ±10 V full-ran
 - **Front L / Front R / Rear L / Rear R:** spatial audio. A front or rear pair carries the whole scene in stereo; any single jack carries mono. Other combinations redistribute the scene across the connected speakers.
 - **Gain:** audio gain from silence to +18 dB, including the dedicated Wind Audio output. It has no CV input.
 
-The context option **Exclude wind from main output** removes wind from the main audio outputs and their reverb, leaving it available at Wind Audio. This setting is saved with the patch.
+The context option **Exclude wind from main output** removes wind from the main audio outputs and their Forest reflections, leaving it available at Wind Audio. This setting is saved with the patch.
 
 ## Keyboard shortcuts
 
 With the pointer over the scene, **M** toggles Mute, **S** toggles Solo, **W** wiggles, **R** randomizes, and **X** strikes the selection. **Space** makes a gust. Each acts once per press.
 
 **Tab / Shift+Tab** selects the next/previous enabled set while hovering over the module. Navigation wraps and replaces the current selection.
+
+## Graphic options
+
+Choose **Graphic → Radial** or **Forest** in the context menu. Radial shows distance rings. Forest replaces the rings with sparse trees: nearby trunks extend beyond the scene, while distant trees appear smaller in front and behind. Chimes remain in front of the scenery and keep their distance-based size. This changes only the graphic, and the choice is saved with the patch.
+
+Forest scenery is generated anew for each scene, with individual bark and foliage colors, trunk thickness, taper, lean, branching, and bark markings. The four Forest controls combine nonlinearly to vary density from a sparse grove to a dense forest, alongside species, lighting, spacing, color, and branching. Their CV inputs affect the scenery too. Trees reuse nearby chimes’ pendulum and tube motion, with varied stiffness, to respond differently to the local wind while their roots stay fixed. A high front horizon fades into sky; the center remains nearest and the rear edge distant. These graphic links do not change the audio controls’ behavior.
+
+Strong, turbulent gusts can break off branches and foliage. The missing parts stay missing until **Regrow forest** in the context menu, or until the scene is recreated. Debris falls to the ground at its tree’s radial position and blows along the local wind field, shrinking with radial distance and following the trees’ front-to-rear layering; it does not fall toward the bottom of the screen or wrap around. Debris is limited to 128 pieces.
+
+## Randomize blocks and locks
+
+Wind and Forest each have a small randomize block: the dice button randomizes that section, and the wavy-lines button makes small changes. The jack beside each button triggers the same action from a mono rising edge around 1 V. A held gate triggers once; lower it before the next trigger. Button actions support undo.
+
+Right-click a knob and enable **Lock randomize / wiggle** to exclude it from both operations. A small padlock marks locked knobs. They remain manually editable and respond to their normal CV. Locks also apply to the existing chime randomize/wiggle actions and save with the patch. On selected chime sets, locking a model knob applies to that control across the selection.
+
+Forest layers draw from Front to Rear: rear trees can overlap the center trees. Radial distance still controls size, so trees toward either edge are smaller. Debris follows the same layering.

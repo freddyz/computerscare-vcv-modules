@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+
+#include "Beats.hpp"
 namespace phlooper {
 struct TimeRange {
   float start, end;
@@ -36,8 +38,36 @@ inline TimeRange dragLoopPoint(TimeRange region, bool startPoint, float delta,
   return startPoint ? TimeRange(region.end - length, region.end)
                     : TimeRange(region.start, region.start + length);
 }
+inline TimeRange dragLoopPointOnGrid(TimeRange region, bool startPoint,
+                                     float delta, float minimumLength,
+                                     float maximumLength, float step,
+                                     float origin) {
+  if (step <= 0.f)
+    return dragLoopPoint(region, startPoint, delta, minimumLength,
+                         maximumLength);
+  double low =
+      startPoint ? region.end - maximumLength : region.start + minimumLength;
+  double high =
+      startPoint ? region.end - minimumLength : region.start + maximumLength;
+  double first = std::ceil((low - origin) / step - 1e-6);
+  double last = std::floor((high - origin) / step + 1e-6);
+  if (first > last)
+    return dragLoopPoint(region, startPoint, delta, minimumLength,
+                         maximumLength);
+  double point = (startPoint ? region.start : region.end) + delta;
+  double index = std::floor((point - origin) / step + .500001);
+  point = origin + std::max(first, std::min(last, index)) * step;
+  return startPoint ? TimeRange(float(point), region.end)
+                    : TimeRange(region.start, float(point));
+}
 inline float controlOffset(int voice, int mode, bool hold, float knob,
                            int channels, float voltage) {
+  if (mode == 3) {
+    float spacing = hold ? 0.f : voice * beatValue(knob);
+    float cv = beatValue(std::max(-10.f, std::min(10.f, voltage)) * 2.f);
+    if (channels == 1) return spacing + cv;
+    return voice < channels ? cv : spacing;
+  }
   float spacing = hold ? 0.f : voice * knob * (mode == 0 ? 5.f : 1.f);
   float cv = std::max(-1.f, std::min(1.f, voltage / 10.f)) *
              (mode == 0 ? 100.f : 20.f);

@@ -11,7 +11,7 @@ def embed(root,x,y,w,h,bounds=None,name='asset'):
     a,b,c,d=bounds or map(float,root.get('viewBox').split())
     group=E.SubElement(svg,tag('g'),id=name,transform=f'translate({x},{y}) scale({w/c},{h/d}) translate({-a},{-b})')
     for child in root:group.append(child)
-def text(s,x,y,w,h,rand=25):
+def text(s,x,y,w,h,rand=25,center=False):
     with tempfile.TemporaryDirectory() as tmp:
         out=Path(tmp)/'text.svg'
         subprocess.run([str(ROOT/'scripts/gen.sh'),s,'--rand',str(rand),'--seed','phlooper-'+s,'--output',str(out)],check=True,stdout=subprocess.DEVNULL)
@@ -20,12 +20,14 @@ def text(s,x,y,w,h,rand=25):
     for path in root.iter(tag('path')):
         for seg in helper.parse_path(path.get('d')):points.extend(seg['points'])
     xs=[p[0] for p in points];ys=[p[1] for p in points];bounds=(min(xs)-1,min(ys)-1,max(xs)-min(xs)+2,max(ys)-min(ys)+2)
-    embed(root,x,y,min(w,h*bounds[2]/bounds[3]),h,bounds,'label-'+s.replace(' ','-'))
+    actual=min(w,h*bounds[2]/bounds[3])
+    embed(root,x-actual*.5 if center else x,y,actual,h,bounds,'label-'+s.replace(' ','-'))
 # Perspective blocks are drawn by the procedural WarpedBlock component.
 text('Phlooper',16,5,119,24,48)
 for s,x in [('Start',22),('Length',74),('Offset',126),('Speed',178),('Rec mix',226),('Out mix',278)]:
     text(s,x,205 if s in ('Length','Speed') else 203,45,9 if s in ('Length','Speed') else 7)
 for s,x in [('L / mono',21),('R',67),('Out L',263),('Out R',291),('EOC',174),('Phase',201)]:text(s,x,360,40,5.5)
+text('Clock',78,277,24,5.5,center=True)
 text('Gain',88,360,25,5.5)
 text('VCA',123,360,30,5.5)
 text('Gain',238,360,25,5.5)

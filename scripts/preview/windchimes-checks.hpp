@@ -18,6 +18,50 @@ inline void checkWindchimesCv(rack::plugin::Model* model) {
       if (module->getParamQuantity(i)->name == name) return module->params[i];
     throw std::runtime_error("Missing parameter: " + name);
   };
+  {
+    std::unique_ptr<engine::Module> owner(model->createModule());
+    auto* target=owner.get();
+    auto idFor=[&](const std::string& name) {
+      for (size_t id=0;id<target->params.size();++id)
+        if (target->getParamQuantity(id)->name==name) return int(id);
+      throw std::runtime_error("Missing rndblk parameter: "+name);
+    };
+    auto cvFor=[&](const std::string& name) -> engine::Input& {
+      for (size_t id=0;id<target->inputs.size();++id)
+        if (target->getInputInfo(id)->name==name) return target->inputs[id];
+      throw std::runtime_error("Missing rndblk input: "+name);
+    };
+    int wind=idFor("Wind strength"), gust=idFor("Gustiness");
+    int mix=idFor("Expanse"), size=idFor("Thicket");
+    target->params[wind].setValue(.42f); target->params[mix].setValue(.31f);
+    json_t* data=json_object(); json_t* locks=json_array();
+    json_array_append_new(locks,json_integer(wind)); json_array_append_new(locks,json_integer(mix));
+    json_object_set_new(data,"randomLocks",locks); target->dataFromJson(data); json_decref(data);
+    engine::Module::ProcessArgs args; args.sampleRate=48000; args.sampleTime=1.f/48000; args.frame=0;
+    target->process(args);  // Establish low trigger states before the first edge.
+    auto& randomWind=cvFor("Randomize wind"); randomWind.channels=1; randomWind.setVoltage(10.f);
+    target->process(args);
+    require(target->params[wind].getValue()==.42f, "Wind random CV must respect knob locks");
+    float randomized=target->params[gust].getValue();
+    require(randomized!=.55f, "Wind random CV changes unlocked controls");
+    target->process(args);
+    require(target->params[gust].getValue()==randomized, "rndblk triggers once per rising edge");
+    auto& wiggle=cvFor("Wiggle wind"); wiggle.channels=1; wiggle.setVoltage(10.f);
+    target->process(args);
+    require(target->params[wind].getValue()==.42f && target->params[gust].getValue()!=randomized &&
+                std::abs(target->params[gust].getValue()-randomized)<=.051f,
+            "Wiggle CV makes small changes while leaving locked controls fixed");
+    auto& randomReverb=cvFor("Randomize forest"); randomReverb.channels=1; randomReverb.setVoltage(10.f);
+    target->process(args);
+    require(target->params[mix].getValue()==.31f && target->params[size].getValue()!=.55f,
+            "Forest randomization is grouped and respects locks");
+    json_t* saved=target->dataToJson();
+    std::unique_ptr<engine::Module> loaded(model->createModule()); loaded->dataFromJson(saved);
+    json_decref(saved); json_t* roundtrip=loaded->dataToJson();
+    require(json_array_size(json_object_get(roundtrip,"randomLocks"))==2, "Knob locks survive patch reload");
+    json_decref(roundtrip);
+    std::puts("rndblk trigger, group isolation, wiggle amount, knob lock, and persistence checks passed");
+  }
   for (size_t i = 0; i < module->params.size(); ++i) {
     auto* gain = module->getParamQuantity(i);
     if (gain->name != "Gain") continue;

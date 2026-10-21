@@ -26,6 +26,12 @@
 
 using namespace rack;
 #include "windchimes-checks.hpp"
+#include "../../src/Windchimes/ForestGraphic.hpp"
+#include "../../src/components/RandomBlock.hpp"
+#include "blunch-layers-checks.hpp"
+#include "blunch-thread-checks.hpp"
+#include "blunch-seed-checks.hpp"
+#include "blunch-sync-checks.hpp"
 
 namespace {
 struct PreviewContainer : widget::Widget {
@@ -91,6 +97,10 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
     if (!value) throw std::runtime_error(message);
   };
   modelBlunchPreview->plugin = &plugin;
+  checkBlunchFormulaLayers(modelBlunchPreview);
+  checkBlunchThreadHandoff(modelBlunchPreview);
+  checkBlunchSeedBoundaries(modelBlunchPreview);
+  checkBlunchChannelSync(modelBlunchPreview);
   auto* module =
       static_cast<ComputerscareBlunch*>(modelBlunchPreview->createModule());
   require(module->playbackDisplayStyle == 1, "New modules default to Minimal blinkers");
@@ -539,8 +549,8 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   module->controlSelection.selectOnly(0);
   module->focusControlRow();
   widget->step();
-  require(widget->channelPlay->tooltipText() == "Apply pending changes to channel 1" &&
-              widget->channelCancel->tooltipText() == "Discard pending changes for channel 1",
+  require(widget->channelPlay->tooltipText() == "Stage Draft for channel 1" &&
+              widget->channelCancel->tooltipText() == "Discard Draft for channel 1 (Shift: discard Next too)",
           "pending tooltips describe the action and target channel");
   require(widget->channelPlay->pending() && !widget->channelPlay->isPressed(),
           "Play stays raised for its channel's pending formula while playback continues");
@@ -568,10 +578,115 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
               !module->channelHasPendingFormula(0) &&
               module->channelHasPendingFormula(2),
           "Cancel restores only its channel's submitted text without interrupting playback");
-  require(widget->channelCancel->tooltipText() == "Channel 1: no pending changes",
+  require(widget->channelCancel->tooltipText() == "Channel 1: no changes",
           "Cancel tooltip updates after reverting");
   require(widget->channelCancel->visible && !widget->channelPlay->pending(),
           "Cancel remains visible when no changes are pending");
+  module->setControlMode(false);
+  module->focusedChannel = 1;
+  module->editorViewMode = BlunchEditorViewMode::Sequence;
+  module->selectedLine = 0;
+  module->selectedLineDirty = true;
+  module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_PAGE);
+  module->sequenceEditorStates[1].text = "4hz\n5hz";
+  require(module->executePage(), "UI page staging compiles");
+  module->sequenceEditorStates[1].text = "6hz\n5hz";
+  module->sequenceEditorStates[1].dirty = true;
+  module->editorViewDirty = true;
+  widget->step();
+  capture(widget.get(), output + "/04-draft-channel.png", scale);
+  auto layerKey = [&](int key, int action = GLFW_PRESS, int mods = 0) {
+    widget::Widget::SelectKeyEvent e;
+    e.key = key; e.action = action; e.mods = mods;
+    editor->onSelectKey(e);
+    widget->step();
+  };
+  layerKey(GLFW_KEY_F6);
+  require(module->visibleLayer() == ComputerscareBlunch::NEXT && editor->readOnly &&
+              editor->text == "4hz\n5hz" && module->sequenceEditorStates[1].text == "6hz\n5hz",
+          "Next view is read-only and preserves newer Draft text");
+  capture(widget.get(), output + "/05-next-channel.png", scale);
+  layerKey(GLFW_KEY_F7);
+  require(module->visibleLayer() == ComputerscareBlunch::NOW && editor->text != "4hz\n5hz",
+          "Holding F7 peeks at Now");
+  layerKey(GLFW_KEY_F7, GLFW_RELEASE);
+  require(module->visibleLayer() == ComputerscareBlunch::NEXT && editor->text == "4hz\n5hz",
+          "Releasing F7 restores Next");
+  std::string nextBeforeUndo = editor->text;
+  layerKey(GLFW_KEY_Z, GLFW_PRESS, RACK_MOD_CTRL);
+  require(editor->text == nextBeforeUndo, "Undo cannot modify read-only Next");
+  layerKey(GLFW_KEY_F6);
+  capture(widget.get(), output + "/06-now-channel.png", scale);
+  layerKey(GLFW_KEY_F6);
+  require(module->visibleLayer() == ComputerscareBlunch::DRAFT && !editor->readOnly &&
+              editor->text == "6hz\n5hz", "Cycling views restores editable Draft");
+  layerKey(GLFW_KEY_F6);
+  widget::Widget::SelectTextEvent draftTyping;
+  draftTyping.codepoint = '7';
+  editor->onSelectText(draftTyping);
+  widget->step();
+  require(module->visibleLayer() == ComputerscareBlunch::DRAFT &&
+              module->pendingFormulas[1].lines.at(0).text == "4hz" &&
+              module->sequenceEditorStates[1].text != "6hz\n5hz",
+          "Typing in Next returns to Draft without overwriting the queue");
+  editor->undo();
+  widget->step();
+  require(module->sequenceEditorStates[1].text == "6hz\n5hz",
+          "Draft undo survives switching between layer views");
+  layerKey(GLFW_KEY_ENTER, GLFW_PRESS, RACK_MOD_CTRL | GLFW_MOD_SHIFT);
+  require(module->pendingFormulas[1].page && module->pendingFormulas[1].lines.at(0).text == "6hz",
+          "Ctrl/Cmd+Shift+Enter stages a whole page through the real editor");
+  module->sequenceEditorStates[1].text = "7hz\n5hz";
+  module->sequenceEditorStates[1].dirty = true;
+  widget->step();
+  layerKey(GLFW_KEY_ESCAPE);
+  require(module->showingSequenceView() && editor->state == &module->sequenceEditorStates[1] &&
+              module->sequenceEditorStates[1].text == "6hz\n5hz" && module->channelHasNext(1),
+          "First Escape discards only Draft and keeps the channel editor open");
+  layerKey(GLFW_KEY_ESCAPE);
+  require(module->showingSequenceView() && !module->pendingFormulas[1].lines.count(0) &&
+              module->pendingFormulas[1].lines.count(1),
+          "Second Escape unstages only the focused line");
+  layerKey(GLFW_KEY_ESCAPE);
+  require(module->showingChannelsView() && module->pendingFormulas[1].lines.count(1),
+          "Escape from an unchanged line returns to All without discarding other lines");
+  // A readable mixed-state page for visual review: both, queued, draft,
+  // unchanged/running, and another draft.
+  module->focusedChannel = 1;
+  module->editorViewMode = BlunchEditorViewMode::Sequence;
+  module->setFormulaLayer(ComputerscareBlunch::DRAFT);
+  module->runningLineTexts[1].clear();
+  module->pendingFormulas[1] = ComputerscareBlunch::PendingFormula{};
+  module->sequenceEditorStates[1].text = "120bpm\n250ms\n2hz\n[300 400]ms\n90bpm@4";
+  require(module->commitLineForChannel(1, 3, true), "mixed-state preview baseline compiles");
+  module->sequencers[1].running = true;
+  module->sequenceEditorStates[1].text = "130bpm\n300ms\n2hz\n[300 400]ms\n90bpm@4";
+  module->executePage();
+  module->sequenceEditorStates[1].text = "140bpm\n300ms\n2.5hz\n[300 400]ms\n100bpm@4";
+  module->selectedLine = 3;
+  module->selectedLineDirty = true;
+  module->sequenceEditorStates[1].dirty = true;
+  module->editorViewDirty = true;
+  widget->step();
+  require(module->lineHasDraft(1, 0) && module->pendingFormulas[1].lines.count(0) &&
+              !module->lineHasDraft(1, 1) && module->pendingFormulas[1].lines.count(1) &&
+              module->lineHasDraft(1, 2) && !module->pendingFormulas[1].lines.count(2),
+          "mixed-state Channel 2 preview contains both, queued-only, and draft-only rows");
+  capture(widget.get(), output + "/07-channel-2-mixed-states.png", scale);
+  module->focusedChannel = 0;
+  module->channelsCursorChannel = 0;
+  module->runningLineTexts[0].clear();
+  module->pendingFormulas[0] = ComputerscareBlunch::PendingFormula{};
+  module->sequenceEditorStates[0].text = "120bpm\n240bpm";
+  module->commitLine(1,true);
+  module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_IMMEDIATE);
+  module->sequenceEditorStates[0].text = "90bpm\n[300 400]ms";
+  module->executePage();
+  module->openFocusedChannelEditPage();
+  module->setFormulaLayer(ComputerscareBlunch::DRAFT);
+  widget->step();
+  capture(widget.get(), output + "/08-channel-draft-applied.png", scale);
+
   std::puts(
       "Blunch Control-mode UI, transport, mouse, and layout checks passed.");
 }
@@ -582,7 +697,7 @@ int main(int argc, char** argv) {
   if (argc < 5 || argc > 7) {
     std::fprintf(stderr,
                  "Usage: phlooper-preview REPO RACK_ASSETS OUTPUT_DIR SCALE "
-                 "[browser|scenarios] [phlooper|blunch|windchimes]\n");
+                 "[browser|scenarios] [phlooper|blunch|32nd-and-columbus]\n");
     return 2;
   }
   try {
@@ -635,7 +750,7 @@ int main(int argc, char** argv) {
       plugin::Model* browserModel = modelPhlooperPreview;
       if (argc == 7 && std::string(argv[6]) == "blunch")
         browserModel = modelBlunchPreview;
-      if (argc == 7 && std::string(argv[6]) == "windchimes")
+      if (argc == 7 && std::string(argv[6]) == "32nd-and-columbus")
         browserModel = modelComputerscareWindchimes;
       if (argc == 7 && std::string(argv[6]) == "mely-porge")
         browserModel = modelComputerscareMelyPorge;
@@ -651,6 +766,142 @@ int main(int argc, char** argv) {
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",
               scale);
+      if (browserModel == modelComputerscareWindchimes) {
+        {
+          windchimes::ForestGraphic::Debris bit;
+          bit.position = Vec(200.f, 190.f); bit.altitude = 120.f;
+          bit.gravity = 180.f; bit.size = 3.f;
+          for (int sample=0; sample<240; ++sample)
+            windchimes::ForestGraphic::stepDebris(bit, Vec(), 1.f/60.f, 500.f, 380.f, 20.f);
+          if (bit.altitude != 0.f || std::abs(bit.position.y-190.f) > .001f || bit.size <= 0)
+            throw std::runtime_error("Forest debris must settle at its tree's radial ground position");
+          bit.position.x = -1.f;
+          windchimes::ForestGraphic::stepDebris(bit, Vec(), 1.f/60.f, 500.f, 380.f, 20.f);
+          if (bit.size != 0.f) throw std::runtime_error("Forest debris must leave the scene without wrapping");
+          using Forest = windchimes::ForestGraphic;
+          if (!(Forest::stageScale(Vec(250,190),500,380) > Forest::stageScale(Vec(250,350),500,380)))
+            throw std::runtime_error("Debris perspective must shrink toward the rear edge");
+          if (!Forest::depthBefore(.1f,25.f,.9f,190.f) || !Forest::depthBefore(.9f,190.f,.1f,350.f) ||
+              Forest::depthBefore(.1f,350.f,.9f,190.f))
+            throw std::runtime_error("Rear trees and debris must render in front of central trees regardless of radial size");
+          Forest::Debris blown; blown.position=Vec(250,190); blown.size=3; blown.leaf=true;
+          for (int sample=0;sample<120;++sample)
+            Forest::stepDebris(blown,Vec(.7f,.3f),1.f/60.f,500,380,20);
+          if (blown.position.x<=260 || blown.position.y<=190 || blown.altitude!=0)
+            throw std::runtime_error("Wind must move grounded debris along its local ground plane");
+          std::puts("Forest debris grounding, wind transport, perspective, radial depth order, and no-wrap checks passed");
+        }
+        std::unique_ptr<engine::Module> forestModule(browserModel->createModule());
+        json_t* state = forestModule->toJson();
+        json_object_set_new(json_object_get(state, "data"), "graphicMode", json_integer(1));
+        forestModule->dataFromJson(json_object_get(state, "data"));
+        json_decref(state);
+        json_t* savedGraphic = forestModule->dataToJson();
+        bool forestSaved = json_integer_value(json_object_get(savedGraphic, "graphicMode")) == 1;
+        json_decref(savedGraphic);
+        if (!forestSaved) throw std::runtime_error("Forest graphic setting did not persist");
+        // Fresh visual fixtures, using real controls rather than a cached image.
+        int chimeCount = 3 + int(random::uniform() * 3.f);
+        float rotation = random::uniform() * 6.2831853f;
+        for (int ch = 0; ch < 16; ++ch) {
+          float angle = rotation + ch * 6.2831853f / chimeCount;
+          float radius = ch == 0 ? .08f + random::uniform() * .07f : .28f + random::uniform() * .13f;
+          std::string prefix = "Chimes " + std::to_string(ch + 1) + " ";
+          for (size_t i = 0; i < forestModule->params.size(); ++i) {
+            auto* quantity = forestModule->getParamQuantity(i);
+            const auto& name = quantity->name;
+            if (name.compare(0, prefix.size(), prefix) != 0) continue;
+            std::string field = name.substr(prefix.size());
+            if (field == "enabled") quantity->setValue(ch < chimeCount ? 1.f : 0.f);
+            else if (field == "stage horizontal") quantity->setValue(.5f + radius * std::cos(angle));
+            else if (field == "stage front / rear") quantity->setValue(.5f + radius * std::sin(angle));
+            else if (field == "material") quantity->setValue(int(random::uniform() * 3.f));
+            else if (field == "tubes") quantity->setValue(4 + int(random::uniform() * 7.f));
+            else if (field == "shape" || field == "body" || field == "decay" || field == "brightness")
+              quantity->setValue(.2f + random::uniform() * .65f);
+          }
+        }
+        auto* sceneModule = forestModule.get();
+        auto setScene = [&](const std::string& name, float value) {
+          for (size_t i = 0; i < sceneModule->params.size(); ++i)
+            if (sceneModule->getParamQuantity(i)->name == name) { sceneModule->params[i].setValue(value); return; }
+          throw std::runtime_error("Missing scene control: "+name);
+        };
+        setScene("Wind strength", .45f + random::uniform() * .3f);
+        setScene("Dry/wet", .2f + random::uniform() * .6f);
+        setScene("Expanse", .3f + random::uniform() * .4f);
+        setScene("Thicket", .2f + random::uniform() * .6f);
+        setScene("Undergrowth", random::uniform());
+        json_t* lockView=sceneModule->dataToJson();
+        json_t* viewLocks=json_array();
+        for (size_t id=0;id<sceneModule->params.size();++id) {
+          const auto& name=sceneModule->getParamQuantity(id)->name;
+          if (name=="Wind tone" || name=="Expanse") json_array_append_new(viewLocks,json_integer(id));
+        }
+        json_object_set_new(lockView,"randomLocks",viewLocks);
+        sceneModule->dataFromJson(lockView); json_decref(lockView);
+        context.engine->addModule(sceneModule);
+        auto forestWidget = std::unique_ptr<app::ModuleWidget>(browserModel->createModuleWidget(forestModule.release()));
+        int randomBlocks=0;
+        for (auto* child : forestWidget->children) {
+          auto* block=dynamic_cast<computerscare::RandomBlock*>(child);
+          if (!block) continue;
+          ++randomBlocks;
+          for (int action=0;action<2;++action) {
+            widget::EventContext hit;
+            widget::Widget::ButtonEvent click;
+            click.context=&hit; click.button=GLFW_MOUSE_BUTTON_LEFT; click.action=GLFW_PRESS;
+            click.pos=block->box.pos+Vec(8.f+action*32.f,8.f);
+            forestWidget->onButton(click);
+            auto* button=dynamic_cast<computerscare::RandomBlock::Button*>(hit.target);
+            if (!button || !button->pressed) throw std::runtime_error("rndblk buttons must receive clicks through their parent");
+            button->onDragEnd(widget::Widget::DragEndEvent());
+            widget::EventContext portHit;
+            click.context=&portHit; click.pos=block->box.pos+Vec(25.f+action*32.f,10.5f);
+            forestWidget->onButton(click);
+            if (!dynamic_cast<app::PortWidget*>(portHit.target)) throw std::runtime_error("rndblk CV jacks must receive clicks through their parent");
+          }
+        }
+        if (randomBlocks!=2) throw std::runtime_error("Wind and Reverb each need one rndblk");
+        std::puts("rndblk button and CV jack mouse-routing checks passed");
+        engine::Module::ProcessArgs windArgs;
+        windArgs.sampleRate = 48000.f; windArgs.sampleTime = 1.f / 48000.f;
+        windArgs.frame = 0;
+        for (int sample=0; sample<24000; ++sample) { sceneModule->process(windArgs); ++windArgs.frame; }
+        capture(forestWidget.get(), std::string(argv[3]) + "/01-forest.png", scale);
+        std::array<float,4> sparse{}, dense{};
+        float least=2.f, most=-1.f;
+        for (int a=0;a<5;++a) for(int b=0;b<5;++b) for(int c=0;c<5;++c) for(int d=0;d<5;++d) {
+          std::array<float,4> env{{a/4.f,b/4.f,c/4.f,d/4.f}};
+          float density=windchimes::ForestGraphic::densityFor(env[0],env[1],env[2],env[3]);
+          if (density<least) { least=density; sparse=env; }
+          if (density>most) { most=density; dense=env; }
+        }
+        if (most-least<.7f) throw std::runtime_error("Forest controls should span sparse to dense scenery");
+        auto setForest=[&](const std::array<float,4>& env) {
+          setScene("Expanse",env[0]); setScene("Thicket",env[1]);
+          setScene("Undergrowth",env[2]); setScene("Canopy",env[3]);
+        };
+        setForest(sparse);
+        capture(forestWidget.get(),std::string(argv[3])+"/02-forest-open.png",scale);
+        setForest(dense);
+        capture(forestWidget.get(),std::string(argv[3])+"/03-forest-thicket.png",scale);
+        if (std::getenv("FOREST_STORM_PREVIEW")) {
+          setScene("Wind strength", 1.f); setScene("Turbulence", 1.f);
+          setScene("Gustiness", 1.f);
+          for (int frame=0; frame<200; ++frame) {
+            for (int sample=0;sample<2400;++sample) { sceneModule->process(windArgs); ++windArgs.frame; }
+            std::this_thread::sleep_for(std::chrono::milliseconds(35));
+            capture(forestWidget.get(), std::string(argv[3]) + "/04-storm-ground.png", scale);
+          }
+          setScene("Wind strength", .12f); setScene("Turbulence", .2f);
+          for (int frame=0; frame<50; ++frame) {
+            for (int sample=0;sample<2400;++sample) { sceneModule->process(windArgs); ++windArgs.frame; }
+            std::this_thread::sleep_for(std::chrono::milliseconds(35));
+            capture(forestWidget.get(), std::string(argv[3]) + "/05-storm-settled.png", scale);
+          }
+        }
+      }
       return 0;
     }
     if (argc == 7 && std::string(argv[6]) == "blunch") {
@@ -713,6 +964,122 @@ int main(int argc, char** argv) {
     module->params[ComputerscarePhlooper::LOOP_SOLO + 1].setValue(1.f);
     module->params[ComputerscarePhlooper::LOOP_MUTE + 2].setValue(1.f);
     save("07-mute-solo-backgrounds");
+    module->params[ComputerscarePhlooper::LOOP_SOLO + 1].setValue(0.f);
+    module->params[ComputerscarePhlooper::LOOP_MUTE + 2].setValue(0.f);
+    module->params[ComputerscarePhlooper::START].setValue(.08f);
+    module->params[ComputerscarePhlooper::LENGTH].setValue(.8f);
+    module->params[ComputerscarePhlooper::COUNT].setValue(3.f);
+    module->params[ComputerscarePhlooper::CLOCK_RATIO].setValue(3.f);
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].channels = 1;
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(0.f);
+    simulate(*module,.01f,frame);
+    module->params[ComputerscarePhlooper::RECORD].setValue(1.f);
+    for(int pulse=0;pulse<6;++pulse) {
+      module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(10.f);
+      simulate(*module,.001f,frame);
+      module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(0.f);
+      simulate(*module,.249f,frame);
+    }
+    module->params[ComputerscarePhlooper::RECORD].setValue(0.f);
+    simulate(*module,.001f,frame);
+    capture(widget.get(),std::string(argv[3])+"/08-clock-queued-stop.png",scale);
+    if (!module->queuedRecord.load() || module->clockMarkCount.load()<10)
+      throw std::runtime_error("Clock recording must publish queued stop and recorded pulse markers");
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(10.f);
+    simulate(*module,.001f,frame);
+    if (module->recording.load() || module->queuedRecord.load())
+      throw std::runtime_error("Clock edge must finish the queued overdub");
+    module->resetRequest = true;
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(0.f);
+    module->params[ComputerscarePhlooper::CLOCK_RATIO].setValue(-1.f);
+    simulate(*module,.01f,frame);
+    module->params[ComputerscarePhlooper::RECORD].setValue(1.f);
+    simulate(*module,.01f,frame);
+    if (module->loop.initial) throw std::runtime_error("Initial recording started before its clock");
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(10.f);
+    simulate(*module,.001f,frame);
+    if (!module->loop.initial) throw std::runtime_error("First divided clock must start initial recording");
+    module->params[ComputerscarePhlooper::RECORD].setValue(0.f);
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(0.f);
+    simulate(*module,.249f,frame);
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(10.f);
+    simulate(*module,.001f,frame);
+    if (!module->loop.initial) throw std::runtime_error("Divided clock stopped initial recording too early");
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(0.f);
+    simulate(*module,.249f,frame);
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].setVoltage(10.f);
+    simulate(*module,.001f,frame);
+    if (module->loop.initial || std::abs(module->loop.size-24000)>2)
+      throw std::runtime_error("Divided clock must finish a precisely half-second initial recording");
+    if (std::abs(module->recordedBeatFrames.load()-24000.f)>2.f)
+      throw std::runtime_error("Recorded beats must retain the divided clock interval");
+    module->params[ComputerscarePhlooper::MODE].setValue(3.f);
+    module->params[ComputerscarePhlooper::OFFSET].setValue(11.f);
+    module->params[ComputerscarePhlooper::COUNT].setValue(3.f);
+    module->params[ComputerscarePhlooper::LENGTH].setValue(.625f);
+    module->inputs[ComputerscarePhlooper::WRITE_CLOCK].channels=0;
+    simulate(*module,.05f,frame);
+    if (std::abs(module->loop.periods[1]-22500.)>2.)
+      throw std::runtime_error("Beat mode must offset playback by 5/16 of the recorded beat");
+    save("09-recorded-beats");
+    module->params[ComputerscarePhlooper::OFFSET].setValue(-4.f);
+    simulate(*module,.05f,frame);
+    if (std::abs(module->loop.periods[1]-14000.)>2.)
+      throw std::runtime_error("Minus 1/12 must shorten loop two by one twelfth of a clock-mark division");
+    save("10-minus-twelfth-beat");
+    module->params[ComputerscarePhlooper::OFFSET].setValue(6.5f);
+    module->params[ComputerscarePhlooper::START].setValue(.17f);
+    module->params[ComputerscarePhlooper::LENGTH].setValue(.57f);
+    simulate(*module,.05f,frame);
+    save("11-odd-beat-grid");
+    if (std::abs(module->loop.sourceStart(0)-4080.)>1.)
+      throw std::runtime_error("Beat quantization must leave Start freely positioned at the knob value");
+
+    if (std::abs(module->getParamQuantity(ComputerscarePhlooper::LENGTH)->getDisplayValue() -
+                 module->loop.periods[0] / module->recordedBeatFrames.load()) > .01f)
+      throw std::runtime_error("Length tooltip must report the same snapped length used by playback");
+
+
+
+    auto* lengthKnob = widget->getParam(ComputerscarePhlooper::LENGTH);
+    auto* lengthQuantity = module->getParamQuantity(ComputerscarePhlooper::LENGTH);
+    std::string formattedLength = lengthQuantity->getDisplayValueString();
+    lengthQuantity->setDisplayValueString(formattedLength);
+    if (lengthQuantity->getDisplayValueString() != formattedLength)
+      throw std::runtime_error("Beat Length fractions must round-trip through the value editor");
+    bool showTooltips = settings::tooltips;
+    settings::tooltips = true;
+    lengthKnob->createTooltip();
+    auto* tooltip = APP->scene->children.back();
+    APP->scene->removeChild(tooltip);
+    widget->addChild(tooltip);
+    tooltip->step();
+    tooltip->box.pos = Vec(98, 205);
+    capture(widget.get(), std::string(argv[3])+"/12-beat-length-tooltip.png", scale, false);
+    widget->removeChild(tooltip);
+    APP->scene->addChild(tooltip);
+    lengthKnob->destroyTooltip();
+    settings::tooltips = showTooltips;
+    PhlooperView* loopView = nullptr;
+    for (auto* child : widget->children)
+      if (auto* candidate = dynamic_cast<PhlooperView*>(child)) loopView = candidate;
+    if (!loopView) throw std::runtime_error("Phlooper loop-point view is missing");
+    loopView->rememberDrag(1, false);
+    auto dragBase = loopView->dragRegion;
+    float grid = std::abs(phlooper::beatValue(module->params[ComputerscarePhlooper::OFFSET].getValue())) *
+                 module->recordedBeatFrames.load() / module->frames.load();
+    auto snapped = phlooper::dragLoopPointOnGrid({dragBase.x,dragBase.y},false,
+                    grid*.7f,48.f/module->frames.load(),
+                    float(phlooper::capacity)/module->frames.load(),grid,
+                    loopView->requestedRegion(1,false,1).x);
+    loopView->applyRegion({snapped.start,snapped.end});
+    simulate(*module,.01f,frame);
+    auto actual = loopView->requestedRegion(1);
+    if (std::abs(actual.y-snapped.end)>1e-5 || std::abs(actual.x-dragBase.x)>1e-5)
+      throw std::runtime_error("Snapped handle edits must preserve the other point and reach playback");
+    loopView->dragVoice=-1;
+    save("13-snapped-custom-handle");
+    std::puts("Phlooper clocked initial recording, overdub, queued indicators and waveform marker checks passed");
     widget.reset();
 
     // Context destroys graphics before terminating GLFW. No settings are saved.

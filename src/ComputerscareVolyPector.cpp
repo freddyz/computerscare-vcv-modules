@@ -1317,11 +1317,20 @@ struct VolyPectorDisableableSmoothKnob : ComputerscareRoundKnob {
         mainKnobRangeRevision = pobs->mainKnobRangeRevision;
       }
 
+      bool anyOutputConnected = false;
+      if (pobs && pobs->channelViewActive()) {
+        for (int output = 0; output < volyPectorNumOutputs; ++output)
+          anyOutputConnected |=
+              pobs->outputs[ComputerscareVolyPector::OUTPUT + output]
+                  .isConnected();
+      }
       bool candidate =
           pobs &&
           ((!pobs->channelViewActive() && channel > module->polyChannels - 1) ||
-           (pobs->channelViewActive() &&
-            pobs->selectedChannel() > module->polyChannels - 1));
+           (pobs->channelViewActive() && anyOutputConnected &&
+            (pobs->selectedChannel() > module->polyChannels - 1 ||
+             !pobs->outputs[ComputerscareVolyPector::OUTPUT + channel]
+                  .isConnected())));
       if (disabled != candidate) {
         setSvg(candidate ? disabledSvg : enabledSvg);
         event::Change eChange;
@@ -1811,6 +1820,12 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
     if (!module) {
       return;
     }
+    auto* change = new history::ModuleChange;
+    change->name = initialize ? "initialize Voly Pector values"
+                   : wiggle   ? "wiggle Voly Pector values"
+                              : "randomize Voly Pector values";
+    change->moduleId = module->id;
+    change->oldModuleJ = module->toJson();
     if (initialize) {
       module->initializeAllValues();
     } else if (wiggle) {
@@ -1820,6 +1835,8 @@ struct VolyPectorActionButton : ComputerscareBlankButton {
       module->randomizeAllValues(
           computerscare::volypector::RandomizeMode::REPLACE);
     }
+    change->newModuleJ = module->toJson();
+    APP->history->push(change);
   }
 
   void onButton(const event::Button& e) override {

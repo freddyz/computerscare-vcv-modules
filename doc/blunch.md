@@ -34,7 +34,7 @@ With automatic Block and Line advance enabled, Blunch finishes each block, conti
 | `1:30min` | A one-minute, thirty-second interval              |
 | `120`     | A number without a unit uses Default number unit  |
 
-Decimals can begin with a dot: `.5s` and `0.5s` mean the same thing. The context menu’s **Default number unit** selects BPM, seconds, milliseconds, Hz, minutes, millihertz, or kilohertz for bare numbers. BPM is the initial setting. Explicit units always override it. The setting applies when a line is next submitted or activated. Clock values must be positive. Units are case-insensitive. Additional unit spellings include `rpm` for BPM, `cps` for Hz, `mhz` for millihertz, `khz` for kilohertz, `sec`/`seconds`, and `m`/`minutes`.
+Decimals can begin with a dot: `.5s` and `0.5s` mean the same thing. The context menu’s **Default number unit** selects BPM, seconds, milliseconds, Hz, minutes, millihertz, or kilohertz for bare numbers. BPM is the initial setting. Explicit units always override it. The setting applies when a line is next submitted; existing Next and Now formulas keep their units. Clock values must be positive. Units are case-insensitive. Additional unit spellings include `rpm` for BPM, `cps` for Hz, `mhz` for millihertz, `khz` for kilohertz, `sec`/`seconds`, and `m`/`minutes`.
 
 ### Sequential values and brackets
 
@@ -133,6 +133,8 @@ Use `#` to set how long a block or group occupies before moving on:
 | `[300 400]ms#4s` | Cycle this group for four seconds                      |
 | `120bpm#4x`      | Run until four rising edges arrive at external clock X |
 
+In `{120bpm|240bpm#2}#4s`, choosing `240bpm#2` holds that choice for two pulses; the whole formula still lasts four seconds. Faster clock values produce more pulses within that same duration.
+
 Total lengths can also use random choices, such as `120bpm#{4|8}`. Modifiers go in the order **probability, repeat, total length**: `120bpm?75@2#4s`.
 
 ### External clocks: `w`, `x`, `y`, `z`
@@ -156,16 +158,40 @@ Direct editing in All view is allowed when a channel is stopped/paused or has on
 
 Stopped channels show their edited text immediately, even if they have never played. Playing multi-line channels show their current active formula. Channels beyond the selected polyphony use faded italic text and a lighter grey background; they remain selectable and editable.
 
-Press **Ctrl+Enter** or **Cmd+Enter** to submit a line. The **Wait** setting determines when submitted text becomes active; editing alone does not replace a running formula, even when it loops. In All view, the left side marker is green for the focused channel. A slow yellow pulse marks channels whose edited formulas differ from their submitted formulas. The pulse clears once those changes take over. Play is raised and pulses yellow when its channel has pending changes; click it to submit them using Wait. The **x** button to the right of Stop discards that channel’s pending edits and restores its submitted formulas without interrupting playback. Invalid text is marked in red so you can correct it. **Esc** cancels or returns to All view.
+### Draft, Next, and Now
 
-Undo with **Cmd/Ctrl+Z**; redo with **Cmd/Ctrl+Shift+Z** or **Cmd/Ctrl+Y**. Submit restored text to apply it to playback.
+| View      | Meaning                                                    |
+| --------- | ---------------------------------------------------------- |
+| **Draft** | Your editable formulas. Typing does not change playback.   |
+| **Next**  | Submitted formulas waiting for the selected Wait boundary. |
+| **Now**   | The formulas currently used for playback.                  |
+
+Press **Ctrl/Cmd+Enter** or click **Play** to stage all Draft changes for the focused channel, including deleted lines. Changes become active at the selected **Wait** boundary without jumping away from a surviving active line. If the active line was deleted, playback continues with a remaining formula. **Immediate** applies the submission straight away. Further typing changes Draft only; it cannot overwrite Next. Starting an empty channel activates its submitted formula because there is no running boundary to wait for.
+
+**Ctrl/Cmd+Shift+Enter** also stages the channel page. With **Wait: Page**, the submitted page changes take effect together when the page wraps. With other Wait modes, changes take effect at the selected boundary on the playing line, or when playback reaches another queued line. An invalid line prevents the whole page submission; correct the red-marked text and try again.
+
+The display’s left edge shows a green focus marker. Steady yellow ticks mark Draft edits; a slow yellow pulse marks Next waiting to take over. Both can appear together, per line in a channel page or summarized per channel in All view. Changed Draft text is tinted yellow. Play stays raised while changes exist: steady yellow for Draft, pulsing yellow for Next. Clicking Play stages the whole channel’s Draft; it does not cancel an existing Next submission.
+
+Click the small **Draft / Next / Now** label in the display, press **F6**, or use **Formula view** in the context menu to switch versions. Next and Now are read-only. Unchanged lines in Next show Now in faded text. Hold **F7** to peek at Now; release it to return. Typing returns to Draft. Switching views never replaces your edits.
+
+The **x** button to the right of Stop acts on the selected channel:
+
+- With Draft edits, discard them and restore Next, keeping Next queued.
+- With no Draft edits, unstage Next and restore Now.
+- **Shift-click** discards both Draft and Next at once.
+
+**Esc** does the same for the focused line in a channel page, or the selected channel in All view. With no changes on the focused line, it returns to All view.
+
+Undo with **Cmd/Ctrl+Z**; redo with **Cmd/Ctrl+Shift+Z** or **Cmd/Ctrl+Y**. Undo changes Draft only. Submit restored text to apply it to playback.
+
+Patches save Draft, Next, and Now separately. Reopening a patch keeps unfinished edits separate from playback and retains queued submissions. Wait uses its current setting, including if you change it after submitting.
 
 ## Controls
 
 - **Run:** master playback enable.
 - **Block / Line / Page:** momentary reset buttons for the current block, line, or whole channel page. Their inputs perform the same resets.
 - **Time:** speeds up or slows down internal timing. Each +1 doubles the speed; each −1 halves it.
-- **Seed:** positive values give repeatable random choices. Zero, or a negative combined value from CV, uses fresh randomness. The knob itself ranges from 0 to 10.
+- **Seed:** positive values give repeatable random choices. Zero, or a negative combined value from CV, uses fresh randomness. The knob itself ranges from 0 to 10. Seed knob/CV changes are latched independently by each channel when its seeded pattern restarts: after its counted or timed repeat, or at the end of an enclosing `#` group. Resets and starting a pattern use the latest seed. With Seed CV patched, pattern restarts wait 1 ms before sampling the seed and choosing the first value. This lets a sequencer clocked by EOB, EOL, or EOP supply its new seed for the upcoming pattern.
 - **Polyphony:** choose 1–16 output channels, or Auto. Auto extends to the highest channel with an activated formula. New modules default to Auto.
 - **Edit/Ctrl:** switch between formula editing and keyboard/mouse control of channels.
 
@@ -199,7 +225,7 @@ For an external clock, phase estimates the period from incoming edges. It needs 
 
 ## Control mode
 
-The header’s **Play** button starts or stops the focused channel and stays pressed while it plays. **Stop** stops that channel. The yellow segment on the display’s left wall marks the focused row.
+With no changes, the header’s **Play** button starts or stops the focused channel and stays pressed while it plays. With Draft edits, it stages them; while Next is waiting, it pulses yellow. **Stop** stops that channel. The green segment on the display’s left wall marks the focused row.
 
 Click **Edit/Ctrl** to enter Control mode. Click anywhere on Blunch to give it keyboard focus; a subtle orange stripe on the left marks focus. Hovering alone does not activate Control shortcuts. It opens All view, disables text editing, and selects the cursor’s channel. Selected rows have a green background; the focused row has a thin yellow outline. At least one channel stays selected.
 
@@ -241,21 +267,34 @@ Display style and default number unit are saved with the patch.
 - **Wait:** applies submitted text immediately, or waits for the next Clock, Block, Line, Page boundary, or an external W/X/Y/Z edge.
 - **Run input:** choose Gate or Trigger toggle behavior.
 
+## Channel sync
+
+The top **Sync** dropdown and context menu’s **Channel sync** share the same settings. **Free** is the default: channels run independently.
+
+Choose a source channel, its **End of Block**, **End of Line**, or **End of Page** boundary, and where followers restart: **Current block**, **Current line**, or **Page beginning**. Each source boundary restarts the other playing channels. Longer formulas are interrupted; shorter ones can loop between restarts. Stopped channels stay stopped. If the source is stopped or outside the output polyphony, followers continue independently.
+
+For example, use `120bpm#4s` on Channel 1, choose Channel 1’s End of Line, and restart followers at Current line. Their lines restart together every four seconds, regardless of their individual rates or random choices. This aligns restart points; it does not stretch formulas to fit.
+
+Sync uses Now and leaves Draft untouched. Next retains its usual Wait behavior. A patched Seed CV keeps its 1 ms sampling grace period without adding time to the shared pattern boundary. Sync settings are saved with the patch.
+
 ## Keyboard shortcuts
 
 Hold **backtick** while Blunch is hovered or focused to show its shortcut popup. Release to hide it. Editing is blocked while the popup is visible. **Shift+backtick types `~`**, the rest operator.
 
-| Shortcut          | Action                                      |
-| ----------------- | ------------------------------------------- |
-| Ctrl/Cmd+Enter    | Submit and start the selected line          |
-| Enter in All view | Open the channel under the cursor           |
-| Tab / Shift+Tab   | Switch between All and the selected channel |
-| Esc               | Cancel / return to All                      |
-| Ctrl+[ / Ctrl+]   | Previous / next channel                     |
-| Ctrl+,            | Stop the selected channel                   |
-| Ctrl+/            | Toggle Run                                  |
-| Ctrl+.            | Stop all                                    |
-| Ctrl+Space        | Start all                                   |
+| Shortcut             | Action                                      |
+| -------------------- | ------------------------------------------- |
+| Ctrl/Cmd+Enter       | Stage and start the channel’s Draft page    |
+| Ctrl/Cmd+Shift+Enter | Stage the changed lines on the page         |
+| F6                   | Cycle Draft / Next / Now                    |
+| Hold F7              | Peek at Now                                 |
+| Enter in All view    | Open the channel under the cursor           |
+| Tab / Shift+Tab      | Switch between All and the selected channel |
+| Esc                  | Cancel / return to All                      |
+| Ctrl+[ / Ctrl+]      | Previous / next channel                     |
+| Ctrl+,               | Stop the selected channel                   |
+| Ctrl+/               | Toggle Run                                  |
+| Ctrl+.               | Stop all                                    |
+| Ctrl+Space           | Start all                                   |
 
 The transport/navigation shortcuts labeled Ctrl use the Control key on macOS too. Standard text editing uses the usual platform modifier.
 

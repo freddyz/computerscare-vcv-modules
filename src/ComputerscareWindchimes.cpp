@@ -4,11 +4,12 @@
 #include "Computerscare.hpp"
 #include "Phlooper/Block.hpp"
 #include "Phlooper/Dropdown.hpp"
-#include "Windchimes/Delay.hpp"
 #include "Windchimes/Engine.hpp"
+#include "Windchimes/ForestGraphic.hpp"
 #include "Windchimes/ModelCv.hpp"
 #include "Windchimes/Presets.hpp"
 #include "Windchimes/Selection.hpp"
+#include "components/RandomBlock.hpp"
 
 namespace wc = windchimes;
 
@@ -22,10 +23,6 @@ struct WindchimesGainQuantity : ParamQuantity {
   std::string getDisplayValueString() override {
     return getValue() == 0.f ? "−∞" : string::f("%+.1f", getDisplayValue());
   }
-};
-
-struct DelayTimeQuantity : ParamQuantity {
-  std::string getDisplayValueString() override;
 };
 
 struct ComputerscareWindchimes : Module {
@@ -68,8 +65,8 @@ struct ComputerscareWindchimes : Module {
   // Keep the original eight slots and global IDs fixed. New chimes use
   // complete parameter blocks appended after every existing control.
   enum EffectParam {
-    REVERB_MIX = SET_BASE + 8 * SET_PARAMS,
-    REVERB_SIZE,
+    FX_MIX = SET_BASE + 8 * SET_PARAMS,
+    EXPANSE,
     WIND_TONE,
     WIND_TEXTURE,
     TIMBRE_BASE,
@@ -77,9 +74,9 @@ struct ComputerscareWindchimes : Module {
     SPREAD_BASE = INHARM_BASE + 8,
     WEIGHT_BASE = SPREAD_BASE + 8,
     SAIL_BASE = WEIGHT_BASE + 8,
-    DELAY_MIX = SAIL_BASE + 8,
-    DELAY_TIME,
-    DELAY_FEEDBACK,
+    THICKET = SAIL_BASE + 8,
+    UNDERGROWTH,
+    CANOPY,
     MUTE_BASE,
     SOLO_BASE = MUTE_BASE + 8,
     EXTRA_SET_BASE = SOLO_BASE + 8,
@@ -89,7 +86,7 @@ struct ComputerscareWindchimes : Module {
     WIND_INPUT,
     TRANSPOSE_INPUT,
     GUST_INPUT,
-    CLOCK_INPUT,
+    RESERVED_CLOCK_INPUT,
     DECAY_CV,
     BRIGHTNESS_CV,
     HARDNESS_CV,
@@ -111,17 +108,21 @@ struct ComputerscareWindchimes : Module {
     WIND_MIX_CV,
     WIND_TONE_CV,
     WIND_TEXTURE_CV,
-    REVERB_MIX_CV,
-    REVERB_SIZE_CV,
+    FX_MIX_CV,
+    EXPANSE_CV,
     RESERVED_GAIN_INPUT,  // Preserve subsequent input IDs.
-    DELAY_MIX_CV,
-    DELAY_TIME_CV,
-    DELAY_FEEDBACK_CV,
+    THICKET_CV,
+    UNDERGROWTH_CV,
+    CANOPY_CV,
     ROOT_CV,
     REGISTER_CV,
     FINE_CV,
     EDO_CV,
     SPREAD_CV,
+    WIND_RANDOM_INPUT,
+    WIND_WIGGLE_INPUT,
+    FOREST_RANDOM_INPUT,
+    FOREST_WIGGLE_INPUT,
     INPUTS
   };
   enum Output {
@@ -144,13 +145,48 @@ struct ComputerscareWindchimes : Module {
            : field >= SET_PARAMS     ? TIMBRE_BASE + set * 2 + field - SHAPE
                                      : SET_BASE + set * SET_PARAMS + field;
   }
+  std::array<std::atomic<bool>, NUM_PARAMS> randomLocks{};
+  dsp::SchmittTrigger groupTriggers[4];
+  bool randomLocked(int id) const {
+    return randomLocks[id].load(std::memory_order_relaxed);
+  }
+  void setRandomLock(int id, bool locked) {
+    randomLocks[id].store(locked, std::memory_order_relaxed);
+    bool modelField = false;
+    for (int ch = 0; ch < wc::maxSets; ++ch)
+      for (int field : randomModelFields())
+        modelField |= id == param(ch, field);
+    getParamQuantity(id)->randomizeEnabled = !locked && modelField;
+  }
+  static std::array<int, 6> groupParams(int group) {
+    return group == 0 ? std::array<int, 6>{{WIND, GUSTINESS, TURBULENCE,
+                                            WIND_MIX, WIND_TONE, WIND_TEXTURE}}
+                      : std::array<int, 6>{
+                            {EXPANSE, THICKET, UNDERGROWTH, CANOPY, -1, -1}};
+  }
+  void randomGroup(int group, bool wiggle) {
+    for (int id : groupParams(group)) {
+      if (id < 0 || randomLocked(id)) continue;
+      auto* q = getParamQuantity(id);
+      float low = q->getMinValue(), high = q->getMaxValue();
+      float value = low + random::uniform() * (high - low);
+      if (wiggle) {
+        float delta = (.01f + random::uniform() * .04f) * (high - low);
+        value = q->getValue() + (random::uniform() < .5f ? -delta : delta);
+        if (value < low) value = 2 * low - value;
+        if (value > high) value = 2 * high - value;
+      }
+      q->setValue(wc::clamp(value, low, high));
+    }
+    refresh = 0;
+  }
   std::atomic<uint32_t> editSelection{1u};
   std::atomic<bool> excludeWindFromQuad{false};
+  unsigned forestGeneration = 0;
+  int graphicMode = 0;  // Radial or Forest; display only.
   std::atomic<bool> gustRequest{false};
   std::atomic<bool> sceneResetRequest{false};
   wc::Engine engine;
-  wc::Delay delay;
-  std::atomic<bool> delaySynced{false};
   dsp::SchmittTrigger gustTrigger, gustButton;
   std::array<std::array<dsp::SchmittTrigger, wc::maxSets>, 3> actionTriggers;
   float globalValue(int parameter, int input) {
@@ -163,6 +199,8 @@ struct ComputerscareWindchimes : Module {
              INHARMONICITY, TUBES, LEVEL, SWING, SAIL_SIZE}};
   }
   float randomModelValue(int chime, int field) {
+    if (randomLocked(param(chime, field)))
+      return params[param(chime, field)].getValue();
     auto* q = getParamQuantity(param(chime, field));
     float low = field == LEVEL ? .3f : q->getMinValue();
     float high = q->getMaxValue();
@@ -172,6 +210,8 @@ struct ComputerscareWindchimes : Module {
     return low + random::uniform() * (high - low);
   }
   float wiggleModelValue(int chime, int field) {
+    if (randomLocked(param(chime, field)))
+      return params[param(chime, field)].getValue();
     auto* q = getParamQuantity(param(chime, field));
     float low = field == LEVEL ? .3f : q->getMinValue();
     float high = q->getMaxValue();
@@ -212,14 +252,16 @@ struct ComputerscareWindchimes : Module {
     configParam<WindchimesGainQuantity>(MASTER, 0.f, 7.94328235f, .8f, "Gain",
                                         " dB");
     configButton(GUST, "Make a gust");
-    configParam(DELAY_MIX, 0.f, 1.f, 0.f, "Delay mix", "%", 0.f, 100.f);
-    configParam<DelayTimeQuantity>(DELAY_TIME, 0.f, 1.f, 2.f / 3.f,
-                                   "Delay time");
-    configParam(DELAY_FEEDBACK, 0.f, .95f, .35f, "Delay feedback", "%", 0.f,
-                100.f);
-    configInput(CLOCK_INPUT, "Delay clock");
-    configParam(REVERB_MIX, 0.f, 1.f, 0.2f, "Reverb dry/wet", "%", 0.f, 100.f);
-    configParam(REVERB_SIZE, 0.f, 1.f, 0.55f, "Reverb size", "%", 0.f, 100.f);
+    configInput(WIND_RANDOM_INPUT, "Randomize wind");
+    configInput(WIND_WIGGLE_INPUT, "Wiggle wind");
+    configInput(FOREST_RANDOM_INPUT, "Randomize forest");
+    configInput(FOREST_WIGGLE_INPUT, "Wiggle forest");
+    configParam(THICKET, 0.f, 1.f, .55f, "Thicket", "%", 0.f, 100.f);
+    configParam(UNDERGROWTH, 0.f, 1.f, .55f, "Undergrowth", "%", 0.f, 100.f);
+    configParam(CANOPY, 0.f, 1.f, .45f, "Canopy", "%", 0.f, 100.f);
+    configInput(RESERVED_CLOCK_INPUT, "Reserved");
+    configParam(FX_MIX, 0.f, 1.f, .2f, "Dry/wet", "%", 0.f, 100.f);
+    configParam(EXPANSE, 0.f, 1.f, .55f, "Expanse", "%", 0.f, 100.f);
     configParam(WIND_TONE, 0.f, 1.f, 0.45f, "Wind tone", "%", 0.f, 100.f);
     configParam(WIND_TEXTURE, 0.f, 1.f, 0.4f, "Wind texture", "%", 0.f, 100.f);
     for (int i = 0; i < wc::maxSets; ++i) {
@@ -290,10 +332,10 @@ struct ComputerscareWindchimes : Module {
     const char* actionNames[] = {"Strike trigger", "Wiggle trigger",
                                  "Random trigger", "Solo gate", "Mute gate"};
     for (int i = 0; i < 5; ++i) configInput(actionInputs[i], actionNames[i]);
-    const char* globalNames[] = {"Gustiness",   "Turbulence",    "Wind mix",
-                                 "Wind tone",   "Wind texture",  "Reverb mix",
-                                 "Reverb size", "Gain",          "Delay mix",
-                                 "Delay time",  "Delay feedback"};
+    const char* globalNames[] = {"Gustiness",   "Turbulence",   "Wind mix",
+                                 "Wind tone",   "Wind texture", "Dry/wet",
+                                 "Expanse",     "Gain",         "Thicket",
+                                 "Undergrowth", "Canopy"};
     for (int i = 0; i < 11; ++i) {
       if (GUSTINESS_CV + i == RESERVED_GAIN_INPUT) continue;
       configInput(GUSTINESS_CV + i,
@@ -378,10 +420,31 @@ struct ComputerscareWindchimes : Module {
   json_t* dataToJson() override {
     json_t* data = json_object();
     json_object_set_new(data, "radialStageVersion", json_integer(1));
+    json_object_set_new(data, "graphicMode", json_integer(graphicMode));
+    json_t* locks = json_array();
+    for (int id = 0; id < NUM_PARAMS; ++id)
+      if (randomLocked(id)) json_array_append_new(locks, json_integer(id));
+    json_object_set_new(data, "randomLocks", locks);
     json_object_set_new(
         data, "excludeWindFromQuad",
         json_boolean(excludeWindFromQuad.load(std::memory_order_relaxed)));
     return data;
+  }
+  void dataFromJson(json_t* data) override {
+    for (int id = 0; id < NUM_PARAMS; ++id) setRandomLock(id, false);
+    json_t* locks = data ? json_object_get(data, "randomLocks") : nullptr;
+    if (json_is_array(locks))
+      for (size_t i = 0; i < json_array_size(locks); ++i) {
+        json_t* value = json_array_get(locks, i);
+        if (json_is_integer(value)) {
+          int id = json_integer_value(value);
+          if (id >= 0 && id < NUM_PARAMS) setRandomLock(id, true);
+        }
+      }
+    graphicMode =
+        data && json_integer_value(json_object_get(data, "graphicMode")) == 1
+            ? 1
+            : 0;
   }
   void fromJson(json_t* root) override {
     Module::fromJson(root);
@@ -403,11 +466,11 @@ struct ComputerscareWindchimes : Module {
     if (sampleRate != args.sampleRate) {
       sampleRate = args.sampleRate;
       engine.setSampleRate(sampleRate);
-      delay.setSampleRate(sampleRate);
       refresh = 0;
     }
-    delay.clock(inputs[CLOCK_INPUT].getVoltage(),
-                inputs[CLOCK_INPUT].isConnected());
+    for (int i = 0; i < 4; ++i)
+      if (groupTriggers[i].process(inputs[WIND_RANDOM_INPUT + i].getVoltage()))
+        randomGroup(i / 2, i % 2);
     engine.configureWindRouting(
         excludeWindFromQuad.load(std::memory_order_relaxed),
         outputs[WIND_AUDIO_OUTPUT].isConnected());
@@ -432,11 +495,13 @@ struct ComputerscareWindchimes : Module {
           1.f);
       gustiness = globalValue(GUSTINESS, GUSTINESS_CV);
       turbulence = globalValue(TURBULENCE, TURBULENCE_CV);
-      engine.configureEffects(globalValue(REVERB_MIX, REVERB_MIX_CV),
-                              globalValue(REVERB_SIZE, REVERB_SIZE_CV),
-                              globalValue(WIND_TONE, WIND_TONE_CV),
-                              globalValue(WIND_TEXTURE, WIND_TEXTURE_CV),
-                              globalValue(WIND_MIX, WIND_MIX_CV));
+      engine.configureForestEffects(
+          globalValue(FX_MIX, FX_MIX_CV), globalValue(EXPANSE, EXPANSE_CV),
+          globalValue(THICKET, THICKET_CV),
+          globalValue(UNDERGROWTH, UNDERGROWTH_CV),
+          globalValue(CANOPY, CANOPY_CV), globalValue(WIND_TONE, WIND_TONE_CV),
+          globalValue(WIND_TEXTURE, WIND_TEXTURE_CV),
+          globalValue(WIND_MIX, WIND_MIX_CV));
       windMix = globalValue(WIND_MIX, WIND_MIX_CV);
       master = params[MASTER].getValue();
       unsigned enabledMask = 0, soloMask = 0, muteMask = 0;
@@ -451,10 +516,6 @@ struct ComputerscareWindchimes : Module {
       }
       soloMask &= enabledMask;
       engine.setAudibleMask((soloMask ? soloMask : enabledMask) & ~muteMask);
-      delaySynced.store(delay.synced(), std::memory_order_relaxed);
-      delay.configure(globalValue(DELAY_TIME, DELAY_TIME_CV),
-                      globalValue(DELAY_MIX, DELAY_MIX_CV),
-                      globalValue(DELAY_FEEDBACK, DELAY_FEEDBACK_CV));
     }
     const int actionInputs[] = {STRIKE_INPUT, WIGGLE_INPUT, RANDOM_INPUT};
     for (int action = 0; action < 3; ++action)
@@ -486,11 +547,7 @@ struct ComputerscareWindchimes : Module {
     for (int ch = 0; ch < 4; ++ch)
       if (outputs[audioIds[ch]].isConnected()) mask |= 1u << ch;
     engine.setOutputMask(mask);
-    wc::Quad out =
-        engine.processQuad(amount, gustiness, turbulence, windMix, true);
-    out = delay.process(out, mask);
-    for (int ch = 0; ch < 4; ++ch)
-      out.channel[ch] += engine.windWithoutDelay().channel[ch];
+    wc::Quad out = engine.processQuad(amount, gustiness, turbulence, windMix);
     // Publish after advancing physics and exciting audio from the same
     // contacts.
     if (publishVisual) {
@@ -538,13 +595,6 @@ struct ComputerscareWindchimes : Module {
   }
 };
 
-std::string DelayTimeQuantity::getDisplayValueString() {
-  auto* m = dynamic_cast<ComputerscareWindchimes*>(module);
-  if (m && m->delaySynced.load(std::memory_order_relaxed))
-    return string::f("%.3g × clock (max 2 s)", wc::Delay::ratio(getValue()));
-  return string::f("%.3g ms", wc::Delay::seconds(getValue()) * 1000.f);
-}
-
 namespace {
 struct SmallGustButton : app::Switch {
   struct Face : phlooper::WarpedDropdown {
@@ -554,9 +604,9 @@ struct SmallGustButton : app::Switch {
   } face;
   SmallGustButton() {
     momentary = true;
-    box.size = Vec(30, 17);
-    face.configure(30, 17, 3.f, 2.f, .7f, 39);
-    face.textSize = 11.f;
+    box.size = Vec(23, 17);
+    face.configure(23, 17, 2.f, 1.f, .7f, 39);
+    face.textSize = 10.f;
     face.faceColor = nvgRGB(36, 201, 166);
   }
   void draw(const DrawArgs& args) override {
@@ -663,16 +713,18 @@ void randomizeScene(W* module, Editor* editor) {
   if (!module) return;
   auto* action = new history::ComplexAction;
   action->name = "Randomize windchime scene";
+  auto randomSet = [&](int id, float value, history::ComplexAction* action) {
+    if (!module->randomLocked(id)) setWithHistory(module, id, value, action);
+  };
   int count = 2 + std::min(6, int(random::uniform() * 7.f));
   for (int i = 0; i < wc::maxSets; ++i) {
     // Reset muted/solo/disabled state as well as stale settings in unused
     // slots.
     for (int field = 0; field <= W::SOLO; ++field) {
       auto* q = module->getParamQuantity(W::param(i, field));
-      setWithHistory(module, W::param(i, field), q->getDefaultValue(), action);
+      randomSet(W::param(i, field), q->getDefaultValue(), action);
     }
-    setWithHistory(module, W::param(i, W::ENABLED), i < count ? 1.f : 0.f,
-                   action);
+    randomSet(W::param(i, W::ENABLED), i < count ? 1.f : 0.f, action);
     if (i >= count) continue;
     for (int field = W::X; field <= W::SAIL_SIZE; ++field) {
       if (field == W::LEGACY_SPREAD) continue;
@@ -685,11 +737,10 @@ void randomizeScene(W* module, Editor* editor) {
             q->getMinValue() +
                 std::floor(random::uniform() *
                            (q->getMaxValue() - q->getMinValue() + 1.f)));
-      setWithHistory(module, W::param(i, field), value, action);
+      randomSet(W::param(i, field), value, action);
     }
     // Keep fresh scenes audible without sending every set to maximum level.
-    setWithHistory(module, W::param(i, W::LEVEL),
-                   .35f + random::uniform() * .45f, action);
+    randomSet(W::param(i, W::LEVEL), .35f + random::uniform() * .45f, action);
     int soundKind = std::min(2, int(random::uniform() * 3.f));
     if (soundKind < 2) {
       int material =
@@ -703,7 +754,7 @@ void randomizeScene(W* module, Editor* editor) {
                               preset.hardness, preset.shape,
                               preset.body,     preset.inharmonicity};
       for (int f = 0; f < 6; ++f)
-        setWithHistory(module, W::param(i, fields[f]), values[f], action);
+        randomSet(W::param(i, fields[f]), values[f], action);
       if (soundKind == 1) editSound(module, i, true, action);
     }
   }
@@ -856,11 +907,34 @@ struct SelectorButton : ActionButton {
 struct ChimeKnob : SmoothKnob {
   static constexpr float scale = .95f;
   ChimeKnob() { box.size = box.size.mult(scale); }
+  void appendContextMenu(Menu* menu) override {
+    auto* m = dynamic_cast<W*>(module);
+    if (!m) return;
+    menu->addChild(new MenuSeparator);
+    menu->addChild(createCheckMenuItem(
+        "Lock randomize / wiggle", "",
+        [=]() { return m->randomLocked(paramId); },
+        [=]() { m->setRandomLock(paramId, !m->randomLocked(paramId)); }));
+  }
   void draw(const DrawArgs& args) override {
     nvgSave(args.vg);
     nvgScale(args.vg, scale, scale);
     SmoothKnob::draw(args);
     nvgRestore(args.vg);
+    auto* m = dynamic_cast<W*>(module);
+    if (m && m->randomLocked(paramId)) {
+      float x = box.size.x - 6, y = 1;
+      nvgBeginPath(args.vg);
+      nvgRect(args.vg, x, y + 3, 5, 4);
+      nvgFillColor(args.vg, nvgRGB(235, 222, 145));
+      nvgFill(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, x + 1, y + 3);
+      nvgBezierTo(args.vg, x + 1, y - 1, x + 4, y - 1, x + 4, y + 3);
+      nvgStrokeColor(args.vg, nvgRGB(235, 222, 145));
+      nvgStrokeWidth(args.vg, 1);
+      nvgStroke(args.vg);
+    }
   }
 };
 template <typename Port>
@@ -903,6 +977,31 @@ struct SetKnob : ChimeKnob {
   void step() override {
     if (module && editor) paramId = W::param(editor->selected, field);
     ChimeKnob::step();
+  }
+  void appendContextMenu(Menu* menu) override {
+    auto* m = owner();
+    if (!m) return;
+    uint32_t mask = activeSelection(m, editor);
+    int lockedField = field;
+    menu->addChild(new MenuSeparator);
+    menu->addChild(createCheckMenuItem(
+        "Lock randomize / wiggle", "",
+        [=]() {
+          bool all = mask != 0;
+          for (int ch = 0; ch < wc::maxSets; ++ch)
+            if (mask & (1u << ch))
+              all &= m->randomLocked(W::param(ch, lockedField));
+          return all;
+        },
+        [=]() {
+          bool all = mask != 0;
+          for (int ch = 0; ch < wc::maxSets; ++ch)
+            if (mask & (1u << ch))
+              all &= m->randomLocked(W::param(ch, lockedField));
+          for (int ch = 0; ch < wc::maxSets; ++ch)
+            if (mask & (1u << ch))
+              m->setRandomLock(W::param(ch, lockedField), !all);
+        }));
   }
   void draw(const DrawArgs& args) override {
     ChimeKnob::draw(args);
@@ -971,6 +1070,7 @@ struct SetKnob : ChimeKnob {
           createMenuItem("Reset selected to default", "", [this, mask]() {
             applyValue(getParamQuantity()->getDefaultValue(), mask);
           }));
+      appendContextMenu(menu);
       e.consume(this);
       return;
     }
@@ -1052,6 +1152,8 @@ struct SetKnob : ChimeKnob {
   }
 };
 struct ChimeScene : widget::OpaqueWidget {
+  wc::ForestGraphic forestGraphic{random::u32()};
+  unsigned forestGeneration = 0;
   W* module = nullptr;
   Editor* editor = nullptr;
   int dragging = -1;
@@ -1268,15 +1370,58 @@ struct ChimeScene : widget::OpaqueWidget {
     nvgRect(vg, 0, 0, box.size.x, box.size.y);
     nvgFillColor(vg, nvgRGB(13, 29, 28));
     nvgFill(vg);
-    drawWind(vg);
-    for (int ring = 1; ring <= 3; ++ring) {
-      nvgBeginPath(vg);
-      nvgEllipse(vg, box.size.x * 0.5f, box.size.y * 0.5f,
-                 box.size.x * ring / 6.f, box.size.y * ring / 6.f);
-      nvgStrokeColor(vg, nvgRGBA(100, 160, 140, 35));
-      nvgStrokeWidth(vg, 1.f);
-      nvgStroke(vg);
+    bool forest = module && module->graphicMode == 1;
+    if (forest) {
+      std::array<Vec, 20> flow;
+      for (int cell = 0; cell < 20; ++cell)
+        flow[cell] =
+            Vec(module->visualFlowX[cell].load(std::memory_order_relaxed),
+                module->visualFlowY[cell].load(std::memory_order_relaxed));
+      if (forestGeneration != module->forestGeneration) {
+        forestGraphic = wc::ForestGraphic(random::u32());
+        forestGeneration = module->forestGeneration;
+      }
+      std::array<wc::ForestGraphic::Motion, 16> motions;
+      for (int ch = 0; ch < 16; ++ch) {
+        auto& m = motions[ch];
+        m.enabled = enabled(ch);
+        if (!m.enabled) continue;
+        m.position = Vec(stageValue(ch, W::X), stageValue(ch, W::Y));
+        m.striker =
+            Vec(module->visualStrikerAngle[ch].load(std::memory_order_relaxed),
+                module->visualStrikerDepth[ch].load(std::memory_order_relaxed));
+        m.flexibility =
+            .25f + .5f * module->params[W::param(ch, W::SAIL_SIZE)].getValue() +
+            .25f * (1.f -
+                    module->params[W::param(ch, W::STRIKER_WEIGHT)].getValue());
+        for (int tube = 0; tube < 3; ++tube) {
+          int index = ch * wc::maxTubes + tube;
+          m.tubes[tube] = Vec(
+              module->visualTubeAngle[index].load(std::memory_order_relaxed),
+              module->visualTubeDepth[index].load(std::memory_order_relaxed));
+        }
+      }
+      float expanse = module->globalValue(W::EXPANSE, W::EXPANSE_CV);
+      float thicket = module->globalValue(W::THICKET, W::THICKET_CV);
+      float undergrowth =
+          module->globalValue(W::UNDERGROWTH, W::UNDERGROWTH_CV);
+      float canopy = module->globalValue(W::CANOPY, W::CANOPY_CV);
+      forestGraphic.draw(
+          vg, box.size.x, box.size.y, glfwGetTime(), expanse, thicket,
+          undergrowth, canopy, flow,
+          module->visualTurbulence.load(std::memory_order_relaxed), motions,
+          module->visualWind.load(std::memory_order_relaxed));
     }
+    drawWind(vg);
+    if (!forest)
+      for (int ring = 1; ring <= 3; ++ring) {
+        nvgBeginPath(vg);
+        nvgEllipse(vg, box.size.x * 0.5f, box.size.y * 0.5f,
+                   box.size.x * ring / 6.f, box.size.y * ring / 6.f);
+        nvgStrokeColor(vg, nvgRGBA(100, 160, 140, 35));
+        nvgStrokeWidth(vg, 1.f);
+        nvgStroke(vg);
+      }
     text(vg, box.size.x * 0.5f - 17.f, 16, "FRONT", 9);
     text(vg, box.size.x * 0.5f - 14.f, box.size.y - 8.f, "REAR", 9);
     text(vg, 8.f, box.size.y * 0.5f, "FAR", 8);
@@ -2001,7 +2146,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     box.size = Vec(panelWidth, RACK_GRID_HEIGHT);
     auto* panel = new ComputerscareSVGPanel;
     panel->setBackground(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/panels/ComputerscareWindchimesPanel.svg")));
+        pluginInstance, "res/panels/Computerscare32ndAndColumbusPanel.svg")));
     auto* backplate = new WindchimesBackplate;
     backplate->box.size = box.size;
     addChild(backplate);
@@ -2016,7 +2161,8 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     block(510, 39, 383, 62, 52, 236);
     block(510, 106, 383, 135, 53, 211);
     block(510, 243, 150, 135, 54, 232);
-    block(668, 243, 119, 135, 57, 211);
+    block(668, 243, 119, 94, 57, 211);
+    block(668, 341, 119, 37, 60, 211);
     block(795, 243, 98, 135, 56, 175);
     addChild(panel);
     auto* labels = new Labels;
@@ -2292,19 +2438,19 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
           Vec(419.f + i * 36.f, 154.f), module, actionInputs[i]));
     addInput(createInputCentered<CompactChimePort<JackLargePointingDown>>(
         Vec(567.5f, 77), module, W::TRANSPOSE_INPUT));
-    const int globals[] = {W::WIND,      W::GUSTINESS,  W::TURBULENCE,
-                           W::WIND_MIX,  W::WIND_TONE,  W::WIND_TEXTURE,
-                           W::MASTER,    W::REVERB_MIX, W::REVERB_SIZE,
-                           W::DELAY_MIX, W::DELAY_TIME, W::DELAY_FEEDBACK};
+    const int globals[] = {W::WIND,     W::GUSTINESS,   W::TURBULENCE,
+                           W::WIND_MIX, W::WIND_TONE,   W::WIND_TEXTURE,
+                           W::MASTER,   W::FX_MIX,      W::EXPANSE,
+                           W::THICKET,  W::UNDERGROWTH, W::CANOPY};
     const int globalInputs[] = {
-        W::WIND_INPUT,          W::GUSTINESS_CV,  W::TURBULENCE_CV,
-        W::WIND_MIX_CV,         W::WIND_TONE_CV,  W::WIND_TEXTURE_CV,
-        W::RESERVED_GAIN_INPUT, W::REVERB_MIX_CV, W::REVERB_SIZE_CV,
-        W::DELAY_MIX_CV,        W::DELAY_TIME_CV, W::DELAY_FEEDBACK_CV};
-    const Vec globalPositions[] = {Vec(343, 264), Vec(390, 264), Vec(343, 302),
-                                   Vec(390, 302), Vec(343, 337), Vec(390, 337),
-                                   Vec(568, 297), Vec(449, 264), Vec(487, 264),
-                                   Vec(449, 308), Vec(487, 308), Vec(449, 351)};
+        W::WIND_INPUT,          W::GUSTINESS_CV,   W::TURBULENCE_CV,
+        W::WIND_MIX_CV,         W::WIND_TONE_CV,   W::WIND_TEXTURE_CV,
+        W::RESERVED_GAIN_INPUT, W::FX_MIX_CV,      W::EXPANSE_CV,
+        W::THICKET_CV,          W::UNDERGROWTH_CV, W::CANOPY_CV};
+    const Vec globalPositions[] = {Vec(343, 275), Vec(390, 275), Vec(343, 313),
+                                   Vec(390, 313), Vec(343, 351), Vec(390, 351),
+                                   Vec(568, 297), Vec(467, 357), Vec(449, 275),
+                                   Vec(487, 275), Vec(449, 313), Vec(487, 313)};
     for (int i = 0; i < 12; ++i) {
       addParam(createParamCentered<ChimeKnob>(globalPositions[i], module,
                                               globals[i]));
@@ -2312,12 +2458,10 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         addInput(createInputCentered<CompactChimePort<JackLargePointingDown>>(
             globalPositions[i] + Vec(16.5f, 0), module, globalInputs[i]));
     }
-    addParam(createParamCentered<SmallGustButton>(Vec(355, 364.5f), module,
+    addParam(createParamCentered<SmallGustButton>(Vec(361.75f, 253.5f), module,
                                                   W::GUST));
-    addInput(createInputCentered<CompactChimePort<JackLargePointingDown>>(
-        Vec(390, 364.5f), module, W::GUST_INPUT));
-    addInput(createInputCentered<JackSmallPointingUp>(Vec(487, 351), module,
-                                                      W::CLOCK_INPUT));
+    addInput(createInputCentered<JackSmallPointingDown>(Vec(375.86f, 253.5f),
+                                                        module, W::GUST_INPUT));
     addOutput(createOutputCentered<WindchimesCompactJackPointingDown>(
         Vec(538, 269), module, W::WIND_OUTPUT));
     addOutput(createOutputCentered<WindchimesCompactJackPointingDown>(
@@ -2340,11 +2484,47 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
         child->box.pos.x =
             controlX(child->box.pos.x + anchor) - anchor + controlColumnOffset;
       }
+    for (int group = 0; group < 2; ++group) {
+      auto* rndblk = new computerscare::RandomBlock(
+          module, group ? W::FOREST_RANDOM_INPUT : W::WIND_RANDOM_INPUT,
+          group ? W::FOREST_WIGGLE_INPUT : W::WIND_WIGGLE_INPUT,
+          group ? "forest" : "wind", [module, group](bool wiggle) {
+            if (!module) return;
+            auto ids = module->groupParams(group);
+            std::array<float, 6> before{};
+            for (int i = 0; i < 6; ++i)
+              if (ids[i] >= 0) before[i] = module->params[ids[i]].getValue();
+            module->randomGroup(group, wiggle);
+            auto* action = new history::ComplexAction;
+            action->name = std::string(wiggle ? "Wiggle " : "Randomize ") +
+                           (group ? "forest" : "wind");
+            for (int i = 0; i < 6; ++i)
+              if (ids[i] >= 0) {
+                float next = module->params[ids[i]].getValue();
+                module->params[ids[i]].setValue(before[i]);
+                setWithHistory(module, ids[i], next, action);
+              }
+            APP->history->push(action);
+          });
+      rndblk->box.pos = Vec(group ? 718.f : 590.f, 243.f);
+      addChild(rndblk);
+    }
   }
   void appendContextMenu(Menu* menu) override {
     auto* m = dynamic_cast<W*>(module);
     if (!m) return;
     menu->addChild(new MenuSeparator);
+    menu->addChild(createSubmenuItem(
+        "Graphic", m->graphicMode == 1 ? "Forest" : "Radial",
+        [m](Menu* graphics) {
+          for (int mode = 0; mode < 2; ++mode)
+            graphics->addChild(createCheckMenuItem(
+                mode ? "Forest" : "Radial", "",
+                [m, mode]() { return m->graphicMode == mode; },
+                [m, mode]() { m->graphicMode = mode; }));
+        }));
+    menu->addChild(
+        createMenuItem("Regrow forest", "", [m]() { ++m->forestGeneration; }));
     menu->addChild(createCheckMenuItem(
         "Exclude wind from main output", "",
         [m]() {
@@ -2359,4 +2539,4 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
 };
 Model* modelComputerscareWindchimes =
     createModel<ComputerscareWindchimes, ComputerscareWindchimesWidget>(
-        "computerscare-windchimes");
+        "computerscare-32nd-and-columbus");

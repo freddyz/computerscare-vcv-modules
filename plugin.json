@@ -155,7 +155,7 @@
     {
       "slug": "computerscare-sloly-pit",
       "name": "Sloly Pit",
-      "description": "Split a polyphonic input into 16 monophonic outputs",
+      "description": "Polyphonic signal router and splitter with 16 configurable outputs",
       "tags": ["Polyphonic", "Utility"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/sloly-pit.md"
     },
@@ -174,11 +174,11 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#mely-porge"
     },
     {
-      "slug": "computerscare-windchimes",
-      "name": "Windchimes",
+      "slug": "computerscare-32nd-and-columbus",
+      "name": "32nd & Columbus",
       "description": "Arrange tuned wind-driven chime sets in a quadraphonic scene",
       "tags": ["Physical modeling", "Random", "Polyphonic"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/windchimes.md"
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/32nd-and-columbus.md"
     },
     {
       "slug": "computerscare-phlooper",

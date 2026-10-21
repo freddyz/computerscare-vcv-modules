@@ -10,7 +10,9 @@
 void require(bool condition, const char* message) {
   if (!condition) { std::fprintf(stderr, "FAIL: %s\n", message); std::exit(1); }
 }
+#include "forest_space_checks.hpp"
 int main() {
+  checkForestSpace();
   namespace wc = windchimes;
   {
     struct Input {

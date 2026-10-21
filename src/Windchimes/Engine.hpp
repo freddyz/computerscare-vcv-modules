@@ -14,7 +14,7 @@ class Engine {
     Motion motion;
     Propagation propagation;
     float distanceState = 0.f, distanceState2 = 0.f, distanceCoeff = 1.f;
-    float roomLeft = 0.f, roomRight = 0.f;
+    float roomLeft = 0.f, roomRight = 0.f, roomGain = 0.f;
     std::array<Resonator, maxTubes> tubes;
     std::array<float, 4> targetGain{}, currentGain{};
     float directGain = 0.f, audibility = 1.f;
@@ -25,6 +25,8 @@ class Engine {
   Reverb reverb;
   std::unique_ptr<Reverb> windReverb{new Reverb};
   Quad windBypass;
+  bool forestMode = false;
+  float forestThicket = .5f;
   float wet = 0.f, smoothWet = 0.f, smoothWindMix = 0.f;
   Random strikes{0x985fe};
   float rate = 48000.f, dt = 0.f;
@@ -92,9 +94,34 @@ class Engine {
   const Quad& windWithoutDelay() const { return windBypass; }
   void configureEffects(float mix, float size, float tone, float texture,
                         float presence = .5f) {
+    forestMode = false;
     wet = clamp(mix, 0.f, 1.f);
     reverb.configure(rate, size);
     windReverb->configure(rate, size);
+    wind.configure(rate, tone, texture, presence);
+  }
+  void configureForestEffects(float mix, float expanse, float thicket,
+                              float undergrowth, float canopy, float tone,
+                              float texture, float presence = .5f) {
+    forestMode = true;
+    wet = clamp(mix, 0.f, 1.f);
+    forestThicket = clamp(thicket, 0.f, 1.f);
+    std::array<float, maxSets> pitches{};
+    int count = 0;
+    for (auto& s : sets)
+      if (s.config.enabled) {
+        float frequency = tubeFrequency(s.config, 0, s.transpose);
+        pitches[count++] = frequency;
+        s.propagation.configureReflections(
+            rate, expanse, thicket, undergrowth, canopy, frequency,
+            stageDistance(s.config.x, s.config.y), s.config.material);
+      }
+    std::array<float, 8> voices{};
+    for (int i = 0; i < 8; ++i)
+      voices[i] = count ? pitches[(i * count) / 8] : 220.f;
+    reverb.configureForest(rate, expanse, thicket, undergrowth, canopy, voices);
+    windReverb->configureForest(rate, expanse, thicket, undergrowth, canopy,
+                                voices);
     wind.configure(rate, tone, texture, presence);
   }
   void configure(int index, const SetConfig& config, float transpose) {
@@ -133,6 +160,7 @@ class Engine {
     float gain = config.level * 0.48f / (1.f + 7.f * (1.f - near));
     float roomGain = config.level * 0.48f * (0.35f + 0.65f * near);
     float left = std::cos(pan * pi * .5f), right = std::sin(pan * pi * .5f);
+    s.roomGain = roomGain;
     s.roomLeft = left * roomGain;
     s.roomRight = right * roomGain;
     s.directGain = gain;
@@ -235,6 +263,7 @@ class Engine {
         (windDirect.channel[0] + windDirect.channel[2]) * .70710678f,
         (windDirect.channel[1] + windDirect.channel[3]) * .70710678f);
     Stereo roomSend;
+    Quad earlyReflections;
     for (int source = 0; source < maxSets; ++source) {
       auto& s = sets[source];
       s.audibility +=
@@ -259,8 +288,14 @@ class Engine {
         if (outputMask & (1u << ch))
           quad.channel[ch] += direct * s.currentGain[ch];
       }
-      roomSend.left += s.distanceState * s.roomLeft * fade * s.audibility;
-      roomSend.right += s.distanceState * s.roomRight * fade * s.audibility;
+      float reflected =
+          forestMode ? s.propagation.reflection() : s.distanceState;
+      roomSend.left += reflected * s.roomLeft * fade * s.audibility;
+      roomSend.right += reflected * s.roomRight * fade * s.audibility;
+      if (forestMode)
+        for (int ch = 0; ch < 4; ++ch)
+          earlyReflections.channel[ch] +=
+              reflected * s.roomGain * s.currentGain[ch] * fade * s.audibility;
       if (s.stopSamples > 0 && --s.stopSamples == 0) {
         for (auto& tube : s.tubes) tube.reset();
         s.distanceState = s.distanceState2 = 0.f;
@@ -280,6 +315,9 @@ class Engine {
           room += reflections.channel[src] * currentRoomDecode[src][ch];
           windRoom += windReflections.channel[src] * currentRoomDecode[src][ch];
         }
+        if (forestMode)
+          room = room * (1.5f + 2.f * forestThicket) +
+                 earlyReflections.channel[ch] * (2.f - forestThicket);
         quad.channel[ch] =
             quad.channel[ch] * (1.f - smoothWet) + room * smoothWet;
         windBypass.channel[ch] =

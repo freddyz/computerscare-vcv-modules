@@ -26,7 +26,7 @@ Use `RACK_DIR=/path/to/Rack-SDK` when the Rack SDK is not in the default local p
 
 ## Audio
 
-- [Windchimes](./doc/windchimes.md): Up to sixteen wind-driven chime sets in a quadraphonic scene
+- [32nd & Columbus](./doc/32nd-and-columbus.md): Up to sixteen wind-driven chime sets in a quadraphonic scene
 
 - [Phlooper](./doc/phlooper.md): Up to sixteen independent audio loops, with [input voltage ranges and channel mapping](./doc/phlooper.md#input-reference)
 

@@ -6,6 +6,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -473,27 +474,152 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   bool randomizeCursorRestorePending = false;
   int randomizeCursorRestoreLine = 0;
   bool randomizeCursorRestoreAtEnd = false;
-  struct PendingFormula {
-    int line = -1;
+  // GUI edits, render reads, patch serialization, and engine activation share
+  // one model. The engine only tries this lock: it never waits on GUI work.
+  mutable std::recursive_mutex stateMutex;
+  using StateGuard = std::lock_guard<std::recursive_mutex>;
+  double deferredSampleTime = 0.;  // Audio-thread-owned elapsed time.
+  float outputSampleTime = 0.f;
+  bool allowSeedGrace = false;
+  int syncSource = -1;  // Free, or a zero-based leader channel.
+  int syncEvent = 1;    // Block, Line, Page.
+  int syncRestart = 1;  // Current block, current line, page beginning.
+  unsigned boundaryEvents[MAX_POLY_CHANNELS] = {};
+
+  std::string syncLabel() const {
+    if (syncSource < 0) return "Free";
+    const char* names[] = {"EOB", "EOL", "EOP"};
+    return "Ch " + std::to_string(syncSource + 1) + " " + names[syncEvent];
+  }
+
+  struct StagedLine {
     std::string text;
+    blunch::language::ClockUnit unit = blunch::language::ClockUnit::Unknown;
     std::vector<BlunchProgramStep> program;
-    bool viewing = true;
-    bool armed = false;
+  };
+  struct PendingFormula {
+    std::map<int, StagedLine> lines;
+    int line =
+        -1;  // Explicit line submission jumps here; page submission does not.
+    bool page = false;
   };
   PendingFormula pendingFormulas[MAX_POLY_CHANNELS];
   std::map<int, std::string> runningLineTexts[MAX_POLY_CHANNELS];
+  std::map<int, blunch::language::ClockUnit>
+      runningLineUnits[MAX_POLY_CHANNELS];
+  enum FormulaLayer { DRAFT, NEXT, NOW };
+  FormulaLayer formulaLayer = DRAFT;
+  bool peekNow = false;
+  ComputerscareTextEditorState layerEditorState;
+  int pageSubmitCount = 0, lastPageSubmitCount = 0;
   PendingFormula& pendingEdit() {
     return pendingFormulas[activeContextChannel()];
   }
-  bool channelHasPendingFormula(int channel) {
-    channel = clampChannel(channel);
-    for (const auto& line : runningLineTexts[channel])
-      if (getLineInfo(sequenceEditorStates[channel].text, line.first).text !=
-          line.second)
-        return true;
-    const auto& pending = pendingFormulas[channel];
-    return pending.line >= 0 &&
-           pending.text != sequencers[channel].activeLineText;
+  FormulaLayer visibleLayer() const { return peekNow ? NOW : formulaLayer; }
+  static const char* layerName(FormulaLayer layer) {
+    return layer == DRAFT ? "Draft" : layer == NEXT ? "Next" : "Now";
+  }
+  std::string lineVersion(int ch, int line, FormulaLayer layer) const {
+    if (layer == DRAFT)
+      return getLineInfo(sequenceEditorStates[ch].text, line).text;
+    if (layer == NEXT) {
+      auto staged = pendingFormulas[ch].lines.find(line);
+      if (staged != pendingFormulas[ch].lines.end()) return staged->second.text;
+    }
+    auto active = runningLineTexts[ch].find(line);
+    return active == runningLineTexts[ch].end() ? "" : active->second;
+  }
+  int layerLineCount(int ch) const {
+    int count = getLineCount(sequenceEditorStates[ch].text);
+    if (!runningLineTexts[ch].empty())
+      count = std::max(count, runningLineTexts[ch].rbegin()->first + 1);
+    if (!pendingFormulas[ch].lines.empty())
+      count = std::max(count, pendingFormulas[ch].lines.rbegin()->first + 1);
+    return count;
+  }
+  std::string layerPage(int ch, FormulaLayer layer) const {
+    std::string page;
+    for (int line = 0; line < layerLineCount(ch); ++line) {
+      if (line) page += "\n";
+      page += lineVersion(ch, line, layer);
+    }
+    return page;
+  }
+  bool lineHasDraft(int ch, int line) const {
+    return lineVersion(ch, line, DRAFT) != lineVersion(ch, line, NEXT);
+  }
+  bool channelHasDraft(int ch) const {
+    for (int line = 0; line < layerLineCount(ch); ++line)
+      if (lineHasDraft(ch, line)) return true;
+    return false;
+  }
+  bool channelHasNext(int ch) const {
+    return !pendingFormulas[ch].lines.empty();
+  }
+  bool channelHasPendingFormula(int ch) const {
+    return channelHasDraft(ch) || channelHasNext(ch);
+  }
+  void setFormulaLayer(FormulaLayer layer) {
+    StateGuard guard(stateMutex);
+    const auto& before = visibleLayer() == DRAFT
+                             ? (showingChannelsView() ? channelsEditorState
+                                                      : sequenceEditorState())
+                             : layerEditorState;
+    int offset = std::min(before.cursor, int(before.text.size()));
+    int row = int(
+        std::count(before.text.begin(), before.text.begin() + offset, '\n'));
+    int column = offset - getLineInfo(before.text, row).begin;
+    formulaLayer = layer;
+    auto& after = visibleEditorState();
+    auto info = getLineInfo(after.text, row);
+    after.cursor = info.begin + std::min(column, int(info.text.size()));
+    after.selection = after.cursor;
+    editorViewDirty = true;
+  }
+  bool handleLayerKey(int key, int mods, int action) {
+    StateGuard guard(stateMutex);
+    if (key == GLFW_KEY_F6) {
+      if (action == GLFW_PRESS)
+        setFormulaLayer(FormulaLayer((formulaLayer + 1) % 3));
+      return true;
+    }
+    if (key == GLFW_KEY_F7) {
+      if (action == GLFW_PRESS && visibleLayer() == DRAFT) {
+        const auto& source =
+            showingChannelsView() ? channelsEditorState : sequenceEditorState();
+        layerEditorState.cursor = source.cursor;
+        layerEditorState.selection = source.selection;
+      }
+      peekNow = action != GLFW_RELEASE;
+      editorViewDirty = true;
+      return true;
+    }
+    if (key == GLFW_KEY_ENTER && (mods & RACK_MOD_CTRL) &&
+        (mods & GLFW_MOD_SHIFT)) {
+      if (action == GLFW_PRESS) ++pageSubmitCount;
+      return true;
+    }
+    return false;
+  }
+  void refreshLayerEditorState() {
+    if (visibleLayer() == DRAFT) return;
+    std::string projection;
+    if (showingChannelsView()) {
+      for (int ch = 0; ch < MAX_POLY_CHANNELS; ++ch) {
+        if (ch) projection += "\n";
+        projection += lineVersion(ch, channelOverviewLine(ch), visibleLayer());
+      }
+    } else
+      projection = layerPage(focusedChannel, visibleLayer());
+    if (layerEditorState.text != projection) {
+      layerEditorState.text = projection;
+      layerEditorState.dirty = true;
+      editorViewDirty = true;
+    }
+    layerEditorState.cursor =
+        std::min(layerEditorState.cursor, int(projection.size()));
+    layerEditorState.selection =
+        std::min(layerEditorState.selection, int(projection.size()));
   }
   int errorLine = -1;
   int errorLineRevertLine = -1;
@@ -556,9 +682,14 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     return sequencerForChannel(activeContextChannel());
   }
 
-  float seedValue() {
+  float requestedSeedValue() {
     return computerscare::blunch::seedWithCv(
         params[SEED_PARAM].getValue(), inputs[SEED_CV_INPUT].getVoltage());
+  }
+
+  float seedValue() {
+    const auto& seq = activeSequencer();
+    return seq.seedLatched ? seq.latchedSeed : requestedSeedValue();
   }
 
   bool seededRandomEnabled() {
@@ -638,10 +769,15 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   ComputerscareTextEditorState& visibleEditorState() {
+    if (visibleLayer() != DRAFT) {
+      refreshLayerEditorState();
+      return layerEditorState;
+    }
     return showingChannelsView() ? channelsEditorState : sequenceEditorState();
   }
 
   bool commitLineForChannel(int channel, int line, bool resetPhase) {
+    StateGuard guard(stateMutex);
     int previousFocusedChannel = focusedChannel;
     focusedChannel = std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
     bool committed = commitLine(line, resetPhase);
@@ -650,6 +786,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void refreshChannelsEditorState(bool preserveCursor = false) {
+    StateGuard guard(stateMutex);
     BlunchAllViewTextPosition cursorPosition;
     BlunchAllViewTextPosition selectionPosition;
     if (preserveCursor) {
@@ -750,6 +887,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void setControlMode(bool enabled) {
+    StateGuard guard(stateMutex);
     if (controlMode == enabled) return;
     if (showingChannelsView()) syncChannelsEditorEdit(channelsCursorChannel);
     controlMode = enabled;
@@ -769,6 +907,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool handleControlKey(int key, int mods, int action) {
+    StateGuard guard(stateMutex);
     if (!controlMode) return false;
     using namespace computerscare::blunch;
     bool navigation = key == GLFW_KEY_UP || key == GLFW_KEY_DOWN ||
@@ -834,6 +973,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void stopSequencer(int channel, bool rememberStopped = false) {
+    StateGuard guard(stateMutex);
     channel = clampChannel(channel);
     BlunchSequencerRuntime& seq = sequencerForChannel(channel);
     seq.stopPlayback();
@@ -857,9 +997,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       BlunchSequencerRuntime& channelSequencer = sequencers[channel];
       channelSequencer.running = rememberedRunning[channel];
       if (channelSequencer.running && !channelSequencer.activeProgram.empty()) {
-        if (seededRandomEnabled()) {
-          resetSeededRandomSerials(channelSequencer);
-        }
+        resetSeededRandomSerials(channelSequencer);
         applyActiveProgramStep(channelSequencer);
       }
     }
@@ -867,8 +1005,16 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void startSequencer(int channel) {
+    StateGuard guard(stateMutex);
     channel = std::max(0, std::min(channel, MAX_POLY_CHANNELS - 1));
     playbackChannel = channel;
+    if (sequencerForChannel(channel).activeProgram.empty() &&
+        channelHasNext(channel)) {
+      int previous = blunchProcessingChannel;
+      blunchProcessingChannel = channel;
+      commitPendingLine(true);
+      blunchProcessingChannel = previous;
+    }
     rememberedRunning[channel] = true;
     sequencerForChannel(channel).running = true;
     params[RUN_PARAM].setValue(1.f);
@@ -956,14 +1102,19 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void triggerTokenMovePulse() {
+    boundaryEvents[activeContextChannel()] |= 1u;
     tokenMovePulses[activeContextChannel()].trigger(1e-3f);
   }
 
   void triggerLineCyclePulse() {
+    boundaryEvents[activeContextChannel()] |= 2u;
     lineCyclePulses[activeContextChannel()].trigger(1e-3f);
   }
 
-  void triggerWrapPulse() { wrapPulses[activeContextChannel()].trigger(1e-3f); }
+  void triggerWrapPulse() {
+    boundaryEvents[activeContextChannel()] |= 4u;
+    wrapPulses[activeContextChannel()].trigger(1e-3f);
+  }
 
   ComputerscareBlunch() {
     config(NUM_PARAMS, NUM_INPUTS, NUM_OUTPUTS, NUM_LIGHTS);
@@ -1047,6 +1198,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     int previousProcessingChannel = blunchProcessingChannel;
     blunchProcessingChannel = channel;
     BlunchSequencerRuntime& seq = activeSequencer();
+    if (channelHasNext(channel) &&
+        (waitMode() == WAIT_IMMEDIATE ||
+         (seq.activeProgram.empty() && channelRunHigh)))
+      commitPendingLine(true);
     if (seq.activeProgram.empty()) {
       seq.clockHigh = false;
       seq.activeClockOutputHigh = false;
@@ -1058,12 +1213,51 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       blunchProcessingChannel = previousProcessingChannel;
       return;
     }
+    bool resetRequested =
+        resetBlockPressed || resetLinePressed || resetSequencePressed;
+    if (seq.seedGraceRemaining > 0.f && !resetRequested) {
+      if (channelRunHigh && seq.running) {
+        // Real seconds, independent of Time CV. Let an EOB/EOL/EOP-clocked
+        // sequencer propagate its new Seed CV before the first random draw.
+        seq.seedGraceElapsed += scaledSampleTime;
+        seq.seedGraceRemaining =
+            std::max(0.f, seq.seedGraceRemaining - outputSampleTime);
+        if (seq.seedGraceRemaining == 0.f) {
+          applyActiveProgramStep(seq);
+          seq.seedGraceClockCatchup = seq.seedGraceElapsed;
+          // Sampling is delayed; the musical boundary is not. Keep the
+          // elapsed grace time and boundary overshoot in the new pattern.
+          seq.activeProgramElapsedSeconds +=
+              seq.seedGraceProgramCarry + seq.seedGraceElapsed;
+          seq.activeTotalDurationElapsedSeconds +=
+              seq.seedGraceTotalCarry + seq.seedGraceElapsed;
+        }
+      }
+      blunchProcessingChannel = previousProcessingChannel;
+      return;
+    }
+    allowSeedGrace = channelRunHigh && seq.running && !resetRequested;
     int activeExternalClock = activeExternalClockInput(seq);
     int activeRepeatClock = activeRepeatExternalClockInput(seq);
     int activeTotalTickClock = activeTotalDurationExternalClockInput(seq);
     bool running = channelRunHigh && seq.running;
     bool previousClockHigh = seq.clockHigh;
     if (running) {
+      bool choiceExpired = false;
+      if (seq.nestedChoiceExternalClock >= 0 && seq.nestedChoiceTicks > 0 &&
+          externalClockEdges[seq.nestedChoiceExternalClock]) {
+        choiceExpired = --seq.nestedChoiceTicks == 0;
+        if (choiceExpired) seq.nestedChoiceExternalClock = -1;
+      }
+      if (seq.nestedChoiceSeconds > 0.f) {
+        seq.nestedChoiceSeconds =
+            std::max(0.f, seq.nestedChoiceSeconds - scaledSampleTime);
+        choiceExpired |= seq.nestedChoiceSeconds == 0.f;
+      }
+      if (choiceExpired) {
+        refreshActiveClockSpecForStep(seq);
+        blunch::sequencer::syncActiveHighlightFromStep(seq);
+      }
       if (activeExternalClock >= 0) {
         if (!advanceActiveTotalDuration(seq, scaledSampleTime)) {
           advanceActiveProgramDuration(seq, scaledSampleTime);
@@ -1101,6 +1295,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
               : seq.clockPhase;
       seq.clockHigh = false;
     }
+    if (seq.seedGraceRemaining > 0.f) seq.clockHigh = false;
     bool outputClockHigh = activeExternalClock >= 0
                                ? externalClockHigh[activeExternalClock]
                                : seq.clockHigh;
@@ -1153,8 +1348,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
           (activeTotalTickClock >= 0 &&
            externalClockEdges[activeTotalTickClock]);
     }
-    if (running && !resetPressed && outputClockTriggered &&
-        seq.activeStepPlays) {
+    if (running && !resetPressed && seq.seedGraceRemaining == 0.f &&
+        outputClockTriggered && seq.activeStepPlays) {
       clockOutputPulses[channel].trigger(1e-3f);
     }
     if (running && !resetPressed &&
@@ -1180,6 +1375,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                                activeTotalDurationExternalClockInput(seq) < 0);
     }
 
+    allowSeedGrace = false;
     if (channelRunHigh && resetSequencePressed) {
       resetActiveSequence(true);
     } else if (channelRunHigh && resetLinePressed) {
@@ -1198,6 +1394,19 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void process(const ProcessArgs& args) override {
+    std::unique_lock<std::recursive_mutex> guard(stateMutex, std::try_to_lock);
+    if (!guard.owns_lock()) {
+      deferredSampleTime += args.sampleTime;
+      return;  // Hold outputs while the GUI owns a coherent model snapshot.
+    }
+    ProcessArgs elapsed = args;
+    elapsed.sampleTime += deferredSampleTime;
+    deferredSampleTime = 0.;
+    outputSampleTime = args.sampleTime;
+    processFrame(elapsed);
+  }
+
+  void processFrame(const ProcessArgs& args) {
     processControlRequests();
     float timeScale = getTimeScale();
     float scaledSampleTime = args.sampleTime * timeScale;
@@ -1224,9 +1433,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         rememberedRunning[channel] = true;
         channelSequencer.running = true;
         if (!channelSequencer.activeProgram.empty()) {
-          if (seededRandomEnabled()) {
-            resetSeededRandomSerials(channelSequencer);
-          }
+          resetSeededRandomSerials(channelSequencer);
           applyActiveProgramStep(channelSequencer);
         }
       }
@@ -1284,19 +1491,51 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     outputs[EOC1_OUTPUT].setChannels(polyChannels);
     outputs[EOC2_OUTPUT].setChannels(polyChannels);
     outputs[EOC3_OUTPUT].setChannels(polyChannels);
-    for (int channel = 0; channel < polyChannels; channel++) {
+    // Collect this frame's semantic events, not the one-ms output pulse.
+    // Evaluate the leader first so channel numbering cannot add a sample delay.
+    std::fill(boundaryEvents, boundaryEvents + MAX_POLY_CHANNELS, 0u);
+    auto processChannel = [&](int channel) {
       bool channelRunHigh =
           runHigh && runInputAllowsChannel(runInputChannels, channel);
       processSequencerChannel(channel, scaledSampleTime, externalClockEdges,
                               channelRunHigh, resetBlockPressed,
                               resetLinePressed, resetSequencePressed,
                               advanceLinePressed, advanceTokenPressed);
+    };
+    bool leaderActive = syncSource >= 0 && syncSource < polyChannels;
+    if (leaderActive) processChannel(syncSource);
+    bool syncNow = leaderActive && !resetPressed && runHigh &&
+                   runInputAllowsChannel(runInputChannels, syncSource) &&
+                   sequencers[syncSource].running &&
+                   (boundaryEvents[syncSource] & (1u << syncEvent));
+    for (int channel = 0; channel < polyChannels; channel++) {
+      if (leaderActive && channel == syncSource) continue;
+      if (syncNow && sequencers[channel].running &&
+          runInputAllowsChannel(runInputChannels, channel) &&
+          !sequencers[channel].activeProgram.empty()) {
+        int previous = blunchProcessingChannel;
+        blunchProcessingChannel = channel;
+        // Restarts use Now, preserving Draft and the normal Next/Wait rules.
+        // A patched Seed CV retains its grace window on this shared boundary.
+        allowSeedGrace = true;
+        clockOutputPulses[channel].reset();
+        if (syncRestart == 0)
+          resetActiveBlock(true);
+        else if (syncRestart == 1)
+          resetActiveProgram(true);
+        else
+          resetActiveSequence(true);
+        allowSeedGrace = false;
+        blunchProcessingChannel = previous;
+      }
+      processChannel(channel);
     }
     for (int channel = polyChannels; channel < MAX_POLY_CHANNELS; channel++) {
       sequencers[channel].activeClockOutputHigh = false;
     }
     for (int channel = 0; channel < polyChannels; channel++) {
-      bool clockPulseHigh = clockOutputPulses[channel].process(args.sampleTime);
+      bool clockPulseHigh =
+          clockOutputPulses[channel].process(outputSampleTime);
       sequencers[channel].activeClockOutputHigh = clockPulseHigh;
       sequencers[channel].activeClockDisplayPulse *=
           std::max(0.f, 1.f - args.sampleTime * 5.f);
@@ -1313,26 +1552,27 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       outputs[PHASE_OUTPUT].setVoltage(clamp(phase, 0.f, 1.f) * 10.f, channel);
       outputs[CLOCK_OUTPUT].setVoltage(clockPulseHigh ? 10.f : 0.f, channel);
       outputs[EOC1_OUTPUT].setVoltage(
-          tokenMovePulses[channel].process(args.sampleTime) ? 10.f : 0.f,
+          tokenMovePulses[channel].process(outputSampleTime) ? 10.f : 0.f,
           channel);
       outputs[EOC2_OUTPUT].setVoltage(
-          lineCyclePulses[channel].process(args.sampleTime) ? 10.f : 0.f,
+          lineCyclePulses[channel].process(outputSampleTime) ? 10.f : 0.f,
           channel);
       outputs[EOC3_OUTPUT].setVoltage(
-          wrapPulses[channel].process(args.sampleTime) ? 10.f : 0.f, channel);
+          wrapPulses[channel].process(outputSampleTime) ? 10.f : 0.f, channel);
     }
     for (int channel = polyChannels; channel < MAX_POLY_CHANNELS; channel++) {
-      clockOutputPulses[channel].process(args.sampleTime);
+      clockOutputPulses[channel].process(outputSampleTime);
       sequencers[channel].activeClockDisplayPulse = 0.f;
       sequencers[channel].activeExternalTimingDisplayPulse = 0.f;
-      tokenMovePulses[channel].process(args.sampleTime);
-      lineCyclePulses[channel].process(args.sampleTime);
-      wrapPulses[channel].process(args.sampleTime);
+      tokenMovePulses[channel].process(outputSampleTime);
+      lineCyclePulses[channel].process(outputSampleTime);
+      wrapPulses[channel].process(outputSampleTime);
     }
     lights[SYNTAX_ERROR_LIGHT].setBrightness(syntaxError ? 1.f : 0.f);
   }
 
   void fromJson(json_t* root) override {
+    StateGuard guard(stateMutex);
     if (json_object_get(json_object_get(root, "data"), "fontHeightOrigin")) {
       Module::fromJson(root);
       return;
@@ -1370,6 +1610,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     Module::fromJson(adjusted.get());
   }
   json_t* dataToJson() override {
+    StateGuard guard(stateMutex);
     json_t* rootJ = json_object();
     json_object_set_new(rootJ, "fontHeightOrigin",
                         json_real(BLUNCH_FONT_HEIGHT_BASE));
@@ -1380,6 +1621,48 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
                             json_stringn(text.c_str(), text.size()));
     }
     json_object_set_new(rootJ, "channelTexts", channelTextsJ);
+    json_t* nowJ = json_array();
+    json_t* nextJ = json_array();
+    json_t* unitsJ = json_array();
+    for (int ch = 0; ch < MAX_POLY_CHANNELS; ++ch) {
+      json_array_append_new(nowJ, json_string(layerPage(ch, NOW).c_str()));
+      json_t* channelUnits = json_array();
+      for (int line = 0; line < layerLineCount(ch); ++line) {
+        auto found = runningLineUnits[ch].find(line);
+        auto unit = found == runningLineUnits[ch].end() ? defaultNumberUnit
+                                                        : found->second;
+        json_array_append_new(
+            channelUnits,
+            json_string(blunch::language::clockUnitName(unit).c_str()));
+      }
+      json_array_append_new(unitsJ, channelUnits);
+      json_t* queued = json_object();
+      json_t* lines = json_array();
+      for (const auto& line : pendingFormulas[ch].lines) {
+        json_t* entry = json_object();
+        json_object_set_new(entry, "line", json_integer(line.first));
+        json_object_set_new(
+            entry, "unit",
+            json_string(
+                blunch::language::clockUnitName(line.second.unit).c_str()));
+        json_object_set_new(entry, "text",
+                            json_string(line.second.text.c_str()));
+        json_array_append_new(lines, entry);
+      }
+      json_object_set_new(queued, "lines", lines);
+      json_object_set_new(queued, "jump",
+                          json_integer(pendingFormulas[ch].line));
+      json_object_set_new(queued, "page",
+                          json_boolean(pendingFormulas[ch].page));
+      json_array_append_new(nextJ, queued);
+    }
+    json_object_set_new(rootJ, "nowTexts", nowJ);
+    json_object_set_new(rootJ, "nowUnits", unitsJ);
+    json_object_set_new(rootJ, "nextFormulas", nextJ);
+    json_object_set_new(rootJ, "formulaLayer", json_integer(formulaLayer));
+    json_object_set_new(rootJ, "syncSource", json_integer(syncSource));
+    json_object_set_new(rootJ, "syncEvent", json_integer(syncEvent));
+    json_object_set_new(rootJ, "syncRestart", json_integer(syncRestart));
     json_object_set_new(rootJ, "text",
                         json_stringn(sequenceEditorStates[0].text.c_str(),
                                      sequenceEditorStates[0].text.size()));
@@ -1414,8 +1697,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void dataFromJson(json_t* rootJ) override {
+    StateGuard guard(stateMutex);
     for (int ch = 0; ch < MAX_POLY_CHANNELS; ++ch) {
       runningLineTexts[ch].clear();
+      runningLineUnits[ch].clear();
       pendingFormulas[ch] = PendingFormula{};
     }
     json_t* fitLinesJ = json_object_get(rootJ, "editorFitLines");
@@ -1489,22 +1774,86 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     if (activeLineJ && !activeLinesJ) {
       activeSequencer().activeLine = json_integer_value(activeLineJ);
     }
+    json_t* nowTextsJ = json_object_get(rootJ, "nowTexts");
+    json_t* nowUnitsJ = json_object_get(rootJ, "nowUnits");
     int previousFocusedChannel = focusedChannel;
     for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
+      json_t* nowTextJ = json_array_get(nowTextsJ, channel);
+      bool hasNow = json_is_string(nowTextJ);
+      std::string nowText = hasNow ? json_string_value(nowTextJ)
+                                   : sequenceEditorStates[channel].text;
+      if (hasNow)
+        for (int line = 0; line < getLineCount(nowText); ++line)
+          runningLineTexts[channel][line] = getLineInfo(nowText, line).text;
+      for (int line = 0; line < getLineCount(nowText); ++line) {
+        json_t* unitJ =
+            json_array_get(json_array_get(nowUnitsJ, channel), line);
+        if (json_is_string(unitJ))
+          runningLineUnits[channel][line] =
+              blunch::language::parseClockUnit(json_string_value(unitJ));
+      }
       // A restored empty/invalid page must not inherit constructor examples.
       sequencers[channel].activeProgram.clear();
-      if (sequenceEditorStates[channel].text.empty()) {
+      if (nowText.empty()) {
+        sequencers[channel].activeLineText.clear();
         stopSequencer(channel, true);
         continue;
       }
       focusedChannel = channel;
-      int line = std::max(
-          0, std::min(sequencers[channel].activeLine,
-                      getLineCount(sequenceEditorStates[channel].text) - 1));
+      int line = std::max(0, std::min(sequencers[channel].activeLine,
+                                      getLineCount(nowText) - 1));
       sequencers[channel].activeLine = line;
-      if (!commitLine(line, true)) stopSequencer(channel, true);
+      if (!commitLine(line, true, !hasNow)) stopSequencer(channel, true);
     }
     focusedChannel = previousFocusedChannel;
+    json_t* nextFormulasJ = json_object_get(rootJ, "nextFormulas");
+    for (int ch = 0; ch < MAX_POLY_CHANNELS; ++ch) {
+      json_t* queued = json_array_get(nextFormulasJ, ch);
+      if (!json_is_object(queued)) continue;
+      auto& next = pendingFormulas[ch];
+      next.line =
+          std::max(-1, std::min(4095, int(json_integer_value(
+                                          json_object_get(queued, "jump")))));
+      next.page = json_is_true(json_object_get(queued, "page"));
+      json_t* lines = json_object_get(queued, "lines");
+      size_t index;
+      json_t* entry;
+      json_array_foreach(lines, index, entry) {
+        if (index >= 4096) break;
+        json_t* lineJ = json_object_get(entry, "line");
+        json_t* textJ = json_object_get(entry, "text");
+        if (!json_is_integer(lineJ) || !json_is_string(textJ)) continue;
+        int line = json_integer_value(lineJ);
+        if (line < 0 || line > 4095) continue;
+        StagedLine staged;
+        staged.text = json_string_value(textJ);
+        json_t* unitJ = json_object_get(entry, "unit");
+        staged.unit =
+            json_is_string(unitJ)
+                ? blunch::language::parseClockUnit(json_string_value(unitJ))
+                : defaultNumberUnit;
+        auto info = getLineInfo(layerPage(ch, NOW), line);
+        if (isBlankLine(staged.text) ||
+            parseLineProgram(line, info.begin, staged.text, staged.program,
+                             staged.unit))
+          next.lines[line] = std::move(staged);
+      }
+    }
+    auto syncSetting = [&](const char* key, int fallback, int low, int high) {
+      json_t* value = json_object_get(rootJ, key);
+      return json_is_integer(value)
+                 ? std::max(low, std::min(high, int(json_integer_value(value))))
+                 : fallback;
+    };
+    syncSource = syncSetting("syncSource", -1, -1, 15);
+    syncEvent = syncSetting("syncEvent", 1, 0, 2);
+    syncRestart = syncSetting("syncRestart", 1, 0, 2);
+    json_t* layerJ = json_object_get(rootJ, "formulaLayer");
+    formulaLayer = json_is_integer(layerJ)
+                       ? FormulaLayer(std::max(
+                             0, std::min(2, int(json_integer_value(layerJ)))))
+                       : DRAFT;
+    peekNow = false;
     json_t* editorViewModeJ = json_object_get(rootJ, "editorViewMode");
     if (editorViewModeJ) {
       std::string mode = json_string_value(editorViewModeJ);
@@ -1529,6 +1878,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void onRandomize() override {
+    StateGuard guard(stateMutex);
     if (showingChannelsView()) {
       randomizeActiveChannelsLine();
     } else {
@@ -1536,12 +1886,15 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
   }
 
-  bool parseLineProgram(int line, int lineBegin, const std::string& lineText,
-                        std::vector<BlunchProgramStep>& program) {
+  bool parseLineProgram(
+      int line, int lineBegin, const std::string& lineText,
+      std::vector<BlunchProgramStep>& program,
+      blunch::language::ClockUnit unit = blunch::language::ClockUnit::Unknown) {
     (void)line;
-    return blunch::program::compileLineProgram(lineText, lineBegin,
-                                               externalClockInputIndex, program,
-                                               defaultNumberUnit);
+    return blunch::program::compileLineProgram(
+        lineText, lineBegin, externalClockInputIndex, program,
+        unit == blunch::language::ClockUnit::Unknown ? defaultNumberUnit
+                                                     : unit);
   }
 
   void captureBaseStepState(BlunchProgramStep& step) {
@@ -1553,6 +1906,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void resetSeededRandomSerials(BlunchSequencerRuntime& seq) {
+    seq.latchedSeed = requestedSeedValue();
+    seq.seedLatched = true;
     for (size_t i = 0; i < seq.activeProgram.size(); i++) {
       seq.activeProgram[i].seededClockSerial = 0;
       seq.activeProgram[i].seededProbabilitySerial = 0;
@@ -1606,17 +1961,32 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool commitLine(int line, bool resetPhase, bool acceptEdits = true) {
+    StateGuard guard(stateMutex);
     BlunchLineInfo lineInfo = getLineInfo(sequenceEditorState().text, line);
     auto& running = runningLineTexts[activeContextChannel()];
     if (running.empty()) {
-      for (int i = 0; i < getLineCount(sequenceEditorState().text); ++i)
+      for (int i = 0; i < getLineCount(sequenceEditorState().text); ++i) {
         running[i] = getLineInfo(sequenceEditorState().text, i).text;
+        runningLineUnits[activeContextChannel()][i] = defaultNumberUnit;
+      }
     }
     auto existing = running.find(line);
     if (!acceptEdits && existing != running.end())
-      lineInfo.text = existing->second;
+      lineInfo = getLineInfo(layerPage(activeContextChannel(), NOW), line);
+    if (isBlankLine(lineInfo.text)) {
+      running[line] = "";
+      activeSequencer().activeLine = line;
+      activeSequencer().activeLineText.clear();
+      activeSequencer().activeProgram.clear();
+      stopSequencer(activeContextChannel(), true);
+      return true;
+    }
+    auto& units = runningLineUnits[activeContextChannel()];
+    auto savedUnit = units.find(line);
+    auto unit = !acceptEdits && savedUnit != units.end() ? savedUnit->second
+                                                         : defaultNumberUnit;
     std::vector<BlunchProgramStep> program;
-    if (!parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
+    if (!parseLineProgram(line, lineInfo.begin, lineInfo.text, program, unit)) {
       setSyntaxError(line, line == activeSequencer().activeLine
                                ? activeSequencer().activeLineText
                                : checkedFocusedLineText);
@@ -1625,33 +1995,19 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
     clearSyntaxError();
     running[line] = lineInfo.text;
+    units[line] = unit;
     activeSequencer().loadActiveProgram(line, lineInfo.text, program,
                                         resetPhase);
-    if (seededRandomEnabled()) {
-      resetSeededRandomSerials(activeSequencer());
-    }
-    if (pendingEdit().line == line && pendingEdit().text == lineInfo.text) {
-      clearPendingLine();
-    }
+    resetSeededRandomSerials(activeSequencer());
+    auto staged = pendingEdit().lines.find(line);
+    if (acceptEdits && staged != pendingEdit().lines.end() &&
+        staged->second.text == lineInfo.text)
+      pendingEdit().lines.erase(staged);
     applyActiveProgramStep(activeSequencer());
     return true;
   }
 
-  void queuePendingActivation() {
-    if (pendingEdit().line < 0 || pendingEdit().program.empty()) {
-      return;
-    }
-    pendingEdit().armed = waitMode() != WAIT_IMMEDIATE;
-    pendingEdit().viewing = true;
-  }
-
-  void clearPendingLine() {
-    pendingEdit().line = -1;
-    pendingEdit().text.clear();
-    pendingEdit().program.clear();
-    pendingEdit().viewing = true;
-    pendingEdit().armed = false;
-  }
+  void clearPendingLine() { pendingEdit() = PendingFormula{}; }
 
   void replaceLineText(int line, const std::string& replacement) {
     BlunchLineInfo lineInfo = getLineInfo(sequenceEditorState().text, line);
@@ -1670,24 +2026,18 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     sequenceEditorStates[channel].dirty = true;
   }
 
-  void discardChannelPending(int channel) {
+  void discardChannelPending(int channel, bool both = false) {
+    StateGuard guard(stateMutex);
     channel = clampChannel(channel);
-    if (!channelHasPendingFormula(channel)) return;
-    const auto& running = runningLineTexts[channel];
-    std::string restored;
-    if (!running.empty()) {
-      for (int line = 0; line <= running.rbegin()->first; ++line) {
-        if (line) restored += "\n";
-        auto found = running.find(line);
-        if (found != running.end()) restored += found->second;
-      }
-    }
+    bool discardDraft = channelHasDraft(channel);
+    FormulaLayer restore = discardDraft && !both ? NEXT : NOW;
+    std::string restored = layerPage(channel, restore);
+    if (!discardDraft || both) pendingFormulas[channel] = PendingFormula{};
     auto& state = sequenceEditorStates[channel];
     state.text = restored;
     state.cursor = std::min(state.cursor, int(restored.size()));
     state.selection = state.cursor;
     state.dirty = true;
-    pendingFormulas[channel] = PendingFormula{};
     if (channel == focusedChannel) {
       clearSyntaxError();
       checkedFocusedLineText = getLineInfo(restored, selectedLine).text;
@@ -1758,6 +2108,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
   }
   void randomizeLineForChannel(int channel, int line, bool restoreCursor) {
+    StateGuard guard(stateMutex);
     int previousFocusedChannel = focusedChannel;
     focusedChannel = clampChannel(channel);
     std::string program = generateRandomProgram(false);
@@ -1782,21 +2133,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
     checkedFocusedLineText = program;
     clearSyntaxError();
-    if (line == activeSequencer().activeLine) {
-      clearPendingLine();
-      commitLine(line, true);
-      focusedChannel = previousFocusedChannel;
-      return;
-    }
-
-    std::vector<BlunchProgramStep> parsedProgram;
-    if (parseLineProgram(line, newLineInfo.begin, program, parsedProgram)) {
-      pendingEdit().line = line;
-      pendingEdit().text = program;
-      pendingEdit().program = parsedProgram;
-      pendingEdit().viewing = true;
-      queuePendingActivation();
-    }
+    executeLine(line, true);
     focusedChannel = previousFocusedChannel;
   }
 
@@ -1811,143 +2148,31 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void cancelPendingLine(int line) {
-    if (errorLine == line) {
-      std::string revertText;
-      if (line == activeSequencer().activeLine) {
-        revertText = activeSequencer().activeLineText;
-      } else if (pendingEdit().line == line && !pendingEdit().text.empty()) {
-        revertText = pendingEdit().text;
-      } else if (errorLineRevertLine == line) {
-        revertText = errorLineRevertText;
-      }
-      replaceLineText(line, revertText);
-      if (pendingEdit().line == line && line == activeSequencer().activeLine) {
-        clearPendingLine();
-      }
-      checkedFocusedLineText =
-          getLineInfo(sequenceEditorState().text, line).text;
-      clearSyntaxError();
-      return;
+    StateGuard guard(stateMutex);
+    int ch = activeContextChannel();
+    bool dirty = lineHasDraft(ch, line);
+    std::string restored = lineVersion(ch, line, dirty ? NEXT : NOW);
+    if (!dirty) {
+      pendingEdit().lines.erase(line);
+      if (pendingEdit().line == line) pendingEdit().line = -1;
     }
-
-    if (pendingEdit().line == line) {
-      if (line == activeSequencer().activeLine) {
-        replaceLineText(line, activeSequencer().activeLineText);
-      }
-      clearPendingLine();
-    }
-    checkedFocusedLineText = getLineInfo(sequenceEditorState().text, line).text;
-  }
-
-  void showPendingLine() {
-    if (pendingEdit().line < 0 || pendingEdit().text.empty()) {
-      return;
-    }
-
-    replaceLineText(pendingEdit().line, pendingEdit().text);
-    checkedFocusedLineText = pendingEdit().text;
-    pendingEdit().viewing = true;
-  }
-
-  void showActiveLineVersion() {
-    if (pendingEdit().line != activeSequencer().activeLine) {
-      return;
-    }
-
-    replaceLineText(activeSequencer().activeLine,
-                    activeSequencer().activeLineText);
-    checkedFocusedLineText = activeSequencer().activeLineText;
-    pendingEdit().viewing = false;
-  }
-
-  void togglePendingView() {
-    if (errorLine == activeSequencer().activeLine) {
-      replaceLineText(activeSequencer().activeLine,
-                      activeSequencer().activeLineText);
-      checkedFocusedLineText = activeSequencer().activeLineText;
-      clearSyntaxError();
-      pendingEdit().viewing = false;
-      return;
-    }
-
-    if (pendingEdit().line != activeSequencer().activeLine) {
-      return;
-    }
-
-    if (pendingEdit().viewing) {
-      showActiveLineVersion();
-    } else {
-      showPendingLine();
-    }
+    replaceLineText(line, restored);
+    checkedFocusedLineText = restored;
+    clearSyntaxError();
   }
 
   void inspectFocusedLine(int line, bool focusChanged) {
-    BlunchLineInfo lineInfo = getLineInfo(sequenceEditorState().text, line);
-    std::string previousCheckedLineText = checkedFocusedLineText;
-    if (line != activeSequencer().activeLine) {
-      if (focusChanged || lineInfo.text == checkedFocusedLineText) {
-        checkedFocusedLineText = lineInfo.text;
-        return;
-      }
-
-      checkedFocusedLineText = lineInfo.text;
-      std::vector<BlunchProgramStep> program;
-      if (parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
-        pendingEdit().line = line;
-        pendingEdit().text = lineInfo.text;
-        pendingEdit().program = program;
-        pendingEdit().armed = false;
-        if (errorLine == line) {
-          clearSyntaxError();
-        }
-        syntaxError = false;
-      } else {
-        std::string revertText =
-            pendingEdit().line == line && !pendingEdit().text.empty()
-                ? pendingEdit().text
-                : previousCheckedLineText;
-        setSyntaxError(line, revertText);
-      }
-      return;
-    }
-
-    if (lineInfo.text == activeSequencer().activeLineText) {
-      if (pendingEdit().line == line && pendingEdit().viewing) {
-        clearPendingLine();
-      }
-      if (errorLine == line) {
-        clearSyntaxError();
-      }
-      checkedFocusedLineText = lineInfo.text;
-      return;
-    }
-
-    if (pendingEdit().line == line && lineInfo.text == pendingEdit().text) {
-      checkedFocusedLineText = lineInfo.text;
-      pendingEdit().viewing = true;
-      return;
-    }
-
-    if (lineInfo.text == checkedFocusedLineText &&
-        (pendingEdit().line == line || errorLine == line)) {
-      return;
-    }
-
-    checkedFocusedLineText = lineInfo.text;
+    StateGuard guard(stateMutex);
+    (void)focusChanged;
+    auto info = getLineInfo(sequenceEditorState().text, line);
+    if (info.text == checkedFocusedLineText) return;
+    checkedFocusedLineText = info.text;
     std::vector<BlunchProgramStep> program;
-    if (parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
-      pendingEdit().line = line;
-      pendingEdit().text = lineInfo.text;
-      pendingEdit().program = program;
-      pendingEdit().viewing = true;
-      pendingEdit().armed = false;
-      if (errorLine == line) {
-        clearSyntaxError();
-      }
-      syntaxError = false;
-    } else {
-      setSyntaxError(line, activeSequencer().activeLineText);
-    }
+    if (isBlankLine(info.text) ||
+        parseLineProgram(line, info.begin, info.text, program)) {
+      clearSyntaxError();
+    } else
+      setSyntaxError(line, lineVersion(activeContextChannel(), line, NEXT));
   }
 
   void setSyntaxError(int line, const std::string& revertText) {
@@ -1966,113 +2191,164 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     syntaxError = false;
   }
 
-  void commitPendingLine(bool resetPhase) {
-    if (pendingEdit().line < 0 || pendingEdit().program.empty()) {
-      return;
-    }
+  void acceptNextLine(int ch, int line) {
+    auto found = pendingFormulas[ch].lines.find(line);
+    if (found == pendingFormulas[ch].lines.end()) return;
+    runningLineTexts[ch][line] = found->second.text;
+    runningLineUnits[ch][line] = found->second.unit;
+    pendingFormulas[ch].lines.erase(found);
+  }
 
-    runningLineTexts[activeContextChannel()][pendingEdit().line] =
-        pendingEdit().text;
-    activeSequencer().loadActiveProgram(pendingEdit().line, pendingEdit().text,
-                                        pendingEdit().program, resetPhase);
-    if (seededRandomEnabled()) {
-      resetSeededRandomSerials(activeSequencer());
+  void commitPendingLine(bool resetPhase) {
+    StateGuard guard(stateMutex);
+    int ch = activeContextChannel();
+    if (pendingEdit().lines.empty()) return;
+    int target = pendingEdit().line;
+    bool page = pendingEdit().page;
+    for (const auto& line : pendingEdit().lines) {
+      runningLineTexts[ch][line.first] = line.second.text;
+      runningLineUnits[ch][line.first] = line.second.unit;
     }
     clearPendingLine();
+    if (target < 0) target = activeSequencer().activeLine;
+    // Preserve the active row unless the submitted page removed it. A
+    // deleted active row must advance to surviving Now text, not stop on a
+    // blank ghost row that exists only in the previous running page.
+    if (page && isBlankLine(lineVersion(ch, target, NOW))) {
+      const auto& running = runningLineTexts[ch];
+      auto surviving = running.upper_bound(target);
+      bool found = false;
+      for (size_t i = 0; i < running.size(); ++i) {
+        if (surviving == running.end()) surviving = running.begin();
+        if (!isBlankLine(surviving->second)) {
+          target = surviving->first;
+          found = true;
+          break;
+        }
+        ++surviving;
+      }
+      if (!found) target = std::max(0, target);
+    }
+    if (page || target >= 0) commitLine(target, resetPhase, false);
     clearSyntaxError();
-    applyActiveProgramStep(activeSequencer());
   }
 
   bool activatePendingLineIfArmed(bool resetPhase) {
-    if (!pendingEdit().armed || pendingEdit().line < 0 ||
-        pendingEdit().program.empty()) {
-      return false;
-    }
-
+    if (pendingEdit().lines.empty()) return false;
     commitPendingLine(resetPhase);
-    startSequencer(activeContextChannel());
     triggerTokenMovePulse();
     return true;
   }
 
   bool activatePendingLineAtBoundary(WaitBoundary boundary, bool resetPhase) {
-    if (!pendingEdit().armed) {
-      return false;
-    }
-
+    if (pendingEdit().lines.empty()) return false;
     WaitMode mode = waitMode();
     bool matches = (mode == WAIT_CLOCK && boundary == WAIT_BOUNDARY_CLOCK) ||
                    (mode == WAIT_BLOCK && boundary == WAIT_BOUNDARY_BLOCK) ||
                    (mode == WAIT_LINE && boundary == WAIT_BOUNDARY_LINE) ||
                    (mode == WAIT_PAGE && boundary == WAIT_BOUNDARY_PAGE);
-    if (!matches) {
-      return false;
+    if (!matches) return false;
+    if (pendingEdit().page) {
+      int ch = activeContextChannel();
+      if (mode == WAIT_LINE)
+        return false;  // Apply each line when it is next reached.
+      if (mode == WAIT_PAGE) {
+        for (const auto& line : pendingEdit().lines) {
+          runningLineTexts[ch][line.first] = line.second.text;
+          runningLineUnits[ch][line.first] = line.second.unit;
+        }
+        clearPendingLine();
+        bool any = false;
+        for (const auto& line : runningLineTexts[ch])
+          any |= !isBlankLine(line.second);
+        if (!any) {
+          activeSequencer().activeLineText.clear();
+          activeSequencer().activeProgram.clear();
+          stopSequencer(ch, true);
+          return true;
+        }
+        return false;  // Continue naturally into the next page.
+      }
+      int line = activeSequencer().activeLine;
+      if (!pendingEdit().lines.count(line)) return false;
+      acceptNextLine(ch, line);
+      commitLine(line, resetPhase, false);
+      return true;
     }
-
     return activatePendingLineIfArmed(resetPhase);
   }
 
   bool activatePendingLineAtExternalClock(int externalClock, bool resetPhase) {
-    if (!pendingEdit().armed || externalClock < 0 || externalClock > 3) {
+    if (pendingEdit().lines.empty() || externalClock < 0 || externalClock > 3)
       return false;
-    }
-
     WaitMode mode = waitMode();
-    bool matches = (mode == WAIT_EXTERNAL_W && externalClock == 0) ||
-                   (mode == WAIT_EXTERNAL_X && externalClock == 1) ||
-                   (mode == WAIT_EXTERNAL_Y && externalClock == 2) ||
-                   (mode == WAIT_EXTERNAL_Z && externalClock == 3);
-    if (!matches) {
-      return false;
-    }
-
+    if (mode != WAIT_EXTERNAL_W + externalClock) return false;
     return activatePendingLineIfArmed(resetPhase);
   }
 
   bool shouldDelayExecution() { return waitMode() != WAIT_IMMEDIATE; }
 
   bool executeLine(int line, bool resetPhase) {
-    BlunchLineInfo lineInfo = getLineInfo(sequenceEditorState().text, line);
-    std::vector<BlunchProgramStep> program;
-    if (!parseLineProgram(line, lineInfo.begin, lineInfo.text, program)) {
-      setSyntaxError(line, line == activeSequencer().activeLine
-                               ? activeSequencer().activeLineText
-                               : checkedFocusedLineText);
+    StateGuard guard(stateMutex);
+    auto info = getLineInfo(sequenceEditorState().text, line);
+    StagedLine staged;
+    staged.text = info.text;
+    staged.unit = defaultNumberUnit;
+    if (!isBlankLine(info.text) &&
+        !parseLineProgram(line, info.begin, info.text, staged.program)) {
+      setSyntaxError(line, lineVersion(activeContextChannel(), line, NEXT));
       return false;
     }
-
+    pendingEdit().lines[line] = std::move(staged);
     pendingEdit().line = line;
-    pendingEdit().text = lineInfo.text;
-    pendingEdit().program = program;
-    pendingEdit().viewing = true;
+    pendingEdit().page = false;
     clearSyntaxError();
+    if (!shouldDelayExecution()) commitPendingLine(resetPhase);
+    return true;
+  }
 
-    if (!shouldDelayExecution()) {
-      commitPendingLine(resetPhase);
-      return true;
+  bool executePage() {
+    StateGuard guard(stateMutex);
+    int ch = activeContextChannel();
+    std::map<int, StagedLine> changed;
+    for (int line = 0; line < layerLineCount(ch); ++line) {
+      if (!lineHasDraft(ch, line)) continue;
+      auto info = getLineInfo(sequenceEditorState().text, line);
+      StagedLine staged;
+      staged.text = info.text;
+      staged.unit = defaultNumberUnit;
+      if (!isBlankLine(info.text) &&
+          !parseLineProgram(line, info.begin, info.text, staged.program)) {
+        setSyntaxError(line, lineVersion(ch, line, NEXT));
+        return false;  // Validate the whole submission before changing Next.
+      }
+      changed[line] = std::move(staged);
     }
-
-    queuePendingActivation();
+    for (auto& line : changed)
+      pendingEdit().lines[line.first] = std::move(line.second);
+    if (pendingEdit().lines.empty()) return true;
+    pendingEdit().page = true;
+    pendingEdit().line = -1;
+    clearSyntaxError();
+    if (!shouldDelayExecution()) commitPendingLine(false);
     return true;
   }
 
   void resetActiveProgram(bool resetPhase) {
     if (activeSequencer().activeProgram.empty()) {
-      commitLine(activeSequencer().activeLine, resetPhase);
+      commitLine(activeSequencer().activeLine, resetPhase, false);
       return;
     }
 
     activeSequencer().resetActiveProgramState(resetPhase);
-    if (seededRandomEnabled()) {
-      resetSeededRandomSerials(activeSequencer());
-    }
+    resetSeededRandomSerials(activeSequencer());
     applyActiveProgramStep(activeSequencer());
   }
 
   void resetActiveBlock(bool resetPhase) {
     BlunchSequencerRuntime& seq = activeSequencer();
     if (seq.activeProgram.empty()) {
-      commitLine(seq.activeLine, resetPhase);
+      commitLine(seq.activeLine, resetPhase, false);
       return;
     }
 
@@ -2092,20 +2368,19 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       seq.clockPhase = 0.f;
       seq.activeClockRamp = 0.f;
     }
-    if (seededRandomEnabled()) {
-      resetSeededRandomSerials(seq);
-    }
+    resetSeededRandomSerials(seq);
     applyActiveProgramStep(seq);
   }
 
   void resetActiveSequence(bool resetPhase) {
-    int lineCount = getLineCount(sequenceEditorState().text);
+    int lineCount = getLineCount(layerPage(activeContextChannel(), NOW));
     for (int line = 0; line < lineCount; line++) {
-      BlunchLineInfo lineInfo = getLineInfo(sequenceEditorState().text, line);
+      BlunchLineInfo lineInfo =
+          getLineInfo(layerPage(activeContextChannel(), NOW), line);
       if (isBlankLine(lineInfo.text)) {
         continue;
       }
-      commitLine(line, resetPhase);
+      commitLine(line, resetPhase, false);
       return;
     }
     resetActiveProgram(resetPhase);
@@ -2351,7 +2626,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       step.repeatHighlightIsOwn = true;
     }
 
-    if (!choice.hasTotalDurationModifier) {
+    if (!choice.hasTotalDurationModifier || step.baseHasTotalDurationGroup) {
       return;
     }
 
@@ -2385,6 +2660,28 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     seq.activeProgramIndex = std::max(
         0, std::min(seq.activeProgramIndex, (int)seq.activeProgram.size() - 1));
     BlunchProgramStep& step = seq.activeProgram[seq.activeProgramIndex];
+    // A counted/timed block starts a pattern; an enclosing # scope owns
+    // the pattern boundary while its inner blocks cycle.
+    bool insideGroup =
+        step.baseHasTotalDurationGroup &&
+        seq.activeTotalDurationGroupId == step.baseTotalDurationGroupId &&
+        !seq.activeTotalDurationBranchLocal;
+    if (!insideGroup && allowSeedGrace && inputs[SEED_CV_INPUT].isConnected()) {
+      seq.seedGraceRemaining = 1e-3f;
+      seq.seedGraceElapsed = seq.seedGraceProgramCarry =
+          seq.seedGraceTotalCarry = 0.;
+      seq.activeProgramElapsedSeconds = 0.;
+      seq.activeTotalDurationElapsedSeconds = 0.;
+      seq.activeTotalDurationGroupId = -1;
+      seq.clockHigh = false;
+      seq.clockStartHighPending = false;
+      clockOutputPulses[activeContextChannel()].reset();
+      return;
+    }
+    if (!insideGroup) resetSeededRandomSerials(seq);
+    seq.nestedChoiceTicks = 0;
+    seq.nestedChoiceSeconds = 0.f;
+    seq.nestedChoiceExternalClock = -1;
     sampleStepRepeatArgument(seq, step);
     refreshActiveClockSpecForStep(seq);
     blunch::sequencer::syncActiveHighlightFromStep(seq);
@@ -2459,8 +2756,24 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       return;
     }
 
+    if (seq.nestedChoiceTicks > 0) {
+      if (seq.nestedChoiceExternalClock >= 0 || --seq.nestedChoiceTicks > 0) {
+        chooseActiveStepPlayback(seq);
+        return;
+      }
+    }
+    if (seq.nestedChoiceSeconds > 0.f) {
+      chooseActiveStepPlayback(seq);
+      return;
+    }
     bool branchLocalTotalDuration = isBranchLocalTotalDuration(step);
-    if (branchLocalTotalDuration || step.hasDuration) {
+    if (branchLocalTotalDuration) {
+      chooseActiveStepPlayback(seq);
+      return;
+    }
+    if (step.hasDuration) {
+      refreshActiveClockSpecForStep(seq);
+      blunch::sequencer::syncActiveHighlightFromStep(seq);
       chooseActiveStepPlayback(seq);
       return;
     }
@@ -2495,15 +2808,20 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
 
   void advanceActiveProgramDuration(BlunchSequencerRuntime& seq,
                                     float sampleTime) {
+    if (seq.seedGraceRemaining > 0.f) return;
     if (blunch::sequencer::advanceProgramDuration(seq, sampleTime)) {
       double elapsedCarry = seq.activeProgramElapsedSeconds;
       advanceActiveProgramStep(seq);
-      seq.activeProgramElapsedSeconds += elapsedCarry;
+      if (seq.seedGraceRemaining > 0.f)
+        seq.seedGraceProgramCarry = elapsedCarry;
+      else
+        seq.activeProgramElapsedSeconds += elapsedCarry;
     }
   }
 
   bool advanceActiveTotalDuration(BlunchSequencerRuntime& seq,
                                   float sampleTime) {
+    if (seq.seedGraceRemaining > 0.f) return false;
     if (!blunch::sequencer::advanceTotalDuration(seq, sampleTime)) {
       return false;
     }
@@ -2513,7 +2831,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         seq.activeProgramIndex < (int)seq.activeProgram.size() &&
         seq.activeProgram[seq.activeProgramIndex].hasTotalDurationGroup &&
         !seq.activeProgram[seq.activeProgramIndex].totalDurationIsTickCount) {
-      seq.activeTotalDurationElapsedSeconds += elapsedCarry;
+      if (seq.seedGraceRemaining > 0.f)
+        seq.seedGraceTotalCarry = elapsedCarry;
+      else
+        seq.activeTotalDurationElapsedSeconds += elapsedCarry;
     }
     return true;
   }
@@ -2616,9 +2937,10 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     const auto& running = runningLineTexts[activeContextChannel()];
     int lineCount = running.empty() ? getLineCount(sequenceEditorState().text)
                                     : running.rbegin()->first + 1;
-    if (lineCount <= 0) {
-      return false;
-    }
+    if (pendingEdit().page && waitMode() != WAIT_PAGE &&
+        !pendingEdit().lines.empty())
+      lineCount = std::max(lineCount, pendingEdit().lines.rbegin()->first + 1);
+    if (lineCount <= 0) return false;
 
     bool wrapped = false;
     int previousLine = activeSequencer().activeLine;
@@ -2631,19 +2953,20 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         wrapped = true;
       }
 
+      if (wrapped &&
+          activatePendingLineAtBoundary(WAIT_BOUNDARY_PAGE, resetPhase)) {
+        triggerWrapPulse();
+        return true;
+      }
       BlunchLineInfo lineInfo =
           getLineInfo(sequenceEditorState().text, nextLine);
+      if (pendingEdit().page && waitMode() != WAIT_PAGE)
+        acceptNextLine(activeContextChannel(), nextLine);
       auto submitted = running.find(nextLine);
       if (submitted == running.end()) continue;
       lineInfo.text = submitted->second;
       if (isBlankLine(lineInfo.text)) {
         continue;
-      }
-
-      if (wrapped &&
-          activatePendingLineAtBoundary(WAIT_BOUNDARY_PAGE, resetPhase)) {
-        triggerWrapPulse();
-        return true;
       }
 
       if (!commitLine(nextLine, resetPhase, false)) {
@@ -2683,6 +3006,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       return;
     }
 
+    if (seq.nestedChoiceTicks > 0 || seq.nestedChoiceSeconds > 0.f) return;
     BlunchProgramStep& step = seq.activeProgram[seq.activeProgramIndex];
     restoreBaseStepState(step);
     if (!step.hasRandomValue) {
@@ -2746,6 +3070,18 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     if (selectedChoice &&
         blunch::program::randomChoiceHasModifiers(*selectedChoice)) {
       applyRandomChoiceModifiers(step, *selectedChoice, seq.activeProgramIndex);
+      if (selectedChoice->hasTotalDurationModifier &&
+          step.baseHasTotalDurationGroup) {
+        if (selectedChoice->totalDurationIsTickCount) {
+          seq.nestedChoiceTicks = selectedChoice->totalDurationTicks;
+          seq.nestedChoiceExternalClock =
+              selectedChoice->totalDurationUsesExternalClock
+                  ? externalClockInputIndex(
+                        selectedChoice->totalDurationExternalClock)
+                  : -1;
+        } else
+          seq.nestedChoiceSeconds = selectedChoice->totalDurationSeconds;
+      }
     }
   }
 
@@ -2754,8 +3090,14 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool nextClockGateHigh(BlunchSequencerRuntime& seq) {
-    return blunch::sequencer::nextClockGateHigh(
+    bool starting = seq.clockStartHighPending;
+    bool high = blunch::sequencer::nextClockGateHigh(
         seq, activeExternalClockInput(seq) >= 0);
+    if (starting && !seq.clockStartHighPending) {
+      seq.clockPhase += seq.seedGraceClockCatchup * seq.activeClockSpec.hz;
+      seq.seedGraceClockCatchup = 0.;
+    }
+    return high;
   }
 
   bool getActiveRepeatProgressHighlight(int& begin, int& end, float& progress) {
@@ -2788,15 +3130,36 @@ static bool blunchShortcutHelpHeld(bool controlMode = false) {
            (APP->window->getMods() & RACK_MOD_MASK) == GLFW_MOD_SHIFT));
 }
 
+struct BlunchStateLock {
+  std::unique_lock<std::recursive_mutex> guard;
+  explicit BlunchStateLock(ComputerscareBlunch* module) {
+    if (module)
+      guard = std::unique_lock<std::recursive_mutex>(module->stateMutex);
+  }
+};
+
 static float blunchPendingPulse() {
   return .35f + .55f * (.5f + .5f * std::sin(float(rack::system::getTime()) *
                                              2.f * float(M_PI) / 2.4f));
 }
 
 struct BlunchTextEditor : ComputerscareTextEditor {
+  widget::SvgWidget layerCaptions[3];
+  BlunchTextEditor() {
+    const char* names[] = {"draft", "next", "now"};
+    for (int i = 0; i < 3; ++i)
+      layerCaptions[i].setSvg(APP->window->loadSvg(asset::plugin(
+          pluginInstance,
+          std::string("res/components/blunch-layer-") + names[i] + ".svg")));
+  }
+  void step() override {
+    BlunchStateLock stateGuard(module);
+    ComputerscareTextEditor::step();
+  }
   void draw(const DrawArgs& args) override {
+    BlunchStateLock stateGuard(module);
     float top = -1.f, bottom = -1.f;
-    std::vector<std::pair<float, float>> pendingRows;
+    std::vector<std::pair<float, float>> pendingRows, draftRows;
     if (module) {
       auto font = loadEditorFont();
       if (font) {
@@ -2812,11 +3175,21 @@ struct BlunchTextEditor : ComputerscareTextEditor {
             top = row.top * getFontScaleY();
             bottom = row.bottom * getFontScaleY();
           }
-          if (module->showingChannelsView() &&
-              i < ComputerscareBlunch::MAX_POLY_CHANNELS &&
-              module->channelHasPendingFormula(i))
-            pendingRows.emplace_back(row.top * getFontScaleY(),
+          bool all = module->showingChannelsView();
+          int ch = all ? int(i) : module->focusedChannel;
+          int line = int(std::count(
+              text.begin(),
+              text.begin() + std::min(row.begin, int(text.size())), '\n'));
+          if (ch < ComputerscareBlunch::MAX_POLY_CHANNELS) {
+            if (all ? module->channelHasNext(ch)
+                    : module->pendingFormulas[ch].lines.count(line) != 0)
+              pendingRows.emplace_back(row.top * getFontScaleY(),
+                                       row.bottom * getFontScaleY());
+            if (all ? module->channelHasDraft(ch)
+                    : module->lineHasDraft(ch, line))
+              draftRows.emplace_back(row.top * getFontScaleY(),
                                      row.bottom * getFontScaleY());
+          }
         }
       }
     }
@@ -2828,12 +3201,39 @@ struct BlunchTextEditor : ComputerscareTextEditor {
       phlooper::drawDisplayWallIndicator(args.vg, box.size, row.first,
                                          row.second,
                                          nvgRGBAf(1.f, .93f, .6f, pulse), 1.f);
+    for (const auto& row : draftRows) {
+      // Two steady ticks remain distinguishable over a queued pulsing fill.
+      float tick = std::min(1.5f, (row.second - row.first) * .2f);
+      for (float y : {row.first, row.second - tick})
+        phlooper::drawDisplayWallIndicator(args.vg, box.size, y, y + tick,
+                                           nvgRGBA(255, 238, 154, 180), 1.f);
+    }
     ComputerscareTextEditor::draw(args);
+  }
+  void drawLayer(const DrawArgs& args, int layer) override {
+    BlunchStateLock stateGuard(module);
+    updatePolicy();
+    ComputerscareTextEditor::drawLayer(args, layer);
+    if (layer != 1 || !module) return;
+    nvgSave(args.vg);
+    nvgBeginPath(args.vg);
+    nvgMoveTo(args.vg, box.size.x - 35.f, 1.5f);
+    nvgLineTo(args.vg, box.size.x - 1.f, .5f);
+    nvgLineTo(args.vg, box.size.x - 1.5f, 11.f);
+    nvgLineTo(args.vg, box.size.x - 34.5f, 10.5f);
+    nvgClosePath(args.vg);
+    nvgFillColor(args.vg, nvgRGBA(10, 15, 13, 235));
+    nvgFill(args.vg);
+    auto& caption = layerCaptions[module->visibleLayer()];
+    nvgTranslate(args.vg, box.size.x - 18.f - caption.box.size.x * .5f, 2.f);
+    caption.draw(args);
+    nvgRestore(args.vg);
   }
   ComputerscareBlunch* module = nullptr;
   void updatePolicy() {
     readOnly =
-        module && (module->controlMode ||
+        module && (module->visibleLayer() != ComputerscareBlunch::DRAFT ||
+                   module->controlMode ||
                    blunchShortcutHelpHeld(module && module->controlMode) ||
                    (module->showingChannelsView() &&
                     !module->channelsEditorEditingEnabled(getCursorLine())));
@@ -2845,8 +3245,10 @@ struct BlunchTextEditor : ComputerscareTextEditor {
     selection = std::max(line.begin, std::min(selection, line.end));
   }
   void onChange(const ChangeEvent& e) override {
+    BlunchStateLock stateGuard(module);
     if (!suppressChangeTracking && module &&
-        (module->controlMode || blunchShortcutHelpHeld(module->controlMode)) &&
+        (module->visibleLayer() != ComputerscareBlunch::DRAFT ||
+         module->controlMode || blunchShortcutHelpHeld(module->controlMode)) &&
         state) {
       text = state->text;
       cursor = state->cursor;
@@ -2874,16 +3276,33 @@ struct BlunchTextEditor : ComputerscareTextEditor {
     }
   }
   void onSelectText(const SelectTextEvent& e) override {
+    BlunchStateLock stateGuard(module);
     if ((module && (module->controlMode || blunchShortcutHelpHeld())) ||
         computerscare::blunch::isShortcutHelpCharacter(e.codepoint)) {
       e.consume(this);
       return;
+    }
+    if (module && module->visibleLayer() != ComputerscareBlunch::DRAFT) {
+      int position = cursor;
+      module->peekNow = false;
+      module->setFormulaLayer(ComputerscareBlunch::DRAFT);
+      state = &module->visibleEditorState();
+      syncFromState();
+      cursor = selection = std::min(position, int(text.size()));
     }
     updatePolicy();
     constrainSelection();
     ComputerscareTextEditor::onSelectText(e);
   }
   void onSelectKey(const SelectKeyEvent& e) override {
+    BlunchStateLock stateGuard(module);
+    if (module && module->handleLayerKey(e.key, e.mods, e.action)) {
+      state = &module->visibleEditorState();
+      syncFromState();
+      updatePolicy();
+      e.consume(this);
+      return;
+    }
     if ((module && blunchShortcutHelpHeld(module && module->controlMode)) ||
         computerscare::blunch::isShortcutHelpKey(e.key, e.keyName, e.mods)) {
       e.consume(this);
@@ -2908,6 +3327,15 @@ struct BlunchTextEditor : ComputerscareTextEditor {
     updatePolicy();
   }
   void onButton(const ButtonEvent& e) override {
+    BlunchStateLock stateGuard(module);
+    if (module && e.button == GLFW_MOUSE_BUTTON_LEFT &&
+        e.action == GLFW_PRESS && e.pos.x >= box.size.x - 35.f &&
+        e.pos.y <= 11.f) {
+      module->setFormulaLayer(
+          ComputerscareBlunch::FormulaLayer((module->formulaLayer + 1) % 3));
+      e.consume(this);
+      return;
+    }
     if (module && blunchShortcutHelpHeld(module->controlMode)) {
       e.consume(this);
       return;
@@ -2937,6 +3365,7 @@ struct BlunchTextEditor : ComputerscareTextEditor {
     updatePolicy();
   }
   void onDoubleClick(const DoubleClickEvent& e) override {
+    BlunchStateLock stateGuard(module);
     if (module && (module->controlMode || blunchShortcutHelpHeld())) {
       e.consume(this);
       return;
@@ -2944,15 +3373,12 @@ struct BlunchTextEditor : ComputerscareTextEditor {
     ComputerscareTextEditor::onDoubleClick(e);
   }
   void onDragHover(const DragHoverEvent& e) override {
+    BlunchStateLock stateGuard(module);
     if (module && (module->controlMode || blunchShortcutHelpHeld())) {
       e.consume(this);
       return;
     }
     ComputerscareTextEditor::onDragHover(e);
-  }
-  void drawLayer(const DrawArgs& args, int layer) override {
-    updatePolicy();
-    ComputerscareTextEditor::drawLayer(args, layer);
   }
 };
 
@@ -3029,6 +3455,7 @@ struct BlunchChannelChoiceItem : MenuItem {
   ComputerscareBlunch* module = nullptr;
   int channel = -1;
   void step() override {
+    BlunchStateLock stateGuard(module);
     rightText = CHECKMARK(
         module && (channel < 0 ? module->showingChannelsView()
                                : !module->showingChannelsView() &&
@@ -3036,6 +3463,7 @@ struct BlunchChannelChoiceItem : MenuItem {
     MenuItem::step();
   }
   void draw(const DrawArgs& args) override {
+    BlunchStateLock stateGuard(module);
     nvgSave(args.vg);
     if (module && channel >= module->selectedOutputChannelCount())
       nvgGlobalAlpha(args.vg, .4f);
@@ -3043,6 +3471,7 @@ struct BlunchChannelChoiceItem : MenuItem {
     nvgRestore(args.vg);
   }
   void onAction(const event::Action&) override {
+    BlunchStateLock stateGuard(module);
     if (!module) return;
     if (channel < 0) {
       if (!module->showingChannelsView()) module->switchEditorView();
@@ -3116,10 +3545,12 @@ struct BlunchChannelLabel : phlooper::WarpedDropdown {
   }
   std::string label() override { return ""; }
   bool isPressed() override {
+    BlunchStateLock stateGuard(module);
     auto* overlay = activeMenu.get();
     return overlay && !overlay->requestedDelete;
   }
   void draw(const DrawArgs& args) override {
+    BlunchStateLock stateGuard(module);
     configure(54.f, 25.f, 2.5f, 1.5f, .7f, 105);
     faceColor = nvgRGB(215, 215, 215);
     textSize = 10;
@@ -3141,6 +3572,7 @@ struct BlunchChannelLabel : phlooper::WarpedDropdown {
     nvgRestore(args.vg);
   }
   void onButton(const event::Button& e) override {
+    BlunchStateLock stateGuard(module);
     if (!module || e.button != GLFW_MOUSE_BUTTON_LEFT || e.action != GLFW_PRESS)
       return;
     auto* menu = createMenu();
@@ -3158,10 +3590,97 @@ struct BlunchChannelLabel : phlooper::WarpedDropdown {
 };
 
 // Editing/control mode selector.
+static void appendBlunchSyncMenu(Menu* menu, ComputerscareBlunch* blunch) {
+  menu->addChild(createMenuLabel("Free: channels run independently"));
+  menu->addChild(createCheckMenuItem(
+      "Free", "",
+      [=]() {
+        BlunchStateLock lock(blunch);
+        return blunch->syncSource < 0;
+      },
+      [=]() {
+        BlunchStateLock lock(blunch);
+        blunch->syncSource = -1;
+      }));
+  menu->addChild(createSubmenuItem("Source channel", "", [=](Menu* source) {
+    for (int ch = 0; ch < 16; ++ch)
+      source->addChild(createCheckMenuItem(
+          "Channel " + std::to_string(ch + 1), "",
+          [=]() {
+            BlunchStateLock lock(blunch);
+            return blunch->syncSource == ch;
+          },
+          [=]() {
+            BlunchStateLock lock(blunch);
+            blunch->syncSource = ch;
+          }));
+  }));
+  menu->addChild(createSubmenuItem("Source boundary", "", [=](Menu* events) {
+    const char* names[] = {"End of Block", "End of Line", "End of Page"};
+    for (int i = 0; i < 3; ++i)
+      events->addChild(createCheckMenuItem(
+          names[i], "",
+          [=]() {
+            BlunchStateLock lock(blunch);
+            return blunch->syncEvent == i;
+          },
+          [=]() {
+            BlunchStateLock lock(blunch);
+            blunch->syncEvent = i;
+          }));
+  }));
+  menu->addChild(
+      createSubmenuItem("Restart followers at", "", [=](Menu* restart) {
+        const char* names[] = {"Current block", "Current line",
+                               "Page beginning"};
+        for (int i = 0; i < 3; ++i)
+          restart->addChild(createCheckMenuItem(
+              names[i], "",
+              [=]() {
+                BlunchStateLock lock(blunch);
+                return blunch->syncRestart == i;
+              },
+              [=]() {
+                BlunchStateLock lock(blunch);
+                blunch->syncRestart = i;
+              }));
+      }));
+  menu->addChild(new MenuSeparator());
+  menu->addChild(
+      createMenuLabel("Each source boundary restarts other playing channels."));
+  menu->addChild(createMenuLabel(
+      "Long formulas are interrupted; stopped channels stay stopped."));
+}
+
+struct BlunchSyncDropdown : phlooper::WarpedDropdown {
+  ComputerscareBlunch* blunch = nullptr;
+  WeakPtr<ui::MenuOverlay> activeMenu;
+  std::string label() override { return "Sync"; }
+  bool isPressed() override { return activeMenu.get() != nullptr; }
+  BlunchSyncDropdown() {
+    configure(22.f, 11.f, 1.5f, 1.f, .7f, 113);
+    textSize = 9.f;
+    faceColor = nvgRGB(205, 205, 205);
+  }
+  void onButton(const event::Button& e) override {
+    if (blunch && e.button == GLFW_MOUSE_BUTTON_LEFT &&
+        e.action == GLFW_PRESS) {
+      BlunchStateLock lock(blunch);
+      auto* menu = createMenu();
+      activeMenu = menu->getAncestorOfType<ui::MenuOverlay>();
+      appendBlunchSyncMenu(menu, blunch);
+      e.consume(this);
+    }
+  }
+};
+
 struct BlunchEditControlToggle : phlooper::WarpedDropdown {
   ComputerscareBlunch* blunch = nullptr;
   std::function<void()> changed;
-  bool control() const { return blunch && blunch->controlMode; }
+  bool control() const {
+    BlunchStateLock stateGuard(blunch);
+    return blunch && blunch->controlMode;
+  }
   widget::SvgWidget captions[2];
   BlunchEditControlToggle() {
     captions[0].setSvg(APP->window->loadSvg(asset::plugin(
@@ -3170,21 +3689,26 @@ struct BlunchEditControlToggle : phlooper::WarpedDropdown {
         pluginInstance, "res/components/blunch-channels/ctrl.svg")));
   }
   std::string label() override { return ""; }
-  bool isPressed() override { return control(); }
+  bool isPressed() override {
+    BlunchStateLock stateGuard(blunch);
+    return control();
+  }
   void draw(const DrawArgs& args) override {
-    configure(28.f, 12.f, 1.5f, 1.f, .7f, 106);
+    BlunchStateLock stateGuard(blunch);
+    configure(20.f, 11.f, 1.5f, 1.f, .7f, 106);
     faceColor = nvgRGB(205, 205, 205);
     phlooper::WarpedDropdown::draw(args);
     auto& caption = captions[control() ? 1 : 0];
     nvgSave(args.vg);
-    nvgTranslate(args.vg, (box.size.x - caption.box.size.x * .8f) * .5f - .5f,
-                 (box.size.y - caption.box.size.y * .8f) * .5f +
+    nvgTranslate(args.vg, (box.size.x - caption.box.size.x * .6f) * .5f - .5f,
+                 (box.size.y - caption.box.size.y * .6f) * .5f +
                      (control() ? .5f : -.5f));
-    nvgScale(args.vg, .8f, .8f);
+    nvgScale(args.vg, .6f, .6f);
     caption.draw(args);
     nvgRestore(args.vg);
   }
   void onButton(const event::Button& e) override {
+    BlunchStateLock stateGuard(blunch);
     if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
       if (blunch) {
         blunch->setControlMode(!blunch->controlMode);
@@ -3212,14 +3736,21 @@ struct BlunchChannelTransport : phlooper::WarpedDropdown {
   }
   ~BlunchChannelTransport() override { destroyTooltip(); }
   std::string tooltipText() const {
+    BlunchStateLock stateGuard(blunch);
     if (!blunch) return "";
     int ch = channel();
-    if (cancel)
-      return pending()
-                 ? string::f("Discard pending changes for channel %d", ch + 1)
-                 : string::f("Channel %d: no pending changes", ch + 1);
-    if (!stop && pending())
-      return string::f("Apply pending changes to channel %d", ch + 1);
+    if (cancel) {
+      if (blunch->channelHasDraft(ch))
+        return string::f(
+            "Discard Draft for channel %d (Shift: discard Next too)", ch + 1);
+      return blunch->channelHasNext(ch)
+                 ? string::f("Unstage Next for channel %d", ch + 1)
+                 : string::f("Channel %d: no changes", ch + 1);
+    }
+    if (!stop && blunch->channelHasDraft(ch))
+      return string::f("Stage Draft for channel %d", ch + 1);
+    if (!stop && blunch->channelHasNext(ch))
+      return string::f("Channel %d: Next is waiting", ch + 1);
     return stop ? string::f("Stop channel %d", ch + 1)
                 : string::f("Channel %d: %s", ch + 1,
                             blunch->channelPlaying(ch) ? "playing" : "stopped");
@@ -3233,6 +3764,7 @@ struct BlunchChannelTransport : phlooper::WarpedDropdown {
     hoverTooltip = tooltip;
   }
   void step() override {
+    BlunchStateLock stateGuard(blunch);
     phlooper::WarpedDropdown::step();
     if (auto* tooltip = hoverTooltip.get()) tooltip->text = tooltipText();
   }
@@ -3241,15 +3773,18 @@ struct BlunchChannelTransport : phlooper::WarpedDropdown {
                                          : blunch->focusedChannel;
   }
   bool pending() const {
+    BlunchStateLock stateGuard(blunch);
     return blunch && blunch->channelHasPendingFormula(channel());
   }
   std::string label() override { return cancel ? "x" : ""; }
   bool isPressed() override {
+    BlunchStateLock stateGuard(blunch);
     if (!stop && !cancel && pending()) return false;
     return pressed ||
            (!stop && !cancel && blunch && blunch->channelPlaying(channel()));
   }
   void draw(const DrawArgs& args) override {
+    BlunchStateLock stateGuard(blunch);
     configure(cancel ? 11.f : 14.f, 13.f, 2.5f, 1.25f, .6f,
               cancel ? 112
               : stop ? 111
@@ -3268,24 +3803,23 @@ struct BlunchChannelTransport : phlooper::WarpedDropdown {
     nvgRestore(args.vg);
   }
   void onButton(const ButtonEvent& e) override {
+    BlunchStateLock stateGuard(blunch);
     if (!blunch || e.button != GLFW_MOUSE_BUTTON_LEFT) return;
     if (e.action == GLFW_PRESS) {
       pressed = true;
       unsigned bit = 1u << channel();
       if (cancel)
-        blunch->discardChannelPending(channel());
+        blunch->discardChannelPending(channel(),
+                                      (e.mods & GLFW_MOD_SHIFT) != 0);
       else if (stop)
         blunch->controlStopRequests.fetch_or(bit);
       else if (pending()) {
         int target = channel();
-        int line = blunch->pendingFormulas[target].line;
-        if (line < 0)
-          line = blunch->showingChannelsView()
-                     ? blunch->channelOverviewLine(target)
-                     : blunch->selectedLine;
         int previous = blunch->focusedChannel;
         blunch->focusedChannel = target;
-        if (blunch->executeLine(line, true)) blunch->startSequencer(target);
+        if (blunch->channelHasDraft(target)) {
+          if (blunch->executePage()) blunch->startSequencer(target);
+        }
         blunch->focusedChannel = previous;
       } else
         blunch->controlToggleRequests.fetch_or(bit);
@@ -3325,8 +3859,12 @@ struct BlunchManualReset : widget::OpaqueWidget {
     APP->scene->addChild(tooltip);
     hoverTooltip = tooltip;
   }
-  void draw(const DrawArgs& args) override { face.draw(args); }
+  void draw(const DrawArgs& args) override {
+    BlunchStateLock stateGuard(module);
+    face.draw(args);
+  }
   void onButton(const event::Button& e) override {
+    BlunchStateLock stateGuard(module);
     if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
       face.down = true;
       if (module)
@@ -3635,6 +4173,7 @@ struct BlunchLineHeightSlider : MenuParamSlider {
                             [ComputerscareBlunch::EDITOR_LINE_HEIGHT_PARAM]),
         blunch(owner) {}
   void draw(const DrawArgs& args) override {
+    BlunchStateLock stateGuard(blunch);
     nvgSave(args.vg);
     if (blunch->editorFitLines) nvgGlobalAlpha(args.vg, .35f);
     MenuParamSlider::draw(args);
@@ -3650,6 +4189,7 @@ struct BlunchLineHeightSlider : MenuParamSlider {
     if (!blunch->editorFitLines) MenuParamSlider::onDragMove(e);
   }
   void onDoubleClick(const DoubleClickEvent& e) override {
+    BlunchStateLock stateGuard(blunch);
     if (!blunch->editorFitLines)
       MenuParamSlider::onDoubleClick(e);
     else
@@ -3667,6 +4207,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     return false;
   }
   void onButton(const ButtonEvent& e) override {
+    BlunchStateLock stateGuard(dynamic_cast<ComputerscareBlunch*>(module));
     ModuleWidget::onButton(e);
     if (inControlMode() && e.button == GLFW_MOUSE_BUTTON_LEFT &&
         e.action == GLFW_PRESS)
@@ -3678,6 +4219,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   }
   std::shared_ptr<std::function<void(const DrawArgs&)>> shortcutDraw;
   void drawShortcutPopup(const DrawArgs& args) {
+    BlunchStateLock stateGuard(dynamic_cast<ComputerscareBlunch*>(module));
     if (args.fb || !module || !blunchShortcutHelpHeld(inControlMode())) return;
     auto belongs = [this](widget::Widget* widget) {
       for (auto* current = widget; current; current = current->parent)
@@ -3710,7 +4252,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         "Open channel",       "All / channel view",     "Back to All"};
     const char** keys = inControlMode() ? controlKeys : editKeys;
     const char** actions = inControlMode() ? controlActions : editActions;
-    const int count = 9;
+    const int count = 12;
     float width = std::min(288.f, box.size.x - 12.f);
     float x = (box.size.x - width) * .5f, y = 43.f;
     nvgSave(args.vg);
@@ -3724,9 +4266,14 @@ struct ComputerscareBlunchWidget : ModuleWidget {
     for (int i = 0; i < count; ++i) {
       float row = y + 15.f + i * 14.f;
       nvgFillColor(args.vg, nvgRGB(95, 220, 181));
-      nvgText(args.vg, x + 9.f, row, keys[i], nullptr);
+      const char* extraKeys[] = {"[Ctrl+Shift+Enter]", "[F6]", "[hold F7]"};
+      const char* extraActions[] = {"Stage page", "Draft / Next / Now",
+                                    "Peek at Now"};
+      nvgText(args.vg, x + 9.f, row, i < 9 ? keys[i] : extraKeys[i - 9],
+              nullptr);
       nvgFillColor(args.vg, nvgRGB(235, 240, 235));
-      nvgText(args.vg, x + 116.f, row, actions[i], nullptr);
+      nvgText(args.vg, x + 116.f, row, i < 9 ? actions[i] : extraActions[i - 9],
+              nullptr);
     }
     nvgRestore(args.vg);
   }
@@ -3737,6 +4284,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   BlunchSeedLabel* seedLabel = nullptr;
   BlunchChannelLabel* channelLabel = nullptr;
   BlunchEditControlToggle* editControlToggle = nullptr;
+  BlunchSyncDropdown* syncDropdown = nullptr;
   BlunchChannelTransport* channelPlay = nullptr;
   BlunchChannelTransport* channelStop = nullptr;
   BlunchChannelTransport* channelCancel = nullptr;
@@ -3810,7 +4358,12 @@ struct ComputerscareBlunchWidget : ModuleWidget {
 
     editControlToggle = new BlunchEditControlToggle;
     editControlToggle->blunch = module;
-    editControlToggle->box = Rect(Vec(box.size.x - 93.f, 1.f), Vec(28.f, 12.f));
+    editControlToggle->box =
+        Rect(Vec(box.size.x - 102.f, 3.f), Vec(20.f, 11.f));
+    syncDropdown = new BlunchSyncDropdown;
+    syncDropdown->blunch = module;
+    syncDropdown->box.pos = Vec(box.size.x - 80.f, 3.f);
+    addChild(syncDropdown);
     addChild(editControlToggle);
     channelPlay = new BlunchChannelTransport;
     channelStop = new BlunchChannelTransport;
@@ -3950,7 +4503,8 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       seedLabel->box.pos = Vec(101.f, 4.f);
     }
     if (editControlToggle)
-      editControlToggle->box.pos = Vec(box.size.x - 93.f, 1.f);
+      editControlToggle->box.pos = Vec(box.size.x - 102.f, 3.f);
+    if (syncDropdown) syncDropdown->box.pos = Vec(box.size.x - 80.f, 3.f);
     if (channelPlay) channelPlay->box.pos = Vec(box.size.x - 100.f, 15.f);
     if (channelStop) channelStop->box.pos = Vec(box.size.x - 85.f, 15.f);
     if (channelCancel) channelCancel->box.pos = Vec(box.size.x - 70.f, 15.f);
@@ -4006,6 +4560,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   }
 
   void step() override {
+    BlunchStateLock stateGuard(dynamic_cast<ComputerscareBlunch*>(module));
     if (module && parent && !shortcutDraw) {
       shortcutDraw = std::make_shared<std::function<void(const DrawArgs&)>>(
           [this](const DrawArgs& args) {
@@ -4087,6 +4642,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         editor->openOnEnter = blunch->showingChannelsView();
         editor->stopShortcutEnabled = true;
         editor->readOnly =
+            blunch->visibleLayer() != ComputerscareBlunch::DRAFT ||
             blunch->controlMode ||
             (blunch->showingChannelsView() &&
              !blunch->channelsEditorEditingEnabled(editor->getCursorLine()));
@@ -4169,13 +4725,17 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           }
           int previousFocusedChannel = blunch->focusedChannel;
           blunch->focusedChannel = blunch->channelsCursorChannel;
-          bool committed = blunch->executeLine(
-              blunch->channelOverviewLine(blunch->focusedChannel), true);
+          bool committed = blunch->executePage();
           if (committed) {
             blunch->startSequencer(blunch->focusedChannel);
             blunch->refreshChannelsEditorState();
           }
           blunch->focusedChannel = previousFocusedChannel;
+        }
+        if (blunch->showingChannelsView() &&
+            editor->commands.cancelCount != blunch->lastCancelCount) {
+          blunch->lastCancelCount = editor->commands.cancelCount;
+          blunch->discardChannelPending(blunch->channelsCursorChannel);
         }
         if (blunch->showingChannelsView()) {
           if (blunch->forcedChannelsCursorChannel >= 0) {
@@ -4217,6 +4777,14 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           blunch->editorViewDirty = false;
           lastCursorLine = editor->getCursorLine();
         }
+        if (blunch->pageSubmitCount != blunch->lastPageSubmitCount) {
+          blunch->lastPageSubmitCount = blunch->pageSubmitCount;
+          int previous = blunch->focusedChannel;
+          if (blunch->showingChannelsView())
+            blunch->focusedChannel = blunch->channelsCursorChannel;
+          blunch->executePage();
+          blunch->focusedChannel = previous;
+        }
         if (blunch->showingSequenceView()) {
           if (blunch->selectedLineDirty) {
             editor->setCursorLine(blunch->selectedLine);
@@ -4230,19 +4798,25 @@ struct ComputerscareBlunchWidget : ModuleWidget {
           blunch->selectedLine = editor->getCursorLine();
           bool focusChanged = blunch->selectedLine != lastCursorLine;
           lastCursorLine = blunch->selectedLine;
-          blunch->inspectFocusedLine(blunch->selectedLine, focusChanged);
+          if (blunch->visibleLayer() == ComputerscareBlunch::DRAFT)
+            blunch->inspectFocusedLine(blunch->selectedLine, focusChanged);
           if (editor->commands.submitCount != blunch->lastSubmitCount) {
             blunch->lastSubmitCount = editor->commands.submitCount;
-            bool committed = blunch->executeLine(blunch->selectedLine, true);
+            bool committed = blunch->executePage();
             if (committed) {
               blunch->startSequencer(blunch->focusedChannel);
             }
           }
           if (editor->commands.cancelCount != blunch->lastCancelCount) {
             blunch->lastCancelCount = editor->commands.cancelCount;
-            blunch->cancelPendingLine(blunch->selectedLine);
-            blunch->returnToChannelsView();
-            editor->state = &blunch->channelsEditorState;
+            if (blunch->lineHasDraft(blunch->focusedChannel,
+                                     blunch->selectedLine) ||
+                blunch->pendingFormulas[blunch->focusedChannel].lines.count(
+                    blunch->selectedLine))
+              blunch->cancelPendingLine(blunch->selectedLine);
+            else
+              blunch->returnToChannelsView();
+            editor->state = &blunch->visibleEditorState();
             editor->syncFromState();
             lastCursorLine = editor->getCursorLine();
           }
@@ -4268,6 +4842,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         blinkHigh = playing && visibleSequencer.activeClockOutputHigh;
         activeProgress = playing ? visibleSequencer.activeClockRamp : 0.f;
         editor->readOnly =
+            blunch->visibleLayer() != ComputerscareBlunch::DRAFT ||
             blunch->controlMode ||
             (blunch->showingChannelsView() &&
              !blunch->channelsEditorEditingEnabled(editor->getCursorLine()));
@@ -4351,32 +4926,58 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         focusHighlight.borderDistortion = .5f;
       }
       state->highlights.push_back(focusHighlight);
+      if (blunch) {
+        for (int row = 0; row < lineCount; ++row) {
+          int ch = blunch->showingChannelsView() ? row : blunch->focusedChannel;
+          int sourceLine = blunch->showingChannelsView()
+                               ? blunch->channelOverviewLine(ch)
+                               : row;
+          if (ch >= ComputerscareBlunch::MAX_POLY_CHANNELS) continue;
+          auto info = getLineInfo(state->text, row);
+          if (blunch->visibleLayer() == ComputerscareBlunch::NEXT &&
+              !blunch->pendingFormulas[ch].lines.count(sourceLine)) {
+            ComputerscareTextHighlight fallback;
+            fallback.begin = info.begin;
+            fallback.end = info.end;
+            fallback.hasBackground = false;
+            fallback.textOpacity = .55f;
+            state->highlights.push_back(fallback);
+          }
+          if (blunch->visibleLayer() == ComputerscareBlunch::DRAFT &&
+              blunch->lineHasDraft(ch, sourceLine) &&
+              info.text == blunch->lineVersion(ch, sourceLine,
+                                               ComputerscareBlunch::DRAFT)) {
+            std::string base =
+                blunch->lineVersion(ch, sourceLine, ComputerscareBlunch::NEXT);
+            int first = 0, end = int(info.text.size()),
+                baseEnd = int(base.size());
+            while (first < end && first < baseEnd &&
+                   info.text[first] == base[first])
+              ++first;
+            while (end > first && baseEnd > first &&
+                   info.text[end - 1] == base[baseEnd - 1]) {
+              --end;
+              --baseEnd;
+            }
+            ComputerscareTextHighlight changed;
+            changed.begin = info.begin + first;
+            changed.end = info.begin + end;
+            changed.hasBackground = false;
+            changed.hasForeground = true;
+            changed.foreground = nvgRGB(255, 238, 154);
+            state->highlights.push_back(changed);
+          }
+        }
+      }
       bool showingSequenceView = !blunch || blunch->showingSequenceView();
       bool showingPendingActiveLine =
           blunch && showingSequenceView &&
-          blunch->pendingEdit().line == blunch->activeSequencer().activeLine &&
-          blunch->pendingEdit().viewing;
-      bool showingActiveVersionOfPending =
-          blunch && showingSequenceView &&
-          blunch->pendingEdit().line == blunch->activeSequencer().activeLine &&
-          !blunch->pendingEdit().viewing;
+          getLineInfo(state->text, blunch->activeSequencer().activeLine).text !=
+              blunch->activeSequencer().activeLineText;
       bool showingInvalidActiveLine =
           blunch && showingSequenceView &&
+          blunch->visibleLayer() == ComputerscareBlunch::DRAFT &&
           blunch->errorLine == blunch->activeSequencer().activeLine;
-      if (blunch && showingSequenceView && blunch->pendingEdit().line >= 0 &&
-          blunch->pendingEdit().armed && !showingActiveVersionOfPending) {
-        BlunchLineInfo pendingLineInfo =
-            getLineInfo(state->text, blunch->pendingEdit().line);
-        float pendingPulse =
-            0.5f + 0.5f * std::sin((float)rack::system::getTime() * 2.2f);
-        ComputerscareTextHighlight pendingHighlight;
-        pendingHighlight.begin = pendingLineInfo.begin;
-        pendingHighlight.end = pendingLineInfo.end;
-        pendingHighlight.fullLine = true;
-        pendingHighlight.background = nvgRGBA(
-            0xb8, 0xb8, 0xb8, (unsigned char)(0x18 + pendingPulse * 0x28));
-        state->highlights.push_back(pendingHighlight);
-      }
       if (blunch && showingSequenceView && blunch->errorLine >= 0) {
         BlunchLineInfo errorLineInfo =
             getLineInfo(state->text, blunch->errorLine);
@@ -4397,7 +4998,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
               blunch->sequencerForChannel(channel);
           BlunchLineInfo channelLineInfo = getLineInfo(state->text, channel);
           BlunchLineInfo sourceLineInfo =
-              getLineInfo(blunch->sequenceEditorStates[channel].text,
+              getLineInfo(blunch->layerPage(channel, ComputerscareBlunch::NOW),
                           channelSequencer.activeLine);
           if (blunch->channelPlaying(channel) &&
               channelLineInfo.text == channelSequencer.activeLineText)
@@ -4407,15 +5008,15 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                                          blunch->playbackBars);
         }
       } else if (blunch) {
-        BlunchLineInfo sourceLineInfo =
-            getLineInfo(blunch->sequenceEditorState().text,
-                        blunch->activeSequencer().activeLine);
+        BlunchLineInfo sourceLineInfo = getLineInfo(
+            blunch->layerPage(blunch->focusedChannel, ComputerscareBlunch::NOW),
+            blunch->activeSequencer().activeLine);
         if (blunch->channelPlaying(blunch->focusedChannel) &&
             !showingPendingActiveLine && !showingInvalidActiveLine) {
           addBlunchSequencerHighlights(
               state->highlights, blunch->activeSequencer(), sourceLineInfo,
-              sourceLineInfo, true, blunch->playbackDisplayStyle,
-              blunch->playbackBars);
+              getLineInfo(state->text, blunch->activeSequencer().activeLine),
+              true, blunch->playbackDisplayStyle, blunch->playbackBars);
         }
       } else {
         ComputerscareTextHighlight activeHighlight;
@@ -4439,6 +5040,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   }
 
   void drawLayer(const DrawArgs& args, int layer) override {
+    BlunchStateLock stateGuard(dynamic_cast<ComputerscareBlunch*>(module));
     ModuleWidget::drawLayer(args, layer);
     if (layer != 1) {
       return;
@@ -4505,12 +5107,20 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   }
 
   void onHoverKey(const HoverKeyEvent& e) override {
+    BlunchStateLock stateGuard(dynamic_cast<ComputerscareBlunch*>(module));
     if ((module && blunchShortcutHelpHeld(inControlMode())) ||
         computerscare::blunch::isShortcutHelpKey(e.key, e.keyName, e.mods)) {
       e.consume(this);
       return;
     }
     auto* blunchControl = dynamic_cast<ComputerscareBlunch*>(module);
+    if (!e.isConsumed() && blunchControl && editor &&
+        APP->event->getSelectedWidget() == editor &&
+        blunchControl->handleLayerKey(e.key, e.mods, e.action)) {
+      e.consume(this);
+      return;
+    }
+
     if (!e.isConsumed() && blunchControl && controlFocused() &&
         blunchControl->handleControlKey(e.key, e.mods, e.action)) {
       e.consume(this);
@@ -4555,11 +5165,18 @@ struct ComputerscareBlunchWidget : ModuleWidget {
   }
 
   void appendContextMenu(Menu* menu) override {
+    BlunchStateLock stateGuard(dynamic_cast<ComputerscareBlunch*>(module));
     ComputerscareBlunch* blunch = dynamic_cast<ComputerscareBlunch*>(module);
     if (!blunch) {
       return;
     }
 
+    menu->addChild(createSubmenuItem(
+        "Channel sync", blunch->syncLabel(),
+        [=](Menu* sync) { appendBlunchSyncMenu(sync, blunch); }));
+    menu->addChild(createMenuItem("Stage page", "Ctrl/Cmd+Shift+Enter",
+                                  [=]() { ++blunch->pageSubmitCount; }));
+    menu->addChild(new MenuSeparator());
     if (!blunch->randomTemplateError.empty()) {
       menu->addChild(
           createMenuLabel("Random templates: " + blunch->randomTemplateError));
@@ -4613,7 +5230,10 @@ struct ComputerscareBlunchWidget : ModuleWidget {
             auto unit = blunch::language::parseClockUnit(name);
             submenu->addChild(createCheckMenuItem(
                 name, "", [=]() { return blunch->defaultNumberUnit == unit; },
-                [=]() { blunch->defaultNumberUnit = unit; }));
+                [=]() {
+                  BlunchStateLock guard(blunch);
+                  blunch->defaultNumberUnit = unit;
+                }));
           }
         }));
     menu->addChild(new MenuSeparator());

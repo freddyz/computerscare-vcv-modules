@@ -1,13 +1,15 @@
 #pragma once
+#include <memory>
+
 #include "Spatial.hpp"
 namespace windchimes {
 // Stereo input diffusion followed by an eight-line orthogonal feedback network.
 // All buffers are fixed storage; size changes move fractional delay taps
 // smoothly.
 class Reverb {
-  static constexpr int capacity = 32768;
+  static constexpr int capacity = 262144;
   struct Line {
-    std::array<float, capacity> buffer{};
+    std::unique_ptr<float[]> buffer{new float[capacity]{}};
     int write = 0;
     float delay = 1000.f, target = 1000.f, filtered = 0.f, feedback = 0.7f;
     float read() const {
@@ -32,6 +34,9 @@ class Reverb {
   };
   std::array<Line, 8> lines;
   std::array<Allpass, 4> diffusers;
+  float scattering = 1.f, smoothScattering = 1.f;
+  std::array<float, 4> forestSettings{{-1, -1, -1, -1}};
+  std::array<float, 8> forestPitches{};
   float rate = 0.f, lastSize = -1.f, damping = 0.2f, slew = 0.001f;
 
  public:
@@ -53,7 +58,7 @@ class Reverb {
       line.feedback =
           std::exp(-6.907755f * line.target / (rate * decaySeconds));
       if (rateChanged) {
-        line.buffer.fill(0.f);
+        std::fill_n(line.buffer.get(), capacity, 0.f);
         line.write = 0;
         line.filtered = 0.f;
         line.delay = line.target;
@@ -68,10 +73,43 @@ class Reverb {
             1, std::min(4096, static_cast<int>(diffusionTimes[i] * rate)));
       }
   }
+  void configureForest(float sampleRate, float expanse, float thicket,
+                       float undergrowth, float canopy,
+                       const std::array<float, 8>& pitches) {
+    std::array<float, 4> settings{{expanse, thicket, undergrowth, canopy}};
+    if (rate == sampleRate && forestSettings == settings &&
+        forestPitches == pitches)
+      return;
+    bool changedRate = rate != sampleRate;
+    configure(sampleRate, expanse);
+    forestSettings = settings;
+    forestPitches = pitches;
+    scattering = thicket * thicket;
+    if (changedRate) smoothScattering = scattering;
+    damping =
+        1.f - std::exp(-2.f * pi * (16000.f * std::pow(.008f, canopy)) / rate);
+    float decay =
+        (.25f + undergrowth * undergrowth * 28.f) * (1.f - .8f * canopy);
+    const float times[8] = {.0297f, .0371f, .0411f, .0437f,
+                            .0531f, .0613f, .0719f, .0797f};
+    for (int i = 0; i < 8; ++i) {
+      float nominal = times[i] * (.6f + expanse * expanse * 12.f) * rate;
+      float period = rate / std::max(30.f, pitches[i]);
+      float tuned = std::max(period, std::round(nominal / period) * period);
+      lines[i].target = clamp(nominal + (tuned - nominal) * undergrowth, 4.f,
+                              float(capacity - 2));
+      lines[i].feedback = std::min(
+          .995f, std::exp(-6.907755f * lines[i].target / (rate * decay)));
+      if (changedRate) lines[i].delay = lines[i].target;
+    }
+  }
   Quad processWetQuad(Stereo dry) {
     float left = diffusers[1].process(diffusers[0].process(dry.left));
     float right = diffusers[3].process(diffusers[2].process(dry.right));
-    float values[8];
+    smoothScattering += (scattering - smoothScattering) * slew;
+    left = dry.left + (left - dry.left) * smoothScattering;
+    right = dry.right + (right - dry.right) * smoothScattering;
+    float values[8], independent[8];
     Quad wet;
     for (int i = 0; i < 8; ++i) {
       auto& line = lines[i];
@@ -79,7 +117,7 @@ class Reverb {
       float delayed = line.read();
       line.filtered += (delayed - line.filtered) * damping;
       if (std::fabs(line.filtered) < 1e-20f) line.filtered = 0.f;
-      values[i] = line.filtered * line.feedback;
+      values[i] = independent[i] = line.filtered * line.feedback;
       for (int ch = 0; ch < 4; ++ch) {
         const int patterns[4] = {1, 2, 4, 7};
         int bits = i & patterns[ch];
@@ -98,7 +136,10 @@ class Reverb {
     for (int i = 0; i < 8; ++i) {
       auto& line = lines[i];
       float input = (i & 1 ? right : left) * (i & 4 ? -0.22f : 0.22f);
-      line.buffer[line.write] = input + values[i] * 0.35355339f;
+      line.buffer[line.write] =
+          clamp(input + independent[i] * (1.f - smoothScattering) +
+                    values[i] * (.35355339f * smoothScattering),
+                -8.f, 8.f);
       if (++line.write == capacity) line.write = 0;
     }
     return wet;

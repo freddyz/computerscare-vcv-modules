@@ -69,6 +69,16 @@ struct BlunchProgramStep {
 };
 
 struct BlunchSequencerRuntime {
+  float seedGraceRemaining = 0.f;
+  double seedGraceElapsed = 0.;
+  double seedGraceClockCatchup = 0.;
+  double seedGraceProgramCarry = 0.;
+  double seedGraceTotalCarry = 0.;
+  float latchedSeed = 0.f;
+  bool seedLatched = false;
+  int nestedChoiceTicks = 0;
+  float nestedChoiceSeconds = 0.f;
+  int nestedChoiceExternalClock = -1;
   float clockPhase = 0.f;
   float activeClockRamp = 0.f;
   bool clockHigh = false;
@@ -109,6 +119,12 @@ struct BlunchSequencerRuntime {
 
   void resetActiveProgramState(bool resetPhase) {
     activeProgramIndex = 0;
+    seedGraceRemaining = 0.f;
+    seedGraceClockCatchup = 0.;
+    seedGraceElapsed = seedGraceProgramCarry = seedGraceTotalCarry = 0.;
+    nestedChoiceTicks = 0;
+    nestedChoiceSeconds = 0.f;
+    nestedChoiceExternalClock = -1;
     activeProgramBeat = 0;
     activeProgramElapsedSeconds = 0.0;
     activeTotalDurationGroupId = -1;

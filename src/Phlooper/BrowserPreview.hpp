@@ -17,7 +17,7 @@ struct BrowserPreview {
                  float offsetRandom, float waveformRandom = 0.f,
                  float modeRandom = 0.f, float directionRandom = 0.f)
       : count(2 + std::min(3, int(countRandom * 4.f))),
-        mode(std::min(2, int(modeRandom * 3.f))),
+        mode(std::min(3, int(modeRandom * 4.f))),
         direction(std::min(3, int(directionRandom * 4.f))),
         start(.18f + .08f * startRandom),
         length(.36f + .22f * lengthRandom),

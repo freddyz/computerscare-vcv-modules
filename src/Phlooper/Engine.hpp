@@ -3,6 +3,8 @@
 #include <array>
 #include <cmath>
 #include <memory>
+
+#include "Beats.hpp"
 namespace phlooper {
 constexpr int voices = 16, rate = 48000, capacity = rate * 60;
 struct Frame {
@@ -17,6 +19,8 @@ struct Settings {
   std::array<float, voices> customStarts{}, customLengths{};
   std::array<int, voices> directions{};
   float start = 0, length = 1, offset = 1, recordMix = .5f, mix = 1, speed = 1;
+  double beatFrames = 0;
+  float beatQuantum = 0.f, beatOrigin = 0.f;
 };
 class Engine {
  public:
@@ -39,12 +43,16 @@ class Engine {
     bool active = false;
     int count = 0, size = 0;
     double clock = 0, duration = 1, globalSpeed = 1;
-    std::array<double, voices> starts{}, periods{}, speeds{}, phases{};
+    std::array<double, voices> starts{}, periods{}, speeds{}, phases{},
+        restartPhases{};
+    std::array<bool, voices> restartReturning{};
   } speedHold;
   std::array<Frame, voices> outputs{};
   std::array<bool, voices> shotFinished{};
   std::array<int, voices> shotLegs{};
-  bool wasOneShot = false;
+  bool wasOneShot = false, wasHeld = false;
+  std::array<double, voices> heldHeads{};
+  std::array<bool, voices> heldReturning{};
   unsigned completed = 0;
   int size = 0, captured = 0;
   bool initial = false;
@@ -91,6 +99,7 @@ class Engine {
   }
   void resetHeads() {
     speedHold.active = false;
+    wasHeld = false;
     shotFinished.fill(false);
     shotLegs.fill(0);
     wasOneShot = false;
@@ -151,8 +160,7 @@ class Engine {
       float offset = s.offsetMask & (1u << v) ? s.offsets[v] : v * s.offset;
       speeds[v] = std::max(.05, std::min(8., 1. + offset / 100.)) *
                   std::max(.25f, std::min(4.f, s.speed));
-      duration =
-          std::min(duration, std::max(48, nominalLength(s, v)) / speeds[v]);
+      duration = std::min(duration, std::max(48., oldPeriod) / speeds[v]);
     }
     speedHold = {};
     speedHold.active = true;
@@ -164,6 +172,8 @@ class Engine {
       speedHold.speeds[v] = speeds[v];
       speedHold.periods[v] = duration * speeds[v];
       speedHold.phases[v] = phases[v];
+      speedHold.restartPhases[v] = phases[v];
+      speedHold.restartReturning[v] = returning[v];
       double position = phases[v] * speedHold.periods[v];
       bool reverse = isReverse(v, s.directions[v]);
       if (reverse)
@@ -281,6 +291,11 @@ class Engine {
       shotLegs.fill(0);
     }
     wasOneShot = s.oneShot;
+    if (s.hold && !wasHeld) {
+      heldHeads = head;
+      heldReturning = returning;
+    }
+    wasHeld = s.hold;
     bool holdingSpeed = s.hold && s.mode == 2 && size > 0;
     if (holdingSpeed && (!speedHold.active || speedHold.count != s.count ||
                          speedHold.size != size))
@@ -307,14 +322,19 @@ class Engine {
       float startValue = s.startMask & bit ? s.starts[v] : s.start;
       int requestedStart =
           size ? std::min(size - 1,
-                          int(std::max(0.f, std::min(1.f, startValue)) * size))
+                          int(std::max(0.f, std::min(1.f, startValue)) * size +
+                              (s.mode == 3 ? .5f : 0.f)))
                : 0;
       int lengthVoice = s.hold && !speedHold.active ? 0 : v;
       float lengthValue = s.lengthMask & (1u << lengthVoice)
                               ? s.lengths[lengthVoice]
                               : s.length;
+      if (s.mode == 3)
+        lengthValue = snapBeatRegion(lengthValue, size, s.beatFrames,
+                                     s.beatQuantum, .001f);
       int length =
-          std::max(1, int(size * std::max(.001f, std::min(1.f, lengthValue))));
+          std::max(1, int(size * std::max(.001f, std::min(1.f, lengthValue)) +
+                          (s.mode == 3 ? .5f : 0.f)));
       length = std::min(std::max(1, size), length);
       float offset = s.hold
                          ? ((s.offsetMask & 1u) ? s.offsets[0] : 0.f)
@@ -325,6 +345,8 @@ class Engine {
         period += offset * rate / 1000.;
       else if (s.mode == 1)
         period *= 1. + offset / 100.;
+      else if (s.mode == 3)
+        period += offset * (s.beatFrames > 0 ? s.beatFrames : size);
       else
         speed = std::max(.05, std::min(8., 1. + offset / 100.));
       if (s.customMask & (1u << lengthVoice)) {
@@ -346,8 +368,46 @@ class Engine {
       if (!speedHold.active && (s.customMask & bit))
         regionShift[v] += s.customStarts[v] * size;
       int direction = std::max(0, std::min(3, s.directions[v]));
-      if (direction != previousDirection[v] || (restart & bit)) {
+      if (direction != previousDirection[v] && !(restart & bit) &&
+          activeStart[v] >= 0) {
+        bool wasReverse = isReverse(v, previousDirection[v]);
+        // Ping-pong keeps the current leg. Fixed modes choose their direction,
+        // but mirror the internal travel counter to preserve the audio point.
+        returning[v] = direction == 2   ? wasReverse
+                       : direction == 3 ? !wasReverse
+                                        : false;
+        if (isReverse(v, direction) != wasReverse)
+          head[v] = std::max(0., period - 1. - head[v]);
+        if (speedHold.active)
+          speedHold.phases[v] = wrapPhase(head[v] / period - speedHold.clock);
+        if (s.hold) {
+          bool capturedReturn = speedHold.active ? speedHold.restartReturning[v]
+                                                 : heldReturning[v];
+          int old = previousDirection[v];
+          bool capturedReverse = old == 1 || (old == 2 && capturedReturn) ||
+                                 (old == 3 && !capturedReturn);
+          bool nextReverse =
+              direction == 1 || (direction >= 2 && capturedReverse);
+          bool nextReturn = direction == 2   ? nextReverse
+                            : direction == 3 ? !nextReverse
+                                             : false;
+          if (speedHold.active) {
+            if (capturedReverse != nextReverse)
+              speedHold.restartPhases[v] =
+                  std::max(0.,
+                           period - 1. - speedHold.restartPhases[v] * period) /
+                  period;
+            speedHold.restartReturning[v] = nextReturn;
+          } else {
+            if (capturedReverse != nextReverse)
+              heldHeads[v] = std::max(0., period - 1. - heldHeads[v]);
+            heldReturning[v] = nextReturn;
+          }
+        }
+      } else if (direction != previousDirection[v] || (restart & bit)) {
         returning[v] = false;
+      }
+      if (direction != previousDirection[v] || (restart & bit)) {
         shotFinished[v] = false;
         shotLegs[v] = 0;
         previousWriteKind[v] = 0;
@@ -360,8 +420,15 @@ class Engine {
         activeStart[v] = requestedStart;
       double start = sourceStart(v);
       if (restart & bit) {
-        head[v] = 0;
-        if (speedHold.active) speedHold.phases[v] = wrapPhase(-speedHold.clock);
+        head[v] = s.hold ? heldHeads[v] : 0.;
+        if (s.hold) returning[v] = heldReturning[v];
+        if (speedHold.active) {
+          head[v] = speedHold.restartPhases[v] * period;
+          speedHold.phases[v] =
+              wrapPhase(speedHold.restartPhases[v] - speedHold.clock);
+          returning[v] = speedHold.restartReturning[v];
+        }
+        reverse = isReverse(v, direction);
         fade[v] = 0;
       }
       head[v] = std::fmod(head[v], period);

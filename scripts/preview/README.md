@@ -11,8 +11,8 @@ This builds the plugin and, when needed, a small development runner, then render
 The default output is `build/previews/phlooper/`, already excluded from Git by the repository's `build` rule. Seven PNGs show the empty module, four-loop playback, sixteen-loop playback, a zoomed region, overdubbing, muted playback with per-channel controls hidden, and a mute/solo background comparison. Audio is generated and recorded through the module's real processing code. The runner uses isolated scratch storage under the output directory.
 
 ```sh
-# Render Windchimes or Blunch using their actual browser widgets.
-scripts/preview-module.sh windchimes
+# Render 32nd & Columbus or Blunch using their actual browser widgets.
+scripts/preview-module.sh 32nd-and-columbus
 scripts/preview-module.sh blunch
 
 # Exercise Blunch's real Control-mode keyboard/mouse, transport, and row layout,
@@ -29,7 +29,7 @@ scripts/preview-module.sh --no-build
 scripts/preview-module.sh --scale 3 --output /tmp/phlooper-previews
 ```
 
-`RACK_SOURCE_DIR` can select a built Rack source checkout containing `libRack.dylib`, `include/`, `dep/include/`, and `res/`. Otherwise the script uses `RACK_DIR`, or `~/dev/VCV-Rack/Rack`. If `RACK_DIR` points at the SDK, it looks for the adjacent `Rack` source checkout because the SDK does not include system artwork/fonts. The current runner supports macOS, Phlooper, Blunch, and Windchimes.
+`RACK_SOURCE_DIR` can select a built Rack source checkout containing `libRack.dylib`, `include/`, `dep/include/`, and `res/`. Otherwise the script uses `RACK_DIR`, or `~/dev/VCV-Rack/Rack`. If `RACK_DIR` points at the SDK, it looks for the adjacent `Rack` source checkout because the SDK does not include system artwork/fonts. The current runner supports macOS, Phlooper, Blunch, and 32nd & Columbus.
 
 The `--browser` option renders only `00-browser.png`, using the exact null-module widget created by Rack’s module browser. Its loop count and region controls are randomized once per widget, with a randomly shifted and stretched speech waveform shared across rows, plus random input/output meter levels and Time/Length/Speed and transport choices. Per-loop controls are hidden in browser previews. It does not construct a DSP module.
 
@@ -49,9 +49,24 @@ The window helper derives a preview-only constructor from the matching Rack sour
 
 Regenerate screenshots whenever requested; do not serve older captures. The compiled runner remains cached for fast renders.
 
-For optional Windchimes trigger-routing integration checks, run
-`WINDCHIMES_PREVIEW_CHECKS=1 scripts/preview-module.sh windchimes --no-build`.
+For optional 32nd & Columbus trigger-routing integration checks, run
+`WINDCHIMES_PREVIEW_CHECKS=1 scripts/preview-module.sh 32nd-and-columbus --no-build`.
 
 Set `JACK_PREVIEW_CHECKS=1` when running a preview to verify that all six shared jack variants load at their expected dimensions. Jack names and artwork are listed in [Jack artwork](../../doc/development/jacks.md).
 
 For jack-style comparisons, browser previews also support `mely-porge`, `voly-pector`, and `laundry-soup`.
+
+Blunch’s `--controls` checks include a two-thread regression for editing, staging,
+cancellation, serialization, and Ctrl+Space while real audio callbacks process all
+16 channels. A deterministic contention test verifies that the callback never
+waits on the GUI and that a queued formula cannot be consumed while the GUI owns
+the model. Blunch UI/event/render access uses `BlunchStateLock`; model entry points
+use `StateGuard`. Keep direct access to formula maps and runtime programs inside
+those guards. The audio callback uses a nonblocking attempt and retains elapsed
+clock time when access is deferred.
+
+The `32nd-and-columbus` preview also writes `01-forest.png`, showing the Forest graphic option with a live module widget and a fresh arrangement of three to five chimes with varied materials and model settings.
+
+Forest previews also render `02-forest-open.png` and `03-forest-thicket.png` with contrasting Forest settings. The fixture simulates wind through the real module before capturing the scene.
+
+Set `FOREST_STORM_PREVIEW=1` for a short live storm and settling sequence (`04-storm-ground.png`, `05-storm-settled.png`). The native fixture also checks that debris settles at its tree’s radial ground position and leaves the scene without wrapping.

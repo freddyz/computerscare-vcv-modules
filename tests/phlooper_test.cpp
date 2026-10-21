@@ -1,4 +1,5 @@
 #include "Phlooper/Engine.hpp"
+#include "Phlooper/RecordClock.hpp"
 #include "Phlooper/BrowserPreview.hpp"
 #include "Phlooper/Waveform.hpp"
 #include "Phlooper/Zoom.hpp"
@@ -24,6 +25,121 @@ void wavFixture(const char* path, int format, int bits, int channels, bool exten
   }
 }
 int main(){
+  {
+    auto start=phlooper::dragLoopPointOnGrid({.17f,.67f},true,.08f,.01f,2.f,.0625f,.17f);
+    auto end=phlooper::dragLoopPointOnGrid({.17f,.67f},false,.08f,.01f,2.f,.0625f,.17f);
+    check(std::abs(start.start-.2325f)<1e-6 && start.end==.67f &&
+              end.start==.17f && std::abs(end.end-.7325f)<1e-6,
+          "Dragged start and end snap to beat fractions anchored at the freely positioned Start knob");
+    auto beyond=phlooper::dragLoopPointOnGrid({.8f,1.3f},false,.19f,.01f,2.f,.125f,.8f);
+    check(std::abs(beyond.end-1.55f)<1e-6,"Beat handle snapping extends beyond the source boundary without wrapping");
+    auto free=phlooper::dragLoopPointOnGrid({.17f,.67f},false,.08f,.01f,2.f,0,.17f);
+    check(std::abs(free.end-.75f)<1e-6,"Zero Offset leaves manual loop-point dragging free");
+  }
+
+  {
+    auto transport=std::unique_ptr<phlooper::Engine>(new phlooper::Engine(1024));
+    transport->size=1000;
+    for(auto& audio:transport->audio)std::fill_n(audio.get(),2048,0.f);
+    for(bool held : {false,true}) for(int oldMode=0;oldMode<4;++oldMode)
+      for(int leg=0;leg<2;++leg) for(int newMode=0;newMode<4;++newMode) {
+        if(oldMode==newMode)continue;
+        transport->resetHeads();
+        phlooper::Settings settings;settings.count=1;settings.offset=0;
+        settings.mode=held?2:0;settings.directions[0]=oldMode;
+        transport->process({},48000,settings,0,0,0,0,1,false);
+        transport->head[0]=237.25;transport->returning[0]=leg!=0;
+        if(held){settings.hold=true;transport->process({},48000,settings,0,0,0,0,1,false);}
+        bool reverse=transport->isReverse(0,oldMode);
+        double position=transport->playbackPosition(0,oldMode);
+        settings.directions[0]=newMode;
+        transport->process({},48000,settings,0,0,0,0,1,false);
+        check(std::abs(transport->playbackPosition(0,newMode)-position)<1e-8,
+              "Direction changes preserve source position, including Speed Hold");
+        check(transport->isReverse(0,newMode)==(newMode==1 || (newMode>=2&&reverse)),
+              "Ping-pong changes retain the current leg; fixed modes select their direction");
+        transport->process({},48000,settings,0,0,0,0,0,false);
+        check(std::abs(transport->playbackPosition(0,newMode)-position-
+                      (transport->isReverse(0,newMode)?-1.:1.))<1e-8,
+              "Changed transport continues smoothly from its preserved position");
+        if(held) {
+          transport->process({},48000,settings,0,0,1,0,1,false);
+          check(std::abs(transport->playbackPosition(0,newMode)-position)<1e-8,
+                "Held restart retains the captured audio point after changing direction modes");
+        }
+      }
+  }
+
+  {
+    check(phlooper::beatLengthLabel(2.+5./16)=="2 5/16" &&
+              phlooper::beatLengthLabel(4./7)=="4/7" &&
+              phlooper::beatLengthLabel(3.)=="3",
+          "Length formats whole beats and mixed fractions including odd denominators");
+    std::array<float,12> markers{};
+    for(int i=0;i<12;++i) markers[i]=i*24000.f;
+    check(phlooper::recordedBeatFromMarks(markers,12)==24000.f &&
+              std::abs(phlooper::beatValue(-4)*phlooper::recordedBeatFromMarks(markers,12)+2000.f)<.001f,
+          "Minus 1/12 uses one twelfth of a marked division, not the twelve-beat recording");
+    check(phlooper::beatLabel(11)=="+5/16" && phlooper::beatLabel(-15)=="-4/7",
+          "Beat offsets include signed odd musical fractions");
+    check(std::abs(phlooper::controlOffset(2,3,false,11,0,0)-.625f)<1e-7,
+          "Beat knob spaces each channel by the selected fraction");
+    check(phlooper::controlOffset(2,3,false,11,3,-5.5f)==-.3125f,
+          "Poly offset CV selects a signed beat fraction per loop");
+    auto beats=std::unique_ptr<phlooper::Engine>(new phlooper::Engine(1024));
+    beats->size=1000;
+    for(auto& audio:beats->audio)std::fill_n(audio.get(),2048,0.f);
+    phlooper::Settings settings;settings.count=3;settings.mode=3;
+    settings.length=.5f;settings.offset=.3125f;settings.beatFrames=480;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(beats->periods[0]==500 && beats->periods[1]==650 && beats->periods[2]==800,
+          "Beat mode uses recorded clock timing instead of loop length or live tempo");
+    check(phlooper::beatLabel(11.5f)=="+7/22" && phlooper::beatLabel(-6.5f)=="-2/13",
+          "Intermediate offset marks add odd fractions without changing existing selections");
+    settings.offset=.0625f;settings.beatQuantum=.0625f;
+    settings.start=.213f;settings.length=.487f;
+    beats->process({},48000,settings,0,0,7,0,65535,false);
+    check(beats->activeStart[0]==213 && beats->periods[0]==480 && beats->periods[1]==510,
+          "Start remains free while main Length snaps to the selected beat-fraction grid");
+    check(std::abs(phlooper::snapBeatRegion(1.f,1000,480,.3125f,.001f)-.9f)<1e-6,
+          "The upper Length limit stays on the beat grid instead of clipping to an unsnapped end");
+    check(phlooper::snapBeatRegion(.213f,1000,480,0)==.213f,
+          "Zero offset leaves Start and Length freely adjustable");
+    settings.offset=.3125f;settings.beatQuantum=0;
+    settings.start=0;settings.length=.5f;
+    settings.beatFrames=0;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(beats->periods[1]==812.5,"Unclocked audio uses its full duration as one beat");
+  }
+
+  {
+    phlooper::RecordClock clock;
+    clock.process(true,0,.001,0,0,0);
+    clock.process(true,0,.001,0,3,4);
+    check(clock.record==0&&clock.erase==0,"Clocked write requests wait for an edge");
+    clock.process(true,10,.001,0,3,4);
+    check(clock.record==3&&clock.erase==4,"Clock edge starts record and erase per voice");
+    clock.process(true,0,.001,0,0,0);
+    check(clock.record==3&&clock.erase==4,"Clocked stops remain queued");
+    clock.process(true,10,.001,0,0,0);
+    check(clock.record==0&&clock.erase==0,"Clock edge commits queued stops");
+    clock.process(false,0,.001,0,2,1);
+    check(clock.record==2&&clock.erase==1,"Unpatching restores immediate gate behavior");
+    clock={};clock.process(true,0,.001,-1,0,0);
+    check(clock.process(true,10,.001,-1,1,0),"Division starts at first clock edge");
+    clock.process(true,0,.001,-1,0,0);
+    check(!clock.process(true,10,.001,-1,0,0)&&clock.record==1,"Divide two skips alternate edges");
+    clock.process(true,0,.001,-1,0,0);
+    check(clock.process(true,10,.001,-1,0,0)&&clock.record==0,"Divide two stops on its grid");
+    clock={};clock.process(true,0,.001,1,0,0);
+    clock.process(true,10,.001,1,0,0);
+    for(int n=0;n<999;++n)clock.process(true,0,.001,1,0,0);
+    clock.process(true,10,.001,1,0,0);
+    bool halfway=false;
+    for(int n=0;n<501;++n)halfway|=clock.process(true,0,.001,1,1,0);
+    check(halfway&&clock.record==1,"Multiply two creates a midpoint clock for queued recording");
+  }
+
   for (int seed=0;seed<100;++seed) {
     phlooper::BrowserPreview preview(seed/100.f, .3f, .6f, seed/100.f);
     check(preview.count>=2&&preview.count<=5,"browser preview has two to five loops");
@@ -243,6 +359,7 @@ int main(){
   e.process({},48000,s,0,0,4,0,0,false);
   check(!e.returning[2]&&e.head[2]==1,"restart begins bounce in the forward direction");
   s.count=1;s.directions[0]=1;s.recordMix=1;
+  e.process({},48000,s,0,0,0,0,1,false);
   e.head[0]=100;e.fade[0]=1;
   phlooper::Frame live;live.l=6;live.r=10;
   e.process(live,48000,s,1,0,0,0,0,true);
@@ -325,7 +442,7 @@ int main(){
   for(int frame=0;frame<100;++frame)e.process({},48000,s,0,0,0,0,2,false);
   check(std::fabs(e.head[1]-pausedPosition)<1e-9,"per-loop pause overrides the shared hold clock");
   e.process({},48000,s,0,0,2,0,0,false);
-  check(std::fabs(e.head[1]-1.1)<1e-9,"restart resets one held channel without changing its pitch");
+  check(std::fabs(e.head[1]-(e.speedHold.restartPhases[1]*e.periods[1]+1.1))<1e-9,"restart restores the held channel snapshot without changing its pitch");
   double heldPeriod=e.periods[0];s.speed=2;
   double phaseBefore=e.head[0]/e.periods[0];
   e.process({},48000,s,0,0,0,0,0,false);
@@ -476,6 +593,17 @@ int main(){
   check(e.speedHold.active&&std::fabs(e.periods[0]/e.speedHold.speeds[0]-
         e.periods[1]/e.speedHold.speeds[1])<1e-6,
         "Speed Hold fits custom regions while retaining shared repeat timing");
+  check(std::fabs(e.speedHold.duration-400./1.2)<.001,
+        "Speed Hold duration respects the chosen custom end point");
+  auto capturedPhases=e.speedHold.restartPhases;
+  auto capturedStarts=e.speedHold.starts;
+  for(int frame=0;frame<1000;++frame)e.process({},48000,s,0,0,0,0,0,false);
+  e.process({},48000,s,0,0,3,0,65535,false);
+  for(int v=0;v<2;++v) {
+    check(std::fabs(e.head[v]-capturedPhases[v]*e.periods[v])<1e-9,
+          "Restart while held restores captured positions instead of zero");
+    check(e.sourceStart(v)==capturedStarts[v],"Held restart preserves fitted loop points");
+  }
   s.hold=false;e.process({},48000,s,0,0,0,0,65535,false);
   check(!e.speedHold.active&&std::fabs(e.periods[1]-400)<.001,
         "releasing Hold restores custom region lengths");

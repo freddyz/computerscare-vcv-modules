@@ -2,7 +2,7 @@
 
 New modules:
 
-- **Windchimes:** Arrange up to sixteen tuned, physically modeled chime sets in a quadraphonic scene. Includes material and sound presets, polyphonic tuning/model CV and action inputs, mono wind/effect CV, wind synthesis, reverb, and clockable delay.
+- **32nd & Columbus:** Arrange up to sixteen tuned, physically modeled chime sets in a quadraphonic scene. Includes material and sound presets, polyphonic tuning/model CV and action inputs, mono wind/effect CV, wind synthesis, chime-linked Forest reflections, a single FX Dry/wet control, and procedural wind-responsive scenery.
 - **Phlooper:** Up to sixteen independent stereo audio loops with Time, Length, and Speed phasing; per-loop transport, reverse and alternating directions, one-shot playback, exact Speed Hold, start/end region alignment, draggable loop points, waveform zoom, polyphonic recording/output, and phase/EOC outputs. Import WAV to all loops; export one or all loops.
 - **Blunch:** Text-based polyphonic trigger sequencer with nested patterns, editable randomization recipes, an editable channel overview, keyboard/mouse Control mode, independent text/row height, selectable default clock units and playback displays, and per-channel Run gating or trigger-toggle control.
 
@@ -13,7 +13,7 @@ Debug:
 Development:
 
 - Build and test all three new modules together, including the shared text editor and sequencer language/runtime tests.
-- Add cached offscreen module previews for panel development, including Blunch interaction and Windchimes CV checks. Generated screenshots stay outside source control.
+- Add cached offscreen module previews for panel development, including Blunch interaction and 32nd & Columbus CV checks. Generated screenshots stay outside source control.
 
 # 2.3.11
 
