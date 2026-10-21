@@ -189,7 +189,7 @@ vcvmon () {
 		_vcvmon_start_rack
 		stamp=$build_stamp
 		dirty=0
-		_vcvmon_status watching
+		if [[ -f "$VCVMON_PAUSE" ]]; then _vcvmon_status paused; else _vcvmon_status watching; fi
 	}
 
 	_vcvmon_banner "1;30;42" "VCVMON $VCVMON_VERSION $mode RUNNING   [space] pause/resume   [r] rebuild   [q] quit"
@@ -217,7 +217,6 @@ vcvmon () {
 				pause) touch "$VCVMON_PAUSE"; _vcvmon_banner "1;30;43" "VCVMON PAUSED" ;;
 				resume) rm -f "$VCVMON_PAUSE"; _vcvmon_banner "1;30;42" "VCVMON RUNNING" ;;
 				rebuild)
-					rm -f "$VCVMON_PAUSE"
 					_vcvmon_restart_rack "VCVMON REBUILD" || true
 					;;
 			esac

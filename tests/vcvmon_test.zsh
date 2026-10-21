@@ -75,15 +75,20 @@ read () {
     8) [[ $(<"$VCVMON_PAUSE.status") == failed* ]] || exit 25
        fail_build=0; print rebuild > "$VCVMON_PAUSE.command" ;;
     9) [[ $(<"$VCVMON_PAUSE.status") == watching* ]] || exit 26
-       key=q; return 0 ;;
+       print pause > "$VCVMON_PAUSE.command" ;;
+    10) print rebuild > "$VCVMON_PAUSE.command" ;;
+    11) [[ -f "$VCVMON_PAUSE" && $(<"$VCVMON_PAUSE.status") == paused* ]] || exit 27
+        key=r; return 0 ;;
+    12) [[ -f "$VCVMON_PAUSE" && $(<"$VCVMON_PAUSE.status") == paused* ]] || exit 28
+        key=q; return 0 ;;
     *) exit 30 ;;
   esac
   return 1
 }
 vcvmon dev > "$local_root/commands-log" 2>&1
-[[ $test_step == 9 ]]
+[[ $test_step == 12 ]]
 [[ $(<"$VCVMON_PAUSE.status") == stopped* ]]
 [[ ! -f "$VCVMON_PAUSE.command" && ! -f "$VCVMON_PAUSE" ]]
 [[ $(<"$local_root/log") == *"launched:$VCVMON_PAUSE"* ]]
-[[ $(rg -c 'plugins all' "$local_root/make-log") == 5 ]]
+[[ $(rg -c 'plugins all' "$local_root/make-log") == 7 ]]
 print 'vcvmon modes, toolbar commands, external resume, retry, and cleanup tests passed'
