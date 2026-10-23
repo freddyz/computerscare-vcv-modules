@@ -20,6 +20,7 @@
 #include "../ModifierMouseControl.hpp"
 #include "../Phlooper/Block.hpp"
 #include "../Phlooper/Dropdown.hpp"
+#include "../components/VisualPanelMode.hpp"
 #include "BlunchEditorViews.hpp"
 #include "BlunchKeyboardShortcuts.hpp"
 #include "BlunchProgramCompiler.hpp"
@@ -424,6 +425,9 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     SEED_PARAM,
     WAIT_MODE_PARAM,
     EDITOR_LINE_HEIGHT_PARAM,
+    CLOCK_OUTPUT_MODE_PARAM,
+    GATE_LENGTH_PARAM,
+    LIVE_APPLY_PARAM,
     NUM_PARAMS
   };
   enum InputIds {
@@ -441,6 +445,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     RUN_INPUT,
     TIME_CV_INPUT,
     SEED_CV_INPUT,
+    GATE_LENGTH_CV_INPUT,
     NUM_INPUTS
   };
   enum OutputIds {
@@ -480,6 +485,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   using StateGuard = std::lock_guard<std::recursive_mutex>;
   double deferredSampleTime = 0.;  // Audio-thread-owned elapsed time.
   float outputSampleTime = 0.f;
+  int lastClockOutputMode = 0;
   bool allowSeedGrace = false;
   int syncSource = -1;  // Free, or a zero-based leader channel.
   int syncEvent = 1;    // Block, Line, Page.
@@ -657,6 +663,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   bool resetClockIgnoreActive = false;
   bool externalClockHigh[4] = {false, false, false, false};
   float width = MIN_WIDTH;
+  bool compactUi = false;
   bool editorLineWrapping = true;
   bool editorFitLines = true;
   int runInputMode = 0;
@@ -1139,6 +1146,14 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         WAIT_MODE_PARAM, 0.f, BLUNCH_WAIT_MODE_COUNT - 1, 0.f, "Wait mode",
         {"Immediate", "Clock", "Block", "Line", "Page", "External W",
          "External X", "External Y", "External Z"});
+    configSwitch(CLOCK_OUTPUT_MODE_PARAM, 0.f, 1.f, 0.f, "Clock output",
+                 {"Trigger", "Gate"});
+    configSwitch(LIVE_APPLY_PARAM, 0.f, 1.f, 0.f, "Formula apply",
+                 {"Manual", "While typing"});
+    getParamQuantity(LIVE_APPLY_PARAM)->randomizeEnabled = false;
+    configParam(GATE_LENGTH_PARAM, 0.f, 100.f, 50.f, "Gate length", "%");
+    getParamQuantity(CLOCK_OUTPUT_MODE_PARAM)->randomizeEnabled = false;
+    getParamQuantity(GATE_LENGTH_PARAM)->randomizeEnabled = false;
     configParam(EDITOR_LINE_HEIGHT_PARAM, -.5f, 1.f, 0.f, "Editor line height",
                 "%", 0.f, 100.f);
     configParam(EDITOR_FONT_SIZE_PARAM, 8.f, 24.f, 14.f, "Editor font size");
@@ -1166,6 +1181,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     configInput(RESET_LINE_INPUT, "Reset Line");
     configInput(RESET_SEQUENCE_INPUT, "Reset Page");
     configInput(RUN_INPUT, "Run");
+    configInput(GATE_LENGTH_CV_INPUT, "Gate length (10 V = 100%)");
     configInput(TIME_CV_INPUT, "Time CV (1 V/oct)");
     configInput(SEED_CV_INPUT, "Seed CV");
     configInput(EXTERNAL_CLOCK_W_INPUT, "External clock W");
@@ -1215,6 +1231,8 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
     bool resetRequested =
         resetBlockPressed || resetLinePressed || resetSequencePressed;
+    if (!channelRunHigh || !seq.running || resetRequested)
+      clockOutputPulses[channel].reset();
     if (seq.seedGraceRemaining > 0.f && !resetRequested) {
       if (channelRunHigh && seq.running) {
         // Real seconds, independent of Time CV. Let an EOB/EOL/EOP-clocked
@@ -1350,7 +1368,25 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
     if (running && !resetPressed && seq.seedGraceRemaining == 0.f &&
         outputClockTriggered && seq.activeStepPlays) {
-      clockOutputPulses[channel].trigger(1e-3f);
+      if (params[CLOCK_OUTPUT_MODE_PARAM].getValue() > .5f) {
+        clockOutputPulses[channel].reset();
+        float fraction = clamp(
+            params[GATE_LENGTH_PARAM].getValue() * .01f +
+                inputs[GATE_LENGTH_CV_INPUT].getPolyVoltage(channel) * .1f,
+            0.f, 1.f);
+        float interval =
+            activeExternalClock >= 0
+                ? float(externalClockPhases[activeExternalClock].period)
+                : 1.f / std::max(1e-9f, float(seq.activeClockSpec.hz *
+                                              getTimeScale()));
+        if (fraction > 0.f)
+          clockOutputPulses[channel].trigger(
+              interval > 0.f ? interval * fraction : 1e-3f);
+      } else
+        clockOutputPulses[channel].trigger(1e-3f);
+    } else if (running && !resetPressed && outputClockTriggered &&
+               params[CLOCK_OUTPUT_MODE_PARAM].getValue() > .5f) {
+      clockOutputPulses[channel].reset();
     }
     if (running && !resetPressed &&
         ((outputClockTriggered && seq.activeStepPlays) ||
@@ -1407,6 +1443,11 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void processFrame(const ProcessArgs& args) {
+    int mode = params[CLOCK_OUTPUT_MODE_PARAM].getValue() > .5f;
+    if (mode != lastClockOutputMode) {
+      for (auto& pulse : clockOutputPulses) pulse.reset();
+      lastClockOutputMode = mode;
+    }
     processControlRequests();
     float timeScale = getTimeScale();
     float scaledSampleTime = args.sampleTime * timeScale;
@@ -1531,6 +1572,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       processChannel(channel);
     }
     for (int channel = polyChannels; channel < MAX_POLY_CHANNELS; channel++) {
+      clockOutputPulses[channel].reset();
       sequencers[channel].activeClockOutputHigh = false;
     }
     for (int channel = 0; channel < polyChannels; channel++) {
@@ -1612,6 +1654,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   json_t* dataToJson() override {
     StateGuard guard(stateMutex);
     json_t* rootJ = json_object();
+    json_object_set_new(rootJ, "compactUi", json_boolean(compactUi));
     json_object_set_new(rootJ, "fontHeightOrigin",
                         json_real(BLUNCH_FONT_HEIGHT_BASE));
     json_t* channelTextsJ = json_array();
@@ -1697,6 +1740,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   void dataFromJson(json_t* rootJ) override {
+    compactUi = json_is_true(json_object_get(rootJ, "compactUi"));
     StateGuard guard(stateMutex);
     for (int ch = 0; ch < MAX_POLY_CHANNELS; ++ch) {
       runningLineTexts[ch].clear();
@@ -2171,6 +2215,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     if (isBlankLine(info.text) ||
         parseLineProgram(line, info.begin, info.text, program)) {
       clearSyntaxError();
+      if (params[LIVE_APPLY_PARAM].getValue() > .5f) executePage();
     } else
       setSyntaxError(line, lineVersion(activeContextChannel(), line, NEXT));
   }
@@ -4198,6 +4243,25 @@ struct BlunchLineHeightSlider : MenuParamSlider {
 };
 
 struct ComputerscareBlunchWidget : ModuleWidget {
+  computerscare::VisualPanelMode visualMode;
+  computerscare::VisualPanelBackdrop* compactBackdrop = nullptr;
+  computerscare::ReturnToNormalButton* normalButton = nullptr;
+  void draw(const DrawArgs& args) override {
+    ModuleWidget::draw(args);
+    visualMode.drawLabels(args);
+  }
+  void updateVisualMode() {
+    auto* m = dynamic_cast<ComputerscareBlunch*>(module);
+    visualMode.set(
+        this, m && m->compactUi,
+        {compactBackdrop, normalButton, editor, editControlToggle, syncDropdown,
+         channelLabel, channelPlay, channelStop, channelCancel});
+    if (visualMode.active) {
+      compactBackdrop->box.size = box.size;
+      editor->box = Rect(Vec(7, 30), Vec(visualMode.normalWidth - 10, 343));
+      normalButton->box.pos = Vec(6, 5);
+    }
+  }
   bool controlFocusRequested = false;
   bool controlFocused() const {
     if (!inControlMode()) return false;
@@ -4317,9 +4381,23 @@ struct ComputerscareBlunchWidget : ModuleWidget {
 
   ComputerscareBlunchWidget(ComputerscareBlunch* module) {
     setModule(module);
+    visualMode.labelFor = [](app::PortWidget* p) {
+      const char* inputs[] = {"W",           "X",          "Y",
+                              "Z",           "Advance",    "Advance line",
+                              "Reset block", "Reset line", "Reset page",
+                              "Run",         "Time CV",    "Seed CV",
+                              "Gate length"};
+      const char* outputs[] = {"Clock", "EOB", "EOL", "EOP", "Phase"};
+      return std::string(p->type == engine::Port::INPUT ? inputs[p->portId]
+                                                        : outputs[p->portId]);
+    };
+
     box.size =
         Vec(module ? module->width : ComputerscareBlunch::MIN_WIDTH, 380.f);
 
+    compactBackdrop = new computerscare::VisualPanelBackdrop;
+    compactBackdrop->visible = false;
+    addChild(compactBackdrop);
     panel = new BlunchPanel();
     panel->box.size = box.size;
     addChild(panel);
@@ -4390,6 +4468,11 @@ struct ComputerscareBlunchWidget : ModuleWidget {
         Vec(47.f, 312.f), module, ComputerscareBlunch::TIME_CV_INPUT));
     addInput(createInput<JackSmallPointingDown>(
         Vec(77.f, 312.f), module, ComputerscareBlunch::SEED_CV_INPUT));
+
+    addParam(createParam<SmallKnob>(Vec(69.f, 344.f), module,
+                                    ComputerscareBlunch::GATE_LENGTH_PARAM));
+    addInput(createInput<JackSmallPointingDown>(
+        Vec(90.f, 347.f), module, ComputerscareBlunch::GATE_LENGTH_CV_INPUT));
 
     externalClockLabels = new BlunchExternalClockLabels();
     externalClockLabels->box.pos = Vec(0.f, 282.f);
@@ -4484,6 +4567,12 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       reset->face.faceColor = nvgRGB(36, 201, 166);
       addChild(reset);
     }
+    normalButton = new computerscare::ReturnToNormalButton;
+    normalButton->visible = false;
+    normalButton->action = [module]() {
+      if (module) module->compactUi = false;
+    };
+    addChild(normalButton);
     applyLayout();
   }
 
@@ -4540,7 +4629,7 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                                  resetSequenceInput};
     PortWidget* outputs[] = {clockOutput, phaseOutput, eoc1Output, eoc2Output,
                              eoc3Output};
-    const float jackXs[] = {8.f, 38.f, 104.f, 134.f, 164.f};
+    const float jackXs[] = {8.f, 38.f, 108.f, 138.f, 168.f};
     for (int i = 0; i < 4; i++) {
       if (externalInputs[i]) {
         externalInputs[i]->box.pos =
@@ -4592,11 +4681,12 @@ struct ComputerscareBlunchWidget : ModuleWidget {
 
     ComputerscareBlunch* blunch = dynamic_cast<ComputerscareBlunch*>(module);
     if (blunch) {
-      if (std::fabs(blunch->width - box.size.x) > 0.01f) {
+      if (!visualMode.active && std::fabs(blunch->width - box.size.x) > 0.01f) {
         blunch->width = box.size.x;
       }
     }
-    applyLayout();
+    updateVisualMode();
+    if (!visualMode.active) applyLayout();
 
     if (editor) {
       ComputerscareTextEditorState* state = nullptr;
@@ -5171,6 +5261,9 @@ struct ComputerscareBlunchWidget : ModuleWidget {
       return;
     }
 
+    computerscare::appendVisualPanelMenu(
+        menu, blunch->compactUi,
+        [blunch](bool compact) { blunch->compactUi = compact; });
     menu->addChild(createSubmenuItem(
         "Channel sync", blunch->syncLabel(),
         [=](Menu* sync) { appendBlunchSyncMenu(sync, blunch); }));
@@ -5235,6 +5328,46 @@ struct ComputerscareBlunchWidget : ModuleWidget {
                   blunch->defaultNumberUnit = unit;
                 }));
           }
+        }));
+    menu->addChild(createCheckMenuItem(
+        "Apply valid edits while typing", "",
+        [=]() {
+          return blunch->params[ComputerscareBlunch::LIVE_APPLY_PARAM]
+                     .getValue() > .5f;
+        },
+        [=]() {
+          auto& value = blunch->params[ComputerscareBlunch::LIVE_APPLY_PARAM];
+          value.setValue(value.getValue() > .5f ? 0.f : 1.f);
+        }));
+    menu->addChild(createSubmenuItem(
+        "Clock output",
+        blunch->params[ComputerscareBlunch::CLOCK_OUTPUT_MODE_PARAM]
+                    .getValue() > .5f
+            ? "Gate"
+            : "Trigger",
+        [=](Menu* output) {
+          for (int mode = 0; mode < 2; ++mode)
+            output->addChild(createCheckMenuItem(
+                mode ? "Gate" : "Trigger", "",
+                [=]() {
+                  return int(blunch
+                                 ->params[ComputerscareBlunch::
+                                              CLOCK_OUTPUT_MODE_PARAM]
+                                 .getValue()) == mode;
+                },
+                [=]() {
+                  auto* h = new history::ParamChange;
+                  h->name = "Blunch clock output mode";
+                  h->moduleId = blunch->id;
+                  h->paramId = ComputerscareBlunch::CLOCK_OUTPUT_MODE_PARAM;
+                  h->oldValue = blunch->params[h->paramId].getValue();
+                  h->newValue = mode;
+                  blunch->params[h->paramId].setValue(mode);
+                  APP->history->push(h);
+                }));
+          output->addChild(new MenuSeparator());
+          output->addChild(new MenuParamSlider(
+              blunch->paramQuantities[ComputerscareBlunch::GATE_LENGTH_PARAM]));
         }));
     menu->addChild(new MenuSeparator());
     menu->addChild(createSubmenuItem("Visual", "", [=](Menu* visual) {

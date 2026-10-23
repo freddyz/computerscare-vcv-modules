@@ -849,6 +849,18 @@ int main() {
     require(quadPower>.01,"Disabling exclusion restores mixed quad wind");
   }
   {
+    for(float rate : {8000.f,48000.f,96000.f}) for(float tone : {0.f,1.f}) {
+      wc::WindSound wind;wind.configure(rate,tone,.9f,1.f);
+      double energy=0;
+      for(int i=0;i<int(rate*4);++i) {
+        float strength=i<int(rate*2.5f)?1.f:0.f;
+        if(i%int(rate/400)==0)wind.step(.0025f,strength,strength,.2f,.8f);
+        float sample=wind.process(15).channel[0];
+        require(std::isfinite(sample)&&std::abs(sample)<10.f,"Howling wind remains finite and bounded across sample rates and tone extremes");
+        energy+=sample*sample;
+      }
+      require(energy>0,"Wind resonances retain audible output");
+    }
     // Falling weather must leave a decaying audio tail at every Texture.
     for(float texture : {0.f, 1.f}) {
       wc::WindSound sound; sound.configure(48000,.8f,texture,1.f);

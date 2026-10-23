@@ -227,22 +227,16 @@ void ComputerscareTextEditor::drawEditorText(const DrawArgs& args) {
         if (row.end <= row.begin) {
           continue;
         }
-        bool italic = false;
-        float textOpacity = 1.f;
-        if (state)
-          for (const auto& highlight : state->highlights) {
-            if (highlight.begin < row.end && highlight.end > row.begin) {
-              italic = italic || highlight.italic;
-              textOpacity = std::min(textOpacity, highlight.textOpacity);
-            }
-          }
+        auto appearance = state ? computerscareTextRowAppearance(
+                                      state->highlights, row.begin, row.end)
+                                : ComputerscareTextRowAppearance();
         nvgSave(args.vg);
         NVGcolor textColor = style.textColor;
-        textColor.a *= std::max(0.f, std::min(1.f, textOpacity));
+        textColor.a *= appearance.opacity;
         nvgFillColor(args.vg, textColor);
         // Lean the glyphs around their baseline without changing caret
         // advances.
-        if (italic)
+        if (appearance.italic)
           nvgTransform(args.vg, 1.f, 0.f, -.18f, 1.f, .18f * row.y, 0.f);
         nvgText(args.vg, layout.metrics.textX, row.y, text.c_str() + row.begin,
                 text.c_str() + row.end);
@@ -479,8 +473,16 @@ void ComputerscareTextEditor::drawHighlightSpan(
     };
     if (mode == HIGHLIGHT_FOREGROUND) {
       std::string spanText = text.substr(spanBegin, spanEnd - spanBegin);
-      nvgFillColor(args.vg, highlight.foreground);
+      auto appearance =
+          computerscareTextRowAppearance(state->highlights, row.begin, row.end);
+      NVGcolor color = highlight.foreground;
+      color.a *= appearance.opacity;
+      nvgSave(args.vg);
+      if (appearance.italic)
+        nvgTransform(args.vg, 1.f, 0.f, -.18f, 1.f, .18f * row.y, 0.f);
+      nvgFillColor(args.vg, color);
       nvgText(args.vg, startX, row.y, spanText.c_str(), NULL);
+      nvgRestore(args.vg);
     } else if (mode == HIGHLIGHT_BACKGROUND) {
       nvgBeginPath(args.vg);
       tokenPath();

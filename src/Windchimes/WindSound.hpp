@@ -22,9 +22,11 @@ class WindSound {
     }
   };
   struct Patch {
-    Band breath, airDetail, whistle;
+    Band breath, airDetail, whistle, howl;
     float drift = 0.f, grain = 0.f, grainSmooth = 0.f, grainDecay = .999f;
     float catchLevel = 0.f, catchTarget = 0.f;
+    float howlLevel = 0.f, howlTarget = 0.f, whistleLevel = 0.f,
+          whistleTarget = 0.f;
     std::array<float, 4> gains{}, currentGains{};
   };
   struct Profile {
@@ -125,7 +127,20 @@ class WindSound {
           rate,
           (190.f + i * 173.f + currentTone * 750.f) *
               (1.f + .55f * strength + .2f * p.drift + lift * .4f),
-          3.f + currentTexture * 8.f);
+          12.f + currentTexture * 22.f);
+      p.howl.configure(
+          rate,
+          (95.f + i * 61.f + currentTone * 260.f) *
+              (1.f + .24f * strength + .10f * p.drift + lift * .3f),
+          9.f + currentTexture * 15.f);
+      // Wind catching an opening: narrow noise resonances, not an oscillator.
+      // Existing weather and timbre controls determine when they emerge.
+      float opening = clamp((strength - .22f) * 2.f, 0.f, 1.f);
+      float caught = p.catchLevel * (.3f + .7f * p.grainSmooth);
+      p.howlTarget = opening * caught * (.35f + .65f * currentTexture) *
+                     (1.f - .65f * currentTone) * (.6f + .4f * roughness);
+      p.whistleTarget =
+          opening * caught * currentTone * (.4f + .6f * currentTexture);
       // Slow overlapping envelopes let brighter air pass intermittently.
       if (control.uniform() <
           dt * strength * (.25f + currentTone * 1.8f + currentTexture * 1.2f) *
@@ -190,12 +205,17 @@ class WindSound {
            (1.f - activity) * clamp(.25f + p.drift + p.grainSmooth, .03f, 1.f));
       float airDetail = p.airDetail.process(n) * profile.airDetail * detail *
                         (.35f + currentTexture * .65f);
-      float whistle = p.whistle.process(n) * profile.whistle *
-                      (.25f + .75f * currentTexture) * detail * p.catchLevel *
-                      clamp((speed - .12f) * 2.f, 0.f, 1.f);
+      // Smooth catches at audio rate so short gusts bloom and trail off.
+      p.howlLevel += (p.howlTarget - p.howlLevel) *
+                     (p.howlTarget > p.howlLevel ? attackCoeff : releaseCoeff);
+      p.whistleLevel +=
+          (p.whistleTarget - p.whistleLevel) *
+          (p.whistleTarget > p.whistleLevel ? attackCoeff : releaseCoeff);
+      float howl = p.howl.process(n) * p.howlLevel * 4.5f;
+      float whistle = p.whistle.process(n) * p.whistleLevel * 5.f;
       // Broad swells add movement without sharp flutter or a cyclic LFO.
       air *= 1.f + profile.flutter * currentTexture * (p.grainSmooth - .15f);
-      float source = (air + airDetail + whistle) * speed * .28f;
+      float source = (air + airDetail + whistle + howl) * speed * .28f;
       for (int ch = 0; ch < 4; ++ch)
         if (mask & (1u << ch)) {
           p.currentGains[ch] += (p.gains[ch] - p.currentGains[ch]) * smoothing;

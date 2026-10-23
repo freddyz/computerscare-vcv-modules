@@ -29,8 +29,9 @@ text('Seed',85,303,27,6,center=True)
 text('ext',213,319,36,8.5,40,center=True,stretch=1.3)
 for label,x,y in [('W',192.5,281),('X',229,281),('Y',192.5,316),('Z',229,316)]:
     text(label,x,y,14.5,5.7,40)
-for label,x in [('out',21.5),('phase',51.5),('EOB',117.5),('EOL',147.5),('EOP',177.5)]:
+for label,x in [('out',21.5),('phase',51.5),('EOB',121.5),('EOL',151.5),('EOP',181.5)]:
     text(label,x,366,28,6,40,center=True)
+text('Gate',78,366,26,6,30,center=True)
 text('poly',212,366,28,6,40,center=True)
 logo=E.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
 embed(logo,104,4,24,24,name='computerscare-blunch-logo')

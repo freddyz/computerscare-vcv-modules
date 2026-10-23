@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -26,6 +27,25 @@ struct ComputerscareTextHighlight {
   float progress = 0.f;
   int progressSegments = 0;
 };
+
+// Text overlays must share the base row's geometry and opacity.
+struct ComputerscareTextRowAppearance {
+  bool italic = false;
+  float opacity = 1.f;
+};
+inline ComputerscareTextRowAppearance computerscareTextRowAppearance(
+    const std::vector<ComputerscareTextHighlight>& highlights, int begin,
+    int end) {
+  ComputerscareTextRowAppearance result;
+  for (const auto& highlight : highlights) {
+    if (highlight.begin < end && highlight.end > begin) {
+      result.italic = result.italic || highlight.italic;
+      result.opacity = std::min(result.opacity, highlight.textOpacity);
+    }
+  }
+  result.opacity = std::max(0.f, std::min(1.f, result.opacity));
+  return result;
+}
 
 struct ComputerscareTextEditorCommands {
   int submitCount = 0;

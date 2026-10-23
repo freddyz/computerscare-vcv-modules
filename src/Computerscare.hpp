@@ -68,6 +68,7 @@ struct ComputerscareSvgPort : PortWidget {
   widget::SvgWidget* sw;
   CircularShadow* shadow;
   float svgScale = 1.f;
+  bool tinyRail = false;
 
   ComputerscareSvgPort();
   void draw(const DrawArgs& args) override;

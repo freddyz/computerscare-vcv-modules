@@ -18,6 +18,13 @@ ComputerscareSvgPort::ComputerscareSvgPort() {
 }
 
 void ComputerscareSvgPort::draw(const DrawArgs& args) {
+  if (tinyRail) {
+    nvgSave(args.vg);
+    nvgScale(args.vg, svgScale, svgScale);
+    PortWidget::draw(args);
+    nvgRestore(args.vg);
+    return;
+  }
   if (svgScale == 1.f) {
     PortWidget::draw(args);
     return;

@@ -10,6 +10,7 @@
 #include "Windchimes/Presets.hpp"
 #include "Windchimes/Selection.hpp"
 #include "components/RandomBlock.hpp"
+#include "components/VisualPanelMode.hpp"
 
 namespace wc = windchimes;
 
@@ -184,6 +185,7 @@ struct ComputerscareWindchimes : Module {
   std::atomic<bool> excludeWindFromQuad{false};
   unsigned forestGeneration = 0;
   int graphicMode = 0;  // Radial or Forest; display only.
+  int panelMode = 0;    // Normal, Max visual, Controls only.
   std::atomic<bool> gustRequest{false};
   std::atomic<bool> sceneResetRequest{false};
   wc::Engine engine;
@@ -317,8 +319,8 @@ struct ComputerscareWindchimes : Module {
     configInput(WIND_INPUT, "Wind strength (0–10 V, added to breeze)");
     configInput(TRANSPOSE_INPUT, "Transpose (1 V/oct)");
     configInput(GUST_INPUT, "Gust trigger");
-    const char* modelNames[] = {"Decay",          "Brightness", "Hardness",
-                                "Striker weight", "Shape",      "Body",
+    const char* modelNames[] = {"Decay",          "Bright", "Hardness",
+                                "Striker weight", "Shape",  "Body",
                                 "Inharmonicity"};
     for (int i = 0; i < 7; ++i)
       configInput(DECAY_CV + i, std::string(modelNames[i]) +
@@ -421,6 +423,7 @@ struct ComputerscareWindchimes : Module {
     json_t* data = json_object();
     json_object_set_new(data, "radialStageVersion", json_integer(1));
     json_object_set_new(data, "graphicMode", json_integer(graphicMode));
+    json_object_set_new(data, "panelMode", json_integer(panelMode));
     json_t* locks = json_array();
     for (int id = 0; id < NUM_PARAMS; ++id)
       if (randomLocked(id)) json_array_append_new(locks, json_integer(id));
@@ -441,6 +444,11 @@ struct ComputerscareWindchimes : Module {
           if (id >= 0 && id < NUM_PARAMS) setRandomLock(id, true);
         }
       }
+    panelMode =
+        data
+            ? clamp(int(json_integer_value(json_object_get(data, "panelMode"))),
+                    0, 2)
+            : 0;
     graphicMode =
         data && json_integer_value(json_object_get(data, "graphicMode")) == 1
             ? 1
@@ -879,6 +887,8 @@ struct ActionButton : widget::OpaqueWidget {
 struct SelectorButton : ActionButton {
   WeakPtr<ui::MenuOverlay> activeMenuOverlay;
   std::function<Menu*()> openMenu;
+  std::function<void()> cycleAction;
+  bool cycleHeld = false;
   SelectorButton() { selector = true; }
   bool menuOpen() {
     auto* overlay = activeMenuOverlay.get();
@@ -886,22 +896,41 @@ struct SelectorButton : ActionButton {
   }
   void step() override {
     widget::OpaqueWidget::step();
-    setPressed(menuOpen());
+    setPressed(menuOpen() || cycleHeld);
   }
   void draw(const DrawArgs& args) override {
-    setPressed(menuOpen());
+    setPressed(menuOpen() || cycleHeld);
     ActionButton::draw(args);
   }
   void onButton(const event::Button& e) override {
-    if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
+    if (cycleAction && e.button == GLFW_MOUSE_BUTTON_LEFT) {
+      if (e.action == GLFW_PRESS) {
+        cycleHeld = true;
+        cycleAction();
+      } else if (e.action == GLFW_RELEASE)
+        cycleHeld = false;
+      setPressed(menuOpen() || cycleHeld);
+      e.consume(this);
+      return;
+    }
+    int menuButton =
+        cycleAction ? GLFW_MOUSE_BUTTON_RIGHT : GLFW_MOUSE_BUTTON_LEFT;
+    if (e.button == menuButton && e.action == GLFW_PRESS) {
       e.consume(this);
       Menu* menu = openMenu();
       if (menu) activeMenuOverlay = menu->getAncestorOfType<ui::MenuOverlay>();
       setPressed(menuOpen());
-    }
+    } else
+      widget::OpaqueWidget::onButton(e);
   }
-  void onDragEnd(const event::DragEnd&) override { setPressed(menuOpen()); }
-  void onLeave(const event::Leave&) override { setPressed(menuOpen()); }
+  void onDragEnd(const event::DragEnd&) override {
+    cycleHeld = false;
+    setPressed(menuOpen());
+  }
+  void onLeave(const event::Leave&) override {
+    cycleHeld = false;
+    setPressed(menuOpen());
+  }
 };
 // Compact controls leave room for captions and CV sockets within each plaque.
 struct ChimeKnob : SmoothKnob {
@@ -942,6 +971,11 @@ struct CompactChimePort : Port {
   CompactChimePort() { this->box.size = this->box.size.mult(.75f); }
   void draw(const widget::Widget::DrawArgs& args) override {
     nvgSave(args.vg);
+    if (this->tinyRail) {
+      nvgRestore(args.vg);
+      Port::draw(args);
+      return;
+    }
     nvgScale(args.vg, .75f, .75f);
     Port::draw(args);
     nvgRestore(args.vg);
@@ -951,6 +985,11 @@ struct WindchimesCompactJackPointingDown : JackLargePointingDown {
   WindchimesCompactJackPointingDown() { box.size = box.size.mult(.65f); }
   void draw(const DrawArgs& args) override {
     nvgSave(args.vg);
+    if (tinyRail) {
+      nvgRestore(args.vg);
+      JackLargePointingDown::draw(args);
+      return;
+    }
     nvgScale(args.vg, .65f, .65f);
     JackLargePointingDown::draw(args);
     nvgRestore(args.vg);
@@ -1387,19 +1426,10 @@ struct ChimeScene : widget::OpaqueWidget {
         m.enabled = enabled(ch);
         if (!m.enabled) continue;
         m.position = Vec(stageValue(ch, W::X), stageValue(ch, W::Y));
-        m.striker =
-            Vec(module->visualStrikerAngle[ch].load(std::memory_order_relaxed),
-                module->visualStrikerDepth[ch].load(std::memory_order_relaxed));
         m.flexibility =
             .25f + .5f * module->params[W::param(ch, W::SAIL_SIZE)].getValue() +
             .25f * (1.f -
                     module->params[W::param(ch, W::STRIKER_WEIGHT)].getValue());
-        for (int tube = 0; tube < 3; ++tube) {
-          int index = ch * wc::maxTubes + tube;
-          m.tubes[tube] = Vec(
-              module->visualTubeAngle[index].load(std::memory_order_relaxed),
-              module->visualTubeDepth[index].load(std::memory_order_relaxed));
-        }
       }
       float expanse = module->globalValue(W::EXPANSE, W::EXPANSE_CV);
       float thicket = module->globalValue(W::THICKET, W::THICKET_CV);
@@ -2075,10 +2105,85 @@ struct WindchimesBackplate : widget::TransparentWidget {
     nvgFill(args.vg);
   }
 };
+struct WindchimesPanel : ComputerscareSVGPanel {
+  float clipLeft = 0;
+  void draw(const DrawArgs& args) override {
+    nvgSave(args.vg);
+    nvgIntersectScissor(args.vg, clipLeft, 0, 900 - clipLeft, 380);
+    ComputerscareSVGPanel::draw(args);
+    nvgRestore(args.vg);
+  }
+};
 struct ComputerscareWindchimesWidget : ModuleWidget {
   Editor editor;
   ChimeScene* scene = nullptr;
+  WindchimesBackplate* backplate = nullptr;
+  WindchimesPanel* panelArt = nullptr;
+  struct Original {
+    widget::Widget* child;
+    Rect box;
+  };
+  using PortOriginal = computerscare::PortRail::Original;
+  computerscare::PortRail portRail;
+  std::vector<Original> originals;
+  std::vector<PortOriginal>& portOriginals = portRail.ports;
+  ActionButton *modeControl = nullptr, *graphicControl = nullptr,
+               *regrowControl = nullptr;
+  int appliedMode = -1;
+  static const char* modeName(int mode) {
+    return mode == 1 ? "Max visual" : mode == 2 ? "Controls only" : "Normal";
+  }
+  void setPanelMode(int mode) {
+    if (auto* m = dynamic_cast<W*>(module)) m->panelMode = mode;
+  }
+  void applyPanelMode(int mode) {
+    if (mode == appliedMode) return;
+    portRail.restore();
+    for (auto& original : originals) {
+      original.child->box = original.box;
+      original.child->visible = true;
+    }
+    panelArt->clipLeft = 0;
+    if (mode == 1) {
+      for (auto& original : originals)
+        original.child->visible =
+            original.child == backplate || original.child == scene;
+      portRail.arrange(this, Vec(517.5f, 30),
+                       computerscare::PortRail::denseRows, Vec(15, 17), true);
+    } else if (mode == 2) {
+      for (auto& original : originals)
+        if (original.child != backplate) original.child->box.pos.x -= 420;
+      scene->visible = false;
+      panelArt->clipLeft = 500;
+    }
+    float width =
+        mode == 1 ? 510.f + 15.f * std::ceil(float(portOriginals.size()) /
+                                             computerscare::PortRail::denseRows)
+        : mode == 2 ? 495.f
+                    : panelWidth;
+    float right = box.pos.x + box.size.x;
+    box.size.x = width;
+    backplate->box.size.x = width;
+    if (appliedMode >= 0) {
+      if (auto* rack = getAncestorOfType<app::RackWidget>()) {
+        box.pos.x = right - width;
+        rack->requestModulePos(this, box.pos);
+      }
+    }
+    modeControl->box.pos = Vec(7, 7);
+    graphicControl->box.pos = Vec(95, 7);
+    regrowControl->box.pos = Vec(151, 7);
+    graphicControl->visible = regrowControl->visible = mode != 2;
+    appliedMode = mode;
+  }
+  void draw(const DrawArgs& args) override {
+    ModuleWidget::draw(args);
+    // Tiny rail labels are available through the native jack tooltips.
+  }
+
   void step() override {
+    auto* m = dynamic_cast<W*>(module);
+    applyPanelMode(m ? m->panelMode : 0);
     activeSelection(dynamic_cast<W*>(module), &editor);
     ModuleWidget::step();
   }
@@ -2103,7 +2208,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
       e.consume(this);
       return;
     }
-    if (module && scene && scene->box.contains(e.pos) &&
+    if (module && scene && scene->visible && scene->box.contains(e.pos) &&
         (e.mods & RACK_MOD_MASK) == 0 && e.key == GLFW_KEY_SPACE) {
       if (e.action == GLFW_PRESS)
         static_cast<W*>(module)->gustRequest.store(true,
@@ -2111,7 +2216,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
       e.consume(this);
       return;
     }
-    if (module && scene && scene->box.contains(e.pos) &&
+    if (module && scene && scene->visible && scene->box.contains(e.pos) &&
         (e.mods & RACK_MOD_MASK) == 0 &&
         (e.key == GLFW_KEY_M || e.key == GLFW_KEY_S || e.key == GLFW_KEY_W ||
          e.key == GLFW_KEY_R || e.key == GLFW_KEY_X)) {
@@ -2132,7 +2237,7 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
     // Rack processes module deletion before passing keys to children. Handle
     // the scene first so an active/hovered chime cannot delete the whole
     // module.
-    if (module && scene && scene->box.contains(e.pos) &&
+    if (module && scene && scene->visible && scene->box.contains(e.pos) &&
         ((e.mods & RACK_MOD_MASK) == 0 &&
          (e.key == GLFW_KEY_DELETE || e.key == GLFW_KEY_BACKSPACE))) {
       if (e.action == GLFW_PRESS) scene->removeActive();
@@ -2144,10 +2249,11 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
   ComputerscareWindchimesWidget(W* module) {
     setModule(module);
     box.size = Vec(panelWidth, RACK_GRID_HEIGHT);
-    auto* panel = new ComputerscareSVGPanel;
+    auto* panel = new WindchimesPanel;
+    panelArt = panel;
     panel->setBackground(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/panels/Computerscare32ndAndColumbusPanel.svg")));
-    auto* backplate = new WindchimesBackplate;
+    backplate = new WindchimesBackplate;
     backplate->box.size = box.size;
     addChild(backplate);
     auto block = [this](float x, float y, float width, float height,
@@ -2509,10 +2615,67 @@ struct ComputerscareWindchimesWidget : ModuleWidget {
       rndblk->box.pos = Vec(group ? 718.f : 590.f, 243.f);
       addChild(rndblk);
     }
+    for (auto* child : children) originals.push_back({child, child->box});
+    portRail.capture(this);
+    auto* mode = new SelectorButton;
+    mode->box = Rect(Vec(7, 7), Vec(75, 17));
+    mode->label = [module]() {
+      return std::string(modeName(module ? module->panelMode : 0));
+    };
+    mode->cycleAction = [this, module]() {
+      if (module) setPanelMode((module->panelMode + 1) % 3);
+    };
+    mode->openMenu = [this, module]() {
+      auto* menu = createMenu();
+      if (module)
+        for (int i = 0; i < 3; ++i)
+          menu->addChild(createCheckMenuItem(
+              modeName(i), "", [module, i]() { return module->panelMode == i; },
+              [this, i]() { setPanelMode(i); }));
+      return menu;
+    };
+    modeControl = mode;
+    addChild(mode);
+    auto* graphic = new SelectorButton;
+    graphic->box = Rect(Vec(95, 7), Vec(50, 17));
+    graphic->label = [module]() {
+      return std::string(module && module->graphicMode ? "Forest" : "Radial");
+    };
+    graphic->cycleAction = [module]() {
+      if (module) module->graphicMode = (module->graphicMode + 1) % 2;
+    };
+    graphic->openMenu = [module]() {
+      auto* menu = createMenu();
+      if (module)
+        for (int i = 0; i < 2; ++i)
+          menu->addChild(createCheckMenuItem(
+              i ? "Forest" : "Radial", "",
+              [module, i]() { return module->graphicMode == i; },
+              [module, i]() { module->graphicMode = i; }));
+      return menu;
+    };
+    graphicControl = graphic;
+    addChild(graphic);
+    auto* regrow = new ActionButton;
+    regrow->box = Rect(Vec(151, 7), Vec(50, 17));
+    regrow->label = []() { return std::string("Regrow"); };
+    regrow->action = [module]() {
+      if (module) ++module->forestGeneration;
+    };
+    regrowControl = regrow;
+    addChild(regrow);
+    applyPanelMode(module ? module->panelMode : 0);
   }
   void appendContextMenu(Menu* menu) override {
     auto* m = dynamic_cast<W*>(module);
     if (!m) return;
+    menu->addChild(createSubmenuItem(
+        "Panel", modeName(m->panelMode), [this, m](Menu* modes) {
+          for (int i = 0; i < 3; ++i)
+            modes->addChild(createCheckMenuItem(
+                modeName(i), "", [m, i]() { return m->panelMode == i; },
+                [this, i]() { setPanelMode(i); }));
+        }));
     menu->addChild(new MenuSeparator);
     menu->addChild(createSubmenuItem(
         "Graphic", m->graphicMode == 1 ? "Forest" : "Radial",

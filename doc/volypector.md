@@ -49,3 +49,18 @@ Rack initialize resets the visible Probability and Range Scale knobs to 100%.
 ## Right-Click Options
 
 - Knob Range: choose Unipolar (0V to 10V) or Bipolar (-10V to 10V). Defaults to Bipolar.
+
+## Keyboard focus
+
+While the mouse is over Voly Pector:
+
+| Key               | Focus                           |
+| ----------------- | ------------------------------- |
+| a–p               | Bands A–P                       |
+| 1–9               | Channels 1–9                    |
+| 0                 | Channel 10                      |
+| q / w / r / t / y | Channels 11 / 12 / 13 / 14 / 15 |
+
+Channel 16 remains selectable with its button. Focus CV overrides keyboard selection while patched. Shortcuts are ignored while editing a value or using Control, Alt or Command modifiers. Button tooltips include the key in brackets.
+
+Hold **~** over the module to show letter/channel shortcut badges. **Z** randomizes the current view; **X** wiggles it. Both preserve scale and offset and support Undo.

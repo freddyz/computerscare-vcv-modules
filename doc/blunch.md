@@ -215,7 +215,7 @@ All outputs use the selected polyphony, with one signal per sequencer channel.
 
 | Output    | Signal                                                            |
 | --------- | ----------------------------------------------------------------- |
-| **out**   | 10 V trigger pulses, approximately 1 ms long                      |
+| **out**   | 10 V triggers (1 ms) or gates with adjustable length              |
 | **phase** | A 0–10 V ramp showing position within the current clock interval  |
 | **EOB**   | End of Block: a 10 V trigger when playback moves to another block |
 | **EOL**   | End of Line: a 10 V trigger when the current line completes       |
@@ -305,3 +305,19 @@ Rack Randomize replaces the selected line with a short clock formula. In All vie
 Examples favor 50–180 BPM and equivalent Hz or millisecond timings, with occasional sequences, repeats, random choices, and longer periods in seconds. Saved patches restore their existing formulas and settings.
 
 For custom recipe collections, see [Random-template customization](development/blunch-random-templates.md).
+
+## Panel layout
+
+Choose **Panel → Max visual** in the context menu to expand the display vertically and collect the input/output jacks in a dense rail of tiny ports. Hover a jack for its label. Hidden controls keep their settings. Use **Normal UI** above the display, or **Panel → Normal**, to restore the controls and original module width. Cables remain connected, and the layout is saved with the patch.
+
+## Clock output gates
+
+Choose **Clock output → Trigger** for the usual 1 ms pulses, or **Gate** for a variable high time. **Gate length** sets 0–100% of each clock interval. At 120 BPM, 50% gives a 250 ms gate. Random durations use their selected interval, and Speed of time scales internal gate lengths too.
+
+At 0% the clock output stays low; at 100%, consecutive playing steps can join into one sustained gate. Rests and stopped channels stay low. Changes to Gate length apply on the next pulse. EOB, EOL and EOP remain short triggers.
+
+External clocks use the last measured interval. Until two rising edges establish that interval, the output uses a short 1 ms pulse. Irregular external clocks are estimates; an arriving edge replaces the previous gate.
+
+Enable **Apply valid edits while typing** in the context menu to submit edits automatically once the page validates. The Wait setting still determines when they become active; invalid edits leave playback unchanged.
+
+The **Gate** knob sets gate length as a percentage of each step. Gate length CV adds to the knob: 10 V adds 100 percentage points, clamped to 0–100%. Mono CV affects all channels; polyphonic CV addresses each channel. Trigger mode keeps its fixed short pulse.

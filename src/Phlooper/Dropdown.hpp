@@ -100,4 +100,20 @@ struct WarpedDropdown : widget::OpaqueWidget {
     nvgRestore(args.vg);
   }
 };
+// Two dropdown targets share one raised body and a single divider.
+struct SplitDropdown : WarpedDropdown {
+  float split = 47.f;
+  std::string label() override { return ""; }
+  bool isPressed() override { return false; }
+  void draw(const DrawArgs& args) override {
+    WarpedDropdown::draw(args);
+    nvgBeginPath(args.vg);
+    nvgMoveTo(args.vg, split, 1.f);
+    nvgLineTo(args.vg, split + .4f, box.size.y - upDepth * .65f - 1.f);
+    nvgStrokeColor(args.vg, nvgRGB(30, 35, 33));
+    nvgStrokeWidth(args.vg, .7f);
+    nvgStroke(args.vg);
+    widget::Widget::draw(args);
+  }
+};
 }  // namespace phlooper

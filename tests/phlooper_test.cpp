@@ -1,4 +1,5 @@
 #include "Phlooper/Engine.hpp"
+#include "Phlooper/Expansion.hpp"
 #include "Phlooper/RecordClock.hpp"
 #include "Phlooper/BrowserPreview.hpp"
 #include "Phlooper/Waveform.hpp"
@@ -25,6 +26,12 @@ void wavFixture(const char* path, int format, int bits, int channels, bool exten
   }
 }
 int main(){
+  for(int i=0;i<6;++i) check(phlooper::expansionSource(i,2,1)==i%2,"Cycle repeats two source recordings into six loops");
+  check(phlooper::expansionSource(5,1,0)==0,"Normal broadcasts one recording");
+  check(phlooper::expansionSource(5,2,0)==-1,"Normal pads multiple recordings with silence");
+  check(phlooper::expansionSource(5,2,2)==-1,"Zero mode adds silence");
+  check(phlooper::expansionSource(5,2,3)==1,"Stall repeats the last recording");
+
   {
     auto start=phlooper::dragLoopPointOnGrid({.17f,.67f},true,.08f,.01f,2.f,.0625f,.17f);
     auto end=phlooper::dragLoopPointOnGrid({.17f,.67f},false,.08f,.01f,2.f,.0625f,.17f);

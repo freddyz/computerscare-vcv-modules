@@ -115,6 +115,8 @@ The four Forest values also combine loosely to shape tree density, species, ligh
 - **Front L / Front R / Rear L / Rear R:** spatial audio. A front or rear pair carries the whole scene in stereo; any single jack carries mono. Other combinations redistribute the scene across the connected speakers.
 - **Gain:** audio gain from silence to +18 dB, including the dedicated Wind Audio output. It has no CV input.
 
+Wind can catch into a low howl or a higher whistle as Strength, Tone, Texture and turbulence change. These resonances swell and release with the weather; they have no separate control.
+
 The context option **Exclude wind from main output** removes wind from the main audio outputs and their Forest reflections, leaving it available at Wind Audio. This setting is saved with the patch.
 
 ## Keyboard shortcuts
@@ -125,7 +127,7 @@ With the pointer over the scene, **M** toggles Mute, **S** toggles Solo, **W** w
 
 ## Graphic options
 
-Choose **Graphic → Radial** or **Forest** in the context menu. Radial shows distance rings. Forest replaces the rings with sparse trees: nearby trunks extend beyond the scene, while distant trees appear smaller in front and behind. Chimes remain in front of the scenery and keep their distance-based size. This changes only the graphic, and the choice is saved with the patch.
+Use the panel’s **Radial / Forest** selector, or **Graphic** in the context menu. **Regrow** restores the trees and generates a new forest. Radial shows distance rings. Forest replaces the rings with trees: nearby trunks extend beyond the scene, while distant trees appear smaller in front and behind. Chimes remain in front of the scenery and keep their distance-based size. This changes only the graphic, and the choice is saved with the patch.
 
 Forest scenery is generated anew for each scene, with individual bark and foliage colors, trunk thickness, taper, lean, branching, and bark markings. The four Forest controls combine nonlinearly to vary density from a sparse grove to a dense forest, alongside species, lighting, spacing, color, and branching. Their CV inputs affect the scenery too. Trees reuse nearby chimes’ pendulum and tube motion, with varied stiffness, to respond differently to the local wind while their roots stay fixed. A high front horizon fades into sky; the center remains nearest and the rear edge distant. These graphic links do not change the audio controls’ behavior.
 
@@ -138,3 +140,15 @@ Wind and Forest each have a small randomize block: the dice button randomizes th
 Right-click a knob and enable **Lock randomize / wiggle** to exclude it from both operations. A small padlock marks locked knobs. They remain manually editable and respond to their normal CV. Locks also apply to the existing chime randomize/wiggle actions and save with the patch. On selected chime sets, locking a model knob applies to that control across the selection.
 
 Forest layers draw from Front to Rear: rear trees can overlap the center trees. Radial distance still controls size, so trees toward either edge are smaller. Debris follows the same layering.
+
+## Panel modes
+
+Left-click the panel selector to cycle through layouts; right-click it to choose from a menu. The **Panel** context submenu offers the same choices:
+
+- **Normal:** scene and all controls.
+- **Max visual:** scene with all existing input/output jacks in a dense rail of tiny ports. Hover a jack for its label. Knobs and action buttons are hidden; their settings continue to apply.
+- **Controls only:** the control panel without the scene. The scene does not render while hidden.
+
+Switching layouts resizes the module and preserves cables, settings and selection. The layout is saved with the patch. Radial/Forest and Regrow are available above the scene; the context menu also provides these actions.
+
+Left-click the Radial/Forest button to switch graphics, or right-click it for the menu.

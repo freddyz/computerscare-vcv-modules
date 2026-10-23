@@ -29,3 +29,5 @@ VCVMON_USER_DIR="$HOME/Library/Application Support/Rack2"
 For an older Rack installation or a custom user folder, set `VCVMON_USER_DIR` to that folder. Dist mode currently targets macOS and chooses the native CPU architecture.
 
 Run the isolated watcher tests with `zsh tests/vcvmon_test.zsh`. These use a temporary fake Rack app and plugin folder and do not touch the installed app.
+
+The dev toolbar has two save buttons. **Save version** increments the parent name (`horse.vcv` → `horse1.vcv` → `horse2.vcv`). **Save variation** adds a word to the current version (`horse2-pig.vcv`, `horse2-shrew.vcv`). Both switch to the saved patch and add it to Recent Files. Further variations keep the same version parent; version saves keep the original root. Existing files are skipped. An unnamed patch first prompts for its initial save. Parent associations survive Rack restarts in `computerscare-copy-parents.json` in Rack’s user folder.

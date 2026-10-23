@@ -1,5 +1,6 @@
 #include "Computerscare.hpp"
 #include "ComputerscarePolyModule.hpp"
+#include "VolyPectorKeyboard.hpp"
 #include "VolyPectorRandomization.hpp"
 
 namespace {
@@ -1515,7 +1516,8 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
 
   std::string tooltipText() {
     if (outputLabel) {
-      std::string text = volyPectorNatoLabels[outputIndex] + " Band";
+      std::string text = volyPectorNatoLabels[outputIndex] + " Band [" +
+                         char('a' + outputIndex) + "]";
       std::string destinationText = volyPectorOutputDestinationText(
           getAncestorOfType<ModuleWidget>(),
           ComputerscareVolyPector::OUTPUT + outputIndex);
@@ -1525,7 +1527,9 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
       }
       return text;
     }
-    return "Channel " + std::to_string(channelIndex + 1);
+    char key = computerscare::voly::channelKey(channelIndex);
+    return "Channel " + std::to_string(channelIndex + 1) +
+           (key ? std::string(" [") + key + "]" : "");
   }
 
   void createHoverTooltip() {
@@ -2054,6 +2058,81 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
   int previewPolyChannels = 16;
   float previewKnobValues[volyPectorNumKnobs] = {};
 
+  bool showShortcutKeys = false;
+  void onLeave(const event::Leave& e) override {
+    showShortcutKeys = false;
+    ModuleWidget::onLeave(e);
+  }
+  void drawLayer(const DrawArgs& args, int layer) override {
+    ModuleWidget::drawLayer(args, layer);
+    if (layer != 1 || !showShortcutKeys || !module) return;
+    auto font =
+        APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
+    if (!font) return;
+    nvgFontFaceId(args.vg, font->handle);
+    nvgFontSize(args.vg, 10.f);
+    nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    for (auto* child : children) {
+      auto* button = dynamic_cast<VolyPectorLabelButton*>(child);
+      if (!button) continue;
+      char key = button->outputLabel
+                     ? char('a' + button->outputIndex)
+                     : computerscare::voly::channelKey(button->channelIndex);
+      if (!key) continue;
+      std::string text = std::string("[") + key + "]";
+      float x = button->box.pos.x + button->box.size.x - 5.f;
+      float y = button->box.pos.y + 2.f;
+      nvgBeginPath(args.vg);
+      nvgRect(args.vg, x - 10, y - 6, 20, 12);
+      nvgFillColor(args.vg, nvgRGBA(15, 25, 23, 230));
+      nvgFill(args.vg);
+      nvgFillColor(args.vg, nvgRGB(52, 220, 178));
+      nvgText(args.vg, x, y, text.c_str(), nullptr);
+    }
+    nvgFillColor(args.vg, nvgRGB(52, 220, 178));
+    nvgText(args.vg, 75, 375, "[z] randomize / [x] wiggle", nullptr);
+  }
+  void onHoverKey(const event::HoverKey& e) override {
+    auto* m = dynamic_cast<ComputerscareVolyPector*>(module);
+    if (m && e.key == GLFW_KEY_GRAVE_ACCENT) {
+      showShortcutKeys = e.action != GLFW_RELEASE;
+      e.consume(this);
+      return;
+    }
+    if (m && (e.key == GLFW_KEY_Z || e.key == GLFW_KEY_X) &&
+        !(e.mods & (GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER)) &&
+        !dynamic_cast<ui::TextField*>(APP->event->getSelectedWidget())) {
+      if (e.action == GLFW_PRESS) {
+        auto* change = new history::ModuleChange;
+        change->name = e.key == GLFW_KEY_Z ? "randomize Voly Pector view"
+                                           : "wiggle Voly Pector view";
+        change->moduleId = m->id;
+        change->oldModuleJ = m->toJson();
+        m->randomizeCurrentView(
+            e.key == GLFW_KEY_Z
+                ? computerscare::volypector::RandomizeMode::REPLACE
+                : computerscare::volypector::RandomizeMode::WIGGLE);
+        change->newModuleJ = m->toJson();
+        APP->history->push(change);
+      }
+      e.consume(this);
+      return;
+    }
+    auto key = computerscare::voly::focusKey(e.key);
+    if (!m || !key.valid() ||
+        (e.mods & (GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER)) ||
+        dynamic_cast<ui::TextField*>(APP->event->getSelectedWidget())) {
+      ModuleWidget::onHoverKey(e);
+      return;
+    }
+    if (e.action == GLFW_PRESS && !m->focusCvControlsFocus()) {
+      if (key.band >= 0)
+        m->selectOutputView(key.band);
+      else
+        m->selectChannelView(key.channel);
+    }
+    e.consume(this);
+  }
   ComputerscareVolyPectorWidget(ComputerscareVolyPector* module) {
     setModule(module);
     if (!module) {

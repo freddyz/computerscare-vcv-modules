@@ -32,6 +32,8 @@ using namespace rack;
 #include "blunch-thread-checks.hpp"
 #include "blunch-seed-checks.hpp"
 #include "blunch-sync-checks.hpp"
+#include "blunch-gate-checks.hpp"
+#include "voly-keyboard-checks.hpp"
 
 namespace {
 struct PreviewContainer : widget::Widget {
@@ -91,12 +93,37 @@ void capture(widget::Widget* widget, const std::string& path, float scale,
   container->removeChild(widget);
   std::printf("%s (%d x %d)\n", path.c_str(), width, height);
 }
+void checkMaxVisual(app::ModuleWidget* widget,bool& compact,const std::string& path,float scale) {
+  float width=widget->box.size.x;
+  auto ports=widget->getPorts();std::vector<widget::Widget*> parents;std::vector<Rect> boxes;
+  for(auto* p:ports){parents.push_back(p->parent);boxes.push_back(p->box);}
+  compact=true;widget->step();
+  if(widget->getPorts().size()!=ports.size())throw std::runtime_error("Max visual must preserve every jack");
+  auto* data=widget->module->dataToJson();bool saved=json_is_true(json_object_get(data,"compactUi"));json_decref(data);
+  if(!saved)throw std::runtime_error("Max visual must save with patch");
+  for(auto* p:ports){
+    if(p->parent!=widget || p->box.pos.x<width || p->box.pos.x+p->box.size.x>widget->box.size.x || p->box.pos.y<0 || p->box.pos.y+p->box.size.y>380)throw std::runtime_error("Max visual ports must fit side rail");
+    if(p->box.size.x>15.f || p->box.size.y>15.f)throw std::runtime_error("Max visual must use tiny jacks");
+    widget::EventContext hit;widget::Widget::ButtonEvent click;click.context=&hit;click.button=GLFW_MOUSE_BUTTON_LEFT;click.action=GLFW_PRESS;click.pos=p->box.getCenter();widget->onButton(click);
+    if(!dynamic_cast<app::PortWidget*>(hit.target))throw std::runtime_error("Max visual ports must receive clicks");
+  }
+  capture(widget,path,scale);
+  computerscare::ReturnToNormalButton* normal=nullptr;
+  for(auto* child:widget->children)if(auto* b=dynamic_cast<computerscare::ReturnToNormalButton*>(child))normal=b;
+  if(!normal || !normal->visible)throw std::runtime_error("Max visual must expose return button");
+  widget::EventContext hit;widget::Widget::ButtonEvent click;click.context=&hit;click.button=GLFW_MOUSE_BUTTON_LEFT;click.action=GLFW_PRESS;click.pos=normal->box.getCenter();widget->onButton(click);widget->step();
+  if(compact || widget->box.size.x!=width)throw std::runtime_error("Return button must restore normal width");
+  for(size_t i=0;i<ports.size();++i)if(ports[i]->parent!=parents[i] || ports[i]->box.pos!=boxes[i].pos || ports[i]->box.size!=boxes[i].size)throw std::runtime_error("Return must restore normal jack placement");
+  std::puts("Shared Max visual port hit-testing, persistence, return button and layout restoration checks passed");
+}
+
 void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
                           float scale) {
   auto require = [](bool value, const char* message) {
     if (!value) throw std::runtime_error(message);
   };
   modelBlunchPreview->plugin = &plugin;
+  checkBlunchGates(modelBlunchPreview);
   checkBlunchFormulaLayers(modelBlunchPreview);
   checkBlunchThreadHandoff(modelBlunchPreview);
   checkBlunchSeedBoundaries(modelBlunchPreview);
@@ -687,6 +714,40 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   widget->step();
   capture(widget.get(), output + "/08-channel-draft-applied.png", scale);
 
+  module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(1);
+  module->pendingFormulas[2] = ComputerscareBlunch::PendingFormula{};
+  module->runningLineTexts[2].clear();
+  module->sequencers[2] = BlunchSequencerRuntime{};
+  module->sequenceEditorStates[2].text = "109.03bpm";
+  module->sequenceEditorStates[2].dirty = true;
+  module->returnToChannelsView();module->channelsCursorChannel=2;
+  module->refreshChannelsEditorState(true);module->editorViewDirty=true;widget->step();
+  auto row = getLineInfo(module->channelsEditorState.text, 2);
+  auto appearance = computerscareTextRowAppearance(module->channelsEditorState.highlights,row.begin,row.end);
+  require(appearance.italic && appearance.opacity == .65f,
+          "Inactive draft foreground and base text inherit identical row styling");
+  bool draftForeground=false;
+  for(const auto& h:module->channelsEditorState.highlights)
+    draftForeground |= h.hasForeground && h.begin>=row.begin && h.end<=row.end;
+  require(draftForeground,"New inactive-channel text receives a draft foreground");
+  capture(widget.get(),output+"/09-inactive-draft.png",scale);
+
+  checkMaxVisual(widget.get(),module->compactUi,output+"/10-max-visual.png",scale);
+  {
+    auto menu=std::unique_ptr<ui::Menu>(new ui::Menu);
+    widget->appendContextMenu(menu.get());
+    ui::MenuItem* pulseMenu=nullptr;
+    for(auto* child:menu->children)if(auto* item=dynamic_cast<ui::MenuItem*>(child))if(item->text=="Clock output")pulseMenu=item;
+    require(pulseMenu,"Clock output mode menu exists");
+    auto options=std::unique_ptr<ui::Menu>(pulseMenu->createChildMenu());
+    ui::MenuItem* gate=nullptr;MenuParamSlider* length=nullptr;
+    for(auto* child:options->children){if(auto* item=dynamic_cast<ui::MenuItem*>(child))if(item->text=="Gate")gate=item;if(auto* slider=dynamic_cast<MenuParamSlider*>(child))length=slider;}
+    require(gate&&length,"Clock output submenu exposes Gate and length percentage");
+    gate->doAction();require(module->params[ComputerscareBlunch::CLOCK_OUTPUT_MODE_PARAM].getValue()==1,"Menu selects Gate mode");
+    widget::Widget menuParent;menuParent.box.size=Vec(400,400);
+    menuParent.addChild(options.get());options->step();menuParent.removeChild(options.get());
+    capture(options.get(),output+"/11-gate-menu.png",scale,false);
+  }
   std::puts(
       "Blunch Control-mode UI, transport, mouse, and layout checks passed.");
 }
@@ -746,6 +807,52 @@ int main(int argc, char** argv) {
       std::puts("All six jack variants load at their expected sizes");
     }
     modelPhlooperPreview->plugin = &plugin;
+    {
+      auto m = std::unique_ptr<ComputerscarePhlooper>(static_cast<ComputerscarePhlooper*>(modelPhlooperPreview->createModule()));
+      m->loop.size=32; m->createdLoops=2;
+      std::fill(m->loop.audio[0].get(),m->loop.audio[0].get()+64,1.f);
+      std::fill(m->loop.audio[1].get(),m->loop.audio[1].get()+64,2.f);
+      m->params[ComputerscarePhlooper::EXPANSION].setValue(1);
+      m->expandLoops(6);
+      for(int i=0;i<6;++i) if(m->loop.audio[i][0] != float(i%2+1)) throw std::runtime_error("Cycle expansion copies existing recordings");
+      m->loop.audio[2][0]=9.f;
+      if(m->loop.audio[0][0]!=1.f) throw std::runtime_error("Expanded recordings must be independent");
+      auto* saved=m->dataToJson();
+      if(json_integer_value(json_object_get(saved,"createdLoops"))!=6) throw std::runtime_error("Expansion count persists");
+      json_decref(saved);
+      std::puts("Phlooper expansion copies, independence and persistence passed");
+      using P=ComputerscarePhlooper;
+      m->params[P::COUNT].setValue(6);
+      m->params[P::OFFSET].setValue(0);
+      m->params[P::OUTPUT_MODE].setValue(1);
+      m->params[P::MIX].setValue(1);
+      m->outputs[P::OUT_L].channels=6;
+      m->outputs[P::OUT_R].channels=6;
+      Module::ProcessArgs gainArgs;gainArgs.sampleRate=48000;gainArgs.sampleTime=1.f/48000;gainArgs.frame=0;
+      std::vector<float> reference;
+      for(float gain : {1.f,.25f}) {
+        m->params[P::OUTPUT_GAIN].setValue(gain);m->outputGain=gain;
+        m->loop.resetHeads();
+        for(int frame=0;frame<3000;++frame){
+          ++gainArgs.frame;m->process(gainArgs);
+          for(int ch=0;ch<6;++ch){float value=m->outputs[P::OUT_L].getVoltage(ch);
+            if(gain==1.f) reference.push_back(value);
+            else if(std::fabs(value-reference[frame*6+ch]*gain)>1e-5f) throw std::runtime_error("Polyphonic output gain changed waveform instead of amplitude");
+          }
+        }
+      }
+      m->params[P::MIX].setValue(0);m->params[P::OUTPUT_GAIN].setValue(1);m->outputGain=1;
+      m->inputs[P::LEFT].channels=6;
+      for(int ch=0;ch<6;++ch)m->inputs[P::LEFT].setVoltage(float(ch+1),ch);
+      for(float gain : {1.f,.25f,2.f}) {
+        m->params[P::INPUT_GAIN].setValue(gain);m->inputGain=gain;
+        ++gainArgs.frame;m->process(gainArgs);
+        for(int ch=0;ch<6;++ch) if(std::fabs(m->outputs[P::OUT_L].getVoltage(ch)-float(ch+1)*gain)>1e-5f) throw std::runtime_error("Polyphonic input gain is not linear");
+      }
+      std::puts("Phlooper six-channel input/output gain linearity checks passed");
+
+    }
+
     if (argc >= 6 && std::string(argv[5]) == "browser") {
       plugin::Model* browserModel = modelPhlooperPreview;
       if (argc == 7 && std::string(argv[6]) == "blunch")
@@ -762,6 +869,7 @@ int main(int argc, char** argv) {
       if (browserModel == modelComputerscareWindchimes &&
           std::getenv("WINDCHIMES_PREVIEW_CHECKS"))
         checkWindchimesCv(browserModel);
+      if(browserModel==modelComputerscareVolyPector)checkVolyKeyboard(browserModel);
       auto browserWidget = std::unique_ptr<app::ModuleWidget>(
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",
@@ -779,6 +887,11 @@ int main(int argc, char** argv) {
           windchimes::ForestGraphic::stepDebris(bit, Vec(), 1.f/60.f, 500.f, 380.f, 20.f);
           if (bit.size != 0.f) throw std::runtime_error("Forest debris must leave the scene without wrapping");
           using Forest = windchimes::ForestGraphic;
+          Forest weatherOnly(42);
+          const auto& tree=weatherOnly.trees[0];
+          if(Forest::windSway(tree,Vec(),3).norm()!=0 || Forest::windTwig(tree,Vec(),3).norm()!=0) throw std::runtime_error("Trees must stay still without wind");
+          if(Forest::windSway(tree,Vec(1,.5f),3).norm()<=0) throw std::runtime_error("Wind must still animate trees");
+
           if (!(Forest::stageScale(Vec(250,190),500,380) > Forest::stageScale(Vec(250,350),500,380)))
             throw std::runtime_error("Debris perspective must shrink toward the rear edge");
           if (!Forest::depthBefore(.1f,25.f,.9f,190.f) || !Forest::depthBefore(.9f,190.f,.1f,350.f) ||
@@ -886,6 +999,47 @@ int main(int argc, char** argv) {
         capture(forestWidget.get(),std::string(argv[3])+"/02-forest-open.png",scale);
         setForest(dense);
         capture(forestWidget.get(),std::string(argv[3])+"/03-forest-thicket.png",scale);
+        auto* chimeWidget=forestWidget.get();
+        const auto originalPorts=chimeWidget->getPorts();
+        std::vector<widget::Widget*> originalParents;
+        std::vector<Rect> originalBoxes;
+        for(auto* p:originalPorts){originalParents.push_back(p->parent);originalBoxes.push_back(p->box);}
+        widget::Widget* scene=nullptr;
+        for(auto* child:chimeWidget->children)if(child->box.pos==Vec(0,0)&&child->box.size==Vec(500,380))scene=child;
+        if(!scene)throw std::runtime_error("Missing chime scene");
+        auto setPanelMode=[&](int mode){auto* data=sceneModule->dataToJson();json_object_set_new(data,"panelMode",json_integer(mode));sceneModule->dataFromJson(data);json_decref(data);chimeWidget->step();};
+        for(int mode : {1,2,0}) {
+          setPanelMode(mode);
+          if(chimeWidget->getPorts().size()!=originalPorts.size())throw std::runtime_error("Panel modes must retain every audio/CV jack");
+          if(mode==1)for(auto* port:originalPorts) {
+            if(port->box.size.x>15.f || port->box.size.y>15.f)throw std::runtime_error("Chimes Max visual must use tiny jacks");
+            if(port->parent!=chimeWidget || port->box.pos.x<500 || port->box.pos.x+port->box.size.x>chimeWidget->box.size.x || port->box.pos.y<0 || port->box.pos.y+port->box.size.y>380)
+              throw std::runtime_error("Max visual jacks must fit the side rail");
+            widget::EventContext hit;widget::Widget::ButtonEvent click;click.context=&hit;click.action=GLFW_PRESS;click.button=GLFW_MOUSE_BUTTON_LEFT;click.pos=port->box.getCenter();chimeWidget->onButton(click);
+            if(!dynamic_cast<app::PortWidget*>(hit.target))throw std::runtime_error("Compact jacks must remain clickable");
+          }
+          if(mode==2 && scene->visible)throw std::runtime_error("Controls only must hide the scene");
+          capture(chimeWidget,std::string(argv[3])+(mode==1?"/06-max-visual.png":mode==2?"/07-controls-only.png":"/08-normal-restored.png"),scale);
+          if(mode==0)for(size_t i=0;i<originalPorts.size();++i)if(originalPorts[i]->parent!=originalParents[i] || originalPorts[i]->box.pos!=originalBoxes[i].pos || originalPorts[i]->box.size!=originalBoxes[i].size)throw std::runtime_error("Restoring Normal must restore jack parents and positions");
+        }
+        widget::EventContext regrowHit;widget::Widget::ButtonEvent regrowClick;
+        regrowClick.context=&regrowHit;regrowClick.action=GLFW_PRESS;regrowClick.button=GLFW_MOUSE_BUTTON_LEFT;regrowClick.pos=Vec(160,14);chimeWidget->onButton(regrowClick);
+        if(!regrowHit.target)throw std::runtime_error("Regrow button must receive clicks");
+        capture(chimeWidget,std::string(argv[3])+"/09-regrown.png",scale);
+        setPanelMode(2);auto* panelState=sceneModule->dataToJson();
+        if(json_integer_value(json_object_get(panelState,"panelMode"))!=2)throw std::runtime_error("Panel mode must save with patch");json_decref(panelState);setPanelMode(0);
+        auto readOption=[&](const char* name){auto* data=sceneModule->dataToJson();int value=int(json_integer_value(json_object_get(data,name)));json_decref(data);return value;};
+        auto clickTop=[&](Vec pos,int button){widget::EventContext hit;widget::Widget::ButtonEvent click;click.context=&hit;click.action=GLFW_PRESS;click.button=button;click.pos=pos;chimeWidget->onButton(click);click.action=GLFW_RELEASE;chimeWidget->onButton(click);chimeWidget->step();};
+        for(int expected : {1,2,0}){clickTop(Vec(12,12),GLFW_MOUSE_BUTTON_LEFT);if(readOption("panelMode")!=expected)throw std::runtime_error("Left-click cycles panel layouts");}
+        int beforeGraphic=readOption("graphicMode");
+        clickTop(Vec(100,12),GLFW_MOUSE_BUTTON_LEFT);
+        if(readOption("graphicMode")==beforeGraphic)throw std::runtime_error("Left-click cycles graphic modes");
+        int menuCount=0;for(auto* child:APP->scene->children)if(dynamic_cast<ui::MenuOverlay*>(child))++menuCount;
+        clickTop(Vec(12,12),GLFW_MOUSE_BUTTON_RIGHT);
+        int afterMenu=0;for(auto* child:APP->scene->children)if(auto* overlay=dynamic_cast<ui::MenuOverlay*>(child)){++afterMenu;overlay->requestDelete();}
+        if(afterMenu<=menuCount || readOption("panelMode")!=0)throw std::runtime_error("Right-click opens layout menu without cycling");
+        std::puts("Chimes left-click cycling and right-click menu checks passed");
+        std::puts("Chime panel modes, jack hit-testing/restoration, hidden-scene visibility, regrow and persistence checks passed");
         if (std::getenv("FOREST_STORM_PREVIEW")) {
           setScene("Wind strength", 1.f); setScene("Turbulence", 1.f);
           setScene("Gustiness", 1.f);
@@ -1080,6 +1234,21 @@ int main(int argc, char** argv) {
     loopView->dragVoice=-1;
     save("13-snapped-custom-handle");
     std::puts("Phlooper clocked initial recording, overdub, queued indicators and waveform marker checks passed");
+    module->params[ComputerscarePhlooper::STOP].setValue(1);
+    module->inputs[ComputerscarePhlooper::RESTART_TRIG].channels=3;
+    for(int ch=0;ch<3;++ch)module->inputs[ComputerscarePhlooper::RESTART_TRIG].setVoltage(0,ch);
+    simulate(*module,.001f,frame);
+    unsigned blink=module->startBlink[1].load();
+    module->inputs[ComputerscarePhlooper::RESTART_TRIG].setVoltage(10,1);
+    simulate(*module,.001f,frame);widget->step();
+    if(module->startBlink[1].load()!=blink+1 || loopView->startFlash(1)<.8f)throw std::runtime_error("Restart trigger must flash its loop's start bracket");
+    simulate(*module,.001f,frame);
+    if(module->startBlink[1].load()!=blink+1)throw std::runtime_error("Held restart gate must not repeatedly flash");
+    module->compactUi=true;widget->step();capture(widget.get(),std::string(argv[3])+"/15-start-bracket-blink.png",scale);
+    module->compactUi=false;widget->step();
+    loopView->startBlinkTime[1]-=1.;
+    if(loopView->startFlash(1)!=0)throw std::runtime_error("Bracket flash must fade back to its normal color");
+    checkMaxVisual(widget.get(),module->compactUi,std::string(argv[3])+"/14-max-visual.png",scale);
     widget.reset();
 
     // Context destroys graphics before terminating GLFW. No settings are saved.

@@ -9,13 +9,13 @@ namespace windchimes {
 // Stable procedural choices per scene; effect controls reshape the forest,
 // while the wind bends it continuously. Roots stay in radial stage coordinates.
 struct ForestGraphic {
+  static constexpr int maxTrees = 96;
   struct Tree {
     float angle, radius, shape, species, phase;
     float barkHue, leafHue, girth, lean, taper, branching;
   };
   struct Motion {
-    Vec position, striker;
-    std::array<Vec, 3> tubes{};
+    Vec position;
     float flexibility = .5f;
     bool enabled = false;
   };
@@ -26,10 +26,10 @@ struct ForestGraphic {
     float birthScale = 1.f, groundedTime = 0.f;
     bool leaf = false;
   };
-  std::array<Tree, 60> trees;
-  std::array<int, 60> damage{};
-  std::array<float, 60> stress{}, uprootStress{}, fall{};
-  std::array<Vec, 60> fallDirection{};
+  std::array<Tree, maxTrees> trees;
+  std::array<int, maxTrees> damage{};
+  std::array<float, maxTrees> stress{}, uprootStress{}, fall{};
+  std::array<Vec, maxTrees> fallDirection{};
   std::array<Debris, 128> debris{};
   unsigned debrisHead = 0;
   double lastTime = 0.;
@@ -39,7 +39,7 @@ struct ForestGraphic {
       return (seed >> 8) * (1.f / 16777216.f);
     };
     float rotation = roll() * 6.2831853f;
-    for (int i = 0; i < 60; ++i) {
+    for (int i = 0; i < maxTrees; ++i) {
       trees[i] = {rotation + (i < 3 ? i * 2.094395f : (i - 3) * 2.399963f) +
                       (roll() - .5f) * .3f,
                   roll(),
@@ -53,6 +53,16 @@ struct ForestGraphic {
                   roll(),
                   roll()};
     }
+  }
+  static Vec windSway(const Tree& tree, Vec wind, double time) {
+    float phase = float(time * (.6f + .8f * tree.shape)) + tree.phase;
+    return Vec(wind.x * (.35f + .18f * std::sin(phase)),
+               wind.y * (.3f + .15f * std::sin(phase * .83f + tree.lean)));
+  }
+  static Vec windTwig(const Tree& tree, Vec wind, double time) {
+    float phase = float(time * (1.7f + tree.branching)) + tree.phase;
+    return Vec(wind.x * .2f * std::sin(phase),
+               wind.y * .15f * std::sin(phase * 1.23f));
   }
   static float stageNear(Vec ground, float width, float height) {
     return std::max(0.f, 1.f - std::hypot(2.f * ground.x / width - 1.f,
@@ -174,10 +184,10 @@ struct ForestGraphic {
       int index;
       float x, y, near;
     };
-    std::array<Placement, 60> placements;
+    std::array<Placement, maxTrees> placements;
     // Cross-coupled space controls, like Foly Pace's parameter mashings.
     float density = densityFor(expanse, thicket, undergrowth, canopy);
-    int count = 10 + int(density * 50.f);
+    int count = 22 + int(density * 74.f);
     for (int i = 0; i < count; ++i) {
       const auto& t = trees[i];
       float radius = i < 3 ? .10f + .075f * t.radius : .24f + .23f * t.radius;
@@ -263,15 +273,12 @@ struct ForestGraphic {
           motion = &m;
         }
       }
-      Vec inertia, twig;
       float flexibility = .65f + .7f * t.shape;
-      if (motion) {
-        inertia = motion->striker;
-        twig = motion->tubes[p.index % 3];
-        flexibility *= .5f + motion->flexibility;
-      }
-      // Reuse real pendulum/tube motion: neighboring trees share the weather,
-      // but each tree weights different tube motion and has its own stiffness.
+      if (motion) flexibility *= .5f + motion->flexibility;
+      // Weather drives trees independently of chime strikes. Chime settings
+      // still supply local stiffness, but their pendulums never push trees.
+      Vec inertia = windSway(t, wind, time);
+      Vec twig = windTwig(t, wind, time);
       float bend = size * flexibility *
                    (.026f * wind.x + .17f * inertia.x + .08f * twig.x);
       float flutter = flexibility * (twig.x - inertia.x) * (.4f + turbulence);
