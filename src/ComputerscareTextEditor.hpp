@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "Computerscare.hpp"
+#include "ComputerscareTextEditorLayout.hpp"
 #include "ComputerscareTextEditorTypes.hpp"
 
 struct ComputerscareTextEditor : ui::TextField {
@@ -42,6 +43,10 @@ struct ComputerscareTextEditor : ui::TextField {
   void redo();
 
  protected:
+  // Reuse geometry only inside one synchronous highlight pass. Each pass
+  // resets this flag, so text, zoom, font and viewport changes cannot go stale.
+  ComputerscareTextEditorLayout highlightLayout;
+  bool highlightLayoutReady = false;
   bool suppressChangeTracking = false;
   bool handlingTrackedInput = false;
   bool lockingWordSelection = false;

@@ -1,6 +1,6 @@
 # Phlooper
 
-Phlooper plays up to sixteen independent audio loops. Small differences in loop length or speed let their repetitions drift apart. Each loop can store different mono or stereo audio.
+Phlooper plays up to sixteen independent audio loops. Small differences in loop length or speed let their repetitions drift apart. All loops share the recording duration; polyphonic inputs can record different audio into each one.
 
 ## Quick start
 
@@ -50,7 +50,7 @@ Positive Time/Length/Beats offsets extend the period with silence; negative offs
 
 Patch **Clock** to quantize Record and Erase starts and stops. Both the panel controls and gate inputs wait for the next adjusted clock pulse. Without a clock cable, they respond immediately.
 
-The boxy purple knob divides the clock to the left and multiplies it to the right: **÷16, ÷12, ÷8, ÷6, ÷4, ÷3, ÷2, ×1, ×2, ×3, ×4, ×6, ×8, ×12, ×16**. Multiplication learns the interval between two incoming pulses before adding subdivisions. Division begins on the first incoming pulse.
+The clock divider/multiplier knob divides the clock to the left and multiplies it to the right: **÷16, ÷12, ÷8, ÷6, ÷4, ÷3, ÷2, ×1, ×2, ×3, ×4, ×6, ×8, ×12, ×16**. Multiplication learns the interval between two incoming pulses before adding subdivisions. Division begins on the first incoming pulse.
 
 The Record light pulses yellow while Record or Erase waits to start and orange while waiting to stop. Erase pulses yellow while a change is queued. Short requests released before a clock pulse cancel themselves. Purple marks in the waveform show adjusted clock pulses captured during recording or erasing; they save with the patch.
 
@@ -64,7 +64,7 @@ In Beats mode, the main **Length** snaps to multiples of the selected fraction. 
 
 ### Hold
 
-**Hold** stops the drift. In Time/Length/Beats modes it preserves the current spacing between heads and matches their periods to loop 1. In Speed mode it preserves pitches and fits temporary regions so every loop repeats in exactly the same time. The shortest current repeat time becomes the shared period.
+**Hold** stops the drift. In Time/Length/Beats modes it preserves the current spacing between heads and matches their periods to loop 1. In Speed mode it preserves pitches and fits temporary regions so every loop repeats in exactly the same time. The shortest current repeat time becomes the shared period. In Speed Hold, polyphonic Speed CV changes each loop’s pitch and adjusts its held region to preserve the shared repeat time.
 
 Releasing Hold restores the selected regions. Start, Length, and Offset changes wait until release in Speed Hold; overall Speed continues to scale the held loops together. Smaller yellow brackets show the original regions while white brackets show the held regions.
 
@@ -90,11 +90,12 @@ Inputs support up to sixteen channels unless marked mono. For per-loop controls,
 | Restart     | Rising edge at ≥1 V, rearmed at ≤0 V. A cable initially high must go low then high                                                                                                                                                                   |
 | Stop        | Gate high at ≥1 V freezes addressed heads; combines with panel Stop and row Pause                                                                                                                                                                    |
 | Mute        | Gate high at ≥1 V silences addressed loops; combines with panel/row Mute and Solo                                                                                                                                                                    |
+| Clock       | Mono; rising edges at ≥1 V, rearmed at ≤0.1 V. Quantizes Record and Erase through the divider/multiplier                                                                                                                                             |
 | Hold        | Mono gate high at ≥1 V enables global Hold; combines with the panel latch                                                                                                                                                                            |
 | Start CV    | Adds 10 percentage points per volt, clamped to 0–100%. Missing poly channels use the knob                                                                                                                                                            |
 | Length CV   | Adds 10 percentage points per volt, clamped to 0.1–100%. Missing poly channels use the knob                                                                                                                                                          |
 | Offset CV   | ±10 V maps to ±100 ms in Time mode or ±20 percentage points in Length/Speed mode, or 40 signed fraction steps in Beats mode. Mono adds to every loop’s knob spacing; poly replaces spacing for supplied channels. Missing channels keep knob spacing |
-| Speed CV    | Mono, 1 V/octave; +1 V doubles speed, −1 V halves it. Combined Speed knob/CV is limited to ¼–4× before Speed-mode Offset                                                                                                                             |
+| Speed CV    | 1 V/octave; +1 V doubles speed, −1 V halves it. Mono affects all loops; poly addresses matching loops. Missing channels use the knob. Combined knob/CV is limited to ¼–4× before Speed-mode Offset                                                   |
 | Rec mix CV  | Mono; adds 10 percentage points per volt, clamped to 0–100%                                                                                                                                                                                          |
 | Out mix CV  | Mono; adds 10 percentage points per volt, clamped to 0–100%                                                                                                                                                                                          |
 | VCA         | 0–10 V controls 0–100% input level, multiplied by input Gain. Negative CV gives silence; above 10 V gives full level. Mono controls all loops; missing poly channels give silence. Unpatched passes full level                                       |

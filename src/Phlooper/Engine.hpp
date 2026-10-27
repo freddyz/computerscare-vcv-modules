@@ -13,7 +13,12 @@ struct Frame {
 struct Settings {
   int count = 2, mode = 0, overdub = 0;
   bool hold = false, oneShot = false, alignEnd = false;
-  unsigned offsetMask = 0, startMask = 0, lengthMask = 0;
+  unsigned offsetMask = 0, startMask = 0, lengthMask = 0, speedMask = 0;
+  std::array<float, voices> speeds{};
+  float speedFor(int voice) const {
+    return std::max(
+        .25f, std::min(4.f, speedMask & (1u << voice) ? speeds[voice] : speed));
+  }
   std::array<float, voices> offsets{}, starts{}, lengths{};
   unsigned customMask = 0;
   std::array<float, voices> customStarts{}, customLengths{};
@@ -44,7 +49,7 @@ class Engine {
     int count = 0, size = 0;
     double clock = 0, duration = 1, globalSpeed = 1;
     std::array<double, voices> starts{}, periods{}, speeds{}, phases{},
-        restartPhases{};
+        restartPhases{}, controlScales{};
     std::array<bool, voices> restartReturning{};
   } speedHold;
   std::array<Frame, voices> outputs{};
@@ -158,8 +163,8 @@ class Engine {
           oldStart +
           (reverse ? std::max(0., oldPeriod - 1. - head[v]) : head[v]);
       float offset = s.offsetMask & (1u << v) ? s.offsets[v] : v * s.offset;
-      speeds[v] = std::max(.05, std::min(8., 1. + offset / 100.)) *
-                  std::max(.25f, std::min(4.f, s.speed));
+      speeds[v] =
+          std::max(.05, std::min(8., 1. + offset / 100.)) * s.speedFor(v);
       duration = std::min(duration, std::max(48., oldPeriod) / speeds[v]);
     }
     speedHold = {};
@@ -170,6 +175,7 @@ class Engine {
     speedHold.globalSpeed = global;
     for (int v = 0; v < s.count; ++v) {
       speedHold.speeds[v] = speeds[v];
+      speedHold.controlScales[v] = s.speedFor(v) / global;
       speedHold.periods[v] = duration * speeds[v];
       speedHold.phases[v] = phases[v];
       speedHold.restartPhases[v] = phases[v];
@@ -355,10 +361,15 @@ class Engine {
             1, int(std::ceil(std::max(48., std::min(double(limit), period)))));
       }
       period = std::max(48., std::min(double(limit), period));
-      speed *= std::max(.25f, std::min(4.f, s.speed));
+      speed *= s.speedFor(v);
       if (speedHold.active) {
-        period = speedHold.periods[v];
-        speed = speedHold.speeds[v] * globalScale;
+        double capturedScale =
+            speedHold.controlScales[v] > 0 ? speedHold.controlScales[v] : 1.;
+        double relativeScale = s.speedFor(v) /
+                               std::max(.25f, std::min(4.f, s.speed)) /
+                               capturedScale;
+        period = speedHold.periods[v] * relativeScale;
+        speed = speedHold.speeds[v] * globalScale * relativeScale;
         length = std::max(1, int(std::ceil(period)));
         head[v] = wrapPhase(speedHold.clock + speedHold.phases[v]) * period;
       }

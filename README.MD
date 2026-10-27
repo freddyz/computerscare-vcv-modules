@@ -1,6 +1,6 @@
 # computerscare modules for VCV Rack
 
-<img src="doc/images/computerscare-1.4-all-modules.png" width="900" alt="Computerscare Modules for VCV Rack" />
+<img src="doc/images/computerscare-all-modules.png" width="900" alt="Computerscare Modules for VCV Rack" />
 
 ## Development
 
@@ -28,22 +28,31 @@ Use `RACK_DIR=/path/to/Rack-SDK` when the Rack SDK is not in the default local p
 
 - [32nd & Columbus](./doc/32nd-and-columbus.md): Up to sixteen wind-driven chime sets in a quadraphonic scene
 
-- [Phlooper](./doc/phlooper.md): Up to sixteen independent audio loops, with [input voltage ranges and channel mapping](./doc/phlooper.md#input-reference)
+- [Phlooper](./doc/phlooper.md): Up to sixteen independent audio loops, with [input voltage ranges and channel mapping](./doc/phlooper.md#inputs)
 
 ## Polyphonic Utilities
 
+[Group overview](./doc/poly-utilities.md)
+
 - [Knoly Pobs](./doc/poly-utilities.md): 16 knobs, polyphonic output
-- [VolyPector](./doc/volypector.md): 16 editable polyphonic CV bands
 - [Boly Puttons](./doc/poly-utilities.md): 16 latch buttons. Optional A/B inputs. Polyphonic output
 - [Roly Pouter](./doc/poly-utilities.md): Re-routes the channels of a polyphonic signal
 - [Soly Pequencer](./doc/poly-utilities.md): Sequentially outputs the individual channel voltages of a polyphonic signal
 - [Toly Pools](./doc/poly-utilities.md): Rotate a polyphonic signal, set/get/display polyphonic channel count
 - [Moly Patrix](./doc/moly-patrix.md): Polyphonic matrix mixer
 - [Goly Penerator](./doc/goly-penerator.md): Generate constant polyphonic CV via various algorithms
+
+## Advanced Polyphonic Utilities
+
+[Group overview](./doc/advanced-poly-utilities.md)
+
+- [Voly Pector](./doc/volypector.md): 16 editable polyphonic CV bands
 - [Sloly Pit](./doc/sloly-pit.md): Split and route a polyphonic input to 16 outputs
 - [Mely Porge](./doc/mely-porge.md): Polyphonic merge / insert / vca utility
 
 ## Visualization
+
+[Group overview](./doc/visualization.md)
 
 - [Foly Pace](./doc/foly-pace.md): Draws a photorealistic face. Use polyphonic input for maximum weirdness
 - [Stoly Fick Pigure](./doc/stoly-fick-pigure.md): Dancing stick figure. Use polyphonic input for the sickest moves

@@ -28,6 +28,13 @@ inline void checkBlunchGates(rack::plugin::Model* model) {
   int cvHigh=0;bool cvWas=false;bool cvDone=false;
   for(int i=0;i<30000;++i){bool on=tick(*cv);if(on)++cvHigh;else if(cvWas){require(std::abs(cvHigh-12000)<=2,"Gate length CV adds to knob");cvDone=true;break;}cvWas=on;}
   require(cvDone,"Gate CV emitted a measured gate");
+  require(cv->paramQuantities[B::GATE_LENGTH_PARAM]->getString()=="Gate length: 50%","Tooltip reports knob plus CV");
+  cv->inputs[B::GATE_LENGTH_CV_INPUT].setVoltage(-1.f);
+  require(cv->paramQuantities[B::GATE_LENGTH_PARAM]->getString()=="Gate length: Trigger","Negative net gate length selects Trigger");
+  auto* quantity=cv->paramQuantities[B::GATE_LENGTH_PARAM];
+  quantity->setDisplayValueString("-4");require(quantity->getValue()==-4&&quantity->getDisplayValueString()=="-4","Direct entry remains numeric in trigger range");
+  quantity->setDisplayValueString("-20");require(quantity->getValue()==-10,"Negative direct entry clamps to minus ten");
+  quantity->setDisplayValueString("41");require(quantity->getValue()==41,"Direct entry accepts gate percentages");
   auto random=make("{100-200}ms");random->params[B::SEED_PARAM].setValue(1);
   int high=0,expected=0,complete=0;bool previous=false;
   for(int i=0;i<96000;++i){bool now=tick(*random);if(now&&!previous)expected=int(24000/random->sequencers[0].activeClockSpec.hz);if(now)++high;else if(previous){require(std::abs(high-expected)<=2,"Random duration determines its own gate length");++complete;high=0;}previous=now;}
@@ -36,7 +43,7 @@ inline void checkBlunchGates(rack::plugin::Model* model) {
   auto tied=make("120bpm",100);int lows=0;for(int i=0;i<60000;++i){bool high=tick(*tied);if(i>100&&!high)++lows;}require(lows<=2,"Full length gates join across consecutive steps");
   tied->sequencers[0].running=false;require(!tick(*tied),"Stop immediately ends a long gate");
   auto rest=make("~120bpm",100);for(int i=0;i<30000;++i)require(!tick(*rest),"Rests do not emit gates");
-  auto trigger=make("120bpm");trigger->params[B::CLOCK_OUTPUT_MODE_PARAM].setValue(0);high=0;previous=false;complete=0;
+  auto trigger=make("120bpm");trigger->params[B::GATE_LENGTH_PARAM].setValue(-1);high=0;previous=false;complete=0;
   for(int i=0;i<30000;++i){bool now=tick(*trigger);if(now)++high;else if(previous){require(std::abs(high-48)<=1,"Trigger mode retains one millisecond pulses");high=0;++complete;}previous=now;}require(complete>0,"Trigger fixture emitted a pulse");
   auto ext=make("w");ext->inputs[B::EXTERNAL_CLOCK_W_INPUT].channels=1;
   for(int i=0;i<10000;++i){ext->inputs[B::EXTERNAL_CLOCK_W_INPUT].setVoltage(i%4800<48?10:0);bool now=tick(*ext);if(i==6000)require(now,"External gate remains high after its incoming trigger falls");if(i==7500)require(!now,"External gate ends at half the measured interval");}

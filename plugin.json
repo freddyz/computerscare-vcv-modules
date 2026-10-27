@@ -171,7 +171,7 @@
       "name": "Mely Porge",
       "description": "Polyphonic input processor with 16 insert channels",
       "tags": ["Polyphonic", "Utility", "Mixer", "Attenuator", "VCA"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/poly-utilities.md#mely-porge"
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/mely-porge.md"
     },
     {
       "slug": "computerscare-32nd-and-columbus",

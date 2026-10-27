@@ -447,9 +447,21 @@ struct ComputerscarePhlooper : Module {
     s.mix =
         clamp(params[MIX].getValue() + inputs[OUT_MIX_CV].getVoltage() / 10.f,
               0.f, 1.f);
+    auto& speedCv = inputs[SPEED_CV];
     s.speed = std::pow(
-        2.f, clamp(params[SPEED].getValue() + inputs[SPEED_CV].getVoltage(),
-                   -2.f, 2.f));
+        2.f,
+        clamp(params[SPEED].getValue() +
+                  (speedCv.getChannels() == 1 ? speedCv.getVoltage() : 0.f),
+              -2.f, 2.f));
+    if (speedCv.getChannels() > 1) {
+      s.speedMask = 65535u;
+      for (int i = 0; i < 16; ++i)
+        s.speeds[i] = std::pow(
+            2.f,
+            clamp(params[SPEED].getValue() +
+                      (i < speedCv.getChannels() ? speedCv.getVoltage(i) : 0.f),
+                  -2.f, 2.f));
+    }
     s.alignEnd = params[ALIGN_END].getValue() > .5f;
     s.oneShot = params[ONE_SHOT].getValue() > .5f;
     s.hold =
@@ -729,9 +741,10 @@ struct ComputerscarePhlooper : Module {
       auto* channels = json_array();
       for (int i = 0; i < state.count; ++i) {
         auto* channel = json_array();
-        for (double value : {state.starts[i], state.periods[i], state.speeds[i],
-                             state.phases[i], state.restartPhases[i],
-                             double(state.restartReturning[i])})
+        for (double value :
+             {state.starts[i], state.periods[i], state.speeds[i],
+              state.phases[i], state.restartPhases[i],
+              double(state.restartReturning[i]), state.controlScales[i]})
           json_array_append_new(channel, json_real(value));
         json_array_append_new(channels, channel);
       }
@@ -827,8 +840,15 @@ struct ComputerscarePhlooper : Module {
             json_array_size(channel) >= 6
                 ? json_number_value(json_array_get(channel, 5)) != 0
                 : loop.returning[i];
+        state.controlScales[i] =
+            json_array_size(channel) >= 7
+                ? json_number_value(json_array_get(channel, 6))
+                : 1.;
         valid =
-            (json_array_size(channel) == 4 || json_array_size(channel) == 6) &&
+            (json_array_size(channel) == 4 || json_array_size(channel) == 6 ||
+             json_array_size(channel) == 7) &&
+            std::isfinite(state.controlScales[i]) &&
+            state.controlScales[i] >= .0625 && state.controlScales[i] <= 16. &&
             std::isfinite(state.restartPhases[i]) &&
             state.restartPhases[i] >= 0 && state.restartPhases[i] < 1 &&
             std::isfinite(state.starts[i]) && state.starts[i] >= 0 &&

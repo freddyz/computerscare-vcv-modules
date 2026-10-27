@@ -19,6 +19,9 @@ scripts/preview-module.sh blunch
 # then capture its selection and inactive-row stripes.
 scripts/preview-module.sh blunch --controls
 
+# Compare editor stepping/rendering cost (excludes PNG writing).
+BLUNCH_EDITOR_BENCHMARK=1 scripts/preview-module.sh blunch --controls
+
 # Render only the exact null-module browser preview.
 scripts/preview-module.sh --browser
 
@@ -70,3 +73,7 @@ The `32nd-and-columbus` preview also writes `01-forest.png`, showing the Forest 
 Forest previews also render `02-forest-open.png` and `03-forest-thicket.png` with contrasting Forest settings. The fixture simulates wind through the real module before capturing the scene.
 
 Set `FOREST_STORM_PREVIEW=1` for a short live storm and settling sequence (`04-storm-ground.png`, `05-storm-settled.png`). The native fixture also checks that debris settles at its tree’s radial ground position and leaves the scene without wrapping.
+
+Blunch Control captures also include `theme-Mauer.png`, `theme-Garnett.png`, `theme-Moss.png`, and `theme-Puckett.png`. These use different channel arrangements to check both overview and detail views. Theme changes are checked against the same caret and viewport geometry.
+
+Use `scripts/preview-module.sh groups` to render the current family, basic polyphonic utilities, advanced polyphonic utilities, and visualization modules. The family is checked against all non-hidden entries in `plugin.json`. The utility groups use real offline patches and Rack cables. Portaloof processes a fresh capture of the displayed modules. No audio device or existing patch is opened. Generated files stay in `build/previews/groups/`; copy approved documentation images into `doc/images/`.

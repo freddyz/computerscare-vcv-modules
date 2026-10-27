@@ -6,10 +6,6 @@
 
 16 knobs, polyphonic output, Default range: 0 - 10 volts. Global scale & offset knobs to adjust all output channel values simultaniously.
 
-## VolyPector
-
-16 editable polyphonic CV bands. See the [VolyPector manual](./volypector.md).
-
 ## Boly Puttons
 
 16 latch buttons. On/off voltages selectable via right-click menu. Plugging in a polyphonic signal to the A/B inputs will override the selected on/off values and use the CV signals instead. If a monophonic signal is plugged into the "A" input, its voltage will be used for ALL "off/up" buttons. Number of output channels will be the maximum of: number of channels from "A" input, number of channels from "B", input, or the manual poly channels knob setting
@@ -38,3 +34,5 @@ Sequentially output the individual channel voltages of a polyphonic signal. Conn
 ### Poly Channels Knob
 
 Most Poly Utilities have the small poly channels knob which sets how many poly channels the output signal has. Puttons, Pouter, and Pequencer all support "automatic" mode for this knob when turned all the way to left. When in this position, the poly output channels will be set to equal the poly input channels.
+
+See [Advanced Polyphonic Utilities](advanced-poly-utilities.md) for Voly Pector, Mely Porge, and Sloly Pit.

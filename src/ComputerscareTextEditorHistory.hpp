@@ -15,15 +15,19 @@ struct ComputerscareTextEditorHistory {
   void* bound = nullptr;
   bool switchState(void* state, Stack& undo, Stack& redo) {
     if (state == bound) return false;
-    if (bound) views[bound] = {undo, redo};
+    if (bound) {
+      auto& previous = views[bound];
+      previous.undo.swap(undo);
+      previous.redo.swap(redo);
+    }
     bound = state;
     auto found = views.find(state);
     if (found == views.end()) {
       undo.clear();
       redo.clear();
     } else {
-      undo = found->second.undo;
-      redo = found->second.redo;
+      undo.swap(found->second.undo);
+      redo.swap(found->second.redo);
     }
     return true;
   }

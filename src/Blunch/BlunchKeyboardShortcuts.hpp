@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-#include "../ComputerscareTextEditorTypes.hpp"
+#include "../ComputerscareTextEditorShortcuts.hpp"
 
 namespace computerscare {
 namespace blunch {
@@ -30,19 +30,14 @@ enum class ControlCommand {
 ControlCommand handleControlShortcut(int key, int mods, int action,
                                      ControlSelection& selection);
 
-struct KeyboardShortcutOptions {
-  bool submitOnEnter = false;
-  bool openOnEnter = false;
-  bool stopShortcutEnabled = false;
-};
-
-bool handleKeyboardShortcut(int key, const std::string& keyName, int mods,
-                            int action, const KeyboardShortcutOptions& options,
-                            ComputerscareTextEditorCommands& commands);
+// Keep existing Blunch callers source-compatible; the reusable editor owns
+// command dispatch and has no dependency on Blunch's channel model.
+using text_editor::handleKeyboardShortcut;
+using text_editor::isHardStopShortcut;
+using text_editor::isRunToggleShortcut;
+using text_editor::KeyboardShortcutOptions;
 bool isShortcutHelpCharacter(uint32_t codepoint);
 bool isShortcutHelpKey(int key, const std::string& keyName, int mods);
-bool isHardStopShortcut(int key, const std::string& keyName, int mods);
-bool isRunToggleShortcut(int key, const std::string& keyName, int mods);
 
 }  // namespace blunch
 }  // namespace computerscare

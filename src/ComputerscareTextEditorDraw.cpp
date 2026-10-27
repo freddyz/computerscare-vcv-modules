@@ -2,7 +2,11 @@
 #include <cmath>
 
 #include "ComputerscareTextEditor.hpp"
+#include "ComputerscareTextEditorHighlightGeometry.hpp"
 #include "ComputerscareTextEditorLayout.hpp"
+#include "ComputerscareTextEditorViewport.hpp"
+using computerscare::text_editor::highlightBorderPath;
+using computerscare::text_editor::highlightFillPath;
 
 namespace {
 enum HighlightDrawMode {
@@ -11,70 +15,6 @@ enum HighlightDrawMode {
   HIGHLIGHT_BORDER,
   HIGHLIGHT_PROGRESS
 };
-void highlightFillPath(NVGcontext* vg, float x, float y, float width,
-                       float height, float distortion, unsigned seed) {
-  if (distortion <= 0.f) {
-    nvgRect(vg, x, y, width, height);
-    return;
-  }
-  float amount = std::min(distortion, std::min(width, height) * .2f);
-  auto offset = [&](unsigned corner) {
-    unsigned bits = seed * 0x9e3779b9u + corner * 0x85ebca6bu;
-    bits ^= bits >> 16;
-    bits *= 0x7feb352du;
-    return float(bits & 1023u) / 1023.f * amount;
-  };
-  // Keep all four corners inside the row, with stable asymmetric edges.
-  nvgMoveTo(vg, x + offset(0), y + offset(1));
-  nvgLineTo(vg, x + width - offset(2), y + offset(3));
-  nvgLineTo(vg, x + width - offset(4), y + height - offset(5));
-  nvgLineTo(vg, x + offset(6), y + height - offset(7));
-  nvgClosePath(vg);
-}
-void highlightBorderPath(NVGcontext* vg, float x, float y, float width,
-                         float height, float distortion, unsigned seed) {
-  if (distortion <= 0.f) {
-    nvgRoundedRect(vg, x, y, width, height, 2.f);
-    return;
-  }
-  float amount = std::min(distortion, std::min(width, height) * .08f);
-  auto jitter = [&](unsigned corner) {
-    unsigned bits = seed * 0x9e3779b9u + corner * 0x85ebca6bu;
-    bits ^= bits >> 16;
-    bits *= 0x7feb352du;
-    return (float(bits & 1023u) / 1023.f - .5f) * amount * 2.f;
-  };
-  Vec corners[] = {Vec(x + jitter(0), y + jitter(1)),
-                   Vec(x + width + jitter(2), y + jitter(3)),
-                   Vec(x + width + jitter(4), y + height + jitter(5)),
-                   Vec(x + jitter(6), y + height + jitter(7))};
-  bool curved = jitter(17) > 0.f;
-  if (curved) {
-    Vec entry[4], exit[4];
-    for (int i = 0; i < 4; ++i) {
-      entry[i] =
-          corners[i].plus(corners[(i + 3) % 4].minus(corners[i]).mult(.12f));
-      exit[i] =
-          corners[i].plus(corners[(i + 1) % 4].minus(corners[i]).mult(.12f));
-    }
-    nvgMoveTo(vg, entry[0].x, entry[0].y);
-    for (int i = 0; i < 4; ++i) {
-      nvgQuadTo(vg, corners[i].x, corners[i].y, exit[i].x, exit[i].y);
-      Vec edge = entry[(i + 1) % 4].minus(exit[i]);
-      float length = std::max(.01f, edge.norm());
-      Vec bend = Vec(-edge.y, edge.x).mult(jitter(20 + i) / length);
-      Vec first = exit[i].plus(edge.mult(1.f / 3.f)).plus(bend);
-      Vec second = exit[i].plus(edge.mult(2.f / 3.f)).plus(bend);
-      Vec end = entry[(i + 1) % 4];
-      nvgBezierTo(vg, first.x, first.y, second.x, second.y, end.x, end.y);
-    }
-  } else {
-    nvgMoveTo(vg, corners[0].x, corners[0].y);
-    for (int i = 1; i < 4; ++i) nvgLineTo(vg, corners[i].x, corners[i].y);
-  }
-  nvgClosePath(vg);
-  nvgLineJoin(vg, curved ? NVG_ROUND : NVG_MITER);
-}
 }  // namespace
 
 void ComputerscareTextEditor::draw(const DrawArgs& args) {
@@ -124,7 +64,8 @@ int ComputerscareTextEditor::getTextPosition(Vec mousePos) {
     nvgScale(vg, rackZoom * getFontScaleX(), rackZoom * getFontScaleY());
     applyTextStyle(vg, font);
     Vec scaledBox = getScaledBoxSize();
-    Vec scaledMouse(mousePos.x / getFontScaleX(), mousePos.y / getFontScaleY());
+    Vec scaledMouse =
+        ComputerscareTextEditorViewport(box.size, style).toLogical(mousePos);
     ComputerscareTextEditorLayout layout =
         ComputerscareTextEditorLayout::build(vg, text, scaledBox, style);
     int textPos = layout.hitTest(scaledMouse);
@@ -146,15 +87,15 @@ std::shared_ptr<Font> ComputerscareTextEditor::loadEditorFont() {
 }
 
 float ComputerscareTextEditor::getFontScaleX() const {
-  return std::max(0.5f, 1.f + style.fontWidthOffset);
+  return ComputerscareTextEditorViewport(box.size, style).scale.x;
 }
 
 float ComputerscareTextEditor::getFontScaleY() const {
-  return std::max(0.5f, 1.f + style.fontHeightOffset);
+  return ComputerscareTextEditorViewport(box.size, style).scale.y;
 }
 
 Vec ComputerscareTextEditor::getScaledBoxSize() const {
-  return Vec(box.size.x / getFontScaleX(), box.size.y / getFontScaleY());
+  return ComputerscareTextEditorViewport(box.size, style).logicalSize();
 }
 
 void ComputerscareTextEditor::applyTextStyle(NVGcontext* vg,
@@ -166,6 +107,7 @@ void ComputerscareTextEditor::applyTextStyle(NVGcontext* vg,
 }
 
 void ComputerscareTextEditor::drawHighlightBackgrounds(const DrawArgs& args) {
+  highlightLayoutReady = false;
   if (!state) {
     return;
   }
@@ -255,6 +197,7 @@ void ComputerscareTextEditor::drawEditorText(const DrawArgs& args) {
 }
 
 void ComputerscareTextEditor::drawHighlightForegrounds(const DrawArgs& args) {
+  highlightLayoutReady = false;
   if (!state) {
     return;
   }
@@ -267,6 +210,7 @@ void ComputerscareTextEditor::drawHighlightForegrounds(const DrawArgs& args) {
 }
 
 void ComputerscareTextEditor::drawHighlightDecorations(const DrawArgs& args) {
+  highlightLayoutReady = false;
   if (!state) {
     return;
   }
@@ -353,8 +297,12 @@ void ComputerscareTextEditor::drawHighlightSpan(
   // under the same font scaling used to render, or spacing drifts per glyph.
   nvgScale(args.vg, getFontScaleX(), getFontScaleY());
   applyTextStyle(args.vg, font);
-  ComputerscareTextEditorLayout layout = ComputerscareTextEditorLayout::build(
-      args.vg, text, getScaledBoxSize(), style);
+  if (!highlightLayoutReady) {
+    highlightLayout = ComputerscareTextEditorLayout::build(
+        args.vg, text, getScaledBoxSize(), style);
+    highlightLayoutReady = true;
+  }
+  const auto& layout = highlightLayout;
   nvgRestore(args.vg);
 
   nvgSave(args.vg);

@@ -33,7 +33,9 @@ using namespace rack;
 #include "blunch-seed-checks.hpp"
 #include "blunch-sync-checks.hpp"
 #include "blunch-gate-checks.hpp"
+#include "blunch-row-selection-checks.hpp"
 #include "voly-keyboard-checks.hpp"
+#include "../../src/Portaloof/PortaloofModule.hpp"
 
 namespace {
 struct PreviewContainer : widget::Widget {
@@ -76,6 +78,17 @@ void capture(widget::Widget* widget, const std::string& path, float scale,
   framebuffer->box.size = widget->box.size;
   container->addChild(widget);
   framebuffer->render(math::Vec(scale, scale));
+  if(std::getenv("BLUNCH_EDITOR_BENCHMARK") && path.find("/01-control-mode.png")!=std::string::npos) {
+    std::vector<double> samples;
+    for(int batch=0;batch<5;++batch){
+      glFinish();auto start=std::chrono::steady_clock::now();
+      for(int frame=0;frame<20;++frame){widget->step();framebuffer->render(math::Vec(scale,scale));}
+      glFinish();samples.push_back(std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count()/20.);
+    }
+    std::sort(samples.begin(),samples.end());
+    std::printf("Blunch editor benchmark: %.3f ms/frame median (step + native render, 16 rows)\n",samples[2]);
+  }
+
   if (!framebuffer->getFramebuffer())
     throw std::runtime_error("Could not render framebuffer");
   nvgluBindFramebuffer(framebuffer->getFramebuffer());
@@ -93,6 +106,9 @@ void capture(widget::Widget* widget, const std::string& path, float scale,
   container->removeChild(widget);
   std::printf("%s (%d x %d)\n", path.c_str(), width, height);
 }
+
+#include "groups.hpp"
+
 void checkMaxVisual(app::ModuleWidget* widget,bool& compact,const std::string& path,float scale) {
   float width=widget->box.size.x;
   auto ports=widget->getPorts();std::vector<widget::Widget*> parents;std::vector<Rect> boxes;
@@ -124,6 +140,7 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   };
   modelBlunchPreview->plugin = &plugin;
   checkBlunchGates(modelBlunchPreview);
+  checkBlunchRowSelection(modelBlunchPreview);
   checkBlunchFormulaLayers(modelBlunchPreview);
   checkBlunchThreadHandoff(modelBlunchPreview);
   checkBlunchSeedBoundaries(modelBlunchPreview);
@@ -323,7 +340,8 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   key(GLFW_KEY_DOWN, GLFW_MOD_SHIFT);
   key(GLFW_KEY_DOWN, GLFW_MOD_SHIFT);
   for (int i = 0; i < 11; ++i) key(GLFW_KEY_DOWN);
-  key(GLFW_KEY_ENTER, GLFW_MOD_CONTROL);
+  module->controlSelection.toggleFocused();
+  key(GLFW_KEY_ENTER, RACK_MOD_CTRL);
   unsigned selected = 14u | (1u << 14);
   require(module->controlSelection.targets() == selected,
           "UI keyboard selection selects channels 2, 3, 4, 15");
@@ -350,6 +368,7 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
       widget->step();
     };
     module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(16.f);
+    module->controlSelection.selectOnly(14);
     pressTransport(widget->channelStop);
     require(widget->channelPlay->tooltipText() == "Channel 15: stopped" &&
                 widget->channelStop->tooltipText() == "Stop channel 15",
@@ -379,11 +398,12 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
     require(firstTrigger && module->sequencers[14].activeClockDisplayPulse > .9f,
             "Play emits its initial trigger and display blink without waiting a beat");
     pressTransport(widget->channelPlay);
-    require(!module->sequencers[14].running,
-            "Play button toggles like the transport keyboard shortcut");
+    require(module->sequencers[14].running,
+            "Play button keeps an already playing selection running");
     pressTransport(widget->channelPlay);
     module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(8.f);
   }
+  module->controlSelection.selectOnly(1);module->focusControlRow();widget->step();
   require(module->commitLineForChannel(1, 1, true), "second line must compile");
   module->stopSequencer(1, true);
   key(GLFW_KEY_R);
@@ -391,16 +411,27 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   require(
       module->sequencers[1].activeLine == 0 && !module->sequencers[1].running,
       "reset returns stopped channels to first line without starting them");
+  selected = module->controlSelection.targets();
   key(GLFW_KEY_ENTER);
-  require(module->showingSequenceView(),
-          "Enter opens focused channel in Control mode");
+  require(module->showingChannelsView(), "Enter stays in All in Control mode");
   key(GLFW_KEY_TAB);
-  require(module->showingChannelsView(), "Tab returns to All in Control mode");
+  require(module->showingSequenceView(), "Tab opens the focused channel");
+  key(GLFW_KEY_TAB);
+  require(module->showingChannelsView(), "Tab returns to All");
   key(GLFW_KEY_TAB);
   key(GLFW_KEY_ESCAPE);
   require(module->showingChannelsView() &&
               module->controlSelection.targets() == selected,
           "Escape returns to All without clearing selection");
+  module->controlMode=false;widget->step();
+  auto allText=module->channelsEditorState.text;
+  key(GLFW_KEY_ENTER);key(GLFW_KEY_KP_ENTER);
+  require(module->showingChannelsView()&&module->channelsEditorState.text==allText,"Enter in All edit view neither navigates nor inserts rows");
+  key(GLFW_KEY_TAB);require(module->showingSequenceView(),"Tab opens channel in edit mode");
+  key(GLFW_KEY_TAB);require(module->showingChannelsView(),"Tab returns to All in edit mode");
+  key(GLFW_KEY_TAB);
+  key(GLFW_KEY_ESCAPE);require(module->showingChannelsView(),"Escape returns to All in edit mode");
+  module->controlMode=true;widget->step();
   auto before = module->channelsEditorState.text;
   widget::Widget::SelectTextEvent typing;
   typing.codepoint = 'x';
@@ -713,6 +744,22 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   module->setFormulaLayer(ComputerscareBlunch::DRAFT);
   widget->step();
   capture(widget.get(), output + "/08-channel-draft-applied.png", scale);
+  module->controlMode=false;
+  module->params[ComputerscareBlunch::AUTO_ADVANCE_PARAM].setValue(0);
+  module->commitLine(0,true);
+  widget->step();editor->setCursorLine(1);
+  key(GLFW_KEY_ENTER,RACK_MOD_CTRL);
+  require(module->sequencers[0].activeLine==1 && module->sequencers[0].running,
+          "Ctrl/Cmd+Enter starts the focused channel line with Line advance off");
+  module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_LINE);
+  editor->setCursorLine(0);key(GLFW_KEY_ENTER,RACK_MOD_CTRL);
+  require(module->pendingFormulas[0].line==0 && !module->pendingFormulas[0].page,
+          "Focused-line submission queues an explicit line jump at the Wait boundary");
+  module->activatePendingLineAtBoundary(ComputerscareBlunch::WAIT_BOUNDARY_LINE,true);
+  require(module->sequencers[0].activeLine==0,
+          "Queued focused-line submission jumps even with Line advance off");
+  module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_IMMEDIATE);
+
 
   module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(1);
   module->pendingFormulas[2] = ComputerscareBlunch::PendingFormula{};
@@ -738,16 +785,42 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
     widget->appendContextMenu(menu.get());
     ui::MenuItem* pulseMenu=nullptr;
     for(auto* child:menu->children)if(auto* item=dynamic_cast<ui::MenuItem*>(child))if(item->text=="Clock output")pulseMenu=item;
-    require(pulseMenu,"Clock output mode menu exists");
-    auto options=std::unique_ptr<ui::Menu>(pulseMenu->createChildMenu());
-    ui::MenuItem* gate=nullptr;MenuParamSlider* length=nullptr;
-    for(auto* child:options->children){if(auto* item=dynamic_cast<ui::MenuItem*>(child))if(item->text=="Gate")gate=item;if(auto* slider=dynamic_cast<MenuParamSlider*>(child))length=slider;}
-    require(gate&&length,"Clock output submenu exposes Gate and length percentage");
-    gate->doAction();require(module->params[ComputerscareBlunch::CLOCK_OUTPUT_MODE_PARAM].getValue()==1,"Menu selects Gate mode");
-    widget::Widget menuParent;menuParent.box.size=Vec(400,400);
-    menuParent.addChild(options.get());options->step();menuParent.removeChild(options.get());
-    capture(options.get(),output+"/11-gate-menu.png",scale,false);
+    require(!pulseMenu,"Clock output mode is controlled by the panel knob, not the context menu");
   }
+  // Theme changes must not move text, alter cursor hit tests, or touch transport.
+  module->returnToChannelsView();module->controlMode=false;widget->step();
+  auto themeLayout=layout();
+  for(int theme=0;theme<4;++theme) {
+    module->editorTheme=theme;widget->step();auto themed=layout();
+    require(themed.rows.size()==themeLayout.rows.size(),"Themes preserve visible rows");
+    for(size_t row=0;row<themed.rows.size();++row)
+      require(themed.rows[row].x==themeLayout.rows[row].x&&themed.rows[row].y==themeLayout.rows[row].y&&themed.rows[row].carets==themeLayout.rows[row].carets,"Themes preserve caret and viewport geometry");
+    auto* saved=module->dataToJson();
+    auto restored=std::unique_ptr<ComputerscareBlunch>(static_cast<ComputerscareBlunch*>(modelBlunchPreview->createModule()));
+    restored->dataFromJson(saved);json_decref(saved);
+    require(restored->editorTheme==theme,"Editor theme survives patch reload");
+  }
+  for(int theme : {1,2,0,3}) {
+    module->editorTheme=theme;
+    module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_IMMEDIATE);
+    module->focusedChannel=1;
+    module->sequenceEditorStates[1].text="80bpm@3\n{100-120}bpm#4s\n[300 450]ms\n(2 (3 1))hz@9";
+    module->commitLineForChannel(1,theme%3,true);module->startSequencer(1);
+    module->sequencers[1].activeClockDisplayPulse=.65f;
+    module->playbackDisplayStyle=theme==2?2:1;
+    module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].setValue(theme==0?16:6);
+    if(theme==1||theme==0) {
+      module->returnToChannelsView();module->controlMode=theme==0;
+      module->controlSelection.selectOnly(theme==0?3:1);module->controlSelection.moveTo(theme==0?5:2,true);module->focusControlRow();
+    } else {
+      module->controlMode=false;module->channelsCursorChannel=1;module->openFocusedChannelEditPage();
+      module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_LINE);
+      module->sequenceEditorStates[1].text="80bpm@3\n{100-140}bpm#4s\n[300 450]ms\n(2 (3 1))hz@9";
+    }
+    widget->step();
+    capture(widget.get(),output+"/theme-"+computerscare::text_editor::editorTheme(theme).name+".png",scale);
+  }
+  std::puts("Editor theme persistence and identical viewport/caret geometry checks passed");
   std::puts(
       "Blunch Control-mode UI, transport, mouse, and layout checks passed.");
 }
@@ -789,6 +862,10 @@ int main(int argc, char** argv) {
     plugin.path = argv[1];
     plugin.slug = "computerscare";
     pluginInstance = &plugin;
+    if(argc==7 && std::string(argv[6])=="groups") {
+      renderModuleGroups(plugin,argv[3],scale);
+      return 0;
+    }
     if (std::getenv("JACK_PREVIEW_CHECKS")) {
       std::unique_ptr<widget::Widget> jacks[] = {
           std::unique_ptr<widget::Widget>(new JackSmallPointingUp),
@@ -850,8 +927,28 @@ int main(int argc, char** argv) {
         for(int ch=0;ch<6;++ch) if(std::fabs(m->outputs[P::OUT_L].getVoltage(ch)-float(ch+1)*gain)>1e-5f) throw std::runtime_error("Polyphonic input gain is not linear");
       }
       std::puts("Phlooper six-channel input/output gain linearity checks passed");
+      m->loop.size=1024;m->loop.resetHeads();
+      for(int voice=0;voice<16;++voice)std::fill(m->loop.audio[voice].get(),m->loop.audio[voice].get()+2048,0.f);
+      m->params[P::MODE].setValue(0);m->params[P::SPEED].setValue(0);m->params[P::OFFSET].setValue(0);m->params[P::COUNT].setValue(4);m->params[P::HOLD].setValue(0);
+      m->inputs[P::SPEED_CV].channels=2;m->inputs[P::SPEED_CV].setVoltage(0,0);m->inputs[P::SPEED_CV].setVoltage(1,1);
+      for(int frame=0;frame<10;++frame){++gainArgs.frame;m->process(gainArgs);}
+      if(std::fabs(m->loop.head[1]-2*m->loop.head[0])>1e-5 || std::fabs(m->loop.head[2]-m->loop.head[0])>1e-5)throw std::runtime_error("Polyphonic speed CV must address matching loops, missing channels use knob");
+      m->loop.resetHeads();m->inputs[P::SPEED_CV].channels=1;m->inputs[P::SPEED_CV].setVoltage(1);
+      for(int frame=0;frame<10;++frame){++gainArgs.frame;m->process(gainArgs);}
+      for(int voice=1;voice<4;++voice)if(m->loop.head[voice]!=m->loop.head[0])throw std::runtime_error("Mono speed CV must broadcast");
+      m->loop.resetHeads();m->inputs[P::SPEED_CV].channels=2;m->inputs[P::SPEED_CV].setVoltage(0,0);m->inputs[P::SPEED_CV].setVoltage(1,1);
+      m->params[P::MODE].setValue(2);++gainArgs.frame;m->process(gainArgs);
+      m->params[P::HOLD].setValue(1);++gainArgs.frame;m->process(gainArgs);
+      if(!m->loop.speedHold.active || std::fabs(m->loop.periods[1]-2*m->loop.periods[0])>1e-5)throw std::runtime_error("Speed Hold fits independent polyphonic pitches");
+      m->inputs[P::SPEED_CV].setVoltage(-1,1);++gainArgs.frame;m->process(gainArgs);
+      if(std::fabs(m->loop.periods[1]-.5*m->loop.periods[0])>1e-5 || std::fabs(phlooper::Engine::wrapPhase(m->loop.head[1]/m->loop.periods[1]-m->loop.speedHold.phases[1])-phlooper::Engine::wrapPhase(m->loop.head[0]/m->loop.periods[0]-m->loop.speedHold.phases[0]))>1e-5)throw std::runtime_error("Poly speed CV responds while held without losing shared repeat timing");
+      auto* heldJson=m->dataToJson();auto restored=std::unique_ptr<P>(static_cast<P*>(modelPhlooperPreview->createModule()));restored->dataFromJson(heldJson);json_decref(heldJson);
+      if(!restored->loop.speedHold.active || restored->loop.speedHold.controlScales[1]!=2.)throw std::runtime_error("Held polyphonic speed state persists");
+      std::puts("Polyphonic speed, mono broadcast, missing channels, live Speed Hold and persistence checks passed");
+
 
     }
+
 
     if (argc >= 6 && std::string(argv[5]) == "browser") {
       plugin::Model* browserModel = modelPhlooperPreview;

@@ -13,6 +13,19 @@ inline void checkBlunchSeedBoundaries(rack::plugin::Model* model) {
     if (!m->commitLine(0, true)) throw std::runtime_error("seed fixture failed to compile");
     return m;
   };
+  for(float seed : {0.f, .1f, 1.f, 2.f, 7.f, 19.f}) {
+    auto countedChoices=make("{2|3|4#2|5#3}hz@9",seed);
+    auto& runtime=countedChoices->sequencers[0];
+    int wraps=0,transitions=0;
+    for(int tick=0;tick<90 && wraps<3;++tick) {
+      int before=runtime.activeProgramBeat;
+      countedChoices->advanceActiveProgramBeat(runtime);
+      int after=runtime.activeProgramBeat;
+      if(after!=before) {++transitions;if(after==0)++wraps;}
+      require(after>=0 && after<9,"Outer @9 counter stays within nine choices");
+    }
+    require(wraps==3 && transitions==27,"Nested #2/#3 choices finish without trapping the seeded @9 pattern");
+  }
   auto timed = make("{80|160}@3s", 1.f);
   auto control = make("{80|160}@3s", 1.f);
   timed->params[B::SEED_PARAM].setValue(2.f);

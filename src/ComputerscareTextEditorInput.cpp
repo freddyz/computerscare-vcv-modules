@@ -1,8 +1,8 @@
 #include <algorithm>
 
-#include "Blunch/BlunchKeyboardShortcuts.hpp"
 #include "ComputerscareTextEditor.hpp"
 #include "ComputerscareTextEditorLogic.hpp"
+#include "ComputerscareTextEditorShortcuts.hpp"
 
 void ComputerscareTextEditor::onEnter(const EnterEvent& e) {
   ui::TextField::onEnter(e);
@@ -83,11 +83,11 @@ void ComputerscareTextEditor::onSelectText(const SelectTextEvent& e) {
 void ComputerscareTextEditor::onSelectKey(const SelectKeyEvent& e) {
   if (e.action == GLFW_PRESS || e.action == GLFW_REPEAT) {
     int mods = e.mods & RACK_MOD_MASK;
-    computerscare::blunch::KeyboardShortcutOptions shortcutOptions;
+    computerscare::text_editor::KeyboardShortcutOptions shortcutOptions;
     shortcutOptions.submitOnEnter = submitOnEnter;
     shortcutOptions.openOnEnter = openOnEnter;
     shortcutOptions.stopShortcutEnabled = stopShortcutEnabled;
-    if (computerscare::blunch::handleKeyboardShortcut(
+    if (computerscare::text_editor::handleKeyboardShortcut(
             e.key, e.keyName, e.mods, e.action, shortcutOptions, commands)) {
       e.consume(this);
       return;

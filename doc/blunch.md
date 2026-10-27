@@ -10,7 +10,7 @@ Blunch is a text-based clock and trigger sequencer with up to 16 independent cha
 4. Try `[300 400]ms` for alternating 300 ms and 400 ms intervals.
 5. Add another formula on a new line. With automatic Line advance, Blunch plays each line in turn and loops the page.
 
-The **Run** button enables playback. New modules start with one output channel and one to four short example lines in channel 1.
+The **Run** button enables playback. New modules start in Auto polyphony, with only channel 1 active and one to four short example lines.
 
 ## Pages, lines, and blocks
 
@@ -152,7 +152,7 @@ External clocks can be used in sequences and random choices just like internal c
 
 Use the channel selector to choose **All** or an individual channel. Selecting a channel does not change the output polyphony.
 
-**All view** shows one formula row per channel. Tab, Shift+Tab, or Enter opens the channel under the cursor. Tab from an individual channel returns to All view. Ctrl+[ and Ctrl+] move between individual channel pages.
+**All view** shows one formula row per channel. Tab or Shift+Tab switches between All view and the channel under the cursor. Escape also returns to All view. Enter in All view does not navigate. Ctrl+[ and Ctrl+] move between individual channel pages.
 
 Direct editing in All view is allowed when a channel is stopped/paused or has only one nonblank formula line. A playing channel with multiple formula lines is read-only there and has no editing caret; open its channel page to edit it. Trailing blank lines do not count as extra formulas.
 
@@ -166,13 +166,15 @@ Stopped channels show their edited text immediately, even if they have never pla
 | **Next**  | Submitted formulas waiting for the selected Wait boundary. |
 | **Now**   | The formulas currently used for playback.                  |
 
-Press **Ctrl/Cmd+Enter** or click **Play** to stage all Draft changes for the focused channel, including deleted lines. Changes become active at the selected **Wait** boundary without jumping away from a surviving active line. If the active line was deleted, playback continues with a remaining formula. **Immediate** applies the submission straight away. Further typing changes Draft only; it cannot overwrite Next. Starting an empty channel activates its submitted formula because there is no running boundary to wait for.
+In All view, press **Ctrl/Cmd+Enter** or click **Play** to stage Draft changes and start the selected channels, including deleted lines. In channel view, **Ctrl/Cmd+Enter** submits the channel’s Draft page and starts the line under the cursor, even with Line advance off; the selected Wait boundary still applies. All-view and Play-button submissions preserve the active line when it still exists. If the active line was deleted, playback continues with a remaining formula. **Immediate** applies the submission straight away. Further typing changes Draft only; it cannot overwrite Next. Starting an empty channel activates its submitted formula because there is no running boundary to wait for.
 
 **Ctrl/Cmd+Shift+Enter** also stages the channel page. With **Wait: Page**, the submitted page changes take effect together when the page wraps. With other Wait modes, changes take effect at the selected boundary on the playing line, or when playback reaches another queued line. An invalid line prevents the whole page submission; correct the red-marked text and try again.
 
-The display’s left edge shows a green focus marker. Steady yellow ticks mark Draft edits; a slow yellow pulse marks Next waiting to take over. Both can appear together, per line in a channel page or summarized per channel in All view. Changed Draft text is tinted yellow. Play stays raised while changes exist: steady yellow for Draft, pulsing yellow for Next. Clicking Play stages the whole channel’s Draft; it does not cancel an existing Next submission.
+Enable **Apply valid edits while typing** in the context menu to submit edits automatically once the page validates. The Wait setting still determines when they become active; invalid edits leave playback unchanged.
 
-Click the small **Draft / Next / Now** label in the display, press **F6**, or use **Formula view** in the context menu to switch versions. Next and Now are read-only. Unchanged lines in Next show Now in faded text. Hold **F7** to peek at Now; release it to return. Typing returns to Draft. Switching views never replaces your edits.
+The display’s left edge shows yellow selection markers. Steady yellow ticks mark Draft edits; a slow yellow pulse marks Next waiting to take over. Both can appear together, per line in a channel page or summarized per channel in All view. Changed Draft text is tinted yellow. Play stays raised while changes exist: steady yellow for Draft, pulsing yellow for Next. Applying Draft does not cancel an existing Next submission.
+
+Click the small **Draft / Next / Now** label in the display or press **F6** to switch versions. Next and Now are read-only. Unchanged lines in Next show Now in faded text. Hold **F7** to peek at Now; release it to return. Typing returns to Draft. Switching views never replaces your edits.
 
 The **x** button to the right of Stop acts on the selected channel:
 
@@ -181,6 +183,8 @@ The **x** button to the right of Stop acts on the selected channel:
 - **Shift-click** discards both Draft and Next at once.
 
 **Esc** does the same for the focused line in a channel page, or the selected channel in All view. With no changes on the focused line, it returns to All view.
+
+Use **Cmd/Ctrl+C**, **X**, and **V** to copy, cut, and paste selected text in either view. **Cmd/Ctrl+A** selects all text. In All view, selections can span channels; pasted lines go into successive channels, and cutting keeps the channel rows in place. Playing multi-line channels expose only their current formula in All view: you can copy it, but open the channel to cut or replace its text. An All-view cut or paste touching a read-only row leaves the selection unchanged.
 
 Undo with **Cmd/Ctrl+Z**; redo with **Cmd/Ctrl+Shift+Z** or **Cmd/Ctrl+Y**. Undo changes Draft only. Submit restored text to apply it to playback.
 
@@ -195,17 +199,26 @@ Patches save Draft, Next, and Now separately. Reopening a patch keeps unfinished
 - **Polyphony:** choose 1–16 output channels, or Auto. Auto extends to the highest channel with an activated formula. New modules default to Auto.
 - **Edit/Ctrl:** switch between formula editing and keyboard/mouse control of channels.
 
-The module starts at 16 HP. Drag either panel edge to resize it in 1 HP steps. The width is saved with the patch. Editor font, spacing, and line wrapping are available in the context menu. Text height and line height are independent: changing the glyph height does not move the rows. **Steady line height** is on by default, sizing 16 rows to the display. Turn it off to size rows from the font size and text height. **Editor line height** adjusts spacing only when Steady line height is off; the slider is disabled while it is on. Disabled channels retain alternating background stripes.
+### Gate length
+
+The **Gate** knob ranges from −10 to 100 and defaults to 50%. Negative values produce 1 ms triggers; 0% produces no gate; positive values set the high time as a percentage of each clock interval. At 120 BPM, 50% gives a 250 ms gate. Random durations use their selected interval, and Speed of time scales internal gate lengths too.
+
+At 0% the clock output stays low; at 100%, consecutive playing steps can join into one sustained gate. Rests and stopped channels stay low. Changes to Gate length apply on the next pulse. EOB, EOL and EOP remain short triggers.
+
+External clocks use the last measured interval. Until two rising edges establish that interval, the output uses a short 1 ms pulse. Irregular external clocks are estimates; an arriving edge replaces the previous gate.
+
+Gate length CV adds 10 percentage points per volt. The combined value is capped at 100%; any negative total selects Trigger. Mono CV affects every channel; polyphonic CV addresses matching channels, with missing channels adding zero. The tooltip shows channel 1’s combined value as **Gate length: Trigger** or a percentage.
 
 ## Inputs
 
-| Input                   | Behavior                                                                                                                                                   |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Run**                 | In Gate mode, above 1 V permits playback; low pauses it. In Trigger toggle mode, rising edges toggle playback. Unpatched permits playback while Run is on. |
-| **Block / Line / Page** | Mono triggers (channel 1); rising edges around 1 V reset the corresponding playback scope. Resets follow the Run/transport state.                          |
-| **Time CV**             | Mono, channel 1. Adds to Time at 1 V/octave. Combined range is −5 to +5: 1/32× to 32× speed.                                                               |
-| **Seed CV**             | Mono, channel 1. Adds one seed unit per volt to the knob. Zero or negative totals select fresh randomness.                                                 |
-| **W / X / Y / Z**       | Mono clocks (channel 1), rising edges around 1 V; referenced by letter in formulas or selected in the context menu.                                        |
+| Input                   | Behavior                                                                                                                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Run**                 | In Gate mode, above 1 V permits playback; low pauses it. In Trigger toggle mode, rising edges toggle playback. Unpatched permits playback while Run is on.                              |
+| **Block / Line / Page** | Mono triggers (channel 1); rising edges around 1 V reset the corresponding playback scope. Resets follow the Run/transport state.                                                       |
+| **Time CV**             | Mono, channel 1. Adds to Time at 1 V/octave. Combined range is −5 to +5: 1/32× to 32× speed.                                                                                            |
+| **Seed CV**             | Mono, channel 1. Adds one seed unit per volt to the knob. Zero or negative totals select fresh randomness.                                                                              |
+| **Gate length**         | Adds 10 percentage points per volt to Gate. Mono broadcasts; poly addresses matching channels. Negative totals produce triggers; zero is silent; positive totals give gates up to 100%. |
+| **W / X / Y / Z**       | Mono clocks (channel 1), rising edges around 1 V; referenced by letter in formulas or selected in the context menu.                                                                     |
 
 Run supports polyphony: a mono cable controls every active channel; poly channels control matching sequencer channels. Channels without a matching Run CV channel pause while that cable is connected. Turning the Run button off stops all channels regardless of its input.
 
@@ -225,21 +238,22 @@ For an external clock, phase estimates the period from incoming edges. It needs 
 
 ## Control mode
 
-With no changes, the header’s **Play** button starts or stops the focused channel and stays pressed while it plays. With Draft edits, it stages them; while Next is waiting, it pulses yellow. **Stop** stops that channel. The green segment on the display’s left wall marks the focused row.
+The header’s **Play** button applies Draft edits and starts the selected channels. **Stop** stops them. In All view, click or drag across rows to select channels; Shift+click or Shift+Up/Down extends the selection. Shift and drag selections highlight text in green, including playing multi-line channels whose text cannot be edited. A plain click focuses a row without selecting its text. The left wall flashes with each playing channel’s clock; selected rows stay yellow and flash brighter.
 
-Click **Edit/Ctrl** to enter Control mode. Click anywhere on Blunch to give it keyboard focus; a subtle orange stripe on the left marks focus. Hovering alone does not activate Control shortcuts. It opens All view, disables text editing, and selects the cursor’s channel. Selected rows have a green background; the focused row has a thin yellow outline. At least one channel stays selected.
+Click **Edit/Ctrl** to enter Control mode. Click anywhere on Blunch to give it keyboard focus; a subtle orange stripe on the left marks focus. Hovering alone does not activate Control shortcuts. It opens All view, disables text editing, and selects the cursor’s channel. Text selections have a green background; the focused row has a thin yellow outline. At least one channel stays selected.
 
 | Control                | Action                                                                                               |
 | ---------------------- | ---------------------------------------------------------------------------------------------------- |
 | Up / Down              | Move focus; a single-row selection follows the cursor, while a multiple-row selection stays selected |
 | Shift+Up / Down        | Extend or shrink a range from the anchor row                                                         |
-| Ctrl/Cmd+Enter         | Add or remove the focused channel from the selection                                                 |
+| Ctrl/Cmd+Enter         | Apply Draft and start the selected channels                                                          |
 | Click                  | Replace the selection with the clicked channel                                                       |
 | Ctrl/Cmd+click         | Add or remove the clicked channel                                                                    |
 | Shift+click            | Select a range to the clicked channel                                                                |
+| Ctrl/Cmd+,             | Stop the selected channels                                                                           |
 | Space                  | Stop the selection if all selected channels are running; otherwise start the selection               |
 | R                      | Reset selected channel pages to their first formula, keeping stopped channels stopped                |
-| Enter in All view      | Open the focused channel                                                                             |
+| Enter in All view      | Stay in All view                                                                                     |
 | Tab / Shift+Tab        | Switch between All and channel view                                                                  |
 | Esc                    | Return to All view without clearing selection                                                        |
 | Hold backtick or tilde | Show Control-mode shortcuts                                                                          |
@@ -281,20 +295,20 @@ Sync uses Now and leaves Draft untouched. Next retains its usual Wait behavior. 
 
 Hold **backtick** while Blunch is hovered or focused to show its shortcut popup. Release to hide it. Editing is blocked while the popup is visible. **Shift+backtick types `~`**, the rest operator.
 
-| Shortcut             | Action                                      |
-| -------------------- | ------------------------------------------- |
-| Ctrl/Cmd+Enter       | Stage and start the channel’s Draft page    |
-| Ctrl/Cmd+Shift+Enter | Stage the changed lines on the page         |
-| F6                   | Cycle Draft / Next / Now                    |
-| Hold F7              | Peek at Now                                 |
-| Enter in All view    | Open the channel under the cursor           |
-| Tab / Shift+Tab      | Switch between All and the selected channel |
-| Esc                  | Cancel / return to All                      |
-| Ctrl+[ / Ctrl+]      | Previous / next channel                     |
-| Ctrl+,               | Stop the selected channel                   |
-| Ctrl+/               | Toggle Run                                  |
-| Ctrl+.               | Stop all                                    |
-| Ctrl+Space           | Start all                                   |
+| Shortcut             | Action                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| Ctrl/Cmd+Enter       | All: apply and start selected channels; channel view: submit and start focused line |
+| Ctrl/Cmd+Shift+Enter | Stage the changed lines on the page                                                 |
+| F6                   | Cycle Draft / Next / Now                                                            |
+| Hold F7              | Peek at Now                                                                         |
+| Enter in All view    | Stay in All view                                                                    |
+| Tab / Shift+Tab      | Switch between All and channel view                                                 |
+| Esc                  | Cancel / return to All                                                              |
+| Ctrl+[ / Ctrl+]      | Previous / next channel                                                             |
+| Ctrl/Cmd+,           | Stop the selected channels                                                          |
+| Ctrl+/               | Toggle Run                                                                          |
+| Ctrl+.               | Stop all                                                                            |
+| Ctrl+Space           | Start all                                                                           |
 
 The transport/navigation shortcuts labeled Ctrl use the Control key on macOS too. Standard text editing uses the usual platform modifier.
 
@@ -308,16 +322,8 @@ For custom recipe collections, see [Random-template customization](development/b
 
 ## Panel layout
 
+Choose **Editor → Theme** in the context menu: **Mauer** is light, **Garnett** uses solar colors, **Moss** keeps the original dark appearance, and **Puckett** is a cool dark variant. Themes change colors only and save with the patch. Existing patches use Moss.
+
+The module starts at 16 HP. Drag either panel edge to resize it in 1 HP steps. The width is saved with the patch. Editor font, spacing, and line wrapping are available in the context menu. Text height and line height are independent: changing the glyph height does not move the rows. **Steady line height** is on by default, sizing 16 rows to the display. Turn it off to size rows from the font size and text height. **Editor line height** adjusts spacing only when Steady line height is off; the slider is disabled while it is on. Disabled channels retain alternating background stripes.
+
 Choose **Panel → Max visual** in the context menu to expand the display vertically and collect the input/output jacks in a dense rail of tiny ports. Hover a jack for its label. Hidden controls keep their settings. Use **Normal UI** above the display, or **Panel → Normal**, to restore the controls and original module width. Cables remain connected, and the layout is saved with the patch.
-
-## Clock output gates
-
-Choose **Clock output → Trigger** for the usual 1 ms pulses, or **Gate** for a variable high time. **Gate length** sets 0–100% of each clock interval. At 120 BPM, 50% gives a 250 ms gate. Random durations use their selected interval, and Speed of time scales internal gate lengths too.
-
-At 0% the clock output stays low; at 100%, consecutive playing steps can join into one sustained gate. Rests and stopped channels stay low. Changes to Gate length apply on the next pulse. EOB, EOL and EOP remain short triggers.
-
-External clocks use the last measured interval. Until two rising edges establish that interval, the output uses a short 1 ms pulse. Irregular external clocks are estimates; an arriving edge replaces the previous gate.
-
-Enable **Apply valid edits while typing** in the context menu to submit edits automatically once the page validates. The Wait setting still determines when they become active; invalid edits leave playback unchanged.
-
-The **Gate** knob sets gate length as a percentage of each step. Gate length CV adds to the knob: 10 V adds 100 percentage points, clamped to 0–100%. Mono CV affects all channels; polyphonic CV addresses each channel. Trigger mode keeps its fixed short pulse.

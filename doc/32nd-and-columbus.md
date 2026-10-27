@@ -129,17 +129,15 @@ With the pointer over the scene, **M** toggles Mute, **S** toggles Solo, **W** w
 
 Use the panel’s **Radial / Forest** selector, or **Graphic** in the context menu. **Regrow** restores the trees and generates a new forest. Radial shows distance rings. Forest replaces the rings with trees: nearby trunks extend beyond the scene, while distant trees appear smaller in front and behind. Chimes remain in front of the scenery and keep their distance-based size. This changes only the graphic, and the choice is saved with the patch.
 
-Forest scenery is generated anew for each scene, with individual bark and foliage colors, trunk thickness, taper, lean, branching, and bark markings. The four Forest controls combine nonlinearly to vary density from a sparse grove to a dense forest, alongside species, lighting, spacing, color, and branching. Their CV inputs affect the scenery too. Trees reuse nearby chimes’ pendulum and tube motion, with varied stiffness, to respond differently to the local wind while their roots stay fixed. A high front horizon fades into sky; the center remains nearest and the rear edge distant. These graphic links do not change the audio controls’ behavior.
+Each forest varies in tree shape, bark, foliage, and spacing. The four Forest controls combine to change density, species, lighting, and terrain; their CV inputs affect the scenery too. Trees sway with the wind, independently of manual chime strikes. The center is nearest, the front fades toward a high horizon, and the rear trees overlap those nearer the center.
 
-Strong, turbulent gusts can break off branches and foliage. The missing parts stay missing until **Regrow forest** in the context menu, or until the scene is recreated. Debris falls to the ground at its tree’s radial position and blows along the local wind field, shrinking with radial distance and following the trees’ front-to-rear layering; it does not fall toward the bottom of the screen or wrap around. Debris is limited to 128 pieces.
+Strong gusts can strip branches and foliage. Sustained extreme wind can topple trees or snap their trunks. Damage remains until **Regrow** or a new scene restores the forest. Loose debris blows with the wind, lands near its tree, and fades away after landing.
 
 ## Randomize blocks and locks
 
 Wind and Forest each have a small randomize block: the dice button randomizes that section, and the wavy-lines button makes small changes. The jack beside each button triggers the same action from a mono rising edge around 1 V. A held gate triggers once; lower it before the next trigger. Button actions support undo.
 
 Right-click a knob and enable **Lock randomize / wiggle** to exclude it from both operations. A small padlock marks locked knobs. They remain manually editable and respond to their normal CV. Locks also apply to the existing chime randomize/wiggle actions and save with the patch. On selected chime sets, locking a model knob applies to that control across the selection.
-
-Forest layers draw from Front to Rear: rear trees can overlap the center trees. Radial distance still controls size, so trees toward either edge are smaller. Debris follows the same layering.
 
 ## Panel modes
 
@@ -149,6 +147,6 @@ Left-click the panel selector to cycle through layouts; right-click it to choose
 - **Max visual:** scene with all existing input/output jacks in a dense rail of tiny ports. Hover a jack for its label. Knobs and action buttons are hidden; their settings continue to apply.
 - **Controls only:** the control panel without the scene. The scene does not render while hidden.
 
-Switching layouts resizes the module and preserves cables, settings and selection. The layout is saved with the patch. Radial/Forest and Regrow are available above the scene; the context menu also provides these actions.
+Switching layouts resizes the module and preserves cables, settings and selection. The layout is saved with the patch. Radial/Forest and Regrow are available above the scene and in the context menu.
 
-Left-click the Radial/Forest button to switch graphics, or right-click it for the menu.
+Left-click **Radial / Forest** to switch graphics; right-click for its menu.

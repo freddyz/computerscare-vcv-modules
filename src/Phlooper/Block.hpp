@@ -8,11 +8,12 @@ namespace phlooper {
 // Color a row-sized segment on the display's left perspective wall.
 inline void drawDisplayWallIndicator(NVGcontext* vg, Vec size, float top,
                                      float bottom, NVGcolor color,
-                                     float skew = 0.f) {
+                                     float skew = 0.f,
+                                     float bottomDepth = 4.f) {
   if (bottom <= top || bottom <= 0.f || top >= size.y) return;
   const Vec a(-.55f, -.65f), b(-.3f, size.y + .85f);
   const Vec outerA = a + Vec(-4.f - skew, 3.f);
-  const Vec outerB = b + Vec(-4.f, 3.f);
+  const Vec outerB = b + Vec(-bottomDepth, 3.f);
   auto point = [&](Vec start, Vec end, float y) {
     return start + (end - start) * clamp(y / size.y, 0.f, 1.f);
   };
@@ -37,8 +38,8 @@ inline void drawDisplayWallIndicator(NVGcontext* vg, Vec size, float top,
 // Display glass stays rectangular for accurate mouse coordinates. Its thin,
 // irregular surround and two exposed sides form the front of a down-left box.
 inline void drawDisplayFrame(NVGcontext* vg, Vec size, float focusTop = -1.f,
-                             float focusBottom = -1.f,
-                             float leftWallSkew = 0.f) {
+                             float focusBottom = -1.f, float leftWallSkew = 0.f,
+                             float bottomDepth = 4.f) {
   nvgSave(vg);
   const Vec front[] = {Vec(-.55f, -.65f), Vec(size.x + .45f, -.25f),
                        Vec(size.x + .65f, size.y + .45f),
@@ -58,7 +59,7 @@ inline void drawDisplayFrame(NVGcontext* vg, Vec size, float focusTop = -1.f,
     nvgStroke(vg);
   };
   Vec outerTop = front[0] + extrusion + Vec(-leftWallSkew, 0.f);
-  Vec outerBottom = front[3] + extrusion;
+  Vec outerBottom = front[3] + Vec(-bottomDepth, 3.f);
   quad(front[0], front[3], outerBottom, outerTop, nvgRGB(128, 134, 130));
   if (focusBottom > focusTop && focusBottom > 0.f && focusTop < size.y) {
     auto wallPoint = [&](float y) {
@@ -73,7 +74,7 @@ inline void drawDisplayFrame(NVGcontext* vg, Vec size, float focusTop = -1.f,
     quad(top, bottom, outerPoint(focusBottom), outerPoint(focusTop),
          nvgRGB(255, 238, 154));
   }
-  quad(front[3], front[2], front[2] + extrusion, front[3] + extrusion,
+  quad(front[3], front[2], front[2] + extrusion, outerBottom,
        nvgRGB(85, 94, 90));
   quad(front[0], front[1], front[2], front[3], nvgRGB(25, 34, 31));
   nvgRestore(vg);
