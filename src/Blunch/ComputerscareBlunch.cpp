@@ -3258,11 +3258,12 @@ static float blunchPendingPulse() {
 struct BlunchTextEditor : ComputerscareTextEditor {
   widget::SvgWidget layerCaptions[3];
   BlunchTextEditor() {
-    const char* names[] = {"draft", "next", "now"};
-    for (int i = 0; i < 3; ++i)
-      layerCaptions[i].setSvg(APP->window->loadSvg(asset::plugin(
-          pluginInstance,
-          std::string("res/components/blunch-layer-") + names[i] + ".svg")));
+    layerCaptions[0].setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/blunch-layer-draft.svg")));
+    layerCaptions[1].setSvg(APP->window->loadSvg(
+        asset::plugin(pluginInstance, "res/components/blunch-layer-next.svg")));
+    layerCaptions[2].setSvg(APP->window->loadSvg(
+        asset::plugin(pluginInstance, "res/components/blunch-layer-now.svg")));
   }
   void step() override {
     BlunchStateLock stateGuard(module);

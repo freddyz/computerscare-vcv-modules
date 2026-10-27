@@ -89,37 +89,37 @@ struct ClockLiteralAst {
 };
 
 struct ClockBlockAst {
+  std::vector<ClockLiteralAst> repeatSequence;
+  ClockLiteralAst literal;
+  ClockLiteralAst repeatRandom;
+  ClockLiteralAst repeatDuration;
+  ClockLiteralAst totalDurationRandom;
+  ClockLiteralAst totalDuration;
   // A bracket sequence advances as one lane item inside parentheses.
   int sequenceGroupId = -1;
-  ClockLiteralAst literal;
-  bool rest = false;
   int repeat = 1;
-  bool repeatIsDuration = false;
-  bool repeatIsRandom = false;
-  bool repeatIsSequence = false;
-  ClockLiteralAst repeatRandom;
-  std::vector<ClockLiteralAst> repeatSequence;
-  ClockLiteralAst repeatDuration;
-  bool repeatUsesExternalClock = false;
-  char repeatExternalClock = '\0';
   int probability = 100;
+  int totalDurationTicks = 0;
+  int totalDurationGroupId = -1;
   SourceRange range;
   SourceRange restRange;
   SourceRange repeatRange;
   SourceRange repeatValueRange;
-  bool repeatValueIsOwn = false;
-  bool hasTotalDuration = false;
-  bool totalDurationIsRandom = false;
-  ClockLiteralAst totalDurationRandom;
-  bool totalDurationIsTickCount = false;
-  int totalDurationTicks = 0;
-  bool totalDurationUsesExternalClock = false;
-  char totalDurationExternalClock = '\0';
-  ClockLiteralAst totalDuration;
-  int totalDurationGroupId = -1;
   SourceRange totalDurationRange;
   SourceRange totalDurationValueRange;
   SourceRange probabilityRange;
+  bool rest = false;
+  bool repeatIsDuration = false;
+  bool repeatIsRandom = false;
+  bool repeatIsSequence = false;
+  bool repeatUsesExternalClock = false;
+  char repeatExternalClock = '\0';
+  bool repeatValueIsOwn = false;
+  bool hasTotalDuration = false;
+  bool totalDurationIsRandom = false;
+  bool totalDurationIsTickCount = false;
+  bool totalDurationUsesExternalClock = false;
+  char totalDurationExternalClock = '\0';
 };
 
 struct ClockProgramAst {
