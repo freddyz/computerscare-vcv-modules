@@ -188,11 +188,19 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/phlooper.md"
     },
     {
-      "slug": "computerscare-xrouter",
-      "name": "XRouter",
+      "slug": "computerscare-daddys-home",
+      "name": "Daddy's Home",
       "description": "16-input, 16-output polyphonic router",
       "tags": ["Polyphonic", "Utility"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/xrouter-dev/doc/xrouter.md"
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/xrouter-dev/doc/daddys-home.md"
+    },
+    {
+      "slug": "computerscare-xrouter",
+      "name": "Daddy's Home",
+      "description": "16-input, 16-output polyphonic router",
+      "tags": ["Polyphonic", "Utility"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/xrouter-dev/doc/daddys-home.md",
+      "hidden": true
     }
   ]
 }

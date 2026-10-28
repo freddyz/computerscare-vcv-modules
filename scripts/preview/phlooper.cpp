@@ -1,5 +1,5 @@
-#include "../../src/XRouter/DisplayLayout.hpp"
-#include "../../src/XRouter/Routing.hpp"
+#include "../../src/DaddysHome/DisplayLayout.hpp"
+#include "../../src/DaddysHome/Routing.hpp"
 // Development-only renderer. Uses the real module/widget, never a panel mockup.
 #define modelComputerscarePhlooper modelPhlooperPreview
 #include "../../src/ComputerscarePhlooper.cpp"
@@ -964,10 +964,10 @@ int main(int argc, char** argv) {
         browserModel = modelComputerscareVolyPector;
       if (argc == 7 && std::string(argv[6]) == "laundry-soup")
         browserModel = modelComputerscareLaundrySoup;
-      if (argc == 7 && std::string(argv[6]) == "xrouter")
-        browserModel = modelComputerscareXRouter;
+      if (argc == 7 && std::string(argv[6]) == "daddys-home")
+        browserModel = modelComputerscareDaddysHome;
       browserModel->plugin = &plugin;
-      if (browserModel == modelComputerscareXRouter) {
+      if (browserModel == modelComputerscareDaddysHome) {
         std::unique_ptr<engine::Module> router(browserModel->createModule());
         engine::Module::ProcessArgs args{};
         args.sampleRate = 48000.f;
@@ -981,16 +981,16 @@ int main(int argc, char** argv) {
         router->process(args);
         for (int port = 0; port < 16; ++port) {
           if (router->outputs[port].getChannels() != port + 1)
-            throw std::runtime_error("XRouter channel count mismatch");
+            throw std::runtime_error("Daddy's Home channel count mismatch");
           for (int ch = 0; ch <= port; ++ch)
             if (router->outputs[port].getVoltage(ch) != router->inputs[port].getVoltage(ch))
-              throw std::runtime_error("XRouter passthrough mismatch");
+              throw std::runtime_error("Daddy's Home passthrough mismatch");
           router->inputs[port].channels = 0;
         }
         router->process(args);
         for (int port = 0; port < 16; ++port)
           if (router->outputs[port].getChannels() != 1 || router->outputs[port].getVoltage() != 0.f)
-            throw std::runtime_error("XRouter unplug must silence output");
+            throw std::runtime_error("Daddy's Home unplug must silence output");
         auto* custom = router->dataToJson();
         auto* routing = json_object_get(custom, "routing");
         for (int dest : {17, 18, 19, 24}) json_array_set_new(routing, dest, json_integer(1));
@@ -1004,41 +1004,70 @@ int main(int argc, char** argv) {
         router->process(args);
         for (int dest : {17, 18, 19, 24})
           if (router->outputs[dest / 16].getVoltage(dest % 16) != 2.f)
-            throw std::runtime_error("XRouter fanout must copy a2 without summing");
+            throw std::runtime_error("Daddy's Home fanout must copy a2 without summing");
         if (router->outputs[2].getVoltage() != 0.f)
-          throw std::runtime_error("XRouter blank must output zero");
+          throw std::runtime_error("Daddy's Home blank must output zero");
         std::unique_ptr<engine::Module> restored(browserModel->createModule());
         custom = router->dataToJson();
         restored->dataFromJson(custom);
         auto* saved = restored->dataToJson();
-        if (!json_equal(custom, saved)) throw std::runtime_error("XRouter routing persistence");
+        if (!json_equal(custom, saved)) throw std::runtime_error("Daddy's Home routing persistence");
         json_decref(custom); json_decref(saved);
         auto* poly = router->getParamQuantity(20);
         router->params[2].setValue(-1);
         poly->setValue(8);
         for (int port = 0; port < 16; ++port)
           if (router->params[4 + port].getValue() != 8.f)
-            throw std::runtime_error("XRouter All polyphony must update every output");
+            throw std::runtime_error("Daddy's Home All polyphony must update every output");
         router->params[2].setValue(1);
         router->params[5].setValue(3);
         if (router->params[4].getValue() != 8.f || router->params[5].getValue() != 3.f)
-          throw std::runtime_error("XRouter independent output polyphony");
+          throw std::runtime_error("Daddy's Home independent output polyphony");
         router->params[2].setValue(-1);
         if (poly->getDisplayValueString() != "Mixed")
-          throw std::runtime_error("XRouter mixed polyphony indication");
+          throw std::runtime_error("Daddy's Home mixed polyphony indication");
         router->process(args);
         if (router->outputs[0].getChannels() != 8 || router->outputs[1].getChannels() != 3)
-          throw std::runtime_error("XRouter output polyphony DSP");
+          throw std::runtime_error("Daddy's Home output polyphony DSP");
         // Save the actual module parameters, including independent output counts.
         auto* patch = router->paramsToJson();
         restored->paramsFromJson(patch);
         json_decref(patch);
         if (restored->params[4].getValue() != 8.f || restored->params[5].getValue() != 3.f)
-          throw std::runtime_error("XRouter polyphony persistence");
+          throw std::runtime_error("Daddy's Home polyphony persistence");
         poly->setValue(0);
         if (poly->getDisplayValueString() != "Auto")
-          throw std::runtime_error("XRouter All must clear mixed state");
-        std::puts("XRouter filters, routing, fanout, blank, per-output polyphony and persistence checks passed");
+          throw std::runtime_error("Daddy's Home All must clear mixed state");
+        // Native params are authoritative: automation and UI use identical sources.
+        router->getParamQuantity(21+209)->setValue(3);
+        router->outputs[13].channels=16;router->process(args);
+        if(router->outputs[13].getVoltage(1)!=4.f || router->getParamQuantity(21+209)->getString()!="a4 → N2")throw std::runtime_error("Daddy's Home source parameter automation");
+        auto resetRoutes=[&](){auto* state=router->dataToJson();auto* values=json_object_get(state,"routing");for(int i=0;i<256;++i)json_array_set_new(values,i,json_integer(i));json_object_set_new(state,"randomMode",json_integer(0));router->dataFromJson(state);json_decref(state);};
+        auto routeSnapshot=[&](){auto* state=router->dataToJson();std::array<int,256> values{};for(int i=0;i<256;++i)values[i]=int(json_integer_value(json_array_get(json_object_get(state,"routing"),i)));json_decref(state);return values;};
+        auto identity=routeSnapshot();for(int i=0;i<256;++i)identity[i]=i;
+        auto silenceTriggers=[&](){for(int i=16;i<24;++i){router->inputs[i].channels=0;router->inputs[i].setVoltage(0);}router->process(args);};
+        silenceTriggers();resetRoutes();router->params[277].setValue(0);
+        router->inputs[16].channels=1;router->inputs[16].setVoltage(10);router->process(args);
+        if(routeSnapshot()!=identity)throw std::runtime_error("Daddy's Home zero random probability");
+        silenceTriggers();router->inputs[22].channels=1;router->inputs[22].setVoltage(10);router->inputs[16].channels=1;router->inputs[16].setVoltage(10);router->process(args);
+        if(routeSnapshot()==identity)throw std::runtime_error("Daddy's Home probability CV");
+        silenceTriggers();resetRoutes();router->params[277].setValue(1);
+        router->inputs[17].channels=16;router->inputs[17].setVoltage(10,4);router->process(args);
+        auto rowChanged=routeSnapshot();bool any=false;
+        for(int i=0;i<256;++i){if(i/16==4)any|=rowChanged[i]!=i;else if(rowChanged[i]!=i)throw std::runtime_error("Daddy's Home row CV escaped scope");}
+        if(!any)throw std::runtime_error("Daddy's Home row CV no change");
+        router->inputs[17].setVoltage(0,4);silenceTriggers();resetRoutes();
+        router->inputs[18].channels=16;router->inputs[18].setVoltage(10,7);router->process(args);
+        auto colChanged=routeSnapshot();any=false;
+        for(int i=0;i<256;++i){if(i%16==7)any|=colChanged[i]!=i;else if(colChanged[i]!=i)throw std::runtime_error("Daddy's Home channel CV escaped scope");}
+        if(!any)throw std::runtime_error("Daddy's Home channel CV no change");
+        router->inputs[18].setVoltage(0,7);silenceTriggers();resetRoutes();router->params[278].setValue(1);
+        router->inputs[19].channels=1;router->inputs[19].setVoltage(10);router->process(args);
+        auto wiggled=routeSnapshot();
+        for(int i=0;i<256;++i)if(wiggled[i]<0 || std::abs(wiggled[i]/16-i/16)>1 || std::abs(wiggled[i]%16-i%16)>1)throw std::runtime_error("Daddy's Home wiggle too large");
+        silenceTriggers();
+        std::puts("Daddy's Home params, automation, probability CV, scoped triggers and wiggle passed");
+        std::puts("Daddy's Home filters, routing, fanout, blank, per-output polyphony and persistence checks passed");
       }
       browserModel->plugin = &plugin;
       if (browserModel == modelComputerscareWindchimes &&
@@ -1049,7 +1078,7 @@ int main(int argc, char** argv) {
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",
               scale);
-      if (browserModel == modelComputerscareXRouter) {
+      if (browserModel == modelComputerscareDaddysHome) {
         auto* router = browserModel->createModule();
         APP->engine->addModule(router);
         router->inputs[0].channels = 6;
@@ -1100,19 +1129,19 @@ int main(int argc, char** argv) {
           int source = int(json_integer_value(json_array_get(routes, dest)));
           changed |= source != dest;
         }
-        if (!changed) throw std::runtime_error("XRouter shortcut did not randomize");
+        if (!changed) throw std::runtime_error("Daddy's Home shortcut did not randomize");
         APP->history->undo();
         auto* undone = router->dataToJson();
         for (int dest = 0; dest < 256; ++dest)
           if (json_integer_value(json_array_get(json_object_get(undone, "routing"), dest)) != dest)
-            throw std::runtime_error("XRouter randomization undo");
+            throw std::runtime_error("Daddy's Home randomization undo");
         json_decref(undone);
         APP->history->redo();
         auto* redone = router->dataToJson();
-        if (!json_equal(redone, randomized)) throw std::runtime_error("XRouter randomization redo");
+        if (!json_equal(redone, randomized)) throw std::runtime_error("Daddy's Home randomization redo");
         json_decref(redone); json_decref(randomized);
         capture(widget.get(), std::string(argv[3]) + "/02-shuffled-matrix.png", scale);
-        std::puts("XRouter Mod+R matrix randomization and undo/redo passed");
+        std::puts("Daddy's Home Mod+R matrix randomization and undo/redo passed");
         router->params[2].setValue(-1);
         custom = router->dataToJson();
         json_object_set_new(custom, "randomMode", json_integer(0));
@@ -1127,85 +1156,197 @@ int main(int argc, char** argv) {
         nvgSave(vg);
         nvgFontFaceId(vg, font->handle);
         nvgFontSize(vg, 8.f);
-        float size = xrouter::sourceFontSize(356.f, nvgTextBounds(vg, 0, 0, "m16", nullptr, nullptr));
+        float size = daddys_home::sourceFontSize(356.f, nvgTextBounds(vg, 0, 0, "m16", nullptr, nullptr));
         nvgFontSize(vg, size);
         for (int source = 0; source < 256; ++source) {
-          auto address = xrouter::address(source);
+          auto address = daddys_home::address(source);
           float width = nvgTextBounds(vg, 0, 0, address.c_str(), nullptr, nullptr);
-          if (width + xrouter::sourceGap > xrouter::sourceColumnWidth(356.f) + .01f)
-            throw std::runtime_error("XRouter source address overlaps the next column");
+          if (width + daddys_home::sourceGap > daddys_home::sourceColumnWidth(356.f) + .01f)
+            throw std::runtime_error("Daddy's Home source address overlaps the next column");
         }
         nvgRestore(vg);
-        std::puts("XRouter all 256 source addresses fit fixed-width display columns");
+        std::puts("Daddy's Home all 256 source addresses fit fixed-width display columns");
         widget::Widget* display = nullptr;
         widget::Widget* modeButton = nullptr;
         for(auto* child : widget->children) {
-          if(child->box.size.x==356 && child->box.size.y==344)display=child;
+          if(child->box.size.x==356 && child->box.size.y==320)display=child;
           if(child->box.pos.x==206 && child->box.pos.y==4)modeButton=child;
         }
-        if(!display || !modeButton)throw std::runtime_error("XRouter edit controls missing");
+        if(!display || !modeButton)throw std::runtime_error("Daddy's Home edit controls missing");
+        std::array<app::ParamWidget*,256> mapped{};
+        for(int i=0;i<256;++i){mapped[i]=widget->getParam(21+i);if(!mapped[i] || mapped[i]->module!=router)throw std::runtime_error("Daddy's Home route must expose a ParamWidget");}
+
         auto routeAt=[&](int dest){ auto* state=router->dataToJson(); int value=int(json_integer_value(json_array_get(json_object_get(state,"routing"),dest))); json_decref(state); return value; };
-        auto button=[&](widget::Widget* target,Vec pos,int buttonCode){ widget::EventContext context; widget::Widget::ButtonEvent e; e.context=&context; e.pos=pos; e.button=buttonCode; e.action=GLFW_PRESS; target->onButton(e); };
+        auto button=[&](widget::Widget* target,Vec pos,int buttonCode){ widget::EventContext context; widget::Widget::ButtonEvent e; e.context=&context; e.pos=pos; e.button=buttonCode; e.action=GLFW_PRESS; target->onButton(e); if(buttonCode==GLFW_MOUSE_BUTTON_LEFT)APP->event->setSelectedWidget(context.target); display->step(); display->step(); };
         auto removeOverlay=[&](widget::Widget* overlay){ APP->scene->removeChild(overlay); delete overlay; };
         APP->scene->box.size=Vec(1280,800);
         auto hover=[&](widget::Widget* target,Vec pos){widget::EventContext context;widget::Widget::HoverEvent e;e.context=&context;e.pos=pos;target->onHover(e);};
         int original=routeAt(6);
-        hover(display,Vec(xrouter::sourceColumnX(356,6),10.75f));
+        // Reproduce Core MIDI Map's actual deselect/touchedParam handshake.
+        struct MidiLearnCapture : widget::Widget {
+          app::ParamWidget* learned=nullptr;
+          void onDeselect(const event::Deselect&) override {
+            learned=APP->scene->rack->getTouchedParam();
+            APP->scene->rack->setTouchedParam(nullptr);
+          }
+        } learner;
+        APP->event->setSelectedWidget(&learner);
+        size_t learnSceneSize=APP->scene->children.size();
+        button(display,Vec(daddys_home::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        if(learner.learned!=mapped[6] || APP->scene->children.size()!=learnSceneSize || routeAt(6)!=original)
+          throw std::runtime_error("Daddy's Home MIDI learn must capture without firing grid click");
+        // Also allow mapping modules which consume the touch in a later UI step.
+        widget::EventContext lateContext;widget::Widget::ButtonEvent lateClick;
+        lateClick.context=&lateContext;lateClick.pos=Vec(daddys_home::sourceColumnX(356,6),10.75f);
+        lateClick.button=GLFW_MOUSE_BUTTON_LEFT;lateClick.action=GLFW_PRESS;
+        display->onButton(lateClick);APP->event->setSelectedWidget(lateContext.target);
+        display->step();APP->scene->rack->setTouchedParam(nullptr);display->step();
+        if(APP->scene->children.size()!=learnSceneSize || routeAt(6)!=original)
+          throw std::runtime_error("Daddy's Home UI-step MIDI learn must suppress picker");
+        std::puts("Daddy's Home MIDI learn clicks are consumed without opening the grid editor");
+
+        hover(display,Vec(daddys_home::sourceColumnX(356,6),10.75f));
         auto* tip=dynamic_cast<ui::Tooltip*>(APP->scene->children.back());
-        if(!tip || tip->text!=xrouter::address(original)+" -> A7")throw std::runtime_error("XRouter grid route tooltip");
-        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        if(!tip || tip->text!=daddys_home::address(original)+" → A7")throw std::runtime_error("Daddy's Home grid route tooltip");
+        button(display,Vec(daddys_home::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        if(APP->scene->rack->touchedParam!=mapped[6])throw std::runtime_error("Daddy's Home click must expose the source param to MIDI learn");
         auto* overlay=APP->scene->children.back();
         auto* picker=overlay->children.front();
         float pickerScale=picker->box.size.x/356.f;
-        if(pickerScale<1.4f)throw std::runtime_error("XRouter picker must be enlarged");
+        if(pickerScale<1.4f)throw std::runtime_error("Daddy's Home picker must be enlarged");
         size_t pickerHoverChildren=APP->scene->children.size();
         hover(picker,Vec(175,193.5f).mult(pickerScale));
-        if(APP->scene->children.size()!=pickerHoverChildren)throw std::runtime_error("XRouter popup must not create tooltips");
+        if(APP->scene->children.size()!=pickerHoverChildren)throw std::runtime_error("Daddy's Home popup must not create tooltips");
         auto pickerPosition=picker->box.pos;
         overlay->removeChild(picker); picker->box.pos=Vec();
         capture(picker,std::string(argv[3])+"/04-source-picker.png",scale);
         picker->box.pos=pickerPosition; overlay->addChild(picker);
         button(picker,Vec(175,193.5f).mult(pickerScale),GLFW_MOUSE_BUTTON_LEFT);
-        if(routeAt(6)!=135)throw std::runtime_error("XRouter picker i8");
-        APP->history->undo(); if(routeAt(6)!=original)throw std::runtime_error("XRouter picker undo");
-        APP->history->redo(); if(routeAt(6)!=135)throw std::runtime_error("XRouter picker redo");
+        if(routeAt(6)!=135)throw std::runtime_error("Daddy's Home picker i8");
+        APP->history->undo(); if(routeAt(6)!=original)throw std::runtime_error("Daddy's Home picker undo");
+        APP->history->redo(); if(routeAt(6)!=135)throw std::runtime_error("Daddy's Home picker redo");
         removeOverlay(overlay);
-        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_RIGHT);
+        button(display,Vec(daddys_home::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_RIGHT);
         overlay=APP->scene->children.back();
         ui::TextField* field=nullptr;
         for(auto* child:overlay->children.front()->children)if(auto* f=dynamic_cast<ui::TextField*>(child))field=f;
-        if(!field)throw std::runtime_error("XRouter text edit missing");
+        if(!field)throw std::runtime_error("Daddy's Home text edit missing");
         auto enter=[&](){ widget::EventContext context; widget::Widget::SelectKeyEvent e; e.context=&context; e.key=GLFW_KEY_ENTER; e.action=GLFW_PRESS; field->onSelectKey(e); };
-        field->text="a17"; enter(); if(routeAt(6)!=135)throw std::runtime_error("XRouter invalid source accepted");
-        field->text="a5"; enter(); if(routeAt(6)!=4)throw std::runtime_error("XRouter code entry");
+        field->text="a17"; enter(); if(routeAt(6)!=135)throw std::runtime_error("Daddy's Home invalid source accepted");
+        field->text="a5"; enter(); if(routeAt(6)!=4)throw std::runtime_error("Daddy's Home code entry");
         APP->event->setSelectedWidget(nullptr); removeOverlay(overlay);
-        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        button(display,Vec(daddys_home::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
         overlay=APP->scene->children.back(); picker=overlay->children.front();
         button(picker,Vec(332,11).mult(picker->box.size.x/356.f),GLFW_MOUSE_BUTTON_LEFT);
-        if(routeAt(6)!=-1)throw std::runtime_error("XRouter X must clear");
+        if(routeAt(6)!=-1)throw std::runtime_error("Daddy's Home X must clear");
         removeOverlay(overlay);
         button(modeButton,Vec(15,10),GLFW_MOUSE_BUTTON_LEFT);
         capture(widget.get(),std::string(argv[3])+"/05-knobs.png",scale);
+        for(int i=0;i<256;++i)if(widget->getParam(21+i)!=mapped[i])throw std::runtime_error("Daddy's Home mode must preserve MIDI mapping identity");
+
         widget::EventContext dragContext;
         widget::Widget::DragStartEvent start; start.context=&dragContext; start.button=GLFW_MOUSE_BUTTON_LEFT;
         widget::Widget::DragMoveEvent move; move.context=&dragContext; move.button=GLFW_MOUSE_BUTTON_LEFT; move.mouseDelta=Vec(0,-10);
         widget::Widget::DragEndEvent end; end.context=&dragContext; end.button=GLFW_MOUSE_BUTTON_LEFT;
-        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        button(display,Vec(daddys_home::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
         display->onDragStart(start); display->onDragMove(move); display->onDragEnd(end);
-        if(routeAt(6)!=4)throw std::runtime_error("XRouter 257-step knob drag");
-        APP->history->undo(); if(routeAt(6)!=-1)throw std::runtime_error("XRouter knob drag undo");
+        if(routeAt(6)!=4)throw std::runtime_error("Daddy's Home 257-step knob drag");
+        APP->history->undo(); if(routeAt(6)!=-1)throw std::runtime_error("Daddy's Home knob drag undo");
         size_t sceneChildren=APP->scene->children.size();
-        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        button(display,Vec(daddys_home::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
         display->onDragStart(start); display->onDragEnd(end);
-        if(APP->scene->children.size()!=sceneChildren || routeAt(6)!=-1)throw std::runtime_error("XRouter knob click must not open picker or edit");
-        hover(display,Vec(xrouter::sourceColumnX(356,6),10.75f));
+        if(APP->scene->children.size()!=sceneChildren || routeAt(6)!=-1)throw std::runtime_error("Daddy's Home knob click must not open picker or edit");
+        hover(display,Vec(daddys_home::sourceColumnX(356,6),10.75f));
         tip=dynamic_cast<ui::Tooltip*>(APP->scene->children.back());
-        if(!tip || tip->text!="-- -> A7")throw std::runtime_error("XRouter knob route tooltip");
+        if(!tip || tip->text!="-- → A7")throw std::runtime_error("Daddy's Home knob route tooltip");
         widget::EventContext leaveContext;widget::Widget::LeaveEvent leave;leave.context=&leaveContext;display->onLeave(leave);
         auto* savedMode=router->dataToJson();
-        if(!json_is_true(json_object_get(savedMode,"knobMode")))throw std::runtime_error("XRouter mode persistence");
+        if(!json_is_true(json_object_get(savedMode,"knobMode")))throw std::runtime_error("Daddy's Home mode persistence");
         json_decref(savedMode);
-        std::puts("XRouter source picker, text validation, blank, knob drag and edit undo/redo passed");
+        auto setIdentity=[&](){auto* state=router->dataToJson();auto* values=json_object_get(state,"routing");for(int i=0;i<256;++i)json_array_set_new(values,i,json_integer(i));json_object_set_new(state,"randomMode",json_integer(0));router->dataFromJson(state);json_decref(state);};
+        widget::Widget* rowAction=nullptr;widget::Widget* colAction=nullptr;
+        for(auto* child:widget->children) {
+          if(std::abs(child->box.pos.x-434.f)<.01f && std::abs(child->box.pos.y-138.f)<.01f)rowAction=child;
+          if(std::abs(child->box.pos.x-(69.f+daddys_home::sourceColumnX(356,7)-10.5f))<.01f && child->box.pos.y==35)colAction=child;
+        }
+        if(!rowAction || !colAction)throw std::runtime_error("Daddy's Home scoped buttons missing");
+        setIdentity();router->params[277].setValue(1);
+        button(rowAction,Vec(5,5),GLFW_MOUSE_BUTTON_LEFT);
+        for(int i=0;i<256;++i)if(i/16!=4 && routeAt(i)!=i)throw std::runtime_error("Daddy's Home row button scope");
+        router->params[21].setValue(7);APP->history->undo();
+        if(routeAt(0)!=7)throw std::runtime_error("Daddy's Home scoped undo altered another route");
+        for(int i=64;i<80;++i)if(routeAt(i)!=i)throw std::runtime_error("Daddy's Home row button undo");
+        setIdentity();button(colAction,Vec(4,4),GLFW_MOUSE_BUTTON_LEFT);
+        for(int i=0;i<256;++i)if(i%16!=7 && routeAt(i)!=i)throw std::runtime_error("Daddy's Home column button scope");
+        widget::EventContext releaseContext;widget::Widget::DragEndEvent release;release.context=&releaseContext;release.button=GLFW_MOUSE_BUTTON_LEFT;rowAction->onDragEnd(release);colAction->onDragEnd(release);
+        std::puts("Daddy's Home MIDI learn target, manual scopes, scoped undo and stable mapping identities passed");
+        std::puts("Daddy's Home source picker, text validation, blank, knob drag and edit undo/redo passed");
+        // Capture hover and a fresh manual edit on different cells.
+        button(modeButton,Vec(15,10),GLFW_MOUSE_BUTTON_LEFT);
+        button(display,Vec(daddys_home::sourceColumnX(356,6),10),GLFW_MOUSE_BUTTON_LEFT);
+        overlay=APP->scene->children.back();picker=overlay->children.front();
+        button(picker,Vec(95,79.5f).mult(picker->box.size.x/356.f),GLFW_MOUSE_BUTTON_LEFT);
+        removeOverlay(overlay);
+        hover(display,Vec(daddys_home::sourceColumnX(356,1),270));
+        capture(widget.get(),std::string(argv[3])+"/06-hover-and-edited-grid.png",scale);
+        display->onLeave(leave);
+        modelComputerscareDaddysHomeLegacy->plugin=&plugin;
+        auto legacy=std::unique_ptr<engine::Module>(modelComputerscareDaddysHomeLegacy->createModule());
+        auto* compatibility=router->dataToJson();legacy->dataFromJson(compatibility);
+        auto* restoredLegacy=legacy->dataToJson();
+        if(!json_equal(compatibility,restoredLegacy))throw std::runtime_error("Daddy's Home legacy patch routing");
+        json_decref(compatibility);json_decref(restoredLegacy);
+        // Real DSP: edits remain independent from the active scene.
+        auto sequence=std::unique_ptr<engine::Module>(browserModel->createModule());
+        engine::Module::ProcessArgs sceneArgs{};
+        sceneArgs.sampleRate=48000; sceneArgs.sampleTime=1.f/48000;
+        sequence->inputs[0].channels=2;
+        sequence->inputs[0].setVoltage(3.f,0);
+        sequence->inputs[0].setVoltage(7.f,1);
+        sequence->outputs[0].channels=1;
+        sequence->params[280].setValue(2); // Steps; IDs append to existing params.
+        sequence->process(sceneArgs);
+        sequence->params[21].setValue(1);
+        sequence->process(sceneArgs);
+        if(sequence->outputs[0].getVoltage()!=7.f)throw std::runtime_error("Scene live editing");
+        sequence->params[279].setValue(2);
+        sequence->process(sceneArgs);
+        if(sequence->params[21].getValue()!=0 || sequence->outputs[0].getVoltage()!=7.f)
+          throw std::runtime_error("Editing index changed active routing");
+        sequence->params[4].setValue(1);
+        auto edge=[&](int input){sequence->inputs[input].channels=1; sequence->inputs[input].setVoltage(0);sequence->process(sceneArgs);sequence->inputs[input].setVoltage(10);sequence->process(sceneArgs);};
+        edge(24);
+        if(sequence->outputs[0].getVoltage()!=3.f || sequence->outputs[0].getChannels()!=1 || sequence->outputs[16].getVoltage()!=0)
+          throw std::runtime_error("Scene clock advance/polyphony");
+        edge(24);
+        if(sequence->outputs[0].getVoltage()!=7.f || sequence->outputs[16].getVoltage()!=10)
+          throw std::runtime_error("Scene cycle pulse");
+        sequence->inputs[26].channels=1;sequence->inputs[26].setVoltage(10);sequence->process(sceneArgs);
+        if(sequence->outputs[0].getVoltage()!=3 || sequence->outputs[16].getVoltage()!=0)
+          throw std::runtime_error("Scan override or EOC suppression");
+        edge(24);edge(25);
+        if(sequence->outputs[0].getVoltage()!=3 || sequence->outputs[16].getVoltage()!=0)
+          throw std::runtime_error("Scan must override clock/reset");
+        sequence->inputs[26].channels=0;
+        edge(25);
+        if(sequence->outputs[0].getVoltage()!=7 || sequence->outputs[16].getVoltage()!=0)
+          throw std::runtime_error("Scene reset");
+        sequence->params[279].setValue(1);sequence->process(sceneArgs);
+        if(sequence->params[21].getValue()!=1)throw std::runtime_error("Scene automatic storage");
+        auto* savedScene=sequence->toJson();
+        auto recalled=std::unique_ptr<engine::Module>(browserModel->createModule());recalled->paramsFromJson(json_object_get(savedScene,"params"));recalled->dataFromJson(json_object_get(savedScene,"data"));json_decref(savedScene);
+        recalled->params[279].setValue(2);recalled->process(sceneArgs);
+        if(recalled->params[21].getValue()!=0 || recalled->params[4].getValue()!=1)
+          throw std::runtime_error("Scene patch persistence");
+        // Exercise two-digit values on the tiny numbered controls.
+        router->params[279].setValue(11);router->params[280].setValue(13);
+        router->process(sceneArgs);
+        router->inputs[26].channels=1;router->inputs[26].setVoltage(7.6f);router->process(sceneArgs);
+        for(int dest=0;dest<256;++dest)router->params[21+dest].setValue((dest*13+37)%256);
+        capture(widget.get(),std::string(argv[3])+"/07-scenes.png",scale);
+        std::puts("Daddy's Home independent scene editing, clock/reset/scan, EOC and patch persistence passed");
+
+
 
 
 

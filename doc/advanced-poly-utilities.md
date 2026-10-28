@@ -13,3 +13,7 @@
 ## Sloly Pit
 
 Split a polyphonic input into 16 configurable mono or polyphonic outputs. [Manual](sloly-pit.md).
+
+## Daddy's Home
+
+16-input, 16-output polyphonic router. [Manual](daddys-home.md).

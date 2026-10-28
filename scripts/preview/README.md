@@ -15,6 +15,9 @@ The default output is `build/previews/phlooper/`, already excluded from Git by t
 scripts/preview-module.sh 32nd-and-columbus
 scripts/preview-module.sh blunch
 
+# Render Daddy's Home and exercise routing edits, MIDI mapping targets and CV actions.
+scripts/preview-module.sh daddys-home
+
 # Exercise Blunch's real Control-mode keyboard/mouse, transport, and row layout,
 # then capture its selection and inactive-row stripes.
 scripts/preview-module.sh blunch --controls

@@ -5,7 +5,7 @@
 #include <utility>
 #include <vector>
 
-namespace xrouter {
+namespace daddys_home {
 constexpr int ports = 16;
 constexpr int routes = ports * ports;
 using Routing = std::array<int, routes>;
@@ -126,4 +126,4 @@ inline std::vector<Row> view(const Routing& routing, const Filter& filter) {
   }
   return rows;
 }
-}  // namespace xrouter
+}  // namespace daddys_home

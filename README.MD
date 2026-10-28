@@ -50,6 +50,8 @@ Use `RACK_DIR=/path/to/Rack-SDK` when the Rack SDK is not in the default local p
 - [Sloly Pit](./doc/sloly-pit.md): Split and route a polyphonic input to 16 outputs
 - [Mely Porge](./doc/mely-porge.md): Polyphonic merge / insert / vca utility
 
+- [Daddy's Home](./doc/daddys-home.md): 16-input, 16-output polyphonic router
+
 ## Visualization
 
 [Group overview](./doc/visualization.md)

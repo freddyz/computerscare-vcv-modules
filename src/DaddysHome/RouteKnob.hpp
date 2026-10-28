@@ -2,7 +2,7 @@
 #include <cmath>
 
 #include "../Computerscare.hpp"
-namespace xrouter {
+namespace daddys_home {
 // Small computerscare-style knob: an irregular face, a single rotating dot,
 // and a stationary source code. No per-knob framebuffer or audio parameters.
 inline void drawRouteKnob(NVGcontext* vg, Vec center, float diameter,
@@ -19,14 +19,14 @@ inline void drawRouteKnob(NVGcontext* vg, Vec center, float diameter,
       nvgLineTo(vg, point.x, point.y);
   }
   nvgClosePath(vg);
-  nvgFillColor(vg, active ? nvgRGB(32, 91, 88) : nvgRGB(36, 54, 51));
+  nvgFillColor(vg, active ? nvgRGB(32, 91, 88) : nvgRGB(47, 72, 68));
   nvgFill(vg);
   float angle = (-.75f + float(source + 1) / 256.f * 1.5f) * float(M_PI);
   Vec dot =
-      center.plus(Vec(std::sin(angle), -std::cos(angle)).mult(radius * .85f));
+      center.plus(Vec(std::sin(angle), -std::cos(angle)).mult(radius * .93f));
   nvgBeginPath(vg);
-  nvgCircle(vg, dot.x, dot.y, .85f);
-  nvgFillColor(vg, active ? COLOR_COMPUTERSCARE_GREEN : nvgRGB(79, 93, 89));
+  nvgCircle(vg, dot.x, dot.y, .65f);
+  nvgFillColor(vg, active ? COLOR_COMPUTERSCARE_GREEN : nvgRGB(123, 160, 148));
   nvgFill(vg);
 }
-}  // namespace xrouter
+}  // namespace daddys_home

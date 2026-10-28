@@ -31,7 +31,8 @@ void init(Plugin* p) {
   p->addModel(modelComputerscareMolyPatrix);
   p->addModel(modelComputerscareMelyPorge);
   p->addModel(modelComputerscareSlolyPit);
-  p->addModel(modelComputerscareXRouter);
+  p->addModel(modelComputerscareDaddysHome);
+  p->addModel(modelComputerscareDaddysHomeLegacy);
   p->addModel(modelComputerscareBlunch);
   p->addModel(modelComputerscareHorseADoodleDoo);
 

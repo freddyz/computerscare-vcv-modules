@@ -1,6 +1,6 @@
 #pragma once
 #include <algorithm>
-namespace xrouter {
+namespace daddys_home {
 constexpr float sourceLeft = 5.f;
 constexpr float sourceGap = 1.5f;
 inline float sourceColumnWidth(float width) {
@@ -13,4 +13,4 @@ inline float sourceFontSize(float width, float longestAddressWidthAt8) {
 inline float sourceColumnX(float width, int column) {
   return sourceLeft + (column + .5f) * sourceColumnWidth(width);
 }
-}  // namespace xrouter
+}  // namespace daddys_home

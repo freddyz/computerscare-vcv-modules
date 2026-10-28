@@ -4,7 +4,7 @@
 #include <cmath>
 #include <string>
 
-namespace xrouter {
+namespace daddys_home {
 inline bool parseSource(std::string text, int& source) {
   auto first = text.find_first_not_of(" \t\r\n"),
        last = text.find_last_not_of(" \t\r\n");
@@ -37,4 +37,4 @@ inline int pickerCell(float x, float y) {
 inline int draggedSource(int start, float steps) {
   return std::max(-1, std::min(255, int(std::round(start + steps))));
 }
-}  // namespace xrouter
+}  // namespace daddys_home
