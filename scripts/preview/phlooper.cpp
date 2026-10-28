@@ -1,3 +1,5 @@
+#include "../../src/XRouter/DisplayLayout.hpp"
+#include "../../src/XRouter/Routing.hpp"
 // Development-only renderer. Uses the real module/widget, never a panel mockup.
 #define modelComputerscarePhlooper modelPhlooperPreview
 #include "../../src/ComputerscarePhlooper.cpp"
@@ -962,6 +964,82 @@ int main(int argc, char** argv) {
         browserModel = modelComputerscareVolyPector;
       if (argc == 7 && std::string(argv[6]) == "laundry-soup")
         browserModel = modelComputerscareLaundrySoup;
+      if (argc == 7 && std::string(argv[6]) == "xrouter")
+        browserModel = modelComputerscareXRouter;
+      browserModel->plugin = &plugin;
+      if (browserModel == modelComputerscareXRouter) {
+        std::unique_ptr<engine::Module> router(browserModel->createModule());
+        engine::Module::ProcessArgs args{};
+        args.sampleRate = 48000.f;
+        args.sampleTime = 1.f / args.sampleRate;
+        for (int port = 0; port < 16; ++port) {
+          router->inputs[port].channels = port + 1;
+          router->outputs[port].channels = 1;
+          for (int ch = 0; ch <= port; ++ch)
+            router->inputs[port].setVoltage(float(port * 16 + ch) * .03125f - 4.f, ch);
+        }
+        router->process(args);
+        for (int port = 0; port < 16; ++port) {
+          if (router->outputs[port].getChannels() != port + 1)
+            throw std::runtime_error("XRouter channel count mismatch");
+          for (int ch = 0; ch <= port; ++ch)
+            if (router->outputs[port].getVoltage(ch) != router->inputs[port].getVoltage(ch))
+              throw std::runtime_error("XRouter passthrough mismatch");
+          router->inputs[port].channels = 0;
+        }
+        router->process(args);
+        for (int port = 0; port < 16; ++port)
+          if (router->outputs[port].getChannels() != 1 || router->outputs[port].getVoltage() != 0.f)
+            throw std::runtime_error("XRouter unplug must silence output");
+        auto* custom = router->dataToJson();
+        auto* routing = json_object_get(custom, "routing");
+        for (int dest : {17, 18, 19, 24}) json_array_set_new(routing, dest, json_integer(1));
+        json_array_set_new(routing, 32, json_integer(-1));
+        router->dataFromJson(custom);
+        json_decref(custom);
+        for (int port = 0; port < 16; ++port) {
+          router->inputs[port].channels = 16;
+          for (int ch = 0; ch < 16; ++ch) router->inputs[port].setVoltage(float(port * 16 + ch + 1), ch);
+        }
+        router->process(args);
+        for (int dest : {17, 18, 19, 24})
+          if (router->outputs[dest / 16].getVoltage(dest % 16) != 2.f)
+            throw std::runtime_error("XRouter fanout must copy a2 without summing");
+        if (router->outputs[2].getVoltage() != 0.f)
+          throw std::runtime_error("XRouter blank must output zero");
+        std::unique_ptr<engine::Module> restored(browserModel->createModule());
+        custom = router->dataToJson();
+        restored->dataFromJson(custom);
+        auto* saved = restored->dataToJson();
+        if (!json_equal(custom, saved)) throw std::runtime_error("XRouter routing persistence");
+        json_decref(custom); json_decref(saved);
+        auto* poly = router->getParamQuantity(20);
+        router->params[2].setValue(-1);
+        poly->setValue(8);
+        for (int port = 0; port < 16; ++port)
+          if (router->params[4 + port].getValue() != 8.f)
+            throw std::runtime_error("XRouter All polyphony must update every output");
+        router->params[2].setValue(1);
+        router->params[5].setValue(3);
+        if (router->params[4].getValue() != 8.f || router->params[5].getValue() != 3.f)
+          throw std::runtime_error("XRouter independent output polyphony");
+        router->params[2].setValue(-1);
+        if (poly->getDisplayValueString() != "Mixed")
+          throw std::runtime_error("XRouter mixed polyphony indication");
+        router->process(args);
+        if (router->outputs[0].getChannels() != 8 || router->outputs[1].getChannels() != 3)
+          throw std::runtime_error("XRouter output polyphony DSP");
+        // Save the actual module parameters, including independent output counts.
+        auto* patch = router->paramsToJson();
+        restored->paramsFromJson(patch);
+        json_decref(patch);
+        if (restored->params[4].getValue() != 8.f || restored->params[5].getValue() != 3.f)
+          throw std::runtime_error("XRouter polyphony persistence");
+        poly->setValue(0);
+        if (poly->getDisplayValueString() != "Auto")
+          throw std::runtime_error("XRouter All must clear mixed state");
+        std::puts("XRouter filters, routing, fanout, blank, per-output polyphony and persistence checks passed");
+      }
       browserModel->plugin = &plugin;
       if (browserModel == modelComputerscareWindchimes &&
           std::getenv("WINDCHIMES_PREVIEW_CHECKS"))
@@ -971,6 +1049,170 @@ int main(int argc, char** argv) {
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",
               scale);
+      if (browserModel == modelComputerscareXRouter) {
+        auto* router = browserModel->createModule();
+        APP->engine->addModule(router);
+        router->inputs[0].channels = 6;
+        router->inputs[1].channels = 12;
+        router->inputs[2].channels = 16;
+        for (int port = 0; port < 3; ++port) router->outputs[port].channels = 1;
+        std::unique_ptr<app::ModuleWidget> widget(browserModel->createModuleWidget(router));
+        router->params[2].setValue(0);
+
+        router->params[2].setValue(-1);
+        router->params[0].setValue(0);
+        auto* custom = router->dataToJson();
+        auto* routes = json_object_get(custom, "routing");
+        for (int dest : {17, 18, 19, 24}) json_array_set_new(routes, dest, json_integer(1));
+        json_array_set_new(routes, 32, json_integer(-1));
+        router->dataFromJson(custom);
+        json_decref(custom);
+
+        router->params[0].setValue(-1);
+        router->params[4].setValue(16);
+        router->params[5].setValue(4);
+        capture(widget.get(), std::string(argv[3]) + "/01-mixed-polyphony.png", scale);
+        router->params[0].setValue(0);
+        custom = router->dataToJson();
+        routes = json_object_get(custom, "routing");
+        for (int dest = 0; dest < 256; ++dest) json_array_set_new(routes, dest, json_integer(1));
+        router->dataFromJson(custom);
+        json_decref(custom);
+
+        // Exercise the actual hover shortcut, then verify scope and undo/redo.
+        router->params[0].setValue(-1);
+        router->params[2].setValue(0);
+        custom = router->dataToJson();
+        routes = json_object_get(custom, "routing");
+        for (int dest = 0; dest < 256; ++dest) json_array_set_new(routes, dest, json_integer(dest));
+        json_object_set_new(custom, "randomMode", json_integer(1));
+        router->dataFromJson(custom);
+        json_decref(custom);
+        widget::EventContext eventContext;
+        widget::Widget::HoverKeyEvent key;
+        key.context = &eventContext; key.key = GLFW_KEY_R;
+        key.mods = RACK_MOD_CTRL; key.action = GLFW_PRESS;
+        widget->onHoverKey(key);
+        auto* randomized = router->dataToJson();
+        routes = json_object_get(randomized, "routing");
+        bool changed = false;
+        for (int dest = 0; dest < 256; ++dest) {
+          int source = int(json_integer_value(json_array_get(routes, dest)));
+          changed |= source != dest;
+        }
+        if (!changed) throw std::runtime_error("XRouter shortcut did not randomize");
+        APP->history->undo();
+        auto* undone = router->dataToJson();
+        for (int dest = 0; dest < 256; ++dest)
+          if (json_integer_value(json_array_get(json_object_get(undone, "routing"), dest)) != dest)
+            throw std::runtime_error("XRouter randomization undo");
+        json_decref(undone);
+        APP->history->redo();
+        auto* redone = router->dataToJson();
+        if (!json_equal(redone, randomized)) throw std::runtime_error("XRouter randomization redo");
+        json_decref(redone); json_decref(randomized);
+        capture(widget.get(), std::string(argv[3]) + "/02-shuffled-matrix.png", scale);
+        std::puts("XRouter Mod+R matrix randomization and undo/redo passed");
+        router->params[2].setValue(-1);
+        custom = router->dataToJson();
+        json_object_set_new(custom, "randomMode", json_integer(0));
+        router->dataFromJson(custom);
+        json_decref(custom);
+        widget::EventContext allContext;
+        key.context = &allContext;
+        widget->onHoverKey(key);
+        capture(widget.get(), std::string(argv[3]) + "/03-randomized-matrix.png", scale);
+        auto font = APP->window->loadFont(asset::plugin(&plugin, "res/fonts/DejaVuSansMono.ttf"));
+        auto* vg = APP->window->vg;
+        nvgSave(vg);
+        nvgFontFaceId(vg, font->handle);
+        nvgFontSize(vg, 8.f);
+        float size = xrouter::sourceFontSize(356.f, nvgTextBounds(vg, 0, 0, "m16", nullptr, nullptr));
+        nvgFontSize(vg, size);
+        for (int source = 0; source < 256; ++source) {
+          auto address = xrouter::address(source);
+          float width = nvgTextBounds(vg, 0, 0, address.c_str(), nullptr, nullptr);
+          if (width + xrouter::sourceGap > xrouter::sourceColumnWidth(356.f) + .01f)
+            throw std::runtime_error("XRouter source address overlaps the next column");
+        }
+        nvgRestore(vg);
+        std::puts("XRouter all 256 source addresses fit fixed-width display columns");
+        widget::Widget* display = nullptr;
+        widget::Widget* modeButton = nullptr;
+        for(auto* child : widget->children) {
+          if(child->box.size.x==356 && child->box.size.y==344)display=child;
+          if(child->box.pos.x==206 && child->box.pos.y==4)modeButton=child;
+        }
+        if(!display || !modeButton)throw std::runtime_error("XRouter edit controls missing");
+        auto routeAt=[&](int dest){ auto* state=router->dataToJson(); int value=int(json_integer_value(json_array_get(json_object_get(state,"routing"),dest))); json_decref(state); return value; };
+        auto button=[&](widget::Widget* target,Vec pos,int buttonCode){ widget::EventContext context; widget::Widget::ButtonEvent e; e.context=&context; e.pos=pos; e.button=buttonCode; e.action=GLFW_PRESS; target->onButton(e); };
+        auto removeOverlay=[&](widget::Widget* overlay){ APP->scene->removeChild(overlay); delete overlay; };
+        APP->scene->box.size=Vec(1280,800);
+        auto hover=[&](widget::Widget* target,Vec pos){widget::EventContext context;widget::Widget::HoverEvent e;e.context=&context;e.pos=pos;target->onHover(e);};
+        int original=routeAt(6);
+        hover(display,Vec(xrouter::sourceColumnX(356,6),10.75f));
+        auto* tip=dynamic_cast<ui::Tooltip*>(APP->scene->children.back());
+        if(!tip || tip->text!=xrouter::address(original)+" -> A7")throw std::runtime_error("XRouter grid route tooltip");
+        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        auto* overlay=APP->scene->children.back();
+        auto* picker=overlay->children.front();
+        float pickerScale=picker->box.size.x/356.f;
+        if(pickerScale<1.4f)throw std::runtime_error("XRouter picker must be enlarged");
+        size_t pickerHoverChildren=APP->scene->children.size();
+        hover(picker,Vec(175,193.5f).mult(pickerScale));
+        if(APP->scene->children.size()!=pickerHoverChildren)throw std::runtime_error("XRouter popup must not create tooltips");
+        auto pickerPosition=picker->box.pos;
+        overlay->removeChild(picker); picker->box.pos=Vec();
+        capture(picker,std::string(argv[3])+"/04-source-picker.png",scale);
+        picker->box.pos=pickerPosition; overlay->addChild(picker);
+        button(picker,Vec(175,193.5f).mult(pickerScale),GLFW_MOUSE_BUTTON_LEFT);
+        if(routeAt(6)!=135)throw std::runtime_error("XRouter picker i8");
+        APP->history->undo(); if(routeAt(6)!=original)throw std::runtime_error("XRouter picker undo");
+        APP->history->redo(); if(routeAt(6)!=135)throw std::runtime_error("XRouter picker redo");
+        removeOverlay(overlay);
+        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_RIGHT);
+        overlay=APP->scene->children.back();
+        ui::TextField* field=nullptr;
+        for(auto* child:overlay->children.front()->children)if(auto* f=dynamic_cast<ui::TextField*>(child))field=f;
+        if(!field)throw std::runtime_error("XRouter text edit missing");
+        auto enter=[&](){ widget::EventContext context; widget::Widget::SelectKeyEvent e; e.context=&context; e.key=GLFW_KEY_ENTER; e.action=GLFW_PRESS; field->onSelectKey(e); };
+        field->text="a17"; enter(); if(routeAt(6)!=135)throw std::runtime_error("XRouter invalid source accepted");
+        field->text="a5"; enter(); if(routeAt(6)!=4)throw std::runtime_error("XRouter code entry");
+        APP->event->setSelectedWidget(nullptr); removeOverlay(overlay);
+        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        overlay=APP->scene->children.back(); picker=overlay->children.front();
+        button(picker,Vec(332,11).mult(picker->box.size.x/356.f),GLFW_MOUSE_BUTTON_LEFT);
+        if(routeAt(6)!=-1)throw std::runtime_error("XRouter X must clear");
+        removeOverlay(overlay);
+        button(modeButton,Vec(15,10),GLFW_MOUSE_BUTTON_LEFT);
+        capture(widget.get(),std::string(argv[3])+"/05-knobs.png",scale);
+        widget::EventContext dragContext;
+        widget::Widget::DragStartEvent start; start.context=&dragContext; start.button=GLFW_MOUSE_BUTTON_LEFT;
+        widget::Widget::DragMoveEvent move; move.context=&dragContext; move.button=GLFW_MOUSE_BUTTON_LEFT; move.mouseDelta=Vec(0,-10);
+        widget::Widget::DragEndEvent end; end.context=&dragContext; end.button=GLFW_MOUSE_BUTTON_LEFT;
+        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        display->onDragStart(start); display->onDragMove(move); display->onDragEnd(end);
+        if(routeAt(6)!=4)throw std::runtime_error("XRouter 257-step knob drag");
+        APP->history->undo(); if(routeAt(6)!=-1)throw std::runtime_error("XRouter knob drag undo");
+        size_t sceneChildren=APP->scene->children.size();
+        button(display,Vec(xrouter::sourceColumnX(356,6),10.75f),GLFW_MOUSE_BUTTON_LEFT);
+        display->onDragStart(start); display->onDragEnd(end);
+        if(APP->scene->children.size()!=sceneChildren || routeAt(6)!=-1)throw std::runtime_error("XRouter knob click must not open picker or edit");
+        hover(display,Vec(xrouter::sourceColumnX(356,6),10.75f));
+        tip=dynamic_cast<ui::Tooltip*>(APP->scene->children.back());
+        if(!tip || tip->text!="-- -> A7")throw std::runtime_error("XRouter knob route tooltip");
+        widget::EventContext leaveContext;widget::Widget::LeaveEvent leave;leave.context=&leaveContext;display->onLeave(leave);
+        auto* savedMode=router->dataToJson();
+        if(!json_is_true(json_object_get(savedMode,"knobMode")))throw std::runtime_error("XRouter mode persistence");
+        json_decref(savedMode);
+        std::puts("XRouter source picker, text validation, blank, knob drag and edit undo/redo passed");
+
+
+
+
+
+
+      }
       if (browserModel == modelComputerscareWindchimes) {
         {
           windchimes::ForestGraphic::Debris bit;

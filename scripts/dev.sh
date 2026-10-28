@@ -258,6 +258,8 @@ build() {
 }
 
 run_tests() {
+  g++ -std=c++11 -I src tests/xrouter_routing_test.cpp -o /tmp/cs_xrouter_routing_test
+  /tmp/cs_xrouter_routing_test
   echo "==> Tests..."
   g++ -std=c++11 -I src tests/voly_pector_keyboard_test.cpp -o /tmp/cs_voly_keyboard_test
   /tmp/cs_voly_keyboard_test

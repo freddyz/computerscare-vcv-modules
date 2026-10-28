@@ -186,6 +186,13 @@
       "description": "Sixteen independent stereo loops with gradual time and speed phasing",
       "tags": ["Looper", "Sampler", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/phlooper.md"
+    },
+    {
+      "slug": "computerscare-xrouter",
+      "name": "XRouter",
+      "description": "16-input, 16-output polyphonic router",
+      "tags": ["Polyphonic", "Utility"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/xrouter-dev/doc/xrouter.md"
     }
   ]
 }
