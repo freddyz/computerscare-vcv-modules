@@ -3256,15 +3256,6 @@ static float blunchPendingPulse() {
 }
 
 struct BlunchTextEditor : ComputerscareTextEditor {
-  widget::SvgWidget layerCaptions[3];
-  BlunchTextEditor() {
-    layerCaptions[0].setSvg(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/components/blunch-layer-draft.svg")));
-    layerCaptions[1].setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/components/blunch-layer-next.svg")));
-    layerCaptions[2].setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/components/blunch-layer-now.svg")));
-  }
   void step() override {
     BlunchStateLock stateGuard(module);
     ComputerscareTextEditor::step();
@@ -3352,22 +3343,6 @@ struct BlunchTextEditor : ComputerscareTextEditor {
     BlunchStateLock stateGuard(module);
     updatePolicy();
     ComputerscareTextEditor::drawLayer(args, layer);
-    if (layer != 1 || !module) return;
-    nvgSave(args.vg);
-    nvgBeginPath(args.vg);
-    nvgMoveTo(args.vg, box.size.x - 35.f, 1.5f);
-    nvgLineTo(args.vg, box.size.x - 1.f, .5f);
-    nvgLineTo(args.vg, box.size.x - 1.5f, 11.f);
-    nvgLineTo(args.vg, box.size.x - 34.5f, 10.5f);
-    nvgClosePath(args.vg);
-    nvgFillColor(
-        args.vg,
-        computerscare::text_editor::editorTheme(module->editorTheme).caption);
-    nvgFill(args.vg);
-    auto& caption = layerCaptions[module->visibleLayer()];
-    nvgTranslate(args.vg, box.size.x - 18.f - caption.box.size.x * .5f, 2.f);
-    caption.draw(args);
-    nvgRestore(args.vg);
   }
   ComputerscareBlunch* module = nullptr;
   void updatePolicy() {
@@ -3612,16 +3587,83 @@ struct BlunchTextEditor : ComputerscareTextEditor {
     }
     updatePolicy();
   }
+  Menu* openLineMenu(Vec position) {
+    bool overview = module->showingChannelsView();
+    int line = getAllViewTextPositionForOffset(
+                   text, clamp(getTextPosition(position), 0, int(text.size())))
+                   .line;
+    int channel = clamp(overview ? line : module->focusedChannel, 0, 15);
+    std::string lineText = getLineInfo(text, line).text;
+    auto* blunch = module;
+    auto* menu = createMenu();
+    bool playing = blunch->channelPlaying(channel) &&
+                   (overview || blunch->sequencers[channel].activeLine == line);
+    std::string target = overview ? "channel " + std::to_string(channel + 1)
+                                  : "line " + std::to_string(line + 1);
+    std::string playLabel = "Play " + target;
+    if (playing) {
+      target[0] = overview ? 'C' : 'L';
+      playLabel = target + " playing";
+    }
+    menu->addChild(createMenuItem(
+        playLabel, "",
+        [blunch, overview, channel, line]() {
+          BlunchStateLock guard(blunch);
+          if (overview) blunch->syncChannelsEditorEdit(channel);
+          int previous = blunch->focusedChannel;
+          blunch->focusedChannel = channel;
+          // Match keyboard Play, but target the clicked row rather than the
+          // current selection. Detail view starts at the clicked formula.
+          if (blunch->params[ComputerscareBlunch::RUN_PARAM].getValue() <= .5f)
+            for (int ch = 0; ch < 16; ++ch) blunch->stopSequencer(ch, true);
+          bool playing = blunch->channelPlaying(channel);
+          if (blunch->executePage(overview ? -1 : line)) {
+            if (overview && !playing &&
+                !blunch->sequencers[channel].activeProgram.empty())
+              blunch->applyActiveProgramStep(blunch->sequencers[channel]);
+            blunch->startSequencer(channel);
+          }
+          blunch->focusedChannel = previous;
+          blunch->refreshChannelsEditorState();
+        },
+        playing));
+    if (overview)
+      menu->addChild(
+          createMenuItem("Stop channel " + std::to_string(channel + 1), "",
+                         [blunch, channel]() {
+                           blunch->controlStopRequests.fetch_or(1u << channel);
+                         }));
+    menu->addChild(new MenuSeparator);
+    menu->addChild(createMenuItem("Copy line", "", [lineText]() {
+      glfwSetClipboardString(APP->window->win, lineText.c_str());
+    }));
+    menu->addChild(new MenuSeparator);
+    updatePolicy();
+    bool selected = cursor != selection;
+    auto clipboard = [this](int key) {
+      // Use the same path as keyboard shortcuts, including All-view row
+      // boundaries, read-only protection, and editor undo history.
+      widget::EventContext context;
+      SelectKeyEvent event;
+      event.context = &context;
+      event.key = key;
+      event.mods = RACK_MOD_CTRL;
+      event.action = GLFW_PRESS;
+      onSelectKey(event);
+    };
+    menu->addChild(createMenuItem(
+        "Cut", RACK_MOD_CTRL_NAME + std::string("+X"),
+        [clipboard]() { clipboard(GLFW_KEY_X); }, !selected || readOnly));
+    menu->addChild(createMenuItem(
+        "Copy", RACK_MOD_CTRL_NAME + std::string("+C"),
+        [clipboard]() { clipboard(GLFW_KEY_C); }, !selected));
+    menu->addChild(createMenuItem(
+        "Paste", RACK_MOD_CTRL_NAME + std::string("+V"),
+        [clipboard]() { clipboard(GLFW_KEY_V); }, readOnly));
+    return menu;
+  }
   void onButton(const ButtonEvent& e) override {
     BlunchStateLock stateGuard(module);
-    if (module && e.button == GLFW_MOUSE_BUTTON_LEFT &&
-        e.action == GLFW_PRESS && e.pos.x >= box.size.x - 35.f &&
-        e.pos.y <= 11.f) {
-      module->setFormulaLayer(
-          ComputerscareBlunch::FormulaLayer((module->formulaLayer + 1) % 3));
-      e.consume(this);
-      return;
-    }
     if (module && blunchShortcutHelpHeld(module->controlMode)) {
       e.consume(this);
       return;
@@ -3652,6 +3694,12 @@ struct BlunchTextEditor : ComputerscareTextEditor {
         e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
       selectingRows = true;
       selectRow(rowAt(e.pos), (e.mods & GLFW_MOD_SHIFT) != 0);
+    }
+    if (module && e.button == GLFW_MOUSE_BUTTON_RIGHT &&
+        e.action == GLFW_PRESS) {
+      openLineMenu(e.pos);
+      e.consume(this);
+      return;
     }
     int anchor = selection;
     ComputerscareTextEditor::onButton(e);

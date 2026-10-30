@@ -6,6 +6,10 @@
 #include "../../src/Blunch/ComputerscareBlunch.cpp"
 #undef modelComputerscareBlunch
 
+#define modelComputerscareVolyPector modelVolyMultiPreview
+#include "../../src/ComputerscareVolyPector.cpp"
+#undef modelComputerscareVolyPector
+
 #include <stb_image_write.h>
 
 #include <algorithm>
@@ -133,6 +137,9 @@ void checkMaxVisual(app::ModuleWidget* widget,bool& compact,const std::string& p
   std::puts("Shared Max visual port hit-testing, persistence, return button and layout restoration checks passed");
 }
 
+#include "blunch-line-menu-checks.hpp"
+#include "voly-multi-checks.hpp"
+
 void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
                           float scale) {
   auto require = [](bool value, const char* message) {
@@ -141,6 +148,7 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   modelBlunchPreview->plugin = &plugin;
   checkBlunchGates(modelBlunchPreview);
   checkBlunchRowSelection(modelBlunchPreview);
+  checkBlunchLineMenus(modelBlunchPreview, output, scale);
   checkBlunchFormulaLayers(modelBlunchPreview);
   checkBlunchThreadHandoff(modelBlunchPreview);
   checkBlunchSeedBoundaries(modelBlunchPreview);
@@ -966,7 +974,8 @@ int main(int argc, char** argv) {
       if (browserModel == modelComputerscareWindchimes &&
           std::getenv("WINDCHIMES_PREVIEW_CHECKS"))
         checkWindchimesCv(browserModel);
-      if(browserModel==modelComputerscareVolyPector)checkVolyKeyboard(browserModel);
+      if(browserModel==modelComputerscareVolyPector && std::getenv("VOLY_PREVIEW_CHECKS"))checkVolyKeyboard(browserModel,[&](app::ModuleWidget* widget){capture(widget,std::string(argv[3])+"/01-shortcuts.png",scale);});
+      if(browserModel==modelComputerscareVolyPector && std::getenv("VOLY_PREVIEW_CHECKS"))checkVolyMulti(browserModel,argv[3],scale);
       auto browserWidget = std::unique_ptr<app::ModuleWidget>(
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",

@@ -78,7 +78,7 @@ The full pattern is `1, 3, 2, 4, 1, 5, 2, 3, 1, 4, 2, 5` seconds. It repeats whe
 
 A parenthesized sequence immediately following a block alternates with that preceding block. For example, `500ms (300ms 400ms)` plays `500, 300, 500, 400` ms.
 
-Use brackets for a straight sequence; use nested parentheses when items should advance on successive turns. A bracketed sequence plays all its values when its turn arrives: `(1 (2 3 [3 2 1]))hz` plays `1, 2, 1, 3, 1, 3, 2, 1`, then repeats.
+Use brackets for a straight sequence; use nested parentheses when items should advance on successive turns. Inside brackets, a nested parenthesized group advances once per pass: `[90 100 110 (120 144)]` plays `90 100 110 120`, then `90 100 110 144`. A bracketed sequence plays all its values when its turn arrives: `(1 (2 3 [3 2 1]))hz` plays `1, 2, 1, 3, 1, 3, 2, 1`, then repeats.
 
 ### Repeats: `@`
 
@@ -154,6 +154,8 @@ Use the channel selector to choose **All** or an individual channel. Selecting a
 
 **All view** shows one formula row per channel. Tab or Shift+Tab switches between All view and the channel under the cursor. Escape also returns to All view. Enter in All view does not navigate. Ctrl+[ and Ctrl+] move between individual channel pages.
 
+Right-click a row in All view to play or stop that channel, or copy its displayed formula. These actions target the clicked row. In channel view, right-click a formula to play from that line or copy it. The playing target is labeled and disabled. Standard Cut, Copy, and Paste work on the current text selection; Copy line copies the clicked formula.
+
 Direct editing in All view is allowed when a channel is stopped/paused or has only one nonblank formula line. A playing channel with multiple formula lines is read-only there and has no editing caret; open its channel page to edit it. Trailing blank lines do not count as extra formulas.
 
 Stopped channels show their edited text immediately, even if they have never played. Playing multi-line channels show their current active formula. Channels beyond the selected polyphony use faded italic text and a lighter grey background; they remain selectable and editable.
@@ -174,7 +176,7 @@ Enable **Apply valid edits while typing** in the context menu to submit edits au
 
 The display’s left edge shows yellow selection markers. Steady yellow ticks mark Draft edits; a slow yellow pulse marks Next waiting to take over. Both can appear together, per line in a channel page or summarized per channel in All view. Changed Draft text is tinted yellow. Play stays raised while changes exist: steady yellow for Draft, pulsing yellow for Next. Applying Draft does not cancel an existing Next submission.
 
-Click the small **Draft / Next / Now** label in the display or press **F6** to switch versions. Next and Now are read-only. Unchanged lines in Next show Now in faded text. Hold **F7** to peek at Now; release it to return. Typing returns to Draft. Switching views never replaces your edits.
+Press **F6** to switch between Draft, Next, and Now. Next and Now are read-only. Unchanged lines in Next show Now in faded text. Hold **F7** to peek at Now; release it to return. Typing returns to Draft. Switching views never replaces your edits.
 
 The **x** button to the right of Stop acts on the selected channel:
 

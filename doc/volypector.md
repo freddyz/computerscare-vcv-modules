@@ -54,13 +54,25 @@ Rack initialize resets the visible Probability and Range Scale knobs to 100%.
 
 While the mouse is over Voly Pector:
 
-| Key               | Focus                           |
-| ----------------- | ------------------------------- |
-| a–p               | Bands A–P                       |
-| 1–9               | Channels 1–9                    |
-| 0                 | Channel 10                      |
-| q / w / r / t / y | Channels 11 / 12 / 13 / 14 / 15 |
+| Key                   | Focus                                |
+| --------------------- | ------------------------------------ |
+| a–p                   | Bands A–P                            |
+| 1–9                   | Channels 1–9                         |
+| 0                     | Channel 10                           |
+| q / w / r / t / y / u | Channels 11 / 12 / 13 / 14 / 15 / 16 |
 
-Channel 16 remains selectable with its button. Focus CV overrides keyboard selection while patched. Shortcuts are ignored while editing a value or using Control, Alt or Command modifiers. Button tooltips include the key in brackets.
+Focus CV overrides keyboard selection while patched. Focus shortcuts are ignored while editing a value or using Control, Alt or Command modifiers. Button tooltips include the key in brackets.
 
-Hold **~** over the module to show letter/channel shortcut badges. **Z** randomizes the current view; **X** wiggles it. Both preserve scale and offset and support Undo.
+Hold **~** over the module to show letter/channel shortcut badges. **Z** randomizes the current view; **X** or **Mod+W** (Cmd+W on macOS, Ctrl+W elsewhere) wiggles it. Both preserve scale and offset and support Undo.
+
+### Multiple selections
+
+Mod+click a band or channel button to add or remove it. Mod is Cmd on macOS, Ctrl elsewhere. A normal click returns to one selection. Up to four can be selected; a fifth click is ignored. At least one stays selected. Switching between bands and channels starts a new selection; the two axes cannot both have multiple selections.
+
+Selected bands each get a block of channel knobs. Selected channels each get a block of band knobs. Each group’s normal offset and scale knobs sit above its values. Hover a value or band offset/scale knob to see its patched destinations. Dense selections hide these pairs; select one band/channel to access them. Multi-selection shows connected bands and channels within the polyphony setting. With no outputs connected, all bands remain available.
+
+Inactive members are hidden automatically; explicitly selecting an inactive band or channel still shows its controls. Its main knobs are grey but editable; offset and scale keep their normal colors.
+
+Groups share the available height evenly. Values use a regular two-, three-, or four-column grid, with each row rising evenly to the right. Labels stay above the left side of each knob. Incomplete rows keep the same column positions. Knobs shrink to fit; offset/scale controls are hidden when space is too tight. The module always stays 8HP. Drag to edit, hold Mod for fine adjustment, double-click to reset, or right-click to enter a value. Changes support undo even after switching views.
+
+Z and X/Mod+W affect only the values displayed in the selected blocks, leaving offset/scale alone. Focus CV takes precedence and shows one view. Selections are saved with the patch. Existing single-view parameter mappings are unchanged.

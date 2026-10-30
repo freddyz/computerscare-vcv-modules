@@ -16,14 +16,14 @@ inline FocusKey focusKey(int key) {
   else if (key == '0')
     result.channel = 9;
   else {
-    const char* extra = "QWRTY";
-    for (int i = 0; i < 5; ++i)
+    const char* extra = "QWRTYU";
+    for (int i = 0; i < 6; ++i)
       if (key == extra[i]) result.channel = 10 + i;
   }
   return result;
 }
 inline char channelKey(int channel) {
-  return channel >= 0 && channel < 15 ? "1234567890qwrty"[channel] : '\0';
+  return channel >= 0 && channel < 16 ? "1234567890qwrtyu"[channel] : '\0';
 }
 }  // namespace voly
 }  // namespace computerscare

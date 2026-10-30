@@ -80,6 +80,17 @@ int main() {
   for (size_t i = 0; i < nested.size(); ++i)
     requireNear(nested[i].spec.periodSeconds, expected[i], "compiled playback follows the nested sequence in seconds");
 
+  auto bracketCycle = requireCompiles("[90 100 110 (120 144)]");
+  auto parenCycle = requireCompiles("(90 100 110 (120 144))");
+  const double cycleBpms[] = {90,100,110,120,90,100,110,144};
+  require(bracketCycle.size() == 8 && parenCycle.size() == 8,
+          "bracket and paren nested cycles have matching lengths");
+  for (size_t i = 0; i < 8; ++i) {
+    requireNear(bracketCycle[i].spec.bpm, cycleBpms[i], "bracket nested playback BPM");
+    requireNear(bracketCycle[i].spec.periodSeconds, parenCycle[i].spec.periodSeconds,
+                "bracket nested playback matches parentheses");
+  }
+
   std::vector<BlunchProgramStep> compiled = requireCompiles("x@3y", 40);
   require(compiled.size() == 1, "external repeat compiles to one step");
   require(compiled[0].externalClockInput == 11,

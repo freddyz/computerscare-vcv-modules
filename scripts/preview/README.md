@@ -77,3 +77,5 @@ Set `FOREST_STORM_PREVIEW=1` for a short live storm and settling sequence (`04-s
 Blunch Control captures also include `theme-Mauer.png`, `theme-Garnett.png`, `theme-Moss.png`, and `theme-Puckett.png`. These use different channel arrangements to check both overview and detail views. Theme changes are checked against the same caret and viewport geometry.
 
 Use `scripts/preview-module.sh groups` to render the current family, basic polyphonic utilities, advanced polyphonic utilities, and visualization modules. The family is checked against all non-hidden entries in `plugin.json`. The utility groups use real offline patches and Rack cables. Portaloof processes a fresh capture of the displayed modules. No audio device or existing patch is opened. Generated files stay in `build/previews/groups/`; copy approved documentation images into `doc/images/`.
+
+Voly Pector normally renders just its browser preview. Set `VOLY_PREVIEW_CHECKS=1` to run the keyboard and multi-selection interaction checks and capture their example states.

@@ -77,6 +77,10 @@ std::string volyPectorOutputDestinationText(ModuleWidget* moduleWidget,
 }  // namespace
 
 struct ComputerscareVolyPector : ComputerscarePolyModule {
+  uint16_t selectedBands = 1;
+  uint16_t selectedChannels = 0;
+  // Inactive groups explicitly chosen by the user remain visible.
+  uint16_t explicitInactiveBands = 0, explicitInactiveChannels = 0;
   bool bipolarMainKnobs = true;
   int mainKnobRangeRevision = 0;
   float outputKnobValues[volyPectorNumOutputs][volyPectorNumKnobs] = {};
@@ -326,6 +330,9 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     int output = normalizedOutputView();
     int channel = selectedChannel();
     if (channel != viewedChannel || output != viewedOutput) {
+      explicitInactiveBands = explicitInactiveChannels = 0;
+      selectedChannels = channel >= 0 ? uint16_t(1u << channel) : 0;
+      selectedBands = channel < 0 ? uint16_t(1u << output) : 0;
       storeViewedView();
       storeViewedControls();
       loadCurrentView();
@@ -347,6 +354,12 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
   void selectOutputView(int output) {
     storeViewedView();
     storeViewedControls();
+    explicitInactiveBands = bandAvailable(clamp(output, 0, 15))
+                                ? 0
+                                : uint16_t(1u << clamp(output, 0, 15));
+    explicitInactiveChannels = 0;
+    selectedBands = uint16_t(1u << clamp(output, 0, 15));
+    selectedChannels = 0;
     params[CHANNEL_SELECTOR].setValue(0.f);
     params[OUTPUT_SELECTOR].setValue(
         math::clamp(output, 0, volyPectorNumOutputs - 1) + 1);
@@ -360,6 +373,12 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
   void selectChannelView(int channel) {
     storeViewedView();
     storeViewedControls();
+    explicitInactiveChannels = channel < clamp(polyChannels, 1, 16)
+                                   ? 0
+                                   : uint16_t(1u << clamp(channel, 0, 15));
+    explicitInactiveBands = 0;
+    selectedChannels = uint16_t(1u << clamp(channel, 0, 15));
+    selectedBands = 0;
     params[OUTPUT_SELECTOR].setValue(0.f);
     params[CHANNEL_SELECTOR].setValue(
         math::clamp(channel, 0, volyPectorNumKnobs - 1) + 1);
@@ -370,6 +389,104 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     outputsDirty = true;
   }
 
+  bool multiView() {
+    unsigned mask = selectedChannels ? selectedChannels : selectedBands;
+    return !inputs[FOCUS_CV_INPUT].isConnected() && (mask & (mask - 1u));
+  }
+  void toggleViewSelection(bool channels, int index) {
+    index = clamp(index, 0, 15);
+    if (focusCvControlsFocus()) return;
+    bool sameAxis = channels == channelViewActive();
+    unsigned mask =
+        sameAxis ? (channels ? selectedChannels : selectedBands) : 0;
+    if (!mask && sameAxis)
+      mask =
+          1u << (channels ? normalizedChannelView() : normalizedOutputView());
+    if (!(mask & (1u << index)) && __builtin_popcount(mask) >= 4) return;
+    unsigned explicitInactive =
+        sameAxis ? (channels ? explicitInactiveChannels : explicitInactiveBands)
+                 : 0;
+    if (!(mask & (1u << index)) &&
+        (channels ? index >= clamp(polyChannels, 1, 16)
+                  : !bandAvailable(index)))
+      explicitInactive |= 1u << index;
+    mask ^= 1u << index;
+    if (!mask) mask = 1u << index;
+    int first = 0;
+    while (!(mask & (1u << first))) ++first;
+    if (channels) {
+      selectChannelView(first);
+      selectedChannels = mask;
+      explicitInactiveChannels = explicitInactive & mask;
+    } else {
+      selectOutputView(first);
+      selectedBands = mask;
+      explicitInactiveBands = explicitInactive & mask;
+    }
+  }
+  bool bandAvailable(int output) {
+    bool any = false;
+    for (int i = 0; i < 16; ++i) any |= outputs[OUTPUT + i].isConnected();
+    return !any || outputs[OUTPUT + output].isConnected();
+  }
+  bool mainValueInactive(int output, int channel) {
+    bool any = false;
+    for (int i = 0; i < 16; ++i) any |= outputs[OUTPUT + i].isConnected();
+    if (channelViewActive() && !any) return false;
+    return channel >= clamp(polyChannels, 1, 16) ||
+           (any && !outputs[OUTPUT + output].isConnected());
+  }
+  bool multiBandVisible(int output) {
+    return bandAvailable(output) ||
+           (!channelViewActive() &&
+            (explicitInactiveBands & selectedBands & (1u << output)));
+  }
+  bool multiChannelVisible(int channel) {
+    return channel < clamp(polyChannels, 1, 16) ||
+           (channelViewActive() &&
+            (explicitInactiveChannels & selectedChannels & (1u << channel)));
+  }
+  bool multiDestinationVisible(int output, int channel) {
+    return multiBandVisible(output) && multiChannelVisible(channel);
+  }
+  // Addresses 0..255 are values; 256..319 are band/channel scale and offset.
+  float multiValue(int address) {
+    address = clamp(address, 0, 319);
+    if (address < 256) return visibleOrStoredValue(address / 16, address % 16);
+    int field = (address - 256) / 16, index = address % 16;
+    if ((field < 2 && viewedChannel < 0 && viewedOutput == index) ||
+        (field >= 2 && viewedChannel == index))
+      return params[(field % 2) ? GLOBAL_SCALE : GLOBAL_OFFSET].getValue();
+    if (field == 0) return outputOffsetValues[index];
+    if (field == 1) return outputScaleValues[index];
+    if (field == 2) return channelOffsetValues[index];
+    return channelScaleValues[index];
+  }
+  void setMultiValue(int address, float value) {
+    address = clamp(address, 0, 319);
+    if (address < 256) {
+      int output = address / 16, channel = address % 16;
+      value = clampKnobValue(value);
+      outputKnobValues[output][channel] = value;
+      if (viewedChannel == channel)
+        params[KNOB + output].setValue(value);
+      else if (viewedChannel < 0 && viewedOutput == output)
+        params[KNOB + channel].setValue(value);
+    } else {
+      int field = (address - 256) / 16, index = address % 16;
+      value =
+          clamp(value, (field % 2) ? -2.f : -10.f, (field % 2) ? 2.f : 10.f);
+      if (field == 0) outputOffsetValues[index] = value;
+      if (field == 1) outputScaleValues[index] = value;
+      if (field == 2) channelOffsetValues[index] = value;
+      if (field == 3) channelScaleValues[index] = value;
+      if ((field < 2 && viewedChannel < 0 && viewedOutput == index) ||
+          (field >= 2 && viewedChannel == index))
+        params[(field % 2) ? GLOBAL_SCALE : GLOBAL_OFFSET].setValue(value);
+    }
+    captureVisibleControls();
+    outputsDirty = true;
+  }
   float focusCvVoltage() {
     return math::clamp(inputs[FOCUS_CV_INPUT].getVoltage(),
                        -volyPectorFocusCvRange, volyPectorFocusCvRange);
@@ -465,7 +582,14 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     float outputSelection = params[OUTPUT_SELECTOR].getValue();
     float channelSelection = params[CHANNEL_SELECTOR].getValue();
     restoreViewSelection(outputSelection, channelSelection);
-    if (channelViewActive()) {
+    if (multiView()) {
+      for (int output = 0; output < 16; ++output)
+        for (int channel = 0; channel < 16; ++channel)
+          if (multiDestinationVisible(output, channel) &&
+              (channelViewActive() ? (selectedChannels & (1u << channel))
+                                   : (selectedBands & (1u << output))))
+            outputKnobValues[output][channel] = 0.f;
+    } else if (channelViewActive()) {
       int channel = normalizedChannelView();
       for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][channel] = 0.f;
@@ -486,7 +610,15 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     float outputSelection = params[OUTPUT_SELECTOR].getValue();
     float channelSelection = params[CHANNEL_SELECTOR].getValue();
     restoreViewSelection(outputSelection, channelSelection);
-    if (channelViewActive()) {
+    if (multiView()) {
+      for (int output = 0; output < 16; ++output)
+        for (int channel = 0; channel < 16; ++channel)
+          if (multiDestinationVisible(output, channel) &&
+              (channelViewActive() ? (selectedChannels & (1u << channel))
+                                   : (selectedBands & (1u << output))))
+            outputKnobValues[output][channel] =
+                randomKnobValue(outputKnobValues[output][channel], mode);
+    } else if (channelViewActive()) {
       int channel = normalizedChannelView();
       for (int output = 0; output < volyPectorNumOutputs; output++) {
         outputKnobValues[output][channel] =
@@ -857,6 +989,13 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
     storeViewedView();
     storeViewedControls();
     json_t* rootJ = json_object();
+    json_object_set_new(rootJ, "selectedBands", json_integer(selectedBands));
+    json_object_set_new(rootJ, "selectedChannels",
+                        json_integer(selectedChannels));
+    json_object_set_new(rootJ, "explicitInactiveBands",
+                        json_integer(explicitInactiveBands));
+    json_object_set_new(rootJ, "explicitInactiveChannels",
+                        json_integer(explicitInactiveChannels));
     json_object_set_new(rootJ, "bipolarMainKnobs",
                         json_boolean(bipolarMainKnobs));
     json_t* outputKnobValuesJ = json_array();
@@ -969,6 +1108,28 @@ struct ComputerscareVolyPector : ComputerscarePolyModule {
       captureVisibleControls();
       outputsDirty = true;
     }
+    unsigned bands =
+        unsigned(json_integer_value(json_object_get(rootJ, "selectedBands"))) &
+        65535u;
+    unsigned channels = unsigned(json_integer_value(
+                            json_object_get(rootJ, "selectedChannels"))) &
+                        65535u;
+    auto limited = [](unsigned mask, int focus) {
+      unsigned result = 1u << focus;
+      for (int i = 0; i < 16 && __builtin_popcount(result) < 4; ++i)
+        if (mask & (1u << i)) result |= 1u << i;
+      return uint16_t(result);
+    };
+    selectedChannels =
+        channelViewActive() ? limited(channels, normalizedChannelView()) : 0;
+    selectedBands =
+        channelViewActive() ? 0 : limited(bands, normalizedOutputView());
+    explicitInactiveBands = unsigned(json_integer_value(json_object_get(
+                                rootJ, "explicitInactiveBands"))) &
+                            selectedBands;
+    explicitInactiveChannels = unsigned(json_integer_value(json_object_get(
+                                   rootJ, "explicitInactiveChannels"))) &
+                               selectedChannels;
   }
 
   void process(const ProcessArgs& args) override {
@@ -1318,20 +1479,12 @@ struct VolyPectorDisableableSmoothKnob : ComputerscareRoundKnob {
         mainKnobRangeRevision = pobs->mainKnobRangeRevision;
       }
 
-      bool anyOutputConnected = false;
-      if (pobs && pobs->channelViewActive()) {
-        for (int output = 0; output < volyPectorNumOutputs; ++output)
-          anyOutputConnected |=
-              pobs->outputs[ComputerscareVolyPector::OUTPUT + output]
-                  .isConnected();
-      }
       bool candidate =
           pobs &&
-          ((!pobs->channelViewActive() && channel > module->polyChannels - 1) ||
-           (pobs->channelViewActive() && anyOutputConnected &&
-            (pobs->selectedChannel() > module->polyChannels - 1 ||
-             !pobs->outputs[ComputerscareVolyPector::OUTPUT + channel]
-                  .isConnected())));
+          pobs->mainValueInactive(
+              pobs->channelViewActive() ? channel
+                                        : pobs->normalizedOutputView(),
+              pobs->channelViewActive() ? pobs->selectedChannel() : channel);
       if (disabled != candidate) {
         setSvg(candidate ? disabledSvg : enabledSvg);
         event::Change eChange;
@@ -1436,6 +1589,12 @@ struct VolyPectorViewTitle : Widget {
 
   std::string title() {
     if (module) {
+      if (module->multiView()) {
+        unsigned mask = module->channelViewActive() ? module->selectedChannels
+                                                    : module->selectedBands;
+        return std::to_string(__builtin_popcount(mask)) +
+               (module->channelViewActive() ? " Channels" : " Bands");
+      }
       if (module->channelViewActive()) {
         return "Channel " + std::to_string(module->selectedChannel() + 1);
       }
@@ -1460,7 +1619,8 @@ struct VolyPectorViewTitle : Widget {
     nvgScale(args.vg, xScale, yScale);
     nvgFontFaceId(args.vg, font->handle);
     std::string text = title();
-    float currentFontSize = text == "November Band" ? 13.5f : fontSize;
+    float currentFontSize =
+        text == "November Band" ? std::min(13.5f, fontSize) : fontSize;
     nvgFontSize(args.vg, currentFontSize);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, nvgRGB(0x10, 0x10, 0x00));
@@ -1578,14 +1738,19 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
   bool selected() {
     if (outputLabel) {
       if (module) {
-        return module->selectedOutput() == outputIndex &&
-               !module->channelViewActive();
+        return !module->channelViewActive() &&
+               (module->focusCvControlsFocus()
+                    ? module->selectedOutput() == outputIndex
+                    : (module->selectedBands & (1u << outputIndex)) != 0);
       }
       return previewMode && !previewChannelView &&
              previewSelectedOutput == outputIndex;
     }
     if (module) {
-      return module->selectedChannel() == channelIndex;
+      return module->channelViewActive() &&
+             (module->focusCvControlsFocus()
+                  ? module->selectedChannel() == channelIndex
+                  : (module->selectedChannels & (1u << channelIndex)) != 0);
     }
     return previewMode && previewChannelView &&
            previewSelectedChannel == channelIndex;
@@ -1655,11 +1820,15 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
     drawText(args);
   }
 
+  bool additiveClick = false;
   void runAction() {
     if (!module || disabledByFocusCv()) {
       return;
     }
-    if (outputLabel) {
+    if (additiveClick) {
+      module->toggleViewSelection(!outputLabel,
+                                  outputLabel ? outputIndex : channelIndex);
+    } else if (outputLabel) {
       module->selectOutputView(outputIndex);
     } else {
       module->selectChannelView(channelIndex);
@@ -1679,6 +1848,7 @@ struct VolyPectorLabelButton : ComputerscareBlankButton {
     }
 
     if (e.action == GLFW_PRESS) {
+      additiveClick = (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL;
       setPressedState(true);
       e.consume(this);
       return;
@@ -2050,6 +2220,8 @@ struct VolyPectorSelectorButton : ComputerscareBlankButton {
   }
 };
 
+#include "VolyPectorMultiView.hpp"
+
 struct ComputerscareVolyPectorWidget : ModuleWidget {
   bool previewMode = false;
   bool previewChannelView = false;
@@ -2058,6 +2230,39 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
   int previewPolyChannels = 16;
   float previewKnobValues[volyPectorNumKnobs] = {};
 
+  VolyMultiPanel* multiPanel = nullptr;
+  struct OriginalChild {
+    widget::Widget* widget;
+    Vec position;
+    bool visible;
+  };
+  std::vector<OriginalChild> originalChildren;
+  void step() override {
+    if (multiPanel) {
+      if (originalChildren.empty())
+        for (auto* child : children)
+          if (child != multiPanel)
+            originalChildren.push_back({child, child->box.pos, child->visible});
+      multiPanel->layout();
+      bool multi = multiPanel->visible;
+      box.size.x = 120;
+      for (auto& original : originalChildren) {
+        auto* child = original.widget;
+        if (!child) continue;
+        child->box.pos = original.position;
+        auto* param = dynamic_cast<app::ParamWidget*>(child);
+        bool main =
+            dynamic_cast<VolyPectorKnobLabel*>(child) ||
+            dynamic_cast<VolyPectorViewTitle*>(child) ||
+            (param &&
+             ((param->paramId >= 0 && param->paramId < 16) ||
+              param->paramId == ComputerscareVolyPector::GLOBAL_SCALE ||
+              param->paramId == ComputerscareVolyPector::GLOBAL_OFFSET));
+        child->visible = original.visible && !(multi && main);
+      }
+    }
+    ModuleWidget::step();
+  }
   bool showShortcutKeys = false;
   void onLeave(const event::Leave& e) override {
     showShortcutKeys = false;
@@ -2089,8 +2294,14 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       nvgFillColor(args.vg, nvgRGB(52, 220, 178));
       nvgText(args.vg, x, y, text.c_str(), nullptr);
     }
+    nvgBeginPath(args.vg);
+    nvgRect(args.vg, 0, 368, box.size.x, 12);
+    nvgFillColor(args.vg, nvgRGBA(15, 25, 23, 250));
+    nvgFill(args.vg);
     nvgFillColor(args.vg, nvgRGB(52, 220, 178));
-    nvgText(args.vg, 75, 375, "[z] randomize / [x] wiggle", nullptr);
+    nvgFontSize(args.vg, 8.f);
+    nvgText(args.vg, box.size.x * .5f, 375, "[z] random / [x, mod+w] wiggle",
+            nullptr);
   }
   void onHoverKey(const event::HoverKey& e) override {
     auto* m = dynamic_cast<ComputerscareVolyPector*>(module);
@@ -2099,8 +2310,12 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
       e.consume(this);
       return;
     }
-    if (m && (e.key == GLFW_KEY_Z || e.key == GLFW_KEY_X) &&
-        !(e.mods & (GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER)) &&
+    bool plainAction =
+        (e.key == GLFW_KEY_Z || e.key == GLFW_KEY_X) &&
+        !(e.mods & (GLFW_MOD_CONTROL | GLFW_MOD_ALT | GLFW_MOD_SUPER));
+    bool modifiedWiggle =
+        e.key == GLFW_KEY_W && (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL;
+    if (m && (plainAction || modifiedWiggle) &&
         !dynamic_cast<ui::TextField*>(APP->event->getSelectedWidget())) {
       if (e.action == GLFW_PRESS) {
         auto* change = new history::ModuleChange;
@@ -2347,6 +2562,9 @@ struct ComputerscareVolyPectorWidget : ModuleWidget {
                   layout.outputChannelButtonOffset,
                   layout.outputBandButtonOffset, layout.outputJackOffset);
     }
+    multiPanel = new VolyMultiPanel(module);
+    multiPanel->visible = false;
+    addChild(multiPanel);
   }
 
   void appendContextMenu(Menu* menu) override {

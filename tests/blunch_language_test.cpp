@@ -969,6 +969,15 @@ void testProgramAst() {
   require(result.program.blocks[5].repeat == 2,
           "nested paren suffix repeat block 5 repeat");
 
+  result = lang::parseClockLiteral("[90 100 110 (120 144)]");
+  require(result.ok(), "bracket with nested alternation parses");
+  requireProgramValues(result, {90, 100, 110, 120, 90, 100, 110, 144},
+                       "nested alternation revisits the entire bracket");
+  result = lang::parseClockLiteral("[90 (100 110) 120]bpm");
+  require(result.ok(), "middle bracket alternation parses");
+  requireProgramValues(result, {90, 100, 120, 90, 110, 120},
+                       "middle alternation keeps both bracket siblings");
+
   result = lang::parseClockLiteral("(1 (2 3 [3 2 1]))hz");
   require(result.ok(), "bracket sequence inside nested cycle parses");
   requireProgramValues(result, {1, 2, 1, 3, 1, 3, 2, 1},

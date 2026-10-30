@@ -6,6 +6,10 @@ New modules:
 - **Phlooper:** Up to sixteen independent stereo audio loops with Time, Length, and Speed phasing; per-loop transport, reverse and alternating directions, one-shot playback, exact Speed Hold, start/end region alignment, draggable loop points, waveform zoom, polyphonic recording/output, and phase/EOC outputs. Import WAV to all loops; export one or all loops.
 - **Blunch:** Text-based polyphonic trigger sequencer with nested patterns, editable randomization recipes, an editable channel overview, keyboard/mouse Control mode, independent text/row height, selectable default clock units and playback displays, and per-channel Run gating or trigger-toggle control.
 
+Voly Pector:
+
+- Mod-click to edit multiple bands or channels together.
+
 Debug:
 
 - Add all visualization options to the context menu.

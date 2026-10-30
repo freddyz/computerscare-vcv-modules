@@ -465,7 +465,8 @@ class Parser {
     Token leftBracket = advance();
     std::vector<ClockBlockAst> groupBlocks;
 
-    parseSequenceUntil(result, groupBlocks, TokenType::RightBracket);
+    std::vector<std::vector<ClockBlockAst>> lanes;
+    parseInterleaveContent(result, groupBlocks, lanes, TokenType::RightBracket);
 
     Token rightBracket;
     if (peek().type == TokenType::RightBracket) {
@@ -596,8 +597,9 @@ class Parser {
 
   void parseInterleaveContent(ParseResult& result,
                               std::vector<ClockBlockAst>& sequence,
-                              std::vector<std::vector<ClockBlockAst>>& lanes) {
-    while (!isAtEnd() && peek().type != TokenType::RightParen) {
+                              std::vector<std::vector<ClockBlockAst>>& lanes,
+                              TokenType terminator = TokenType::RightParen) {
+    while (!isAtEnd() && peek().type != terminator) {
       if (matchSeparator()) {
         continue;
       }
