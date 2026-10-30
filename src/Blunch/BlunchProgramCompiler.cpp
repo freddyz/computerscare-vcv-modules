@@ -57,6 +57,7 @@ void captureBaseStepState(BlunchProgramStep& step) {
   step.baseHasDuration = step.hasDuration;
   step.baseDurationSeconds = step.durationSeconds;
   step.baseProbability = step.probability;
+  step.baseSkipOnMiss = step.skipOnMiss;
   step.baseRepeatHighlightBegin = step.repeatHighlightBegin;
   step.baseRepeatHighlightEnd = step.repeatHighlightEnd;
   step.baseRepeatHighlightIsOwn = step.repeatHighlightIsOwn;
@@ -82,6 +83,7 @@ void restoreBaseStepState(BlunchProgramStep& step) {
   step.hasDuration = step.baseHasDuration;
   step.durationSeconds = step.baseDurationSeconds;
   step.probability = step.baseProbability;
+  step.skipOnMiss = step.baseSkipOnMiss;
   step.repeatHighlightBegin = step.baseRepeatHighlightBegin;
   step.repeatHighlightEnd = step.baseRepeatHighlightEnd;
   step.repeatHighlightIsOwn = step.baseRepeatHighlightIsOwn;
@@ -119,6 +121,7 @@ bool compileLineProgram(const std::string& lineText, int lineBegin,
     const blunch::language::ClockBlockAst& block = parse.program.blocks[i];
 
     BlunchProgramStep step;
+    step.randomMode = block.randomMode;
     step.sourceLineBegin = lineBegin;
     step.literal = block.literal;
     step.isRest = block.rest;
@@ -216,6 +219,7 @@ bool compileLineProgram(const std::string& lineText, int lineBegin,
       step.durationSeconds = std::max(0.0, durationEval.spec.periodSeconds);
     }
     step.probability = std::max(0, std::min(100, block.probability));
+    step.skipOnMiss = block.skipOnMiss;
     if (block.rest && block.range.end > block.range.begin) {
       step.highlightBegin = lineBegin + block.range.begin;
       step.highlightEnd = lineBegin + block.range.end;

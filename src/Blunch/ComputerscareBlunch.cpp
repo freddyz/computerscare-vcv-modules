@@ -350,6 +350,13 @@ static int sampleRandomChoiceInteger(
          (int)std::floor(randomValue * (float)(highValue - lowValue + 1));
 }
 
+struct BlunchSeedParamQuantity : ParamQuantity {
+  std::string getDisplayValueString() override {
+    return getValue() == 0.f ? "Random"
+                             : ParamQuantity::getDisplayValueString();
+  }
+};
+
 struct BlunchGateLengthParamQuantity : ParamQuantity {
   std::string getString() override;
 };
@@ -494,6 +501,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   float outputSampleTime = 0.f;
   int lastClockOutputMode = 0;
   bool allowSeedGrace = false;
+  bool resolvingProbabilitySkips = false;
   int syncSource = -1;  // Free, or a zero-based leader channel.
   int syncEvent = 1;    // Block, Line, Page.
   int syncRestart = 1;  // Current block, current line, page beginning.
@@ -708,6 +716,13 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
   }
 
   bool seededRandomEnabled() {
+    const auto& seq = activeSequencer();
+    if (seq.activeProgramIndex >= 0 &&
+        seq.activeProgramIndex < int(seq.activeProgram.size())) {
+      auto mode = seq.activeProgram[seq.activeProgramIndex].randomMode;
+      if (mode == blunch::language::RandomMode::AlwaysSeeded) return true;
+      if (mode == blunch::language::RandomMode::AlwaysRandom) return false;
+    }
     return computerscare::blunch::usesSeed(seedValue());
   }
 
@@ -1036,18 +1051,32 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
   }
 
+  bool applyChangesBeforeStart() {
+    int channel = activeContextChannel();
+    if (!channelHasPendingFormula(channel)) return true;
+    if (!executePage()) return false;
+    // Explicit master start bypasses Wait. Latest valid Draft replaces Next.
+    commitPendingLine(true);
+    return true;
+  }
+
   void restartRememberedSequencers() {
     int previousProcessingChannel = blunchProcessingChannel;
     for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
       blunchProcessingChannel = channel;
       BlunchSequencerRuntime& channelSequencer = sequencers[channel];
-      channelSequencer.running = rememberedRunning[channel];
-      if (channelSequencer.running && !channelSequencer.activeProgram.empty()) {
+      bool changed = channelHasPendingFormula(channel);
+      bool valid = applyChangesBeforeStart();
+      channelSequencer.running = valid && rememberedRunning[channel] &&
+                                 !channelSequencer.activeProgram.empty();
+      if (channelSequencer.running && !changed) {
         resetSeededRandomSerials(channelSequencer);
         applyActiveProgramStep(channelSequencer);
       }
     }
     blunchProcessingChannel = previousProcessingChannel;
+    refreshChannelsEditorState(true);
+    editorViewDirty = true;
   }
 
   void startSequencer(int channel) {
@@ -1180,7 +1209,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         {"Off", "Automatic", "External W", "External X", "External Y",
          "External Z"});
     configSwitch(RUN_PARAM, 0.f, 1.f, 1.f, "Run", {"Stopped", "Running"});
-    configParam(SEED_PARAM, 0.f, 10.f, 0.f, "Seed");
+    configParam<BlunchSeedParamQuantity>(SEED_PARAM, 0.f, 10.f, 0.f, "Seed");
     configSwitch<BlunchWaitModeParamQuantity>(
         WAIT_MODE_PARAM, 0.f, BLUNCH_WAIT_MODE_COUNT - 1, 0.f, "Wait mode",
         {"Immediate", "Clock", "Block", "Line", "Page", "External W",
@@ -1519,14 +1548,19 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       for (int channel = 0; channel < MAX_POLY_CHANNELS; channel++) {
         blunchProcessingChannel = channel;
         BlunchSequencerRuntime& channelSequencer = sequencers[channel];
-        rememberedRunning[channel] = true;
-        channelSequencer.running = true;
-        if (!channelSequencer.activeProgram.empty()) {
+        bool changed = channelHasPendingFormula(channel);
+        bool valid = applyChangesBeforeStart();
+        rememberedRunning[channel] =
+            valid && !channelSequencer.activeProgram.empty();
+        channelSequencer.running = rememberedRunning[channel];
+        if (channelSequencer.running && !changed) {
           resetSeededRandomSerials(channelSequencer);
           applyActiveProgramStep(channelSequencer);
         }
       }
       blunchProcessingChannel = previousProcessingChannel;
+      refreshChannelsEditorState(true);
+      editorViewDirty = true;
     }
     if (runHigh && !lastRunHigh && !startAllNow) {
       restartRememberedSequencers();
@@ -2245,6 +2279,22 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     int channel = clampChannel(channelsCursorChannel);
     randomizeLineForChannel(channel, channelOverviewLine(channel), false);
     refreshChannelsEditorState(true);
+  }
+
+  void unstageChanges(int channel, int line = -1) {
+    StateGuard guard(stateMutex);
+    channel = clampChannel(channel);
+    auto& next = pendingFormulas[channel];
+    if (line < 0)
+      next = PendingFormula{};
+    else {
+      next.lines.erase(line);
+      if (next.line == line) next.line = -1;
+      if (next.lines.empty()) next = PendingFormula{};
+    }
+    // Draft and Now are untouched: withdrawing Next must not discard typing.
+    refreshChannelsEditorState(true);
+    editorViewDirty = true;
   }
 
   void cancelPendingLine(int line) {
@@ -2996,7 +3046,12 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     }
 
     seq.activeProgramIndex++;
-    if (currentStep.hasTotalDurationGroup &&
+    bool skipOwnDuration = resolvingProbabilitySkips &&
+                           (isBranchLocalTotalDuration(currentStep) ||
+                            currentStep.totalDurationGroupEnd -
+                                    currentStep.totalDurationGroupStart ==
+                                1);
+    if (currentStep.hasTotalDurationGroup && !skipOwnDuration &&
         seq.activeProgramIndex >= currentStep.totalDurationGroupEnd) {
       seq.activeProgramIndex = currentStep.totalDurationGroupStart;
       applyActiveProgramStep(seq);
@@ -3102,6 +3157,20 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     blunch::sequencer::chooseStepPlayback(
         seq,
         randomFloatForEvent(seq, SEEDED_RANDOM_PROBABILITY, eventIndex, 0));
+    if (!seq.activeStepSkipped || resolvingProbabilitySkips) return;
+    // Traverse failed blocks synchronously, without recursion or consuming
+    // their clock interval. Bound the work even when every block skips.
+    resolvingProbabilitySkips = true;
+    bool savedGrace = allowSeedGrace;
+    allowSeedGrace = false;
+    int limit = std::min(256, std::max(32, int(seq.activeProgram.size()) * 2));
+    for (int i = 0;
+         i < limit && seq.activeStepSkipped && !seq.activeProgram.empty();
+         ++i) {
+      advanceActiveProgramStep(seq, true);
+    }
+    allowSeedGrace = savedGrace;
+    resolvingProbabilitySkips = false;
   }
 
   void refreshActiveClockSpecForStep(BlunchSequencerRuntime& seq) {
@@ -3133,6 +3202,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
       step.isRest = step.baseIsRest || choice.restChoice;
       if (choice.probabilityRange.end > choice.probabilityRange.begin) {
         step.probability = std::max(0, std::min(100, choice.probability));
+        step.skipOnMiss = choice.skipOnMiss;
       }
       step.highlightBegin = step.sourceLineBegin + choice.range.begin;
       step.highlightEnd = step.sourceLineBegin + choice.range.end;
@@ -3315,19 +3385,6 @@ struct BlunchTextEditor : ComputerscareTextEditor {
       if (row.selected)
         phlooper::drawDisplayWallIndicator(args.vg, box.size, row.top,
                                            row.bottom, palette.wall, 1.f, 6.5f);
-    float pulse = blunchPendingPulse();
-    for (const auto& row : pendingRows)
-      phlooper::drawDisplayWallIndicator(
-          args.vg, box.size, row.first, row.second,
-          nvgTransRGBAf(palette.yellow, pulse), 1.f, 6.5f);
-    for (const auto& row : draftRows) {
-      // Two steady ticks remain distinguishable over a queued pulsing fill.
-      float tick = std::min(1.5f, (row.second - row.first) * .2f);
-      for (float y : {row.first, row.second - tick})
-        phlooper::drawDisplayWallIndicator(args.vg, box.size, y, y + tick,
-                                           nvgTransRGBA(palette.yellow, 180),
-                                           1.f, 6.5f);
-    }
     for (const auto& row : wallRows)
       if (row.flash > .001f) {
         NVGcolor color =
@@ -3338,6 +3395,28 @@ struct BlunchTextEditor : ComputerscareTextEditor {
                                            row.bottom, color, 1.f, 6.5f);
       }
     ComputerscareTextEditor::draw(args);
+    // Draw after the editor background, on the wall's inner/right edge.
+    // A small intrusion into the glass keeps edits visible beside row focus.
+    const NVGcolor editColor =
+        nvgTransRGBAf(palette.yellow, blunchPendingPulse());
+    auto drawEditMarker = [&](const std::pair<float, float>& row) {
+      float top = clamp(row.first, 0.f, box.size.y),
+            bottom = clamp(row.second, 0.f, box.size.y);
+      if (bottom <= top) return;
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -.6f, top + 1.f);
+      nvgLineTo(args.vg, 2.4f, top);
+      nvgLineTo(args.vg, 2.7f, bottom - 1.f);
+      nvgLineTo(args.vg, -.4f, bottom);
+      nvgClosePath(args.vg);
+      nvgFillColor(args.vg, editColor);
+      nvgFill(args.vg);
+    };
+    for (const auto& row : pendingRows) drawEditMarker(row);
+    for (const auto& row : draftRows)
+      if (std::find(pendingRows.begin(), pendingRows.end(), row) ==
+          pendingRows.end())
+        drawEditMarker(row);
   }
   void drawLayer(const DrawArgs& args, int layer) override {
     BlunchStateLock stateGuard(module);
@@ -3633,6 +3712,51 @@ struct BlunchTextEditor : ComputerscareTextEditor {
                          [blunch, channel]() {
                            blunch->controlStopRequests.fetch_or(1u << channel);
                          }));
+    bool draft = overview ? blunch->channelHasDraft(channel)
+                          : blunch->lineHasDraft(channel, line);
+    bool next = overview
+                    ? blunch->channelHasNext(channel)
+                    : blunch->pendingFormulas[channel].lines.count(line) != 0;
+    if (draft || next) menu->addChild(new MenuSeparator);
+    if (draft)
+      menu->addChild(createMenuItem("Stage changes", "",
+                                    [blunch, overview, channel, line]() {
+                                      BlunchStateLock guard(blunch);
+                                      if (overview)
+                                        blunch->syncChannelsEditorEdit(channel);
+                                      int previous = blunch->focusedChannel;
+                                      blunch->focusedChannel = channel;
+                                      if (overview)
+                                        blunch->executePage();
+                                      else
+                                        blunch->executeLine(line, false);
+                                      blunch->focusedChannel = previous;
+                                      blunch->refreshChannelsEditorState(true);
+                                      blunch->editorViewDirty = true;
+                                    }));
+    if (draft)
+      menu->addChild(createMenuItem(
+          "Revert changes", "", [blunch, overview, channel, line]() {
+            BlunchStateLock guard(blunch);
+            if (overview ? !blunch->channelHasDraft(channel)
+                         : !blunch->lineHasDraft(channel, line))
+              return;
+            if (overview)
+              blunch->discardChannelPending(channel);
+            else {
+              int previous = blunch->focusedChannel;
+              blunch->focusedChannel = channel;
+              blunch->cancelPendingLine(line);
+              blunch->focusedChannel = previous;
+              blunch->refreshChannelsEditorState(true);
+              blunch->editorViewDirty = true;
+            }
+          }));
+    if (next)
+      menu->addChild(createMenuItem(
+          "Unstage changes", "", [blunch, overview, channel, line]() {
+            blunch->unstageChanges(channel, overview ? -1 : line);
+          }));
     menu->addChild(new MenuSeparator);
     menu->addChild(createMenuItem("Copy line", "", [lineText]() {
       glfwSetClipboardString(APP->window->win, lineText.c_str());

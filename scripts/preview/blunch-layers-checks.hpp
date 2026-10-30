@@ -19,6 +19,27 @@ inline void checkBlunchFormulaLayers(rack::plugin::Model* model) {
     m->focusedChannel = 0;
     return m;
   };
+  {
+    auto master=make();
+    for(int ch=0;ch<2;++ch) {
+      master->focusedChannel=ch;master->sequenceEditorStates[ch].text="3hz";
+      require(master->commitLine(0,true),"Master-start Now fixture compiles");
+      master->params[B::WAIT_MODE_PARAM].setValue(B::WAIT_PAGE);
+      master->sequenceEditorStates[ch].text="4hz";require(master->executePage(),"Master-start queues Next");
+      master->sequenceEditorStates[ch].text="5hz";
+    }
+    master->sequencers[0].running=true;master->sequencers[1].running=false;
+    rack::engine::Module::ProcessArgs args;args.sampleRate=48000;args.sampleTime=1.f/48000.f;
+    master->params[B::RUN_PARAM].setValue(0);master->process(args);
+    master->params[B::RUN_PARAM].setValue(1);master->process(args);
+    for(int ch=0;ch<2;++ch)require(master->sequencers[ch].activeLineText=="5hz"&&!master->channelHasPendingFormula(ch),"Run-on immediately applies latest Draft and clears Next, even for paused channels");
+    require(master->sequencers[0].running&&!master->sequencers[1].running,"Run-on preserves remembered paused state");
+    for(int ch=0;ch<2;++ch)master->sequenceEditorStates[ch].text="6hz";
+    master->sequenceEditorStates[2].text="broken";
+    master->startAllRequested=true;master->process(args);
+    for(int ch=0;ch<2;++ch)require(master->sequencers[ch].running&&master->sequencers[ch].activeLineText=="6hz"&&!master->channelHasPendingFormula(ch),"Mod+Space applies and starts all valid channels without Wait");
+    require(!master->sequencers[2].running&&master->sequenceEditorStates[2].text=="broken","Invalid Draft remains editable and does not start");
+  }
   auto m = make();
   m->sequenceEditorStates[0].text = "3hz";
   require(m->commitLine(0, true), "Now baseline compiles");

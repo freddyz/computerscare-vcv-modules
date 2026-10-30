@@ -87,6 +87,14 @@ void testRunToggleShortcutDoesNotStartAll() {
 }  // namespace
 
 int main() {
+  {
+    computerscare::blunch::KeyboardShortcutOptions options;
+    ComputerscareTextEditorCommands commands;
+    require(computerscare::blunch::handleKeyboardShortcut(GLFW_KEY_SPACE," ",RACK_MOD_CTRL,GLFW_PRESS,options,commands)&&commands.startAllCount==1,"Mod+Space requests Start All");
+    computerscare::blunch::handleKeyboardShortcut(GLFW_KEY_SPACE," ",GLFW_MOD_CONTROL,GLFW_PRESS,options,commands);
+    require(commands.startAllCount==2,"Ctrl+Space remains available");
+  }
+
   using namespace computerscare::blunch;
   require(isShortcutHelpKey(GLFW_KEY_GRAVE_ACCENT, "`", 0), "backtick opens shortcut help");
   require(!isShortcutHelpKey(GLFW_KEY_GRAVE_ACCENT, "~", GLFW_MOD_SHIFT), "shifted backtick remains available for the rest operator");

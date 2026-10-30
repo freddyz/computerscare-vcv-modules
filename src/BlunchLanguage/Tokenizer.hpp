@@ -16,6 +16,8 @@ enum class TokenType {
   At,
   Hash,
   Question,
+  Dollar,
+  Bang,
   Tilde,
   LeftBracket,
   RightBracket,

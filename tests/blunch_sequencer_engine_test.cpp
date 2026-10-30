@@ -49,6 +49,13 @@ BlunchSequencerRuntime runtimeWithSteps(int count) {
 int main() {
   namespace engine = blunch::sequencer;
 
+  {
+    auto seq=runtimeWithSteps(1);auto& step=seq.activeProgram[0];step.probability=25;
+    engine::chooseStepPlayback(seq,.8f);require(!seq.activeStepPlays&&!seq.activeStepSkipped,"Single ? misses remain timed rests");
+    step.skipOnMiss=true;engine::chooseStepPlayback(seq,.8f);require(!seq.activeStepPlays&&seq.activeStepSkipped,"Double ?? misses request a skip");
+    engine::chooseStepPlayback(seq,.1f);require(seq.activeStepPlays&&!seq.activeStepSkipped,"Double ?? hits play normally");
+    step.isRest=true;engine::chooseStepPlayback(seq,.1f);require(!seq.activeStepPlays&&!seq.activeStepSkipped,"Explicit rest remains timed when its probability passes");
+  }
   float seededA = engine::seededRandomFloat(1.0f, 2, 3, 4, 5, 6, 7);
   float seededB = engine::seededRandomFloat(1.0f, 2, 3, 4, 5, 6, 7);
   requireNear(seededA, seededB, "seeded random is stable");

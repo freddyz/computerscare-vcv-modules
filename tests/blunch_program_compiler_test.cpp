@@ -54,6 +54,15 @@ std::vector<BlunchProgramStep> requireCompiles(const std::string& source,
 }  // namespace
 
 int main() {
+  {
+    auto steps=requireCompiles("1s?25 $2s??75 {1s??0|2s??100}");
+    require(!steps[0].skipOnMiss&&steps[1].skipOnMiss&&steps[1].baseSkipOnMiss,"Compiler distinguishes skip and rest probability");
+    require(steps[2].literal.randomChoices[0].skipOnMiss,"Random choice preserves skip probability");
+  }
+  {
+    auto steps=requireCompiles("${80|160}bpm !120bpm?50 {100-140}bpm");
+    require(steps.size()==3&&steps[0].randomMode==blunch::language::RandomMode::AlwaysSeeded&&steps[1].randomMode==blunch::language::RandomMode::AlwaysRandom&&steps[2].randomMode==blunch::language::RandomMode::FollowSeed,"Compiler preserves per-block random mode");
+  }
   namespace language = blunch::language;
   namespace program = blunch::program;
 

@@ -7,10 +7,13 @@
 #include "../BlunchLanguage/BlunchLanguage.hpp"
 
 struct BlunchProgramStep {
+  blunch::language::RandomMode randomMode =
+      blunch::language::RandomMode::FollowSeed;
   blunch::language::ClockLiteralAst literal;
   blunch::language::ClockSpec spec;
   bool isRest = false;
   bool baseIsRest = false;
+  bool skipOnMiss = false, baseSkipOnMiss = false;
   int externalClockInput = -1;
   int repeat = 1;
   int baseRepeat = 1;
@@ -99,6 +102,7 @@ struct BlunchSequencerRuntime {
   int activeTotalDurationTicks = 0;
   int activeTotalDurationStepBeat = 0;
   bool activeStepPlays = true;
+  bool activeStepSkipped = false;
   bool activeClockOutputHigh = false;
   float activeClockDisplayPulse = 0.f;
   float activeExternalTimingDisplayPulse = 0.f;
@@ -133,6 +137,7 @@ struct BlunchSequencerRuntime {
     activeTotalDurationTicks = 0;
     activeTotalDurationStepBeat = 0;
     activeStepPlays = true;
+    activeStepSkipped = false;
     if (resetPhase) {
       clockPhase = 0.f;
       activeClockRamp = 0.f;

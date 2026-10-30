@@ -185,6 +185,32 @@ class Parser {
   }
 
   void parseBlock(ParseResult& result, std::vector<ClockBlockAst>& blocks) {
+    if (peek().type == TokenType::Dollar || peek().type == TokenType::Bang) {
+      const Token prefix = advance();
+      const auto mode = prefix.type == TokenType::Dollar
+                            ? RandomMode::AlwaysSeeded
+                            : RandomMode::AlwaysRandom;
+      size_t begin = blocks.size();
+      if (isAtEnd()) {
+        addDiagnostic(result, "Expected block after random mode prefix",
+                      rangeFromToken(prefix));
+        return;
+      }
+      if (peek().type == TokenType::Dollar || peek().type == TokenType::Bang) {
+        addDiagnostic(result, "Use one random mode prefix per block",
+                      rangeFromToken(peek()));
+        advance();
+        return;
+      }
+      parseBlock(result, blocks);
+      for (size_t i = begin; i < blocks.size(); ++i) {
+        if (blocks[i].randomMode == RandomMode::FollowSeed)
+          blocks[i].randomMode = mode;
+      }
+      if (begin < blocks.size()) blocks[begin].range.begin = prefix.begin;
+      return;
+    }
+
     if (peek().type == TokenType::Invalid) {
       addDiagnostic(result, "Invalid token", rangeFromToken(peek()));
       advance();
@@ -425,6 +451,7 @@ class Parser {
     choice.restChoice = block.rest;
     choice.restRange = block.restRange;
     choice.probability = block.probability;
+    choice.skipOnMiss = block.skipOnMiss;
     choice.probabilityRange = block.probabilityRange;
     choice.range = block.range;
     if (block.literal.kind == ClockLiteralKind::ExternalClock) {
@@ -692,6 +719,7 @@ class Parser {
           groupBlocks[i].probabilityRange.end <=
               groupBlocks[i].probabilityRange.begin) {
         groupBlocks[i].probability = repeatBlock.probability;
+        groupBlocks[i].skipOnMiss = repeatBlock.skipOnMiss;
         groupBlocks[i].probabilityRange = repeatBlock.probabilityRange;
       }
     }
@@ -1006,6 +1034,11 @@ class Parser {
     }
 
     Token questionToken = advance();
+    if (peek().type == TokenType::Question &&
+        peek().begin == questionToken.end) {
+      choice.skipOnMiss = true;
+      questionToken.end = advance().end;
+    }
     choice.probability = 50;
     choice.probabilityRange.begin = questionToken.begin;
     choice.probabilityRange.end = questionToken.end;
@@ -1270,6 +1303,11 @@ class Parser {
     }
 
     Token questionToken = advance();
+    if (peek().type == TokenType::Question &&
+        peek().begin == questionToken.end) {
+      block.skipOnMiss = true;
+      questionToken.end = advance().end;
+    }
     block.probability = 50;
     block.probabilityRange.begin = questionToken.begin;
     block.probabilityRange.end = questionToken.end;

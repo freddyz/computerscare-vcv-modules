@@ -85,7 +85,8 @@ inline bool handleKeyboardShortcut(int key, const std::string& keyName,
     return true;
   }
 
-  if (key == GLFW_KEY_SPACE && rackMods == GLFW_MOD_CONTROL) {
+  if (key == GLFW_KEY_SPACE &&
+      (rackMods == GLFW_MOD_CONTROL || rackMods == RACK_MOD_CTRL)) {
     if (action == GLFW_PRESS) {
       commands.startAllCount++;
     }

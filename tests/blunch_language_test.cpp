@@ -1739,6 +1739,26 @@ void testRandomProgramGenerator() {
 }  // namespace
 
 int main() {
+  {
+    using Mode=lang::RandomMode;
+    for(const char* source:{"${80|120|160}bpm","${100-140}bpm","$120bpm?50","!{80|120|160}bpm","!{100-140}bpm","!120bpm?50"}) {
+      auto parsed=lang::parseClockLiteral(source);
+      require(parsed.ok(),"Random-mode examples parse");
+      require(parsed.program.blocks.front().randomMode==(source[0]=='$'?Mode::AlwaysSeeded:Mode::AlwaysRandom),"Prefix sets block random mode");
+    }
+    auto nested=lang::parseClockLiteral("$[120bpm?50 !{80|160}bpm] {100-140}bpm");
+    require(nested.ok()&&nested.program.blocks.size()==3,"Prefixed groups parse");
+    require(nested.program.blocks[0].randomMode==Mode::AlwaysSeeded&&nested.program.blocks[1].randomMode==Mode::AlwaysRandom&&nested.program.blocks[2].randomMode==Mode::FollowSeed,"Nested overrides stay local and outer mode does not leak");
+    for(const char* bad:{"$","!","$!120bpm","!$120bpm"})require(!lang::parseClockLiteral(bad).ok(),"Incomplete or conflicting prefixes are rejected");
+  }
+  {
+    for(const char* source:{"1s 2s??","1s !2s??25","1s $2s??75","(1 2)s??40","{1s??0|2s??100}"}) {
+      auto parsed=lang::parseClockLiteral(source);require(parsed.ok(),"Skip probability syntax parses");
+      if(source[0]!='{')require(parsed.program.blocks.back().skipOnMiss,"Skip mode reaches compiled block AST");
+    }
+    auto legacy=lang::parseClockLiteral("1s?25");require(legacy.ok()&&!legacy.program.blocks[0].skipOnMiss,"Single question mark retains timed-rest mode");
+    for(const char* source:{"1s???","1s??101","1s?" "?-1","1s??2.5"})require(!lang::parseClockLiteral(source).ok(),"Invalid skip probability rejected");
+  }
   testTokenizer();
   testAst();
   testProgramAst();

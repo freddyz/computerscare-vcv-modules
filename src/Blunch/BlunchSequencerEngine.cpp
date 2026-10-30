@@ -97,19 +97,14 @@ void chooseStepPlayback(BlunchSequencerRuntime& seq, float randomValue) {
   const BlunchProgramStep* step = activeStep(seq);
   if (!step) {
     seq.activeStepPlays = true;
+    seq.activeStepSkipped = false;
     return;
   }
-
-  int probability = step->probability;
-  if (step->isRest) {
-    seq.activeStepPlays = false;
-  } else if (probability >= 100) {
-    seq.activeStepPlays = true;
-  } else if (probability <= 0) {
-    seq.activeStepPlays = false;
-  } else {
-    seq.activeStepPlays = randomValue * 100.f < probability;
-  }
+  const bool passes =
+      step->probability >= 100 ||
+      (step->probability > 0 && randomValue * 100.f < step->probability);
+  seq.activeStepSkipped = step->skipOnMiss && !passes;
+  seq.activeStepPlays = !step->isRest && passes;
 }
 
 bool nextClockGateHigh(BlunchSequencerRuntime& seq, bool usesExternalClock) {

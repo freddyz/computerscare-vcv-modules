@@ -112,6 +112,19 @@ Put probability before repeat and total-length modifiers:
 120bpm?75@4
 ```
 
+### Skip probability: `??`
+
+`120bpm??75` plays with a 75% chance; otherwise it skips straight to the next block without spending time on a rest. Bare `??` means 50%.
+
+```text
+1s? 2s?
+1s 2s??
+1s !2s??25
+1s $2s??75
+```
+
+The first line always takes three seconds, including any rests. In the second, a skipped `2s` leaves consecutive one-second triggers. `$` and `!` work as with `?`. A failed check skips the current block and its remaining repeats. An enclosing fixed `#` duration still controls the length of its group. If every block skips, output stays silent and retries on a later clock; it cannot spin indefinitely.
+
 ### Random choices and ranges: `{}`
 
 | Formula             | Meaning                                    |
@@ -122,6 +135,27 @@ Put probability before repeat and total-length modifiers:
 | `{2hz\|~2hz}`       | Choose a clock or a rest                   |
 
 Choices are redrawn as the block is revisited. The **Seed** control makes those choices repeatable when its combined knob/CV value is positive.
+
+### Random mode: `$` and `!`
+
+Prefix a block with `$` to make its choices, ranges, and probability always seeded. Prefix it with `!` for fresh randomness regardless of Seed:
+
+```text
+${80|120|160}bpm
+${100-140}bpm
+$120bpm?50
+!{80|120|160}bpm
+!{100-140}bpm
+!120bpm?50
+```
+
+`$` uses the signed combined Seed knob/CV value: zero and negative values are valid seeds, and different negative seeds give different patterns. It follows the same seed-latching boundaries as ordinary seeded patterns. `!` ignores Seed. Without a prefix, behavior is unchanged: positive Seed is repeatable; zero or negative Seed uses fresh randomness.
+
+A prefix on a group applies to its blocks, including random repeat and length arguments. An inner prefix overrides it; blocks outside the group are unaffected:
+
+```text
+$[120bpm?50 !{80|160}bpm]
+```
 
 ### Total length: `#`
 
@@ -170,11 +204,13 @@ Stopped channels show their edited text immediately, even if they have never pla
 
 In All view, press **Ctrl/Cmd+Enter** or click **Play** to stage Draft changes and start the selected channels, including deleted lines. In channel view, **Ctrl/Cmd+Enter** submits the channel’s Draft page and starts the line under the cursor, even with Line advance off; the selected Wait boundary still applies. All-view and Play-button submissions preserve the active line when it still exists. If the active line was deleted, playback continues with a remaining formula. **Immediate** applies the submission straight away. Further typing changes Draft only; it cannot overwrite Next. Starting an empty channel activates its submitted formula because there is no running boundary to wait for.
 
+Turning **Run** back on applies the latest valid Draft/Next changes immediately, bypassing Wait, and resumes the remembered channels. **Ctrl/Cmd+Space** does the same and starts all channels. Invalid Drafts remain editable and do not start that channel.
+
 **Ctrl/Cmd+Shift+Enter** also stages the channel page. With **Wait: Page**, the submitted page changes take effect together when the page wraps. With other Wait modes, changes take effect at the selected boundary on the playing line, or when playback reaches another queued line. An invalid line prevents the whole page submission; correct the red-marked text and try again.
 
 Enable **Apply valid edits while typing** in the context menu to submit edits automatically once the page validates. The Wait setting still determines when they become active; invalid edits leave playback unchanged.
 
-The display’s left edge shows yellow selection markers. Steady yellow ticks mark Draft edits; a slow yellow pulse marks Next waiting to take over. Both can appear together, per line in a channel page or summarized per channel in All view. Changed Draft text is tinted yellow. Play stays raised while changes exist: steady yellow for Draft, pulsing yellow for Next. Applying Draft does not cancel an existing Next submission.
+The left wall shows selection and playback. A narrow yellow marker pulses at its inner edge when Draft edits or waiting Next changes exist, per line in channel view or per channel in All view. Right-click a row for **Stage changes** or **Unstage changes**. Unstage withdraws Next while keeping Draft and Now. **Revert changes** discards Draft edits and restores Next, or Now if nothing is queued. Changed Draft text is tinted yellow. Play stays raised while changes exist: steady yellow for Draft, pulsing yellow for Next. Applying Draft does not cancel an existing Next submission.
 
 Press **F6** to switch between Draft, Next, and Now. Next and Now are read-only. Unchanged lines in Next show Now in faded text. Hold **F7** to peek at Now; release it to return. Typing returns to Draft. Switching views never replaces your edits.
 
@@ -197,7 +233,7 @@ Patches save Draft, Next, and Now separately. Reopening a patch keeps unfinished
 - **Run:** master playback enable.
 - **Block / Line / Page:** momentary reset buttons for the current block, line, or whole channel page. Their inputs perform the same resets.
 - **Time:** speeds up or slows down internal timing. Each +1 doubles the speed; each −1 halves it.
-- **Seed:** positive values give repeatable random choices. Zero, or a negative combined value from CV, uses fresh randomness. The knob itself ranges from 0 to 10. Seed knob/CV changes are latched independently by each channel when its seeded pattern restarts: after its counted or timed repeat, or at the end of an enclosing `#` group. Resets and starting a pattern use the latest seed. With Seed CV patched, pattern restarts wait 1 ms before sampling the seed and choosing the first value. This lets a sequencer clocked by EOB, EOL, or EOP supply its new seed for the upcoming pattern.
+- **Seed:** positive values give repeatable random choices. Zero, or a negative combined value from CV, uses fresh randomness. The knob itself ranges from 0 to 10 and shows **Random** at zero. `$` blocks use any signed net seed, including zero; `!` blocks always use fresh randomness. Seed knob/CV changes are latched independently by each channel when its seeded pattern restarts: after its counted or timed repeat, or at the end of an enclosing `#` group. Resets and starting a pattern use the latest seed. With Seed CV patched, pattern restarts wait 1 ms before sampling the seed and choosing the first value. This lets a sequencer clocked by EOB, EOL, or EOP supply its new seed for the upcoming pattern.
 - **Polyphony:** choose 1–16 output channels, or Auto. Auto extends to the highest channel with an activated formula. New modules default to Auto.
 - **Edit/Ctrl:** switch between formula editing and keyboard/mouse control of channels.
 
@@ -218,7 +254,7 @@ Gate length CV adds 10 percentage points per volt. The combined value is capped 
 | **Run**                 | In Gate mode, above 1 V permits playback; low pauses it. In Trigger toggle mode, rising edges toggle playback. Unpatched permits playback while Run is on.                              |
 | **Block / Line / Page** | Mono triggers (channel 1); rising edges around 1 V reset the corresponding playback scope. Resets follow the Run/transport state.                                                       |
 | **Time CV**             | Mono, channel 1. Adds to Time at 1 V/octave. Combined range is −5 to +5: 1/32× to 32× speed.                                                                                            |
-| **Seed CV**             | Mono, channel 1. Adds one seed unit per volt to the knob. Zero or negative totals select fresh randomness.                                                                              |
+| **Seed CV**             | Mono, channel 1. Adds one seed unit per volt to the knob. Zero or negative totals select fresh randomness for unprefixed blocks. `$` uses the signed total as a seed; `!` ignores it.   |
 | **Gate length**         | Adds 10 percentage points per volt to Gate. Mono broadcasts; poly addresses matching channels. Negative totals produce triggers; zero is silent; positive totals give gates up to 100%. |
 | **W / X / Y / Z**       | Mono clocks (channel 1), rising edges around 1 V; referenced by letter in formulas or selected in the context menu.                                                                     |
 
@@ -310,7 +346,7 @@ Hold **backtick** while Blunch is hovered or focused to show its shortcut popup.
 | Ctrl/Cmd+,           | Stop the selected channels                                                          |
 | Ctrl+/               | Toggle Run                                                                          |
 | Ctrl+.               | Stop all                                                                            |
-| Ctrl+Space           | Start all                                                                           |
+| Ctrl/Cmd+Space       | Apply Draft and start all, bypassing Wait                                           |
 
 The transport/navigation shortcuts labeled Ctrl use the Control key on macOS too. Standard text editing uses the usual platform modifier.
 

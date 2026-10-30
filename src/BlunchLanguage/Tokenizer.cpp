@@ -72,6 +72,13 @@ std::vector<Token> tokenize(const std::string& source) {
       continue;
     }
 
+    if (c == '$' || c == '!') {
+      tokens.push_back({c == '$' ? TokenType::Dollar : TokenType::Bang,
+                        source.substr(index, 1), index, index + 1});
+      ++index;
+      continue;
+    }
+
     if (c == ':') {
       tokens.push_back(
           {TokenType::Colon, source.substr(index, 1), index, index + 1});
@@ -193,6 +200,10 @@ std::string tokenTypeName(TokenType type) {
       return "At";
     case TokenType::Hash:
       return "Hash";
+    case TokenType::Dollar:
+      return "Dollar";
+    case TokenType::Bang:
+      return "Bang";
     case TokenType::Question:
       return "Question";
     case TokenType::Tilde:

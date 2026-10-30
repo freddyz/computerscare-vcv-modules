@@ -152,6 +152,8 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   checkBlunchFormulaLayers(modelBlunchPreview);
   checkBlunchThreadHandoff(modelBlunchPreview);
   checkBlunchSeedBoundaries(modelBlunchPreview);
+  checkBlunchSkipProbability(modelBlunchPreview);
+  checkBlunchRandomModes(modelBlunchPreview,[&](app::ModuleWidget* widget){capture(widget,output+"/11-random-modes.png",scale);});
   checkBlunchChannelSync(modelBlunchPreview);
   auto* module =
       static_cast<ComputerscareBlunch*>(modelBlunchPreview->createModule());

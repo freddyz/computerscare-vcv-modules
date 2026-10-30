@@ -27,6 +27,8 @@ enum class ClockUnit {
   Minutes
 };
 
+enum class RandomMode { FollowSeed, AlwaysSeeded, AlwaysRandom };
+
 enum class ClockLiteralKind {
   Empty,
   Numeric,
@@ -41,6 +43,7 @@ struct RandomChoiceAst {
   bool externalClockChoice = false;
   char externalClock = '\0';
   int probability = 100;
+  bool skipOnMiss = false;
   SourceRange probabilityRange;
   double minValue = 0.0;
   double maxValue = 0.0;
@@ -89,6 +92,7 @@ struct ClockLiteralAst {
 };
 
 struct ClockBlockAst {
+  RandomMode randomMode = RandomMode::FollowSeed;
   std::vector<ClockLiteralAst> repeatSequence;
   ClockLiteralAst literal;
   ClockLiteralAst repeatRandom;
@@ -99,6 +103,7 @@ struct ClockBlockAst {
   int sequenceGroupId = -1;
   int repeat = 1;
   int probability = 100;
+  bool skipOnMiss = false;
   int totalDurationTicks = 0;
   int totalDurationGroupId = -1;
   SourceRange range;
