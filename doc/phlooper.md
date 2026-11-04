@@ -56,11 +56,11 @@ The Record light pulses yellow while Record or Erase waits to start and orange w
 
 ### Beats offset
 
-Choose **Beats** in the phase-mode menu to adjust each loop’s duration by a fraction of the recorded clock beat, keeping its pitch unchanged. One beat is one division between recorded clock marks: −1/12 shortens loop 2 by one-twelfth of that division, loop 3 by two-twelfths, and so on. Positive values lengthen successive loops; negative values shorten them. The clock divider/multiplier used while recording determines the captured beat; changing the live clock afterwards does not retime it. For audio recorded or imported without a clock, the full recording is one beat.
+Choose **Beats** in the phase-mode menu to adjust each loop’s duration by a fraction of the recorded clock beat, keeping its pitch unchanged. One beat is one division between recorded clock marks: −1/12 shortens loop 2 by one-twelfth of that division, loop 3 by two-twelfths, and so on. Positive values lengthen successive loops; negative values shorten them. The clock divider/multiplier used while recording determines the captured beat; changing the live clock afterwards does not retime it. Audio recorded or imported without a clock defaults to four equal beats across the full recording. Its beat markers appear only in Beats mode.
 
 Offset selects signed fractions from **1/128 to 4 beats**, including **1/16, 1/12, 2/13, 2/11, 5/16, 7/22, 4/7, 5/7**, and zero. The Offset tooltip shows the chosen fraction. Length shows beats and mixed fractions, such as **2 5/16 beats**, in Beats mode. Offset CV selects the same steps: mono adds a shared offset, poly addresses each loop. Recorded beat timing saves with the patch.
 
-In Beats mode, the main **Length** snaps to multiples of the selected fraction. **Start always moves freely**, so you can position the loop precisely. The sign affects loop phasing; the grid uses the fraction’s magnitude. At zero Offset, Length also moves freely. Dragged start/end handles snap to the same fraction grid, anchored at the freely positioned Start knob. At zero Offset, handle dragging is free too.
+In Beats mode, adjusting the main **Length** snaps it to multiples of the selected fraction. Changing Offset keeps that length; the next Length adjustment uses the new fraction. **Start always moves freely**, so you can position the loop precisely. The sign affects loop phasing; the grid uses the fraction’s magnitude. At zero Offset, Length also moves freely. Dragged start/end handles snap to the same fraction grid, anchored at the freely positioned Start knob. At zero Offset, handle dragging is free too.
 
 ### Hold
 

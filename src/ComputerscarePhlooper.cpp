@@ -13,6 +13,7 @@
 #include "Phlooper/Engine.hpp"
 #include "Phlooper/Expansion.hpp"
 #include "Phlooper/RecordClock.hpp"
+#include "Phlooper/Storage.hpp"
 #include "Phlooper/Wav.hpp"
 #include "Phlooper/Waveform.hpp"
 #include "Phlooper/Zoom.hpp"
@@ -138,6 +139,7 @@ struct ComputerscarePhlooper : Module {
   std::atomic<unsigned> queuedRecord{0}, queuedErase{0};
   std::array<std::atomic<float>, 2048> clockMarks{};
   std::atomic<unsigned> clockMarkCount{0};
+  std::array<std::atomic<uint64_t>, 16> beatLengthVisual{};
 
   ComputerscareMeterSignal inputMeter, outputMeter;
   float inputGain = 1.f, outputGain = 1.f;
@@ -186,6 +188,7 @@ struct ComputerscarePhlooper : Module {
   ComputerscarePhlooper() {
     config(PARAMS, INPUTS, OUTPUTS, LIGHTS);
     waveformRange = packRange({});
+    for (auto& length : beatLengthVisual) length = packRange({-1.f, 1.f});
     configSwitch(OUTPUT_MODE, 0, 1, 0, "Output mode", {"Mix", "Polyphonic"});
     configSwitch(ALIGN_END, 0, 1, 0, "Region alignment", {"Starts", "Ends"});
     configSwitch(ONE_SHOT, 0, 1, 0, "One-shot", {"Looping", "One-shot"});
@@ -280,14 +283,20 @@ struct ComputerscarePhlooper : Module {
   void clearCustomRegions() {
     for (int i = CUSTOM_START; i < CLOCK_RATIO; ++i) params[i].setValue(0.f);
   }
-  float snappedMainValue(int param) {
-    float value = params[param].getValue();
-    if (params[MODE].getValue() != 3.f || param == START) return value;
+  float resolvedLength(int voice, float raw) {
+    if (params[MODE].getValue() != 3.f) return raw;
+    int channels = inputs[LENGTH_CV].getChannels();
+    int source = channels <= 1 || voice >= channels ? 0 : voice;
+    auto saved =
+        unpackRange(beatLengthVisual[source].load(std::memory_order_relaxed));
+    if (saved.start == raw) return saved.end;
     return phlooper::snapBeatRegion(
-        value, frames.load(), recordedBeatFrames.load(),
-        std::abs(phlooper::beatValue(params[OFFSET].getValue())),
-        param == LENGTH ? .001f : 0.f,
-        param == START && clockMarkCount.load() ? clockMarks[0].load() : 0.f);
+        raw, frames.load(), recordedBeatFrames.load(),
+        std::abs(phlooper::beatValue(params[OFFSET].getValue())), .001f);
+  }
+  float snappedMainValue(int param) {
+    return param == LENGTH ? resolvedLength(0, params[param].getValue())
+                           : params[param].getValue();
   }
   float offsetFor(int voice, int mode, bool hold) {
     auto& input = inputs[OFFSET_CV];
@@ -297,7 +306,9 @@ struct ComputerscarePhlooper : Module {
   }
   unsigned gates(int port) {
     unsigned mask = 0;
-    for (int i = 0; i < 16; ++i) {
+    int channels = inputs[port].getChannels();
+    if (channels == 1) return inputs[port].getVoltage() >= 1.f ? 65535u : 0u;
+    for (int i = 0; i < std::min(16, channels); ++i) {
       // A one-channel control addresses all loops; poly channels address
       // individually.
       float v = inputs[port].getChannels() == 1 ? inputs[port].getVoltage()
@@ -358,6 +369,7 @@ struct ComputerscarePhlooper : Module {
       params[LENGTH].setValue(1.f);
       clearCustomRegions();
       loop.resetHeads();
+      for (auto& length : beatLengthVisual) length = packRange({-1.f, 1.f});
       loop.size = 0;
       createdLoops = 0;
       loop.initial = false;
@@ -415,6 +427,7 @@ struct ComputerscarePhlooper : Module {
     s.overdub = int(params[OVERDUB].getValue());
     s.start = params[START].getValue();
     s.length = params[LENGTH].getValue();
+    s.sharedLength = inputs[LENGTH_CV].getChannels() <= 1;
     for (int i = 0; i < phlooper::voices; ++i) {
       auto cv = [&](int port) {
         return inputs[port].getChannels() == 1 ? inputs[port].getVoltage()
@@ -504,6 +517,14 @@ struct ComputerscarePhlooper : Module {
     auto out = loop.process(input, args.sampleRate, s, rec, eraseMask, restart,
                             gates(MUTE_GATE) | manualMute, stopMask,
                             inputs[RIGHT].isConnected(), &channelInputs);
+    if (loop.changedLengths)
+      for (int i = 0; i < s.count; ++i)
+        if (loop.changedLengths & (1u << i)) {
+          const auto& length = loop.beatLengths[i];
+          beatLengthVisual[i].store(
+              packRange({length.enabled ? length.input : -1.f, length.value}),
+              std::memory_order_relaxed);
+        }
     speedHoldVisual.store(loop.speedHold.active, std::memory_order_relaxed);
     recordVisual.store(loop.initial ? 65535u : rec & ~eraseMask & ~stopMask,
                        std::memory_order_relaxed);
@@ -673,6 +694,7 @@ struct ComputerscarePhlooper : Module {
       recordedBeatFrames.store(0.f);
       loop.initial = false;
       loop.resetHeads();
+      for (auto& length : beatLengthVisual) length = packRange({-1.f, 1.f});
       loadRegionSettleTime = .002f;
       params[RECORD].setValue(0.f);
       frames = n;
@@ -710,6 +732,13 @@ struct ComputerscarePhlooper : Module {
     json_object_set_new(root, "clockMarks", marks);
     json_object_set_new(root, "beatFrames",
                         json_real(recordedBeatFrames.load()));
+    auto* lengths = json_array();
+    for (const auto& length : loop.beatLengths)
+      json_array_append_new(
+          lengths,
+          json_pack("[ffib]", double(length.input), double(length.value),
+                    length.frames, int(length.enabled)));
+    json_object_set_new(root, "beatLengths", lengths);
     auto* heads = json_array();
     auto* starts = json_array();
     auto* returning = json_array();
@@ -779,6 +808,26 @@ struct ComputerscarePhlooper : Module {
     if (markedBeat > 0.f) recordedBeatFrames.store(markedBeat);
 
     std::lock_guard<std::mutex> lock(storage);
+    auto* lengths = json_object_get(root, "beatLengths");
+    for (int i = 0; i < 16; ++i) {
+      auto* saved = json_array_get(lengths, i);
+      auto& length = loop.beatLengths[i];
+      double raw = json_number_value(json_array_get(saved, 0));
+      double value = json_number_value(json_array_get(saved, 1));
+      int size = int(json_integer_value(json_array_get(saved, 2)));
+      length = {};
+      if (json_array_size(saved) == 4 && std::isfinite(raw) && raw >= .001 &&
+          raw <= 1 && std::isfinite(value) && value >= .001 && value <= 1 &&
+          size > 0 && size <= loop.limit) {
+        length.input = float(raw);
+        length.value = float(value);
+        length.frames = size;
+        length.enabled = json_is_true(json_array_get(saved, 3));
+      }
+      beatLengthVisual[i] =
+          packRange({length.enabled ? length.input : -1.f, length.value});
+    }
+    loop.lengthMode = int(params[MODE].getValue());
     auto* heads = json_object_get(root, "heads");
     auto* starts = json_object_get(root, "starts");
     auto* returning = json_object_get(root, "returning");
@@ -920,11 +969,17 @@ struct ComputerscarePhlooper : Module {
     try {
       std::string dir = createPatchStorageDirectory();
       if (!n) {
+        std::remove((dir + "/audio-index.txt").c_str());
+        for (const auto& path : system::getEntries(dir))
+          if (system::getFilename(path).find("audio-") == 0 &&
+              system::getExtension(path) == ".wav")
+            std::remove(path.c_str());
         for (int i = 0; i < 16; ++i)
           std::remove(
               (dir + "/loop-" + std::to_string(i + 1) + ".wav").c_str());
         return;
       }
+      std::array<std::string, 16> files;
       std::vector<float> snapshot(n * 2);
       for (int i = 0; i < 16; ++i) {
         bool stereo = false;
@@ -935,8 +990,15 @@ struct ComputerscarePhlooper : Module {
                     snapshot.begin() + start);
           stereo = loop.stereo[i];
         }
-        phlooper::saveWav(dir + "/loop-" + std::to_string(i + 1) + ".wav",
-                          snapshot.data(), n, stereo);
+        files[i] = phlooper::storeAudio(dir, snapshot.data(), n, stereo);
+      }
+      phlooper::writeAudioIndex(dir, files);
+      for (const auto& path : system::getEntries(dir)) {
+        auto name = system::getFilename(path);
+        if ((name.find("audio-") == 0 || name.find("loop-") == 0) &&
+            system::getExtension(name) == ".wav" &&
+            std::find(files.begin(), files.end(), name) == files.end())
+          std::remove(path.c_str());
       }
     } catch (const std::exception& e) {
       WARN("Phlooper save: %s", e.what());
@@ -944,10 +1006,28 @@ struct ComputerscarePhlooper : Module {
   }
   void onAdd(const AddEvent&) override {
     std::lock_guard<std::mutex> lock(storage);
+    std::array<std::string, 16> files;
+    try {
+      files = phlooper::readAudioIndex(getPatchStorageDirectory());
+    } catch (const std::exception& e) {
+      WARN("Phlooper load: %s", e.what());
+      loop.size = 0;
+      frames = 0;
+      return;
+    }
     for (int i = 0; i < 16; ++i) {
       try {
-        auto wav = phlooper::loadWav(getPatchStorageDirectory() + "/loop-" +
-                                     std::to_string(i + 1) + ".wav");
+        auto previous = std::find(files.begin(), files.begin() + i, files[i]);
+        if (previous != files.begin() + i) {
+          int source = int(previous - files.begin());
+          std::copy(loop.audio[source].get(),
+                    loop.audio[source].get() + loop.size * 2,
+                    loop.audio[i].get());
+          loop.stereo[i] = loop.stereo[source];
+          continue;
+        }
+        auto wav =
+            phlooper::loadWav(getPatchStorageDirectory() + "/" + files[i]);
         int n = std::min(loop.limit, int(wav.samples.size() / wav.channels));
         for (int j = 0; j < n; ++j)
           for (int ch = 0; ch < 2; ++ch)
@@ -991,16 +1071,15 @@ float PhlooperLengthQuantity::getDisplayValue() {
   return m && m->params[ComputerscarePhlooper::MODE].getValue() == 3.f
              ? m->snappedMainValue(ComputerscarePhlooper::LENGTH) *
                    m->frames.load() /
-                   (m->recordedBeatFrames.load() > 0
-                        ? m->recordedBeatFrames.load()
-                        : std::max(1, m->frames.load()))
+                   phlooper::effectiveBeatFrames(m->frames.load(),
+                                                 m->recordedBeatFrames.load())
              : ParamQuantity::getDisplayValue();
 }
 void PhlooperLengthQuantity::setDisplayValue(float value) {
   auto* m = dynamic_cast<ComputerscarePhlooper*>(module);
   if (m && m->params[ComputerscarePhlooper::MODE].getValue() == 3.f) {
     float beat = m->recordedBeatFrames.load();
-    setValue(value * (beat > 0 ? beat : std::max(1, m->frames.load())) /
+    setValue(value * phlooper::effectiveBeatFrames(m->frames.load(), beat) /
              std::max(1, m->frames.load()));
   } else
     ParamQuantity::setDisplayValue(value);
@@ -1070,6 +1149,7 @@ std::string PhlooperOffsetQuantity::getUnit() {
   int mode = m ? int(m->params[ComputerscarePhlooper::MODE].getValue()) : 0;
   return mode == 0   ? " ms per loop"
          : mode == 3 ? " beats per loop"
+         : mode == 2 ? "% speed per loop"
                      : "% per loop";
 }
 
@@ -1234,25 +1314,15 @@ struct PhlooperDescribedChoiceItem : MenuItem {
 };
 
 struct PhlooperChoice : phlooper::WarpedDropdown {
-  bool splitFace = false;
   void draw(const DrawArgs& args) override {
-    if (!splitFace) {
-      phlooper::WarpedDropdown::draw(args);
-      return;
-    }
+    phlooper::WarpedDropdown::draw(args);
     bool pressed = isPressed();
-    if (pressed) {
-      nvgBeginPath(args.vg);
-      nvgRect(args.vg, 1.f, 2.f, box.size.x - 3.f, box.size.y - 6.f);
-      nvgFillColor(args.vg, nvgRGB(190, 194, 191));
-      nvgFill(args.vg);
-    }
     if (param == ComputerscarePhlooper::EXPANSION) {
       int mode = module ? int(module->params[param].getValue()) : 1;
       nvgSave(args.vg);
-      nvgTranslate(args.vg, -1.f + (pressed ? 1.f : 0.f),
-                   2.f + (pressed ? 1.f : 0.f));
-      nvgScale(args.vg, .7f, .7f);
+      nvgTranslate(args.vg, 1.f + (pressed ? upDepth + downDepth : 0.f),
+                   2.f + (pressed ? (upDepth + downDepth) * .65f : 0.f));
+      nvgScale(args.vg, pressed ? .55f : .7f, pressed ? .55f : .7f);
       nvgStrokeColor(args.vg, nvgRGB(15, 42, 36));
       nvgStrokeWidth(args.vg, 1.25f);
       nvgLineJoin(args.vg, NVG_ROUND);
@@ -1287,16 +1357,6 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
       nvgRestore(args.vg);
       return;
     }
-    auto font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
-    if (!font) return;
-    nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, textSize);
-    nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-    nvgFillColor(args.vg, nvgRGB(15, 42, 36));
-    nvgText(args.vg, 3.f + (pressed ? 1.f : 0.f),
-            box.size.y * .43f + (pressed ? 1.f : 0.f), label().c_str(),
-            nullptr);
   }
   std::shared_ptr<const phlooper::BrowserPreview> preview;
   ComputerscarePhlooper* module = nullptr;
@@ -1609,7 +1669,7 @@ struct PhlooperView : widget::Widget {
       float beat = module->recordedBeatFrames.load();
       grid = std::abs(phlooper::beatValue(
                  module->params[ComputerscarePhlooper::OFFSET].getValue())) *
-             (beat > 0 ? beat : frames) / frames;
+             phlooper::effectiveBeatFrames(frames, beat) / frames;
     }
     // Keep the free Start knob as the grid anchor, including its mono CV.
     Vec defaults = requestedRegion(dragVoice, false, dragVoice);
@@ -1693,12 +1753,7 @@ struct PhlooperView : widget::Widget {
     int frames = module->frames.load(std::memory_order_relaxed);
     if (frames <= 0) return Vec(start, start + length);
     int mode = int(module->params[ComputerscarePhlooper::MODE].getValue());
-    if (mode == 3) {
-      float quantum = std::abs(phlooper::beatValue(
-          module->params[ComputerscarePhlooper::OFFSET].getValue()));
-      float beat = module->recordedBeatFrames.load();
-      length = phlooper::snapBeatRegion(length, frames, beat, quantum, .001f);
-    }
+    length = module->resolvedLength(hold ? 0 : voice, length);
     int offsetVoice = hold ? 0 : voice;
     float offset = module->offsetFor(offsetVoice, mode, hold);
     double period = std::max(1, int(length * frames + (mode == 3 ? .5f : 0.f)));
@@ -1708,7 +1763,7 @@ struct PhlooperView : widget::Widget {
       period *= 1. + offset / 100.;
     else if (mode == 3) {
       float beat = module->recordedBeatFrames.load();
-      period += offset * (beat > 0 ? beat : frames);
+      period += offset * phlooper::effectiveBeatFrames(frames, beat);
     }
     if (module->customRegion(hold ? 0 : voice) &&
         (hold ? 0 : voice) != defaultVoice)
@@ -2009,8 +2064,14 @@ struct PhlooperView : widget::Widget {
       }
       if (module && module->frames.load() > 0) {
         unsigned marks = module->clockMarkCount.load(std::memory_order_acquire);
+        bool synthetic =
+            marks == 0 && module->recordedBeatFrames.load() <= 0.f &&
+            module->params[ComputerscarePhlooper::MODE].getValue() == 3.f;
+        if (synthetic) marks = 4;
         for (unsigned mark = 0; mark < marks; ++mark) {
-          float phase = module->clockMarks[mark].load() / module->frames.load();
+          float phase = synthetic ? float(mark) / 4.f
+                                  : module->clockMarks[mark].load() /
+                                        module->frames.load();
           for (int repeat = -1; repeat <= 1; ++repeat) {
             float unit = (phase + repeat - zoomRange.start) /
                          (zoomRange.end - zoomRange.start);
@@ -2383,12 +2444,12 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     };
     block(Rect(Vec(9, 3), Vec(156, 31)), 4.f, .9f, 11, 205);
     block(Rect(Vec(174, 3), Vec(147, 31)), 4.f, 1.3f, 12, 210);
-    block(Rect(Vec(9, 171), Vec(312, 78)), 4.f, 2.5f, 13, 236);
-    block(Rect(Vec(9, 251), Vec(312, 62)), 4.f, 1.7f, 14, 210);
-    block(Rect(Vec(9, 313), Vec(145, 58)), 4.f, 1.8f, 15, 232);
-    block(Rect(Vec(160, 313), Vec(169, 58)), 4.f, 2.2f, 16, 175);
+    block(Rect(Vec(9, 176), Vec(312, 78)), 4.f, 2.5f, 13, 236);
+    block(Rect(Vec(9, 256), Vec(312, 62)), 4.f, 1.7f, 14, 210);
+    block(Rect(Vec(9, 318), Vec(145, 58)), 4.f, 1.8f, 15, 232);
+    block(Rect(Vec(160, 318), Vec(169, 58)), 4.f, 2.2f, 16, 175);
     for (int i = 0; i < 2; ++i)
-      block(Rect(Vec(i == 0 ? 18.f : 169.f, 316),
+      block(Rect(Vec(i == 0 ? 18.f : 169.f, 321),
                  Vec(i == 0 ? 127.f : 143.f, 18)),
             2.5f, .9f, unsigned(17 + i), 205);
     auto* panel = new ComputerscareSVGPanel;
@@ -2408,7 +2469,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     waveView = view;
     view->module = module;
     view->preview = preview;
-    view->box = Rect(Vec(10, 60), Vec(310, 105));
+    view->box = Rect(Vec(7, 58), Vec(316, 112));
     const int transportParams[] = {ComputerscarePhlooper::LOOP_MUTE,
                                    ComputerscarePhlooper::LOOP_SOLO,
                                    ComputerscarePhlooper::LOOP_PAUSE,
@@ -2449,7 +2510,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     float zoomX = controlsX + controlsWidth + 6.f;
     float zoomWidth = buttonWidth("Zoom");
     auto* showControls = createParam<PhlooperButton>(
-        Vec(controlsX, 38), module, ComputerscarePhlooper::SHOW_TRANSPORT);
+        Vec(controlsX, 36), module, ComputerscarePhlooper::SHOW_TRANSPORT);
     showControls->momentary = false;
     showControls->face.caption = "Ctrl";
     showControls->box.size = Vec(controlsWidth, 20);
@@ -2460,9 +2521,8 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     timing->preview = preview;
     timing->box = Rect(Vec(181, 7), Vec(72, 24));
     addChild(timing);
-    auto* loopSelector = new phlooper::SplitDropdown;
-    loopSelector->box.pos = Vec(261, 9);
-    loopSelector->configure(65, 20, 4, 3, 1, 1);
+    auto* loopSelector = new widget::Widget;
+    loopSelector->box = Rect(Vec(246, 9), Vec(70, 20));
     addChild(loopSelector);
     for (int i = 0; i < 3; ++i) {
       auto* choice = new PhlooperChoice;
@@ -2471,13 +2531,12 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       choice->param = i == 0   ? ComputerscarePhlooper::COUNT
                       : i == 1 ? ComputerscarePhlooper::MODE
                                : ComputerscarePhlooper::LOOP_DIRECTION;
-      choice->box = i == 0 ? Rect(Vec(0, 0), Vec(47, 20))
+      choice->box = i == 0 ? Rect(Vec(0, 0), Vec(49, 20))
                     : i == 1
-                        ? Rect(Vec(12, 38), Vec(modeWidth, 20))
-                        : Rect(Vec(directionX, 38), Vec(directionWidth, 20));
+                        ? Rect(Vec(12, 36), Vec(modeWidth, 20))
+                        : Rect(Vec(directionX, 36), Vec(directionWidth, 20));
       if (i == 0) {
-        choice->textSize = 11.f;
-        choice->splitFace = true;
+        choice->textSize = 12.f;
       }
       choice->configure(choice->box.size.x, choice->box.size.y, 4.f, 4.f, 1.2f,
                         unsigned(i + 1));
@@ -2489,12 +2548,12 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     auto* expansion = new PhlooperChoice;
     expansion->module = module;
     expansion->param = ComputerscarePhlooper::EXPANSION;
-    expansion->box.pos = Vec(47, 0);
-    expansion->splitFace = true;
+    expansion->box.pos = Vec(48, 0);
+    expansion->showLabel = false;
     expansion->textSize = 10.f;
-    expansion->configure(18, 20, 4.f, 4.f, 1.f, 4);
+    expansion->configure(22, 20, 4.f, 3.f, 1.f, 4);
     loopSelector->addChild(expansion);
-    auto* zoom = createParam<PhlooperButton>(Vec(zoomX, 38), module,
+    auto* zoom = createParam<PhlooperButton>(Vec(zoomX, 36), module,
                                              ComputerscarePhlooper::ZOOM);
     zoom->momentary = false;
     zoom->face.caption = "Zoom";
@@ -2503,7 +2562,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     addParam(zoom);
     float alignWidth = buttonWidth("Ends");
     auto* align =
-        createParam<PhlooperButton>(Vec(zoomX + zoomWidth + 6.f, 38), module,
+        createParam<PhlooperButton>(Vec(zoomX + zoomWidth + 6.f, 36), module,
                                     ComputerscarePhlooper::ALIGN_END);
     align->momentary = false;
     align->face.caption = "Ends";
@@ -2512,7 +2571,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     addParam(align);
     float shotWidth = buttonWidth("1-shot");
     auto* shot = createParam<PhlooperButton>(
-        Vec(zoomX + zoomWidth + alignWidth + 12.f, 38), module,
+        Vec(zoomX + zoomWidth + alignWidth + 12.f, 36), module,
         ComputerscarePhlooper::ONE_SHOT);
     shot->momentary = false;
     shot->face.caption = "1-shot";
@@ -2531,7 +2590,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       }
       meter->label = "";
       meter->shapeSeed = random::u32();
-      meter->box = Rect(Vec(i == 0 ? 21.f : 172.f, 319),
+      meter->box = Rect(Vec(i == 0 ? 21.f : 172.f, 324),
                         Vec(i == 0 ? 119.f : 135.f, 12));
       addChild(meter);
     }
@@ -2540,7 +2599,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         ComputerscarePhlooper::OFFSET,  ComputerscarePhlooper::SPEED,
         ComputerscarePhlooper::REC_MIX, ComputerscarePhlooper::MIX};
     for (int i = 0; i < 6; ++i) {
-      auto* knob = createParamCentered<SmoothKnob>(Vec(35 + i * 52, 190),
+      auto* knob = createParamCentered<SmoothKnob>(Vec(35 + i * 52, 195),
                                                    module, knobs[i]);
       addParam(knob);
       if (i < 3) previewKnobs[i] = knob;
@@ -2556,7 +2615,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     for (int i = 0; i < 6; ++i) {
       float x = i == 0 ? 35.f : 113.f + (i - 1) * 44.5f;
       auto* b =
-          createParamCentered<PhlooperButton>(Vec(x, 266), module, buttons[i]);
+          createParamCentered<PhlooperButton>(Vec(x, 271), module, buttons[i]);
       if (i > 0) {
         float width = i == 2 ? 38.f : 34.f;
         b->box.size.x = width;
@@ -2570,16 +2629,16 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       b->face.shapeSeed = unsigned(i + 4);
       addParam(b);
       if (i < 6)
-        addInput(createInputCentered<JackLargePointingDown>(Vec(x, 290), module,
+        addInput(createInputCentered<JackLargePointingDown>(Vec(x, 295), module,
                                                             controlInputs[i]));
     }
     addParam(createParamCentered<PhlooperClockKnob>(
-        Vec(78, 264), module, ComputerscarePhlooper::CLOCK_RATIO));
+        Vec(78, 269), module, ComputerscarePhlooper::CLOCK_RATIO));
     addInput(createInputCentered<JackSmallPointingDown>(
-        Vec(78, 294), module, ComputerscarePhlooper::WRITE_CLOCK));
+        Vec(78, 299), module, ComputerscarePhlooper::WRITE_CLOCK));
     auto* recordIndicator = new PhlooperRecordIndicator;
     recordIndicator->module = module;
-    recordIndicator->box.pos = Vec(53, 256);
+    recordIndicator->box.pos = Vec(53, 261);
     addChild(recordIndicator);
     const int regionInputs[] = {
         ComputerscarePhlooper::START_CV,   ComputerscarePhlooper::LENGTH_CV,
@@ -2587,26 +2646,26 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         ComputerscarePhlooper::REC_MIX_CV, ComputerscarePhlooper::OUT_MIX_CV};
     for (int i = 0; i < 6; ++i)
       addInput(createInputCentered<JackLargePointingDown>(
-          Vec(35 + i * 52, 227), module, regionInputs[i]));
-    addParam(createParamCentered<SmallKnob>(Vec(97, 347), module,
+          Vec(35 + i * 52, 232), module, regionInputs[i]));
+    addParam(createParamCentered<SmallKnob>(Vec(97, 352), module,
                                             ComputerscarePhlooper::INPUT_GAIN));
     addParam(createParamCentered<SmallKnob>(
-        Vec(247, 347), module, ComputerscarePhlooper::OUTPUT_GAIN));
+        Vec(247, 352), module, ComputerscarePhlooper::OUTPUT_GAIN));
     addInput(createInputCentered<JackLargePointingDown>(
-        Vec(133, 347), module, ComputerscarePhlooper::VCA_CV));
+        Vec(133, 352), module, ComputerscarePhlooper::VCA_CV));
     const float inputX[] = {35.f, 70.f};
     const int audioInputs[] = {ComputerscarePhlooper::LEFT,
                                ComputerscarePhlooper::RIGHT};
     for (int i = 0; i < 2; ++i) {
       if (i == 1)
         addInput(createInputCentered<JackLargePointingUp>(
-            Vec(inputX[i], 347), module, audioInputs[i]));
+            Vec(inputX[i], 352), module, audioInputs[i]));
       else
         addInput(createInputCentered<JackLargePointingDown>(
-            Vec(inputX[i], 347), module, audioInputs[i]));
+            Vec(inputX[i], 352), module, audioInputs[i]));
     }
     addOutput(createOutputCentered<JackLargePointingDown>(
-        Vec(213, 347), module, ComputerscarePhlooper::PHASE));
+        Vec(213, 352), module, ComputerscarePhlooper::PHASE));
     const float outputX[] = {275.f, 303.f, 184.f};
     const int audioOutputs[] = {ComputerscarePhlooper::OUT_L,
                                 ComputerscarePhlooper::OUT_R,
@@ -2614,10 +2673,10 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     for (int i = 0; i < 3; ++i) {
       if (i == 1)
         addOutput(createOutputCentered<JackLargePointingDown>(
-            Vec(outputX[i], 347), module, audioOutputs[i]));
+            Vec(outputX[i], 352), module, audioOutputs[i]));
       else
         addOutput(createOutputCentered<JackLargePointingUp>(
-            Vec(outputX[i], 347), module, audioOutputs[i]));
+            Vec(outputX[i], 352), module, audioOutputs[i]));
     }
   }
   void onPathDrop(const event::PathDrop& e) override {

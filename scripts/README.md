@@ -30,4 +30,10 @@ For an older Rack installation or a custom user folder, set `VCVMON_USER_DIR` to
 
 Run the isolated watcher tests with `zsh tests/vcvmon_test.zsh`. These use a temporary fake Rack app and plugin folder and do not touch the installed app.
 
-The dev toolbar has two save buttons. **Save version** increments the parent name (`horse.vcv` → `horse1.vcv` → `horse2.vcv`). **Save variation** adds a word to the current version (`horse2-pig.vcv`, `horse2-shrew.vcv`). Both switch to the saved patch and add it to Recent Files. Further variations keep the same version parent; version saves keep the original root. Existing files are skipped. An unnamed patch first prompts for its initial save. Parent associations survive Rack restarts in `computerscare-copy-parents.json` in Rack’s user folder.
+The toolbar has **Save version**, **Save branch**, and **Options**. Both save actions switch to the new patch and add it to Recent Files.
+
+- **Save version** increments only the trailing number: `horse.vcv` → `horse1.vcv`; `horse2-pig.vcv` → `horse2-pig1.vcv` → `horse2-pig2.vcv`. It uses the highest existing sibling number plus one.
+- **Save branch** appends a short animal, plant, tree, geography, or household word: `horse2.vcv` → `horse2-elm.vcv`. From a root branch it creates a sibling: `horse2-pig.vcv` → `horse2-elm.vcv`. Numbered branches keep their full name: `horse2-pig1.vcv` → `horse2-pig1-elm.vcv`. Existing filenames are indexed in one folder scan. If all 150 single words are taken, names concatenate words, such as `horse2-horseflax.vcv`, then longer combinations if needed.
+- **Save in patch folder** defaults on. Opening `patchxyz.vcv` and using either action creates `patchxyz/` beside it. All subsequent saves stay in that single folder. Opening `test1.vcv` starts a `test1/` folder; its next numbered save is `test1/test2.vcv`. The original file stays untouched.
+- A small `.computerscare-patch-folder.json` marker keeps a folder recognizable after moving or reopening it. Saves within it do not create nested folders. Parent-name associations are no longer needed.
+- Turn folder mode off in **Options** to save beside the current file. This preference survives Rack restarts. An unnamed patch first prompts for its initial save; canceling cancels the operation.

@@ -259,6 +259,8 @@ build() {
 
 run_tests() {
   echo "==> Tests..."
+  g++ -std=c++11 -I src tests/patch_save_naming_test.cpp -o /tmp/cs_patch_save_naming_test
+  /tmp/cs_patch_save_naming_test
   g++ -std=c++11 -I src tests/voly_pector_keyboard_test.cpp -o /tmp/cs_voly_keyboard_test
   /tmp/cs_voly_keyboard_test
   g++ -std=c++11 -I src tests/voly_pector_layout_test.cpp -o /tmp/cs_voly_layout_test

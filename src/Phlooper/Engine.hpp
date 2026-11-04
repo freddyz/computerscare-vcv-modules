@@ -12,7 +12,7 @@ struct Frame {
 };
 struct Settings {
   int count = 2, mode = 0, overdub = 0;
-  bool hold = false, oneShot = false, alignEnd = false;
+  bool hold = false, oneShot = false, alignEnd = false, sharedLength = false;
   unsigned offsetMask = 0, startMask = 0, lengthMask = 0, speedMask = 0;
   std::array<float, voices> speeds{};
   float speedFor(int voice) const {
@@ -32,6 +32,9 @@ class Engine {
   // Reserve storage outside process(). Unwritten storage is never read.
   std::array<std::unique_ptr<float[]>, voices> audio;
   std::array<double, voices> head{};
+  std::array<BeatLengthState, voices> beatLengths{};
+  unsigned changedLengths = 0;
+  int lengthMode = -1;
   struct WriteSpan {
     double from = 0, extent = 0, period = 1;
     int base = 0, kind = 0;
@@ -103,6 +106,8 @@ class Engine {
     resetHeads();
   }
   void resetHeads() {
+    beatLengths = {};
+    lengthMode = -1;
     speedHold.active = false;
     wasHeld = false;
     shotFinished.fill(false);
@@ -214,9 +219,10 @@ class Engine {
              int regionLength) const {
     if (!size || pos >= regionLength) return {};
     int i = int(pos), j = (i + 1) % regionLength;
-    Frame a = sourceFrame(voice, regionStart + i),
-          b = sourceFrame(voice, regionStart + j);
+    Frame a = sourceFrame(voice, regionStart + i);
     float f = float(pos - i);
+    if (f == 0) return a;
+    Frame b = sourceFrame(voice, regionStart + j);
     Frame out;
     out.l = a.l * (1 - f) + b.l * f;
     out.r = a.r * (1 - f) + b.r * f;
@@ -245,6 +251,14 @@ class Engine {
                 const std::array<Frame, voices>* channelInputs = nullptr) {
     outputs.fill({});
     completed = 0;
+    changedLengths = 0;
+    if (lengthMode != s.mode) {
+      for (auto& length : beatLengths) {
+        length.enabled = false;
+        length.frames = 0;
+      }
+      lengthMode = s.mode;
+    }
     const double step = double(rate) / sampleRate;
     if (initial) {
       writeClock += step;
@@ -335,9 +349,16 @@ class Engine {
       float lengthValue = s.lengthMask & (1u << lengthVoice)
                               ? s.lengths[lengthVoice]
                               : s.length;
-      if (s.mode == 3)
-        lengthValue = snapBeatRegion(lengthValue, size, s.beatFrames,
-                                     s.beatQuantum, .001f);
+      if (s.mode == 3) {
+        int snapVoice = !s.sharedLength && (s.lengthMask & (1u << lengthVoice))
+                            ? lengthVoice
+                            : 0;
+        auto& snapped = beatLengths[snapVoice];
+        if (snapped.update(lengthValue, size, s.beatFrames, s.beatQuantum,
+                           true))
+          changedLengths |= 1u << snapVoice;
+        lengthValue = snapped.value;
+      }
       int length =
           std::max(1, int(size * std::max(.001f, std::min(1.f, lengthValue)) +
                           (s.mode == 3 ? .5f : 0.f)));
@@ -352,7 +373,7 @@ class Engine {
       else if (s.mode == 1)
         period *= 1. + offset / 100.;
       else if (s.mode == 3)
-        period += offset * (s.beatFrames > 0 ? s.beatFrames : size);
+        period += offset * effectiveBeatFrames(size, s.beatFrames);
       else
         speed = std::max(.05, std::min(8., 1. + offset / 100.));
       if (s.customMask & (1u << lengthVoice)) {
@@ -442,7 +463,8 @@ class Engine {
         reverse = isReverse(v, direction);
         fade[v] = 0;
       }
-      head[v] = std::fmod(head[v], period);
+      if (head[v] < 0 || head[v] >= period)
+        head[v] = std::fmod(head[v], period);
       int writeKind = stop & bit ? 0 : erase & bit ? 2 : record & bit ? 1 : 0;
       auto& span = writeSpans[v];
       if (writeKind && (writeKind != previousWriteKind[v] || (restart & bit) ||
@@ -494,31 +516,34 @@ class Engine {
         sum.r += out.r * fade[v];
         // Visit every crossed storage frame, even when playback is faster than
         // 1x.
-        double end = head[v] + step * speed;
-        int steps = int(std::ceil(end)) - int(head[v]);
-        for (int k = 0; k < steps && !(stop & bit) && ((record | erase) & bit);
-             ++k) {
-          double p = int(head[v]) + k;
-          if (p >= period) continue;
-          double source = reverse ? std::max(0., period - 1. - p) : p;
-          if (source >= length) continue;
-          int index = int(start + source) % size;
-          if (erase & bit) {
-            audio[v][index * 2] = 0;
-            audio[v][index * 2 + 1] = 0;
-          } else {
-            float weight = float(std::min(end, p + 1.) - std::max(head[v], p));
-            float retained =
-                s.overdub == 0 ? std::pow(1 - s.recordMix, weight) : 1;
-            float incomingWeight =
-                s.overdub == 0 ? 1 - retained : s.recordMix * weight;
-            float l =
-                audio[v][index * 2] * retained + incoming.l * incomingWeight;
-            float r = audio[v][index * 2 + 1] * retained +
-                      incoming.r * incomingWeight;
-            audio[v][index * 2] = std::max(-20.f, std::min(20.f, l));
-            audio[v][index * 2 + 1] = std::max(-20.f, std::min(20.f, r));
-            if (isStereo) stereo[v] = true;
+        if (writeKind) {
+          double end = head[v] + step * speed;
+          int steps = int(std::ceil(end)) - int(head[v]);
+          for (int k = 0;
+               k < steps && !(stop & bit) && ((record | erase) & bit); ++k) {
+            double p = int(head[v]) + k;
+            if (p >= period) continue;
+            double source = reverse ? std::max(0., period - 1. - p) : p;
+            if (source >= length) continue;
+            int index = int(start + source) % size;
+            if (erase & bit) {
+              audio[v][index * 2] = 0;
+              audio[v][index * 2 + 1] = 0;
+            } else {
+              float weight =
+                  float(std::min(end, p + 1.) - std::max(head[v], p));
+              float retained =
+                  s.overdub == 0 ? std::pow(1 - s.recordMix, weight) : 1;
+              float incomingWeight =
+                  s.overdub == 0 ? 1 - retained : s.recordMix * weight;
+              float l =
+                  audio[v][index * 2] * retained + incoming.l * incomingWeight;
+              float r = audio[v][index * 2 + 1] * retained +
+                        incoming.r * incomingWeight;
+              audio[v][index * 2] = std::max(-20.f, std::min(20.f, l));
+              audio[v][index * 2 + 1] = std::max(-20.f, std::min(20.f, r));
+              if (isStereo) stereo[v] = true;
+            }
           }
         }
         if (!(stop & bit)) {
@@ -540,7 +565,7 @@ class Engine {
                         ? wrapPhase(speedHold.clock + speedHold.phases[v] +
                                     holdStep) *
                               period
-                        : std::fmod(next, period);
+                        : (next < period ? next : std::fmod(next, period));
         } else if (speedHold.active) {
           speedHold.phases[v] = wrapPhase(speedHold.phases[v] - holdStep);
         }

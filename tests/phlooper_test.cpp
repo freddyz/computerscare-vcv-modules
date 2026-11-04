@@ -5,6 +5,8 @@
 #include "Phlooper/Waveform.hpp"
 #include "Phlooper/Zoom.hpp"
 #include "Phlooper/Wav.hpp"
+#include "Phlooper/Storage.hpp"
+#include <unistd.h>
 #include <cstdio>
 #include <cstdlib>
 #include <cmath>
@@ -26,6 +28,29 @@ void wavFixture(const char* path, int format, int bits, int channels, bool exten
   }
 }
 int main(){
+  char storageDir[]="/tmp/phlooper-storage-XXXXXX";
+  check(mkdtemp(storageDir)!=nullptr,"create isolated storage fixture");
+  std::string dir=storageDir;
+  float samples[]={1,2,3,4,0,0};
+  auto mono=phlooper::storeAudio(dir,samples,3,false);
+  samples[1]=99;
+  check(phlooper::storeAudio(dir,samples,3,false)==mono,"mono ignores unused right lane");
+  auto stereo=phlooper::storeAudio(dir,samples,3,true);
+  check(stereo!=mono,"stereo retains independent right audio");
+  samples[0]=0;
+  auto erased=phlooper::storeAudio(dir,samples,3,false);
+  check(erased!=mono,"edited loop gets independent saved audio");
+  check(phlooper::loadWav(dir+"/"+mono).samples[0]==.2f,"editing leaves shared saved audio intact");
+  check(phlooper::readAudioIndex(dir)[15]=="loop-16.wav","legacy storage names remain loadable");
+  std::array<std::string,16> refs; refs.fill(mono); refs[2]=stereo; refs[5]=erased;
+  phlooper::writeAudioIndex(dir,refs);
+  check(phlooper::readAudioIndex(dir)==refs,"shared and divergent references survive reload");
+  { std::ofstream out(dir+"/audio-index.txt"); out<<"Phlooper audio 1\n../bad.wav\n"; }
+  bool invalid=false; try { phlooper::readAudioIndex(dir); } catch(const std::exception&) {invalid=true;}
+  check(invalid,"invalid references are rejected");
+  for(auto name:{mono,stereo,erased,std::string("audio-index.txt")})std::remove((dir+"/"+name).c_str());
+  rmdir(dir.c_str());
+
   for(int i=0;i<6;++i) check(phlooper::expansionSource(i,2,1)==i%2,"Cycle repeats two source recordings into six loops");
   check(phlooper::expansionSource(5,1,0)==0,"Normal broadcasts one recording");
   check(phlooper::expansionSource(5,2,0)==-1,"Normal pads multiple recordings with silence");
@@ -116,7 +141,51 @@ int main(){
     settings.start=0;settings.length=.5f;
     settings.beatFrames=0;
     beats->process({},48000,settings,0,0,0,0,65535,false);
-    check(beats->periods[1]==812.5,"Unclocked audio uses its full duration as one beat");
+    check(beats->periods[1]==578.125,"Unclocked audio defaults to four beats across its duration");
+    settings.beatFrames=480; settings.length=.52f;
+    settings.offset=-.1f; settings.beatQuantum=.1f;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    double original=beats->periods[0];
+    check(original==528,"Length edits snap to the current fraction");
+    settings.offset=-.125f; settings.beatQuantum=.125f;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(beats->periods[0]==original && std::abs(beats->periods[1]-(original-60))<.001,
+          "Changing Offset from -1/10 to -1/8 moves only the per-loop offset");
+    settings.length=.53f;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(beats->periods[0]==540,"The next Length edit uses the newly selected grid");
+    settings.beatQuantum=0; settings.length=.531f;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(beats->periods[0]==531,"Length edits at zero Offset remain free");
+    settings.lengthMask=7; settings.lengths[0]=.52f; settings.lengths[1]=.61f; settings.lengths[2]=.71f;
+    settings.offset=-.1f; settings.beatQuantum=.1f;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    double second=beats->periods[1],third=beats->periods[2];
+    settings.offset=-.125f; settings.beatQuantum=.125f;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(std::abs(beats->periods[1]-(second-12))<.001 && std::abs(beats->periods[2]-(third-24))<.001,
+          "Static poly Length CV retains each base length when Offset changes");
+    settings.lengths[1]=.64f;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(beats->periods[1]==600,"Moving poly Length CV uses the new fraction grid");
+    settings.lengthMask=0; settings.count=1; settings.length=.54f;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    settings.length=.52f;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    settings.count=3;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(beats->periods[0]==540 && beats->periods[1]==480 && beats->periods[2]==420,
+          "Expanding loops uses the retained common Length consistently");
+    settings.mode=0;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(beats->periods[0]==520,"Leaving Beats restores the unsnapped Length knob value");
+    settings.mode=3;
+    beats->process({},48000,settings,0,0,0,0,65535,false);
+    check(beats->periods[0]==540,"Entering Beats adopts the current fraction grid");
+
+
+
+
   }
 
   {

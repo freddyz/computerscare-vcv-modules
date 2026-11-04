@@ -1,16 +1,18 @@
 #include "DevWatcherToolbar.hpp"
 
+#include <osdialog.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
 #include <functional>
-#include <iomanip>
-#include <map>
+#include <history.hpp>
 #include <patch.hpp>
-#include <sstream>
+#include <stdexcept>
 
 #include "Computerscare.hpp"
+#include "PatchSaveNaming.hpp"
 
 namespace {
 struct WatcherButton : ui::Button {
@@ -31,101 +33,146 @@ struct WatcherToolbar : widget::OpaqueWidget {
   double nextPoll = 0.;
   WatcherButton* pause = nullptr;
   WatcherButton* rebuild = nullptr;
-  WatcherButton* saveCopy = nullptr;
-  WatcherButton* saveVariation = nullptr;
-  std::map<std::string, std::string> copyParents, variationParents;
-  std::string copyParentStore() {
-    return asset::user("computerscare-copy-parents.json");
+  WatcherButton* saveNext = nullptr;
+  WatcherButton* saveBranch = nullptr;
+  bool folderMode = true;
+  static const char* folderMarker() {
+    return ".computerscare-patch-folder.json";
   }
-  void saveVersion(bool variation) {
+  std::string settingsPath() {
+    return asset::user("computerscare-patch-saves.json");
+  }
+  void writeJson(const std::string& path, json_t* value) {
+    std::string temporary = path + ".tmp";
+    int result = json_dump_file(value, temporary.c_str(), JSON_INDENT(2));
+    json_decref(value);
+    if (result != 0 || !system::rename(temporary, path)) {
+      system::remove(temporary);
+      throw std::runtime_error("Could not write " + path);
+    }
+  }
+  bool managedFolder(const std::string& directory) {
+    std::string path = system::join(directory, folderMarker());
+    if (!system::exists(path)) return false;
+    json_error_t error;
+    json_t* root = json_load_file(path.c_str(), 0, &error);
+    bool valid = root && json_integer_value(json_object_get(
+                             root, "computerscarePatchFolder")) == 1;
+    if (root) json_decref(root);
+    if (!valid)
+      throw std::runtime_error("Unrecognized patch-folder marker: " + path);
+    return true;
+  }
+  std::string saveDirectory(const std::string& source, bool create) {
+    std::string directory = system::getDirectory(source);
+    if (!folderMode) return directory;
+    if (managedFolder(directory)) return directory;
+    std::string stem = system::getStem(source);
+    // Also reuse a manually created patchxyz/patchxyz.vcv folder.
+    if (system::getFilename(directory) != stem)
+      directory = system::join(directory, stem);
+    if (create) {
+      if (!system::isDirectory(directory) &&
+          !system::createDirectories(directory))
+        throw std::runtime_error("Could not create patch folder: " + directory);
+      if (!managedFolder(directory)) {
+        json_t* marker = json_object();
+        json_object_set_new(marker, "computerscarePatchFolder",
+                            json_integer(1));
+        json_object_set_new(marker, "initialFile",
+                            json_string(system::getFilename(source).c_str()));
+        writeJson(system::join(directory, folderMarker()), marker);
+      }
+    }
+    return directory;
+  }
+  void showError(const std::string& message) {
+    WARN("Patch save: %s", message.c_str());
+    osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK, message.c_str());
+  }
+  void openOptions() {
+    auto* menu = createMenu();
+    menu->addChild(createMenuLabel("Patch saves"));
+    menu->addChild(createCheckMenuItem(
+        "Save in patch folder", "", [this]() { return folderMode; },
+        [this]() {
+          try {
+            json_t* settings = json_object();
+            json_object_set_new(settings, "folderMode",
+                                json_boolean(!folderMode));
+            writeJson(settingsPath(), settings);
+            folderMode = !folderMode;
+          } catch (const std::exception& error) {
+            showError(error.what());
+          }
+        }));
+    if (!APP->patch->path.empty()) {
+      try {
+        std::string directory = saveDirectory(APP->patch->path, false);
+        menu->addChild(
+            createMenuLabel("Folder: " + system::getFilename(directory)));
+        menu->addChild(createMenuItem("Copy folder path", "", [directory]() {
+          glfwSetClipboardString(APP->window->win, directory.c_str());
+        }));
+      } catch (const std::exception& error) {
+        menu->addChild(createMenuLabel(error.what()));
+      }
+    }
+    menu->addChild(new MenuSeparator);
+    menu->addChild(createMenuLabel("Save version: increment trailing number"));
+    menu->addChild(createMenuLabel("Save branch: sibling or new word"));
+  }
+  void savePatch(bool branch) {
     if (APP->patch->path.empty()) APP->patch->saveDialog();
     const std::string source = APP->patch->path;
     if (source.empty()) return;
-    std::string parent =
-        copyParents.count(source) ? copyParents[source] : source;
-    if (!copyParents.count(source)) {
-      std::string stem = system::getStem(source);
-      while (!stem.empty() && stem.back() >= '0' && stem.back() <= '9')
-        stem.pop_back();
-      if (!stem.empty())
-        parent = system::join(system::getDirectory(source), stem + ".vcv");
-    }
-    const std::string branch =
-        variationParents.count(source) ? variationParents[source] : source;
-    std::string target;
-    static const char* words[] = {
-        "pig",  "shrew", "fox",  "otter", "moth",  "hare", "wren", "badger",
-        "mole", "finch", "lynx", "newt",  "stoat", "owl",  "yak",  "toad"};
-    unsigned first = 1;
-    if (!variation) {
-      std::string rootStem = system::getStem(parent),
-                  branchStem = system::getStem(branch);
-      if (branchStem.compare(0, rootStem.size(), rootStem) == 0) {
-        const char* digits = branchStem.c_str() + rootStem.size();
-        unsigned long current = std::strtoul(digits, nullptr, 10);
-        if (current < 1000000) first = unsigned(current) + 1;
-      }
-    }
-    for (unsigned number = first;; ++number) {
-      std::string suffix;
-      if (variation) {
-        unsigned index = number - 1;
-        suffix = std::string("-") + words[index % 16];
-        if (index >= 16) suffix += std::to_string(index / 16 + 1);
-      } else
-        suffix = std::to_string(number);
-      const auto& base = variation ? branch : parent;
-      target = system::join(system::getDirectory(base),
-                            system::getStem(base) + suffix + ".vcv");
-      if (!system::exists(target)) break;
-    }
-    auto* button = variation ? saveVariation : saveCopy;
+    auto* button = branch ? saveBranch : saveNext;
+    int previousSavedIndex = APP->history->savedIndex;
     try {
+      std::string directory = saveDirectory(source, true);
+      std::string stem = system::getStem(source), target;
+      // One directory scan supplies both naming strategies.
+      std::vector<std::string> existing;
+      for (const auto& path : system::getEntries(directory))
+        existing.push_back(system::getFilename(path));
+      if (branch) {
+        computerscare::patch_saves::BranchCandidates candidates(
+            stem, existing,
+            random::u32() %
+                unsigned(computerscare::patch_saves::words().size()));
+        do {
+          target = system::join(directory, candidates.next());
+        } while (system::exists(target));
+      } else {
+        target = system::join(
+            directory,
+            computerscare::patch_saves::nextFilename(stem, existing));
+        // Also respect case-insensitive filesystem collisions and directories.
+        while (system::exists(target))
+          target =
+              system::join(directory, computerscare::patch_saves::nextFilename(
+                                          system::getStem(target), existing));
+      }
+      // Match Rack Save As: serialize a clean history state; restore on
+      // failure.
+      APP->history->setSaved();
       APP->patch->save(target);
-      copyParents[source] = parent;
-      copyParents[target] = parent;
-      if (variation) variationParents[target] = branch;
-      json_t* root = json_object();
-      auto store = [&](const char* name,
-                       const std::map<std::string, std::string>& entries) {
-        json_t* values = json_object();
-        for (const auto& entry : entries)
-          json_object_set_new(values, entry.first.c_str(),
-                              json_string(entry.second.c_str()));
-        json_object_set_new(root, name, values);
-      };
-      store("parents", copyParents);
-      store("variations", variationParents);
-      if (json_dump_file(root, copyParentStore().c_str(), JSON_INDENT(2)) != 0)
-        WARN("Could not store patch parent names");
-      json_decref(root);
       APP->patch->path = target;
       APP->patch->pushRecentPath(target);
-      APP->history->setSaved();
-      button->text = variation ? "Save variation" : "Save version";
+      button->text = branch ? "Save branch" : "Save version";
     } catch (const std::exception& error) {
-      WARN("Save patch version failed: %s", error.what());
+      APP->history->savedIndex = previousSavedIndex;
       button->text = "Save failed";
+      showError(error.what());
     }
   }
   WatcherToolbar(const std::string& path) : control(path) {
     json_error_t error;
-    json_t* parents = json_load_file(copyParentStore().c_str(), 0, &error);
-    auto load = [&](json_t* values,
-                    std::map<std::string, std::string>& entries) {
-      if (!json_is_object(values)) return;
-      const char* key;
-      json_t* value;
-      json_object_foreach(values, key, value) if (json_is_string(value))
-          entries[key] = json_string_value(value);
-    };
-    load(json_object_get(parents, "parents")
-             ? json_object_get(parents, "parents")
-             : parents,
-         copyParents);
-    load(json_object_get(parents, "variations"), variationParents);
-    if (parents) json_decref(parents);
-    box.size = Vec(580, 28);
+    json_t* settings = json_load_file(settingsPath().c_str(), 0, &error);
+    json_t* mode = settings ? json_object_get(settings, "folderMode") : nullptr;
+    if (json_is_boolean(mode)) folderMode = json_boolean_value(mode);
+    if (settings) json_decref(settings);
+    box.size = Vec(635, 28);
     pause = new WatcherButton;
     pause->box = Rect(Vec(205, 4), Vec(75, 20));
     pause->action = [this]() {
@@ -137,16 +184,29 @@ struct WatcherToolbar : widget::OpaqueWidget {
     rebuild->box = Rect(Vec(285, 4), Vec(78, 20));
     rebuild->action = [this]() { command("rebuild"); };
     addChild(rebuild);
-    saveCopy = new WatcherButton;
-    saveCopy->text = "Save version";
-    saveCopy->box = Rect(Vec(368, 4), Vec(95, 20));
-    saveCopy->action = [this]() { saveVersion(false); };
-    addChild(saveCopy);
-    saveVariation = new WatcherButton;
-    saveVariation->text = "Save variation";
-    saveVariation->box = Rect(Vec(468, 4), Vec(105, 20));
-    saveVariation->action = [this]() { saveVersion(true); };
-    addChild(saveVariation);
+    saveNext = new WatcherButton;
+    saveNext->text = "Save version";
+    saveNext->box = Rect(Vec(368, 4), Vec(95, 20));
+    saveNext->action = [this]() { savePatch(false); };
+    addChild(saveNext);
+    saveBranch = new WatcherButton;
+    saveBranch->text = "Save branch";
+    saveBranch->box = Rect(Vec(468, 4), Vec(92, 20));
+    saveBranch->action = [this]() { savePatch(true); };
+    addChild(saveBranch);
+    auto* options = new WatcherButton;
+    options->text = "Options";
+    options->box = Rect(Vec(565, 4), Vec(62, 20));
+    options->action = [this]() { openOptions(); };
+    addChild(options);
+  }
+  void onButton(const ButtonEvent& e) override {
+    if (e.button == GLFW_MOUSE_BUTTON_RIGHT && e.action == GLFW_PRESS) {
+      openOptions();
+      e.consume(this);
+      return;
+    }
+    widget::OpaqueWidget::onButton(e);
   }
   void command(const std::string& value) {
     if (state == "offline" || state == "stopped" || state == "building") return;

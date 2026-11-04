@@ -7,6 +7,7 @@ namespace phlooper {
 // Text follows the face geometry, rather than a separately tuned state offset.
 struct WarpedDropdown : widget::OpaqueWidget {
   float textSize = 13.f;
+  bool showLabel = true;
   float upDepth = 4.f;
   float downDepth = 3.f;
   float screwup = .8f;
@@ -89,7 +90,7 @@ struct WarpedDropdown : widget::OpaqueWidget {
                         std::max(0.f, bottom - top));
     auto font = APP->window->loadFont(
         asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
-    if (font) {
+    if (font && showLabel) {
       nvgFontFaceId(args.vg, font->handle);
       nvgFontSize(args.vg, textSize);
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
@@ -98,22 +99,6 @@ struct WarpedDropdown : widget::OpaqueWidget {
               label().c_str(), nullptr);
     }
     nvgRestore(args.vg);
-  }
-};
-// Two dropdown targets share one raised body and a single divider.
-struct SplitDropdown : WarpedDropdown {
-  float split = 47.f;
-  std::string label() override { return ""; }
-  bool isPressed() override { return false; }
-  void draw(const DrawArgs& args) override {
-    WarpedDropdown::draw(args);
-    nvgBeginPath(args.vg);
-    nvgMoveTo(args.vg, split, 1.f);
-    nvgLineTo(args.vg, split + .4f, box.size.y - upDepth * .65f - 1.f);
-    nvgStrokeColor(args.vg, nvgRGB(30, 35, 33));
-    nvgStrokeWidth(args.vg, .7f);
-    nvgStroke(args.vg);
-    widget::Widget::draw(args);
   }
 };
 }  // namespace phlooper

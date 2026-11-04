@@ -36,11 +36,16 @@ inline float beatValue(float knob) {
       int(std::round(std::max(-20.f, std::min(20.f, knob)) * 2.f)));
   return float(value.numerator) / value.denominator;
 }
+// Unclocked recordings use a four-beat bar without storing synthetic clock
+// data.
+inline double effectiveBeatFrames(int frames, double recorded) {
+  return recorded > 0 ? recorded : std::max(1, frames) / 4.;
+}
 inline float snapBeatRegion(float value, int frames, double beatFrames,
                             float quantum, float minimum = 0.f,
                             float origin = 0.f) {
   if (frames <= 0 || quantum <= 0.f) return value;
-  double step = quantum * (beatFrames > 0 ? beatFrames : frames);
+  double step = quantum * effectiveBeatFrames(frames, beatFrames);
   double lower = std::ceil((double(minimum) * frames - origin) / step - 1e-6);
   double upper = std::floor((frames - origin) / step + 1e-6);
   if (upper < lower) return 1.f;  // The selected step exceeds the recording.
@@ -48,6 +53,21 @@ inline float snapBeatRegion(float value, int frames, double beatFrames,
   double snapped = std::max(lower, std::min(upper, index)) * step + origin;
   return float(std::max(double(minimum), std::min(1., snapped / frames)));
 }
+// Retain the chosen length when Offset changes; adopt its grid on the next
+// length edit. Keeping the raw input also handles continuous/polyphonic CV.
+struct BeatLengthState {
+  float input = -1.f, value = 1.f;
+  int frames = 0;
+  bool enabled = false;
+  bool update(float raw, int size, double beat, float quantum, bool beats) {
+    if (input == raw && frames == size && enabled == beats) return false;
+    input = raw;
+    frames = size;
+    enabled = beats;
+    value = beats ? snapBeatRegion(raw, size, beat, quantum, .001f) : raw;
+    return true;
+  }
+};
 inline std::string beatLengthLabel(double beats) {
   beats = std::max(0., beats);
   long long whole = static_cast<long long>(std::floor(beats));

@@ -25,12 +25,12 @@ def text(s,x,y,w,h,rand=25,center=False):
 # Perspective blocks are drawn by the procedural WarpedBlock component.
 text('Phlooper',16,5,119,24,48)
 for s,x in [('Start',22),('Length',74),('Offset',126),('Speed',178),('Rec mix',226),('Out mix',278)]:
-    text(s,x,205 if s in ('Length','Speed') else 203,45,9 if s in ('Length','Speed') else 7)
-for s,x in [('L / mono',21),('R',67),('Out L',263),('Out R',291),('EOC',174),('Phase',201)]:text(s,x,360,40,5.5)
-text('Clock',78,277,24,5.5,center=True)
-text('Gain',88,360,25,5.5)
-text('VCA',123,360,30,5.5)
-text('Gain',238,360,25,5.5)
+    text(s,x,210 if s in ('Length','Speed') else 208,45,9 if s in ('Length','Speed') else 7)
+for s,x in [('L / mono',21),('R',67),('Out L',263),('Out R',291),('EOC',174),('Phase',201)]:text(s,x,365,40,5.5)
+text('Clock',78,282,24,5.5,center=True)
+text('Gain',88,365,25,5.5)
+text('VCA',123,365,30,5.5)
+text('Gain',238,365,25,5.5)
 logo=E.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
 embed(logo,141,7,17,21,name='computerscare-logo')
 logo_group=svg[-1]

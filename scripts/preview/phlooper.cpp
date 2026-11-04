@@ -10,6 +10,8 @@
 #include "../../src/ComputerscareVolyPector.cpp"
 #undef modelComputerscareVolyPector
 
+#include "../../src/DevWatcherToolbar.hpp"
+#include "../../src/PatchSaveNaming.hpp"
 #include <stb_image_write.h>
 
 #include <algorithm>
@@ -137,6 +139,9 @@ void checkMaxVisual(app::ModuleWidget* widget,bool& compact,const std::string& p
   std::puts("Shared Max visual port hit-testing, persistence, return button and layout restoration checks passed");
 }
 
+#include "phlooper-benchmark.hpp"
+#include "phlooper-storage-checks.hpp"
+#include "patch-save-checks.hpp"
 #include "blunch-line-menu-checks.hpp"
 #include "voly-multi-checks.hpp"
 
@@ -267,7 +272,9 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
     std::string control(path);
     widget::Widget* toolbar = nullptr;
     for (auto* child : APP->scene->children)
-      if (child->box.size == Vec(370, 28)) toolbar = child;
+      for(auto* control:child->children)
+        if(auto* button=dynamic_cast<ui::Button*>(control))
+          if(button->text=="Save version")toolbar=child;
     require(toolbar, "Watcher toolbar attaches to the Rack scene");
     auto pollState = [&](const char* state) {
       { std::ofstream status(control + ".status"); status << state << " " << std::time(nullptr); }
@@ -302,6 +309,8 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
     pollState("watching"); click("Rebuild", "rebuild");
     pollState("building"); click("Rebuild", "");
     pollState("failed"); click("Rebuild", "rebuild");
+    pollState("watching");
+    checkPatchSaves(toolbar,[&](widget::Widget* widget,const char* name){if(widget==toolbar)renderToolbar(name);else capture(widget,output+"/"+name,scale,false);});
     std::puts("Watcher toolbar state and command checks passed");
   }
   // The preview scene can retain Rack's startup menus; dismiss them before
@@ -894,6 +903,8 @@ int main(int argc, char** argv) {
       std::puts("All six jack variants load at their expected sizes");
     }
     modelPhlooperPreview->plugin = &plugin;
+    checkPhlooperStorage(modelPhlooperPreview);
+    if(std::getenv("PHLOOPER_DSP_BENCHMARK")){benchmarkPhlooper(modelPhlooperPreview);return 0;}
     {
       auto m = std::unique_ptr<ComputerscarePhlooper>(static_cast<ComputerscarePhlooper*>(modelPhlooperPreview->createModule()));
       m->loop.size=32; m->createdLoops=2;
@@ -1199,11 +1210,63 @@ int main(int argc, char** argv) {
     widget->step();
     simulate(*module, .1f, frame);
     save("02-playing-four-loops");
+    if (std::getenv("PHLOOPER_UNCLOCKED_BEATS")) {
+      float oldOffset = module->params[ComputerscarePhlooper::OFFSET].getValue();
+      module->params[ComputerscarePhlooper::MODE].setValue(3.f);
+      module->params[ComputerscarePhlooper::OFFSET].setValue(-4.5f);
+      simulate(*module, .1f, frame);
+      if (std::abs(module->loop.periods[1] - module->loop.size * .975) > 1.f)
+        throw std::runtime_error("Unclocked -1/10 offset must shorten loop 2 by 1/40 of the recording");
+      save("18-unclocked-four-beats");
+      module->params[ComputerscarePhlooper::LENGTH].setValue(.523f);
+      simulate(*module, .01f, frame);
+      double base = module->loop.periods[0];
+      module->params[ComputerscarePhlooper::OFFSET].setValue(-5.f);
+      simulate(*module, .01f, frame);
+      if (module->loop.periods[0] != base ||
+          std::abs(module->snappedMainValue(ComputerscarePhlooper::LENGTH) * module->loop.size - base) > 1.f)
+        throw std::runtime_error("Offset moved the main Length or its tooltip");
+      auto* state = module->dataToJson();
+      auto restored = std::unique_ptr<ComputerscarePhlooper>(static_cast<ComputerscarePhlooper*>(modelPhlooperPreview->createModule()));
+      for (int i=0;i<ComputerscarePhlooper::PARAMS;++i) restored->params[i].setValue(module->params[i].getValue());
+      restored->dataFromJson(state); json_decref(state);
+      restored->loop.size = module->loop.size;
+      for (int i=0;i<16;++i) std::copy(module->loop.audio[i].get(), module->loop.audio[i].get()+module->loop.size*2, restored->loop.audio[i].get());
+      simulate(*restored, .01f, frame);
+      if (restored->loop.periods[0] != base)
+        throw std::runtime_error("Stable beat length did not survive patch serialization");
+      save("20-offset-eighth-stable-length");
+      module->params[ComputerscarePhlooper::LENGTH].setValue(1.f);
+
+      module->params[ComputerscarePhlooper::MODE].setValue(0.f);
+      module->params[ComputerscarePhlooper::OFFSET].setValue(oldOffset);
+      save("19-unclocked-time-no-marks");
+    }
+
     module->params[ComputerscarePhlooper::COUNT].setValue(16.f);
     module->params[ComputerscarePhlooper::START].setValue(.2f);
     module->params[ComputerscarePhlooper::LENGTH].setValue(.45f);
     simulate(*module, .2f, frame);
     save("03-sixteen-loops");
+    if (std::getenv("PHLOOPER_SELECTOR_CHECKS")) {
+      auto overlay = std::unique_ptr<ui::MenuOverlay>(new ui::MenuOverlay);
+      PhlooperChoice* count = nullptr;
+      PhlooperChoice* expansion = nullptr;
+      for (auto* parent : widget->children)
+        for (auto* child : parent->children)
+          if (auto* choice = dynamic_cast<PhlooperChoice*>(child)) {
+            if (choice->param == ComputerscarePhlooper::COUNT) count = choice;
+            if (choice->param == ComputerscarePhlooper::EXPANSION) expansion = choice;
+          }
+      if (!count || !expansion) throw std::runtime_error("Missing separate loop selector buttons");
+      count->activeMenuOverlay = overlay.get();
+      save("16-count-pressed");
+      count->activeMenuOverlay = nullptr;
+      expansion->activeMenuOverlay = overlay.get();
+      save("17-expansion-pressed");
+      expansion->activeMenuOverlay = nullptr;
+    }
+
     module->params[ComputerscarePhlooper::COUNT].setValue(4.f);
     module->params[ComputerscarePhlooper::LENGTH].setValue(.12f);
     module->params[ComputerscarePhlooper::ZOOM].setValue(1.f);
@@ -1284,9 +1347,11 @@ int main(int argc, char** argv) {
     if (std::abs(module->loop.periods[1]-22500.)>2.)
       throw std::runtime_error("Beat mode must offset playback by 5/16 of the recorded beat");
     save("09-recorded-beats");
+    double retainedBeatLength = module->loop.periods[0];
     module->params[ComputerscarePhlooper::OFFSET].setValue(-4.f);
     simulate(*module,.05f,frame);
-    if (std::abs(module->loop.periods[1]-14000.)>2.)
+    if (std::abs(module->loop.periods[0] - retainedBeatLength) > 1. ||
+        std::abs(module->loop.periods[1] - (retainedBeatLength - module->recordedBeatFrames.load()/12.)) > 2.)
       throw std::runtime_error("Minus 1/12 must shorten loop two by one twelfth of a clock-mark division");
     save("10-minus-twelfth-beat");
     module->params[ComputerscarePhlooper::OFFSET].setValue(6.5f);

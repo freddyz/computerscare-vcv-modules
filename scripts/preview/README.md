@@ -22,6 +22,9 @@ scripts/preview-module.sh blunch --controls
 # Compare editor stepping/rendering cost (excludes PNG writing).
 BLUNCH_EDITOR_BENCHMARK=1 scripts/preview-module.sh blunch --controls
 
+# Benchmark Phlooper playback at 3 and 16 loops (no PNG capture).
+PHLOOPER_DSP_BENCHMARK=1 scripts/preview-module.sh phlooper --no-build
+
 # Render only the exact null-module browser preview.
 scripts/preview-module.sh --browser
 

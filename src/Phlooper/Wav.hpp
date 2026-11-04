@@ -121,6 +121,7 @@ inline void saveWav(const std::string& path, const float* samples, int frames,
       std::memcpy(&bits, &x, 4);
       put(bits, 4);
     }
+  out.close();
   if (!out) throw std::runtime_error("Cannot finish WAV");
 }
 }  // namespace phlooper
