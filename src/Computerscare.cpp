@@ -37,4 +37,5 @@ void init(Plugin* p) {
   p->addModel(modelComputerscareTolyPoolsV2);
   p->addModel(modelComputerscarePortaloof);
   p->addModel(modelComputerscareWindchimes);
+  p->addModel(modelComputerscareWindyWally);
 }

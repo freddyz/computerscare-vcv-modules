@@ -5,6 +5,9 @@
 #define modelComputerscareBlunch modelBlunchPreview
 #include "../../src/Blunch/ComputerscareBlunch.cpp"
 #undef modelComputerscareBlunch
+#define modelComputerscareWindyWally modelWindyWallyPreview
+#include "../../src/ComputerscareWindyWally.cpp"
+#undef modelComputerscareWindyWally
 
 #define modelComputerscareVolyPector modelVolyMultiPreview
 #include "../../src/ComputerscareVolyPector.cpp"
@@ -32,6 +35,7 @@
 
 using namespace rack;
 #include "windchimes-checks.hpp"
+#include "windy-wally-checks.hpp"
 #include "../../src/Windchimes/ForestGraphic.hpp"
 #include "../../src/components/RandomBlock.hpp"
 #include "blunch-layers-checks.hpp"
@@ -977,6 +981,8 @@ int main(int argc, char** argv) {
         browserModel = modelBlunchPreview;
       if (argc == 7 && std::string(argv[6]) == "32nd-and-columbus")
         browserModel = modelComputerscareWindchimes;
+      if (argc == 7 && std::string(argv[6]) == "windy-wally")
+        browserModel = modelWindyWallyPreview;
       if (argc == 7 && std::string(argv[6]) == "mely-porge")
         browserModel = modelComputerscareMelyPorge;
       if (argc == 7 && std::string(argv[6]) == "voly-pector")
@@ -984,6 +990,7 @@ int main(int argc, char** argv) {
       if (argc == 7 && std::string(argv[6]) == "laundry-soup")
         browserModel = modelComputerscareLaundrySoup;
       browserModel->plugin = &plugin;
+      if(browserModel==modelWindyWallyPreview) checkWindyWally(browserModel);
       if (browserModel == modelComputerscareWindchimes &&
           std::getenv("WINDCHIMES_PREVIEW_CHECKS"))
         checkWindchimesCv(browserModel);
@@ -993,6 +1000,21 @@ int main(int argc, char** argv) {
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",
               scale);
+      if (browserModel == modelWindyWallyPreview) {
+        auto* live=static_cast<ComputerscareWindyWally*>(browserModel->createModule());
+        context.engine->addModule(live);
+        live->params[ComputerscareWindyWally::STRENGTH].setValue(.72f);
+        live->params[ComputerscareWindyWally::GUSTINESS].setValue(.8f);
+        live->params[ComputerscareWindyWally::TURBULENCE].setValue(.6f);
+        live->params[ComputerscareWindyWally::TONE].setValue(.68f);
+        live->params[ComputerscareWindyWally::TEXTURE].setValue(.76f);
+        live->params[ComputerscareWindyWally::PRESENCE].setValue(.55f);
+        live->params[ComputerscareWindyWally::WIDTH].setValue(.85f);
+        live->params[ComputerscareWindyWally::GAIN].setValue(3.f);
+        live->params[ComputerscareWindyWally::GUST].setValue(1.f);
+        auto view=std::unique_ptr<app::ModuleWidget>(browserModel->createModuleWidget(live));
+        capture(view.get(),std::string(argv[3])+"/01-gusty-stereo.png",scale);
+      }
       if (browserModel == modelComputerscareWindchimes) {
         {
           windchimes::ForestGraphic::Debris bit;

@@ -271,6 +271,8 @@ run_tests() {
   /tmp/cs_polyphonic_mapping_test
   g++ -std=c++11 -I src tests/phlooper_test.cpp -o /tmp/cs_phlooper_test
   /tmp/cs_phlooper_test
+  g++ -std=c++11 -O2 -I src tests/wind_generator_test.cpp -o /tmp/cs_wind_generator_test
+  /tmp/cs_wind_generator_test
   g++ -std=c++11 -O2 -I src tests/windchimes_test.cpp -o /tmp/cs_windchimes_test
   /tmp/cs_windchimes_test
   g++ -std=c++11 -I src tests/text_editor_logic_test.cpp -o /tmp/cs_text_editor_logic_test

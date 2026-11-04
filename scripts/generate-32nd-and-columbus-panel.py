@@ -92,7 +92,7 @@ for label,center in [('CV',538),('Audio',568)]:
     caption(label,center,254,width=29,height=5.5)
 # Outside captions frame a tight square of chime sockets.
 for label,x,y,right in [('Front L',713,316,False),('Front R',763,316,True),
-                         ('Rear L',713,370,False),('Rear R',763,370,True)]:
+                         ('Rear L',713,365,False),('Rear R',763,365,True)]:
     lettering(label,x,y,30,5.5,right=right)
 ET.indent(svg)
 ET.ElementTree(svg).write(ROOT/'res/panels/Computerscare32ndAndColumbusPanel.svg',encoding='utf-8',xml_declaration=True)

@@ -186,6 +186,13 @@
       "description": "Sixteen independent stereo loops with gradual time and speed phasing",
       "tags": ["Looper", "Sampler", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/phlooper.md"
+    },
+    {
+      "slug": "computerscare-windy-wally",
+      "name": "Windy Wally",
+      "description": "Stereo wind synthesis with gusts and wind-strength CV",
+      "tags": ["Noise", "Random", "Stereo"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/windy-wally.md"
     }
   ]
 }

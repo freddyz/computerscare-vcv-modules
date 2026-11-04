@@ -13,6 +13,7 @@ The default output is `build/previews/phlooper/`, already excluded from Git by t
 ```sh
 # Render 32nd & Columbus or Blunch using their actual browser widgets.
 scripts/preview-module.sh 32nd-and-columbus
+scripts/preview-module.sh windy-wally
 scripts/preview-module.sh blunch
 
 # Exercise Blunch's real Control-mode keyboard/mouse, transport, and row layout,
@@ -35,7 +36,7 @@ scripts/preview-module.sh --no-build
 scripts/preview-module.sh --scale 3 --output /tmp/phlooper-previews
 ```
 
-`RACK_SOURCE_DIR` can select a built Rack source checkout containing `libRack.dylib`, `include/`, `dep/include/`, and `res/`. Otherwise the script uses `RACK_DIR`, or `~/dev/VCV-Rack/Rack`. If `RACK_DIR` points at the SDK, it looks for the adjacent `Rack` source checkout because the SDK does not include system artwork/fonts. The current runner supports macOS, Phlooper, Blunch, and 32nd & Columbus.
+`RACK_SOURCE_DIR` can select a built Rack source checkout containing `libRack.dylib`, `include/`, `dep/include/`, and `res/`. Otherwise the script uses `RACK_DIR`, or `~/dev/VCV-Rack/Rack`. If `RACK_DIR` points at the SDK, it looks for the adjacent `Rack` source checkout because the SDK does not include system artwork/fonts. The current runner supports macOS, Phlooper, Blunch, 32nd & Columbus, and Windy Wally.
 
 The `--browser` option renders only `00-browser.png`, using the exact null-module widget created by Rack’s module browser. Its loop count and region controls are randomized once per widget, with a randomly shifted and stretched speech waveform shared across rows, plus random input/output meter levels and Time/Length/Speed and transport choices. Per-loop controls are hidden in browser previews. It does not construct a DSP module.
 
