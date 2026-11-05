@@ -5,9 +5,7 @@
 #define modelComputerscareBlunch modelBlunchPreview
 #include "../../src/Blunch/ComputerscareBlunch.cpp"
 #undef modelComputerscareBlunch
-#define modelComputerscareWindyWally modelWindyWallyPreview
-#include "../../src/ComputerscareWindyWally.cpp"
-#undef modelComputerscareWindyWally
+
 
 #define modelComputerscareVolyPector modelVolyMultiPreview
 #include "../../src/ComputerscareVolyPector.cpp"
@@ -34,10 +32,6 @@
 #include <ui/common.hpp>
 
 using namespace rack;
-#include "windchimes-checks.hpp"
-#include "windy-wally-checks.hpp"
-#include "../../src/Windchimes/ForestGraphic.hpp"
-#include "../../src/components/RandomBlock.hpp"
 #include "blunch-layers-checks.hpp"
 #include "blunch-thread-checks.hpp"
 #include "blunch-seed-checks.hpp"
@@ -854,7 +848,7 @@ int main(int argc, char** argv) {
   if (argc < 5 || argc > 7) {
     std::fprintf(stderr,
                  "Usage: phlooper-preview REPO RACK_ASSETS OUTPUT_DIR SCALE "
-                 "[browser|scenarios] [phlooper|blunch|32nd-and-columbus]\n");
+                 "[browser|scenarios] [phlooper|blunch]\n");
     return 2;
   }
   try {
@@ -979,10 +973,6 @@ int main(int argc, char** argv) {
       plugin::Model* browserModel = modelPhlooperPreview;
       if (argc == 7 && std::string(argv[6]) == "blunch")
         browserModel = modelBlunchPreview;
-      if (argc == 7 && std::string(argv[6]) == "32nd-and-columbus")
-        browserModel = modelComputerscareWindchimes;
-      if (argc == 7 && std::string(argv[6]) == "windy-wally")
-        browserModel = modelWindyWallyPreview;
       if (argc == 7 && std::string(argv[6]) == "mely-porge")
         browserModel = modelComputerscareMelyPorge;
       if (argc == 7 && std::string(argv[6]) == "voly-pector")
@@ -990,213 +980,12 @@ int main(int argc, char** argv) {
       if (argc == 7 && std::string(argv[6]) == "laundry-soup")
         browserModel = modelComputerscareLaundrySoup;
       browserModel->plugin = &plugin;
-      if(browserModel==modelWindyWallyPreview) checkWindyWally(browserModel);
-      if (browserModel == modelComputerscareWindchimes &&
-          std::getenv("WINDCHIMES_PREVIEW_CHECKS"))
-        checkWindchimesCv(browserModel);
       if(browserModel==modelComputerscareVolyPector && std::getenv("VOLY_PREVIEW_CHECKS"))checkVolyKeyboard(browserModel,[&](app::ModuleWidget* widget){capture(widget,std::string(argv[3])+"/01-shortcuts.png",scale);});
       if(browserModel==modelComputerscareVolyPector && std::getenv("VOLY_PREVIEW_CHECKS"))checkVolyMulti(browserModel,argv[3],scale);
       auto browserWidget = std::unique_ptr<app::ModuleWidget>(
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",
               scale);
-      if (browserModel == modelWindyWallyPreview) {
-        auto* live=static_cast<ComputerscareWindyWally*>(browserModel->createModule());
-        context.engine->addModule(live);
-        live->params[ComputerscareWindyWally::STRENGTH].setValue(.72f);
-        live->params[ComputerscareWindyWally::GUSTINESS].setValue(.8f);
-        live->params[ComputerscareWindyWally::TURBULENCE].setValue(.6f);
-        live->params[ComputerscareWindyWally::TONE].setValue(.68f);
-        live->params[ComputerscareWindyWally::TEXTURE].setValue(.76f);
-        live->params[ComputerscareWindyWally::PRESENCE].setValue(.55f);
-        live->params[ComputerscareWindyWally::WIDTH].setValue(.85f);
-        live->params[ComputerscareWindyWally::GAIN].setValue(3.f);
-        live->params[ComputerscareWindyWally::GUST].setValue(1.f);
-        auto view=std::unique_ptr<app::ModuleWidget>(browserModel->createModuleWidget(live));
-        capture(view.get(),std::string(argv[3])+"/01-gusty-stereo.png",scale);
-      }
-      if (browserModel == modelComputerscareWindchimes) {
-        {
-          windchimes::ForestGraphic::Debris bit;
-          bit.position = Vec(200.f, 190.f); bit.altitude = 120.f;
-          bit.gravity = 180.f; bit.size = 3.f;
-          for (int sample=0; sample<240; ++sample)
-            windchimes::ForestGraphic::stepDebris(bit, Vec(), 1.f/60.f, 500.f, 380.f, 20.f);
-          if (bit.altitude != 0.f || std::abs(bit.position.y-190.f) > .001f || bit.size <= 0)
-            throw std::runtime_error("Forest debris must settle at its tree's radial ground position");
-          bit.position.x = -1.f;
-          windchimes::ForestGraphic::stepDebris(bit, Vec(), 1.f/60.f, 500.f, 380.f, 20.f);
-          if (bit.size != 0.f) throw std::runtime_error("Forest debris must leave the scene without wrapping");
-          using Forest = windchimes::ForestGraphic;
-          Forest weatherOnly(42);
-          const auto& tree=weatherOnly.trees[0];
-          if(Forest::windSway(tree,Vec(),3).norm()!=0 || Forest::windTwig(tree,Vec(),3).norm()!=0) throw std::runtime_error("Trees must stay still without wind");
-          if(Forest::windSway(tree,Vec(1,.5f),3).norm()<=0) throw std::runtime_error("Wind must still animate trees");
-
-          if (!(Forest::stageScale(Vec(250,190),500,380) > Forest::stageScale(Vec(250,350),500,380)))
-            throw std::runtime_error("Debris perspective must shrink toward the rear edge");
-          if (!Forest::depthBefore(.1f,25.f,.9f,190.f) || !Forest::depthBefore(.9f,190.f,.1f,350.f) ||
-              Forest::depthBefore(.1f,350.f,.9f,190.f))
-            throw std::runtime_error("Rear trees and debris must render in front of central trees regardless of radial size");
-          Forest::Debris blown; blown.position=Vec(250,190); blown.size=3; blown.leaf=true;
-          for (int sample=0;sample<120;++sample)
-            Forest::stepDebris(blown,Vec(.7f,.3f),1.f/60.f,500,380,20);
-          if (blown.position.x<=260 || blown.position.y<=190 || blown.altitude!=0)
-            throw std::runtime_error("Wind must move grounded debris along its local ground plane");
-          std::puts("Forest debris grounding, wind transport, perspective, radial depth order, and no-wrap checks passed");
-        }
-        std::unique_ptr<engine::Module> forestModule(browserModel->createModule());
-        json_t* state = forestModule->toJson();
-        json_object_set_new(json_object_get(state, "data"), "graphicMode", json_integer(1));
-        forestModule->dataFromJson(json_object_get(state, "data"));
-        json_decref(state);
-        json_t* savedGraphic = forestModule->dataToJson();
-        bool forestSaved = json_integer_value(json_object_get(savedGraphic, "graphicMode")) == 1;
-        json_decref(savedGraphic);
-        if (!forestSaved) throw std::runtime_error("Forest graphic setting did not persist");
-        // Fresh visual fixtures, using real controls rather than a cached image.
-        int chimeCount = 3 + int(random::uniform() * 3.f);
-        float rotation = random::uniform() * 6.2831853f;
-        for (int ch = 0; ch < 16; ++ch) {
-          float angle = rotation + ch * 6.2831853f / chimeCount;
-          float radius = ch == 0 ? .08f + random::uniform() * .07f : .28f + random::uniform() * .13f;
-          std::string prefix = "Chimes " + std::to_string(ch + 1) + " ";
-          for (size_t i = 0; i < forestModule->params.size(); ++i) {
-            auto* quantity = forestModule->getParamQuantity(i);
-            const auto& name = quantity->name;
-            if (name.compare(0, prefix.size(), prefix) != 0) continue;
-            std::string field = name.substr(prefix.size());
-            if (field == "enabled") quantity->setValue(ch < chimeCount ? 1.f : 0.f);
-            else if (field == "stage horizontal") quantity->setValue(.5f + radius * std::cos(angle));
-            else if (field == "stage front / rear") quantity->setValue(.5f + radius * std::sin(angle));
-            else if (field == "material") quantity->setValue(int(random::uniform() * 3.f));
-            else if (field == "tubes") quantity->setValue(4 + int(random::uniform() * 7.f));
-            else if (field == "shape" || field == "body" || field == "decay" || field == "brightness")
-              quantity->setValue(.2f + random::uniform() * .65f);
-          }
-        }
-        auto* sceneModule = forestModule.get();
-        auto setScene = [&](const std::string& name, float value) {
-          for (size_t i = 0; i < sceneModule->params.size(); ++i)
-            if (sceneModule->getParamQuantity(i)->name == name) { sceneModule->params[i].setValue(value); return; }
-          throw std::runtime_error("Missing scene control: "+name);
-        };
-        setScene("Wind strength", .45f + random::uniform() * .3f);
-        setScene("Dry/wet", .2f + random::uniform() * .6f);
-        setScene("Expanse", .3f + random::uniform() * .4f);
-        setScene("Thicket", .2f + random::uniform() * .6f);
-        setScene("Undergrowth", random::uniform());
-        json_t* lockView=sceneModule->dataToJson();
-        json_t* viewLocks=json_array();
-        for (size_t id=0;id<sceneModule->params.size();++id) {
-          const auto& name=sceneModule->getParamQuantity(id)->name;
-          if (name=="Wind tone" || name=="Expanse") json_array_append_new(viewLocks,json_integer(id));
-        }
-        json_object_set_new(lockView,"randomLocks",viewLocks);
-        sceneModule->dataFromJson(lockView); json_decref(lockView);
-        context.engine->addModule(sceneModule);
-        auto forestWidget = std::unique_ptr<app::ModuleWidget>(browserModel->createModuleWidget(forestModule.release()));
-        int randomBlocks=0;
-        for (auto* child : forestWidget->children) {
-          auto* block=dynamic_cast<computerscare::RandomBlock*>(child);
-          if (!block) continue;
-          ++randomBlocks;
-          for (int action=0;action<2;++action) {
-            widget::EventContext hit;
-            widget::Widget::ButtonEvent click;
-            click.context=&hit; click.button=GLFW_MOUSE_BUTTON_LEFT; click.action=GLFW_PRESS;
-            click.pos=block->box.pos+Vec(8.f+action*32.f,8.f);
-            forestWidget->onButton(click);
-            auto* button=dynamic_cast<computerscare::RandomBlock::Button*>(hit.target);
-            if (!button || !button->pressed) throw std::runtime_error("rndblk buttons must receive clicks through their parent");
-            button->onDragEnd(widget::Widget::DragEndEvent());
-            widget::EventContext portHit;
-            click.context=&portHit; click.pos=block->box.pos+Vec(25.f+action*32.f,10.5f);
-            forestWidget->onButton(click);
-            if (!dynamic_cast<app::PortWidget*>(portHit.target)) throw std::runtime_error("rndblk CV jacks must receive clicks through their parent");
-          }
-        }
-        if (randomBlocks!=2) throw std::runtime_error("Wind and Reverb each need one rndblk");
-        std::puts("rndblk button and CV jack mouse-routing checks passed");
-        engine::Module::ProcessArgs windArgs;
-        windArgs.sampleRate = 48000.f; windArgs.sampleTime = 1.f / 48000.f;
-        windArgs.frame = 0;
-        for (int sample=0; sample<24000; ++sample) { sceneModule->process(windArgs); ++windArgs.frame; }
-        capture(forestWidget.get(), std::string(argv[3]) + "/01-forest.png", scale);
-        std::array<float,4> sparse{}, dense{};
-        float least=2.f, most=-1.f;
-        for (int a=0;a<5;++a) for(int b=0;b<5;++b) for(int c=0;c<5;++c) for(int d=0;d<5;++d) {
-          std::array<float,4> env{{a/4.f,b/4.f,c/4.f,d/4.f}};
-          float density=windchimes::ForestGraphic::densityFor(env[0],env[1],env[2],env[3]);
-          if (density<least) { least=density; sparse=env; }
-          if (density>most) { most=density; dense=env; }
-        }
-        if (most-least<.7f) throw std::runtime_error("Forest controls should span sparse to dense scenery");
-        auto setForest=[&](const std::array<float,4>& env) {
-          setScene("Expanse",env[0]); setScene("Thicket",env[1]);
-          setScene("Undergrowth",env[2]); setScene("Canopy",env[3]);
-        };
-        setForest(sparse);
-        capture(forestWidget.get(),std::string(argv[3])+"/02-forest-open.png",scale);
-        setForest(dense);
-        capture(forestWidget.get(),std::string(argv[3])+"/03-forest-thicket.png",scale);
-        auto* chimeWidget=forestWidget.get();
-        const auto originalPorts=chimeWidget->getPorts();
-        std::vector<widget::Widget*> originalParents;
-        std::vector<Rect> originalBoxes;
-        for(auto* p:originalPorts){originalParents.push_back(p->parent);originalBoxes.push_back(p->box);}
-        widget::Widget* scene=nullptr;
-        for(auto* child:chimeWidget->children)if(child->box.pos==Vec(0,0)&&child->box.size==Vec(500,380))scene=child;
-        if(!scene)throw std::runtime_error("Missing chime scene");
-        auto setPanelMode=[&](int mode){auto* data=sceneModule->dataToJson();json_object_set_new(data,"panelMode",json_integer(mode));sceneModule->dataFromJson(data);json_decref(data);chimeWidget->step();};
-        for(int mode : {1,2,0}) {
-          setPanelMode(mode);
-          if(chimeWidget->getPorts().size()!=originalPorts.size())throw std::runtime_error("Panel modes must retain every audio/CV jack");
-          if(mode==1)for(auto* port:originalPorts) {
-            if(port->box.size.x>15.f || port->box.size.y>15.f)throw std::runtime_error("Chimes Max visual must use tiny jacks");
-            if(port->parent!=chimeWidget || port->box.pos.x<500 || port->box.pos.x+port->box.size.x>chimeWidget->box.size.x || port->box.pos.y<0 || port->box.pos.y+port->box.size.y>380)
-              throw std::runtime_error("Max visual jacks must fit the side rail");
-            widget::EventContext hit;widget::Widget::ButtonEvent click;click.context=&hit;click.action=GLFW_PRESS;click.button=GLFW_MOUSE_BUTTON_LEFT;click.pos=port->box.getCenter();chimeWidget->onButton(click);
-            if(!dynamic_cast<app::PortWidget*>(hit.target))throw std::runtime_error("Compact jacks must remain clickable");
-          }
-          if(mode==2 && scene->visible)throw std::runtime_error("Controls only must hide the scene");
-          capture(chimeWidget,std::string(argv[3])+(mode==1?"/06-max-visual.png":mode==2?"/07-controls-only.png":"/08-normal-restored.png"),scale);
-          if(mode==0)for(size_t i=0;i<originalPorts.size();++i)if(originalPorts[i]->parent!=originalParents[i] || originalPorts[i]->box.pos!=originalBoxes[i].pos || originalPorts[i]->box.size!=originalBoxes[i].size)throw std::runtime_error("Restoring Normal must restore jack parents and positions");
-        }
-        widget::EventContext regrowHit;widget::Widget::ButtonEvent regrowClick;
-        regrowClick.context=&regrowHit;regrowClick.action=GLFW_PRESS;regrowClick.button=GLFW_MOUSE_BUTTON_LEFT;regrowClick.pos=Vec(160,14);chimeWidget->onButton(regrowClick);
-        if(!regrowHit.target)throw std::runtime_error("Regrow button must receive clicks");
-        capture(chimeWidget,std::string(argv[3])+"/09-regrown.png",scale);
-        setPanelMode(2);auto* panelState=sceneModule->dataToJson();
-        if(json_integer_value(json_object_get(panelState,"panelMode"))!=2)throw std::runtime_error("Panel mode must save with patch");json_decref(panelState);setPanelMode(0);
-        auto readOption=[&](const char* name){auto* data=sceneModule->dataToJson();int value=int(json_integer_value(json_object_get(data,name)));json_decref(data);return value;};
-        auto clickTop=[&](Vec pos,int button){widget::EventContext hit;widget::Widget::ButtonEvent click;click.context=&hit;click.action=GLFW_PRESS;click.button=button;click.pos=pos;chimeWidget->onButton(click);click.action=GLFW_RELEASE;chimeWidget->onButton(click);chimeWidget->step();};
-        for(int expected : {1,2,0}){clickTop(Vec(12,12),GLFW_MOUSE_BUTTON_LEFT);if(readOption("panelMode")!=expected)throw std::runtime_error("Left-click cycles panel layouts");}
-        int beforeGraphic=readOption("graphicMode");
-        clickTop(Vec(100,12),GLFW_MOUSE_BUTTON_LEFT);
-        if(readOption("graphicMode")==beforeGraphic)throw std::runtime_error("Left-click cycles graphic modes");
-        int menuCount=0;for(auto* child:APP->scene->children)if(dynamic_cast<ui::MenuOverlay*>(child))++menuCount;
-        clickTop(Vec(12,12),GLFW_MOUSE_BUTTON_RIGHT);
-        int afterMenu=0;for(auto* child:APP->scene->children)if(auto* overlay=dynamic_cast<ui::MenuOverlay*>(child)){++afterMenu;overlay->requestDelete();}
-        if(afterMenu<=menuCount || readOption("panelMode")!=0)throw std::runtime_error("Right-click opens layout menu without cycling");
-        std::puts("Chimes left-click cycling and right-click menu checks passed");
-        std::puts("Chime panel modes, jack hit-testing/restoration, hidden-scene visibility, regrow and persistence checks passed");
-        if (std::getenv("FOREST_STORM_PREVIEW")) {
-          setScene("Wind strength", 1.f); setScene("Turbulence", 1.f);
-          setScene("Gustiness", 1.f);
-          for (int frame=0; frame<200; ++frame) {
-            for (int sample=0;sample<2400;++sample) { sceneModule->process(windArgs); ++windArgs.frame; }
-            std::this_thread::sleep_for(std::chrono::milliseconds(35));
-            capture(forestWidget.get(), std::string(argv[3]) + "/04-storm-ground.png", scale);
-          }
-          setScene("Wind strength", .12f); setScene("Turbulence", .2f);
-          for (int frame=0; frame<50; ++frame) {
-            for (int sample=0;sample<2400;++sample) { sceneModule->process(windArgs); ++windArgs.frame; }
-            std::this_thread::sleep_for(std::chrono::milliseconds(35));
-            capture(forestWidget.get(), std::string(argv[3]) + "/05-storm-settled.png", scale);
-          }
-        }
-      }
       return 0;
     }
     if (argc == 7 && std::string(argv[6]) == "blunch") {

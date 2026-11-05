@@ -174,25 +174,11 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/mely-porge.md"
     },
     {
-      "slug": "computerscare-32nd-and-columbus",
-      "name": "32nd & Columbus",
-      "description": "Arrange tuned wind-driven chime sets in a quadraphonic scene",
-      "tags": ["Physical modeling", "Random", "Polyphonic"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/32nd-and-columbus.md"
-    },
-    {
       "slug": "computerscare-phlooper",
       "name": "Phlooper",
       "description": "Sixteen independent stereo loops with gradual time and speed phasing",
       "tags": ["Looper", "Sampler", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/phlooper.md"
-    },
-    {
-      "slug": "computerscare-windy-wally",
-      "name": "Windy Wally",
-      "description": "Stereo wind synthesis with gusts and wind-strength CV",
-      "tags": ["Noise", "Random", "Stereo"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/windy-wally.md"
     }
   ]
 }
