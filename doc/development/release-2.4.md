@@ -8,7 +8,7 @@ Reviewed 3 November 2026. The Library currently publishes 2.3.11; the release ma
 - Windy Wally has a panel, registration, manual, and packaged assets.
 - Extracting the shared wind code preserved exact audio samples at 44.1, 48, and 96 kHz.
 - Shared wind tests cover stereo, wind CV, zero strength, gusts, and CV-only operation.
-- Rack checks cover Windy Wally width, gain, additive CV, output ranges, and button/trigger equivalence.
+- Rack checks cover Windy Wally width, overdrive, additive CV, output ranges, and button/trigger equivalence.
 - Existing chime DSP, CV, action, panel-mode, and browser-preview checks pass.
 - Build, tests, static analysis, macOS ARM64 packaging, and packaged-asset validation pass.
 - The previous branch commit's [CI passed](https://github.com/freddyz/computerscare-vcv-modules/actions/runs/41768433935).

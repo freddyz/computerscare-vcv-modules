@@ -2,7 +2,7 @@
 
 New modules:
 
-- **Windy Wally:** Stereo wind synthesis, gusts, CV inputs, stereo width, and wind-strength CV. Shares the wind model with 32nd & Columbus.
+- **Windy Wally:** Stereo wind synthesis, gusts, CV inputs, stereo width, overdrive, and wind-strength CV. Shares the wind model with 32nd & Columbus.
 
 - **32nd & Columbus:** Arrange up to sixteen tuned, physically modeled chime sets in a quadraphonic scene. Includes material and sound presets, polyphonic tuning/model CV and action inputs, mono wind/effect CV, wind synthesis, chime-linked Forest reflections, a single FX Dry/wet control, and procedural wind-responsive scenery.
 - **Phlooper:** Up to sixteen independent stereo audio loops with Time, Length, Speed, and Beats phasing; per-loop transport, reverse and alternating directions, one-shot playback, clocked recording/erasing, exact Speed Hold, start/end region alignment, draggable loop points, waveform zoom, polyphonic recording/output, and phase/EOC outputs. Import WAV to all loops; export one or all loops.

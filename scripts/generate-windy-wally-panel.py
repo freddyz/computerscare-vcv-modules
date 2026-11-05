@@ -13,7 +13,7 @@ def tag(name): return '{'+NS+'}'+name
 spec = importlib.util.spec_from_file_location('type', ROOT/'scripts/svg_text_randomize.py')
 helper = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(helper)
-svg = E.Element(tag('svg'), width='180', height='380', viewBox='0 0 180 380')
+svg = E.Element(tag('svg'), width='120', height='380', viewBox='0 0 120 380')
 def embed(root, x, y, width, height, name, bounds=None):
     a,b,c,d = bounds or map(float, root.get('viewBox').split())
     group = E.SubElement(svg,tag('g'),id=name,
@@ -33,14 +33,14 @@ def text(label, x, y, width, height, center=True, distortion=24):
     width = min(width,height*bounds[2]/bounds[3])
     embed(root,x-width/2 if center else x,y,width,height,'label-'+label.replace(' ','-'),bounds)
 
-text('Windy Wally',14,12,125,17,False,40)
-for i,label in enumerate(['Strength','Gustiness','Turbulence','Tone','Texture','Presence','Width','Gain']):
-    text(label,130 if i%2 else 48,44+(i//2)*56,68,8)
-text('Gust',130,278,40,7)
-for label,x in [('L / mono',35),('R',89),('Wind CV',143)]: text(label,x,357,48,6)
-text('computerscare',90,372,120,5,True,38)
+text('Windy Wally',11,12,78,16,False,40)
+for i,label in enumerate(['Strength','Gustiness','Turbulence','Tone','Texture','Presence','Width','Overdrive']):
+    text(label,86 if i%2 else 33,44+(i//2)*56,49,8)
+text('Gust',91,278,36,7)
+for label,x in [('L / mono',25),('R',60),('Wind CV',95)]: text(label,x,357,32,6)
+text('computerscare',60,372,100,5,True,38)
 logo = E.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
-group = embed(logo,148,9,18,22,'windy-wally-logo')
-group.set('transform','rotate(7 157 20) skewX(-3) '+group.get('transform'))
+group = embed(logo,94,9,17,22,'windy-wally-logo')
+group.set('transform','rotate(7 102.5 20) skewX(-3) '+group.get('transform'))
 E.indent(svg)
 E.ElementTree(svg).write(ROOT/'res/panels/ComputerscareWindyWallyPanel.svg',encoding='utf-8',xml_declaration=True)

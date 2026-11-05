@@ -1,7 +1,9 @@
+
 #include "Computerscare.hpp"
 #include "Phlooper/Block.hpp"
 #include "Phlooper/Dropdown.hpp"
 #include "Wind/Generator.hpp"
+#include "Wind/Overdrive.hpp"
 
 struct ComputerscareWindyWally : Module {
   enum ParamId {
@@ -12,7 +14,7 @@ struct ComputerscareWindyWally : Module {
     TEXTURE,
     PRESENCE,
     WIDTH,
-    GAIN,
+    OVERDRIVE,
     GUST,
     PARAMS
   };
@@ -24,7 +26,7 @@ struct ComputerscareWindyWally : Module {
     TEXTURE_CV,
     PRESENCE_CV,
     WIDTH_CV,
-    GAIN_CV,
+    OVERDRIVE_CV,
     GUST_INPUT,
     INPUTS
   };
@@ -32,19 +34,20 @@ struct ComputerscareWindyWally : Module {
   computerscare::wind::Generator wind;
   dsp::SchmittTrigger externalGust, manualGust;
   float sampleRate = 0.f, strength = .5f, gustiness = .55f, turbulence = .35f;
-  float targetGain = 1.f, gain = 1.f, targetWidth = 1.f, width = 1.f;
+  float targetDrive = 0.f, drive = 0.f, targetWidth = 1.f, width = 1.f;
+  computerscare::wind::Overdrive saturation[2];
   int refresh = 0;
+
   ComputerscareWindyWally() {
     config(PARAMS, INPUTS, OUTPUTS, 0);
-    const char* names[] = {"Strength", "Gustiness", "Turbulence",  "Tone",
-                           "Texture",  "Presence",  "Stereo width"};
-    const float defaults[] = {.5f, .55f, .35f, .45f, .4f, .5f, 1.f};
-    for (int i = 0; i < 7; ++i) {
+    const char* names[] = {"Strength",     "Gustiness", "Turbulence",
+                           "Tone",         "Texture",   "Presence",
+                           "Stereo width", "Overdrive"};
+    const float defaults[] = {.5f, .55f, .35f, .45f, .4f, .5f, 1.f, 0.f};
+    for (int i = 0; i < 8; ++i) {
       configParam(i, 0.f, 1.f, defaults[i], names[i], "%", 0.f, 100.f);
       configInput(i, std::string(names[i]) + " (0–10 V, added to knob)");
     }
-    configParam(GAIN, -60.f, 18.f, 0.f, "Gain", " dB");
-    configInput(GAIN_CV, "Gain (6 dB/V, added to knob)");
     configButton(GUST, "Gust");
     configInput(GUST_INPUT, "Gust (trigger, 1 V threshold)");
     configOutput(LEFT, "Left / mono audio");
@@ -68,10 +71,7 @@ struct ComputerscareWindyWally : Module {
       wind.configure(sampleRate, control(TONE), control(TEXTURE),
                      control(PRESENCE));
       targetWidth = control(WIDTH);
-      float db =
-          clamp(params[GAIN].getValue() + inputs[GAIN_CV].getVoltage() * 6.f,
-                -60.f, 18.f);
-      targetGain = std::pow(10.f, db / 20.f);
+      targetDrive = control(OVERDRIVE);
     }
     bool button = manualGust.process(params[GUST].getValue());
     bool trigger = externalGust.process(inputs[GUST_INPUT].getVoltage());
@@ -80,7 +80,7 @@ struct ComputerscareWindyWally : Module {
                     (outputs[RIGHT].isConnected() ? 2u : 0u);
     auto out = wind.process(strength, gustiness, turbulence, mask);
     float slew = std::min(1.f, args.sampleTime / .01f);
-    gain += (targetGain - gain) * slew;
+    drive += (targetDrive - drive) * slew;
     width += (targetWidth - width) * slew;
     float left = out.channel[0], right = out.channel[1];
     if (mask == 3) {
@@ -88,12 +88,10 @@ struct ComputerscareWindyWally : Module {
       left = mid + side;
       right = mid - side;
     }
-    auto voltage = [&](float sample) {
-      float x = sample * gain * 3.f;
-      return 5.f * x / (1.f + std::fabs(x));
-    };
-    outputs[LEFT].setVoltage(voltage(left));
-    outputs[RIGHT].setVoltage(voltage(right));
+    outputs[LEFT].setVoltage(
+        5.f * saturation[0].process(left * 3.f, drive, sampleRate));
+    outputs[RIGHT].setVoltage(
+        5.f * saturation[1].process(right * 3.f, drive, sampleRate));
     outputs[WIND].setVoltage(wind.strength());
   }
 };
@@ -106,7 +104,7 @@ struct WindyWallyGustButton : app::Switch {
   } face;
   WindyWallyGustButton() {
     momentary = true;
-    box.size = Vec(58, 22);
+    box.size = Vec(51, 22);
     face.configure(58, 22, 4.f, 3.f, 1.2f, 483);
     face.faceColor = nvgRGB(36, 201, 166);
   }
@@ -128,38 +126,37 @@ struct WindyWallyBackplate : widget::TransparentWidget {
 struct ComputerscareWindyWallyWidget : ModuleWidget {
   ComputerscareWindyWallyWidget(ComputerscareWindyWally* module) {
     setModule(module);
-    box.size = Vec(180, 380);
+    box.size = Vec(120, 380);
     auto* backplate = new WindyWallyBackplate;
     backplate->box.size = box.size;
     addChild(backplate);
-    auto block = [&](Rect bounds, float depth, float distortion, unsigned seed,
-                     int grey) {
+    auto block = [&](Rect bounds, float distortion, unsigned seed, int grey) {
       auto* face = new phlooper::WarpedBlock;
-      face->configure(bounds, depth, distortion, seed,
-                      nvgRGB(grey, grey, grey));
+      face->configure(bounds, 4.f, distortion, seed, nvgRGB(grey, grey, grey));
       backplate->addChild(face);
     };
-    block(Rect(Vec(7, 4), Vec(166, 31)), 4, 1.2f, 475, 205);
-    block(Rect(Vec(7, 39), Vec(166, 228)), 4, 1.9f, 476, 232);
-    block(Rect(Vec(7, 273), Vec(166, 44)), 4, 1.7f, 477, 210);
-    block(Rect(Vec(7, 322), Vec(166, 45)), 4, 2.f, 478, 175);
+    block(Rect(Vec(7, 4), Vec(106, 31)), 1.2f, 475, 205);
+    block(Rect(Vec(7, 39), Vec(106, 228)), 1.9f, 476, 232);
+    block(Rect(Vec(7, 273), Vec(106, 44)), 1.95f, 477, 210);
+    block(Rect(Vec(7, 322), Vec(106, 45)), 2.f, 478, 175);
     auto* panel = new ComputerscareSVGPanel;
     panel->setBackground(APP->window->loadSvg(asset::plugin(
         pluginInstance, "res/panels/ComputerscareWindyWallyPanel.svg")));
     addChild(panel);
     for (int i = 0; i < 8; ++i) {
-      float x = i % 2 ? 130.f : 48.f, y = 65.f + (i / 2) * 56.f;
-      addParam(createParamCentered<SmoothKnob>(Vec(x, y), module, i));
-      addInput(createInputCentered<JackSmallPointingDown>(Vec(x, y + 24.f),
+      Vec center(i % 2 ? 86.f : 33.f, 65.f + (i / 2) * 56.f);
+      addParam(createParamCentered<SmoothKnob>(center, module, i));
+      addInput(createInputCentered<JackSmallPointingDown>(center + Vec(0, 24),
                                                           module, i));
     }
-    addParam(createParam<WindyWallyGustButton>(Vec(24, 282), module,
+    addParam(createParam<WindyWallyGustButton>(Vec(11, 282), module,
                                                ComputerscareWindyWally::GUST));
     addInput(createInputCentered<JackLargePointingDown>(
-        Vec(130, 297), module, ComputerscareWindyWally::GUST_INPUT));
+        Vec(91, 297), module, ComputerscareWindyWally::GUST_INPUT));
+    const float outputs[] = {25.f, 60.f, 95.f};
     for (int i = 0; i < 3; ++i)
-      addOutput(createOutputCentered<JackLargePointingUp>(
-          Vec(35 + i * 54.f, 342), module, i));
+      addOutput(createOutputCentered<JackLargePointingUp>(Vec(outputs[i], 342),
+                                                          module, i));
   }
 };
 Model* modelComputerscareWindyWally =

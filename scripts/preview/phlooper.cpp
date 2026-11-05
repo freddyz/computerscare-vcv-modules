@@ -990,7 +990,10 @@ int main(int argc, char** argv) {
       if (argc == 7 && std::string(argv[6]) == "laundry-soup")
         browserModel = modelComputerscareLaundrySoup;
       browserModel->plugin = &plugin;
-      if(browserModel==modelWindyWallyPreview) checkWindyWally(browserModel);
+      if(browserModel==modelWindyWallyPreview) {
+        checkWindyWally(browserModel);
+        if(std::getenv("WINDY_AUDIO_PREVIEW"))renderWindyWallyAudio(browserModel,argv[3]);
+      }
       if (browserModel == modelComputerscareWindchimes &&
           std::getenv("WINDCHIMES_PREVIEW_CHECKS"))
         checkWindchimesCv(browserModel);
@@ -1010,11 +1013,12 @@ int main(int argc, char** argv) {
         live->params[ComputerscareWindyWally::TEXTURE].setValue(.76f);
         live->params[ComputerscareWindyWally::PRESENCE].setValue(.55f);
         live->params[ComputerscareWindyWally::WIDTH].setValue(.85f);
-        live->params[ComputerscareWindyWally::GAIN].setValue(3.f);
+        live->params[ComputerscareWindyWally::OVERDRIVE].setValue(.65f);
         live->params[ComputerscareWindyWally::GUST].setValue(1.f);
         auto view=std::unique_ptr<app::ModuleWidget>(browserModel->createModuleWidget(live));
         capture(view.get(),std::string(argv[3])+"/01-gusty-stereo.png",scale);
       }
+
       if (browserModel == modelComputerscareWindchimes) {
         {
           windchimes::ForestGraphic::Debris bit;
