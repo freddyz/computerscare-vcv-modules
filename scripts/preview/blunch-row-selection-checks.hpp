@@ -1,5 +1,5 @@
 #pragma once
-inline void checkBlunchRowSelection(rack::plugin::Model* model) {
+inline void checkBlunchRowSelection(rack::plugin::Model* model, const std::function<void(rack::app::ModuleWidget*)>& captureRow) {
   using B=ComputerscareBlunch;
   auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
   auto* m=static_cast<B*>(model->createModule());APP->engine->addModule(m);
@@ -28,7 +28,7 @@ inline void checkBlunchRowSelection(rack::plugin::Model* model) {
   const char* previousClipboard=glfwGetClipboardString(APP->window->win);
   std::string savedClipboard=previousClipboard?previousClipboard:"";
   struct RestoreClipboard { std::string value; ~RestoreClipboard(){glfwSetClipboardString(APP->window->win,value.c_str());} } restoreClipboard{savedClipboard};
-  m->controlMode=false;
+
   for(int ch=0;ch<4;++ch){m->stopSequencer(ch,true);m->sequenceEditorStates[ch].text="120bpm";}
   m->refreshChannelsEditorState();widget->step();
   auto selectText=[&](int begin,int end){editor->selection=begin;editor->cursor=end;editor->state->selection=begin;editor->state->cursor=end;};
@@ -51,6 +51,18 @@ inline void checkBlunchRowSelection(rack::plugin::Model* model) {
   require(std::string(glfwGetClipboardString(APP->window->win))==readonly.text,"Playing multiline All-view rows remain copyable");
   std::string page=m->sequenceEditorStates[1].text;selectText(readonly.begin,readonly.end);key(GLFW_KEY_X,RACK_MOD_CTRL);
   require(m->sequenceEditorStates[1].text==page,"Cut leaves playing multiline pages intact");
+  m->params[B::AUTO_ADVANCE_PARAM].setValue(0);
+  m->refreshChannelsEditorState();widget->step();
+  auto editable=getLineInfo(editor->text,1);selectText(editable.begin,editable.end);widget->step();
+  require(!editor->readOnly&&!editor->hideCursor,"Line advance Off exposes an editing caret on a playing multiline row");
+  glfwSetClipboardString(APP->window->win,"150bpm");key(GLFW_KEY_V,RACK_MOD_CTRL);widget->step();widget->step();
+  require(m->sequenceEditorStates[1].text=="150bpm\n90bpm"&&getLineInfo(editor->text,1).text=="150bpm",
+          "All-view edit persists on the playing line without changing the other lines");
+  require(m->sequencers[1].activeLineText=="120bpm","Editing with Line advance Off preserves Now until submitted");
+  captureRow(widget.get());
+  m->sequenceEditorStates[1].text="120bpm\n90bpm";m->sequenceEditorStates[1].dirty=true;
+  m->params[B::AUTO_ADVANCE_PARAM].setValue(1);m->refreshChannelsEditorState();m->editorViewDirty=true;widget->step();
+  require(editor->readOnly,"Re-enabling Line advance restores multiline row protection");
   m->focusedChannel=1;m->openFocusedChannelEditPage();widget->step();
   selectText(0,3);key(GLFW_KEY_C,RACK_MOD_CTRL);require(std::string(glfwGetClipboardString(APP->window->win))=="120","Channel-view Copy uses the exact text selection");
   selectText(0,3);key(GLFW_KEY_X,RACK_MOD_CTRL);require(editor->text.substr(0,3)=="bpm","Channel-view Cut edits the selection");

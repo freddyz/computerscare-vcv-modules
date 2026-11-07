@@ -248,11 +248,12 @@ struct ComputerscarePhlooper : Module {
     configSwitch(STOP, 0.f, 1.f, 0.f, "Stop all loops", {"Playing", "Stopped"});
     for (int param : {ONE_SHOT, SHOW_TRANSPORT, ZOOM, MIX, COUNT})
       getParamQuantity(param)->randomizeEnabled = false;
-    const int shortcutParams[] = {STOP,  MUTE,    HOLD, RECORD,
-                                  ERASE, RESTART, ZOOM, SHOW_TRANSPORT};
-    const char* shortcutHints[] = {"[space]",    "[m]", "[h]", "[r]",
-                                   "[e] (hold)", "[t]", "[z]", "[c]"};
-    for (int i = 0; i < 8; ++i)
+    const int shortcutParams[] = {STOP,    MUTE, HOLD,           RECORD, ERASE,
+                                  RESTART, ZOOM, SHOW_TRANSPORT, MIX};
+    const char* shortcutHints[] = {"[space]", "[m]",        "[h]",
+                                   "[r]",     "[e] (hold)", "[t]",
+                                   "[z]",     "[c]",        "[w] (hold)"};
+    for (int i = 0; i < 9; ++i)
       getParamQuantity(shortcutParams[i])->description = shortcutHints[i];
     const char* names[] = {
         "Audio left / mono",   "Audio right",      "Record gates",
@@ -2277,14 +2278,15 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
         ComputerscarePhlooper::STOP,  ComputerscarePhlooper::MUTE,
         ComputerscarePhlooper::HOLD,  ComputerscarePhlooper::RECORD,
         ComputerscarePhlooper::ERASE, ComputerscarePhlooper::RESTART,
-        ComputerscarePhlooper::ZOOM,  ComputerscarePhlooper::SHOW_TRANSPORT};
-    const char* keys[] = {"[space]", "[m]", "[h]", "[r]",
-                          "[e]",     "[t]", "[z]", "[c]"};
+        ComputerscarePhlooper::ZOOM,  ComputerscarePhlooper::SHOW_TRANSPORT,
+        ComputerscarePhlooper::MIX};
+    const char* keys[] = {"[space]", "[m]", "[h]", "[r]", "[e]",
+                          "[t]",     "[z]", "[c]", "[w]"};
     nvgSave(args.vg);
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 12.f);
     nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < 9; ++i) {
       auto* control = getParam(ids[i]);
       if (!control || !control->visible) continue;
       float x = control->box.pos.x + control->box.size.x - 2.f;
@@ -2299,6 +2301,13 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       nvgText(args.vg, x, y, keys[i], nullptr);
     }
     nvgRestore(args.vg);
+  }
+  bool monitorKeyHeld = false;
+  float monitorPreviousMix = 0.f;
+  void releaseMonitorKey() {
+    if (module && monitorKeyHeld)
+      module->params[ComputerscarePhlooper::MIX].setValue(monitorPreviousMix);
+    monitorKeyHeld = false;
   }
   bool eraseKeyHeld = false;
   bool restartKeyHeld = false;
@@ -2321,6 +2330,9 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       APP->scene->rack->addChild(overlay);
     }
     if (module && APP->window->win) {
+      if (monitorKeyHeld &&
+          glfwGetKey(APP->window->win, GLFW_KEY_W) != GLFW_PRESS)
+        releaseMonitorKey();
       if (eraseKeyHeld &&
           glfwGetKey(APP->window->win, GLFW_KEY_E) != GLFW_PRESS) {
         module->params[ComputerscarePhlooper::ERASE].setValue(0.f);
@@ -2351,6 +2363,23 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     }
   }
   void onHoverKey(const event::HoverKey& e) override {
+    if (module && e.key == GLFW_KEY_W && e.action == GLFW_RELEASE &&
+        monitorKeyHeld) {
+      releaseMonitorKey();
+      e.consume(this);
+      return;
+    }
+    if (module && !e.isConsumed() && !(e.mods & RACK_MOD_MASK) &&
+        e.key == GLFW_KEY_W) {
+      if (e.action == GLFW_PRESS && !monitorKeyHeld) {
+        monitorPreviousMix =
+            module->params[ComputerscarePhlooper::MIX].getValue();
+        monitorKeyHeld = true;
+        module->params[ComputerscarePhlooper::MIX].setValue(0.f);
+      }
+      e.consume(this);
+      return;
+    }
     if (!module || e.isConsumed() || (e.mods & RACK_MOD_MASK)) {
       ModuleWidget::onHoverKey(e);
       return;

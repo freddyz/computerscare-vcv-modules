@@ -125,7 +125,7 @@ Randomize preserves loop count, 1-shot, Ctrl, Zoom, Out mix, and custom loop poi
 
 ## Keyboard shortcuts
 
-With the pointer over Phlooper: **Space** toggles Stop, **M** toggles Mute, **H** toggles Hold, **R** toggles Record, **T** restarts, **E** erases while held, **Z** toggles Zoom, and **C** toggles row controls.
+With the pointer over Phlooper: **Space** toggles Stop, **M** toggles Mute, **H** toggles Hold, **R** toggles Record, **T** restarts, **E** erases while held, **W** sets Out mix to 0 while held (release restores it), **Z** toggles Zoom, and **C** toggles row controls.
 
 Hover tooltips show shortcuts in brackets. Hold backtick/tilde while hovering over or interacting with Phlooper to show them beside their controls.
 

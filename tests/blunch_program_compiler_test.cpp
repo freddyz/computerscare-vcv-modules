@@ -159,14 +159,14 @@ int main() {
           "nested repeat count sequence compiles to one step");
   require(compiled[0].repeatIsSequence,
           "nested repeat count sequence compiles sequence flag");
-  require(compiled[0].repeatSequence.size() == 3,
-          "nested repeat count sequence compiles flattened values");
+  require(compiled[0].repeatSequence.size() == 4,
+          "nested repeat count sequence compiles interleaved values");
   requireNear(compiled[0].repeatSequence[0].value, 2.0,
               "nested repeat count sequence compiles first value");
   requireNear(compiled[0].repeatSequence[1].value, 4.0,
               "nested repeat count sequence compiles second value");
-  requireNear(compiled[0].repeatSequence[2].value, 5.0,
-              "nested repeat count sequence compiles third value");
+  requireNear(compiled[0].repeatSequence[2].value, 2.0,
+              "nested repeat count sequence returns to outer value");
   require(compiled[0].repeatHighlightBegin == 24,
           "nested repeat count sequence highlight starts at values");
   require(compiled[0].repeatHighlightEnd == 33,
@@ -203,7 +203,7 @@ int main() {
           "mixed nested program first step has no repeat sequence");
   require(compiled[2].repeatIsSequence,
           "mixed nested program final step keeps repeat sequence");
-  require(compiled[2].repeatSequence.size() == 3,
+  require(compiled[2].repeatSequence.size() == 4,
           "mixed nested program final step keeps all repeat sequence values");
 
   compiled = requireCompiles(

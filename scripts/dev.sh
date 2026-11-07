@@ -269,6 +269,7 @@ run_tests() {
   /tmp/cs_test
   g++ -std=c++11 -I src tests/polyphonic_mapping_test.cpp -o /tmp/cs_polyphonic_mapping_test
   /tmp/cs_polyphonic_mapping_test
+  python3 scripts/generate-blunch-help.py --check
   g++ -std=c++11 -I src tests/phlooper_test.cpp -o /tmp/cs_phlooper_test
   /tmp/cs_phlooper_test
   g++ -std=c++11 -I src tests/text_editor_logic_test.cpp -o /tmp/cs_text_editor_logic_test

@@ -124,6 +124,23 @@ int main() {
   require(runtime.clockStartHighPending,
           "token start schedules following high edge");
 
+  BlunchSequencerRuntime visits;
+  std::vector<BlunchProgramStep> repeatProgram(1);
+  visits.loadActiveProgram(0,"120bpm@(2 4)",repeatProgram,false);
+  require(visits.nextRepeatSequenceIndex(2)==0,"repeat sequence starts at first value");
+  visits.loadActiveProgram(1,"90bpm@(3 5)",repeatProgram,false);
+  require(visits.nextRepeatSequenceIndex(2)==0,"another line has its own repeat sequence");
+  visits.loadActiveProgram(0,"120bpm@(2 4)",repeatProgram,false);
+  require(visits.nextRepeatSequenceIndex(2)==1,"line revisits preserve repeat argument position");
+  require(visits.nextRepeatSequenceIndex(2)==0,"repeat sequence wraps");
+  visits.resetRepeatSequenceStep(0);
+  require(visits.nextRepeatSequenceIndex(2)==0,"explicit block reset restarts repeat arguments");
+  visits.loadActiveProgram(0,"120bpm@(4 6)",repeatProgram,false);
+  require(visits.nextRepeatSequenceIndex(2)==0,"changed formula gets a fresh repeat sequence");
+  visits.stopPlayback();
+  visits.loadActiveProgram(0,"120bpm@(4 6)",repeatProgram,false);
+  require(visits.nextRepeatSequenceIndex(2)==0,"stopping resets the active repeat sequence");
+
   std::puts("blunch sequencer runtime tests passed");
   return 0;
 }

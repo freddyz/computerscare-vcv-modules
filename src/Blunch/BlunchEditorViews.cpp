@@ -6,8 +6,8 @@
 std::string buildBlunchChannelsViewText(const BlunchSequencerRuntime* channels,
                                         int channelCount,
                                         const std::string* const* sourceTexts,
-                                        const bool* playing,
-                                        const int* cursors) {
+                                        const bool* playing, const int* cursors,
+                                        bool lineAdvanceOff) {
   std::string text;
   for (int channel = 0; channel < channelCount; channel++) {
     if (channel > 0) {
@@ -17,7 +17,7 @@ std::string buildBlunchChannelsViewText(const BlunchSequencerRuntime* channels,
       text += sourceTexts ? blunchChannelsRowText(
                                 channels[channel], *sourceTexts[channel],
                                 cursors ? cursors[channel] : 0,
-                                playing && playing[channel])
+                                playing && playing[channel], lineAdvanceOff)
                           : channels[channel].activeLineText;
     }
   }
@@ -60,8 +60,9 @@ int blunchFormulaLineCount(const std::string& text) {
     if (!blank(line)) ++count;
   return count;
 }
-bool blunchChannelsRowEditable(bool playing, const std::string& text) {
-  return !playing || blunchFormulaLineCount(text) <= 1;
+bool blunchChannelsRowEditable(bool playing, const std::string& text,
+                               bool lineAdvanceOff) {
+  return lineAdvanceOff || !playing || blunchFormulaLineCount(text) <= 1;
 }
 int blunchChannelsSourceLine(const std::string& text, int activeLine,
                              int cursor, bool playing) {
@@ -78,8 +79,8 @@ int blunchChannelsSourceLine(const std::string& text, int activeLine,
 }
 std::string blunchChannelsRowText(const BlunchSequencerRuntime& sequencer,
                                   const std::string& text, int cursor,
-                                  bool playing) {
-  if (playing && blunchFormulaLineCount(text) > 1)
+                                  bool playing, bool lineAdvanceOff) {
+  if (playing && !lineAdvanceOff && blunchFormulaLineCount(text) > 1)
     return sequencer.activeLineText;
   return formulaLines(text)[blunchChannelsSourceLine(text, sequencer.activeLine,
                                                      cursor, playing)];

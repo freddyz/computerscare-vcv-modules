@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -72,6 +73,31 @@ struct BlunchProgramStep {
 };
 
 struct BlunchSequencerRuntime {
+  // Ordered repeat arguments advance on visits, independently of RNG resets.
+  // Keep their position when normal playback recompiles another page line.
+  struct RepeatSequenceState {
+    std::string text;
+    std::vector<size_t> positions;
+  };
+  std::map<int, RepeatSequenceState> repeatSequenceVisits;
+  size_t nextRepeatSequenceIndex(size_t count) {
+    auto& state = repeatSequenceVisits[activeLine];
+    if (state.text != activeLineText ||
+        state.positions.size() != activeProgram.size()) {
+      state.text = activeLineText;
+      state.positions.assign(activeProgram.size(), 0);
+    }
+    auto& position = state.positions[activeProgramIndex];
+    size_t selected = position % count;
+    position = (selected + 1) % count;
+    return selected;
+  }
+  void resetRepeatSequenceStep(int index) {
+    auto found = repeatSequenceVisits.find(activeLine);
+    if (found != repeatSequenceVisits.end() && index >= 0 &&
+        index < int(found->second.positions.size()))
+      found->second.positions[index] = 0;
+  }
   float seedGraceRemaining = 0.f;
   double seedGraceElapsed = 0.;
   double seedGraceClockCatchup = 0.;
@@ -109,6 +135,7 @@ struct BlunchSequencerRuntime {
   bool running = true;
 
   void stopPlayback() {
+    repeatSequenceVisits.erase(activeLine);
     running = false;
     clockHigh = false;
     activeClockOutputHigh = false;

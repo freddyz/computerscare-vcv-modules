@@ -82,13 +82,19 @@ Use brackets for a straight sequence; use nested parentheses when items should a
 
 ### Repeats: `@`
 
-| Formula            | Meaning                                                 |
-| ------------------ | ------------------------------------------------------- |
-| `120bpm@4`         | Play four pulses at 120 BPM before advancing            |
-| `120bpm@2s`        | Keep this clock for two seconds                         |
-| `120bpm@{2\|4\|8}` | Choose a repeat count of 2, 4, or 8                     |
-| `120bpm@(2 4)`     | Alternate repeat counts of 2 and 4 on successive visits |
-| `[300 400]ms@2`    | Repeat each value twice: 300, 300, 400, 400 ms          |
+| Formula             | Meaning                                                            |
+| ------------------- | ------------------------------------------------------------------ |
+| `120bpm@4`          | Play four pulses at 120 BPM before advancing                       |
+| `120bpm@2s`         | Keep this clock for two seconds                                    |
+| `120bpm@{2\|4\|8}`  | Randomly choose a repeat count of 2, 4, or 8                       |
+| `120bpm@(2 4)`      | Alternate repeat counts of 2 and 4 on successive visits            |
+| `[300 400]ms@2`     | Repeat each value twice: 300, 300, 400, 400 ms                     |
+| `120bpm@(2 (3 4))`  | Alternate repeat counts 2, 3, 2, 4 on successive visits            |
+| `[120 91 62]@[2 3]` | Repeat each clock twice on the first pass, three times on the next |
+
+Square brackets also work for repeat sequences: `120bpm@[2 4]` is equivalent to `120bpm@(2 4)`. `[120 91 62]@[2 3]` gives each clock two pulses on its first visit, three on its next, then alternates.
+
+Nested repeat arguments follow the same interleaving rules as clock sequences: `@(2 (3 4))` selects **2, 3, 2, 4**. A bracketed child plays its whole sequence on its turn: `@(2 [3 4])` selects **2, 3, 4**.
 
 A repeat attached to a group applies to its individual blocks. It does not mean repeating the entire group as a single unit.
 
@@ -127,12 +133,12 @@ The first line always takes three seconds, including any rests. In the second, a
 
 ### Random choices and ranges: `{}`
 
-| Formula             | Meaning                                    |
-| ------------------- | ------------------------------------------ |
-| `{90\|120\|150}bpm` | Choose one of three tempos                 |
-| `{90-150}bpm`       | Choose a value in the range                |
-| `{300ms\|.5s\|2hz}` | Choose between clocks with different units |
-| `{2hz\|~2hz}`       | Choose a clock or a rest                   |
+| Formula             | Meaning                                             |
+| ------------------- | --------------------------------------------------- |
+| `{90\|120\|150}bpm` | Randomly choose one of three tempos                 |
+| `{90-150}bpm`       | Randomly choose a value in the range                |
+| `{300ms\|.5s\|2hz}` | Randomly choose between clocks with different units |
+| `{2hz\|~2hz}`       | Randomly choose a clock or a rest                   |
 
 Choices are redrawn as the block is revisited. The **Seed** control makes those choices repeatable when its combined knob/CV value is positive.
 
@@ -190,9 +196,9 @@ Use the channel selector to choose **All** or an individual channel. Selecting a
 
 Right-click a row in All view to play or stop that channel, or copy its displayed formula. These actions target the clicked row. In channel view, right-click a formula to play from that line or copy it. The playing target is labeled and disabled. Standard Cut, Copy, and Paste work on the current text selection; Copy line copies the clicked formula.
 
-Direct editing in All view is allowed when a channel is stopped/paused or has only one nonblank formula line. A playing channel with multiple formula lines is read-only there and has no editing caret; open its channel page to edit it. Trailing blank lines do not count as extra formulas.
+Direct editing in All view is allowed when a channel is stopped/paused, has only one nonblank formula line, or **Line advance** is **Off**. With Line advance Off, edit the playing line without opening its channel page. Otherwise, a playing channel with multiple formula lines is read-only there and has no editing caret; open its channel page to edit it. Trailing blank lines do not count as extra formulas.
 
-Stopped channels show their edited text immediately, even if they have never played. Playing multi-line channels show their current active formula. Channels beyond the selected polyphony use faded italic text and a lighter grey background; they remain selectable and editable.
+Stopped channels show their edited text immediately, even if they have never played. Playing multi-line channels show their current active formula, or its Draft text when Line advance is Off. Channels beyond the selected polyphony use faded italic text and a lighter grey background; they remain selectable and editable.
 
 ### Draft, Next, and Now
 
@@ -235,7 +241,7 @@ Patches save Draft, Next, and Now separately. Reopening a patch keeps unfinished
 - **Time:** speeds up or slows down internal timing. Each +1 doubles the speed; each −1 halves it.
 - **Seed:** positive values give repeatable random choices. Zero, or a negative combined value from CV, uses fresh randomness. The knob itself ranges from 0 to 10 and shows **Random** at zero. `$` blocks use any signed net seed, including zero; `!` blocks always use fresh randomness. Seed knob/CV changes are latched independently by each channel when its seeded pattern restarts: after its counted or timed repeat, or at the end of an enclosing `#` group. Resets and starting a pattern use the latest seed. With Seed CV patched, pattern restarts wait 1 ms before sampling the seed and choosing the first value. This lets a sequencer clocked by EOB, EOL, or EOP supply its new seed for the upcoming pattern.
 - **Polyphony:** choose 1–16 output channels, or Auto. Auto extends to the highest channel with an activated formula. New modules default to Auto.
-- **Edit/Ctrl:** switch between formula editing and keyboard/mouse control of channels.
+- **Edit/Set:** switch between formula editing and Settings (F8).
 
 ### Gate length
 
@@ -274,29 +280,23 @@ All outputs use the selected polyphony, with one signal per sequencer channel.
 
 For an external clock, phase estimates the period from incoming edges. It needs two edges to establish a period and holds at 10 V if the clock stops. Playback highlights appear only for channels that are playing.
 
-## Control mode
+## Channel selection and transport
 
-The header’s **Play** button applies Draft edits and starts the selected channels. **Stop** stops them. In All view, click or drag across rows to select channels; Shift+click or Shift+Up/Down extends the selection. Shift and drag selections highlight text in green, including playing multi-line channels whose text cannot be edited. A plain click focuses a row without selecting its text. The left wall flashes with each playing channel’s clock; selected rows stay yellow and flash brighter.
+Each channel’s started/stopped state is saved with the patch. Master Run and Run CV still control whether started channels can play.
 
-Click **Edit/Ctrl** to enter Control mode. Click anywhere on Blunch to give it keyboard focus; a subtle orange stripe on the left marks focus. Hovering alone does not activate Control shortcuts. It opens All view, disables text editing, and selects the cursor’s channel. Text selections have a green background; the focused row has a thin yellow outline. At least one channel stays selected.
+The header’s **Play** button applies Draft edits and starts the selected channels. **Stop** stops them. In All view, click or drag across rows to select channels; Shift+click or Shift+Up/Down extends the selection. Ctrl/Cmd+click toggles a channel in the selection. Shift and drag selections highlight text in green, including playing multi-line channels whose text cannot be edited. A plain click focuses a row without selecting its text. The left wall flashes with each playing channel’s clock; selected rows stay yellow and flash brighter.
 
-| Control                | Action                                                                                               |
-| ---------------------- | ---------------------------------------------------------------------------------------------------- |
-| Up / Down              | Move focus; a single-row selection follows the cursor, while a multiple-row selection stays selected |
-| Shift+Up / Down        | Extend or shrink a range from the anchor row                                                         |
-| Ctrl/Cmd+Enter         | Apply Draft and start the selected channels                                                          |
-| Click                  | Replace the selection with the clicked channel                                                       |
-| Ctrl/Cmd+click         | Add or remove the clicked channel                                                                    |
-| Shift+click            | Select a range to the clicked channel                                                                |
-| Ctrl/Cmd+,             | Stop the selected channels                                                                           |
-| Space                  | Stop the selection if all selected channels are running; otherwise start the selection               |
-| R                      | Reset selected channel pages to their first formula, keeping stopped channels stopped                |
-| Enter in All view      | Stay in All view                                                                                     |
-| Tab / Shift+Tab        | Switch between All and channel view                                                                  |
-| Esc                    | Return to All view without clearing selection                                                        |
-| Hold backtick or tilde | Show Control-mode shortcuts                                                                          |
+Ctrl/Cmd+Enter applies and starts the selection; Ctrl/Cmd+, stops it. Tab switches between All and channel view. Escape returns to All. Selection stays intact when switching views. Ordinary text editing remains available wherever the row is editable.
 
-Selection stays intact when switching views. To replace it, click a row. Removing the final selected row keeps that row selected. Control commands do not change the output polyphony or override the Run input. Click **Ctrl** to return to editing; in Edit mode, mouse and keyboard text selection work normally.
+## Settings
+
+Press **F8** with Blunch focused or hovered, or click **Edit** to open Settings. Settings fill the display while playback continues. Settings navigation is keyboard-only. Use **Up/Down** to move, **Enter/Space** to open or select, and **Escape** to go back. Choices take effect immediately; `[x]` marks the selected option. Escape at the top, F8, or clicking **Set** returns to Edit.
+
+Settings include line/block advance, Wait, Run input, live apply, channel sync, default units, and Stage page. Appearance and editor options remain in the context menu. Entering and leaving Settings uses a 500 ms character transition. Formula text and selection are preserved.
+
+### Help
+
+Open **Settings → Help** for Overview, Controls, and Language. Use Up/Down to scroll descriptions. Language topics contain examples from this reference; highlight an example and press Enter to copy the formula, then Escape or F8 back to the editor and paste it. Copying an example does not change or start a formula.
 
 ## Playback display
 
@@ -330,6 +330,8 @@ For example, use `120bpm#4s` on Channel 1, choose Channel 1’s End of Line, and
 Sync uses Now and leaves Draft untouched. Next retains its usual Wait behavior. A patched Seed CV keeps its 1 ms sampling grace period without adding time to the shared pattern boundary. Sync settings are saved with the patch.
 
 ## Keyboard shortcuts
+
+**F8** opens or closes Settings.
 
 Hold **backtick** while Blunch is hovered or focused to show its shortcut popup. Release to hide it. Editing is blocked while the popup is visible. **Shift+backtick types `~`**, the rest operator.
 

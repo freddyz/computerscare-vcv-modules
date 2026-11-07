@@ -75,6 +75,11 @@ int main() {
           "channel 13 appears in All view while outside the playing polyphony");
   require(std::fabs(BLUNCH_FONT_HEIGHT_BASE - .069f) < 1e-6f,
           "zero font-height offset uses the requested baseline");
+  require(blunchChannelsRowEditable(true,"120bpm\n90bpm",true),
+          "Line advance Off permits editing a playing multiline channel");
+  idle.activeLine=1;
+  require(blunchChannelsRowText(idle,"120bpm\n95bpm",0,true,true)=="95bpm",
+          "Line advance Off shows Draft for the active line, not stale Now or cursor line");
   std::puts("blunch editor views tests passed");
   return 0;
 }

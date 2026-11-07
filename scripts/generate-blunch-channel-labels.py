@@ -13,7 +13,7 @@ spec=importlib.util.spec_from_file_location('type',ROOT/'scripts/svg_text_random
 helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
 output=ROOT/'res/components/blunch-channels';output.mkdir(exist_ok=True)
 captions=[(channel, 'All' if channel==0 else f'Ch {channel}', f'channel-{channel}.svg', 51, 11) for channel in range(17)]
-captions += [(-1, 'Edit', 'edit.svg', 26, 12), (-1, 'Ctrl', 'ctrl.svg', 26, 12)]
+captions += [(-1, 'Edit', 'edit.svg', 26, 12)]
 for channel,caption,filename,max_width,max_height in captions:
     with tempfile.TemporaryDirectory() as tmp:
         source=Path(tmp)/'text.svg'

@@ -14,7 +14,7 @@ The default output is `build/previews/phlooper/`, already excluded from Git by t
 # Render Blunch using its actual browser widget.
 scripts/preview-module.sh blunch
 
-# Exercise Blunch's real Control-mode keyboard/mouse, transport, and row layout,
+# Exercise Blunch's real editor keyboard/mouse, transport, and row layout,
 # then capture its selection and inactive-row stripes.
 scripts/preview-module.sh blunch --controls
 
@@ -67,8 +67,14 @@ use `StateGuard`. Keep direct access to formula maps and runtime programs inside
 those guards. The audio callback uses a nonblocking attempt and retains elapsed
 clock time when access is deferred.
 
-Blunch Control captures also include `theme-Mauer.png`, `theme-Garnett.png`, `theme-Moss.png`, and `theme-Puckett.png`. These use different channel arrangements to check both overview and detail views. Theme changes are checked against the same caret and viewport geometry.
+Blunch editor captures also include `theme-Mauer.png`, `theme-Garnett.png`, `theme-Moss.png`, and `theme-Puckett.png`. These use different channel arrangements to check both overview and detail views. Theme changes are checked against the same caret and viewport geometry.
 
 Use `scripts/preview-module.sh groups` to render the current family, basic polyphonic utilities, advanced polyphonic utilities, and visualization modules. The family is checked against all non-hidden entries in `plugin.json`. The utility groups use real offline patches and Rack cables. Portaloof processes a fresh capture of the displayed modules. No audio device or existing patch is opened. Generated files stay in `build/previews/groups/`; copy approved documentation images into `doc/images/`.
 
 Voly Pector normally renders just its browser preview. Set `VOLY_PREVIEW_CHECKS=1` to run the keyboard and multi-selection interaction checks and capture their example states.
+
+Blunch's `--controls` checks also exercise Settings navigation, shared context-menu values, immediate changes, and formula/focus preservation. They capture `settings-root.png`, `settings-playback.png`, `settings-wait.png`, and `settings-splash.png`. Set `BLUNCH_SETTINGS_ANIMATION=1` to export 60 fps transition frames under `settings-animation/`.
+
+Blunch Help is generated from `doc/blunch.md` with `python3 scripts/generate-blunch-help.py`. `scripts/dev.sh check` checks that it is current. The Settings fixture compiles every copyable example and checks reader navigation, clipboard copying, and preservation of editor text and selection; it also captures the Help pages.
+
+The Blunch interaction checks include repeat-argument sequences across line/page cycles and resets, plus complete Rack save/reload of per-channel started/stopped states with master Run on or off.

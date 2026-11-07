@@ -622,28 +622,32 @@ class Parser {
     }
   }
 
+  // Both clock sequences and repeat arguments use the same lane scheduling.
+  // Their leaf parsers and count/time validation remain context-specific.
+  template <typename ParseLane>
+  void parseSequenceLanes(std::vector<ClockBlockAst>& sequence,
+                          std::vector<std::vector<ClockBlockAst>>& lanes,
+                          TokenType terminator, ParseLane parseLane) {
+    while (!isAtEnd() && peek().type != terminator) {
+      if (matchSeparator()) continue;
+      std::vector<ClockBlockAst> lane;
+      parseLane(lane);
+      if (!lane.empty()) lanes.push_back(std::move(lane));
+    }
+    sequence = interleaveLanes(lanes);
+  }
+
   void parseInterleaveContent(ParseResult& result,
                               std::vector<ClockBlockAst>& sequence,
                               std::vector<std::vector<ClockBlockAst>>& lanes,
                               TokenType terminator = TokenType::RightParen) {
-    while (!isAtEnd() && peek().type != terminator) {
-      if (matchSeparator()) {
-        continue;
-      }
-
-      std::vector<ClockBlockAst> lane;
-      if (peek().type == TokenType::LeftParen) {
-        lane = parseParenthesizedSequenceLane(result);
-      } else {
-        parseBlock(result, lane);
-      }
-
-      if (!lane.empty()) {
-        lanes.push_back(lane);
-      }
-    }
-    // Each direct child is a lane; short lanes wrap while longer lanes advance.
-    sequence = interleaveLanes(lanes);
+    parseSequenceLanes(sequence, lanes, terminator,
+                       [&](std::vector<ClockBlockAst>& lane) {
+                         if (peek().type == TokenType::LeftParen)
+                           lane = parseParenthesizedSequenceLane(result);
+                         else
+                           parseBlock(result, lane);
+                       });
   }
 
   std::vector<ClockBlockAst> parseParenthesizedSequenceLane(
@@ -785,49 +789,53 @@ class Parser {
     return parseNumericLiteral(result, firstNumber);
   }
 
+  std::vector<ClockBlockAst> parseRepeatSequenceLane(
+      ParseResult& result, TokenType closingType, const Token& openingToken,
+      const char* expectedClosing) {
+    std::vector<ClockBlockAst> sequence;
+    std::vector<std::vector<ClockBlockAst>> lanes;
+    parseSequenceLanes(
+        sequence, lanes, closingType, [&](std::vector<ClockBlockAst>& lane) {
+          if (peek().type == TokenType::LeftParen ||
+              peek().type == TokenType::LeftBracket) {
+            Token nested = advance();
+            bool paren = nested.type == TokenType::LeftParen;
+            lane = parseRepeatSequenceLane(
+                result, paren ? TokenType::RightParen : TokenType::RightBracket,
+                nested, paren ? "Expected ')'" : "Expected ']'");
+          } else if (peek().type == TokenType::Number ||
+                     peek().type == TokenType::LeftBrace ||
+                     (peek().type == TokenType::Identifier &&
+                      isExternalClockIdentifier(peek().lexeme))) {
+            ClockBlockAst item;
+            item.literal = parseLiteral(result);
+            lane.push_back(std::move(item));
+          } else {
+            addDiagnostic(result, "Expected repeat sequence value",
+                          rangeFromToken(peek()));
+            advance();
+          }
+        });
+    if (peek().type == closingType)
+      advance();
+    else
+      addDiagnostic(result, expectedClosing, rangeFromToken(openingToken));
+    // A bracketed child contributes its whole sequence on each parent turn.
+    if (openingToken.type == TokenType::LeftBracket) {
+      int group = nextSequenceGroupId++;
+      for (auto& item : sequence) item.sequenceGroupId = group;
+    }
+    return sequence;
+  }
+
   void parseRepeatSequenceItems(ParseResult& result,
                                 std::vector<ClockLiteralAst>& items,
                                 TokenType closingType,
                                 const Token& openingToken,
                                 const char* expectedClosing) {
-    while (!isAtEnd() && peek().type != closingType) {
-      if (matchSeparator()) {
-        continue;
-      }
-
-      if (peek().type == TokenType::LeftParen) {
-        Token nestedOpen = advance();
-        parseRepeatSequenceItems(result, items, TokenType::RightParen,
-                                 nestedOpen, "Expected ')'");
-        continue;
-      }
-
-      if (peek().type == TokenType::LeftBracket) {
-        Token nestedOpen = advance();
-        parseRepeatSequenceItems(result, items, TokenType::RightBracket,
-                                 nestedOpen, "Expected ']'");
-        continue;
-      }
-
-      if (peek().type != TokenType::Number &&
-          peek().type != TokenType::LeftBrace &&
-          !(peek().type == TokenType::Identifier &&
-            isExternalClockIdentifier(peek().lexeme))) {
-        addDiagnostic(result, "Expected repeat sequence value",
-                      rangeFromToken(peek()));
-        advance();
-        continue;
-      }
-
-      items.push_back(parseLiteral(result));
-    }
-
-    if (peek().type == closingType) {
-      advance();
-      return;
-    }
-
-    addDiagnostic(result, expectedClosing, rangeFromToken(openingToken));
+    auto sequence = parseRepeatSequenceLane(result, closingType, openingToken,
+                                            expectedClosing);
+    for (auto& item : sequence) items.push_back(std::move(item.literal));
   }
 
   ClockLiteralAst parseExternalClockLiteral(ParseResult& result) {
@@ -1375,24 +1383,26 @@ class Parser {
       return;
     }
 
-    if (peek().type == TokenType::LeftParen) {
-      Token leftParen = advance();
+    if (peek().type == TokenType::LeftParen ||
+        peek().type == TokenType::LeftBracket) {
+      Token opening = advance();
+      TokenType closing = opening.type == TokenType::LeftParen
+                              ? TokenType::RightParen
+                              : TokenType::RightBracket;
       block.repeatRange.begin = atToken.begin;
-      block.repeatValueRange.begin = leftParen.begin;
-      parseRepeatSequenceItems(result, block.repeatSequence,
-                               TokenType::RightParen, leftParen,
-                               "Expected ')'");
-      Token rightParen =
-          previous().type == TokenType::RightParen ? previous() : leftParen;
-
-      block.repeatRange.end = rightParen.end;
-      block.repeatValueRange.end = rightParen.end;
+      block.repeatValueRange.begin = opening.begin;
+      parseRepeatSequenceItems(
+          result, block.repeatSequence, closing, opening,
+          closing == TokenType::RightParen ? "Expected ')'" : "Expected ']'");
+      Token end = previous().type == closing ? previous() : opening;
+      block.repeatRange.end = end.end;
+      block.repeatValueRange.end = end.end;
       block.repeatValueIsOwn = true;
       block.repeatIsSequence = true;
 
       if (block.repeatSequence.empty()) {
         addDiagnostic(result, "Expected repeat sequence value",
-                      rangeFromToken(leftParen));
+                      rangeFromToken(opening));
       }
 
       bool hasUnit = false;

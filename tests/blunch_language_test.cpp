@@ -1302,6 +1302,31 @@ void testProgramAst() {
   require(result.program.blocks[0].repeat == 4,
           "external clock random repeat");
 
+  result = lang::parseClockLiteral("[120 91 62]@[2 3]");
+  require(result.ok(), "bracketed repeat sequence parses after a group");
+  require(result.program.blocks.size()==3, "bracket repeat retains three clock blocks");
+  for(const auto& block:result.program.blocks) {
+    require(block.repeatIsSequence && block.repeatSequence.size()==2,"group members inherit bracket repeat sequence");
+    requireNear(block.repeatSequence[0].value,2,"bracket repeat first value");
+    requireNear(block.repeatSequence[1].value,3,"bracket repeat second value");
+  }
+  result=lang::parseClockLiteral("120bpm@[.5s 1s]");
+  require(result.ok() && result.program.blocks[0].repeatIsDuration,"bracket repeat supports time units");
+  result=lang::parseClockLiteral("120bpm@[2 (3 4)]");
+  require(result.ok(),"bracket repeat supports existing nested repeat syntax");
+  result=lang::parseClockLiteral("120bpm@[2 3)");
+  require(!result.ok(),"mismatched repeat delimiters are rejected");
+  result=lang::parseClockLiteral("120bpm@[]");
+  require(!result.ok(),"empty bracket repeat sequences are rejected");
+  for(const std::string& pattern:{"(2 (3 4))","((2 3) (4 5 6))","(2 (3 [4 5]))","[2 (3 4)]","(2 [3 4])","(2 (3 (4 5)))"}) {
+    auto lhs=lang::parseClockLiteral(pattern);
+    auto rhs=lang::parseClockLiteral("120bpm@"+pattern);
+    require(lhs.ok()&&rhs.ok(),"matching clock/repeat group patterns parse");
+    const auto& sequence=rhs.program.blocks[0].repeatSequence;
+    require(sequence.size()==lhs.program.blocks.size(),"repeat and clock nesting have the same cycle length");
+    for(size_t i=0;i<sequence.size();++i)
+      requireNear(sequence[i].value,lhs.program.blocks[i].literal.value,"repeat and clock nesting use the same interleaving");
+  }
   result = lang::parseClockLiteral("3hz@(2 4 2 4)");
   require(result.ok(), "repeat count sequence parses");
   require(result.program.blocks.size() == 1,
@@ -1335,19 +1360,19 @@ void testProgramAst() {
           "nested repeat count sequence block count");
   require(result.program.blocks[0].repeatIsSequence,
           "nested repeat count sequence flag");
-  require(result.program.blocks[0].repeatSequence.size() == 3,
-          "nested repeat count sequence flattened value count");
+  require(result.program.blocks[0].repeatSequence.size() == 4,
+          "nested repeat count sequence interleaved value count");
   requireNear(result.program.blocks[0].repeatSequence[0].value, 2.0,
               "nested repeat count sequence first value");
   requireNear(result.program.blocks[0].repeatSequence[1].value, 4.0,
               "nested repeat count sequence second value");
-  requireNear(result.program.blocks[0].repeatSequence[2].value, 5.0,
-              "nested repeat count sequence third value");
+  requireNear(result.program.blocks[0].repeatSequence[2].value, 2.0,
+              "nested repeat count sequence returns to outer value");
   requireRange(result.program.blocks[0].repeatRange, 3, 13,
                "nested repeat count sequence range");
   requireRange(result.program.blocks[0].repeatSequence[1].range, 8, 9,
                "nested repeat count sequence nested first range");
-  requireRange(result.program.blocks[0].repeatSequence[2].range, 10, 11,
+  requireRange(result.program.blocks[0].repeatSequence[3].range, 10, 11,
                "nested repeat count sequence nested second range");
 
   result = lang::parseClockLiteral("3hz@(2 [4 5])");
@@ -1394,11 +1419,11 @@ void testProgramAst() {
           "mixed program with nested repeat sequence block count");
   require(result.program.blocks[2].repeatIsSequence,
           "mixed program final block nested repeat sequence flag");
-  require(result.program.blocks[2].repeatSequence.size() == 3,
+  require(result.program.blocks[2].repeatSequence.size() == 4,
           "mixed program final block nested repeat sequence count");
   requireNear(result.program.blocks[2].repeatSequence[1].value, 4.0,
               "mixed program final block nested repeat sequence value");
-  requireNear(result.program.blocks[2].repeatSequence[2].value, 5.0,
+  requireNear(result.program.blocks[2].repeatSequence[3].value, 5.0,
               "mixed program final block nested repeat sequence final value");
   requireRange(result.program.blocks[2].repeatRange, 13, 23,
                "mixed program final block nested repeat sequence range");
