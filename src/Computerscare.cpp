@@ -9,6 +9,7 @@ void init(Plugin* p) {
   installDevWatcherToolbar();
 
   p->addModel(modelComputerscareController);
+  p->addModel(modelComputerscareXboxController);
   p->addModel(modelComputerscarePhlooper);
   p->addModel(modelComputerscareDebug);
   p->addModel(modelComputerscarePatchSequencer);

@@ -1,8 +1,10 @@
-# Controller
+# Controllers
 
-DualShock 4, DualSense and Xbox Series controllers to CV. Pair the controller in your computer's Bluetooth settings, then choose it in the module's device menu. Auto uses the first supported controller. USB connections also work.
+Two modules share the same controls and processing: **ps5 controller** for PlayStation controllers, and **xbox controller** for Xbox controllers. The existing DualSense module keeps its original patch identifier.
 
-Each control has its own output. Four polyphonic banks group the main buttons, other buttons, continuous controls/status, and touch/motion signals. Channel order is listed below. Button banks follow each jack’s Gate/Trigger/Toggle setting. Xbox controllers have no touchpad or motion sensors; those outputs remain at 0 V.
+Pair the controller in your computer's Bluetooth settings, then choose it in the matching module's device menu. Auto uses the first controller of that family. USB connections also work. Unplugging one controller and connecting a different family leaves the original module disconnected; its panel and assignments stay fixed.
+
+Each control has its own output. Four polyphonic banks group the main buttons, other buttons, continuous controls/status, and touch/motion signals. Channel order is listed below. Button banks follow each jack’s Gate/Trigger/Toggle setting. The Xbox panel omits touchpad and motion jacks. Their reserved button-bank slots remain at 0 V.
 
 ## Buttons
 
@@ -44,7 +46,7 @@ Unpatching both inputs stops rumble. Rumble also expires when Rack stops process
 
 ## Panel
 
-The 15 HP panel uses tiny labeled jacks. All individual outputs, banks and rumble inputs remain available. Button labels light green when pressed or latched on. Hover a jack for its full name; right-click for offset, scale and button mode. Dead zone, threshold and slew have knobs at the top. Center resets the motion baseline. These controls are also in the module menu.
+The DualSense panel is 15 HP; Xbox is 12 HP. Both use tiny labeled jacks. All individual outputs, banks and rumble inputs remain available. Button labels light green when pressed or latched on. Hover a jack for its full name; right-click for offset, scale and button mode. Dead zone, threshold and slew have knobs at the top. On DualSense, Center resets the motion baseline. These controls are also in the module menu.
 
 **Set all** at the top changes every button output to Gate, Trigger or Toggle. Individual jack menus can override it afterward. Changes can be undone.
 
@@ -75,4 +77,22 @@ Button banks follow the per-button mode, offset and scale settings.
 
 The Controls bank carries LX, LY, RX, RY, L2, R2, Battery and Connected on channels 1–8. The Touch/Motion bank carries Touch 1 X/Y, Touch 2 X/Y, Gyro X/Y/Z and Accel X/Y/Z on channels 1–10.
 
-Each bank sits beneath its matching controls. Touch coordinates are grouped with motion because they share that bank. Poly1/Poly2 are the two button banks; the other banks are labeled Poly.
+Each bank sits in a smaller box inside its matching section. Touch coordinates are grouped with motion because they share that bank. Poly1/Poly2 are the two button banks; the other banks are labeled Poly.
+
+## Xbox assignments
+
+Poly1 keeps the same sixteen channel positions: A, B, X, Y, D-pad Up/Down/Left/Right, LB, LT threshold, LS click, RB, RT threshold, RS click, then two unused channels at 0 V.
+
+Poly2 also preserves the five PlayStation slot positions:
+
+| Channel | Xbox        |
+| ------- | ----------- |
+| 1       | Unused: 0 V |
+| 2       | Share       |
+| 3       | View        |
+| 4       | Menu        |
+| 5       | Xbox button |
+
+LT/RT continuous outputs are separate from their threshold button outputs. Button Gate/Trigger/Toggle modes and per-output offset/scale work the same on both modules.
+
+Battery is the last individual jack in Controls on both panels. A grey jack means no usable battery reading has been received. AA-powered Xbox controllers may report a coarse estimate; availability depends on the controller, firmware and driver. The bank positions remain Battery on channel 7 and Connected on channel 8.

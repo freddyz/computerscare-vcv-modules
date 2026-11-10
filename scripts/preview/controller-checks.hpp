@@ -215,7 +215,8 @@ inline void checkController(plugin::Model* model, const std::string& dir,
   m->process(args);
   require(m->outputs[M::ANALOG + 12].getVoltage() == 0,
           "Xbox has no motion output");
-  capture(widget.get(), dir + "/02-xbox.png", scale);
+  require(!m->connection.load() && !m->online,
+          "PlayStation refuses to silently bind an Xbox controller");
   // Exercise the same UI/audio ownership split as hot-unplug and rebind.
   std::atomic<bool> startStress{false};
   std::thread audio([&]() {
@@ -253,4 +254,91 @@ inline void checkController(plugin::Model* model, const std::string& dir,
       "Controller ranges, scale/offset, short presses, banks, centering, "
       "persistence and "
       "disconnect checks passed");
+}
+
+inline void checkXboxController(plugin::Model* model, const std::string& dir,
+                                float scale) {
+  setenv("CONTROLLER_PREVIEW", "1", 1);
+  using M = ComputerscareController;
+  auto* m = static_cast<M*>(model->createModule());
+  APP->engine->addModule(m);
+  auto w = std::unique_ptr<app::ModuleWidget>(model->createModuleWidget(m));
+  auto require = [](bool okay, const char* why) {
+    if (!okay) throw std::runtime_error(why);
+  };
+  require(m->deviceFamily == cc::Xbox && w->box.size.x == 180,
+          "Xbox has a fixed twelve HP panel");
+  for (auto& out : m->outputs) out.channels = 1;
+  for (int i : {15, 17, 18, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 42})
+    require(w->getOutput(i) == nullptr, "Xbox omits PlayStation-only jacks");
+  for (int i : {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14,
+                16, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 39, 40, 41})
+    require(w->getOutput(i) != nullptr,
+            "Xbox retains every supported individual output and bank");
+  auto c = std::make_shared<cc::Connection>();
+  c->profile = cc::Xbox;
+  c->name = "Xbox Series — preview fixture";
+  c->connected = true;
+  c->supportedAnalog = 255;
+  c->supportedButtons = ((1u << cc::buttons) - 1);
+  c->values[0] = .5;
+  c->values[4] = .75;
+  c->values[6] = .65;
+  c->values[7] = 1;
+  c->setButton(16, true);
+  c->setButton(13, true);
+  c->setButton(2, true);
+  c->setButton(9, true);
+  m->bind(c);
+  m->params[M::DEADZONE].setValue(0);
+  m->params[M::SMOOTHING].setValue(0);
+  m->params[M::SCALE + M::ANALOG].setValue(1.5);
+  m->params[M::OFFSET + M::ANALOG].setValue(-1);
+  engine::Module::ProcessArgs args;
+  args.sampleRate = 48000;
+  args.sampleTime = 1.f / 48000;
+  args.frame = 0;
+  m->process(args);
+  require(m->outputs[M::BANK].getChannels() == 16 &&
+              m->outputs[M::BANK].getVoltage(14) == 0 &&
+              m->outputs[M::BANK].getVoltage(15) == 0,
+          "Xbox keeps missing touches as zero in Poly1 slots 15–16");
+  const float expected[] = {0, 10, 0, 10, 0};
+  for (int i = 0; i < 5; ++i)
+    require(m->outputs[M::BANK + 1].getVoltage(i) == expected[i],
+            "Xbox Poly2 preserves Pad/Share/View/Menu/Home slot compatibility");
+  require(m->outputs[M::ANALOG].getVoltage() == 2.75f &&
+              m->outputs[M::BANK + 2].getVoltage() == 2.75f,
+          "Xbox shares per-control scale/offset processing");
+  for (int i = 0; i < M::OUTPUTS; ++i)
+    if (auto* port = w->getOutput(i))
+      require(port->box.pos.x >= 0 &&
+                  port->box.pos.x + port->box.size.x <= 180 &&
+                  port->box.pos.y + port->box.size.y <= 380,
+              "Xbox jacks fit the fixed panel");
+  require(w->getOutput(16)->box.pos.x == w->getOutput(13)->box.pos.x &&
+              w->getOutput(12)->box.pos.x == w->getOutput(14)->box.pos.x,
+          "Xbox auxiliary buttons form a filled two-by-two group");
+  require(w->getOutput(M::ANALOG + 6)->box.pos.y >
+              w->getOutput(M::ANALOG + 7)->box.pos.y,
+          "Battery is the last individual control");
+  capture(w.get(), dir + "/01-xbox.png", scale);
+  auto ps = std::make_shared<cc::Connection>();
+  ps->profile = cc::DualSense;
+  ps->connected = true;
+  m->bind(ps);
+  ++args.frame;
+  m->process(args);
+  require(!m->connection.load() && !m->online,
+          "Xbox refuses to silently switch to a PlayStation controller");
+  auto* saved = m->dataToJson();
+  json_object_set_new(saved, "profile", json_integer(cc::DualSense));
+  auto clone = std::unique_ptr<M>(static_cast<M*>(model->createModule()));
+  clone->dataFromJson(saved);
+  json_decref(saved);
+  require(clone->profile == cc::Xbox,
+          "Xbox panel identity survives incompatible saved profile data");
+  std::puts(
+      "Xbox fixed layout, supported jacks, compatible bank slots, transforms, "
+      "and controller-family switching checks passed");
 }

@@ -36,3 +36,26 @@ for index, name in enumerate(['up', 'right', 'down', 'left']):
         x, y = x - 8, y - 8
         points.append((8 + x*math.cos(angle) - y*math.sin(angle) + rng.uniform(-.22,.22), 8 + x*math.sin(angle) + y*math.cos(angle) + rng.uniform(-.22,.22)))
     write(f'arrow-{name}', polygon(points))
+
+# Xbox face letters use the same distorted text outlines as the panels.
+import importlib.util
+import subprocess
+import tempfile
+spec = importlib.util.spec_from_file_location('controller_type', ROOT/'scripts/svg_text_randomize.py')
+helper = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(helper)
+for letter in 'ABXY':
+    with tempfile.TemporaryDirectory() as directory:
+        source = Path(directory)/'letter.svg'
+        subprocess.run([str(ROOT/'scripts/gen.sh'), letter, '--font', 'Verdana Bold', '--rand', '28', '--seed', 'controller-xbox-'+letter, '--output', str(source)], check=True, stdout=subprocess.DEVNULL)
+        original = ET.parse(source).getroot()
+    points = [p for path in original.iter(f'{{{NS}}}path') for segment in helper.parse_path(path.get('d')) for p in segment['points']]
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    x,y,w,h=min(xs)-1,min(ys)-1,max(xs)-min(xs)+2,max(ys)-min(ys)+2
+    scale=min(14/w,14/h)
+    svg=ET.Element(f'{{{NS}}}svg',width='14',height='14',viewBox='0 0 16 16')
+    group=ET.SubElement(svg,f'{{{NS}}}g',transform=f'translate({(16-w*scale)/2},{(16-h*scale)/2}) scale({scale}) translate({-x},{-y})')
+    for child in original:group.append(child)
+    for path in svg.iter(f'{{{NS}}}path'):path.set('fill','#14231c')
+    ET.indent(svg)
+    ET.ElementTree(svg).write(OUTPUT/f'button-{letter.lower()}.svg',encoding='utf-8',xml_declaration=True)

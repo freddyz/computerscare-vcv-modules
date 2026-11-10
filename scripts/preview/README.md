@@ -13,6 +13,7 @@ The default output is `build/previews/phlooper/`, already excluded from Git by t
 ```sh
 # Render Controller browser artwork and simulated DualSense/Xbox states.
 scripts/preview-module.sh controller
+scripts/preview-module.sh controller-xbox
 
 # Render Blunch using its actual browser widget.
 scripts/preview-module.sh blunch

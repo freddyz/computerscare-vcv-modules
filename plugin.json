@@ -182,8 +182,15 @@
     },
     {
       "slug": "computerscare-controller",
-      "name": "Controller",
-      "description": "PlayStation and Xbox controller to CV, gates and triggers",
+      "name": "ps5 controller",
+      "description": "DualSense controller to CV, gates and triggers",
+      "tags": ["Controller", "Utility"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/controller.md"
+    },
+    {
+      "slug": "computerscare-controller-xbox",
+      "name": "xbox controller",
+      "description": "Xbox Series controller to CV, gates and triggers",
       "tags": ["Controller", "Utility"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/controller.md"
     }

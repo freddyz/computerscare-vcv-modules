@@ -1,6 +1,10 @@
 #define modelComputerscareController modelControllerPreview
 #include "../../src/ComputerscareController.cpp"
 #undef modelComputerscareController
+#define modelComputerscareXboxController modelXboxControllerPreview
+#include "../../src/ComputerscareXboxController.cpp"
+#undef modelComputerscareXboxController
+
 // Development-only renderer. Uses the real module/widget, never a panel mockup.
 #define modelComputerscarePhlooper modelPhlooperPreview
 #include "../../src/ComputerscarePhlooper.cpp"
@@ -918,6 +922,7 @@ int main(int argc, char** argv) {
         browserModel = modelComputerscareVolyPector;
       if (argc == 7 && std::string(argv[6]) == "laundry-soup")
         browserModel = modelComputerscareLaundrySoup;
+      if(argc==7&&std::string(argv[6])=="controller-xbox")browserModel=modelXboxControllerPreview;
       browserModel->plugin = &plugin;
       if(browserModel==modelComputerscareVolyPector && std::getenv("VOLY_PREVIEW_CHECKS"))checkVolyKeyboard(browserModel,[&](app::ModuleWidget* widget){capture(widget,std::string(argv[3])+"/01-shortcuts.png",scale);});
       if(browserModel==modelComputerscareVolyPector && std::getenv("VOLY_PREVIEW_CHECKS"))checkVolyMulti(browserModel,argv[3],scale);
@@ -926,6 +931,7 @@ int main(int argc, char** argv) {
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",
               scale);
       if(browserModel==modelControllerPreview)checkController(browserModel,argv[3],scale);
+      if(browserModel==modelXboxControllerPreview)checkXboxController(browserModel,argv[3],scale);
       return 0;
     }
     if (argc == 7 && std::string(argv[6]) == "blunch") {

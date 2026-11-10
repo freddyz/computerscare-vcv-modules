@@ -755,3 +755,5 @@ struct SmallLetterDisplay : Widget {
 extern Model* modelComputerscarePhlooper;
 
 extern Model* modelComputerscareController;
+
+extern Model* modelComputerscareXboxController;

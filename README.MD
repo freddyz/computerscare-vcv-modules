@@ -19,7 +19,7 @@ Use `RACK_DIR=/path/to/Rack-SDK` when the Rack SDK is not in the default local p
 - [Father & Son Patch Sequencer](./doc/father-and-son.md): 16 scene, polyphonic patch matrix
 - [Debug](./doc/debug.md): Polyphonic volt meter / sample & hold / and noise source
 - [Laundry Soup](./doc/laundry-soup.md): Polyphonic, text-based trigger sequencer
-- [Controller](./doc/controller.md): DualSense and Xbox controller to CV
+- [PS5 / Xbox Controller](./doc/controller.md): Game controllers to CV
 - [Blunch](./doc/blunch.md): Text-based polyphonic trigger sequencer
 - [I Love Cookies](./doc/i-love-cookies.md): Signal/CV sequencer, programmed by text input
 - [Oh Peas! Quad Quantenuverter](./doc/oh-peas.md): Polyphonic 4-Channel attenuverter, offsetter, quantizer
