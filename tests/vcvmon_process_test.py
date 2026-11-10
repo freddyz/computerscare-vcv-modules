@@ -108,8 +108,14 @@ vcvmon dev
         try:
             wait_for(lambda: (root/'rack-pid').exists(), 'Hung dummy failed to launch')
             child = int((root/'rack-pid').read_text())
+            old_child = child
+            starts_before = (root/'starts').read_text().count('start')
+            (root/'control.command').write_text('rebuild')
+            wait_for(lambda: (root/'starts').read_text().count('start') == starts_before + 1, 'Hung dev Rack prevented rebuild', seconds=12)
+            assert not running(old_child), 'Rebuild launched before the hung owned Rack was gone'
+            child = int((root/'rack-pid').read_text())
             os.killpg(hung.pid, signal.SIGINT)
-            hung.wait(timeout=10)
+            hung.wait(timeout=12)
             wait_for(lambda: not running(child), 'Ctrl+C failed to force-stop an owned hung Rack')
         finally:
             if hung.poll() is None:
@@ -117,4 +123,4 @@ vcvmon dev
                 hung.wait()
             if child and running(child):
                 os.kill(child, signal.SIGKILL)
-print('vcvmon singleton, Ctrl+C cleanup, forced owned cleanup, lock release and slow Rack restart checks passed')
+print('vcvmon singleton, Ctrl+C cleanup, forced rebuild cleanup, lock release and slow Rack restart checks passed')

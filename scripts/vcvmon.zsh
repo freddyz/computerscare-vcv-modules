@@ -15,7 +15,7 @@
 
 : ${VCVMON_PAUSE:=/tmp/vcvmon.pause}
 : ${VCVMON_RACK:=$HOME/dev/VCV-Rack/Rack}
-VCVMON_VERSION=toolbar-v5
+VCVMON_VERSION=toolbar-v6
 : ${VCVMON_SDK:=$HOME/dev/VCV-Rack/Rack-SDK}
 : ${VCVMON_APP:=/Applications/VCV Rack 2 Pro.app}
 : ${VCVMON_USER_DIR:=${RACK_USER_DIR:-$HOME/Library/Application Support/Rack2}}
@@ -77,12 +77,13 @@ _vcvmon_stop_owned_tree () {
     sleep .1
   done
   if (( force )); then
+    print -u2 "vcvmon: dev Rack did not exit after 5s; force-stopping owned PID(s): ${remaining[*]}"
     for pid in $remaining; do kill -KILL "$pid" 2>/dev/null || true; done
-    for attempt in {1..20}; do
+    for attempt in {1..50}; do
       local alive=0
       for pid in $remaining; do _vcvmon_pid_running "$pid" && alive=1; done
       (( ! alive )) && return 0
-      sleep .05
+      sleep .1
     done
   fi
   print -u2 "vcvmon: owned Rack process is still exiting; refusing to launch another"
@@ -229,7 +230,8 @@ vcvmon () {
 				_vcvmon_banner "1;97;41" "VCVMON BUILD FAILED - Rack left running   [r] retry"
 				return 1
 			fi
-			_vcvmon_stop_rack || { failed=1; dirty=0; _vcvmon_status failed; return 1; }
+			# Dev rebuilds must also clean up a stuck owned Rack, just like Ctrl+C.
+			_vcvmon_stop_rack 1 || { failed=1; dirty=0; _vcvmon_status failed; return 1; }
 		fi
 		_vcvmon_start_rack || { failed=1; dirty=0; _vcvmon_status failed; return 1; }
 		stamp=$build_stamp
