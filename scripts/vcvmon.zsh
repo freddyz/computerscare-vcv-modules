@@ -15,7 +15,7 @@
 
 : ${VCVMON_PAUSE:=/tmp/vcvmon.pause}
 : ${VCVMON_RACK:=$HOME/dev/VCV-Rack/Rack}
-: ${VCVMON_VERSION:=toolbar-v4}
+VCVMON_VERSION=toolbar-v5
 : ${VCVMON_SDK:=$HOME/dev/VCV-Rack/Rack-SDK}
 : ${VCVMON_APP:=/Applications/VCV Rack 2 Pro.app}
 : ${VCVMON_USER_DIR:=${RACK_USER_DIR:-$HOME/Library/Application Support/Rack2}}
@@ -56,12 +56,43 @@ _vcvmon_kill_tree () {
 	for child in ${(f)"$(pgrep -P "$parent" 2>/dev/null)"}; do
 		_vcvmon_kill_tree "$child"
 	done
-	kill "$parent" 2>/dev/null
+	print -r -- "$parent"
+	kill "$parent" 2>/dev/null || true
+}
+
+# Track every PID signalled before its make/shell parent can exit. Waiting only
+# for make leaves a slow Rack process orphaned and allows a second launch.
+_vcvmon_pid_running () {
+  local state=$(command ps -p "$1" -o stat= 2>/dev/null)
+  [[ -n "$state" && "$state" != *Z* ]]
+}
+_vcvmon_stop_owned_tree () {
+  local root=$1 force=${2:-0} pid attempt
+  local -a pids remaining
+  pids=(${(f)"$(_vcvmon_kill_tree "$root")"})
+  for attempt in {1..50}; do
+    remaining=()
+    for pid in $pids; do _vcvmon_pid_running "$pid" && remaining+=("$pid"); done
+    (( ${#remaining} == 0 )) && return 0
+    sleep .1
+  done
+  if (( force )); then
+    for pid in $remaining; do kill -KILL "$pid" 2>/dev/null || true; done
+    for attempt in {1..20}; do
+      local alive=0
+      for pid in $remaining; do _vcvmon_pid_running "$pid" && alive=1; done
+      (( ! alive )) && return 0
+      sleep .05
+    done
+  fi
+  print -u2 "vcvmon: owned Rack process is still exiting; refusing to launch another"
+  return 1
 }
 
 vcvmon () {
 	emulate -L zsh
 	unsetopt BG_NICE
+	setopt LOCAL_TRAPS
 	local mode=${1:-dev}
 	if (( $# > 1 )) || [[ "$mode" != dev && "$mode" != dist ]]; then
 		print -u2 "Usage: vcvmon [dev|dist]"
@@ -84,6 +115,16 @@ vcvmon () {
 			return 1
 		fi
 	fi
+	# One watcher owns a control path. Kernel locks also recover after a crash.
+	zmodload zsh/system || return 1
+	local watcher_lock_fd
+	touch "$VCVMON_PAUSE.lock" || return 1
+	if ! zsystem flock -t 0 -f watcher_lock_fd "$VCVMON_PAUSE.lock"; then
+		print -u2 "vcvmon: another watcher already owns $VCVMON_PAUSE"
+		return 1
+	fi
+	local quitting=0
+	trap 'quitting=1' INT TERM HUP
 	rm -f "$VCVMON_PAUSE" "$VCVMON_PAUSE.command"
 
 	local key runner_pid=0 stamp next_stamp dirty=0 failed=0 command
@@ -120,14 +161,15 @@ vcvmon () {
 	}
 
 	_vcvmon_start_rack () {
+		(( quitting )) && return 1
 		if [[ "$mode" == dist ]]; then
-			(cd "$VCVMON_APP/Contents/MacOS" && VCVMON_CONTROL="$VCVMON_PAUSE" RACK_USER_DIR="$VCVMON_USER_DIR" ./Rack) &!
+			(cd "$VCVMON_APP/Contents/MacOS" && VCVMON_CONTROL="$VCVMON_PAUSE" RACK_USER_DIR="$VCVMON_USER_DIR" exec ./Rack) &!
 			runner_pid=$!
 			return
 		fi
 		(
 			cd "$VCVMON_RACK" || exit 1
-			VCVMON_CONTROL="$VCVMON_PAUSE" make run
+			VCVMON_CONTROL="$VCVMON_PAUSE" exec ./Rack -d
 		) &!
 		runner_pid=$!
 	}
@@ -139,7 +181,10 @@ vcvmon () {
 			return
 		fi
 		if (( runner_pid > 0 )) && kill -0 "$runner_pid" 2>/dev/null; then
-			_vcvmon_kill_tree "$runner_pid"
+			local parent_pid=$(command ps -p "$runner_pid" -o ppid= 2>/dev/null)
+			parent_pid=${parent_pid//[[:space:]]/}
+			if [[ "$parent_pid" != "$sysparams[pid]" ]]; then runner_pid=0; return 0; fi
+			_vcvmon_stop_owned_tree "$runner_pid" "${1:-0}" || return 1
 			wait "$runner_pid" 2>/dev/null
 		fi
 		runner_pid=0
@@ -184,20 +229,19 @@ vcvmon () {
 				_vcvmon_banner "1;97;41" "VCVMON BUILD FAILED - Rack left running   [r] retry"
 				return 1
 			fi
-			_vcvmon_stop_rack
+			_vcvmon_stop_rack || { failed=1; dirty=0; _vcvmon_status failed; return 1; }
 		fi
-		_vcvmon_start_rack
+		_vcvmon_start_rack || { failed=1; dirty=0; _vcvmon_status failed; return 1; }
 		stamp=$build_stamp
 		dirty=0
 		if [[ -f "$VCVMON_PAUSE" ]]; then _vcvmon_status paused; else _vcvmon_status watching; fi
 	}
 
 	_vcvmon_banner "1;30;42" "VCVMON $VCVMON_VERSION $mode RUNNING   [space] pause/resume   [r] rebuild   [q] quit"
-	stamp=$(_vcvmon_stamp)
-	_vcvmon_restart_rack "VCVMON $mode - building + launching Rack" || true
-
 	{
-		while true; do
+		stamp=$(_vcvmon_stamp)
+		_vcvmon_restart_rack "VCVMON $mode - building + launching Rack" || true
+		while (( ! quitting )); do
 			command=""
 			if read -t 0.5 -sk1 key; then
 				case $key in
@@ -206,6 +250,7 @@ vcvmon () {
 					q|Q) break ;;
 				esac
 			fi
+			(( quitting )) && break
 			if [[ -f "$VCVMON_PAUSE.command" ]]; then
 				command=$(<"$VCVMON_PAUSE.command")
 				rm -f "$VCVMON_PAUSE.command"
@@ -243,8 +288,10 @@ vcvmon () {
 			fi
 		done
 	} always {
-		_vcvmon_stop_rack
+		trap '' INT TERM HUP
+		_vcvmon_stop_rack 1 || true
 		rm -f "$VCVMON_PAUSE" "$VCVMON_PAUSE.command"
+		zsystem flock -u "$watcher_lock_fd"
 		_vcvmon_status stopped
 		_vcvmon_banner "1;97;41" "VCVMON STOPPED"
 	}

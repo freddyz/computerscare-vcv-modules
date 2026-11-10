@@ -7,6 +7,7 @@ print '{}' > "$local_root/repo/plugin.json"
 print '' > "$local_root/sdk/plugin.mk"
 print '#!/bin/zsh\nprint "launched:$VCVMON_CONTROL" >> "$VCVMON_TEST_LOG"' > "$local_root/Rack.app/Contents/MacOS/Rack"
 chmod +x "$local_root/Rack.app/Contents/MacOS/Rack"
+cp "$local_root/Rack.app/Contents/MacOS/Rack" "$local_root/dev/Rack"
 export VCVMON_TEST_LOG="$local_root/log"
 VCVMON_REPO="$local_root/repo"
 VCVMON_RACK="$local_root/dev"
@@ -44,7 +45,7 @@ fail_build=0
 vcvmon dev > "$local_root/dev-log" 2>&1
 sleep .1
 [[ $(cat "$local_root/make-log") == *"$VCVMON_RACK plugins all"* ]]
-[[ $(cat "$local_root/make-log") == *"$VCVMON_RACK run"* ]]
+[[ $(cat "$local_root/log") == *"launched:$VCVMON_PAUSE"* ]]
 if vcvmon invalid > /dev/null 2>&1; then exit 1;fi
 vcvmon > "$local_root/default-log" 2>&1
 if vcvmon dev extra > /dev/null 2>&1; then exit 1;fi
