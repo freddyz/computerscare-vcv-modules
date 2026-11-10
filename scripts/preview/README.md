@@ -11,6 +11,9 @@ This builds the plugin and, when needed, a small development runner, then render
 The default output is `build/previews/phlooper/`, already excluded from Git by the repository's `build` rule. Seven PNGs show the empty module, four-loop playback, sixteen-loop playback, a zoomed region, overdubbing, muted playback with per-channel controls hidden, and a mute/solo background comparison. Audio is generated and recorded through the module's real processing code. The runner uses isolated scratch storage under the output directory.
 
 ```sh
+# Render Controller browser artwork and simulated DualSense/Xbox states.
+scripts/preview-module.sh controller
+
 # Render Blunch using its actual browser widget.
 scripts/preview-module.sh blunch
 

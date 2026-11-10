@@ -12,3 +12,4 @@ scripts/gen/
 .claude/
 CLAUDE.local.md
 AGENTS.local.md
+lib/

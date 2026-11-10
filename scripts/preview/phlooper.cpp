@@ -1,3 +1,6 @@
+#define modelComputerscareController modelControllerPreview
+#include "../../src/ComputerscareController.cpp"
+#undef modelComputerscareController
 // Development-only renderer. Uses the real module/widget, never a panel mockup.
 #define modelComputerscarePhlooper modelPhlooperPreview
 #include "../../src/ComputerscarePhlooper.cpp"
@@ -777,6 +780,8 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
 
 }  // namespace
 
+#include "controller-checks.hpp"
+
 int main(int argc, char** argv) {
   if (argc < 5 || argc > 7) {
     std::fprintf(stderr,
@@ -904,6 +909,7 @@ int main(int argc, char** argv) {
 
     if (argc >= 6 && std::string(argv[5]) == "browser") {
       plugin::Model* browserModel = modelPhlooperPreview;
+      if(argc==7&&std::string(argv[6])=="controller")browserModel=modelControllerPreview;
       if (argc == 7 && std::string(argv[6]) == "blunch")
         browserModel = modelBlunchPreview;
       if (argc == 7 && std::string(argv[6]) == "mely-porge")
@@ -919,6 +925,7 @@ int main(int argc, char** argv) {
           browserModel->createModuleWidget(nullptr));
       capture(browserWidget.get(), std::string(argv[3]) + "/00-browser.png",
               scale);
+      if(browserModel==modelControllerPreview)checkController(browserModel,argv[3],scale);
       return 0;
     }
     if (argc == 7 && std::string(argv[6]) == "blunch") {

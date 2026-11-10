@@ -259,6 +259,12 @@ build() {
 
 run_tests() {
   echo "==> Tests..."
+  g++ -std=c++11 -I src tests/controller_signals_test.cpp -o /tmp/cs_controller_signals_test
+  /tmp/cs_controller_signals_test
+  local controller_link_flags=()
+  if [[ "$(uname -s)" == Linux ]]; then controller_link_flags=(-ldl); fi
+  g++ -std=c++11 -I src tests/controller_sdl_signal_test.cpp -o /tmp/cs_controller_sdl_signal_test "${controller_link_flags[@]}"
+  /tmp/cs_controller_sdl_signal_test "$PWD"
   g++ -std=c++11 -I src tests/patch_save_naming_test.cpp -o /tmp/cs_patch_save_naming_test
   /tmp/cs_patch_save_naming_test
   g++ -std=c++11 -I src tests/voly_pector_keyboard_test.cpp -o /tmp/cs_voly_keyboard_test
