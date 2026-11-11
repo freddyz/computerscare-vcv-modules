@@ -2234,11 +2234,16 @@ struct PhlooperShortcutOverlay : widget::TransparentWidget {
       if (auto draw = drawShortcuts.lock()) (*draw)(args);
   }
 };
+struct PhlooperViewButton : computerscare::ReturnToNormalButton {
+  std::string caption;
+  std::string label() override { return caption; }
+};
 struct ComputerscarePhlooperWidget : ModuleWidget {
   computerscare::VisualPanelMode visualMode;
   computerscare::VisualPanelBackdrop* compactBackdrop = nullptr;
   computerscare::ReturnToNormalButton* normalButton = nullptr;
   PhlooperView* waveView = nullptr;
+  widget::Widget* fullDecor = nullptr;
   void draw(const DrawArgs& args) override {
     ModuleWidget::draw(args);
     visualMode.drawLabels(args);
@@ -2246,11 +2251,30 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
   void updateVisualMode() {
     bool compact =
         module && static_cast<ComputerscarePhlooper*>(module)->compactUi;
-    visualMode.set(this, compact, {compactBackdrop, waveView, normalButton});
+    visualMode.set(this, compact,
+                   {compactBackdrop, fullDecor, waveView, normalButton});
     if (compact) {
+      box.size.x = visualMode.normalWidth;
       compactBackdrop->box.size = box.size;
-      waveView->box = Rect(Vec(10, 30), Vec(310, 340));
-      normalButton->box.pos = Vec(9, 5);
+      fullDecor->box.pos.x = box.size.x - 25;
+      waveView->box = Rect(Vec(5, 2), Vec(box.size.x - 31, 375));
+      normalButton->box.pos = Vec(box.size.x - 24, 2);
+      for (auto& original : visualMode.rail.ports) {
+        auto* port = original.port;
+        float y;
+        if (port->type == engine::Port::OUTPUT) {
+          const int order[] = {2, 3, 0, 1};
+          y = 304.f + order[port->portId] * 17.f;
+        } else {
+          int index = port->portId;
+          if (index == ComputerscarePhlooper::VCA_CV)
+            index = 2;
+          else if (index >= 2 && index < ComputerscarePhlooper::VCA_CV)
+            ++index;
+          y = 32.f + index * 17.f;
+        }
+        port->box.pos = Vec(box.size.x - 12, y) - port->box.size * .5f;
+      }
     }
   }
   std::shared_ptr<const phlooper::BrowserPreview> preview;
@@ -2274,6 +2298,25 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     auto font =
         APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
     if (!font) return;
+    if (static_cast<ComputerscarePhlooper*>(module)->compactUi) {
+      nvgSave(args.vg);
+      nvgBeginPath(args.vg);
+      nvgRect(args.vg, 36, 35, 225, 146);
+      nvgFillColor(args.vg, nvgRGBA(13, 29, 28, 235));
+      nvgFill(args.vg);
+      nvgFontFaceId(args.vg, font->handle);
+      nvgFontSize(args.vg, 12);
+      nvgFillColor(args.vg, nvgRGB(220, 243, 228));
+      nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+      const char* lines[] = {"[space] Stop   [m] Mute   [h] Hold",
+                             "[r] Record   [e] Erase   [t] Restart",
+                             "[z] Zoom   [c] Per-loop controls",
+                             "[w] Monitor input (hold)", "[escape] Small view"};
+      for (int i = 0; i < 5; ++i)
+        nvgText(args.vg, 44, 46 + i * 25, lines[i], nullptr);
+      nvgRestore(args.vg);
+      return;
+    }
     const int ids[] = {
         ComputerscarePhlooper::STOP,  ComputerscarePhlooper::MUTE,
         ComputerscarePhlooper::HOLD,  ComputerscarePhlooper::RECORD,
@@ -2384,6 +2427,12 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       ModuleWidget::onHoverKey(e);
       return;
     }
+    if (e.key == GLFW_KEY_ESCAPE && e.action == GLFW_PRESS &&
+        static_cast<ComputerscarePhlooper*>(module)->compactUi) {
+      static_cast<ComputerscarePhlooper*>(module)->compactUi = false;
+      e.consume(this);
+      return;
+    }
     int param = -1;
     bool momentary = false;
     switch (e.key) {
@@ -2488,12 +2537,46 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     compactBackdrop = new computerscare::VisualPanelBackdrop;
     compactBackdrop->visible = false;
     addChild(compactBackdrop);
-    normalButton = new computerscare::ReturnToNormalButton;
+    auto* small = new PhlooperViewButton;
+    small->caption = "sm";
+    small->configure(20, 18, 3, 2, .7f, 198);
+    small->textSize = 13.f;
+    small->textInset = 4.f;
+    normalButton = small;
     normalButton->visible = false;
     normalButton->action = [module]() {
       if (module) module->compactUi = false;
     };
     addChild(normalButton);
+    fullDecor = new widget::Widget;
+    fullDecor->visible = false;
+    addChild(fullDecor);
+    for (int i = 0; i < 2; ++i) {
+      auto* plaque = new phlooper::WarpedBlock;
+      plaque->configure(
+          Rect(Vec(3, i ? 294.f : 22.f), Vec(21, i ? 70.f : 55.f)), 2.f, 1.f,
+          91 + i, i ? nvgRGB(175, 175, 175) : nvgRGB(232, 232, 232));
+      fullDecor->addChild(plaque);
+    }
+    auto* logo = new widget::SvgWidget;
+    logo->setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance, "res/components/computerscare-logo-normal.svg")));
+    auto* logoTransform = new widget::TransformWidget;
+    logoTransform->box.pos = Vec(3, 365);
+    float logoScale =
+        std::min(25.f / logo->box.size.x, 16.f / logo->box.size.y);
+    logoTransform->scale(Vec(logoScale, logoScale));
+    logoTransform->addChild(logo);
+    fullDecor->addChild(logoTransform);
+    auto* full = new PhlooperViewButton;
+    full->caption = "Big";
+    full->configure(35, 20, 3, 2, .7f, 199);
+    full->textSize = 13.f;
+    full->box.pos = Vec(288, 36);
+    full->action = [module]() {
+      if (module) module->compactUi = true;
+    };
+    addChild(full);
     auto* view = new PhlooperView;
     waveView = view;
     view->module = module;

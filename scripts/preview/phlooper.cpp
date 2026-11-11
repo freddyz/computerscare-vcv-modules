@@ -122,14 +122,33 @@ void checkMaxVisual(app::ModuleWidget* widget,bool& compact,const std::string& p
   auto* data=widget->module->dataToJson();bool saved=json_is_true(json_object_get(data,"compactUi"));json_decref(data);
   if(!saved)throw std::runtime_error("Max visual must save with patch");
   for(auto* p:ports){
-    if(p->parent!=widget || p->box.pos.x<width || p->box.pos.x+p->box.size.x>widget->box.size.x || p->box.pos.y<0 || p->box.pos.y+p->box.size.y>380)throw std::runtime_error("Max visual ports must fit side rail");
+    if(p->parent!=widget || p->box.pos.x<0 || p->box.pos.x+p->box.size.x>widget->box.size.x || p->box.pos.y<0 || p->box.pos.y+p->box.size.y>380)throw std::runtime_error("Max visual ports must fit side rail");
     if(p->box.size.x>15.f || p->box.size.y>15.f)throw std::runtime_error("Max visual must use tiny jacks");
     widget::EventContext hit;widget::Widget::ButtonEvent click;click.context=&hit;click.button=GLFW_MOUSE_BUTTON_LEFT;click.action=GLFW_PRESS;click.pos=p->box.getCenter();widget->onButton(click);
     if(!dynamic_cast<app::PortWidget*>(hit.target))throw std::runtime_error("Max visual ports must receive clicks");
   }
   capture(widget,path,scale);
+  if (dynamic_cast<ComputerscarePhlooperWidget*>(widget)) {
+    if (widget->box.size.x != width)
+      throw std::runtime_error("Phlooper Big must preserve module width");
+    for (auto* port : ports)
+      if (port->box.getCenter().x < width - 20)
+        throw std::runtime_error("Phlooper Big jacks must stay on the right");
+    widget::EventContext keys;
+    widget::Widget::HoverKeyEvent escape;
+    escape.context = &keys;
+    escape.key = GLFW_KEY_ESCAPE;
+    escape.action = GLFW_PRESS;
+    escape.mods = 0;
+    widget->onHoverKey(escape);
+    widget->step();
+    if (compact || widget->box.size.x != width)
+      throw std::runtime_error("Escape must restore Phlooper normal view");
+    compact = true;
+    widget->step();
+  }
   computerscare::ReturnToNormalButton* normal=nullptr;
-  for(auto* child:widget->children)if(auto* b=dynamic_cast<computerscare::ReturnToNormalButton*>(child))normal=b;
+  for(auto* child:widget->children)if(auto* b=dynamic_cast<computerscare::ReturnToNormalButton*>(child))if(b->visible)normal=b;
   if(!normal || !normal->visible)throw std::runtime_error("Max visual must expose return button");
   widget::EventContext hit;widget::Widget::ButtonEvent click;click.context=&hit;click.button=GLFW_MOUSE_BUTTON_LEFT;click.action=GLFW_PRESS;click.pos=normal->box.getCenter();widget->onButton(click);widget->step();
   if(compact || widget->box.size.x!=width)throw std::runtime_error("Return button must restore normal width");

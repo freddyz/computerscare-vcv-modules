@@ -134,3 +134,8 @@ Hover tooltips show shortcuts in brackets. Hold backtick/tilde while hovering ov
 Choose **Panel → Max visual** in the context menu to expand the display vertically and collect the input/output jacks in a dense rail of tiny ports. Hover a jack for its label. Hidden controls keep their settings. Use **Normal UI** above the display, or **Panel → Normal**, to restore the controls and original module width. Cables remain connected, and the layout is saved with the patch.
 
 The two-part loop selector sets the number of loops and how new loops are filled. **Cycle** repeats existing recordings in order (1, 2 → 1, 2, 1, 2, 1, 2). **Normal** repeats a single recording, otherwise adds silence. **Zero** adds silence; **Stall** copies the last existing recording. Added recordings are independent: overdubbing or erasing one does not change its source. Reducing the loop count preserves recordings for later. WAV import still fills all sixteen loops.
+
+**Big** expands the waveform and puts the tiny jacks along the right edge,
+keeping the module width unchanged.
+**sm** or **Escape** returns to the normal panel. Hold backtick/tilde to see
+keyboard shortcuts in either view.
