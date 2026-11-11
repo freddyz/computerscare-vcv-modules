@@ -25,3 +25,17 @@ Rumble requests use one packed atomic motor pair and an owner token. The audio t
 SDL must be initialized through `Sdl::initForHost`, which sets `SDL_NO_SIGNAL_HANDLERS=1` before initializing any subsystem. SDL's default SIGINT/SIGTERM handlers convert those signals into SDL quit events; this polling backend does not consume quit events, so those handlers can prevent Rack from responding to the dev watcher's shutdown request. The runtime signal regression test initializes events only and does not open controllers, windows or audio devices.
 
 The two model entry points share `Controller/Module.hpp` and `Controller/Widget.hpp`. Device family is fixed by the model, while connected devices are filtered before automatic selection or manual binding. Port and parameter IDs remain identical across models; the Xbox frontend omits unsupported widgets, and the shared processor masks their signals to zero. Poly1 has sixteen channels on both models, and Poly2 retains five fixed auxiliary slots. Browser widgets use their constructor's explicit family when the engine module is null.
+
+### Local runtime cache
+
+The local SDL runtime and license are kept outside this checkout in
+`~/dev/computerscare-controller-runtime/`. After checking out the controller
+branch, restore its private runtime with:
+
+```sh
+scripts/build-controller-runtime.sh --local
+```
+
+Set `CS_CONTROLLER_RUNTIME_DIR` to use another cache directory. This copies both
+the platform library and its license into ignored `lib/` for local builds.
+Release builds must still build SDL from pinned source for their target platform.
