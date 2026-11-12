@@ -49,6 +49,7 @@ struct RandomChoiceAst {
   double maxValue = 0.0;
   std::string minValueLexeme;
   std::string maxValueLexeme;
+  SourceRange minValueRange, maxValueRange;
   ClockUnit unit = ClockUnit::Unknown;
   SourceRange unitRange;
   SourceRange range;

@@ -99,14 +99,14 @@ def generate():
            '// clang-format off', '#pragma once', '#include "../components/TerminalSettings.hpp"',
            'inline computerscare::TerminalSetting blunchHelp() {',
            '  using Entry = computerscare::TerminalSetting;',
-           '  Entry help; help.name="Help";',
-           '  Entry overview; overview.name="Overview"; overview.body='+q(overview)+';',
-           '  Entry controls; controls.name="Controls";']
+           '  Entry help; help.name="Help"; help.help="Reference and examples.";',
+           '  Entry overview; overview.name="Overview"; overview.help="Getting started."; overview.body='+q(overview)+';',
+           '  Entry controls; controls.name="Controls"; controls.help="Buttons, jacks, and keys.";']
     for name, body in controls:
-        out += ['  { Entry page; page.name='+q('Panel' if name == 'Controls' else name)+'; page.body='+q(body)+'; controls.children.push_back(page); }']
-    out += ['  Entry language; language.name="Language";']
+        out += ['  { Entry page; page.name='+q('Panel' if name == 'Controls' else name)+'; page.help='+q({'Controls':'Knobs and buttons.', 'Inputs':'Input ranges and behavior.', 'Outputs':'Output signals.', 'Keyboard shortcuts':'Keyboard controls.'}[name])+'; page.body='+q(body)+'; controls.children.push_back(page); }']
+    out += ['  Entry language; language.name="Language"; language.help="Formula examples to copy.";']
     for name, examples in language_topics(manual):
-        out += ['  { Entry topic; topic.name='+q(name)+';']
+        out += ['  { Entry topic; topic.name='+q(name)+'; topic.help='+q('Examples: '+name.lower()+'.')+';']
         for formula, description in examples:
             out += ['    { Entry example; example.name='+q(formula)+'; example.copyText='+q(formula)+'; example.help='+q(description)+'; topic.children.push_back(example); }']
         out += ['    language.children.push_back(topic); }']

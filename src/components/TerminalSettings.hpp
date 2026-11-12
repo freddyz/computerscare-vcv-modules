@@ -53,7 +53,7 @@ struct TerminalSettings : rack::widget::OpaqueWidget {
   double copiedAt = -10;
   bool opened = false, leaving = false;
   double transitionStart = -1;
-  static constexpr double transitionSeconds = .5;
+  static constexpr double transitionSeconds = .3;
   std::string before;
   int firstRow = 0;
   unsigned transitionSerial = 0;
@@ -359,7 +359,7 @@ struct TerminalSettings : rack::widget::OpaqueWidget {
       nvgFillColor(args.vg, palette.green);
       nvgText(args.vg, geometry.textX,
               (int(size.y / rowHeight) - 1) * rowHeight + geometry.baselineY,
-              fitText(args.vg, "Up/Down scroll  Esc back",
+              fitText(args.vg, "[up/down] scroll  [esc] back",
                       size.x - 2 * geometry.textX)
                   .c_str(),
               nullptr);
@@ -412,8 +412,8 @@ struct TerminalSettings : rack::widget::OpaqueWidget {
                size.x - 2 * geometry.textX, description.c_str(), nullptr);
     nvgFillColor(args.vg, palette.green);
     std::string footer = screen.entries[screen.selected].copyText.empty()
-                             ? "Enter/Space select  Esc back"
-                             : "Enter copies  Esc back";
+                             ? "[enter] select  [esc] back"
+                             : "[enter] copy  [esc] back";
     if (!copiedText.empty() &&
         copiedText == screen.entries[screen.selected].copyText &&
         rack::system::getTime() - copiedAt < 1.2)

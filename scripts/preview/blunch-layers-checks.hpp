@@ -113,13 +113,7 @@ inline void checkBlunchFormulaLayers(rack::plugin::Model* model) {
     rack::event::Button click;
     click.button = GLFW_MOUSE_BUTTON_LEFT; click.action = GLFW_PRESS; click.mods = 0;
     play.onButton(click);
-    if (wait != B::WAIT_IMMEDIATE) {
-      require(ghost->pendingFormulas[0].lines.size()==2,
-              "Play stages the edit and ghost deletion together");
-      ghost->activatePendingLineAtBoundary(B::WAIT_BOUNDARY_LINE, true);
-      ghost->moveToNextLine(false);
-      ghost->moveToNextLine(false);
-    }
+    require(!ghost->channelHasNext(0), "Explicit Play bypasses Wait and clears the queued submission");
     require(ghost->lineVersion(0,0,B::NOW)=="90bpm" &&
                 ghost->lineVersion(0,1,B::NOW).empty() &&
                 ghost->sequencers[0].activeLine==0 &&
@@ -143,16 +137,61 @@ inline void checkBlunchFormulaLayers(rack::plugin::Model* model) {
     widget->step();
     ++widget->editor->commands.submitCount;
     widget->step();
-    require(keyboard->pendingFormulas[0].lines.size()==2 &&
-                keyboard->lineVersion(0,0,B::NEXT)=="90bpm" &&
-                keyboard->lineVersion(0,1,B::NEXT).empty(),
-            "Keyboard apply stages the whole channel and deleted row in both editor views");
+    require(!keyboard->channelHasNext(0) && keyboard->sequencers[0].activeLineText=="90bpm" && keyboard->lineVersion(0,1,B::NOW).empty(),
+            "Keyboard Play applies edits and ghost deletion immediately in both views");
     ++widget->editor->commands.submitCount;
     widget->step();
-    require(keyboard->pendingFormulas[0].lines.size()==2,
-            "Submitting again retains the complete queued page");
+    require(!keyboard->channelHasNext(0) && keyboard->sequencers[0].running,
+            "Repeated Play restarts the focused formula without getting stuck in Next");
   }
 
+  for (int wait=0;wait<BLUNCH_WAIT_MODE_COUNT;++wait) {
+    auto start=make();
+    start->runningLineTexts[0].clear();
+    start->sequenceEditorStates[0].text="100ms\n200ms\n300ms";
+    start->commitLine(0,true);
+    start->openFocusedChannelEditPage();start->selectedLine=1;
+    start->params[B::WAIT_MODE_PARAM].setValue(wait);
+    start->sequencers[0].clockPhase=.75f;
+    start->playSelection();
+    require(start->sequencers[0].activeLine==1 && start->sequencers[0].activeLineText=="200ms" && start->sequencers[0].running && start->sequencers[0].clockPhase==0 && !start->channelHasNext(0),"Play immediately starts the focused line under every Wait mode");
+    start->sequencers[0].clockPhase=.5f;start->playSelection();
+    require(start->sequencers[0].clockPhase==0,"Play restarts an already playing focused line");
+  }
+  {
+    auto* focus=make().release();APP->engine->addModule(focus);
+    focus->runningLineTexts[0].clear();focus->sequenceEditorStates[0].text="100ms\n200ms";focus->commitLine(0,true);
+    focus->openFocusedChannelEditPage();focus->params[B::WAIT_MODE_PARAM].setValue(B::WAIT_NEXT_VISIT);
+    auto w=std::unique_ptr<ComputerscareBlunchWidget>(static_cast<ComputerscareBlunchWidget*>(model->createModuleWidget(focus)));
+    w->step();w->editor->setCursorLine(1);focus->selectedLine=0;
+    rack::event::Button click;click.button=GLFW_MOUSE_BUTTON_LEFT;click.action=GLFW_PRESS;click.mods=0;
+    w->channelPlay->onButton(click);
+    require(focus->sequencers[0].activeLine==1 && !focus->channelHasNext(0),"Panel Play reads the current editor cursor, not the previous frame's focused line");
+    w->step();w->editor->setCursorLine(0);
+    ++w->editor->commands.submitCount;w->step();
+    require(focus->sequencers[0].activeLine==0 && !focus->channelHasNext(0),"Keyboard Play uses the focused line immediately with Next visit selected");
+  }
+  {
+    auto bare=make();
+    bare->defaultNumberUnit=blunch::language::parseClockUnit("bpm");
+    bare->runningLineTexts[0].clear();
+    bare->sequenceEditorStates[0].text="(3 2)hz#8\n3.5hz@9\n8";
+    require(bare->commitLine(2,true),"Bare eight fixture compiles");
+    require(std::abs(bare->sequencers[0].activeClockSpec.periodSeconds-7.5f)<1e-5,"Bare 8 with default BPM is one pulse per 7.5 seconds");
+    auto* json=bare->dataToJson();auto restored=make();restored->dataFromJson(json);json_decref(json);
+    require(std::abs(restored->sequencers[0].activeClockSpec.periodSeconds-7.5f)<1e-5,"Bare eight retains BPM after reload");
+  }
+  {
+    auto source=make();source->openFocusedChannelEditPage();source->setFormulaLayer(B::NOW);
+    auto* data=source->dataToJson();auto* restored=make().release();restored->dataFromJson(data);json_decref(data);
+    APP->engine->addModule(restored);
+    auto w=std::unique_ptr<ComputerscareBlunchWidget>(static_cast<ComputerscareBlunchWidget*>(model->createModuleWidget(restored)));
+    w->step();APP->event->setSelectedWidget(w->editor);
+    require(w->editor->readOnly && w->editor->hideCursor && w->channelLabel->viewIndicator()=="Now","Reloaded active view clearly identifies why its cursor is hidden");
+    rack::event::SelectKey key;key.key=GLFW_KEY_F7;key.action=GLFW_PRESS;key.mods=0;
+    w->editor->onSelectKey(key);w->step();
+    require(restored->visibleLayer()==B::DRAFT && !w->editor->readOnly && !w->editor->hideCursor && w->editor->cursor==w->editor->selection && w->channelLabel->viewIndicator().empty(),"F7 returns a reloaded read-only view to editable Draft with its caret enabled");
+  }
   auto saved = make();
   saved->sequenceEditorStates[0].text = "3hz";
   saved->commitLine(0, true);

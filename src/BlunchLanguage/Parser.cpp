@@ -469,6 +469,10 @@ class Parser {
 
     choice.minValue = block.literal.value;
     choice.maxValue = block.literal.value;
+    choice.minValueRange.begin = block.literal.range.begin;
+    choice.minValueRange.end =
+        block.literal.range.begin + int(block.literal.valueLexeme.size());
+    choice.maxValueRange = choice.minValueRange;
     choice.minValueLexeme = block.literal.valueLexeme;
     choice.maxValueLexeme = block.literal.valueLexeme;
     choice.unit = block.literal.unit;
@@ -991,6 +995,8 @@ class Parser {
     choice.maxValue = choice.minValue;
     choice.minValueLexeme = minToken.lexeme;
     choice.maxValueLexeme = minToken.lexeme;
+    choice.minValueRange = rangeFromToken(minToken);
+    choice.maxValueRange = choice.minValueRange;
     choice.range.begin = restChoice ? restRange.begin : minToken.begin;
     choice.range.end = minToken.end;
 
@@ -1013,6 +1019,7 @@ class Parser {
     Token maxToken = advance();
     choice.maxValue = parseDouble(maxToken.lexeme);
     choice.maxValueLexeme = maxToken.lexeme;
+    choice.maxValueRange = rangeFromToken(maxToken);
     choice.range.end = maxToken.end;
     parseRandomChoiceUnit(result, choice);
     parseRandomChoiceProbability(result, choice);

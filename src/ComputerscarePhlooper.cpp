@@ -110,6 +110,7 @@ struct ComputerscarePhlooper : Module {
     CUSTOM_ACTIVE = CUSTOM_LENGTH + 16,
     CLOCK_RATIO = CUSTOM_ACTIVE + 16,
     EXPANSION,
+    SPEED_OFFSET_CURVE,
     PARAMS
   };
   enum Input {
@@ -177,6 +178,7 @@ struct ComputerscarePhlooper : Module {
   };
   std::array<WriteVisual, 16> writeVisual{};
   std::atomic<bool> resetRequest{false};
+  std::atomic<bool> initializeRequest{false};
   unsigned visualDivider = 0;
   float loadRegionSettleTime = 0.f;
   bool firstGate = false;
@@ -215,6 +217,9 @@ struct ComputerscarePhlooper : Module {
                  {"Time (ms)", "Length (%)", "Speed (%)", "Beats"});
     configSwitch(SHOW_TRANSPORT, 0, 1, 1, "Per-channel controls",
                  {"Hidden", "Visible"});
+    configSwitch(SPEED_OFFSET_CURVE, 0, 1, 0, "Speed offset curve",
+                 {"Linear", "Multiplicative"});
+    getParamQuantity(SPEED_OFFSET_CURVE)->randomizeEnabled = false;
     configSwitch(OVERDUB, 0, 1, 0, "Overdub", {"Blend", "Add"});
     configSwitch(RECORD, 0.f, 1.f, 0.f, "Record all", {"Off", "Recording"});
     configLight(RECORD_LIGHT, "Recording");
@@ -303,7 +308,8 @@ struct ComputerscarePhlooper : Module {
     auto& input = inputs[OFFSET_CV];
     return phlooper::controlOffset(
         voice, mode, hold, params[OFFSET].getValue(), input.getChannels(),
-        input.getVoltage(input.getChannels() == 1 ? 0 : voice));
+        input.getVoltage(input.getChannels() == 1 ? 0 : voice),
+        params[SPEED_OFFSET_CURVE].getValue() > .5f);
   }
   unsigned gates(int port) {
     unsigned mask = 0;
@@ -365,6 +371,19 @@ struct ComputerscarePhlooper : Module {
       eraseVisual = 0;
       return;
     }
+    if (initializeRequest.exchange(false)) {
+      // Initialize resets controls/transport; only Clear recording removes
+      // audio.
+      if (loop.initial) loop.finish();
+      firstGate = false;
+      writeClock = {};
+      queuedRecord.store(0);
+      queuedErase.store(0);
+      loop.resetHeads();
+      clearCustomRegions();
+      for (auto& length : beatLengthVisual) length = packRange({-1.f, 1.f});
+      frames = loop.size;
+    }
     if (resetRequest.exchange(false)) {
       params[START].setValue(0.f);
       params[LENGTH].setValue(1.f);
@@ -422,6 +441,7 @@ struct ComputerscarePhlooper : Module {
     phlooper::Settings s;
     s.count = int(params[COUNT].getValue());
     s.mode = int(params[MODE].getValue());
+    s.multiplicativeOffset = params[SPEED_OFFSET_CURVE].getValue() > .5f;
     s.beatFrames = recordedBeatFrames.load();
     s.beatQuantum = std::abs(phlooper::beatValue(params[OFFSET].getValue()));
     s.beatOrigin = clockMarkCount.load() ? clockMarks[0].load() : 0.f;
@@ -1053,7 +1073,7 @@ struct ComputerscarePhlooper : Module {
   }
   void onReset(const ResetEvent& e) override {
     Module::onReset(e);
-    resetRequest = true;
+    initializeRequest = true;
   }
 };
 
@@ -1128,7 +1148,10 @@ float PhlooperOffsetQuantity::getDisplayValue() {
   if (m && m->params[ComputerscarePhlooper::MODE].getValue() == 3.f)
     return phlooper::beatValue(getValue());
   bool time = !m || m->params[ComputerscarePhlooper::MODE].getValue() == 0.f;
-  return getValue() * (time ? 5.f : 1.f);
+  return getValue() *
+         (time                                                       ? 5.f
+          : m->params[ComputerscarePhlooper::MODE].getValue() == 2.f ? 1.25f
+                                                                     : 1.f);
 }
 void PhlooperOffsetQuantity::setDisplayValue(float value) {
   auto* m = dynamic_cast<ComputerscarePhlooper*>(module);
@@ -1142,7 +1165,10 @@ void PhlooperOffsetQuantity::setDisplayValue(float value) {
     return;
   }
   bool time = !m || m->params[ComputerscarePhlooper::MODE].getValue() == 0.f;
-  setValue(value / (time ? 5.f : 1.f));
+  setValue(value / (time ? 5.f
+                    : m->params[ComputerscarePhlooper::MODE].getValue() == 2.f
+                        ? 1.25f
+                        : 1.f));
 }
 
 std::string PhlooperOffsetQuantity::getUnit() {
@@ -1166,6 +1192,12 @@ struct PhlooperButton : app::Switch {
     box.size = Vec(42, 20);
     face.configure(42, 20, 4.f, 3.f, 1.2f, 1);
     face.faceColor = nvgRGB(36, 201, 166);
+  }
+  void initParamQuantity() override {
+    app::Switch::initParamQuantity();
+    // The widget starts momentary, then the panel configures latching buttons.
+    // Initialize must reset both kinds; retain their randomization exclusions.
+    if (auto* quantity = getParamQuantity()) quantity->resetEnabled = true;
   }
   void draw(const DrawArgs& args) override {
     auto* quantity = getParamQuantity();
@@ -1239,14 +1271,10 @@ static std::string phlooperChoiceDescription(int param, int value) {
   }
   if (param == ComputerscarePhlooper::MODE) {
     static const char* descriptions[] = {
-        "Offset changes loop duration in milliseconds.\n"
-        "Pitch stays the same.",
-        "Offset changes loop duration by a percentage of Length.\n"
-        "Pitch stays the same.",
-        "Offset changes playback speed by a percentage.\n"
-        "Pitch changes with speed.",
-        "Offset changes loop duration in recorded clock-beat fractions.\n"
-        "Pitch stays the same."};
+        "Offset changes loop duration in milliseconds.",
+        "Offset changes loop duration by a percentage of Length.",
+        "Offset changes playback speed by a percentage.",
+        "Offset changes loop duration in recorded clock-beat fractions."};
     return descriptions[clamp(value, 0, 3)];
   }
   if (param == ComputerscarePhlooper::OVERDUB)
@@ -1410,10 +1438,16 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
                                       : 2) +
              " loops";
     if (param == ComputerscarePhlooper::MODE)
-      return std::string(value == 0   ? "Time ms"
-                         : value == 1 ? "Length %"
-                         : value == 2 ? "Speed %"
-                                      : "Beats");
+      return std::string(
+          value == 0   ? "Time ms"
+          : value == 1 ? "Length %"
+          : value == 2
+              ? (module && module->params
+                                   [ComputerscarePhlooper::SPEED_OFFSET_CURVE]
+                                       .getValue() > .5f
+                     ? "Speed % mult"
+                     : "Speed % lin")
+              : "Beats");
     if (param == ComputerscarePhlooper::LOOP_DIRECTION) {
       if (module)
         for (int i = 1; i < 16; ++i)
@@ -1439,10 +1473,17 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
       int count = param == ComputerscarePhlooper::COUNT            ? 16
                   : param == ComputerscarePhlooper::LOOP_DIRECTION ? 4
                   : param == ComputerscarePhlooper::EXPANSION      ? 4
-                  : param == ComputerscarePhlooper::MODE           ? 4
+                  : param == ComputerscarePhlooper::MODE           ? 5
                                                                    : 3;
       for (int i = 0; i < count; ++i) {
-        int value = param == ComputerscarePhlooper::COUNT ? i + 1 : i;
+        int value = param == ComputerscarePhlooper::COUNT  ? i + 1
+                    : param == ComputerscarePhlooper::MODE ? (i == 3   ? 2
+                                                              : i == 4 ? 3
+                                                                       : i)
+                                                           : i;
+        bool speedChoice =
+            param == ComputerscarePhlooper::MODE && (i == 2 || i == 3);
+        int curve = i == 3 ? 1 : 0;
         const char* expansionNames[] = {"Normal", "Cycle", "Zero", "Stall"};
         std::string name = param == ComputerscarePhlooper::EXPANSION
                                ? expansionNames[i]
@@ -1451,7 +1492,8 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
                            : param == ComputerscarePhlooper::MODE
                                ? (i == 0   ? "Time (ms)"
                                   : i == 1 ? "Length (%)"
-                                  : i == 2 ? "Speed (%)"
+                                  : i == 2 ? "Speed % Linear"
+                                  : i == 3 ? "Speed % Mult"
                                            : "Beats")
                                : (i == 0   ? "Forward"
                                   : i == 1 ? "Reverse"
@@ -1460,11 +1502,19 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
         auto* item = new PhlooperDescribedChoiceItem;
         item->text = name;
         item->description = phlooperChoiceDescription(param, value);
+        if (speedChoice)
+          item->description +=
+              curve ? "\nEach loop multiplies the previous loop's speed."
+                    : "\nEach loop adds the same speed offset.";
         item->checked = [=]() {
           int channels =
               param == ComputerscarePhlooper::LOOP_DIRECTION ? 16 : 1;
           for (int j = 0; j < channels; ++j)
             if (module->params[param + j].getValue() != value) return false;
+          if (speedChoice &&
+              int(module->params[ComputerscarePhlooper::SPEED_OFFSET_CURVE]
+                      .getValue()) != curve)
+            return false;
           return true;
         };
         item->action = [=]() {
@@ -1480,6 +1530,15 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
             change->oldValue = module->params[param + j].getValue();
             change->newValue = float(value);
             module->params[param + j].setValue(float(value));
+            changes->push(change);
+          }
+          if (speedChoice) {
+            auto* change = new history::ParamChange;
+            change->moduleId = module->id;
+            change->paramId = ComputerscarePhlooper::SPEED_OFFSET_CURVE;
+            change->oldValue = module->params[change->paramId].getValue();
+            change->newValue = float(curve);
+            module->params[change->paramId].setValue(float(curve));
             changes->push(change);
           }
           APP->history->push(changes);
@@ -2236,7 +2295,9 @@ struct PhlooperShortcutOverlay : widget::TransparentWidget {
 };
 struct PhlooperViewButton : computerscare::ReturnToNormalButton {
   std::string caption;
+  bool pressed = false;
   std::string label() override { return caption; }
+  bool isPressed() override { return pressed; }
 };
 struct ComputerscarePhlooperWidget : ModuleWidget {
   computerscare::VisualPanelMode visualMode;
@@ -2258,7 +2319,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       compactBackdrop->box.size = box.size;
       fullDecor->box.pos.x = box.size.x - 25;
       waveView->box = Rect(Vec(5, 2), Vec(box.size.x - 31, 375));
-      normalButton->box.pos = Vec(box.size.x - 24, 2);
+      normalButton->box.pos = Vec(box.size.x - 27, 2);
       for (auto& original : visualMode.rail.ports) {
         auto* port = original.port;
         float y;
@@ -2538,10 +2599,11 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     compactBackdrop->visible = false;
     addChild(compactBackdrop);
     auto* small = new PhlooperViewButton;
-    small->caption = "sm";
-    small->configure(20, 18, 3, 2, .7f, 198);
+    small->caption = "Big";
+    small->pressed = true;
+    small->configure(25, 18, 3, 2, .7f, 198);
     small->textSize = 13.f;
-    small->textInset = 4.f;
+    small->textInset = 2.f;
     normalButton = small;
     normalButton->visible = false;
     normalButton->action = [module]() {
@@ -2612,7 +2674,7 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
     };
     float modeWidth =
         std::max(buttonWidth("Length %"),
-                 std::max(buttonWidth("Time ms"), buttonWidth("Speed %")));
+                 std::max(buttonWidth("Time ms"), buttonWidth("Speed % mult")));
     float directionWidth =
         std::max(buttonWidth("Fwd / Rev"),
                  std::max(buttonWidth("Forward"), buttonWidth("Reverse")));

@@ -17,6 +17,9 @@ inline void checkBlunchSettings(rack::plugin::Model* model,const std::string& ou
   const auto source=w->editor->text;int cursor=w->editor->cursor,selection=w->editor->selection;
   clickMode();require(w->settings->opened&&w->settings->transitioning(),"Edit opens Settings with a transition");
   require(APP->event->getSelectedWidget()==w->settings,"Settings receives keyboard focus");
+  APP->event->setSelectedWidget(w->editSettingsToggle);
+  w->step();
+  require(APP->event->getSelectedWidget()==w->settings,"Settings restores keyboard focus after the mouse click completes");
   auto* s=w->settings;
   key(GLFW_KEY_ENTER);require(s->screens.size()==1,"Transition consumes keys without applying them");
   s->previewProgress=.5f;w->step();
@@ -26,6 +29,15 @@ inline void checkBlunchSettings(rack::plugin::Model* model,const std::string& ou
   capture(w.get(),output+"/settings-root.png",scale);
   key(GLFW_KEY_ENTER);require(s->screens.size()==2,"Enter opens Playback");
   capture(w.get(),output+"/settings-playback.png",scale);
+  s->screens.back().selected=5;key(GLFW_KEY_ENTER);
+  key(GLFW_KEY_DOWN);key(GLFW_KEY_DOWN);key(GLFW_KEY_SPACE);
+  require(m->params[B::LINE_SCAN_PARAM].getValue()==2,"Line scan X is selectable");
+  capture(w.get(),output+"/settings-line-scan.png",scale);
+  key(GLFW_KEY_ESCAPE);s->screens.back().selected=6;key(GLFW_KEY_ENTER);
+  key(GLFW_KEY_DOWN);key(GLFW_KEY_DOWN);key(GLFW_KEY_DOWN);key(GLFW_KEY_SPACE);
+  require(m->params[B::BLOCK_SCAN_PARAM].getValue()==3,"Block scan Y is selectable");
+  capture(w.get(),output+"/settings-block-scan.png",scale);
+  key(GLFW_KEY_ESCAPE);s->screens.back().selected=0;
   key(GLFW_KEY_DOWN);key(GLFW_KEY_DOWN);key(GLFW_KEY_ENTER);
   require(s->screens.back().name=="Wait","Nested settings navigation");
   key(GLFW_KEY_DOWN);key(GLFW_KEY_DOWN);key(GLFW_KEY_SPACE);
@@ -134,7 +146,7 @@ inline void checkBlunchSettings(rack::plugin::Model* model,const std::string& ou
   capture(w.get(),output+"/help-random-mode.png",scale);
   key(GLFW_KEY_ESCAPE);key(GLFW_KEY_ESCAPE);key(GLFW_KEY_ESCAPE);
   require(s->screens.size()==1,"Escape returns from Help to Settings");
-  require(computerscare::TerminalSettings::transitionSeconds==.5,"Transition is 500 milliseconds");
+  require(computerscare::TerminalSettings::transitionSeconds==.3,"Transition is 300 milliseconds");
   // Freeze 60 fps transition samples for an optional development animation.
   if(std::getenv("BLUNCH_SETTINGS_ANIMATION")) {
     std::string frames=output+"/settings-animation";system::createDirectories(frames);
@@ -147,5 +159,5 @@ inline void checkBlunchSettings(rack::plugin::Model* model,const std::string& ou
       capture(w.get(),frames+string::f("/frame-%03d.png",i),scale,false);
     }
   }
-  std::puts("Blunch Settings navigation, immediate shared bindings, 500ms transition, formula/focus preservation and mode cycling checks passed");
+  std::puts("Blunch Settings navigation, immediate shared bindings, 300ms transition, formula/focus preservation and mode cycling checks passed");
 }

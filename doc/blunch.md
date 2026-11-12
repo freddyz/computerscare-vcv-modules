@@ -208,17 +208,17 @@ Stopped channels show their edited text immediately, even if they have never pla
 | **Next**  | Submitted formulas waiting for the selected Wait boundary. |
 | **Now**   | The formulas currently used for playback.                  |
 
-In All view, press **Ctrl/Cmd+Enter** or click **Play** to stage Draft changes and start the selected channels, including deleted lines. In channel view, **Ctrl/Cmd+Enter** submits the channel’s Draft page and starts the line under the cursor, even with Line advance off; the selected Wait boundary still applies. All-view and Play-button submissions preserve the active line when it still exists. If the active line was deleted, playback continues with a remaining formula. **Immediate** applies the submission straight away. Further typing changes Draft only; it cannot overwrite Next. Starting an empty channel activates its submitted formula because there is no running boundary to wait for.
+In All view, press **Ctrl/Cmd+Enter** or click **Play** to stage Draft changes and start the selected channels, including deleted lines. In channel view, **Ctrl/Cmd+Enter** submits the channel’s Draft page and starts the line under the cursor, even with Line advance off; Play starts immediately, bypassing Wait. All-view Play starts each selected channel at its displayed line; channel-view Play starts the focused line. If the active line was deleted, playback continues with a remaining formula. **Immediate** applies the submission straight away. Further typing changes Draft only; it cannot overwrite Next. Starting an empty channel activates its submitted formula because there is no running boundary to wait for.
 
 Turning **Run** back on applies the latest valid Draft/Next changes immediately, bypassing Wait, and resumes the remembered channels. **Ctrl/Cmd+Space** does the same and starts all channels. Invalid Drafts remain editable and do not start that channel.
 
 **Ctrl/Cmd+Shift+Enter** also stages the channel page. With **Wait: Page**, the submitted page changes take effect together when the page wraps. With other Wait modes, changes take effect at the selected boundary on the playing line, or when playback reaches another queued line. An invalid line prevents the whole page submission; correct the red-marked text and try again.
 
-Enable **Apply valid edits while typing** in the context menu to submit edits automatically once the page validates. The Wait setting still determines when they become active; invalid edits leave playback unchanged.
+Enable **Auto-stage valid edits** in the context menu to submit edits automatically once the page validates. Wait controls when staged edits become active. Choose Next visit to preserve the current visit. Invalid edits leave playback unchanged.
 
 The left wall shows selection and playback. A narrow yellow marker pulses at its inner edge when Draft edits or waiting Next changes exist, per line in channel view or per channel in All view. Right-click a row for **Stage changes** or **Unstage changes**. Unstage withdraws Next while keeping Draft and Now. **Revert changes** discards Draft edits and restores Next, or Now if nothing is queued. Changed Draft text is tinted yellow. Play stays raised while changes exist: steady yellow for Draft, pulsing yellow for Next. Applying Draft does not cancel an existing Next submission.
 
-Press **F6** to switch between Draft, Next, and Now. Next and Now are read-only. Unchanged lines in Next show Now in faded text. Hold **F7** to peek at Now; release it to return. Typing returns to Draft. Switching views never replaces your edits.
+Next and Now are read-only. Unchanged lines in Next show Now in faded text. Press **F7** to cycle Draft → Next → Now → Draft. The channel selector shows a small Next or Now indicator in those read-only views; Draft has no indicator. Typing returns to Draft. Switching views never replaces your edits.
 
 The **x** button to the right of Stop acts on the selected channel:
 
@@ -262,7 +262,7 @@ Gate length CV adds 10 percentage points per volt. The combined value is capped 
 | **Time CV**             | Mono, channel 1. Adds to Time at 1 V/octave. Combined range is −5 to +5: 1/32× to 32× speed.                                                                                            |
 | **Seed CV**             | Mono, channel 1. Adds one seed unit per volt to the knob. Zero or negative totals select fresh randomness for unprefixed blocks. `$` uses the signed total as a seed; `!` ignores it.   |
 | **Gate length**         | Adds 10 percentage points per volt to Gate. Mono broadcasts; poly addresses matching channels. Negative totals produce triggers; zero is silent; positive totals give gates up to 100%. |
-| **W / X / Y / Z**       | Mono clocks (channel 1), rising edges around 1 V; referenced by letter in formulas or selected in the context menu.                                                                     |
+| **W / X / Y / Z**       | Clock: channel 1, rising edges around 1 V. Scan: 0–10 V sampled at advance boundaries; mono broadcasts, poly addresses matching channels.                                               |
 
 Run supports polyphony: a mono cable controls every active channel; poly channels control matching sequencer channels. Channels without a matching Run CV channel pause while that cable is connected. Turning the Run button off stops all channels regardless of its input.
 
@@ -292,7 +292,7 @@ Ctrl/Cmd+Enter applies and starts the selection; Ctrl/Cmd+, stops it. Tab switch
 
 Press **F8** with Blunch focused or hovered, or click **Edit** to open Settings. Settings fill the display while playback continues. Settings navigation is keyboard-only. Use **Up/Down** to move, **Enter/Space** to open or select, and **Escape** to go back. Choices take effect immediately; `[x]` marks the selected option. Escape at the top, F8, or clicking **Set** returns to Edit.
 
-Settings include line/block advance, Wait, Run input, live apply, channel sync, default units, and Stage page. Appearance and editor options remain in the context menu. Entering and leaving Settings uses a 500 ms character transition. Formula text and selection are preserved.
+Settings include line/block advance, Wait, Run input, live apply, channel sync, default units, and Stage page. Appearance and editor options remain in the context menu. Entering and leaving Settings uses a 300 ms character transition. Formula text and selection are preserved.
 
 ### Help
 
@@ -316,7 +316,9 @@ Display style and default number unit are saved with the patch.
 
 - **Block advance:** Automatic advances when the current block finishes. Off holds the current block. External W/X/Y/Z advances on the selected input.
 - **Line advance:** Automatic advances after the current line. Off keeps it looping. External W/X/Y/Z advances lines on the selected input.
-- **Wait:** applies submitted text immediately, or waits for the next Clock, Block, Line, Page boundary, or an external W/X/Y/Z edge.
+- **Wait:** applies submitted text immediately, at a Clock/Block/Line/Page boundary, on an external W/X/Y/Z edge, or on each edited line’s Next visit.
+- **Line scan / Block scan:** Off advances sequentially. W/X/Y/Z samples 0–10 V to select a line/block at the configured advance boundary.
+- **Auto-stage valid edits:** stages valid edits automatically; Wait controls activation.
 - **Run input:** choose Gate or Trigger toggle behavior.
 
 ## Channel sync
@@ -339,8 +341,7 @@ Hold **backtick** while Blunch is hovered or focused to show its shortcut popup.
 | -------------------- | ----------------------------------------------------------------------------------- |
 | Ctrl/Cmd+Enter       | All: apply and start selected channels; channel view: submit and start focused line |
 | Ctrl/Cmd+Shift+Enter | Stage the changed lines on the page                                                 |
-| F6                   | Cycle Draft / Next / Now                                                            |
-| Hold F7              | Peek at Now                                                                         |
+| F7                   | Cycle Draft / Next / Now                                                            |
 | Enter in All view    | Stay in All view                                                                    |
 | Tab / Shift+Tab      | Switch between All and channel view                                                 |
 | Esc                  | Cancel / return to All                                                              |
@@ -367,3 +368,29 @@ Choose **Editor → Theme** in the context menu: **Mauer** is light, **Garnett**
 The module starts at 16 HP. Drag either panel edge to resize it in 1 HP steps. The width is saved with the patch. Editor font, spacing, and line wrapping are available in the context menu. Text height and line height are independent: changing the glyph height does not move the rows. **Steady line height** is on by default, sizing 16 rows to the display. Turn it off to size rows from the font size and text height. **Editor line height** adjusts spacing only when Steady line height is off; the slider is disabled while it is on. Disabled channels retain alternating background stripes.
 
 Choose **Panel → Max visual** in the context menu to expand the display vertically and collect the input/output jacks in a dense rail of tiny ports. Hover a jack for its label. Hidden controls keep their settings. Use **Normal UI** above the display, or **Panel → Normal**, to restore the controls and original module width. Cables remain connected, and the layout is saved with the patch.
+
+### Scanning lines and blocks
+
+In Playback settings, choose **Line scan** or **Block scan**, then W, X, Y, or Z.
+0–10 V selects across the available lines or blocks. The existing **Line advance**
+and **Block advance** settings determine when the voltage is sampled: Automatic
+waits for completion; External waits for that clock; Off holds the current selection.
+Voltage changes between boundaries do not interrupt playback. Mono scan voltage
+controls every channel; polyphonic scan voltage addresses matching channels.
+Blank lines are skipped. Scan Off keeps sequential advancement.
+
+**Stage changes** and **Stage page** submit edits without jumping playback.
+**Wait → Next visit** applies each staged line when it is next entered, including
+when the same line repeats. **Auto-stage valid edits** submits edits automatically and follows Wait, just like manual staging. With Next visit selected, editing the playing line leaves its current visit unchanged. Editing another line never redirects playback. Play still submits
+and starts the chosen line explicitly.
+
+### Bake Time into formulas
+
+Choose **Bake Time into formulas** in the context menu (also in Settings →
+Playback) to fold the Time knob into all channels’ Draft, Next, and Now formulas,
+then reset Time to zero. CV is ignored and remains patched. At Time +1, for example,
+`100bpm` becomes `200bpm` and `500ms` becomes `250ms`. Timed `@` and `#` limits
+also scale; repeat counts, probabilities, and external-clock references do not.
+Values use six significant digits without trailing zeros. Colon times become
+seconds. Correct invalid drafts before baking. Playback keeps its position and
+current random choices. The action supports Undo/Redo.

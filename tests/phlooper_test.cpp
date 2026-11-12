@@ -700,8 +700,31 @@ int main(){
   check(phlooper::controlOffset(3,0,false,-1,4,2)==20&&
         phlooper::controlOffset(4,0,false,-1,4,2)==-20,
         "poly offset CV replaces each supplied channel and missing channels keep knob spacing");
-  check(phlooper::controlOffset(3,2,false,1,1,20)==23,
+  check(phlooper::controlOffset(3,2,false,1,1,20)==28.75f,
         "mono speed-mode offset adds a clamped percent to knob spacing");
+  check(phlooper::controlOffset(1,2,false,20,0,0)==25 &&
+        phlooper::controlOffset(1,2,false,-20,0,0)==-25 &&
+        phlooper::controlOffset(0,2,false,0,2,-10)==-25,
+        "speed offset knob and CV reach plus/minus 25 percent");
+  for (int voice=0;voice<16;++voice) {
+    float offset=phlooper::controlOffset(voice,2,false,-8,0,0,true);
+    check(std::abs(1.f+offset/100.f-std::pow(.9f,voice))<2e-6f,
+          "multiplicative speed offsets compound by the previous loop ratio");
+  }
+  check(std::abs(phlooper::controlOffset(2,2,false,-8,1,4,true)+10.9f)<1e-4f,
+        "mono offset CV multiplies every geometric loop speed");
+  check(std::abs(phlooper::controlOffset(7,2,false,-8,8,-4,true)+10.f)<1e-4f,
+        "poly offset CV supplies the addressed loop ratio directly");
+  phlooper::Settings geometric;
+  geometric.multiplicativeOffset=true;
+  check(geometric.offsetSpeed(-98.f)<.05 && geometric.offsetSpeed(-98.f)>.019,
+        "multiplicative playback does not plateau at the linear five-percent floor");
+  e.size=64;e.resetHeads();geometric.mode=2;geometric.count=3;
+  geometric.offsetMask=7;
+  for(int v=0;v<3;++v)geometric.offsets[v]=phlooper::controlOffset(v,2,false,-8,0,0,true);
+  for(int frame=0;frame<20;++frame)e.process({},48000,geometric,0,0,0,0,0,false);
+  check(std::abs(e.head[0]-20)<1e-4 && std::abs(e.head[1]-18)<1e-4 && std::abs(e.head[2]-16.2)<1e-4,
+        "multiplicative ratios drive actual audio playheads");
   e.size=0;
   check(e.phase(0,1)==0,"empty loops produce zero phase");
   std::puts("Phlooper DSP and WAV tests passed");

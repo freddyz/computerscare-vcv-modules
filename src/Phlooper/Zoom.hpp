@@ -61,16 +61,37 @@ inline TimeRange dragLoopPointOnGrid(TimeRange region, bool startPoint,
                     : TimeRange(region.start, float(point));
 }
 inline float controlOffset(int voice, int mode, bool hold, float knob,
-                           int channels, float voltage) {
+                           int channels, float voltage,
+                           bool multiplicative = false) {
+  if (mode == 2 && multiplicative) {
+    // Integer exponent: at most four squarings, without transcendental work.
+    float ratio = 1.f, base = 1.f + knob * .0125f;
+    for (int power = hold ? 0 : voice; power; power >>= 1) {
+      if (power & 1) ratio *= base;
+      base *= base;
+    }
+    float cvRatio = 1.f + std::max(-1.f, std::min(1.f, voltage / 10.f)) * .25f;
+    if (channels == 1)
+      ratio *= cvRatio;
+    else if (voice < channels)
+      ratio = cvRatio;
+    return (ratio - 1.f) * 100.f;
+  }
   if (mode == 3) {
     float spacing = hold ? 0.f : voice * beatValue(knob);
     float cv = beatValue(std::max(-10.f, std::min(10.f, voltage)) * 2.f);
     if (channels == 1) return spacing + cv;
     return voice < channels ? cv : spacing;
   }
-  float spacing = hold ? 0.f : voice * knob * (mode == 0 ? 5.f : 1.f);
-  float cv = std::max(-1.f, std::min(1.f, voltage / 10.f)) *
-             (mode == 0 ? 100.f : 20.f);
+  float spacing = hold ? 0.f
+                       : voice * knob *
+                             (mode == 0   ? 5.f
+                              : mode == 2 ? 1.25f
+                                          : 1.f);
+  float cv =
+      std::max(-1.f, std::min(1.f, voltage / 10.f)) * (mode == 0   ? 100.f
+                                                       : mode == 2 ? 25.f
+                                                                   : 20.f);
   if (channels == 1) return spacing + cv;
   return voice < channels ? cv : spacing;
 }

@@ -16,9 +16,12 @@ inline void checkBlunchGates(rack::plugin::Model* model) {
   }
   auto live=make("120bpm");
   live->params[B::LIVE_APPLY_PARAM].setValue(1);
+  live->params[B::WAIT_MODE_PARAM].setValue(B::WAIT_NEXT_VISIT);
   live->sequenceEditorStates[0].text="90bpm";
   live->inspectFocusedLine(0,false);
-  require(live->runningLineTexts[0][0]=="90bpm","Valid typing applies in immediate mode");
+  require(live->runningLineTexts[0][0]=="120bpm" && live->channelHasNext(0),"Valid typing stages without interrupting the current visit");
+  live->handleLineCycleEnd();
+  require(live->runningLineTexts[0][0]=="90bpm","Valid typing applies on next repetition");
   live->sequenceEditorStates[0].text="{";
   live->inspectFocusedLine(0,false);
   require(live->runningLineTexts[0][0]=="90bpm","Invalid typing preserves running formula");

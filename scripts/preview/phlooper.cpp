@@ -161,6 +161,8 @@ void checkMaxVisual(app::ModuleWidget* widget,bool& compact,const std::string& p
 #include "patch-save-checks.hpp"
 #include "blunch-line-menu-checks.hpp"
 #include "blunch-settings-checks.hpp"
+#include "blunch-scan-checks.hpp"
+#include "blunch-bake-checks.hpp"
 #include "blunch-repeat-sequence-checks.hpp"
 #include "blunch-transport-save-checks.hpp"
 #include "voly-multi-checks.hpp"
@@ -174,6 +176,8 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   checkBlunchRepeatSequences(modelBlunchPreview);
   checkBlunchTransportSave(modelBlunchPreview);
   checkBlunchSettings(modelBlunchPreview, output, scale);
+  checkBlunchScanning(modelBlunchPreview);
+  checkBlunchTimeBake(modelBlunchPreview,output,scale);
   checkBlunchGates(modelBlunchPreview);
   checkBlunchRowSelection(modelBlunchPreview,[&](app::ModuleWidget* widget){capture(widget,output+"/all-line-advance-off.png",scale);});
   checkBlunchLineMenus(modelBlunchPreview, output, scale);
@@ -576,7 +580,7 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   module->controlSelection.selectOnly(0);
   module->focusControlRow();
   widget->step();
-  require(widget->channelPlay->tooltipText() == "Stage Draft for channel 1" &&
+  require(widget->channelPlay->tooltipText() == "Apply / start channel 1 [Mod+Enter]" &&
               widget->channelCancel->tooltipText() == "Discard Draft for channel 1 (Shift: discard Next too)",
           "pending tooltips describe the action and target channel");
   require(widget->channelPlay->pending() && !widget->channelPlay->isPressed(),
@@ -628,26 +632,37 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
     editor->onSelectKey(e);
     widget->step();
   };
-  layerKey(GLFW_KEY_F6);
+  module->setFormulaLayer(ComputerscareBlunch::FormulaLayer((module->formulaLayer + 1) % 3));
+  widget->step();
   require(module->visibleLayer() == ComputerscareBlunch::NEXT && editor->readOnly &&
               editor->text == "4hz\n5hz" && module->sequenceEditorStates[1].text == "6hz\n5hz",
           "Next view is read-only and preserves newer Draft text");
+  require(widget->channelLabel->viewIndicator()=="Next", "Header identifies the read-only Next view");
   capture(widget.get(), output + "/05-next-channel.png", scale);
   layerKey(GLFW_KEY_F7);
   require(module->visibleLayer() == ComputerscareBlunch::NOW && editor->text != "4hz\n5hz",
-          "Holding F7 peeks at Now");
+          "F7 cycles Next to Now");
   layerKey(GLFW_KEY_F7, GLFW_RELEASE);
-  require(module->visibleLayer() == ComputerscareBlunch::NEXT && editor->text == "4hz\n5hz",
-          "Releasing F7 restores Next");
+  require(module->visibleLayer() == ComputerscareBlunch::NOW,
+          "F7 release leaves the selected layer unchanged");
+  layerKey(GLFW_KEY_F7);
+  require(module->visibleLayer() == ComputerscareBlunch::DRAFT, "F7 cycles Now back to Draft");
+  layerKey(GLFW_KEY_F7);
+  require(module->visibleLayer() == ComputerscareBlunch::NEXT && editor->text == "4hz\n5hz", "F7 cycles Draft to Next without losing edits");
   std::string nextBeforeUndo = editor->text;
   layerKey(GLFW_KEY_Z, GLFW_PRESS, RACK_MOD_CTRL);
   require(editor->text == nextBeforeUndo, "Undo cannot modify read-only Next");
-  layerKey(GLFW_KEY_F6);
+  module->setFormulaLayer(ComputerscareBlunch::FormulaLayer((module->formulaLayer + 1) % 3));
+  widget->step();
+  require(widget->channelLabel->viewIndicator()=="Now", "Header identifies the read-only Now view");
   capture(widget.get(), output + "/06-now-channel.png", scale);
-  layerKey(GLFW_KEY_F6);
+  module->setFormulaLayer(ComputerscareBlunch::FormulaLayer((module->formulaLayer + 1) % 3));
+  widget->step();
+  require(widget->channelLabel->viewIndicator().empty(), "Draft has no header indicator");
   require(module->visibleLayer() == ComputerscareBlunch::DRAFT && !editor->readOnly &&
               editor->text == "6hz\n5hz", "Cycling views restores editable Draft");
-  layerKey(GLFW_KEY_F6);
+  module->setFormulaLayer(ComputerscareBlunch::FormulaLayer((module->formulaLayer + 1) % 3));
+  widget->step();
   widget::Widget::SelectTextEvent draftTyping;
   draftTyping.codepoint = '7';
   editor->onSelectText(draftTyping);
@@ -722,11 +737,8 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
           "Ctrl/Cmd+Enter starts the focused channel line with Line advance off");
   module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_LINE);
   editor->setCursorLine(0);key(GLFW_KEY_ENTER,RACK_MOD_CTRL);
-  require(module->pendingFormulas[0].line==0 && !module->pendingFormulas[0].page,
-          "Focused-line submission queues an explicit line jump at the Wait boundary");
-  module->activatePendingLineAtBoundary(ComputerscareBlunch::WAIT_BOUNDARY_LINE,true);
-  require(module->sequencers[0].activeLine==0,
-          "Queued focused-line submission jumps even with Line advance off");
+  require(!module->channelHasNext(0) && module->sequencers[0].activeLine==0,
+          "Focused-line Play bypasses Wait and starts immediately with Line advance off");
   module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_IMMEDIATE);
 
 
@@ -1000,6 +1012,101 @@ int main(int argc, char** argv) {
     widget->step();
     simulate(*module, .1f, frame);
     save("02-playing-four-loops");
+    {
+      using P=ComputerscarePhlooper;
+      int size=module->loop.size;int created=module->createdLoops;
+      std::array<std::vector<float>,16> before;
+      for(int v=0;v<16;++v) before[v].assign(module->loop.audio[v].get(),module->loop.audio[v].get()+size*2);
+      module->clockMarkCount.store(2);module->clockMarks[0].store(0);module->clockMarks[1].store(size/4.f);module->recordedBeatFrames.store(size/4.f);
+      module->params[P::START].setValue(.2f);module->params[P::LENGTH].setValue(.6f);
+      module->params[P::LOOP_MUTE].setValue(1);module->params[P::HOLD].setValue(1);
+      module->onReset({});
+      if(module->params[P::HOLD].getValue()!=0)
+        throw std::runtime_error("Initialize did not reset Hold: default="+std::to_string(module->getParamQuantity(P::HOLD)->getDefaultValue()));
+      for(auto* quantity:module->paramQuantities)quantity->setImmediateValue(quantity->getValue());
+      simulate(*module,.001f,frame);
+      if(module->loop.size!=size || module->frames.load()!=size || module->createdLoops!=created)
+        throw std::runtime_error("Initialize must preserve recording length and created loops");
+      for(int v=0;v<16;++v)if(!std::equal(before[v].begin(),before[v].end(),module->loop.audio[v].get()))
+        throw std::runtime_error("Initialize changed stored loop audio");
+      if(module->clockMarkCount.load()!=2 || module->recordedBeatFrames.load()!=size/4.f || module->params[P::START].getValue()!=0 || module->params[P::LENGTH].getValue()!=1 || module->params[P::LOOP_MUTE].getValue()!=0 || module->recording.load())
+        throw std::runtime_error("Initialize must reset controls but preserve beat markers");
+      module->params[P::COUNT].setValue(4);
+      save("22-initialized-audio-preserved");
+      module->clockMarkCount.store(0);module->recordedBeatFrames.store(0);
+      auto initial=std::unique_ptr<P>(static_cast<P*>(modelPhlooperPreview->createModule()));
+      initial->inputs[P::LEFT].channels=1;initial->params[P::RECORD].setValue(1);
+      simulate(*initial,.02f,frame);
+      int captured=initial->loop.captured;
+      std::vector<float> capture(initial->loop.audio[0].get(),initial->loop.audio[0].get()+captured*2);
+      initial->onReset({});simulate(*initial,.001f,frame);
+      if(initial->loop.initial || initial->loop.size!=captured || !std::equal(capture.begin(),capture.end(),initial->loop.audio[0].get()))
+        throw std::runtime_error("Initialize must finalize and preserve an in-progress first recording");
+      std::puts("Phlooper Initialize preserves all sixteen audio loops and beat markers while resetting controls");
+    }
+
+    {
+      using P=ComputerscarePhlooper;
+      float mode=module->params[P::MODE].getValue(), offset=module->params[P::OFFSET].getValue();
+      module->params[P::MODE].setValue(2);
+      auto* quantity=module->getParamQuantity(P::OFFSET);
+      quantity->setDisplayValue(25);
+      quantity->setImmediateValue(quantity->getValue());
+      if (quantity->getDisplayValue()!=25 || module->offsetFor(1,2,false)!=25)
+        throw std::runtime_error("Speed offset must reach +25 percent in tooltip and DSP");
+      quantity->setDisplayValue(-25);
+      quantity->setImmediateValue(quantity->getValue());
+      if (quantity->getDisplayValue()!=-25 || module->offsetFor(1,2,false)!=-25)
+        throw std::runtime_error("Speed offset must reach -25 percent");
+      quantity->setDisplayValue(25);
+      quantity->setImmediateValue(quantity->getValue());
+      widget->step(); simulate(*module,.05f,frame);
+      bool tips=settings::tooltips;settings::tooltips=true;
+      auto* knob=widget->getParam(P::OFFSET);knob->createTooltip();
+      auto* tip=APP->scene->children.back();APP->scene->removeChild(tip);widget->addChild(tip);tip->step();tip->box.pos=Vec(94,202);
+      capture(widget.get(),std::string(argv[3])+"/19-speed-offset-25.png",scale,false);
+      widget->removeChild(tip);APP->scene->addChild(tip);knob->destroyTooltip();settings::tooltips=tips;
+      module->params[P::SPEED_OFFSET_CURVE].setValue(1);
+      module->params[P::OFFSET].setValue(-8); // -10% per preceding loop
+      module->params[P::COUNT].setValue(8);
+      widget->step();simulate(*module,.2f,frame);
+      for(int voice=0;voice<8;++voice)
+        if(std::abs(1.f+module->offsetFor(voice,2,false)/100.f-std::pow(.9f,voice))>2e-6f)
+          throw std::runtime_error("Multiplicative per-loop speed ratio is incorrect");
+      auto* saved=module->toJson();
+      bool curveSaved=false;size_t paramIndex;json_t* parameter;
+      json_array_foreach(json_object_get(saved,"params"),paramIndex,parameter)
+        if(json_integer_value(json_object_get(parameter,"id"))==P::SPEED_OFFSET_CURVE)
+          curveSaved=json_number_value(json_object_get(parameter,"value"))==1;
+      json_decref(saved);
+      if(!curveSaved)throw std::runtime_error("Speed offset curve must persist in patch state");
+      save("21-multiplicative-speed-offset");
+      if (std::getenv("PHLOOPER_MENU_PREVIEW")) {
+        PhlooperChoice* choice=nullptr;
+        for(auto* child:widget->children)if(auto* candidate=dynamic_cast<PhlooperChoice*>(child))
+          if(candidate->param==P::MODE)choice=candidate;
+        if(!choice)throw std::runtime_error("Missing phase-mode dropdown");
+        event::Button click;click.button=GLFW_MOUSE_BUTTON_LEFT;click.action=GLFW_PRESS;click.mods=0;
+        choice->onButton(click);
+        auto* overlay=choice->activeMenuOverlay.get();
+        if(!overlay)throw std::runtime_error("Phase-mode dropdown did not open");
+        overlay->parent->removeChild(overlay);
+        widget::Widget shell;shell.box.size=widget->box.size;shell.addChild(widget.get());shell.addChild(overlay);
+        overlay->box=Rect(Vec(),shell.box.size);
+        for(auto* child:overlay->children)if(auto* menu=dynamic_cast<ui::Menu*>(child)) {
+          menu->step();menu->box.pos=Vec(10,58);shell.box.size.x=std::max(shell.box.size.x,menu->box.size.x+20);
+        }
+        overlay->box.size=shell.box.size;
+        capture(&shell,std::string(argv[3])+"/23-mode-menu.png",scale,false);
+        shell.removeChild(widget.get());shell.removeChild(overlay);APP->scene->addChild(overlay);overlay->requestDelete();
+        choice->activeMenuOverlay=nullptr;
+      }
+
+      module->params[P::SPEED_OFFSET_CURVE].setValue(0);
+      module->params[P::COUNT].setValue(4);
+      module->params[P::MODE].setValue(mode);module->params[P::OFFSET].setValue(offset);
+    }
+
     if (std::getenv("PHLOOPER_UNCLOCKED_BEATS")) {
       float oldOffset = module->params[ComputerscarePhlooper::OFFSET].getValue();
       module->params[ComputerscarePhlooper::MODE].setValue(3.f);
@@ -1135,7 +1242,7 @@ int main(int argc, char** argv) {
     module->inputs[ComputerscarePhlooper::WRITE_CLOCK].channels=0;
     simulate(*module,.05f,frame);
     if (std::abs(module->loop.periods[1]-22500.)>2.)
-      throw std::runtime_error("Beat mode must offset playback by 5/16 of the recorded beat");
+      throw std::runtime_error("Beat mode must offset playback by 5/16 of the recorded beat: " + std::to_string(module->loop.periods[1]) + " size=" + std::to_string(module->loop.size) + " beat=" + std::to_string(module->recordedBeatFrames.load()) + " hold=" + std::to_string(module->params[ComputerscarePhlooper::HOLD].getValue()) + " offset=" + std::to_string(module->offsetFor(1,3,false)));
     save("09-recorded-beats");
     double retainedBeatLength = module->loop.periods[0];
     module->params[ComputerscarePhlooper::OFFSET].setValue(-4.f);

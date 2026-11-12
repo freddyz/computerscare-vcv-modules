@@ -82,23 +82,23 @@ Polyphonic Start, Length, or Offset CV temporarily takes over the regions and lo
 
 Inputs support up to sixteen channels unless marked mono. For per-loop controls, a mono cable broadcasts to all loops and polyphonic channels address corresponding loops.
 
-| Input       | Range and behavior                                                                                                                                                                                                                                   |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| L / mono, R | Audio, scaled by input Gain and VCA. ±5 V is the nominal reference. Missing poly channels are silent; unpatched R copies L                                                                                                                           |
-| Record      | Gate high at ≥1 V enables recording; the panel latch also enables it                                                                                                                                                                                 |
-| Erase       | Gate high at ≥1 V erases under addressed heads                                                                                                                                                                                                       |
-| Restart     | Rising edge at ≥1 V, rearmed at ≤0 V. A cable initially high must go low then high                                                                                                                                                                   |
-| Stop        | Gate high at ≥1 V freezes addressed heads; combines with panel Stop and row Pause                                                                                                                                                                    |
-| Mute        | Gate high at ≥1 V silences addressed loops; combines with panel/row Mute and Solo                                                                                                                                                                    |
-| Clock       | Mono; rising edges at ≥1 V, rearmed at ≤0.1 V. Quantizes Record and Erase through the divider/multiplier                                                                                                                                             |
-| Hold        | Mono gate high at ≥1 V enables global Hold; combines with the panel latch                                                                                                                                                                            |
-| Start CV    | Adds 10 percentage points per volt, clamped to 0–100%. Missing poly channels use the knob                                                                                                                                                            |
-| Length CV   | Adds 10 percentage points per volt, clamped to 0.1–100%. Missing poly channels use the knob                                                                                                                                                          |
-| Offset CV   | ±10 V maps to ±100 ms in Time mode or ±20 percentage points in Length/Speed mode, or 40 signed fraction steps in Beats mode. Mono adds to every loop’s knob spacing; poly replaces spacing for supplied channels. Missing channels keep knob spacing |
-| Speed CV    | 1 V/octave; +1 V doubles speed, −1 V halves it. Mono affects all loops; poly addresses matching loops. Missing channels use the knob. Combined knob/CV is limited to ¼–4× before Speed-mode Offset                                                   |
-| Rec mix CV  | Mono; adds 10 percentage points per volt, clamped to 0–100%                                                                                                                                                                                          |
-| Out mix CV  | Mono; adds 10 percentage points per volt, clamped to 0–100%                                                                                                                                                                                          |
-| VCA         | 0–10 V controls 0–100% input level, multiplied by input Gain. Negative CV gives silence; above 10 V gives full level. Mono controls all loops; missing poly channels give silence. Unpatched passes full level                                       |
+| Input       | Range and behavior                                                                                                                                                                                                                                                |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L / mono, R | Audio, scaled by input Gain and VCA. ±5 V is the nominal reference. Missing poly channels are silent; unpatched R copies L                                                                                                                                        |
+| Record      | Gate high at ≥1 V enables recording; the panel latch also enables it                                                                                                                                                                                              |
+| Erase       | Gate high at ≥1 V erases under addressed heads                                                                                                                                                                                                                    |
+| Restart     | Rising edge at ≥1 V, rearmed at ≤0 V. A cable initially high must go low then high                                                                                                                                                                                |
+| Stop        | Gate high at ≥1 V freezes addressed heads; combines with panel Stop and row Pause                                                                                                                                                                                 |
+| Mute        | Gate high at ≥1 V silences addressed loops; combines with panel/row Mute and Solo                                                                                                                                                                                 |
+| Clock       | Mono; rising edges at ≥1 V, rearmed at ≤0.1 V. Quantizes Record and Erase through the divider/multiplier                                                                                                                                                          |
+| Hold        | Mono gate high at ≥1 V enables global Hold; combines with the panel latch                                                                                                                                                                                         |
+| Start CV    | Adds 10 percentage points per volt, clamped to 0–100%. Missing poly channels use the knob                                                                                                                                                                         |
+| Length CV   | Adds 10 percentage points per volt, clamped to 0.1–100%. Missing poly channels use the knob                                                                                                                                                                       |
+| Offset CV   | ±10 V maps to ±100 ms in Time mode or ±20 percentage points in Length mode, ±25 in Speed mode, or 40 signed fraction steps in Beats mode. Mono adds to every loop’s knob spacing; poly replaces spacing for supplied channels. Missing channels keep knob spacing |
+| Speed CV    | 1 V/octave; +1 V doubles speed, −1 V halves it. Mono affects all loops; poly addresses matching loops. Missing channels use the knob. Combined knob/CV is limited to ¼–4× before Speed-mode Offset                                                                |
+| Rec mix CV  | Mono; adds 10 percentage points per volt, clamped to 0–100%                                                                                                                                                                                                       |
+| Out mix CV  | Mono; adds 10 percentage points per volt, clamped to 0–100%                                                                                                                                                                                                       |
+| VCA         | 0–10 V controls 0–100% input level, multiplied by input Gain. Negative CV gives silence; above 10 V gives full level. Mono controls all loops; missing poly channels give silence. Unpatched passes full level                                                    |
 
 Unpatched gates are inactive. Gate inputs go low below 1 V. Unpatched CV adds zero, except VCA’s full-level normalization. VCA affects recording and dry monitoring. Time/Length/Beats Hold uses loop 1’s Length CV; Speed Hold captures its regions until released.
 
@@ -137,5 +137,16 @@ The two-part loop selector sets the number of loops and how new loops are filled
 
 **Big** expands the waveform and puts the tiny jacks along the right edge,
 keeping the module width unchanged.
-**sm** or **Escape** returns to the normal panel. Hold backtick/tilde to see
+**Big** stays pressed while expanded; click it again or press **Escape** to return to the normal panel. Hold backtick/tilde to see
 keyboard shortcuts in either view.
+
+In Speed mode, the Offset knob spans −25% to +25% speed per loop.
+
+The phase-mode menu offers **Speed % Linear** and **Speed % Mult**. At −10%, Linear gives 100%, 90%,
+80%, 70%…; Multiplicative gives 100%, 90%, 81%, 72.9%… . Linear has a 5% floor;
+Multiplicative continues below 5%. Both have an 800% ceiling before the main
+Speed knob/CV. Mono Offset CV multiplies every loop by its shared ratio;
+polyphonic Offset CV sets each addressed loop’s ratio directly. Other offset
+modes are unchanged. The choice saves with the patch and supports Undo.
+
+**Initialize** resets controls and restarts playback while keeping recorded audio and beat markers. Use **Clear recording** to empty the loops.

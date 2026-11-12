@@ -20,6 +20,13 @@ inline std::vector<computerscare::TerminalSetting> blunchSettings(
                          bool advance) {
     Entry group;
     group.name = title;
+    const std::string category = title;
+    group.help = category == "Line advance"    ? "When to change lines."
+                 : category == "Block advance" ? "When to change blocks."
+                 : category == "Wait"       ? "When staged edits take effect."
+                 : category == "Line scan"  ? "Select lines using CV."
+                 : category == "Block scan" ? "Select blocks using CV."
+                                            : "";
     group.value = [=]() {
       BlunchStateLock lock(m);
       return names[rack::math::clamp(int(m->params[param].getValue()), 0,
@@ -42,6 +49,7 @@ inline std::vector<computerscare::TerminalSetting> blunchSettings(
   };
   Entry playback;
   playback.name = "Playback";
+  playback.help = "Timing and transport.";
   playback.children.push_back(paramChoice(
       "Line advance", ComputerscareBlunch::AUTO_ADVANCE_PARAM,
       BLUNCH_ADVANCE_MODE_NAMES, BLUNCH_LINE_ADVANCE_MODE_DESCRIPTIONS,
@@ -55,6 +63,7 @@ inline std::vector<computerscare::TerminalSetting> blunchSettings(
       BLUNCH_WAIT_MODE_DESCRIPTIONS, BLUNCH_WAIT_MODE_COUNT, false));
   Entry run;
   run.name = "Run input";
+  run.help = "Gate or toggle playback.";
   run.value = [=]() {
     BlunchStateLock lock(m);
     return BLUNCH_RUN_INPUT_MODE_NAMES[rack::math::clamp(m->runInputMode, 0,
@@ -74,7 +83,9 @@ inline std::vector<computerscare::TerminalSetting> blunchSettings(
         }));
   playback.children.push_back(run);
   playback.children.push_back(choice(
-      "Apply valid edits while typing", "Valid edits apply without submitting.",
+      "Auto-stage valid edits",
+      "Stage valid edits for each line’s next visit; playback is "
+      "uninterrupted.",
       [=]() {
         BlunchStateLock lock(m);
         return m->params[ComputerscareBlunch::LIVE_APPLY_PARAM].getValue() >
@@ -85,9 +96,10 @@ inline std::vector<computerscare::TerminalSetting> blunchSettings(
         auto& p = m->params[ComputerscareBlunch::LIVE_APPLY_PARAM];
         p.setValue(p.getValue() > .5f ? 0.f : 1.f);
       }));
-  playback.children.back().shortName = "Apply while typing";
+  playback.children.back().shortName = "Auto-stage edits";
   Entry sync;
   sync.name = "Channel sync";
+  sync.help = "Keep channels together.";
   sync.value = [=]() {
     BlunchStateLock lock(m);
     return m->syncLabel();
@@ -104,6 +116,7 @@ inline std::vector<computerscare::TerminalSetting> blunchSettings(
       }));
   Entry source;
   source.name = "Source channel";
+  source.help = "Choose the leading channel.";
   source.value = [=]() {
     BlunchStateLock lock(m);
     return m->syncSource < 0 ? std::string("Free")
@@ -126,8 +139,10 @@ inline std::vector<computerscare::TerminalSetting> blunchSettings(
   const char* restarts[] = {"Current block", "Current line", "Page beginning"};
   Entry boundary;
   boundary.name = "Source boundary";
+  boundary.help = "Choose the sync event.";
   Entry restart;
   restart.name = "Restart followers at";
+  restart.help = "Where followers restart.";
   for (int i = 0; i < 3; ++i) {
     std::string event = events[i], location = restarts[i];
     boundary.children.push_back(choice(
@@ -165,6 +180,7 @@ inline std::vector<computerscare::TerminalSetting> blunchSettings(
   sync.children.push_back(restart);
   Entry units;
   units.name = "Default number unit";
+  units.help = "Units for bare numbers.";
   units.value = [=]() {
     BlunchStateLock lock(m);
     return std::string(blunch::language::clockUnitName(m->defaultNumberUnit));
@@ -189,5 +205,38 @@ inline std::vector<computerscare::TerminalSetting> blunchSettings(
     BlunchStateLock lock(m);
     ++m->pageSubmitCount;
   };
+  static const std::string scanNames[] = {"Off", "W", "X", "Y", "Z"};
+  static const std::string scanHelp[] = {
+      "Advance sequentially.", "Sample W at each advance boundary (0–10 V).",
+      "Sample X at each advance boundary (0–10 V).",
+      "Sample Y at each advance boundary (0–10 V).",
+      "Sample Z at each advance boundary (0–10 V)."};
+  playback.children.push_back(paramChoice("Line scan",
+                                          ComputerscareBlunch::LINE_SCAN_PARAM,
+                                          scanNames, scanHelp, 5, false));
+  playback.children.push_back(paramChoice("Block scan",
+                                          ComputerscareBlunch::BLOCK_SCAN_PARAM,
+                                          scanNames, scanHelp, 5, false));
+  Entry bake;
+  bake.name = "Bake Time into formulas";
+  bake.help = "Remap timing, then reset Time. Ignores CV.";
+  bake.action = [=]() {
+    BlunchStateLock lock(m);
+    if (m->params[ComputerscareBlunch::SPEED_OF_TIME_PARAM].getValue() == 0.f)
+      return;
+    auto* change = new rack::history::ModuleChange;
+    change->name = "Bake Time into formulas";
+    change->moduleId = m->id;
+    change->oldModuleJ = m->toJson();
+    try {
+      m->bakeTime();
+      change->newModuleJ = m->toJson();
+      APP->history->push(change);
+    } catch (const std::exception& error) {
+      delete change;
+      osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK, error.what());
+    }
+  };
+  playback.children.push_back(bake);
   return {playback, sync, units, stage, blunchHelp()};
 }

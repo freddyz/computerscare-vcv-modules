@@ -12,12 +12,17 @@ struct Frame {
 };
 struct Settings {
   int count = 2, mode = 0, overdub = 0;
+  bool multiplicativeOffset = false;
   bool hold = false, oneShot = false, alignEnd = false, sharedLength = false;
   unsigned offsetMask = 0, startMask = 0, lengthMask = 0, speedMask = 0;
   std::array<float, voices> speeds{};
   float speedFor(int voice) const {
     return std::max(
         .25f, std::min(4.f, speedMask & (1u << voice) ? speeds[voice] : speed));
+  }
+  double offsetSpeed(float offset) const {
+    return std::max(multiplicativeOffset ? .000001 : .05,
+                    std::min(8., 1. + offset / 100.));
   }
   std::array<float, voices> offsets{}, starts{}, lengths{};
   unsigned customMask = 0;
@@ -168,8 +173,7 @@ class Engine {
           oldStart +
           (reverse ? std::max(0., oldPeriod - 1. - head[v]) : head[v]);
       float offset = s.offsetMask & (1u << v) ? s.offsets[v] : v * s.offset;
-      speeds[v] =
-          std::max(.05, std::min(8., 1. + offset / 100.)) * s.speedFor(v);
+      speeds[v] = s.offsetSpeed(offset) * s.speedFor(v);
       duration = std::min(duration, std::max(48., oldPeriod) / speeds[v]);
     }
     speedHold = {};
@@ -375,7 +379,7 @@ class Engine {
       else if (s.mode == 3)
         period += offset * effectiveBeatFrames(size, s.beatFrames);
       else
-        speed = std::max(.05, std::min(8., 1. + offset / 100.));
+        speed = s.offsetSpeed(offset);
       if (s.customMask & (1u << lengthVoice)) {
         period += s.customLengths[lengthVoice] * size;
         length = std::max(

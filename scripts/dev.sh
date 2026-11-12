@@ -270,6 +270,8 @@ run_tests() {
   g++ -std=c++11 -I src tests/polyphonic_mapping_test.cpp -o /tmp/cs_polyphonic_mapping_test
   /tmp/cs_polyphonic_mapping_test
   python3 scripts/generate-blunch-help.py --check
+  g++ -std=c++11 -I src tests/blunch_time_bake_test.cpp src/BlunchLanguage/Tokenizer.cpp src/BlunchLanguage/Parser.cpp src/BlunchLanguage/Evaluator.cpp -o /tmp/cs_blunch_time_bake_test
+  /tmp/cs_blunch_time_bake_test
   g++ -std=c++11 -I src tests/phlooper_test.cpp -o /tmp/cs_phlooper_test
   /tmp/cs_phlooper_test
   g++ -std=c++11 -I src tests/text_editor_logic_test.cpp -o /tmp/cs_text_editor_logic_test
