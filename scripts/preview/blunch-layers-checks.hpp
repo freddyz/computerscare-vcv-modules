@@ -9,6 +9,8 @@ inline void checkBlunchFormulaLayers(rack::plugin::Model* model) {
   };
   auto make = [&]() {
     auto m = std::unique_ptr<B>(static_cast<B*>(model->createModule()));
+    m->params[B::LIVE_APPLY_PARAM].setValue(0);
+    m->params[B::WAIT_MODE_PARAM].setValue(B::WAIT_IMMEDIATE);
     for (int ch = 0; ch < B::MAX_POLY_CHANNELS; ++ch) {
       m->sequenceEditorStates[ch].text.clear();
       m->runningLineTexts[ch].clear();

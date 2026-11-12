@@ -4,6 +4,8 @@ inline void checkBlunchScanning(rack::plugin::Model* model) {
   auto require = [](bool ok, const char* why) { if (!ok) throw std::runtime_error(why); };
   auto make = [&]() {
     auto m = std::unique_ptr<B>(static_cast<B*>(model->createModule()));
+    m->params[B::LIVE_APPLY_PARAM].setValue(0);
+    m->params[B::WAIT_MODE_PARAM].setValue(B::WAIT_IMMEDIATE);
     m->runningLineTexts[0].clear();
     m->sequenceEditorStates[0].text = "[100 200 300]ms\n[400 500]ms\n600ms";
     require(m->commitLine(0, true), "Scan fixture compiles");

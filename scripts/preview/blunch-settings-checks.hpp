@@ -3,6 +3,7 @@ inline void checkBlunchSettings(rack::plugin::Model* model,const std::string& ou
   using B=ComputerscareBlunch;
   auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
   auto* m=static_cast<B*>(model->createModule());APP->engine->addModule(m);
+  require(m->params[B::LIVE_APPLY_PARAM].getValue()==1 && m->params[B::WAIT_MODE_PARAM].getValue()==B::WAIT_NEXT_VISIT,"New Blunch defaults to auto-stage and Next visit");
   auto w=std::unique_ptr<ComputerscareBlunchWidget>(static_cast<ComputerscareBlunchWidget*>(model->createModuleWidget(m)));
   m->sequenceEditorStates[0].text="120bpm\n[300 450]ms\n(2 (3 1))hz@9";
   m->commitLineForChannel(0,0,true);m->params[B::RUN_PARAM].setValue(1);
@@ -49,8 +50,8 @@ inline void checkBlunchSettings(rack::plugin::Model* model,const std::string& ou
   capture(w.get(),output+"/settings-wait.png",scale);
   key(GLFW_KEY_ESCAPE);require(s->screens.back().name=="Playback","Escape backs up one screen");
   s->screens.back().selected=4;key(GLFW_KEY_SPACE);
-  require(m->params[B::LIVE_APPLY_PARAM].getValue()==1,"Checkbox toggles immediately");
-  key(GLFW_KEY_SPACE);require(m->params[B::LIVE_APPLY_PARAM].getValue()==0,"Checkbox toggles off");
+  require(m->params[B::LIVE_APPLY_PARAM].getValue()==0,"Checkbox toggles default auto-stage off");
+  key(GLFW_KEY_SPACE);require(m->params[B::LIVE_APPLY_PARAM].getValue()==1,"Checkbox toggles auto-stage on");
   key(GLFW_KEY_ESCAPE);
   s->screens.back().selected=1;key(GLFW_KEY_ENTER);s->screens.back().selected=1;key(GLFW_KEY_ENTER);
   for(int i=0;i<15;++i)key(GLFW_KEY_DOWN);

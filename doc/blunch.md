@@ -10,7 +10,7 @@ Blunch is a text-based clock and trigger sequencer with up to 16 independent cha
 4. Try `[300 400]ms` for alternating 300 ms and 400 ms intervals.
 5. Add another formula on a new line. With automatic Line advance, Blunch plays each line in turn and loops the page.
 
-The **Run** button enables playback. New modules start in Auto polyphony, with only channel 1 active and one to four short example lines.
+The **Run** button enables playback. New modules start with Auto-stage valid edits on, Wait set to Next visit, and Auto polyphony, with only channel 1 active and one to four short example lines.
 
 ## Pages, lines, and blocks
 

@@ -4,6 +4,7 @@ inline void checkBlunchLineMenus(rack::plugin::Model* model,
   using B = ComputerscareBlunch;
   auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
   auto* m=static_cast<B*>(model->createModule());APP->engine->addModule(m);
+  m->params[B::LIVE_APPLY_PARAM].setValue(0);
   auto widget=std::unique_ptr<ComputerscareBlunchWidget>(static_cast<ComputerscareBlunchWidget*>(model->createModuleWidget(m)));
   for(int ch=0;ch<4;++ch){m->sequenceEditorStates[ch].text=ch==1?"100bpm\n150bpm\n[250 500]ms":"120bpm";m->commitLineForChannel(ch,0,true);m->stopSequencer(ch,true);}
   m->params[B::POLY_CHANNELS_PARAM].setValue(4);

@@ -189,12 +189,15 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
   checkBlunchChannelSync(modelBlunchPreview);
   auto* module =
       static_cast<ComputerscareBlunch*>(modelBlunchPreview->createModule());
+  module->params[ComputerscareBlunch::LIVE_APPLY_PARAM].setValue(0);
+  module->params[ComputerscareBlunch::WAIT_MODE_PARAM].setValue(ComputerscareBlunch::WAIT_IMMEDIATE);
   require(module->playbackDisplayStyle == 1, "New modules default to Minimal blinkers");
   require(module->params[ComputerscareBlunch::POLY_CHANNELS_PARAM].getValue() == 0.f,
           "New modules default to automatic polyphony");
   {
     auto draft = std::unique_ptr<ComputerscareBlunch>(
         static_cast<ComputerscareBlunch*>(modelBlunchPreview->createModule()));
+    draft->params[ComputerscareBlunch::LIVE_APPLY_PARAM].setValue(0);
     for (int ch = 0; ch < 2; ++ch) {
       draft->runningLineTexts[ch].clear();
       draft->sequenceEditorStates[ch].text = "120bpm";

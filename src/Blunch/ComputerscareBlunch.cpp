@@ -1171,12 +1171,13 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
     configSwitch(RUN_PARAM, 0.f, 1.f, 1.f, "Run", {"Stopped", "Running"});
     configParam<BlunchSeedParamQuantity>(SEED_PARAM, 0.f, 10.f, 0.f, "Seed");
     configSwitch<BlunchWaitModeParamQuantity>(
-        WAIT_MODE_PARAM, 0.f, BLUNCH_WAIT_MODE_COUNT - 1, 0.f, "Wait mode",
+        WAIT_MODE_PARAM, 0.f, BLUNCH_WAIT_MODE_COUNT - 1,
+        float(WAIT_NEXT_VISIT), "Wait mode",
         {"Immediate", "Clock", "Block", "Line", "Page", "External W",
          "External X", "External Y", "External Z", "Next visit"});
     configSwitch(CLOCK_OUTPUT_MODE_PARAM, 0.f, 1.f, 0.f, "Clock output",
                  {"Trigger", "Gate"});
-    configSwitch(LIVE_APPLY_PARAM, 0.f, 1.f, 0.f, "Auto-stage valid edits",
+    configSwitch(LIVE_APPLY_PARAM, 0.f, 1.f, 1.f, "Auto-stage valid edits",
                  {"Manual", "While typing"});
     getParamQuantity(LIVE_APPLY_PARAM)->randomizeEnabled = false;
     configSwitch(LINE_SCAN_PARAM, 0, 4, 0, "Line scan",

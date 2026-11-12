@@ -3,6 +3,7 @@ inline void checkBlunchTimeBake(rack::plugin::Model* model,const std::string& ou
   using B=ComputerscareBlunch;
   auto require=[](bool ok,const char* why){if(!ok)throw std::runtime_error(why);};
   auto* m=static_cast<B*>(model->createModule());APP->engine->addModule(m);
+  m->params[B::LIVE_APPLY_PARAM].setValue(0);
   m->runningLineTexts[0].clear();m->runningLineTexts[1].clear();
   m->sequenceEditorStates[0].text="{100|200}bpm?75@3#8s\n[300 500]ms@(2s 4s)";
   m->sequenceEditorStates[1].text="4hz";
