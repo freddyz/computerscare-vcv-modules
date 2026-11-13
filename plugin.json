@@ -179,6 +179,20 @@
       "description": "Sixteen independent stereo loops with gradual time and speed phasing",
       "tags": ["Looper", "Sampler", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/phlooper.md"
+    },
+    {
+      "slug": "computerscare-controller",
+      "name": "ps5 controller",
+      "description": "DualSense controller to CV, gates and triggers",
+      "tags": ["Controller", "Utility"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/controller.md"
+    },
+    {
+      "slug": "computerscare-controller-xbox",
+      "name": "xbox controller",
+      "description": "Xbox Series controller to CV, gates and triggers",
+      "tags": ["Controller", "Utility"],
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/controller.md"
     }
   ]
 }

@@ -52,3 +52,10 @@ include $(RACK_DIR)/plugin.mk
 ifdef ARCH_WIN
 LDFLAGS += -lopengl32
 endif
+
+# Optional private controller runtime; absent SDL3 never prevents plugin loading.
+DISTRIBUTABLES += $(wildcard lib)
+
+ifdef ARCH_LIN
+LDFLAGS += -ldl
+endif

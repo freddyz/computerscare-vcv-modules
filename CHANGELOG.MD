@@ -2,6 +2,8 @@
 
 New modules:
 
+- **PS5 Controller / Xbox Controller:** Game controller to CV, with rumble inputs, per-control offset/scale, and gate, trigger or toggle button outputs.
+
 - **Phlooper:** Up to sixteen independent stereo audio loops with Time, Length, Speed, and Beats phasing; per-loop transport, reverse and alternating directions, one-shot playback, clocked recording/erasing, exact Speed Hold, start/end region alignment, draggable loop points, waveform zoom, polyphonic recording/output, and phase/EOC outputs. Import WAV to all loops; export one or all loops.
 - **Blunch:** Text-based polyphonic trigger sequencer with nested patterns, editable randomization recipes, an editable channel overview, keyboard/mouse selection and in-display Settings, independent text/row height, selectable default clock units and playback displays, and per-channel Run gating or trigger-toggle control, adjustable pulse width, staged formula changes, saved per-channel transport, and channel sync.
 

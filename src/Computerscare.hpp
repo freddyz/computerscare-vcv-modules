@@ -753,3 +753,7 @@ struct SmallLetterDisplay : Widget {
 #include "pointFunctions.hpp"
 
 extern Model* modelComputerscarePhlooper;
+
+extern Model* modelComputerscareController;
+
+extern Model* modelComputerscareXboxController;
