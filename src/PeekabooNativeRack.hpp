@@ -1,5 +1,5 @@
 #pragma once
-// Included inside patchabstractor, after the subview declarations.
+// Included inside peekaboo, after the subview declarations.
 struct ScopedSubviewOpacity {
   float previous;
   explicit ScopedSubviewOpacity(float opacity)
@@ -16,6 +16,11 @@ struct SubpatchNativeRack : widget::OpaqueWidget {
                  *cables = new widget::Widget;
   widget::Widget* savedParent = nullptr;
   math::Rect savedBox;
+  widget::Widget* rails = nullptr;
+  math::Rect savedRailBox;
+  Vec pointer, selectionStart;
+  bool selecting = false;
+  std::set<int64_t> selectionBase;
   math::Rect savedContainerBoxes[3];
   app::ParamWidget* savedTouched = nullptr;
   float drawnOpacity = -1.f;
@@ -46,6 +51,12 @@ struct SubpatchNativeRack : widget::OpaqueWidget {
     for (auto* child : b->children) child->parent = b;
   }
   void enter() {
+    for (auto* child : main->children)
+      if (dynamic_cast<app::RailWidget*>(child)) {
+        rails = child;
+        savedRailBox = child->box;
+        child->box = Rect(Vec(), box.size);
+      }
     savedParent = main->parent;
     savedBox = main->box;
     savedTouched = main->getTouchedParam();
@@ -69,6 +80,7 @@ struct SubpatchNativeRack : widget::OpaqueWidget {
       exchangeChildren(canonical[i], local[i]);
       canonical[i]->box = savedContainerBoxes[i];
     }
+    if (rails) rails->box = savedRailBox;
     main->parent = savedParent;
     main->box = savedBox;
     main->setTouchedParam(savedTouched);
@@ -110,22 +122,82 @@ struct SubpatchNativeRack : widget::OpaqueWidget {
   void draw(const DrawArgs& args) override;
   void drawLayer(const DrawArgs&, int) override {}
   void onHover(const HoverEvent& e) override {
+    pointer = e.pos;
+    if (view->browserPending) {
+      widget::Widget::onHover(e);
+      if (!e.isConsumed()) e.consume(this);
+      return;
+    }
     ScopedSubviewRack scope(this);
     main->onHover(e);
     if (e.getTarget() == main) e.setTarget(this);
   }
   void onDragHover(const DragHoverEvent& e) override {
+    pointer = e.pos;
+    if (view->browserPending) {
+      widget::Widget::onDragHover(e);
+      return;
+    }
     ScopedSubviewRack scope(this);
     main->onDragHover(e);
     if (e.getTarget() == main) e.setTarget(this);
   }
-  void onDragStart(const DragStartEvent& e) override { e.consume(this); }
+  void onDragStart(const DragStartEvent& e) override {
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT || view->exposeMode) return;
+    selecting = true;
+    selectionStart = pointer;
+    selectionBase = view->selected;
+  }
+  void onDragMove(const DragMoveEvent&) override {
+    if (!selecting) return;
+    // DragHover already supplied the current rack-local pointer position.
+    Vec a = selectionStart, b = pointer;
+    Rect region(Vec(std::min(a.x, b.x), std::min(a.y, b.y)),
+                Vec(std::abs(a.x - b.x), std::abs(a.y - b.y)));
+    view->selected = selectionBase;
+    for (auto* w : getModules())
+      if (region.intersects(w->box)) view->selected.insert(w->module->id);
+  }
+  void onDragEnd(const DragEndEvent&) override { selecting = false; }
+  void onDoubleClick(const DoubleClickEvent& e) override {
+    if (!view->exposeMode) {
+      view->openBrowser(pointer);
+      e.consume(this);
+    }
+  }
   void onButton(const ButtonEvent& e) override {
-    // The local children are drawing/event proxies, not a second Rack instance.
     widget::Widget::onButton(e);
-    if (!e.isConsumed()) e.consume(this);
+    if (e.isConsumed()) return;
+    if (!view->exposeMode && e.action == GLFW_PRESS) {
+      pointer = e.pos;
+      if (e.button == GLFW_MOUSE_BUTTON_LEFT &&
+          !(e.mods & (RACK_MOD_CTRL | GLFW_MOD_SHIFT)))
+        view->selected.clear();
+      if (e.button == GLFW_MOUSE_BUTTON_RIGHT) {
+        auto* menu = createMenu();
+        WeakPtr<SubpatchView> live = view;
+        Vec position = pointer;
+        menu->addChild(createMenuItem("Add module…", "", [live, position] {
+          if (live) live->openBrowser(position);
+        }));
+        if (!view->selected.empty()) {
+          int64_t id = *view->selected.begin();
+          menu->addChild(createMenuItem("Remove selected from abstraction", "",
+                                        [live, id] {
+                                          if (live) live->queueRemoval(id);
+                                        }));
+        }
+      }
+    }
+    e.consume(this);
   }
   void onHoverKey(const HoverKeyEvent& e) override {
+    if (!view->exposeMode && e.key == GLFW_KEY_A && (e.mods & RACK_MOD_CTRL) &&
+        e.action == GLFW_PRESS) {
+      for (auto* w : getModules()) view->selected.insert(w->module->id);
+      e.consume(this);
+      return;
+    }
     widget::Widget::onHoverKey(e);
     e.stopPropagating();
   }

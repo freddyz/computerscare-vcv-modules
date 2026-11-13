@@ -1,6 +1,6 @@
 #pragma once
 
-// Included inside patchabstractor. The modal view renders the original widgets
+// Included inside peekaboo. The modal view renders the original widgets
 // and forwards control events; it never creates another engine or module copy.
 struct SubpatchHit;
 struct SubpatchCanvas;
@@ -34,7 +34,22 @@ struct SubpatchScroll : ui::ScrollWidget {
   }
 };
 struct SubpatchView : widget::OpaqueWidget {
-  WeakPtr<Abstractor> owner;
+  WeakPtr<Peekaboo> owner;
+  std::set<int64_t> selected, pendingRemoval, browserExisting;
+  bool browserPending = false;
+  Vec browserPosition;
+  void openBrowser(Vec position);
+  void finishBrowser();
+  void queueRemoval(int64_t id);
+  void selectModule(int64_t id, int mods);
+  GroupHistory* moveHistory = nullptr;
+  std::map<int64_t, Vec> dragPositions;
+  Vec dragDelta;
+  void beginMove(int64_t id);
+  void moveSelection(Vec delta);
+  void endMove();
+  void moduleMenu(int64_t id);
+  ActionButton* addButton = nullptr;
   bool exposeMode = false;
   bool closing = false;
   SubpatchNativeRack* nativeRack = nullptr;
@@ -59,7 +74,7 @@ struct SubpatchView : widget::OpaqueWidget {
   ActionButton *adjust = nullptr, *exposeButton = nullptr, *close = nullptr;
   ActionButton *zoomOut = nullptr, *zoomLabel = nullptr, *zoomIn = nullptr,
                *fit = nullptr;
-  explicit SubpatchView(Abstractor* group);
+  explicit SubpatchView(Peekaboo* group);
   void choose(app::PortWidget* port);
   bool connect(app::PortWidget* a, app::PortWidget* b);
   void disconnect(app::PortWidget* port);
@@ -306,7 +321,7 @@ struct SubpatchHit : widget::OpaqueWidget {
 // back immediately. Engine processing never reads widget geometry.
 struct SourcePortLayout {
   std::vector<std::pair<app::PortWidget*, Vec>> moved;
-  SourcePortLayout(Abstractor* owner, int64_t id) {
+  SourcePortLayout(Peekaboo* owner, int64_t id) {
     for (const auto& p : owner->ports)
       if (p.id == id)
         if (auto* source = owner->findPort(p)) {
@@ -318,11 +333,12 @@ struct SourcePortLayout {
     for (auto& p : moved) p.first->box.pos = p.second;
   }
 };
-#include "PatchAbstractorNativeRack.hpp"
+#include "PeekabooNativeRack.hpp"
 struct SubpatchModuleFace : app::ModuleWidget {
   SubpatchView* view;
   WeakPtr<app::ModuleWidget> source;
   Vec preferredPosition;
+  bool dragAllowed = true;
   SubpatchModuleFace(SubpatchView* v, app::ModuleWidget* w)
       : view(v), source(w) {
     module = w->module;
@@ -372,19 +388,43 @@ struct SubpatchModuleFace : app::ModuleWidget {
     widget::Widget::step();
   }
   void onHoverKey(const HoverKeyEvent& e) override {
+    if (!view->exposeMode && e.key == GLFW_KEY_A && (e.mods & RACK_MOD_CTRL) &&
+        e.action == GLFW_PRESS) {
+      for (auto* w : view->nativeRack->getModules())
+        view->selected.insert(w->module->id);
+      e.consume(this);
+      return;
+    }
     widget::Widget::onHoverKey(e);
     e.stopPropagating();
   }
   void onButton(const ButtonEvent& e) override {
+    if (!source || !view->owner) return;
     widget::Widget::onButton(e);
-    if (e.isConsumed() || !source || !view->owner) return;
+    if (e.isConsumed()) return;
     if (!view->exposeMode) {
       SourcePortLayout layout(view->owner.get(), source->module->id);
       source->widget::Widget::onButton(e);
+      if (e.isConsumed()) return;
+      if (e.action == GLFW_PRESS) {
+        if (e.button == GLFW_MOUSE_BUTTON_LEFT) {
+          dragAllowed = !(e.mods & (RACK_MOD_CTRL | GLFW_MOD_SHIFT));
+          view->selectModule(module->id, e.mods);
+        }
+        if (e.button == GLFW_MOUSE_BUTTON_RIGHT) view->moduleMenu(module->id);
+      }
     }
-    // Never dispatch module-background drag, delete, or context-menu actions.
-    if (!e.isConsumed()) e.consume(this);
+    e.consume(this);
   }
+  void onDragStart(const DragStartEvent& e) override {
+    if (dragAllowed && !view->exposeMode && e.button == GLFW_MOUSE_BUTTON_LEFT)
+      view->beginMove(module->id);
+  }
+  void onDragMove(const DragMoveEvent& e) override {
+    if (!view->exposeMode)
+      view->moveSelection(e.mouseDelta / getAbsoluteZoom());
+  }
+  void onDragEnd(const DragEndEvent&) override { view->endMove(); }
   void draw(const DrawArgs& args) override {
     if (!source || !view->owner) return;
     {
@@ -394,6 +434,13 @@ struct SubpatchModuleFace : app::ModuleWidget {
       nvgRestore(args.vg);
     }
     widget::Widget::draw(args);
+    if (!view->exposeMode && view->selected.count(module->id)) {
+      nvgBeginPath(args.vg);
+      nvgRect(args.vg, 1, 1, box.size.x - 2, box.size.y - 2);
+      nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_GREEN);
+      nvgStrokeWidth(args.vg, 2);
+      nvgStroke(args.vg);
+    }
   }
   void drawLayer(const DrawArgs& args, int layer) override {
     if (!source || !view->owner) return;
@@ -460,26 +507,15 @@ struct SubpatchCanvas : widget::Widget {
     for (auto* child : view->nativeRack->getModuleContainer()->children)
       if (auto* face = dynamic_cast<SubpatchModuleFace*>(child))
         faces.push_back(face);
-    std::sort(faces.begin(), faces.end(),
-              [](SubpatchModuleFace* a, SubpatchModuleFace* b) {
-                return a->preferredPosition.y == b->preferredPosition.y
-                           ? a->preferredPosition.x < b->preferredPosition.x
-                           : a->preferredPosition.y < b->preferredPosition.y;
-              });
-    Vec cursor(16, 16);
-    float previousY = faces.empty() ? 0 : faces.front()->preferredPosition.y;
     box.size = Vec();
     for (auto* face : faces) {
-      if (face->preferredPosition.y != previousY) {
-        cursor.x = 16;
-        cursor.y += RACK_GRID_HEIGHT + 24;
-        previousY = face->preferredPosition.y;
-      }
-      face->box.pos = cursor;
-      cursor.x += face->box.size.x + 15;
-      box.size.x = std::max(box.size.x, face->box.getRight() + 16);
-      box.size.y = std::max(box.size.y, face->box.getBottom() + 100);
+      box.size.x = std::max(box.size.x, face->box.getRight() + 180);
+      box.size.y =
+          std::max(box.size.y, face->box.getBottom() + RACK_GRID_HEIGHT);
     }
+    float z = view->zoom ? view->zoom->getZoom() : 1.f;
+    box.size.x = std::max(box.size.x, view->scroll->box.size.x / z);
+    box.size.y = std::max(box.size.y, view->scroll->box.size.y / z);
     if (view->owner)
       for (auto* cable : APP->scene->rack->getCompleteCables())
         if (view->owner->contains(cable->cable->inputModule) &&
@@ -495,6 +531,19 @@ struct SubpatchCanvas : widget::Widget {
   void draw(const DrawArgs& args) override {
     view->nativeRack->box.size = box.size;
     widget::Widget::draw(args);
+    if (view->nativeRack->selecting) {
+      Vec a = view->nativeRack->selectionStart, b = view->nativeRack->pointer;
+      nvgBeginPath(args.vg);
+      nvgRect(args.vg, std::min(a.x, b.x), std::min(a.y, b.y),
+              std::abs(a.x - b.x), std::abs(a.y - b.y));
+      auto color = COLOR_COMPUTERSCARE_GREEN;
+      color.a = .12f;
+      nvgFillColor(args.vg, color);
+      nvgFill(args.vg);
+      nvgStrokeColor(args.vg, COLOR_COMPUTERSCARE_GREEN);
+      nvgStrokeWidth(args.vg, 1);
+      nvgStroke(args.vg);
+    }
     renderedCables = view->nativeRack->getCompleteCables().size();
     view->nativeRack->box.size = box.size;
     {
@@ -577,7 +626,7 @@ struct SubpatchCanvas : widget::Widget {
     }
   }
 };
-SubpatchView::SubpatchView(Abstractor* group) : owner(group) {
+SubpatchView::SubpatchView(Peekaboo* group) : owner(group) {
   adjust = new ActionButton;
   adjust->text = "Adjust subpatch";
   adjust->configure(155, 32, 4, 3, .9f, 871);
@@ -631,6 +680,14 @@ SubpatchView::SubpatchView(Abstractor* group) : owner(group) {
     button->textSize = 16;
     button->textInset = 5;
   }
+  addButton = new ActionButton;
+  addButton->text = "Add module";
+  addButton->configure(100, 30, 4, 3, .8f, 949);
+  addButton->textSize = 16;
+  addButton->action = [this] {
+    openBrowser(scroll->offset / zoom->getZoom() + Vec(30, 30));
+  };
+  addChild(addButton);
   scroll = new SubpatchScroll;
   addChild(scroll);
   canvas = new SubpatchCanvas(this);
@@ -645,11 +702,22 @@ SubpatchView::SubpatchView(Abstractor* group) : owner(group) {
     minimum.x = std::min(minimum.x, member.position.x);
     minimum.y = std::min(minimum.y, member.position.y);
   }
+  Vec cursor;
+  float rowY = minimum.y;
   for (const auto& member : group->members)
     if (auto* w = group->find(member.id)) {
       auto* face = new SubpatchModuleFace(this, w);
       face->preferredPosition = member.position - minimum;
-      face->box.pos = face->preferredPosition + Vec(16, 16);
+      if (member.position.y != rowY) {
+        cursor.x = 0;
+        cursor.y += RACK_GRID_HEIGHT;
+        rowY = member.position.y;
+      }
+      auto saved = group->subpatchPositions.find(member.id);
+      face->box.pos =
+          saved == group->subpatchPositions.end() ? cursor : saved->second;
+      cursor.x += face->box.size.x + 15;
+      group->subpatchPositions[member.id] = face->box.pos;
       {
         ScopedSubviewRack scope(nativeRack);
         nativeRack->addModule(face);
@@ -659,6 +727,154 @@ SubpatchView::SubpatchView(Abstractor* group) : owner(group) {
       canvas->box.size.y =
           std::max(canvas->box.size.y, face->box.getBottom() + 100);
     }
+  group->saveGroup();
+}
+void SubpatchView::selectModule(int64_t id, int mods) {
+  if (mods & (RACK_MOD_CTRL | GLFW_MOD_SHIFT)) {
+    if (selected.count(id))
+      selected.erase(id);
+    else
+      selected.insert(id);
+  } else if (!selected.count(id)) {
+    selected.clear();
+    selected.insert(id);
+  }
+}
+void SubpatchView::beginMove(int64_t id) {
+  if (!owner || exposeMode || settings::lockModules) return;
+  if (!selected.count(id)) {
+    selected.clear();
+    selected.insert(id);
+  }
+  dragPositions.clear();
+  dragDelta = Vec();
+  for (auto* w : nativeRack->getModules())
+    if (selected.count(w->module->id))
+      dragPositions[w->module->id] = w->box.pos;
+  moveHistory = owner->beginAction("move subpatch modules");
+}
+void SubpatchView::moveSelection(Vec delta) {
+  if (!moveHistory || !owner) return;
+  dragDelta += delta;
+  Vec snapped = dragDelta.div(RACK_GRID_SIZE).round().mult(RACK_GRID_SIZE);
+  auto modules = nativeRack->getModules();
+  for (auto* w : modules)
+    if (dragPositions.count(w->module->id)) {
+      Rect candidate(dragPositions[w->module->id] + snapped, w->box.size);
+      if (candidate.pos.x < 0 || candidate.pos.y < 0) return;
+      for (auto* other : modules)
+        if (!dragPositions.count(other->module->id) &&
+            candidate.intersects(other->box))
+          return;
+    }
+  for (auto* w : modules)
+    if (dragPositions.count(w->module->id)) {
+      w->box.pos = dragPositions[w->module->id] + snapped;
+      owner->subpatchPositions[w->module->id] = w->box.pos;
+    }
+}
+void SubpatchView::endMove() {
+  if (!moveHistory) return;
+  auto* action = moveHistory;
+  moveHistory = nullptr;
+  bool changed = false;
+  if (owner)
+    for (const auto& p : dragPositions)
+      if (owner->subpatchPositions[p.first] != p.second) changed = true;
+  dragPositions.clear();
+  if (owner && changed) {
+    owner->saveGroup();
+    owner->finishAction(action);
+  } else
+    delete action;
+}
+void SubpatchView::queueRemoval(int64_t id) {
+  if (!selected.count(id)) {
+    selected.clear();
+    selected.insert(id);
+  }
+  pendingRemoval = selected;
+}
+void SubpatchView::moduleMenu(int64_t id) {
+  if (!selected.count(id)) {
+    selected.clear();
+    selected.insert(id);
+  }
+  auto* menu = createMenu();
+  WeakPtr<SubpatchView> live = this;
+  menu->addChild(createMenuLabel(
+      selected.size() > 1 ? std::to_string(selected.size()) + " modules"
+                          : owner->memberName(id)));
+  menu->addChild(createMenuItem("Remove from abstraction", "", [live, id] {
+    if (live) live->queueRemoval(id);
+  }));
+  menu->addChild(createMenuItem("Select all", "", [live] {
+    if (live)
+      for (auto* w : live->nativeRack->getModules())
+        live->selected.insert(w->module->id);
+  }));
+  menu->addChild(createMenuItem("Add module…", "", [live] {
+    if (live)
+      live->openBrowser(live->scroll->offset / live->zoom->getZoom() +
+                        Vec(30, 30));
+  }));
+}
+void SubpatchView::openBrowser(Vec position) {
+  if (!owner || exposeMode || closing) return;
+  browserPosition = position.div(RACK_GRID_SIZE).round().mult(RACK_GRID_SIZE);
+  browserExisting.clear();
+  for (auto id : APP->engine->getModuleIds()) browserExisting.insert(id);
+  browserPending = true;
+  // The stock browser initially places a module in the main Rack. Reserve an
+  // empty row so this temporary placement cannot push unrelated modules.
+  widget::Widget::HoverEvent parkingHover;
+  parkingHover.pos = owner->parkingPosition() + Vec(60, RACK_GRID_HEIGHT);
+  owner->homeRack->onHover(parkingHover);
+  auto* browser = APP->scene->browser;
+  // Use the existing browser, above this modal, without constructing private
+  // UI.
+  if (browser->parent) {
+    auto* p = browser->parent;
+    p->removeChild(browser);
+    p->addChild(browser);
+  }
+  browser->setVisible(true);
+}
+void SubpatchView::finishBrowser() {
+  browserPending = false;
+  if (!owner) return;
+  auto* group = owner.get();
+  auto* rack = group->homeRack;
+  std::vector<app::ModuleWidget*> added;
+  for (auto* w : rack->getModules())
+    if (w->module && !browserExisting.count(w->module->id) &&
+        !dynamic_cast<Peekaboo*>(w) &&
+        !w->module->leftExpander.producerMessage &&
+        !w->module->rightExpander.producerMessage)
+      added.push_back(w);
+  if (added.empty()) return;
+  // Browser placement uses the main Rack. End its placement drag before the
+  // original is parked, then expose the module's proxy at the requested spot.
+  APP->event->setDraggedWidget(nullptr, GLFW_MOUSE_BUTTON_LEFT);
+  Vec position = browserPosition;
+  for (auto* w : added) {
+    bool overlap = true;
+    while (overlap) {
+      overlap = false;
+      for (auto* face : nativeRack->getModules())
+        if (Rect(position, w->box.size).intersects(face->box)) {
+          position.x = face->box.getRight() + RACK_GRID_WIDTH;
+          overlap = true;
+          break;
+        }
+    }
+    group->subpatchPositions[w->module->id] = position;
+    position.x += w->box.size.x + RACK_GRID_WIDTH;
+  }
+  rack->deselectAll();
+  for (auto* w : added) rack->select(w, true);
+  group->addSelection();
+  group->showView();
 }
 // Engine connections have one authoritative widget in the main rack. The
 // local Rack owns only visual counterparts, released before its destruction.
@@ -764,6 +980,7 @@ SubpatchNativePort* SubpatchView::portFor(app::PortWidget* source) {
   return nullptr;
 }
 void SubpatchView::shutdownNative() {
+  endMove();
   if (closing || !nativeRack) return;
   closing = true;
   for (auto* port : portHits) port->clearTooltip();
@@ -811,11 +1028,23 @@ void SubpatchView::onHide(const HideEvent& e) {
   widget::OpaqueWidget::onHide(e);
 }
 void SubpatchView::step() {
-  if (!owner || owner->members.empty()) {
+  if (!owner) {
     dismiss();
     return;
   }
   if (closing) return;
+  if (!pendingRemoval.empty()) {
+    auto* group = owner.get();
+    auto ids = pendingRemoval;
+    pendingRemoval.clear();
+    group->removeMembers(ids);
+    group->showView();
+    return;
+  }
+  if (browserPending && !APP->scene->browser->visible) {
+    finishBrowser();
+    if (closing) return;
+  }
   syncFromMain();
   if (parent) box.size = parent->box.size;
   adjust->box.pos = Vec(8, 8);
@@ -824,7 +1053,9 @@ void SubpatchView::step() {
   zoomLabel->box.pos = Vec(301, 8);
   zoomIn->box.pos = Vec(374, 8);
   fit->box.pos = Vec(415, 8);
-  close->box.pos = Vec(std::max(475.f, box.size.x - 82), 8);
+  addButton->box.pos = Vec(475, 8);
+  addButton->visible = !exposeMode;
+  close->box.pos = Vec(std::max(585.f, box.size.x - 82), 8);
   cableOpacity->box.pos = Vec(std::max(330.f, box.size.x - 182), 47);
   scroll->box = Rect(Vec(0, 80), Vec(std::max(100.f, box.size.x),
                                      std::max(100.f, box.size.y - 80)));
@@ -842,10 +1073,11 @@ void SubpatchView::draw(const DrawArgs& args) {
   auto font = APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
   nvgFontFaceId(args.vg, font->handle);
   nvgFontSize(args.vg, 12);
-  nvgFillColor(args.vg, nvgRGB(24, 38, 31));
+  nvgFillColor(args.vg, nvgRGB(148, 164, 155));
   std::string text = exposeMode
                          ? "Click controls to expose. Yellow jacks are locked."
-                         : "Drag plugs to patch. Yellow jacks are locked.";
+                         : "Drag modules to move. Shift-click to select. "
+                           "Right-click for actions. Yellow jacks are locked.";
   nvgText(args.vg, 10, 63, text.c_str(), nullptr);
   widget::OpaqueWidget::draw(args);
   // Match Rack's explicit extra-layer composition on the normal Scene draw
@@ -864,9 +1096,14 @@ void SubpatchView::setViewZoom(float amount, Vec focus) {
   scroll->step();
 }
 void SubpatchView::fitView() {
-  if (canvas->box.size.x <= 0 || canvas->box.size.y <= 0) return;
-  float amount = std::min((scroll->box.size.x - 18) / canvas->box.size.x,
-                          (scroll->box.size.y - 18) / canvas->box.size.y);
+  Vec extent;
+  for (auto* w : nativeRack->getModules()) {
+    extent.x = std::max(extent.x, w->box.getRight() + 18);
+    extent.y = std::max(extent.y, w->box.getBottom() + 18);
+  }
+  if (extent.x <= 0 || extent.y <= 0) return;
+  float amount = std::min((scroll->box.size.x - 18) / extent.x,
+                          (scroll->box.size.y - 18) / extent.y);
   zoom->setZoom(clamp(amount, .15f, 1.f));
   scroll->offset = Vec();
   scroll->step();
@@ -895,8 +1132,7 @@ void SubpatchView::disconnect(app::PortWidget* source) {
   if (!port || port->locked()) return;
   nativeAction([&] { port->deleteTopCableAction(); });
 }
-void Abstractor::showView() {
-  if (members.empty()) return;
+void Peekaboo::showView() {
   if (subview) {
     closeView();
     return;

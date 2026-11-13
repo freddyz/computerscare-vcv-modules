@@ -8,7 +8,8 @@ void init(Plugin* p) {
   pluginInstance = p;
   installDevWatcherToolbar();
 
-  p->addModel(modelComputerscarePatchAbstractor);
+  p->addModel(modelComputerscarePeekaboo);
+  p->addModel(modelComputerscarePeekabooLegacy);
   p->addModel(modelComputerscarePhlooper);
   p->addModel(modelComputerscareDebug);
   p->addModel(modelComputerscarePatchSequencer);

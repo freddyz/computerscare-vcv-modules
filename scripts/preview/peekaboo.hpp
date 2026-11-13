@@ -1,5 +1,5 @@
 // Isolated Rack-engine integration test, not connected to a live Rack process.
-namespace abstractorfixture {
+namespace peekaboofixture {
 struct Gain : engine::Module {
   int randomCalls=0,resetCalls=0;
   void onRandomize(const RandomizeEvent& e) override {++randomCalls;engine::Module::onRandomize(e);}
@@ -31,27 +31,35 @@ struct Face : app::ModuleWidget {
     addParam(createParamCentered<SmallKnob>(Vec(45,180),m,0));
     for(int i=1;i<=3;++i) {
       auto* sw=createParamCentered<app::Switch>(Vec(45,200+i*20),m,i);
+      sw->box=Rect(Vec(35,200+i*20),Vec(20,20));
       sw->momentary=i==1;addParam(sw);
     }
   }
 };
 }
-void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float scale) {
+void renderPeekabooPreview(plugin::Plugin& plugin,const std::string& output,float scale) {
   auto require=[](bool pass,const char* why){if(!pass)throw std::runtime_error(why);};
+  for(int count:{0,1,4,8,24,64,128}) for(float width:{75.f,90.f,120.f,180.f,225.f,300.f,450.f,600.f,900.f,1500.f}) {
+    auto layout=peekaboo::responsiveLayout(width,count,count,count/2);
+    require(layout.width>=width && layout.totalHeight()<=368.01f,"Responsive planner must preserve requested width or enforce physical minimum without hiding controls");
+  }
   // Only this renderer process gets a fake watcher control path. Never send
   // commands to the user's watcher or running Rack session.
   setenv("VCVMON_CONTROL",(output+"/isolated-watcher").c_str(),1);
   auto* rack=APP->scene->rack;
-  auto* gainModel=createModel<abstractorfixture::Gain,abstractorfixture::Face>("demo-gain");
+  auto* gainModel=createModel<peekaboofixture::Gain,peekaboofixture::Face>("demo-gain");
   gainModel->name="Demo gain";
-  plugin.addModel(gainModel); plugin.addModel(modelAbstractorPreview);
+  plugin.addModel(gainModel); plugin.addModel(modelPeekabooPreview); plugin.addModel(modelPeekabooLegacyPreview);
+  require(modelPeekabooLegacyPreview->hidden,"Legacy model must stay hidden from the browser");
   plugin::plugins.push_back(&plugin);
+  auto* browserWidget=modelPeekabooPreview->createModuleWidget(nullptr);
+  browserWidget->step();capture(browserWidget,output+"/00-browser.png",scale,false);delete browserWidget;
   struct Cleanup {
     plugin::Plugin& plugin;plugin::Model* gain;
     ~Cleanup() {
       APP->scene->rack->clear();
       plugin::plugins.erase(std::find(plugin::plugins.begin(),plugin::plugins.end(),&plugin));
-      plugin.models.remove(gain);plugin.models.remove(modelAbstractorPreview);delete gain;
+      plugin.models.remove(gain);plugin.models.remove(modelPeekabooPreview);plugin.models.remove(modelPeekabooLegacyPreview);delete gain;
     }
   } cleanup{plugin,gainModel};
   auto add=[&](plugin::Model* model,Vec pos){
@@ -63,7 +71,7 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   auto* b=add(gainModel,Vec(180,0));
   auto* guard=add(gainModel,Vec(915,0));
   const int64_t guardId=guard->module->id;
-  auto* host=static_cast<patchabstractor::Abstractor*>(add(modelAbstractorPreview,Vec(300,0)));
+  auto* host=static_cast<peekaboo::Peekaboo*>(add(modelPeekabooPreview,Vec(300,0)));
   const int64_t aId=a->module->id,bId=b->module->id,sinkId=sink->module->id,hostId=host->module->id;
   auto connect=[&](app::ModuleWidget* from,app::ModuleWidget* to){
     auto* c=new engine::Cable;c->outputModule=from->module;c->outputId=0;c->inputModule=to->module;c->inputId=0;
@@ -95,10 +103,10 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   for(int i=1;i<24;++i) {host->expose(a,a->getInput(i));host->exposeParameter(bId,i);}
   host->expose(a,a->getInput(0));host->exposeParameter(bId,0);
   require(host->ports.size()==25 && host->parameters.size()==24,"Controls must support more than 16 ports and one parameter without duplicates");
-  require(host->box.size.x>300,"Panel must grow to fit all exposed controls");
-  auto* moment=dynamic_cast<patchabstractor::ExposedSwitch*>(host->parameters[1].knob);
-  auto* toggle=dynamic_cast<patchabstractor::ExposedSwitch*>(host->parameters[2].knob);
-  auto* positions=dynamic_cast<patchabstractor::ExposedSwitch*>(host->parameters[3].knob);
+  require(host->box.size.x>=peekaboo::minimumLayoutWidth(24,24,1),"Panel must grow to fit all exposed controls");
+  auto* moment=dynamic_cast<peekaboo::ExposedSwitch*>(host->parameters[1].knob);
+  auto* toggle=dynamic_cast<peekaboo::ExposedSwitch*>(host->parameters[2].knob);
+  auto* positions=dynamic_cast<peekaboo::ExposedSwitch*>(host->parameters[3].knob);
   require(moment && moment->momentary && toggle && !toggle->momentary && positions,"Exposed switch kinds must match original widgets");
   event::DragStart press;press.button=GLFW_MOUSE_BUTTON_LEFT;
   event::DragEnd release;release.button=GLFW_MOUSE_BUTTON_LEFT;
@@ -125,7 +133,7 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
         save |= button->text=="Save version";
         if(button->text=="Save version") toolbar=child;
       }
-    require(toolbar && save,"Abstractor's standard panel must attach the dev toolbar");
+    require(toolbar && save,"Peekaboo's standard panel must attach the dev toolbar");
     toolbar->step();
     for(auto* control:toolbar->children)
       if(auto* button=dynamic_cast<ui::Button*>(control)) pause |= button->text=="Pause" || button->text=="Resume";
@@ -136,8 +144,8 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
     toolbar->box.pos=position;parent->addChild(toolbar);
   }
   {
-    auto* own=static_cast<patchabstractor::Module*>(host->module);
-    auto* gainA=static_cast<abstractorfixture::Gain*>(a->module);auto* gainB=static_cast<abstractorfixture::Gain*>(b->module);
+    auto* own=static_cast<peekaboo::Module*>(host->module);
+    auto* gainA=static_cast<peekaboofixture::Gain*>(a->module);auto* gainB=static_cast<peekaboofixture::Gain*>(b->module);
     std::vector<float> savedA,savedB;
     for(int i=0;i<24;++i){savedA.push_back(gainA->getParamQuantity(i)->getValue());savedB.push_back(gainB->getParamQuantity(i)->getValue());}
     host->parameterAction(2,true);
@@ -146,7 +154,7 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
     widget::EventContext ctx;widget::Widget::HoverKeyEvent key;key.context=&ctx;key.key=GLFW_KEY_R;key.mods=RACK_MOD_CTRL;key.action=GLFW_PRESS;host->onHoverKey(key);
     require(ctx.consumed && gainA->randomCalls==0 && gainB->randomCalls==0 && gainA->getParamQuantity(0)->getValue()==savedA[0],"Mod+R must randomize exposed params without whole-module callbacks");
     APP->history->undo();
-    own->params[patchabstractor::Module::WIGGLE_AMOUNT].setValue(.1f);
+    own->params[peekaboo::Module::WIGGLE_AMOUNT].setValue(.1f);
     host->parameterAction(0,true);
     for(int i=0;i<24;++i)require(std::abs(gainB->getParamQuantity(i)->getValue()-savedB[i])<=.20001f,"Wiggle exceeded selected amount");
     APP->history->undo();
@@ -177,7 +185,7 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   std::ofstream(output+"/roundtrip.json")<<encoded;std::free(encoded);
   rack->clear();require(APP->engine->getModuleIds().empty(),"Rack clear must release held modules exactly once");
   APP->engine->fromJson(patch);rack->fromJson(patch);
-  host=dynamic_cast<patchabstractor::Abstractor*>(rack->getModule(hostId));require(host,"Reload lost container");
+  host=dynamic_cast<peekaboo::Peekaboo*>(rack->getModule(hostId));require(host,"Reload lost container");
   host->step();
   require(rack->getModule(guardId)->box.pos==savedGuardPosition,"Reload shoved an unrelated module");
   a=host->find(aId);b=host->find(bId);sink=rack->getModule(sinkId);
@@ -189,7 +197,7 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   APP->engine->stepBlock(64);
   for(int ch=0;ch<4;++ch)require(sink->module->outputs[0].getVoltage(ch)==reference[ch]*.5f,"Reload changed polyphonic audio");
   APP->scene->box.size=Vec(1100,650);
-  host->showView();auto* view=dynamic_cast<patchabstractor::SubpatchView*>(host->subview.get());
+  host->showView();auto* view=dynamic_cast<peekaboo::SubpatchView*>(host->subview.get());
   require(view,"Show must open a subpatch view");
   auto* originalRackParent=rack->parent;auto rackBox=rack->box;
   auto registeredModules=rack->getModules();auto selectedModules=rack->getSelected();
@@ -202,7 +210,7 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   require(blankHover.getTarget()!=rack,"Subview background must never target the live Rack");
   require(!a->visible && !b->visible && rack->getModule(aId)->box.size==Vec(),"Show must not expand or ungroup members");
   require(view->canvas->box.size.isFinite() && view->scroll->containerBox.size.isFinite(),"Subview canvas and scroll bounds must be finite");
-  auto* farFace=static_cast<patchabstractor::SubpatchModuleFace*>(view->nativeRack->getModules().back());
+  auto* farFace=static_cast<peekaboo::SubpatchModuleFace*>(view->nativeRack->getModules().back());
   Vec savedSourceSize=farFace->source->box.size;
   farFace->source->box.size.x=1800;APP->scene->box.size=Vec(600,480);view->step();view->step();
   require(view->scroll->horizontalScrollbar->visible && view->scroll->verticalScrollbar->visible,"Large subpatch must scroll on both axes");
@@ -221,7 +229,7 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   auto* locked=b->getOutput(0);
   require(!view->connect(locked,a->getInput(1)),"Subview must reject external-jack repatching");
   view->disconnect(locked);require(rack->getCable(externalId),"Subview removed external cable");
-  auto hitFor=[&](widget::Widget* source) -> patchabstractor::SubpatchHit* {
+  auto hitFor=[&](widget::Widget* source) -> peekaboo::SubpatchHit* {
     for(auto* hit:view->hits)if(hit->param.get()==source)return hit;
     throw std::runtime_error("Subview omitted a real parameter");
   };
@@ -285,23 +293,48 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
 
   host->closeView();
   // A copied/pasted container must not take ownership of the original group.
-  auto* copy=static_cast<patchabstractor::Abstractor*>(add(modelAbstractorPreview,Vec(645,0)));
+  auto* copy=static_cast<peekaboo::Peekaboo*>(add(modelPeekabooPreview,Vec(645,0)));
   json_t* state=host->module->dataToJson();copy->module->dataFromJson(state);json_decref(state);copy->step();
   require(copy->members.empty() && host->members.size()==2 && !a->visible,"Copied container stole a group");
   rack->removeModule(copy);delete copy;
-  for(const auto& port:host->ports)require(port.face->box.getRight()<host->box.size.x && port.face->box.getBottom()<350,"Exposed port clipped outside panel");
-  for(const auto& param:host->parameters)require(param.knob->box.getRight()<host->box.size.x && param.knob->box.getBottom()<350,"Exposed knob clipped outside panel");
+  for(const auto& port:host->ports)require(port.face->box.getRight()<host->box.size.x && port.face->box.getBottom()<=368,"Exposed port clipped outside panel");
+  for(const auto& param:host->parameters)require(param.knob->box.getRight()<host->box.size.x && param.knob->box.getBottom()<=368,"Exposed knob clipped outside panel");
+  for(float width:{75.f,180.f,300.f,450.f,900.f}) {
+    host->requestedWidth=width;host->layoutControls();
+    std::vector<widget::Widget*> visibleControls;
+    for(auto* w:host->actionButtons)visibleControls.push_back(w);
+    for(auto* w:host->managementButtons)visibleControls.push_back(w);
+    for(int i=0;i<6;++i)visibleControls.push_back(host->getInput(i));
+    visibleControls.push_back(host->getParam(peekaboo::Module::WIGGLE_AMOUNT));
+    for(const auto& p:host->ports)visibleControls.push_back(p.face);
+    for(const auto& p:host->parameters)visibleControls.push_back(p.knob);
+    require(host->ownFrame->box.size.x<=260,"Module controls must retain a capped width");
+    for(int action=0;action<3;++action) {
+      if(host->responsive.ownColumns==2)require(host->actionButtons[action]->box.pos.y==host->actionButtons[action+3]->box.pos.y,"Matching exposed/all actions must share a row");
+      else require(host->actionButtons[action]->box.pos.x==host->actionButtons[action+3]->box.pos.x,"Narrow action sets must share a column");
+    }
+    for(size_t i=0;i<visibleControls.size();++i) {
+      auto bounds=visibleControls[i]->box;
+      require(bounds.pos.x>=5 && bounds.pos.y>=26 && bounds.getRight()<=host->box.size.x-5 && bounds.getBottom()<=368,"Responsive controls must stay inside module bounds");
+      for(size_t j=0;j<i;++j)require(!bounds.intersects(visibleControls[j]->box),"Responsive controls must never overlap at any breakpoint");
+    }
+  }
+  host->requestedWidth=450;host->layoutControls();
+  auto* widthState=host->module->dataToJson();
+  host->requestedWidth=900;host->layoutControls();host->module->dataFromJson(widthState);json_decref(widthState);host->step();
+  require(host->requestedWidth==450 && host->box.size.x>=450,"User resize width must survive module JSON reload");
   auto* parent=host->parent;parent->removeChild(host);auto pos=host->box.pos;host->box.pos=Vec();
+  host->requestedWidth=900;host->layoutControls();
   capture(host,output+"/02-reloaded.png",scale,false);
   for(int mode=1;mode<=2;++mode) {
-    host->viewMode=mode;host->layoutControls();
+    host->requestedWidth=mode==1?450.f:75.f;host->layoutControls();
     capture(host,output+(mode==1?"/10-medium.png":"/11-small.png"),scale,false);
   }
-  host->viewMode=0;host->layoutControls();
-  auto* mappedButton=dynamic_cast<patchabstractor::MappedParam<patchabstractor::ExposedSwitch>*>(host->parameters[1].knob);
+  host->requestedWidth=900;host->layoutControls();
+  auto* mappedButton=dynamic_cast<peekaboo::MappedParam<peekaboo::ExposedSwitch>*>(host->parameters[1].knob);
   require(mappedButton,"Mapped button must have tooltip support");
   APP->event->setHoveredWidget(mappedButton);
-  require(mappedButton->tip && mappedButton->tip->caption().find("#2")!=std::string::npos,"Mapped button tooltip must identify duplicate module instance");
+  require(mappedButton->tip && mappedButton->tip->caption().find(host->memberName(bId))!=std::string::npos && host->memberName(bId).find("#")!=std::string::npos,"Mapped button tooltip must identify duplicate module instance");
   APP->event->setHoveredWidget(nullptr);
   require(!mappedButton->tip,"Mapped button tooltip must clear on leave");
   host->box.pos=pos;parent->addChild(host);
@@ -333,7 +366,7 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   auto* expandedPatch=APP->engine->toJson();rack->mergeJson(expandedPatch);
   Vec expandedA=rack->getModule(aId)->box.pos,expandedB=rack->getModule(bId)->box.pos;
   rack->clear();APP->engine->fromJson(expandedPatch);rack->fromJson(expandedPatch);json_decref(expandedPatch);
-  host=dynamic_cast<patchabstractor::Abstractor*>(rack->getModule(hostId));host->step();
+  host=dynamic_cast<peekaboo::Peekaboo*>(rack->getModule(hostId));host->step();
   a=host->find(aId);b=host->find(bId);sink=rack->getModule(sinkId);registeredA=rack->getModule(aId);registeredB=rack->getModule(bId);
   require(host->expanded && host->members.size()==2 && registeredA->box.pos==expandedA && registeredB->box.pos==expandedB,"Expanded grouping and block positions must survive reload");
 
@@ -359,26 +392,82 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   for(size_t i=0;i<json_array_size(modules);++i)
     if(json_integer_value(json_object_get(json_array_get(modules,i),"id"))==aId) {json_array_remove(modules,i);break;}
   APP->engine->fromJson(patch);rack->fromJson(patch);
-  host=dynamic_cast<patchabstractor::Abstractor*>(rack->getModule(hostId));host->step();
+  host=dynamic_cast<peekaboo::Peekaboo*>(rack->getModule(hostId));host->step();
   require(host->members.empty() && rack->getModule(bId)->visible,"Missing member must recover available modules");
   rack->clear();json_decref(patch);
+  auto* legacyModules=json_object_get(intact,"modules");
+  for(size_t i=0;i<json_array_size(legacyModules);++i) {
+    auto* entry=json_array_get(legacyModules,i);
+    if(json_integer_value(json_object_get(entry,"id"))==hostId) json_object_set_new(entry,"model",json_string("computerscare-patch-abstractor"));
+  }
   APP->engine->fromJson(intact);rack->fromJson(intact);
-  host=dynamic_cast<patchabstractor::Abstractor*>(rack->getModule(hostId));host->step();
+  host=dynamic_cast<peekaboo::Peekaboo*>(rack->getModule(hostId));host->step();
+  require(host && host->module->model==modelPeekabooLegacyPreview && host->members.size()==2,"Old module slug must restore the complete Peekaboo group");
   rack->touchedParam=host->find(aId)->getParam(0);
   rack->selectAll();rack->deleteSelectionAction();
   require(APP->engine->getModuleIds().empty() && rack->touchedParam==nullptr,"Delete-all left a held module or dangling touched control");
   json_decref(intact);
+  // Editable subpatch layout, browser adoption, and selection removal.
+  rack->clear();
+  auto* editA=add(gainModel,Vec());auto* editB=add(gainModel,Vec(105,0));
+  auto* editOut=add(gainModel,Vec(210,0));
+  auto* editHost=static_cast<peekaboo::Peekaboo*>(add(modelPeekabooPreview,Vec(360,0)));
+  int64_t editAId=editA->module->id,editBId=editB->module->id;
+  connect(editA,editB);connect(editB,editOut);auto editCableIds=cableIds();
+  rack->deselectAll();rack->select(editA,true);rack->select(editB,true);editHost->collapse();
+  editHost->showView();auto* editView=dynamic_cast<peekaboo::SubpatchView*>(editHost->subview.get());editView->step();
+  editView->selectModule(editAId,0);editView->selectModule(editBId,GLFW_MOD_SHIFT);
+  require(editView->selected.size()==2,"Shift-click must select multiple subpatch modules");
+  auto* editFace=static_cast<peekaboo::SubpatchModuleFace*>(editView->nativeRack->getModules().front());
+  widget::EventContext selectionContext;widget::Widget::ButtonEvent selectionClick;
+  selectionClick.context=&selectionContext;selectionClick.pos=Vec(2,2);selectionClick.action=GLFW_PRESS;selectionClick.button=GLFW_MOUSE_BUTTON_LEFT;selectionClick.mods=GLFW_MOD_SHIFT;
+  editFace->onButton(selectionClick);
+  widget::Widget::DragStartEvent selectionStart;selectionStart.button=GLFW_MOUSE_BUTTON_LEFT;editFace->onDragStart(selectionStart);
+  require(!editView->selected.count(editFace->module->id) && !editView->moveHistory,"Shift-toggle must not immediately reselect a module through drag start");
+  editView->selected.clear();editView->nativeRack->pointer=Vec();
+  editView->nativeRack->onDragStart(selectionStart);
+  widget::Widget::DragHoverEvent marqueeHover;marqueeHover.pos=Vec(240,379);editView->nativeRack->onDragHover(marqueeHover);
+  widget::Widget::DragMoveEvent marqueeMove;marqueeMove.mouseDelta=Vec(240,379);editView->nativeRack->onDragMove(marqueeMove);
+  require(editView->selected.size()==2,"Rectangle selection must select both modules using the current pointer, without double-counting delta");
+  widget::Widget::DragEndEvent marqueeEnd;editView->nativeRack->onDragEnd(marqueeEnd);
+  editView->selected={editAId,editBId};
+  auto initialPositions=editHost->subpatchPositions;
+  editView->beginMove(editAId);editView->moveSelection(Vec(30,RACK_GRID_HEIGHT));editView->endMove();
+  for(auto id:{editAId,editBId})require(editHost->subpatchPositions[id]==initialPositions[id]+Vec(30,RACK_GRID_HEIGHT),"Dragging must move all selected modules together on Rack grid");
+  require(cableIds()==editCableIds,"Moving subpatch modules changed audio connections");
+  auto movedPositions=editHost->subpatchPositions;
+  APP->history->undo();editHost->step();require(editHost->subpatchPositions==initialPositions,"Subview move undo must restore layout");
+  APP->history->redo();editHost->step();require(editHost->subpatchPositions==movedPositions,"Subview move redo must restore layout");
+  auto* editSaved=editHost->toJson();editHost->fromJson(editSaved);json_decref(editSaved);editHost->step();
+  require(editHost->subpatchPositions==movedPositions,"Subview positions must survive patch JSON reload");
+  editHost->showView();editView=dynamic_cast<peekaboo::SubpatchView*>(editHost->subview.get());editView->step();
+  editView->openBrowser(Vec(450,0));require(APP->scene->browser->visible,"Add module must open Rack's existing browser");
+  auto* browserAdded=add(gainModel,editHost->parkingPosition()+Vec(60,RACK_GRID_HEIGHT));int64_t browserId=browserAdded->module->id;
+  APP->scene->browser->hide();editView->step();
+  editView=dynamic_cast<peekaboo::SubpatchView*>(editHost->subview.get());require(editView && editHost->members.size()==3 && rack->getModule(browserId)->box.size==Vec(),"Browser-created module must be absorbed and hidden in the main Rack");editView->step();
+  require(editView->nativeRack->getModules().size()==3,"Browser-created module must appear in subpatch workspace");
+  editView->selected={editAId,browserId};editView->queueRemoval(editAId);editView->step();
+  require(editHost->members.size()==1 && !editHost->expanded && rack->getModule(editAId)->visible && rack->getModule(browserId)->visible && !rack->getModule(editBId)->visible,"Removing selection must return both modules to main Rack and keep remaining module abstracted");
+  require(cableIds()==editCableIds,"Removing members must preserve all engine connections");
+  APP->history->undo();editHost->step();require(editHost->members.size()==3 && !rack->getModule(browserId)->visible,"Selection removal must support undo");
+  APP->history->redo();editHost->step();require(editHost->members.size()==1 && rack->getModule(browserId)->visible,"Selection removal must support redo");
+  editHost->removeMembers({editBId});require(editHost->members.empty() && rack->getModule(editBId)->visible && cableIds()==editCableIds,"Removing final member must leave the audio patch intact");
+  editHost->showView();editView=dynamic_cast<peekaboo::SubpatchView*>(editHost->subview.get());editView->step();
+  require(editView && !editView->closing && editView->nativeRack->getModules().empty(),"Empty abstraction must keep an editable workspace available");
+  rack->clear();
+
   // Show actual computerscare modules in both subview modes for visual QA.
   modelVolyMultiPreview->plugin=&plugin;modelComputerscareMelyPorge->plugin=&plugin;
   modelVolyMultiPreview->name="Voly Pector";modelComputerscareMelyPorge->name="Mely Porge";
   auto* voly=add(modelVolyMultiPreview,Vec(0,0));
   auto* mely=add(modelComputerscareMelyPorge,Vec(voly->box.size.x+30,0));
   auto* outside=add(gainModel,Vec(mely->box.getRight()+30,0));
-  auto* group=static_cast<patchabstractor::Abstractor*>(add(modelAbstractorPreview,Vec(outside->box.getRight()+30,0)));
+  auto* group=static_cast<peekaboo::Peekaboo*>(add(modelPeekabooPreview,Vec(outside->box.getRight()+30,0)));
   connect(voly,mely);connect(mely,outside);APP->engine->stepBlock(64);voly->step();mely->step();
   rack->select(voly,true);rack->select(mely,true);group->groupAction(true);
   group->exposeParameter(voly->module->id,0);group->exposeParameter(mely->module->id,0);
-  group->showView();auto* realView=dynamic_cast<patchabstractor::SubpatchView*>(group->subview.get());
+  if(auto* input=mely->getInput(1))group->expose(mely,input);
+  group->showView();auto* realView=dynamic_cast<peekaboo::SubpatchView*>(group->subview.get());
   APP->scene->box.size=Vec(std::max(900.f,mely->box.getRight()+90),620);
   realView->step();
   auto captureView=[&](const std::string& path){
@@ -393,16 +482,19 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
     for(const auto& p:endpoints)require(p.first->inputPort==p.second.first && p.first->outputPort==p.second.second,"Rendering must restore native rack endpoints");
   };
   captureView(output+"/04-adjust-subpatch.png");
+  realView->selected={voly->module->id,mely->module->id};
+  realView->beginMove(voly->module->id);realView->moveSelection(Vec(60,0));realView->endMove();
+  realView->fitView();realView->step();captureView(output+"/12-editable-rack.png");
   realView->setMode(true);realView->setViewZoom(.75f,Vec());captureView(output+"/05-expose-subpatch.png");
   {
     realView->fitView();realView->step();
-    patchabstractor::SubpatchHit* hit=nullptr;
+    peekaboo::SubpatchHit* hit=nullptr;
     for(auto* candidate:realView->hits)if(candidate->param && candidate->visible){hit=candidate;break;}
     require(hit,"Actual subpatch needs a parameter tooltip target");
     widget::Widget::EnterEvent enter;APP->event->setHoveredWidget(hit);require(hit->tooltip,"Actual module's native tooltip was not created");
     hit->tooltip->step();hit->tooltipAnchor->step();
     struct TooltipShot : widget::Widget {
-      patchabstractor::SubpatchView* view;ui::Tooltip* tip;
+      peekaboo::SubpatchView* view;ui::Tooltip* tip;
       void draw(const DrawArgs& args) override {
         view->draw(args);nvgSave(args.vg);nvgTranslate(args.vg,tip->box.pos.x,tip->box.pos.y);
         auto local=args;local.clipBox=tip->box.zeroPos();tip->draw(local);nvgRestore(args.vg);
@@ -420,7 +512,14 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   }
   group->closeView();
   auto* groupParent=group->parent;auto groupPosition=group->box.pos;
-  groupParent->removeChild(group);group->box.pos=Vec();capture(group,output+"/08-action-grid.png",scale,false);group->box.pos=groupPosition;groupParent->addChild(group);
+  groupParent->removeChild(group);group->box.pos=Vec();capture(group,output+"/08-action-grid.png",scale,false);
+  const float resizeWidths[]={75,180,360,600};
+  const char* resizeFiles[]={"/13-minimum-width.png","/14-compact-width.png","/15-readable-width.png","/16-roomy-width.png"};
+  for(int i=0;i<4;++i) {
+    group->requestedWidth=resizeWidths[i];group->layoutControls();
+    capture(group,output+resizeFiles[i],scale,false);
+  }
+  group->requestedWidth=180;group->layoutControls();group->box.pos=groupPosition;groupParent->addChild(group);
   // The external fixture only demonstrates a locked boundary in the subview;
   // omit that unstyled test module from the rack photograph.
   rack->removeModule(outside);delete outside;
@@ -434,5 +533,68 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   rack->clear();
 
 
-  std::printf("Abstractor: zero footprint, occupied-space expansion, native save/load, four-channel DSP, exposed controls, copy isolation, missing-member recovery and deletion checks passed.\n");
+  // Sixteen real module renders at a common scale, covering sparse, skewed,
+  // medium and crowded mappings. Captures are development-only artifacts.
+  struct SpectrumCase {int p,in,out;float width;const char* name;};
+  const SpectrumCase cases[]={
+    {0,1,1,75,"Sparse / minimum"},{2,2,2,105,"Sparse / narrow"},{3,1,4,180,"Sparse / compact"},{4,4,1,300,"Sparse / readable"},
+    {0,8,1,90,"Mostly inputs"},{2,1,8,150,"Mostly outputs"},{8,0,4,225,"No inputs"},{8,4,0,360,"No outputs"},
+    {8,8,8,120,"Medium / minimum"},{12,4,8,210,"Medium / compact"},{16,8,4,300,"Medium / readable"},{12,12,12,480,"Medium / wide"},
+    {24,16,16,150,"Large / minimum"},{24,2,24,300,"Large / output-heavy"},{24,24,2,450,"Large / input-heavy"},{24,24,24,600,"Large / wide"}
+  };
+  struct SpectrumTile : widget::Widget {
+    std::string caption;
+    void draw(const DrawArgs& args) override {
+      nvgBeginPath(args.vg);nvgRect(args.vg,0,0,box.size.x,box.size.y);nvgFillColor(args.vg,nvgRGB(222,226,223));nvgFill(args.vg);
+      auto font=APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));nvgFontFaceId(args.vg,font->handle);nvgFontSize(args.vg,10);nvgFillColor(args.vg,nvgRGB(32,48,40));
+      auto separator=caption.find(" | ");
+      nvgText(args.vg,8,12,caption.substr(0,separator).c_str(),nullptr);
+      if(separator!=std::string::npos)nvgText(args.vg,8,25,caption.substr(separator+3).c_str(),nullptr);
+      widget::Widget::draw(args);
+    }
+  } sheet;
+  sheet.box.size=Vec(2480,1680);
+  struct SpectrumEntry {SpectrumTile* tile;peekaboo::Peekaboo* host;Vec position;};
+  std::vector<SpectrumEntry> entries;
+  std::string previousName=gainModel->name;gainModel->name="Voice";
+  auto inside=[](Rect b,Rect a) {return b.pos.x>=a.pos.x-.01f && b.pos.y>=a.pos.y-.01f && b.getRight()<=a.getRight()+.01f && b.getBottom()<=a.getBottom()+.01f;};
+  for(int index=0;index<16;++index) {
+    const auto& c=cases[index];float base=index*2000.f;
+    auto* left=add(gainModel,Vec(base,0));auto* right=add(gainModel,Vec(base+105,0));
+    auto* wrapper=static_cast<peekaboo::Peekaboo*>(add(modelPeekabooPreview,Vec(base+300,0)));
+    rack->deselectAll();rack->select(left,true);rack->select(right,true);wrapper->collapse();
+    for(int n=0;n<c.p;++n) {auto* source=n%2?right:left;wrapper->exposeParameter(source->module->id,n/2);auto* q=source->module->getParamQuantity(n/2);float value=q->getMinValue()+(q->getMaxValue()-q->getMinValue())*((n*7+index*3)%17)/16.f;if(q->snapEnabled)value=std::round(value);q->setImmediateValue(value);}
+    for(int n=0;n<c.in;++n)wrapper->expose(left,left->getInput(n));
+    for(int n=0;n<c.out;++n)wrapper->expose(right,right->getOutput(n));
+    wrapper->requestedWidth=c.width;wrapper->layoutControls();wrapper->step();
+    for(auto* button:wrapper->actionButtons)require(inside(button->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": action outside controls face").c_str());
+    for(auto* button:wrapper->managementButtons)require(inside(button->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": management outside controls face").c_str());
+    for(int i=0;i<6;++i)require(inside(wrapper->getInput(i)->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": CV outside controls face").c_str());
+    for(const auto& p:wrapper->parameters)require(inside(p.knob->box,wrapper->frameContent(wrapper->frame)),("Spectrum "+std::to_string(index+1)+": parameter extends into a perspective wall").c_str());
+    for(const auto& p:wrapper->ports)require(inside(p.face->box,wrapper->frameContent(p.input?wrapper->inputFrame:wrapper->outputFrame)),("Spectrum "+std::to_string(index+1)+": jack extends into a perspective wall").c_str());
+    auto* tile=new SpectrumTile;tile->box=Rect(Vec((index%4)*620,(index/4)*420),Vec(620,420));
+    tile->caption=std::to_string(index+1)+". "+c.name+" | "+std::to_string(c.p)+" params / "+std::to_string(c.in)+" in / "+std::to_string(c.out)+" out | width "+std::to_string(int(wrapper->box.size.x));
+    auto position=wrapper->box.pos;rack->getModuleContainer()->removeChild(wrapper);wrapper->box.pos=Vec((620-wrapper->box.size.x)*.5f,30);tile->addChild(wrapper);entries.push_back({tile,wrapper,position});
+    capture(tile,output+"/spectrum-"+std::to_string(index+1)+".png",scale,false);
+    sheet.addChild(tile);
+  }
+  float columnWidths[]={340,340,340,340};
+  for(size_t i=0;i<entries.size();++i)columnWidths[i%4]=std::max(columnWidths[i%4],entries[i].host->box.size.x+24);
+  float columnOffsets[]={0,columnWidths[0],columnWidths[0]+columnWidths[1],columnWidths[0]+columnWidths[1]+columnWidths[2]};
+  sheet.box.size.x=columnOffsets[3]+columnWidths[3];
+  for(size_t i=0;i<entries.size();++i) {
+    entries[i].tile->box.pos.x=columnOffsets[i%4];entries[i].tile->box.size.x=columnWidths[i%4];
+    entries[i].host->box.pos.x=(columnWidths[i%4]-entries[i].host->box.size.x)*.5f;
+  }
+  capture(&sheet,output+"/spectrum-16.png",scale,false);
+  struct SpectrumRow : widget::Widget {
+    widget::Widget* sheet;int row;
+    void draw(const DrawArgs& args) override {nvgSave(args.vg);nvgTranslate(args.vg,0,-row*420);auto local=args;local.clipBox.pos.y+=row*420;sheet->draw(local);nvgRestore(args.vg);}
+  } row;
+  row.sheet=&sheet;row.box.size=Vec(sheet.box.size.x,420);
+  for(int r=0;r<4;++r) {row.row=r;capture(&row,output+"/spectrum-row-"+std::to_string(r+1)+".png",scale,false);}
+  for(auto& entry:entries) {entry.tile->removeChild(entry.host);entry.host->box.pos=entry.position;rack->addModule(entry.host);}
+  rack->clear();gainModel->name=previousName;
+
+  std::printf("Peekaboo: zero footprint, occupied-space expansion, native save/load, four-channel DSP, exposed controls, copy isolation, missing-member recovery and deletion checks passed.\n");
 }

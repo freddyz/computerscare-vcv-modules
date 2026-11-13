@@ -2,11 +2,13 @@
 #include <mutex>
 
 #include "Computerscare.hpp"
+#include "ComputerscareResizableHandle.hpp"
+#include "PeekabooLayout.hpp"
 #include "Phlooper/Block.hpp"
 #include "Phlooper/Dropdown.hpp"
 
 // Engine modules and cables stay in Rack; only their UI layout is grouped.
-namespace patchabstractor {
+namespace peekaboo {
 struct SubpatchNativeRack;
 // Temporarily lend the existing Rack's public containers to the subpatch UI.
 // No RackWidget construction or private SDK entry points are required.
@@ -17,6 +19,7 @@ struct ScopedSubviewRack {
   ~ScopedSubviewRack();
 };
 struct Module : engine::Module {
+  std::atomic<float> panelWidth{180.f};
   std::mutex stateMutex;
   json_t* group = nullptr;
   bool restorePending = false;
@@ -56,12 +59,18 @@ struct Module : engine::Module {
   json_t* dataToJson() override {
     std::lock_guard<std::mutex> lock(stateMutex);
     auto* root = json_object();
+    json_object_set_new(root, "panelWidth", json_real(panelWidth.load()));
     if (group) json_object_set(root, "group", group);
     return root;
   }
   void dataFromJson(json_t* root) override {
     std::lock_guard<std::mutex> lock(stateMutex);
     json_decref(group);
+    auto* width = json_object_get(root, "panelWidth");
+    float value =
+        json_is_number(width) ? float(json_number_value(width)) : 180.f;
+    panelWidth.store(std::isfinite(value) ? clamp(value, 75.f, 30000.f)
+                                          : 180.f);
     group = json_deep_copy(json_object_get(root, "group"));
     restorePending = true;
   }
@@ -128,7 +137,7 @@ struct Holder : app::ModuleWidget {
     module = nullptr;
   }
 };
-struct Abstractor;
+struct Peekaboo;
 struct RackLayoutSnapshot {
   std::map<int64_t, Vec> positions;
   std::vector<int64_t> selected;
@@ -161,6 +170,24 @@ struct GroupHistory : history::ModuleChange {
 };
 struct ActionButton : phlooper::WarpedDropdown {
   int icon = -1;
+  std::function<std::string()> help;
+  ui::Tooltip* tooltip = nullptr;
+  void onEnter(const EnterEvent&) override {
+    if (!settings::tooltips || tooltip) return;
+    tooltip = new ui::Tooltip;
+    tooltip->text = help ? help() : label();
+    tooltip->box.pos = getAbsoluteOffset(box.size);
+    APP->scene->addChild(tooltip);
+  }
+  void onLeave(const LeaveEvent&) override { clearTooltip(); }
+  void clearTooltip() {
+    if (tooltip) {
+      APP->scene->removeChild(tooltip);
+      delete tooltip;
+      tooltip = nullptr;
+    }
+  }
+  ~ActionButton() override { clearTooltip(); }
   void draw(const DrawArgs& args) override {
     showLabel = icon < 0;
     phlooper::WarpedDropdown::draw(args);
@@ -192,6 +219,35 @@ struct ActionButton : phlooper::WarpedDropdown {
         nvgBezierTo(args.vg, -2, -9 + j * 4, 2, 5 + j * 4, 7, -2 + j * 4);
         nvgStroke(args.vg);
       }
+    } else if (icon == 3) {
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -7, 0);
+      nvgBezierTo(args.vg, -3, -7, 3, -7, 7, 0);
+      nvgBezierTo(args.vg, 3, 7, -3, 7, -7, 0);
+      nvgStroke(args.vg);
+      nvgBeginPath(args.vg);
+      nvgCircle(args.vg, 0, 0, 2);
+      nvgFill(args.vg);
+    } else if (icon == 4) {
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -7, -2);
+      nvgLineTo(args.vg, 0, -6);
+      nvgLineTo(args.vg, 7, -2);
+      nvgLineTo(args.vg, 0, 2);
+      nvgClosePath(args.vg);
+      nvgStroke(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -7, 2);
+      nvgLineTo(args.vg, 0, 6);
+      nvgLineTo(args.vg, 7, 2);
+      nvgStroke(args.vg);
+    } else if (icon == 5) {
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -5, -5);
+      nvgLineTo(args.vg, 5, 5);
+      nvgMoveTo(args.vg, 5, -5);
+      nvgLineTo(args.vg, -5, 5);
+      nvgStroke(args.vg);
     } else {
       nvgBeginPath(args.vg);
       nvgMoveTo(args.vg, 5, -4);
@@ -301,6 +357,9 @@ struct MappedParam : Base {
   void onLeave(const widget::Widget::LeaveEvent&) override { clearTip(); }
 };
 struct PortFace : widget::OpaqueWidget {
+  bool compact = true, input = true;
+  JackSmallPointingDown tinyDown;
+  JackSmallPointingUp tinyUp;
   std::function<std::string()> caption;
   MappingTooltip* tip = nullptr;
   void clearTip() {
@@ -312,9 +371,17 @@ struct PortFace : widget::OpaqueWidget {
   }
   ~PortFace() override { clearTip(); }
   WeakPtr<app::PortWidget> source;
-  void draw(const DrawArgs& args) override { source->draw(args); }
+  void draw(const DrawArgs& args) override {
+    if (compact) {
+      if (input)
+        tinyDown.draw(args);
+      else
+        tinyUp.draw(args);
+    } else if (source)
+      source->draw(args);
+  }
   void drawLayer(const DrawArgs& args, int layer) override {
-    if (source) source->drawLayer(args, layer);
+    if (!compact && source) source->drawLayer(args, layer);
   }
   void onButton(const ButtonEvent& e) override {
     if (source) source->onButton(e);
@@ -337,7 +404,7 @@ struct PortFace : widget::OpaqueWidget {
   }
   void onLeave(const LeaveEvent& e) override { clearTip(); }
 };
-struct Abstractor : app::ModuleWidget {
+struct Peekaboo : app::ModuleWidget {
   struct Member {
     int64_t id;
     Vec position;
@@ -353,6 +420,7 @@ struct Abstractor : app::ModuleWidget {
   };
   app::RackWidget* homeRack = nullptr;
   std::vector<Member> members;
+  std::map<int64_t, Vec> subpatchPositions;
   bool expanded = false;
   float actionPulse[6]{};
   std::vector<Port> ports;
@@ -363,8 +431,21 @@ struct Abstractor : app::ModuleWidget {
     app::ParamWidget* knob;
   };
   std::vector<Parameter> parameters;
-  int viewMode = 0;
-  ActionButton* viewButton = nullptr;
+  int layoutTier =
+      0;  // derived responsive tier; retained only for old patch migration
+  float requestedWidth = 180, lastLayoutWidth = -1;
+  ResponsiveLayout responsive;
+  ComputerscareSVGPanel* artwork = nullptr;
+  ComputerscareResizeHandle *leftHandle = nullptr, *rightHandle = nullptr;
+  phlooper::WarpedBlock *ownFrame = nullptr, *titleFrame = nullptr;
+  struct ControlLabel {
+    Vec pos;
+    float width;
+    std::string text;
+    bool output;
+    int align;
+  };
+  std::vector<ControlLabel> controlLabels;
   std::vector<ActionButton*> actionButtons;
   std::vector<ActionButton*> managementButtons;
   phlooper::WarpedBlock* frame = nullptr;
@@ -398,13 +479,24 @@ struct Abstractor : app::ModuleWidget {
     }
   }
   std::string status = "Select modules, then right-click here";
-  Abstractor(Module* m) {
+  Peekaboo(Module* m) {
     homeRack = APP->scene->rack;
     setModule(m);
+    if (m) requestedWidth = m->panelWidth.load();
     auto* panel = new ComputerscareSVGPanel;
+    artwork = panel;
     panel->setBackground(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/panels/ComputerscarePatchAbstractorPanel.svg")));
+        pluginInstance, "res/panels/ComputerscarePeekabooPanel.svg")));
     setPanel(panel);
+    panel->visible = false;
+    titleFrame = new phlooper::WarpedBlock;
+    titleFrame->configure(Rect(Vec(6, 4), Vec(168, 32)), 4, 1.1f, 809,
+                          nvgRGB(198, 201, 199));
+    addChild(titleFrame);
+    ownFrame = new phlooper::WarpedBlock;
+    ownFrame->configure(Rect(Vec(6, 26), Vec(168, 100)), 4, 1.3f, 811,
+                        nvgRGB(186, 198, 192));
+    addChild(ownFrame);
     frame = new phlooper::WarpedBlock;
     frame->configure(Rect(Vec(9, 140), Vec(342, 213)), 5, 1.8f, 719,
                      nvgRGB(198, 206, 202));
@@ -421,6 +513,7 @@ struct Abstractor : app::ModuleWidget {
     show->text = "Show";
     show->configure(52, 24, 3, 2, .8f, 713);
     show->box.pos = Vec(15, 39);
+    show->help = [] { return "Show subpatch"; };
     show->action = [this] { showView(); };
     show->pressed = [this] { return bool(subview); };
     addChild(show);
@@ -431,6 +524,11 @@ struct Abstractor : app::ModuleWidget {
     reveal->caption = [this] {
       return members.empty() ? "Abstract" : expanded ? "Collapse" : "Expand";
     };
+    reveal->help = [this] {
+      return members.empty() ? "Abstract selected modules"
+             : expanded      ? "Collapse modules"
+                             : "Expand modules";
+    };
     reveal->pressed = [this] { return expanded; };
     reveal->action = [this] { groupAction(members.empty() || expanded); };
     addChild(reveal);
@@ -439,6 +537,7 @@ struct Abstractor : app::ModuleWidget {
     end->text = "End abstraction";
     end->configure(131, 24, 3, 2, .8f, 715);
     end->box.pos = Vec(154, 39);
+    end->help = [] { return "End abstraction"; };
     end->action = [this] { endAction(); };
     addChild(end);
     managementButtons.push_back(end);
@@ -449,6 +548,10 @@ struct Abstractor : app::ModuleWidget {
         float x = 55 + col * 80, y = 73 + row * 28;
         auto* button = new ActionButton;
         button->text = captions[col];
+        std::string fullHelp =
+            std::string(captions[col]) +
+            (row == 0 ? " exposed parameters" : " all member modules");
+        button->help = [fullHelp] { return fullHelp; };
         button->textSize = 12;
         button->configure(56, 23, 3, 2, .9f, 730 + index);
         button->box.pos = Vec(x, y);
@@ -465,22 +568,18 @@ struct Abstractor : app::ModuleWidget {
       }
     addParam(
         createParamCentered<SmallKnob>(Vec(328, 94), m, Module::WIGGLE_AMOUNT));
-    viewButton = new ActionButton;
-    viewButton->caption = [this] {
-      return viewMode == 0 ? "Full" : viewMode == 1 ? "Med" : "Small";
-    };
-    viewButton->configure(44, 24, 3, 2, .8f, 903);
-    viewButton->action = [this] {
-      viewMode = (viewMode + 1) % 3;
-      layoutControls();
-      saveGroup();
-    };
-    addChild(viewButton);
     controls = new widget::Widget;
     addChild(controls);
+    leftHandle = new ComputerscareResizeHandle;
+    leftHandle->box.size.x = 5;
+    addChild(leftHandle);
+    rightHandle = new ComputerscareResizeHandle;
+    rightHandle->right = true;
+    rightHandle->box.size.x = 5;
+    addChild(rightHandle);
     layoutControls();
   }
-  ~Abstractor() override { endAbstraction(); }
+  ~Peekaboo() override { endAbstraction(); }
   app::ModuleWidget* find(int64_t id) {
     ScopedSubviewRack mainScope(homeRack);
     auto* registered = APP && APP->scene ? homeRack->getModule(id) : nullptr;
@@ -504,7 +603,7 @@ struct Abstractor : app::ModuleWidget {
       return;
     }
     auto* root = json_object();
-    json_object_set_new(root, "view", json_integer(viewMode));
+
     json_object_set_new(root, "owner", json_integer(m->id));
     json_object_set_new(root, "expanded", json_boolean(expanded));
     auto* list = json_array();
@@ -514,6 +613,12 @@ struct Abstractor : app::ModuleWidget {
           json_pack("{s:I,s:f,s:f}", "id", (json_int_t)member.id, "x",
                     (double)member.position.x, "y", (double)member.position.y));
     json_object_set_new(root, "members", list);
+    auto* positions = json_array();
+    for (const auto& p : subpatchPositions)
+      json_array_append_new(
+          positions, json_pack("{s:I,s:f,s:f}", "id", (json_int_t)p.first, "x",
+                               double(p.second.x), "y", double(p.second.y)));
+    json_object_set_new(root, "subpatchPositions", positions);
     list = json_array();
     for (const auto& port : ports)
       json_array_append_new(
@@ -560,28 +665,29 @@ struct Abstractor : app::ModuleWidget {
       w->visible = false;
     }
   }
+  static Rect frameContent(const phlooper::WarpedBlock* block) {
+    return Rect(
+        block->box.pos + Vec(4, 4),
+        Vec(std::max(0.f, block->box.size.x - block->depth - 8),
+            std::max(0.f, block->box.size.y - block->depth * .65f - 6.5f)));
+  }
   void layoutControls() {
-    headings.clear();
-    float cell = viewMode == 0 ? 82.f : viewMode == 1 ? 66.f : 31.f;
-    if (viewMode == 0) {
-      for (const auto& p : parameters)
-        if (auto* w = find(p.id))
-          if (auto* q = w->module->getParamQuantity(p.paramId))
-            cell = std::max(cell, 34.f + q->getLabel().size() * 5.5f);
-      for (const auto& p : ports)
-        if (auto* source = findPort(p))
-          if (auto* info = source->getPortInfo())
-            cell = std::max(cell, 34.f + info->getName().size() * 5.5f);
-    }
     std::vector<widget::Widget*> items[3];
-    std::vector<int64_t> ids[3];
-    for (const auto& m : members) {
+    std::map<widget::Widget*, std::pair<std::string, std::string>> names;
+    std::vector<const Member*> ordered;
+    for (const auto& m : members) ordered.push_back(&m);
+    std::sort(
+        ordered.begin(), ordered.end(), [](const Member* a, const Member* b) {
+          return a->position.y == b->position.y ? a->position.x < b->position.x
+                                                : a->position.y < b->position.y;
+        });
+    for (auto* m : ordered) {
       std::vector<const Parameter*> params;
       std::vector<const Port*> jacks;
       for (const auto& p : parameters)
-        if (p.id == m.id) params.push_back(&p);
+        if (p.id == m->id) params.push_back(&p);
       for (const auto& p : ports)
-        if (p.id == m.id) jacks.push_back(&p);
+        if (p.id == m->id) jacks.push_back(&p);
       std::sort(params.begin(), params.end(),
                 [](const Parameter* a, const Parameter* b) {
                   return a->paramId < b->paramId;
@@ -589,66 +695,177 @@ struct Abstractor : app::ModuleWidget {
       std::sort(jacks.begin(), jacks.end(), [](const Port* a, const Port* b) {
         return a->portId < b->portId;
       });
-      for (auto* p : params) {
-        items[0].push_back(p->knob);
-        ids[0].push_back(m.id);
-      }
+      for (auto* p : params)
+        if (auto* w = find(p->id))
+          if (auto* q = w->module->getParamQuantity(p->paramId)) {
+            items[0].push_back(p->knob);
+            names[p->knob] = {q->getLabel(), memberName(p->id)};
+          }
       for (auto* p : jacks) {
-        int k = p->input ? 1 : 2;
-        items[k].push_back(p->face);
-        ids[k].push_back(m.id);
+        items[p->input ? 1 : 2].push_back(p->face);
+        auto* source = findPort(*p);
+        auto* info = source ? source->getPortInfo() : nullptr;
+        names[p->face] = {info ? info->getName() : "Port", memberName(p->id)};
       }
     }
-    int pc = std::max(1, int((items[0].size() + 2) / 3));
-    int ic = std::max(1, int((items[1].size() + 2) / 3));
-    int oc = std::max(1, int((items[2].size() + 2) / 3));
-    float width = std::ceil(std::max(viewMode == 2   ? 240.f
-                                     : viewMode == 1 ? 270.f
-                                                     : 360.f,
-                                     std::max(pc, ic + oc) * cell + 42) /
-                            15) *
-                  15;
+    if (auto* state = getModule<Module>())
+      state->panelWidth.store(requestedWidth);
+    responsive = responsiveLayout(requestedWidth, items[0].size(),
+                                  items[1].size(), items[2].size());
+    float width = responsive.width;
+    layoutTier = responsive.tier;
     bool changed = box.size.x != width;
     box.size.x = width;
-    float split = 18 + ic * cell;
-    for (int k = 0; k < 3; ++k) {
-      int cols = k == 0   ? std::max(pc, int((width - 36) / cell))
-                 : k == 1 ? ic
-                          : oc;
-      float start = k == 2 ? split + 12 : 18;
-      for (size_t i = 0; i < items[k].size(); ++i) {
-        Vec center(start + 12 + (i % cols) * cell,
-                   (k == 0 ? 164.f : 277.f) + (i / cols) * 29);
-        items[k][i]->box.pos = center - items[k][i]->box.size * .5f;
-        if (viewMode == 0 && (i == 0 || ids[k][i] != ids[k][i - 1]))
-          headings.push_back(
-              {center + Vec(-10, -16), memberName(ids[k][i]), k == 2});
+    lastLayoutWidth = width;
+    float minimumWidth =
+        minimumLayoutWidth(items[0].size(), items[1].size(), items[2].size());
+    if (leftHandle) leftHandle->minWidth = minimumWidth;
+    if (rightHandle) {
+      rightHandle->minWidth = minimumWidth;
+      rightHandle->box.pos.x = width - rightHandle->box.size.x;
+    }
+    controlLabels.clear();
+    headings.clear();
+    titleFrame->box = Rect(Vec(6, 4), Vec(std::min(width - 12, 205.f), 32));
+    ownFrame->box =
+        Rect(Vec(6, 40), Vec(responsive.ownWidth, responsive.ownHeight));
+    float ownLeft = ownFrame->box.pos.x + 4, ownTop = ownFrame->box.pos.y;
+    float available = responsive.ownWidth - 12;
+    float managementWidths[] = {layoutTier >= 2 ? 42.f : 37.f,
+                                layoutTier >= 2 ? 58.f : 52.f,
+                                layoutTier >= 2 ? 34.f : 30.f};
+    float managementTotal =
+        managementWidths[0] + managementWidths[1] + managementWidths[2] + 6;
+    bool icons = layoutTier == 0 || managementTotal > available;
+    float managementX = ownLeft;
+    for (int i = 0; i < 3; ++i) {
+      auto* button = managementButtons[i];
+      float bw =
+          icons ? std::min(21.f, (available - 6) / 3) : managementWidths[i];
+      button->box.pos = Vec(managementX, ownTop + 5);
+      button->box.size = Vec(bw, 21);
+      button->textSize = 12;
+      button->icon = icons ? i + 3 : -1;
+      managementX += bw + 3;
+    }
+    managementButtons[2]->text = "End";
+    if (layoutTier && responsive.ownColumns == 2) {
+      headings.push_back({Vec(ownLeft, ownTop + 36), "Exposed", false});
+      headings.push_back(
+          {Vec(ownLeft + responsive.ownCell + 8, ownTop + 36), "All", false});
+    }
+    float matrixTop = ownTop + 28 + (layoutTier ? 14 : 0);
+    for (int i = 0; i < 6; ++i) {
+      int action = i % 3, scope = i / 3;
+      int col = responsive.ownColumns == 2 ? scope : 0;
+      int row = responsive.ownColumns == 2 ? action : scope * 3 + action;
+      auto* button = actionButtons[i];
+      button->icon = action;
+      button->box.pos =
+          Vec(ownLeft + col * (responsive.ownCell + 8), matrixTop + row * 24);
+      button->box.size = Vec(layoutTier ? 23 : 17, 21);
+      auto* port = getInput(i);
+      if (port)
+        port->box.pos = Vec(button->box.getRight() + (layoutTier ? 3 : 1),
+                            button->box.getCenter().y - port->box.size.y * .5f);
+      if (layoutTier >= 2 && port) {
+        std::string label = action == 0   ? "Wiggle"
+                            : action == 1 ? "Randomize"
+                                          : "Initialize";
+        controlLabels.push_back(
+            {Vec(port->box.getRight() + 4, button->box.getCenter().y),
+             responsive.ownCell - 48, label, false, NVG_ALIGN_LEFT});
       }
     }
-    frame->box = Rect(Vec(9, 140), Vec(width - 18, 105));
-    inputFrame->box = Rect(Vec(9, 253), Vec(split - 12, 100));
-    outputFrame->box = Rect(Vec(split + 3, 253), Vec(width - split - 12, 100));
-    inputFrame->visible = !items[1].empty();
-    outputFrame->visible = !items[2].empty();
-    viewButton->box.pos = Vec(width - 51, 8);
-    bool compact = viewMode != 0;
-    for (size_t i = 0; i < actionButtons.size(); ++i) {
-      int row = i / 3, col = i % 3;
-      auto* button = actionButtons[i];
-      button->icon = compact ? col : -1;
-      button->box.pos =
-          Vec(compact ? 42 + col * 48 : 55 + col * 80, 73 + row * 28);
-      button->box.size = Vec(compact ? 25 : 56, 23);
-      if (auto* port = getInput(i))
-        port->box.pos =
-            button->box.pos + Vec(compact ? 36 : 68, 11) - port->box.size * .5f;
+    if (auto* amount = getParam(Module::WIGGLE_AMOUNT)) {
+      Vec center =
+          responsive.amountInTop
+              ? Vec(managementX + 8 + amount->box.size.x * .5f, ownTop + 15.5f)
+              : Vec(ownLeft + amount->box.size.x * .5f,
+                    matrixTop + (responsive.ownColumns == 2 ? 3 : 6) * 24 +
+                        10.5f);
+      amount->box.pos = center - amount->box.size * .5f;
+      if (layoutTier) {
+        float labelWidth =
+            ownFrame->box.getRight() - 8 - amount->box.getRight() - 4;
+        if (labelWidth >= 26)
+          controlLabels.push_back({Vec(amount->box.getRight() + 4, center.y),
+                                   labelWidth, "Amount", false,
+                                   NVG_ALIGN_LEFT});
+      }
     }
-    if (auto* amount = getParam(Module::WIGGLE_AMOUNT))
-      amount->box.pos = Vec(compact ? 209 : 328, 94) - amount->box.size * .5f;
-    if (managementButtons.size() == 3) {
-      managementButtons[2]->box.pos = Vec(154, 39);
-      managementButtons[2]->box.size.x = compact ? 78 : 131;
-      managementButtons[2]->text = compact ? "End group" : "End abstraction";
+    float py = responsive.paramTop;
+    frame->box = Rect(Vec(responsive.paramLeft, py),
+                      Vec(responsive.paramWidth, responsive.paramHeight));
+    frame->visible = responsive.paramHeight > 0 && !expanded;
+    float portY = 368 - responsive.portHeight;
+    float gap = items[1].empty() || items[2].empty() ? 0 : 8;
+    int portColumns = responsive.inputColumns + responsive.outputColumns;
+    int panes = (!items[1].empty() ? 1 : 0) + (!items[2].empty() ? 1 : 0);
+    float portAvailable = width - 12 - gap - panes * 13;
+    float portStep = portColumns ? portAvailable / portColumns : 0;
+    float inWidth =
+        responsive.inputColumns ? responsive.inputColumns * portStep + 13 : 0;
+    float outWidth =
+        responsive.outputColumns ? responsive.outputColumns * portStep + 13 : 0;
+    inputFrame->box = Rect(Vec(6, portY), Vec(inWidth, responsive.portHeight));
+    outputFrame->box = Rect(Vec(width - 6 - outWidth, portY),
+                            Vec(outWidth, responsive.portHeight));
+    inputFrame->visible = !items[1].empty() && !expanded;
+    outputFrame->visible = !items[2].empty() && !expanded;
+    if (layoutTier) {
+      if (frame->visible)
+        headings.push_back(
+            {Vec(frame->box.pos.x + 6, py + 11), "Parameters", false});
+      if (inputFrame->visible)
+        headings.push_back({inputFrame->box.pos + Vec(6, 11), "Inputs", false});
+      if (outputFrame->visible)
+        headings.push_back(
+            {outputFrame->box.pos + Vec(6, 11), "Outputs", true});
+    }
+    for (int k = 0; k < 3; ++k) {
+      Rect region = k == 0   ? frame->box
+                    : k == 1 ? inputFrame->box
+                             : outputFrame->box;
+      int cols = k == 0   ? responsive.paramColumns
+                 : k == 1 ? responsive.inputColumns
+                          : responsive.outputColumns;
+      if (!cols) continue;
+      float row = k == 0 ? responsive.paramRow : responsive.portRow;
+      float step = (region.size.x - 13) / cols;
+      float header = layoutTier ? 14 : 6;
+      std::string lastModule;
+      for (size_t i = 0; i < items[k].size(); ++i) {
+        auto* item = items[k][i];
+        if (k) {
+          auto* face = static_cast<PortFace*>(item);
+          face->compact = layoutTier < 2;
+          face->box.size = face->compact ? Vec(16, 16) : face->source->box.size;
+        }
+        bool centered = layoutTier == 0 || (layoutTier == 1 && k);
+        float inset = centered ? step * .5f : item->box.size.x * .5f + 1.5f;
+        float rowCenter = (layoutTier == 1 && k) ? 10.f : row * .5f;
+        Vec center = region.pos + Vec(4 + (i % cols) * step + inset,
+                                      header + (i / cols) * row + rowCenter);
+        item->box.pos = center - item->box.size * .5f;
+        if (!layoutTier) continue;
+        auto name = names[item];
+        if (layoutTier == 1 && name.first.size() > 14)
+          name.first = name.first.substr(0, 12) + "…";
+        if (layoutTier >= 3 && k == 0 && name.second != lastModule)
+          headings.push_back(
+              {Vec(center.x - 10, center.y - 14), name.second, false});
+        lastModule = name.second;
+        if (layoutTier == 1 && k) {
+          if (name.first.size() > 10)
+            name.first = name.first.substr(0, 9) + "…";
+          controlLabels.push_back({center + Vec(0, 16), step - 4, name.first,
+                                   k == 2, NVG_ALIGN_CENTER});
+        } else
+          controlLabels.push_back({center + Vec(item->box.size.x * .5f + 4, 0),
+                                   std::max(12.f, step - item->box.size.x - 6),
+                                   name.first, k == 2, NVG_ALIGN_LEFT});
+      }
     }
     if (changed && parent == homeRack->getModuleContainer())
       homeRack->setModulePosForce(this, box.pos);
@@ -692,8 +909,6 @@ struct Abstractor : app::ModuleWidget {
     saveGroup();
   }
   void restore(json_t* root) {
-    viewMode =
-        clamp(int(json_integer_value(json_object_get(root, "view"))), 0, 2);
     // Native duplicate/preset operations don't remap embedded module IDs.
     // Refuse a copied container's references instead of stealing its group.
     auto* owner = json_object_get(root, "owner");
@@ -716,7 +931,7 @@ struct Abstractor : app::ModuleWidget {
       double x = json_number_value(json_object_get(item, "x"));
       double y = json_number_value(json_object_get(item, "y"));
       if (!json_is_integer(idJ) || !w || w == this ||
-          dynamic_cast<Abstractor*>(w) || !w->visible ||
+          dynamic_cast<Peekaboo*>(w) || !w->visible ||
           !seen.insert(id).second || !std::isfinite(x) || !std::isfinite(y)) {
         complete = false;
         continue;
@@ -727,6 +942,16 @@ struct Abstractor : app::ModuleWidget {
       endAbstraction();
       status = "Group incomplete — available modules expanded";
       return;
+    }
+    auto* savedPositions = json_object_get(root, "subpatchPositions");
+    for (size_t n = 0; n < json_array_size(savedPositions); ++n) {
+      auto* p = json_array_get(savedPositions, n);
+      int64_t id = json_integer_value(json_object_get(p, "id"));
+      Vec pos(json_number_value(json_object_get(p, "x")),
+              json_number_value(json_object_get(p, "y")));
+      if (contains(APP->engine->getModule(id)) && pos.isFinite() &&
+          pos.x >= 0 && pos.y >= 0)
+        subpatchPositions[id] = pos;
     }
     auto* savedPorts = json_object_get(root, "ports");
     for (size_t i = 0; i < json_array_size(savedPorts); ++i) {
@@ -849,6 +1074,7 @@ struct Abstractor : app::ModuleWidget {
     if (!expanded && !members.empty()) revealMembers(true);
     ports.clear();
     members.clear();
+    subpatchPositions.clear();
     controls->clearChildren();
     parameters.clear();
     expanded = false;
@@ -865,6 +1091,7 @@ struct Abstractor : app::ModuleWidget {
         return;
     auto* face = new PortFace;
     face->source = source;
+    face->input = source->type == engine::Port::INPUT;
     face->box.size = source->box.size;
     int64_t id = w->module->id;
     face->caption = [this, face, id] {
@@ -980,7 +1207,7 @@ struct Abstractor : app::ModuleWidget {
   }
   bool ownedElsewhere(engine::Module* m) const {
     for (auto* w : homeRack->getModules())
-      if (auto* group = dynamic_cast<Abstractor*>(w))
+      if (auto* group = dynamic_cast<Peekaboo*>(w))
         if (group != this && group->contains(m)) return true;
     return false;
   }
@@ -998,7 +1225,7 @@ struct Abstractor : app::ModuleWidget {
     std::vector<app::ModuleWidget*> added;
     for (auto* w : homeRack->getSelected())
       if (w != this && w->visible && !contains(w->module) &&
-          !ownedElsewhere(w->module) && !dynamic_cast<Abstractor*>(w) &&
+          !ownedElsewhere(w->module) && !dynamic_cast<Peekaboo*>(w) &&
           !w->module->leftExpander.producerMessage &&
           !w->module->rightExpander.producerMessage)
         added.push_back(w);
@@ -1025,8 +1252,15 @@ struct Abstractor : app::ModuleWidget {
     for (auto* w : rack->getSelected())
       if (contains(w->module)) removed.insert(w->module->id);
     if (removed.empty()) return;
+    removeMembers(removed);
+  }
+  void removeMembers(const std::set<int64_t>& removed) {
+    if (removed.empty()) return;
+    bool wasExpanded = expanded;
     auto* action = beginAction("remove selected members from abstraction");
     closeView();
+    if (!expanded) revealMembers(true);
+    for (auto id : removed) subpatchPositions.erase(id);
     for (auto it = ports.begin(); it != ports.end();)
       if (removed.count(it->id)) {
         controls->removeChild(it->face);
@@ -1050,8 +1284,10 @@ struct Abstractor : app::ModuleWidget {
       expanded = false;
       controls->visible = true;
       status = "Abstraction ended — modules remain in rack";
-    } else
+    } else {
       syncBoundaryPorts();
+      if (!wasExpanded) pack();
+    }
     layoutControls();
     saveGroup();
     finishAction(action);
@@ -1151,7 +1387,7 @@ struct Abstractor : app::ModuleWidget {
     std::vector<app::ModuleWidget*> selected;
     for (auto* w : rack->getSelected()) {
       if (w == this || !w->module || !w->visible) continue;
-      if (dynamic_cast<Abstractor*>(w) || ownedElsewhere(w->module) ||
+      if (dynamic_cast<Peekaboo*>(w) || ownedElsewhere(w->module) ||
           w->module->leftExpander.producerMessage ||
           w->module->rightExpander.producerMessage) {
         status = "Expanders and nested groups are not supported";
@@ -1189,6 +1425,15 @@ struct Abstractor : app::ModuleWidget {
     step();
   }
   void step() override {
+    auto* sizing = getModule<Module>();
+    if (sizing && sizing->panelWidth.load() != requestedWidth) {
+      requestedWidth = sizing->panelWidth.load();
+      layoutControls();
+    }
+    if (box.size.x != lastLayoutWidth) {
+      requestedWidth = box.size.x;
+      layoutControls();
+    }
     for (auto& pulse : actionPulse)
       pulse = std::max(0.f, pulse - float(APP->window->getLastFrameDuration()));
     if (auto* m = getModule<Module>())
@@ -1233,9 +1478,10 @@ struct Abstractor : app::ModuleWidget {
     for (const auto& p : ports) {
       p.face->source = findPort(p);
       if (auto* source = findPort(p)) {
-        Vec desired = controls->getRelativeOffset(p.face->box.pos, homeRack);
+        Vec desired =
+            controls->getRelativeOffset(p.face->box.getCenter(), homeRack);
         Vec parentOrigin = source->parent->getRelativeOffset(Vec(), homeRack);
-        source->box.pos = desired - parentOrigin;
+        source->box.pos = desired - source->box.size * .5f - parentOrigin;
       }
     }
     for (auto* cable : homeRack->getCompleteCables()) {
@@ -1255,67 +1501,73 @@ struct Abstractor : app::ModuleWidget {
     nvgFillColor(args.vg, nvgRGB(198, 201, 199));
     nvgFill(args.vg);
     ModuleWidget::draw(args);
+    if (artwork && titleFrame) {
+      Rect area = frameContent(titleFrame);
+      float scale = std::min({1.f, area.size.x / 184.f, area.size.y / 25.f});
+      nvgSave(args.vg);
+      nvgIntersectScissor(args.vg, area.pos.x, area.pos.y, area.size.x,
+                          area.size.y);
+      nvgTranslate(args.vg, area.pos.x - 8 * scale,
+                   area.pos.y + (area.size.y - 25 * scale) * .5f - 6 * scale);
+      nvgScale(args.vg, scale, scale);
+      artwork->draw(args);
+      nvgRestore(args.vg);
+    }
     auto font =
         APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
+    if (!font) return;
     nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, 10);
-    nvgFillColor(args.vg, nvgRGB(30, 40, 35));
-    nvgFontSize(args.vg, viewMode == 2 ? 7 : 10);
-    if (viewMode != 2) nvgText(args.vg, 15, 367, status.c_str(), nullptr);
     nvgFontSize(args.vg, 8);
-    if (viewMode != 2)
-      nvgText(args.vg, viewMode == 0 ? 309 : 193, 119, "Amount", nullptr);
-    if (expanded) {
-      nvgFontSize(args.vg, 14);
-      std::string message =
-          std::to_string(members.size()) + " modules expanded in rack";
-      nvgText(args.vg, 24, 110, message.c_str(), nullptr);
-      return;
-    }
-    if (viewMode == 2) return;
-    nvgFontSize(args.vg, 7);
+    nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
     for (const auto& h : headings) {
       nvgFillColor(args.vg,
-                   h.output ? nvgRGB(222, 234, 227) : nvgRGB(30, 40, 35));
+                   h.output ? nvgRGB(222, 234, 227) : nvgRGB(40, 61, 50));
       nvgText(args.vg, h.pos.x, h.pos.y, h.text.c_str(), nullptr);
     }
-    nvgFontSize(args.vg, 8);
-    nvgFillColor(args.vg, nvgRGB(30, 40, 35));
-    for (size_t i = 0; i < parameters.size(); ++i) {
-      const auto& p = parameters[i];
-      auto* w = find(p.id);
-      if (!w) continue;
-      auto* q = w->module->getParamQuantity(p.paramId);
-      if (!q) continue;
-      auto pos = p.knob->box.getCenter() - Vec(12, 12);
-      if (viewMode == 1)
-        nvgTextBox(args.vg, pos.x + 29, pos.y + 6, 33, q->getLabel().c_str(),
+    nvgFontSize(args.vg, layoutTier >= 2 ? 9 : 7);
+    for (const auto& label : controlLabels) {
+      nvgFillColor(args.vg,
+                   label.output ? nvgRGB(230, 238, 232) : nvgRGB(27, 45, 36));
+      nvgTextAlign(args.vg, label.align | NVG_ALIGN_BASELINE);
+      float x = label.pos.x -
+                (label.align == NVG_ALIGN_CENTER ? label.width * .5f : 0);
+      if (layoutTier == 1) {
+        std::string text = label.text;
+        auto trim = [](std::string& value) {
+          if (value.empty()) return;
+          size_t i = value.size() - 1;
+          while (i > 0 && (static_cast<unsigned char>(value[i]) & 0xc0) == 0x80)
+            --i;
+          value.resize(i);
+        };
+        bool shortened = false;
+        while (!text.empty() &&
+               nvgTextBounds(args.vg, 0, 0,
+                             (text + (shortened ? "…" : "")).c_str(), nullptr,
+                             nullptr) > label.width) {
+          trim(text);
+          shortened = true;
+        }
+        if (shortened) text += "…";
+        nvgTextAlign(args.vg, label.align | (label.align == NVG_ALIGN_CENTER
+                                                 ? NVG_ALIGN_BASELINE
+                                                 : NVG_ALIGN_MIDDLE));
+        nvgText(args.vg, label.pos.x, label.pos.y, text.c_str(), nullptr);
+      } else {
+        float bounds[4];
+        nvgTextBoxBounds(args.vg, x, 0, label.width, label.text.c_str(),
+                         nullptr, bounds);
+        float baseline = label.pos.y - (bounds[1] + bounds[3]) * .5f;
+        nvgTextBox(args.vg, x, baseline, label.width, label.text.c_str(),
                    nullptr);
-      else
-        nvgText(args.vg, pos.x + 29, pos.y + 13, q->getLabel().c_str(),
-                nullptr);
-    }
-    for (const auto& p : ports)
-      if (auto* source = findPort(p)) {
-        auto* info = source->getPortInfo();
-        std::string name;
-        name += info ? info->getName() : "Port";
-        nvgFillColor(args.vg,
-                     p.input ? nvgRGB(30, 40, 35) : nvgRGB(222, 234, 227));
-        if (viewMode == 1)
-          nvgTextBox(args.vg, p.face->box.pos.x + 29, p.face->box.pos.y + 6, 33,
-                     name.c_str(), nullptr);
-        else
-          nvgText(args.vg, p.face->box.pos.x + 29, p.face->box.pos.y + 13,
-                  name.c_str(), nullptr);
       }
+    }
   }
   void appendContextMenu(ui::Menu* menu) override {
     if (!module) return;
     menu->addChild(new ui::MenuSeparator);
 
-    menu->addChild(createMenuItem(
-        "Show subpatch", "", [this] { showView(); }, members.empty()));
+    menu->addChild(createMenuItem("Show subpatch", "", [this] { showView(); }));
     menu->addChild(createMenuItem(
         members.empty() ? "Abstract selected modules" : "Collapse modules", "",
         [this] { groupAction(true); }, !members.empty() && !expanded));
@@ -1366,19 +1618,25 @@ struct Abstractor : app::ModuleWidget {
 void GroupHistory::undo() {
   history::ModuleChange::undo();
   if (auto* group =
-          dynamic_cast<Abstractor*>(APP->scene->rack->getModule(moduleId)))
+          dynamic_cast<Peekaboo*>(APP->scene->rack->getModule(moduleId)))
     group->step();
   before.restore();
 }
 void GroupHistory::redo() {
   history::ModuleChange::redo();
   if (auto* group =
-          dynamic_cast<Abstractor*>(APP->scene->rack->getModule(moduleId)))
+          dynamic_cast<Peekaboo*>(APP->scene->rack->getModule(moduleId)))
     group->step();
   after.restore();
 }
-#include "PatchAbstractorSubview.hpp"
-}  // namespace patchabstractor
-Model* modelComputerscarePatchAbstractor =
-    createModel<patchabstractor::Module, patchabstractor::Abstractor>(
-        "computerscare-patch-abstractor");
+#include "PeekabooSubview.hpp"
+}  // namespace peekaboo
+Model* modelComputerscarePeekaboo =
+    createModel<peekaboo::Module, peekaboo::Peekaboo>("computerscare-peekaboo");
+
+Model* modelComputerscarePeekabooLegacy = [] {
+  auto* model = createModel<peekaboo::Module, peekaboo::Peekaboo>(
+      "computerscare-patch-abstractor");
+  model->hidden = true;
+  return model;
+}();

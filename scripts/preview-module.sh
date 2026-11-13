@@ -17,14 +17,15 @@ while (($#)); do
     groups) MODULE=groups; PREVIEW_MODE=browser; shift ;;
     phlooper) MODULE=phlooper; shift ;;
     blunch) MODULE=blunch; PREVIEW_MODE=browser; shift ;;
-    patch-abstractor|mely-porge|voly-pector|laundry-soup) MODULE=$1; PREVIEW_MODE=browser; shift ;;
+    patch-abstractor) MODULE=peekaboo; PREVIEW_MODE=browser; shift ;;
+    peekaboo|mely-porge|voly-pector|laundry-soup) MODULE=$1; PREVIEW_MODE=browser; shift ;;
     --output) OUTPUT_DIR=$2; shift 2 ;;
     --scale) SCALE=$2; shift 2 ;;
     --browser) PREVIEW_MODE=browser; shift ;;
     --controls) PREVIEW_MODE=controls; shift ;;
     --no-build) BUILD_PLUGIN=0; shift ;;
     -h|--help)
-      echo "Usage: scripts/preview-module.sh [groups|phlooper|blunch|patch-abstractor|mely-porge|voly-pector|laundry-soup] [--output DIR] [--scale 2] [--no-build] [--browser] [--controls]"
+      echo "Usage: scripts/preview-module.sh [groups|phlooper|blunch|peekaboo|mely-porge|voly-pector|laundry-soup] [--output DIR] [--scale 2] [--no-build] [--browser] [--controls]"
       echo "RACK_DIR must contain a built Rack library and res/. No audio device or patch is opened."
       echo "Images and the preview executable default to ignored build/previews/."
       exit 0 ;;
