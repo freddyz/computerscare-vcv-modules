@@ -7,6 +7,15 @@
 
 // Engine modules and cables stay in Rack; only their UI layout is grouped.
 namespace patchabstractor {
+struct SubpatchNativeRack;
+// Temporarily lend the existing Rack's public containers to the subpatch UI.
+// No RackWidget construction or private SDK entry points are required.
+struct ScopedSubviewRack {
+  SubpatchNativeRack* previous;
+  explicit ScopedSubviewRack(SubpatchNativeRack* rack);
+  explicit ScopedSubviewRack(app::RackWidget* rack);
+  ~ScopedSubviewRack();
+};
 struct Module : engine::Module {
   std::mutex stateMutex;
   json_t* group = nullptr;
@@ -92,14 +101,17 @@ struct Holder : app::ModuleWidget {
     original->visible = visible;
   }
   void onHoverKey(const HoverKeyEvent& e) override {
-    original->widget::Widget::onHoverKey(e);
-    if (e.isConsumed()) return;
-    bool visible = original->visible;
-    original->visible = false;
-    // Native delete may destroy this object, so retain a weak original handle.
+    // Native delete may destroy this object or its nested widget.
     WeakPtr<app::ModuleWidget> live = original;
+    if (!live) return;
+    live->widget::Widget::onHoverKey(e);
+    if (e.isConsumed()) return;
+    auto* afterChildren = live.get();
+    if (!afterChildren) return;
+    bool wasVisible = afterChildren->visible;
+    afterChildren->visible = false;
     ModuleWidget::onHoverKey(e);
-    if (live) live->visible = visible;
+    if (live) live->visible = wasVisible;
     if (!e.isConsumed() && live) live->onHoverKey(e);
   }
   ~Holder() override {
@@ -470,6 +482,7 @@ struct Abstractor : app::ModuleWidget {
   }
   ~Abstractor() override { endAbstraction(); }
   app::ModuleWidget* find(int64_t id) {
+    ScopedSubviewRack mainScope(homeRack);
     auto* registered = APP && APP->scene ? homeRack->getModule(id) : nullptr;
     for (const auto& member : members)
       if (member.id == id) {
@@ -692,10 +705,9 @@ struct Abstractor : app::ModuleWidget {
     if (!json_is_array(list) || json_array_size(list) == 0) return;
     endAbstraction();
     bool complete = true;
-    size_t i;
-    json_t* item;
     std::set<int64_t> seen;
-    json_array_foreach(list, i, item) {
+    for (size_t i = 0; i < json_array_size(list); ++i) {
+      auto* item = json_array_get(list, i);
       auto* idJ = json_object_get(item, "id");
       int64_t id = json_integer_value(idJ);
       auto* registered = homeRack->getModule(id);
@@ -717,7 +729,8 @@ struct Abstractor : app::ModuleWidget {
       return;
     }
     auto* savedPorts = json_object_get(root, "ports");
-    json_array_foreach(savedPorts, i, item) {
+    for (size_t i = 0; i < json_array_size(savedPorts); ++i) {
+      auto* item = json_array_get(savedPorts, i);
       int64_t id = json_integer_value(json_object_get(item, "module"));
       int index = json_integer_value(json_object_get(item, "port"));
       bool input = json_is_true(json_object_get(item, "input"));
@@ -735,7 +748,8 @@ struct Abstractor : app::ModuleWidget {
     };
     auto* savedParams = json_object_get(root, "parameters");
     if (json_is_array(savedParams)) {
-      json_array_foreach(savedParams, i, item) restoreParam(item);
+      for (size_t n = 0; n < json_array_size(savedParams); ++n)
+        restoreParam(json_array_get(savedParams, n));
     } else if (auto* legacy = json_object_get(root, "parameter")) {
       restoreParam(legacy);
     }
@@ -866,6 +880,7 @@ struct Abstractor : app::ModuleWidget {
     saveGroup();
   }
   bool boundaryPort(app::PortWidget* port) const {
+    ScopedSubviewRack mainScope(homeRack);
     for (auto* cable : homeRack->getCompleteCables())
       if ((cable->inputPort == port || cable->outputPort == port) &&
           contains(cable->cable->inputModule) !=

@@ -24,7 +24,7 @@ Expansion finds a free continuous block on the same row. Expanded/collapsed stat
 
 **Show** opens the grouped modules without expanding them. The two buttons at the top switch modes:
 
-- **Adjust subpatch:** turn knobs and drag (or click) between internal jacks. Right-click a jack to disconnect its internal cables.
+- **Adjust subpatch:** turn knobs and use Rack’s normal cable gestures between internal jacks. Right-click a jack for its cable menu.
 - **Expose:** click a knob or jack to toggle its presence on the abstraction. Green marks exposed controls.
 
 Yellow jacks have external connections and are locked in both modes. Closing the view or pressing Escape keeps the abstraction intact.
@@ -51,3 +51,5 @@ undo/redo of grouping and expansion, and both subview modes with actual computer
 It does not operate the running Rack application or vcvmon.
 
 Full, Med, and Small change exposed-control spacing. Full keeps complete labels; Med uses small labels; Small hides labels. Hover identifies the source module, with instance numbers when a model appears more than once.
+
+The subpatch UI uses the existing Rack instance through public container APIs. During a native callback or draw, a scoped adapter lends it the subpatch’s visual proxies, then restores its original containers, parent, bounds, and touched parameter. It never constructs a private `RackWidget` or creates a second audio engine.

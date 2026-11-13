@@ -190,7 +190,16 @@ void renderAbstractorDemo(plugin::Plugin& plugin,const std::string& output,float
   for(int ch=0;ch<4;++ch)require(sink->module->outputs[0].getVoltage(ch)==reference[ch]*.5f,"Reload changed polyphonic audio");
   APP->scene->box.size=Vec(1100,650);
   host->showView();auto* view=dynamic_cast<patchabstractor::SubpatchView*>(host->subview.get());
-  require(view,"Show must open a subpatch view");view->step();
+  require(view,"Show must open a subpatch view");
+  auto* originalRackParent=rack->parent;auto rackBox=rack->box;
+  auto registeredModules=rack->getModules();auto selectedModules=rack->getSelected();
+  auto* touchedBefore=rack->getTouchedParam();
+  view->step();
+  require(rack->parent==originalRackParent && rack->box.pos==rackBox.pos && rack->box.size==rackBox.size && rack->getModules()==registeredModules && rack->getSelected()==selectedModules && rack->getTouchedParam()==touchedBefore,"Subview callbacks must restore main Rack geometry, registry, selection and touched parameter");
+  widget::EventContext blankContext;widget::Widget::HoverEvent blankHover;
+  blankHover.context=&blankContext;blankHover.pos=Vec(-50,-50);
+  view->nativeRack->onHover(blankHover);
+  require(blankHover.getTarget()!=rack,"Subview background must never target the live Rack");
   require(!a->visible && !b->visible && rack->getModule(aId)->box.size==Vec(),"Show must not expand or ungroup members");
   require(view->canvas->box.size.isFinite() && view->scroll->containerBox.size.isFinite(),"Subview canvas and scroll bounds must be finite");
   auto* farFace=static_cast<patchabstractor::SubpatchModuleFace*>(view->nativeRack->getModules().back());

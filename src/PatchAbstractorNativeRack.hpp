@@ -1,13 +1,5 @@
 #pragma once
 // Included inside patchabstractor, after the subview declarations.
-struct ScopedSubviewRack {
-  app::RackWidget* previous;
-  explicit ScopedSubviewRack(app::RackWidget* rack)
-      : previous(APP->scene->rack) {
-    APP->scene->rack = rack;
-  }
-  ~ScopedSubviewRack() { APP->scene->rack = previous; }
-};
 struct ScopedSubviewOpacity {
   float previous;
   explicit ScopedSubviewOpacity(float opacity)
@@ -16,25 +8,120 @@ struct ScopedSubviewOpacity {
   }
   ~ScopedSubviewOpacity() { settings::cableOpacity = previous; }
 };
-struct SubpatchNativeRack : app::RackWidget {
+struct SubpatchNativeRack : widget::OpaqueWidget {
   SubpatchView* view;
+  app::RackWidget* main;
+  widget::Widget* mainPlugs = nullptr;
+  widget::Widget *modules = new widget::Widget, *plugs = new widget::Widget,
+                 *cables = new widget::Widget;
+  widget::Widget* savedParent = nullptr;
+  math::Rect savedBox;
+  math::Rect savedContainerBoxes[3];
+  app::ParamWidget* savedTouched = nullptr;
   float drawnOpacity = -1.f;
-  explicit SubpatchNativeRack(SubpatchView* v) : view(v) { box.size = Vec(); }
+  static SubpatchNativeRack*& active() {
+    static thread_local SubpatchNativeRack* value = nullptr;
+    return value;
+  }
+  explicit SubpatchNativeRack(SubpatchView* v)
+      : view(v), main(v->owner->homeRack) {
+    // PlugWidget is opaque in the SDK. Locate its public parent by identity.
+    auto* probe = new app::CableWidget;
+    main->addCable(probe);
+    for (auto* container : main->children)
+      for (auto* child : container->children)
+        if (static_cast<void*>(child) == static_cast<void*>(probe->inputPlug))
+          mainPlugs = container;
+    main->removeCable(probe);
+    delete probe;
+    assert(mainPlugs);
+    box.size = Vec();
+    addChild(modules);
+    addChild(plugs);
+    addChild(cables);
+  }
+  void exchangeChildren(widget::Widget* a, widget::Widget* b) {
+    a->children.swap(b->children);
+    for (auto* child : a->children) child->parent = a;
+    for (auto* child : b->children) child->parent = b;
+  }
+  void enter() {
+    savedParent = main->parent;
+    savedBox = main->box;
+    savedTouched = main->getTouchedParam();
+    main->parent = parent;
+    main->box = box;
+    widget::Widget* canonical[] = {main->getModuleContainer(), mainPlugs,
+                                   main->getCableContainer()};
+    widget::Widget* local[] = {modules, plugs, cables};
+    for (int i = 0; i < 3; ++i) {
+      savedContainerBoxes[i] = canonical[i]->box;
+      canonical[i]->box = Rect(Vec(), box.size);
+      exchangeChildren(canonical[i], local[i]);
+    }
+    active() = this;
+  }
+  void leave() {
+    widget::Widget* canonical[] = {main->getModuleContainer(), mainPlugs,
+                                   main->getCableContainer()};
+    widget::Widget* local[] = {modules, plugs, cables};
+    for (int i = 0; i < 3; ++i) {
+      exchangeChildren(canonical[i], local[i]);
+      canonical[i]->box = savedContainerBoxes[i];
+    }
+    main->parent = savedParent;
+    main->box = savedBox;
+    main->setTouchedParam(savedTouched);
+    active() = nullptr;
+  }
+  widget::Widget* getModuleContainer() {
+    return active() == this ? main->getModuleContainer() : modules;
+  }
+  widget::Widget* getCableContainer() {
+    return active() == this ? main->getCableContainer() : cables;
+  }
+  void addModule(app::ModuleWidget* w) {
+    ScopedSubviewRack scope(this);
+    main->addModule(w);
+  }
+  void addCable(app::CableWidget* w) {
+    ScopedSubviewRack scope(this);
+    main->addCable(w);
+  }
+  void removeCable(app::CableWidget* w) {
+    ScopedSubviewRack scope(this);
+    main->removeCable(w);
+  }
+  app::CableWidget* getCable(int64_t id) {
+    ScopedSubviewRack scope(this);
+    return main->getCable(id);
+  }
+  std::vector<app::CableWidget*> getCompleteCables() {
+    ScopedSubviewRack scope(this);
+    return main->getCompleteCables();
+  }
+  std::vector<app::ModuleWidget*> getModules() {
+    ScopedSubviewRack scope(this);
+    return main->getModules();
+  }
+  // This fixed subview never selects or moves modules in Rack's selection set.
+  void deselectAll() {}
   void step() override;
   void draw(const DrawArgs& args) override;
   void drawLayer(const DrawArgs&, int) override {}
   void onHover(const HoverEvent& e) override {
     ScopedSubviewRack scope(this);
-    app::RackWidget::onHover(e);
+    main->onHover(e);
+    if (e.getTarget() == main) e.setTarget(this);
   }
   void onDragHover(const DragHoverEvent& e) override {
     ScopedSubviewRack scope(this);
-    app::RackWidget::onDragHover(e);
+    main->onDragHover(e);
+    if (e.getTarget() == main) e.setTarget(this);
   }
   void onDragStart(const DragStartEvent& e) override { e.consume(this); }
   void onButton(const ButtonEvent& e) override {
-    // Module management stays in the main rack. Ports implement the complete
-    // native cable gestures, including stack moves, clones and cable menus.
+    // The local children are drawing/event proxies, not a second Rack instance.
     widget::Widget::onButton(e);
     if (!e.isConsumed()) e.consume(this);
   }
@@ -43,6 +130,20 @@ struct SubpatchNativeRack : app::RackWidget {
     e.stopPropagating();
   }
 };
+ScopedSubviewRack::ScopedSubviewRack(SubpatchNativeRack* rack)
+    : previous(SubpatchNativeRack::active()) {
+  if (previous == rack) return;
+  if (previous) previous->leave();
+  if (rack) rack->enter();
+}
+ScopedSubviewRack::ScopedSubviewRack(app::RackWidget*)
+    : ScopedSubviewRack(static_cast<SubpatchNativeRack*>(nullptr)) {}
+ScopedSubviewRack::~ScopedSubviewRack() {
+  auto* current = SubpatchNativeRack::active();
+  if (current == previous) return;
+  if (current) current->leave();
+  if (previous) previous->enter();
+}
 struct SubpatchNativePort : app::PortWidget {
   SubpatchView* view;
   WeakPtr<app::ModuleWidget> sourceModule;

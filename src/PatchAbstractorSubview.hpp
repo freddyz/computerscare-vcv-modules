@@ -662,7 +662,7 @@ SubpatchView::SubpatchView(Abstractor* group) : owner(group) {
 }
 // Engine connections have one authoritative widget in the main rack. The
 // local Rack owns only visual counterparts, released before its destruction.
-inline std::vector<app::CableWidget*> subpatchCables(app::RackWidget* rack) {
+inline std::vector<app::CableWidget*> subpatchCables(SubpatchNativeRack* rack) {
   std::vector<app::CableWidget*> result;
   for (auto* child : rack->getCableContainer()->children)
     if (auto* cw = dynamic_cast<app::CableWidget*>(child)) result.push_back(cw);
@@ -678,6 +678,7 @@ inline bool subpatchCableMatches(app::CableWidget* cw, engine::Cable* engine) {
 void SubpatchView::syncFromMain() {
   if (closing || !owner || !nativeRack) return;
   auto* main = owner->homeRack;
+  ScopedSubviewRack mainScope(main);
   for (auto* cw : subpatchCables(nativeRack))
     if (cw->cable) {
       auto old = localKnown.find(cw);
@@ -785,8 +786,9 @@ void SubpatchView::shutdownNative() {
 SubpatchView::~SubpatchView() { shutdownNative(); }
 void SubpatchNativeRack::step() {
   if (view->closing) return;
+  for (auto* child : children) child->box = Rect(Vec(), box.size);
   ScopedSubviewRack scope(this);
-  app::RackWidget::step();
+  main->step();
 }
 void SubpatchNativeRack::draw(const DrawArgs& args) {
   if (view->closing || !view->owner) return;
@@ -794,8 +796,7 @@ void SubpatchNativeRack::draw(const DrawArgs& args) {
   drawnOpacity =
       view->owner->module->params[Module::SHOW_CABLE_OPACITY].getValue();
   ScopedSubviewOpacity opacity(drawnOpacity);
-  for (auto* child : children) child->box = Rect(Vec(), box.size);
-  app::RackWidget::draw(args);
+  main->draw(args);
 }
 void SubpatchView::setMode(bool expose) {
   for (auto* hit : hits) hit->clearTooltip();
