@@ -1009,6 +1009,7 @@ struct Abstractor : app::ModuleWidget {
     for (auto* registered : added) {
       auto* holder = dynamic_cast<Holder*>(registered);
       auto* w = holder ? holder->original : registered;
+      if (!w || !w->module) continue;
       members.push_back({w->module->id, registered->box.pos, w, holder});
     }
     syncBoundaryPorts();
@@ -1165,6 +1166,7 @@ struct Abstractor : app::ModuleWidget {
     for (auto* registered : selected) {
       auto* holder = dynamic_cast<Holder*>(registered);
       auto* w = holder ? holder->original : registered;
+      if (!w || !w->module) continue;
       members.push_back({w->module->id, registered->box.pos, w, holder});
     }
     std::vector<std::pair<app::ModuleWidget*, app::PortWidget*>> boundary;
