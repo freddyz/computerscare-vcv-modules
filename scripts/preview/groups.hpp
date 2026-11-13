@@ -239,7 +239,7 @@ inline void renderModuleGroups(rack::plugin::Plugin& plugin,
     capture(group.get(), output + "/" + name + ".png", scale);
   };
   std::vector<std::vector<M*>> family = {
-      {modelPhlooperPreview, modelBlunchPreview,
+      {modelAbstractorPreview, modelPhlooperPreview, modelBlunchPreview,
        modelComputerscareDebug, modelComputerscareOhPeas},
       {modelComputerscarePatchSequencer, modelComputerscareLaundrySoup,
        modelComputerscareILoveCookies, modelComputerscareHorseADoodleDoo,

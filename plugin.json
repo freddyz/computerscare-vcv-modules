@@ -179,6 +179,12 @@
       "description": "Sixteen independent stereo loops with gradual time and speed phasing",
       "tags": ["Looper", "Sampler", "Polyphonic"],
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/phlooper.md"
+    },
+    {
+      "slug": "computerscare-patch-abstractor",
+      "name": "Patch Abstractor",
+      "description": "Group modules and expose their controls",
+      "tags": ["Utility"]
     }
   ]
 }

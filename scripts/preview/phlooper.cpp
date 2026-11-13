@@ -1,3 +1,6 @@
+#define modelComputerscarePatchAbstractor modelAbstractorPreview
+#include "../../src/ComputerscarePatchAbstractor.cpp"
+#undef modelComputerscarePatchAbstractor
 // Development-only renderer. Uses the real module/widget, never a panel mockup.
 #define modelComputerscarePhlooper modelPhlooperPreview
 #include "../../src/ComputerscarePhlooper.cpp"
@@ -112,6 +115,7 @@ void capture(widget::Widget* widget, const std::string& path, float scale,
 }
 
 #include "groups.hpp"
+#include "abstractor.hpp"
 
 void checkMaxVisual(app::ModuleWidget* widget,bool& compact,const std::string& path,float scale) {
   float width=widget->box.size.x;
@@ -846,6 +850,10 @@ int main(int argc, char** argv) {
     plugin.path = argv[1];
     plugin.slug = "computerscare";
     pluginInstance = &plugin;
+    if(argc==7 && std::string(argv[6])=="patch-abstractor") {
+      renderAbstractorDemo(plugin, argv[3], scale);
+      return 0;
+    }
     if(argc==7 && std::string(argv[6])=="groups") {
       renderModuleGroups(plugin,argv[3],scale);
       return 0;
