@@ -1,6 +1,6 @@
 # Phlooper
 
-Phlooper plays up to sixteen independent audio loops. Small differences in loop length or speed let their repetitions drift apart. All loops share the recording duration; polyphonic inputs can record different audio into each one.
+Phlooper is a sampler geared towards phased playback of the same sample, a la Steve Reich.  Small differences in loop length or speed let their repetitions drift apart, creating interesting (maybe?) sounds.
 
 ## Quick start
 
