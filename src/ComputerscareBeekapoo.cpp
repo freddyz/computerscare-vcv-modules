@@ -202,10 +202,11 @@ struct ActionButton : phlooper::WarpedDropdown {
   WeakPtr<ui::Tooltip> tooltip;
   void onEnter(const EnterEvent&) override {
     if (!settings::tooltips || tooltip) return;
-    tooltip = new ui::Tooltip;
-    tooltip->text = help ? help() : label();
-    tooltip->box.pos = getAbsoluteOffset(box.size);
-    APP->scene->addChild(tooltip);
+    auto* created = new ui::Tooltip;
+    created->text = help ? help() : label();
+    created->box.pos = getAbsoluteOffset(box.size);
+    APP->scene->addChild(created);
+    tooltip = created;
   }
   void onLeave(const LeaveEvent&) override { clearTooltip(); }
   void clearTooltip() {
@@ -225,6 +226,8 @@ struct ActionButton : phlooper::WarpedDropdown {
     Vec c = box.size * .5f + (isPressed() ? Vec(2, 1) : Vec(-1, -1));
     nvgSave(args.vg);
     nvgTranslate(args.vg, c.x, c.y);
+    float iconScale = std::min(1.f, std::max(.4f, (box.size.x - 6) / 16.f));
+    nvgScale(args.vg, iconScale, iconScale);
     nvgStrokeColor(args.vg, nvgRGB(15, 42, 36));
     nvgFillColor(args.vg, nvgRGB(15, 42, 36));
     nvgStrokeWidth(args.vg, 1.3f);
@@ -381,10 +384,11 @@ struct MappedParam : Base {
   ~MappedParam() override { clearTip(); }
   void onEnter(const widget::Widget::EnterEvent&) override {
     if (!settings::tooltips || tip) return;
-    tip = new MappingTooltip;
-    tip->caption = caption;
-    tip->box.pos = this->getAbsoluteOffset(this->box.size);
-    APP->scene->addChild(tip);
+    auto* created = new MappingTooltip;
+    created->caption = caption;
+    created->box.pos = this->getAbsoluteOffset(this->box.size);
+    APP->scene->addChild(created);
+    tip = created;
   }
   void onLeave(const widget::Widget::LeaveEvent&) override { clearTip(); }
 };
@@ -393,15 +397,46 @@ struct PortFace : widget::OpaqueWidget {
   JackSmallPointingDown tinyDown;
   JackSmallPointingUp tinyUp;
   std::function<std::string()> caption;
-  WeakPtr<MappingTooltip> tip;
+  WeakPtr<ui::Tooltip> tip;
+  bool nativeTooltip = false;
   void clearTip() {
-    if (tip) {
-      // Drop callbacks before the source control dies; Scene owns deletion.
-      tip->caption = {};
+    if (source) {
+      LeaveEvent leave;
+      source->onLeave(leave);
+    }
+    if (!nativeTooltip && tip) {
+      if (auto* fallback = dynamic_cast<MappingTooltip*>(tip.get()))
+        fallback->caption = {};
       tip->hide();
       tip->requestDelete();
-      tip = nullptr;
     }
+    nativeTooltip = false;
+    tip = nullptr;
+  }
+  void nativeTipAction(const std::function<void()>& action) {
+    std::set<widget::Widget*> before(APP->scene->children.begin(),
+                                     APP->scene->children.end());
+    action();
+    for (auto* child : APP->scene->children)
+      if (!before.count(child))
+        if (auto* tooltip = dynamic_cast<ui::Tooltip*>(child)) {
+          tip = tooltip;
+          nativeTooltip = true;
+          break;
+        }
+  }
+  void step() override {
+    if (tip) {
+      auto* hovered = APP->event->getHoveredWidget();
+      auto* dragHovered = APP->event->getDragHoveredWidget();
+      bool shown = visible;
+      for (auto* p = parent; p && shown; p = p->parent) shown = p->visible;
+      if (!shown || !settings::tooltips ||
+          (hovered != this && hovered != source.get() && dragHovered != this &&
+           dragHovered != source.get()))
+        clearTip();
+    }
+    widget::OpaqueWidget::step();
   }
   ~PortFace() override { clearTip(); }
   WeakPtr<app::PortWidget> source;
@@ -424,6 +459,14 @@ struct PortFace : widget::OpaqueWidget {
   void drawLayer(const DrawArgs& args, int layer) override {
     if (!compact && source) source->drawLayer(args, layer);
   }
+  void onHover(const HoverEvent& e) override {
+    // Rack highlights cables by exact port-widget identity. Target the real
+    // endpoint, as we already do for patching, rather than the artwork face.
+    if (source)
+      source->onHover(e);
+    else
+      widget::OpaqueWidget::onHover(e);
+  }
   void onButton(const ButtonEvent& e) override {
     if (source) source->onButton(e);
   }
@@ -432,23 +475,29 @@ struct PortFace : widget::OpaqueWidget {
     for (auto* child : APP->scene->rack->getCableContainer()->children)
       if (auto* cable = dynamic_cast<app::CableWidget*>(child))
         if (!cable->isComplete()) incomplete.push_back(cable);
-    if (source) source->onDragDrop(e);
+    if (source) nativeTipAction([&] { source->onDragDrop(e); });
     if (patched)
       for (auto& cable : incomplete)
         if (cable && cable->isComplete() && cable->cable) patched(cable.get());
   }
   void onDragEnter(const DragEnterEvent& e) override {
-    if (source) source->onDragEnter(e);
+    if (source) nativeTipAction([&] { source->onDragEnter(e); });
   }
   void onDragLeave(const DragLeaveEvent& e) override {
     if (source) source->onDragLeave(e);
+    clearTip();
   }
   void onEnter(const EnterEvent& e) override {
     if (!settings::tooltips || tip) return;
-    tip = new MappingTooltip;
-    tip->caption = caption;
-    tip->box.pos = getAbsoluteOffset(box.size);
-    APP->scene->addChild(tip);
+    if (source && source->module) {
+      nativeTipAction([&] { source->onEnter(e); });
+    } else {
+      auto* fallback = new MappingTooltip;
+      fallback->caption = caption;
+      fallback->box.pos = getAbsoluteOffset(box.size);
+      APP->scene->addChild(fallback);
+      tip = fallback;
+    }
   }
   void onLeave(const LeaveEvent& e) override { clearTip(); }
 };
@@ -577,7 +626,7 @@ struct Beekapoo : app::ModuleWidget {
     addChild(inputFrame);
     outputFrame = new phlooper::WarpedBlock;
     outputFrame->configure(Rect(Vec(186, 253), Vec(165, 100)), 5, 2.f, 727,
-                           nvgRGB(84, 101, 96));
+                           nvgRGB(105, 119, 114));
     addChild(outputFrame);
     auto* show = new ActionButton;
     show->text = "Edit";
@@ -793,12 +842,23 @@ struct Beekapoo : app::ModuleWidget {
         Vec(std::max(0.f, block->box.size.x - block->depth - 8),
             std::max(0.f, block->box.size.y - block->depth * .65f - 6.5f)));
   }
+  static float tinyOwnHeight(float width) {
+    float available = std::min(width - 25, 247.f);
+    int managementCols = std::max(1, std::min(3, int(available / 16)));
+    int actionCols = std::max(1, std::min(2, int(available / 34)));
+    return layoutRows(3, managementCols) * 18 + layoutRows(6, actionCols) * 20 +
+           12;
+  }
   static float minimumJackWidth(int inputs, int outputs) {
+    // `inputs` includes the six module CVs, which stay beside their buttons.
+    inputs = std::max(0, inputs - 6);
     for (int width = 45; width < 30000; width += 15) {
+      if (width - 25 < 34) continue;
       int cols = std::max(1, int((width - 25) / 20));
-      int rows = layoutRows(inputs, cols) + layoutRows(outputs, cols);
-      float height = (width < 75 ? 6 : 40) + rows * 22 + (inputs ? 14 : 0) +
-                     (outputs ? 14 : 0) + (inputs && outputs ? 8 : 0);
+      float height =
+          34 + tinyOwnHeight(width) + 8 +
+          (layoutRows(inputs, cols) + layoutRows(outputs, cols)) * 22 +
+          (inputs ? 14 : 0) + (outputs ? 14 : 0) + (inputs && outputs ? 8 : 0);
       if (height <= 368) return width;
     }
     return 30000;
@@ -806,12 +866,9 @@ struct Beekapoo : app::ModuleWidget {
   void layoutOnlyJacks(std::vector<widget::Widget*> inputs,
                        std::vector<widget::Widget*> outputs) {
     jacksOnly = true;
-    for (auto* button : managementButtons) button->visible = false;
-    for (auto* button : actionButtons) button->visible = false;
     getParam(Module::WIGGLE_AMOUNT)->visible = false;
     for (auto& parameter : parameters) parameter.knob->visible = false;
-    for (int i = 5; i >= 0; --i) inputs.insert(inputs.begin(), getInput(i));
-    float minimum = minimumJackWidth(inputs.size(), outputs.size());
+    float minimum = minimumJackWidth(inputs.size() + 6, outputs.size());
     float width = std::max(minimum, std::ceil(requestedWidth / 15) * 15);
     bool changed = box.size.x != width;
     box.size.x = width;
@@ -821,15 +878,43 @@ struct Beekapoo : app::ModuleWidget {
     rightHandle->box.pos.x = width - rightHandle->box.size.x;
     controlLabels.clear();
     headings.clear();
-    ownFrame->visible = false;
     frame->visible = false;
-    titleFrame->visible = width >= 75;
-    titleFrame->box = Rect(Vec(6, 4), Vec(width - 12, 32));
+    titleFrame->visible = true;
+    titleFrame->box = Rect(Vec(6, 4), Vec(std::min(width - 12, 205.f), 32));
     layoutTier = 0;
     responsive = ResponsiveLayout();
     responsive.width = width;
-    float y = width < 75 ? 6 : 40;
+    float ownWidth = std::min(width - 12, 260.f), available = ownWidth - 13;
+    int managementCols = std::max(1, std::min(3, int(available / 16)));
+    int actionCols = std::max(1, std::min(2, int(available / 34)));
+    ownFrame->visible = true;
+    ownFrame->box = Rect(Vec(6, 40), Vec(ownWidth, tinyOwnHeight(width)));
+    for (int i = 0; i < 3; ++i) {
+      auto* button = managementButtons[i];
+      button->visible = true;
+      button->icon = 3 + i;
+      button->box = Rect(
+          Vec(10 + (i % managementCols) * 16, 44 + (i / managementCols) * 18),
+          Vec(14, 16));
+    }
+    float actionTop = 44 + layoutRows(3, managementCols) * 18;
+    for (int i = 0; i < 6; ++i) {
+      int col = actionCols == 2 ? i / 3 : 0, row = actionCols == 2 ? i % 3 : i;
+      Vec cell(10 + col * 34, actionTop + row * 20);
+      auto* button = actionButtons[i];
+      button->visible = true;
+      button->box = Rect(cell, Vec(14, 16));
+      auto* port = getInput(i);
+      port->visible = true;
+      port->box.pos = cell + Vec(18, 0);
+    }
     int cols = std::max(1, int((width - 25) / 20));
+    float inputHeight =
+        inputs.empty() ? 0 : 14 + layoutRows(inputs.size(), cols) * 22;
+    float outputHeight =
+        outputs.empty() ? 0 : 14 + layoutRows(outputs.size(), cols) * 22;
+    float y = 368 - inputHeight - outputHeight -
+              (!inputs.empty() && !outputs.empty() ? 8 : 0);
     auto place = [&](std::vector<widget::Widget*>& items,
                      phlooper::WarpedBlock* block) {
       block->visible = !items.empty();
@@ -920,10 +1005,11 @@ struct Beekapoo : app::ModuleWidget {
     if (arrangeByModule) {
       std::vector<widget::Widget*> unified;
       for (auto* m : ordered)
-        for (int k = 0; k < 3; ++k)
+        for (int k = 0; k < 1; ++k)
           for (auto* item : items[k])
             if (moduleIds[item] == m->id) unified.push_back(item);
-      responsive = responsiveLayout(requestedWidth, unified.size(), 0, 0);
+      responsive = responsiveLayout(requestedWidth, unified.size(),
+                                    items[1].size(), items[2].size());
       // Each module starts a row. Feed the padding back to the same planner,
       // so physical minimums still account for the complete grouped layout.
       for (int pass = 0; pass < 12; ++pass) {
@@ -936,8 +1022,9 @@ struct Beekapoo : app::ModuleWidget {
           padded.push_back(item);
           last = moduleIds[item];
         }
-        auto next = responsiveLayout(std::max(requestedWidth, responsive.width),
-                                     padded.size(), 0, 0);
+        auto next =
+            responsiveLayout(std::max(requestedWidth, responsive.width),
+                             padded.size(), items[1].size(), items[2].size());
         if (next.paramColumns == cols) {
           items[0] = padded;
           responsive = next;
@@ -946,8 +1033,6 @@ struct Beekapoo : app::ModuleWidget {
         responsive = next;
         items[0] = padded;
       }
-      items[1].clear();
-      items[2].clear();
     }
     float width = responsive.width;
     layoutTier = responsive.tier;
@@ -1843,12 +1928,19 @@ struct Beekapoo : app::ModuleWidget {
     ModuleWidget::draw(args);
     if (artwork && titleFrame && titleFrame->visible) {
       Rect area = frameContent(titleFrame);
-      float scale = std::min({1.f, area.size.x / 184.f, area.size.y / 25.f});
+      bool logoOnly = jacksOnly && box.size.x < 180;
+      float scale =
+          logoOnly ? std::min({1.f, area.size.x / 24.f, area.size.y / 28.f})
+                   : std::min({1.f, area.size.x / 184.f, area.size.y / 25.f});
       nvgSave(args.vg);
       nvgIntersectScissor(args.vg, area.pos.x, area.pos.y, area.size.x,
                           area.size.y);
-      nvgTranslate(args.vg, area.pos.x - 8 * scale,
-                   area.pos.y + (area.size.y - 25 * scale) * .5f - 6 * scale);
+      if (logoOnly)
+        nvgTranslate(args.vg, area.getCenter().x - 176 * scale,
+                     area.getCenter().y - 19 * scale);
+      else
+        nvgTranslate(args.vg, area.pos.x - 8 * scale,
+                     area.pos.y + (area.size.y - 25 * scale) * .5f - 6 * scale);
       nvgScale(args.vg, scale, scale);
       artwork->draw(args);
       nvgRestore(args.vg);

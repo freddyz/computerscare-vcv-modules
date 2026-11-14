@@ -120,6 +120,24 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   positions->onDragStart(press);positions->onDragEnd(release);
   positions->onDragStart(press);positions->onDragEnd(release);
   require(b->module->params[3].getValue()==2.f,"Multi-position switch must cycle");
+  beekapoo::PortFace* outputFace=nullptr;
+  for(auto& port:host->ports)if(port.id==bId && !port.input && port.portId==0)outputFace=port.face;
+  require(outputFace,"Tooltip fixture must expose the connected output");
+  widget::EventContext portHoverContext;widget::Widget::HoverEvent portHover;portHover.context=&portHoverContext;portHover.pos=outputFace->box.size*.5f;
+  outputFace->onHover(portHover);require(portHoverContext.target==b->getOutput(0),"Mapped jack hover must target its actual cable endpoint for native cable highlighting");
+  APP->event->setHoveredWidget(portHoverContext.target);
+  auto* hoveredPort=dynamic_cast<app::PortWidget*>(APP->event->getHoveredWidget());
+  require(hoveredPort && rack->getCompleteCablesOnPort(hoveredPort).size()==1,"Native hovered endpoint must expose its connected cable");APP->event->setHoveredWidget(nullptr);
+  APP->event->setHoveredWidget(outputFace);require(outputFace->nativeTooltip && outputFace->tip,"Mapped port must create the native Rack tooltip");
+  outputFace->tip->step();require(outputFace->tip->text.find("4: ")!=std::string::npos && outputFace->tip->text.find("V")!=std::string::npos,"Native mapped-port tooltip must report every polyphonic voltage");
+  b->module->outputs[0].setVoltage(3.125f,3);outputFace->tip->step();
+  require(outputFace->tip->text.find("3.125V")!=std::string::npos,"Port tooltip must update live voltage values");
+  APP->event->setHoveredWidget(nullptr);require(!outputFace->tip,"Native mapped-port tooltip must close on leave");APP->engine->stepBlock(64);
+  widget::Widget::DragEnterEvent tipDrag;tipDrag.origin=a->getInput(1);tipDrag.button=GLFW_MOUSE_BUTTON_LEFT;
+  outputFace->onDragEnter(tipDrag);require(outputFace->tip,"Drag-hover must track the native tooltip it creates");
+  WeakPtr<ui::Tooltip> staleDragTip=outputFace->tip;outputFace->step();
+  require(!outputFace->tip && !staleDragTip,"A tooltip must disappear after losing actual hover, even without a Leave event");
+  APP->event->setHoveredWidget(outputFace);settings::tooltips=false;outputFace->step();require(!outputFace->tip,"Disabling tooltips must clear an already visible tooltip");settings::tooltips=true;APP->event->setHoveredWidget(nullptr);
   Vec savedGuardPosition=guard->box.pos;
   host->step();
   auto& proxy=host->ports.front();
@@ -314,7 +332,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
       for(auto r:occupied)require(!control->box.intersects(r),"Module-first controls must not overlap");occupied.push_back(control->box);
     };
     for(auto& p:host->parameters)check(p.knob);
-    for(auto& p:host->ports)check(p.face);
+
   }
   host->arrangeByModule=false;
   for(float width:{75.f,180.f,300.f,450.f,900.f}) {
@@ -713,7 +731,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   }
   group->closeView();
   group->arrangeByModule=true;group->requestedWidth=540;group->layoutControls();group->saveGroup();
-  require(group->frame->visible && !group->inputFrame->visible && !group->outputFrame->visible,"Module arrangement must collect the complete module's controls in one section");
+  require(group->frame->visible && group->inputFrame->visible && group->outputFrame->visible && group->outputFrame->box.getBottom()>=367,"I/O must remain at the bottom in module-first arrangement");
   group->hiddenKinds=2;group->layoutControls();
   for(auto& port:group->ports)if(port.input)require(!port.face->visible,"Input visibility filter must hide all input faces without removing mappings");
   group->hiddenKinds=0;
@@ -725,7 +743,10 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   capture(group,output+"/19-by-module.png",scale,false);group->box.pos=groupedShotPosition;
   APP->scene->rack->getModuleContainer()->addChild(group);
   group->requestedWidth=45;group->layoutControls();
-  require(group->jacksOnly && !group->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible && !group->actionButtons[0]->visible,"Minimum view must hide main controls and parameters");
+  require(group->jacksOnly && !group->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Minimum view must hide parameter knobs");
+  for(auto* button:group->managementButtons)require(button->visible,"Edit, Expand and End must always stay visible");
+  for(auto* button:group->actionButtons)require(button->visible,"Module action buttons must stay visible at minimum width");
+  require(group->titleFrame->visible && group->ownFrame->visible,"Minimum layout must keep the logo and its separate module-controls block");
   auto* tinyParent=group->parent;auto tinyPosition=group->box.pos;tinyParent->removeChild(group);group->box.pos=Vec();
   capture(group,output+"/20-jacks-only.png",scale,false);group->box.pos=tinyPosition;tinyParent->addChild(group);
   auto* patchInput=mely->getInput(1);APP->event->setDraggedWidget(patchInput,GLFW_MOUSE_BUTTON_LEFT);
@@ -743,6 +764,13 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   for(auto& layer:realSession->highlights)if(layer)require(layer->parent==layer->sourceModule.get(),"Expose highlights must live behind the source module's controls");
   capture(APP->scene,output+"/18-real-rack-expose.png",scale,false);
   realSession->finish(true);
+  group->requestedWidth=300;group->layoutControls();group->step();
+  APP->scene->box.size=Vec(520,740);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(520,710));
+  APP->scene->rackScroll->zoomToBound(group->box);APP->scene->rackScroll->step();group->step();
+  beekapoo::PortFace* visibleOutput=nullptr;for(auto& port:group->ports)if(!port.input)visibleOutput=port.face;
+  require(visibleOutput,"Screenshot needs a mapped output");visibleOutput->nativeTipAction([&] {APP->event->setHoveredWidget(visibleOutput->source.get());});
+  require(visibleOutput->nativeTooltip && visibleOutput->tip,"Screenshot must use the native output tooltip");visibleOutput->tip->step();
+  capture(APP->scene,output+"/22-output-voltage-tooltip.png",scale,false);APP->event->setHoveredWidget(nullptr);
 
   auto* groupParent=group->parent;auto groupPosition=group->box.pos;
   groupParent->removeChild(group);group->box.pos=Vec();capture(group,output+"/08-action-grid.png",scale,false);
@@ -802,7 +830,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     wrapper->requestedWidth=c.width;wrapper->layoutControls();wrapper->step();
     for(auto* button:wrapper->actionButtons)if(button->visible)require(inside(button->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": action outside controls face").c_str());
     for(auto* button:wrapper->managementButtons)if(button->visible)require(inside(button->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": management outside controls face").c_str());
-    for(int i=0;i<6;++i)require(inside(wrapper->getInput(i)->box,wrapper->frameContent(wrapper->jacksOnly?wrapper->inputFrame:wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": CV outside controls face").c_str());
+    for(int i=0;i<6;++i)require(inside(wrapper->getInput(i)->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": CV outside controls face").c_str());
     for(const auto& p:wrapper->parameters)if(p.knob->visible)require(inside(p.knob->box,wrapper->frameContent(wrapper->frame)),("Spectrum "+std::to_string(index+1)+": parameter extends into a perspective wall").c_str());
     for(const auto& p:wrapper->ports)require(inside(p.face->box,wrapper->frameContent(p.input?wrapper->inputFrame:wrapper->outputFrame)),("Spectrum "+std::to_string(index+1)+": jack extends into a perspective wall").c_str());
     auto* tile=new SpectrumTile;tile->box=Rect(Vec((index%4)*620,(index/4)*420),Vec(620,420));

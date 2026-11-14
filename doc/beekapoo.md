@@ -20,7 +20,7 @@ Modules added while editing join this Beekapoo after placement. Deleting a membe
 
 ## Panel
 
-**Panel arrangement** groups controls by type or by source module. **Show controls** hides or shows parameters, inputs, outputs, or controls from one module. Hiding a control preserves its mapping and connections. Hover for the full control and module name. At the smallest widths, buttons and parameter knobs are hidden, including Amount; all jacks remain available.
+**Panel arrangement** groups controls by type or by source module. **Show controls** hides or shows parameters, inputs, outputs, or controls from one module. Hiding a control preserves its mapping and connections. Hover for the full control and module name. Port tooltips show the normal live voltage readings. At the smallest widths, parameter knobs are hidden, including Amount. Edit, Expand, End, the action buttons, all jacks, and the computerscare logo remain visible. Module actions keep their own box, separate from the exposed jacks.
 
 Cables patched on Beekapoo’s front panel remain visible there, including connections between its own jacks. Internal wiring made while editing is hidden when you finish.
 
