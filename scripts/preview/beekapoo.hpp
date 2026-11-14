@@ -1,5 +1,9 @@
 // Isolated Rack-engine integration test, not connected to a live Rack process.
 namespace beekapoofixture {
+struct ProtectedQuantity : engine::ParamQuantity {
+  int randomCalls=0;
+  void randomize() override {++randomCalls;setImmediateValue(getMaxValue());}
+};
 struct Gain : engine::Module {
   int randomCalls=0,resetCalls=0,saveCalls=0;
   void onSave(const SaveEvent&) override { ++saveCalls; }
@@ -12,6 +16,7 @@ struct Gain : engine::Module {
       configInput(i,i==0?"Signal":"Input "+std::to_string(i+1));
       configOutput(i,i==0?"Signal":"Output "+std::to_string(i+1));
     }
+    configParam<ProtectedQuantity>(4,0.f,2.f,1.f,"Protected gain");
     configButton(1,"Momentary");
     configSwitch(2,0.f,1.f,0.f,"Toggle");
     configSwitch(3,0.f,3.f,0.f,"Position");
@@ -204,6 +209,22 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
       own->inputs[index].setVoltage(0);own->process(args);
     }
 
+    auto* protectedQ=static_cast<beekapoofixture::ProtectedQuantity*>(gainB->getParamQuantity(4));
+    protectedQ->randomizeEnabled=false;protectedQ->setImmediateValue(2.f);
+    gainB->getParamQuantity(1)->setImmediateValue(1.f);
+    int customRandomBefore=protectedQ->randomCalls;
+    host->parameterAction(1,true);
+    require(protectedQ->getValue()<2.f && protectedQ->randomCalls==customRandomBefore,"Exposed Randomize must ignore exclusion flags and custom randomize callbacks");
+    require(gainB->getParamQuantity(1)->getValue()==1.f,"Exposed Randomize must leave momentary buttons untouched");
+    APP->history->undo();require(protectedQ->getValue()==2.f,"Undo must restore random-excluded exposed parameters");
+    bool moved=false;own->params[beekapoo::Module::WIGGLE_AMOUNT].setValue(.1f);
+    for(int i=0;i<4;++i){protectedQ->setImmediateValue(1.f);host->parameterAction(0,false);moved|=protectedQ->getValue()!=1.f;}
+    require(moved && gainB->getParamQuantity(1)->getValue()==1.f,"Exposed Wiggle must ignore exclusion flags and skip momentary buttons");
+    protectedQ->setImmediateValue(1.f);host->parameterAction(3,false);
+    require(protectedQ->getValue()==1.f,"All Wiggle must retain parameter exclusions");
+    host->parameterAction(4,false);
+    require(protectedQ->getValue()==1.f && protectedQ->randomCalls==customRandomBefore,"All Randomize must retain the module's exclusions");
+    protectedQ->randomizeEnabled=true;
     for(int i=0;i<24;++i){gainA->getParamQuantity(i)->setImmediateValue(savedA[i]);gainB->getParamQuantity(i)->setImmediateValue(savedB[i]);}
   }
   // Real Rack save/load: serialize engine state and native widget positions,

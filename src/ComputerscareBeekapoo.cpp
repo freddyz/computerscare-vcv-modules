@@ -1874,15 +1874,18 @@ struct Beekapoo : app::ModuleWidget {
                                                  : "initialize ") +
                     (all ? "all subpatch modules" : "exposed parameters");
     actionPulse[index] = .12f;
-    auto change = [&](engine::ParamQuantity* q) {
-      if (!q || !q->isBounded() ||
-          (operation == 2 ? !q->resetEnabled : !q->randomizeEnabled))
+    auto change = [&](engine::ParamQuantity* q, bool momentary) {
+      if (!q || !q->isBounded()) return;
+      if (operation == 2 ? !q->resetEnabled
+                         : momentary || (all && !q->randomizeEnabled))
         return;
       float before = q->getValue();
       if (operation == 2)
         q->reset();
       else if (operation == 1)
-        q->randomize();
+        // Exposed controls use Rack's bounded distribution directly, rather
+        // than a module/quantity's custom randomize policy.
+        q->engine::ParamQuantity::randomize();
       else {
         float amount = module->params[Module::WIGGLE_AMOUNT].getValue();
         q->setImmediateValue(q->fromScaled(clamp(
@@ -1917,12 +1920,19 @@ struct Beekapoo : app::ModuleWidget {
     } else if (all) {
       for (const auto& member : members)
         if (auto* w = find(member.id))
-          for (auto* q : w->module->paramQuantities) change(q);
+          for (auto* q : w->module->paramQuantities) {
+            auto* source =
+                q ? dynamic_cast<app::Switch*>(w->getParam(q->paramId))
+                  : nullptr;
+            change(q, source && source->momentary);
+          }
     } else {
       for (const auto& param : parameters)
         if (controlVisible(param.id, 0))
           if (auto* w = find(param.id))
-            change(w->module->getParamQuantity(param.paramId));
+            change(w->module->getParamQuantity(param.paramId),
+                   dynamic_cast<app::Switch*>(param.knob) &&
+                       static_cast<app::Switch*>(param.knob)->momentary);
     }
     if (batch) {
       if (batch->isEmpty())

@@ -32,7 +32,7 @@ Rack’s **Save selection as** saves a `.vcvs` selection file. Select Beekapoo t
 
 ## Randomization
 
-The action grid has **Exposed** and **All** sets, each with Wiggle, Randomize, and Initialize buttons and trigger inputs. Exposed affects visible mapped parameters; All affects the grouped modules. **Amount** sets the wiggle range. Cmd/Ctrl+R randomizes visible mapped parameters.
+The action grid has **Exposed** and **All** sets, each with Wiggle, Randomize, and Initialize buttons and trigger inputs. Exposed affects visible mapped parameters. Randomize and Wiggle ignore their normal randomization exclusions, but skip momentary buttons. All uses the grouped modules’ normal randomization behavior. **Amount** sets the wiggle range. Cmd/Ctrl+R randomizes visible mapped parameters.
 
 Trigger inputs respond to rising signals of at least 1 V. These actions run at UI refresh rate, so rapid repeated triggers may combine. Manual button actions support undo.
 
