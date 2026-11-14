@@ -1,6 +1,6 @@
 # Blunch
 
-Blunch is a text-based clock and trigger sequencer with up to 16 independent channels. Write clock rates, durations, sequences, rests, and random choices as formulas. Each channel has its own page of formula lines.
+Blunch is a text-based clock and trigger sequencer.  Offers somewhat of a "live coding" language for generating trigger sequences.  Fully polyphonic, with up to 16 independent clocks.  A simple starter formula would be `109bpm`, which will emit a 109bpm clock.  It can get as complicated as you like, eg: `90bpm@3 120bpm@4` which emits 3 triggers at 90bpm, and then 4 at 120.  `{3hz|5hz}#4` will randomly choose between 3hz and 5hz each clock, and will emit an "End-of-Block" (EOB) trigger every 4 clocks.
 
 ## Quick start
 
@@ -34,7 +34,7 @@ With automatic Block and Line advance enabled, Blunch finishes each block, conti
 | `1:30min` | A one-minute, thirty-second interval              |
 | `120`     | A number without a unit uses Default number unit  |
 
-Decimals can begin with a dot: `.5s` and `0.5s` mean the same thing. The context menu’s **Default number unit** selects BPM, seconds, milliseconds, Hz, minutes, millihertz, or kilohertz for bare numbers. BPM is the initial setting. Explicit units always override it. The setting applies when a line is next submitted; existing Next and Now formulas keep their units. Clock values must be positive. Units are case-insensitive. Additional unit spellings include `rpm` for BPM, `cps` for Hz, `mhz` for millihertz, `khz` for kilohertz, `sec`/`seconds`, and `m`/`minutes`.
+Decimals can begin with a dot: `.5s` and `0.5s` mean the same thing. The context menu’s **Default number unit** selects BPM, seconds, milliseconds, Hz, minutes, millihertz, or kilohertz for bare numbers. BPM is the initial setting. Explicit units always override it. The setting applies when a line is next submitted; existing Next and Now formulas keep their units. Clock values must be positive. Units are case-insensitive. `s`, `sec`, and `seconds` are equivalent; `m`, `min`, and `minutes` are equivalent. Additional unit spellings include `rpm` for BPM, `cps` for Hz, `mhz` for millihertz, and `khz` for kilohertz.
 
 ### Sequential values and brackets
 
@@ -74,7 +74,7 @@ For two changing sequences:
 ((1 2) (3 4 5))s
 ```
 
-The full pattern is `1, 3, 2, 4, 1, 5, 2, 3, 1, 4, 2, 5` seconds. It repeats when both inner sequences return to their beginnings.
+Equivalent to: `[1 3 2 4 1 5 2 3 1 4 2 5]s`. It repeats when both inner sequences return to their beginnings.
 
 A parenthesized sequence immediately following a block alternates with that preceding block. For example, `500ms (300ms 400ms)` plays `500, 300, 500, 400` ms.
 
