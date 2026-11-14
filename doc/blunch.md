@@ -1,6 +1,6 @@
 # Blunch
 
-Blunch is a text-based clock and trigger sequencer.  Offers somewhat of a "live coding" language for generating trigger sequences.  Fully polyphonic, with up to 16 independent clocks.  A simple starter formula would be `109bpm`, which will emit a 109bpm clock.  It can get as complicated as you like, eg: `90bpm@3 120bpm@4` which emits 3 triggers at 90bpm, and then 4 at 120.  `{3hz|5hz}#4` will randomly choose between 3hz and 5hz each clock, and will emit an "End-of-Block" (EOB) trigger every 4 clocks.
+Blunch is a text-based clock and trigger sequencer. Offers somewhat of a "live coding" language for generating trigger sequences. Fully polyphonic, with up to 16 independent clocks. A simple starter formula would be `109bpm`, which will emit a 109bpm clock. It can get as complicated as you like, eg: `90bpm@3 120bpm@4` which emits 3 triggers at 90bpm, and then 4 at 120. `{3hz|5hz}#4` will randomly choose between 3hz and 5hz each clock, and will emit an "End-of-Block" (EOB) trigger every 4 clocks.
 
 ## Quick start
 
@@ -10,7 +10,7 @@ Blunch is a text-based clock and trigger sequencer.  Offers somewhat of a "live 
 4. Try `[300 400]ms` for alternating 300 ms and 400 ms intervals.
 5. Add another formula on a new line. With automatic Line advance, Blunch plays each line in turn and loops the page.
 
-The **Run** button enables playback. New modules start with Auto-stage valid edits on, Wait set to Next visit, and Auto polyphony, with only channel 1 active and one to four short example lines.
+The **Run** button enables or disables playback.
 
 ## Pages, lines, and blocks
 
@@ -194,45 +194,39 @@ Use the channel selector to choose **All** or an individual channel. Selecting a
 
 **All view** shows one formula row per channel. Tab or Shift+Tab switches between All view and the channel under the cursor. Escape also returns to All view. Enter in All view does not navigate. Ctrl+[ and Ctrl+] move between individual channel pages.
 
-Right-click a row in All view to play or stop that channel, or copy its displayed formula. These actions target the clicked row. In channel view, right-click a formula to play from that line or copy it. The playing target is labeled and disabled. Standard Cut, Copy, and Paste work on the current text selection; Copy line copies the clicked formula.
+In All view, right-click a row to play or stop that channel, or copy its displayed formula. In channel view, right-click a formula to play from that line or copy it.
 
-Direct editing in All view is allowed when a channel is stopped/paused, has only one nonblank formula line, or **Line advance** is **Off**. With Line advance Off, edit the playing line without opening its channel page. Otherwise, a playing channel with multiple formula lines is read-only there and has no editing caret; open its channel page to edit it. Trailing blank lines do not count as extra formulas.
+You can edit a channel in All view when it is stopped or paused, has only one formula line, or **Line advance** is **Off**. Otherwise, open its channel page to edit. Channels above the selected polyphony are faded but remain editable.
 
-Stopped channels show their edited text immediately, even if they have never played. Playing multi-line channels show their current active formula, or its Draft text when Line advance is Off. Channels beyond the selected polyphony use faded italic text and a lighter grey background; they remain selectable and editable.
+### Editing during playback
+
+With **Auto-stage valid edits** on, valid edits are submitted automatically. **Wait** selects when they enter playback. Invalid edits leave playback unchanged.
+
+For example, play `120bpm`, then change it to `90bpm`. With **Wait → Next visit**, the current visit finishes before the new tempo starts. Editing another line does not jump to it.
+
+To prepare a change manually, turn Auto-stage off. Edit the formula, then right-click and choose **Stage changes**, or press **Ctrl/Cmd+Shift+Enter** to stage the channel page. With **Wait → Page**, the changes start together when the page repeats. Correct any red-marked errors before submitting.
+
+To start a chosen line immediately, select it and click **Play**. In All view, Play starts the selected channels at their displayed lines. **Ctrl/Cmd+Enter** also submits and starts playback, using Wait for pending changes.
+
+Turning **Run** back on applies valid edits immediately and resumes the remembered channels. **Ctrl/Cmd+Space** applies valid edits and starts all channels.
 
 ### Draft, Next, and Now
 
-| View      | Meaning                                                    |
-| --------- | ---------------------------------------------------------- |
-| **Draft** | Your editable formulas. Typing does not change playback.   |
-| **Next**  | Submitted formulas waiting for the selected Wait boundary. |
-| **Now**   | The formulas currently used for playback.                  |
+| View      | Meaning                              |
+| --------- | ------------------------------------ |
+| **Draft** | The formulas you are editing.        |
+| **Next**  | Submitted formulas waiting to start. |
+| **Now**   | The formulas currently playing.      |
 
-In All view, press **Ctrl/Cmd+Enter** or click **Play** to stage Draft changes and start the selected channels, including deleted lines. In channel view, **Ctrl/Cmd+Enter** submits the channel’s Draft page and starts the line under the cursor, even with Line advance off; Play starts immediately, bypassing Wait. All-view Play starts each selected channel at its displayed line; channel-view Play starts the focused line. If the active line was deleted, playback continues with a remaining formula. **Immediate** applies the submission straight away. Further typing changes Draft only; it cannot overwrite Next. Starting an empty channel activates its submitted formula because there is no running boundary to wait for.
+Press **F7** to cycle through these views. Next and Now are read-only; typing returns to Draft. Patches save all three views.
 
-Turning **Run** back on applies the latest valid Draft/Next changes immediately, bypassing Wait, and resumes the remembered channels. **Ctrl/Cmd+Space** does the same and starts all channels. Invalid Drafts remain editable and do not start that channel.
+**Unstage changes** removes Next but keeps your Draft. **Revert changes** restores Draft from Next, or from Now if nothing is waiting.
 
-**Ctrl/Cmd+Shift+Enter** also stages the channel page. With **Wait: Page**, the submitted page changes take effect together when the page wraps. With other Wait modes, changes take effect at the selected boundary on the playing line, or when playback reaches another queued line. An invalid line prevents the whole page submission; correct the red-marked text and try again.
+The **x** button beside Stop discards Draft edits first. If there are no Draft edits, it cancels Next. **Shift-click** discards both. **Esc** does the same for the focused line, or the selected channel in All view. With no changes on the focused line, Esc returns to All view.
 
-Enable **Auto-stage valid edits** in the context menu to submit edits automatically once the page validates. Wait controls when staged edits become active. Choose Next visit to preserve the current visit. Invalid edits leave playback unchanged.
+Use the usual copy, cut, paste, and select-all shortcuts. In All view, copied or pasted lines span successive channels. Open a playing multi-line channel to cut or replace its text.
 
-The left wall shows selection and playback. A narrow yellow marker pulses at its inner edge when Draft edits or waiting Next changes exist, per line in channel view or per channel in All view. Right-click a row for **Stage changes** or **Unstage changes**. Unstage withdraws Next while keeping Draft and Now. **Revert changes** discards Draft edits and restores Next, or Now if nothing is queued. Changed Draft text is tinted yellow. Play stays raised while changes exist: steady yellow for Draft, pulsing yellow for Next. Applying Draft does not cancel an existing Next submission.
-
-Next and Now are read-only. Unchanged lines in Next show Now in faded text. Press **F7** to cycle Draft → Next → Now → Draft. The channel selector shows a small Next or Now indicator in those read-only views; Draft has no indicator. Typing returns to Draft. Switching views never replaces your edits.
-
-The **x** button to the right of Stop acts on the selected channel:
-
-- With Draft edits, discard them and restore Next, keeping Next queued.
-- With no Draft edits, unstage Next and restore Now.
-- **Shift-click** discards both Draft and Next at once.
-
-**Esc** does the same for the focused line in a channel page, or the selected channel in All view. With no changes on the focused line, it returns to All view.
-
-Use **Cmd/Ctrl+C**, **X**, and **V** to copy, cut, and paste selected text in either view. **Cmd/Ctrl+A** selects all text. In All view, selections can span channels; pasted lines go into successive channels, and cutting keeps the channel rows in place. Playing multi-line channels expose only their current formula in All view: you can copy it, but open the channel to cut or replace its text. An All-view cut or paste touching a read-only row leaves the selection unchanged.
-
-Undo with **Cmd/Ctrl+Z**; redo with **Cmd/Ctrl+Shift+Z** or **Cmd/Ctrl+Y**. Undo changes Draft only. Submit restored text to apply it to playback.
-
-Patches save Draft, Next, and Now separately. Reopening a patch keeps unfinished edits separate from playback and retains queued submissions. Wait uses its current setting, including if you change it after submitting.
+Undo with **Cmd/Ctrl+Z**; redo with **Cmd/Ctrl+Shift+Z** or **Cmd/Ctrl+Y**. Undo changes Draft. Auto-stage and Wait control when the restored text enters playback.
 
 ## Controls
 
@@ -369,7 +363,7 @@ The module starts at 16 HP. Drag either panel edge to resize it in 1 HP steps. T
 
 Choose **Panel → Max visual** in the context menu to expand the display vertically and collect the input/output jacks in a dense rail of tiny ports. Hover a jack for its label. Hidden controls keep their settings. Use **Normal UI** above the display, or **Panel → Normal**, to restore the controls and original module width. Cables remain connected, and the layout is saved with the patch.
 
-### Scanning lines and blocks
+## Scanning lines and blocks
 
 In Playback settings, choose **Line scan** or **Block scan**, then W, X, Y, or Z.
 0–10 V selects across the available lines or blocks. The existing **Line advance**
@@ -379,12 +373,7 @@ Voltage changes between boundaries do not interrupt playback. Mono scan voltage
 controls every channel; polyphonic scan voltage addresses matching channels.
 Blank lines are skipped. Scan Off keeps sequential advancement.
 
-**Stage changes** and **Stage page** submit edits without jumping playback.
-**Wait → Next visit** applies each staged line when it is next entered, including
-when the same line repeats. **Auto-stage valid edits** submits edits automatically and follows Wait, just like manual staging. With Next visit selected, editing the playing line leaves its current visit unchanged. Editing another line never redirects playback. Play still submits
-and starts the chosen line explicitly.
-
-### Bake Time into formulas
+## Bake Time into formulas
 
 Choose **Bake Time into formulas** in the context menu (also in Settings →
 Playback) to fold the Time knob into all channels’ Draft, Next, and Now formulas,

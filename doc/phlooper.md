@@ -1,6 +1,6 @@
 # Phlooper
 
-Phlooper is a sampler geared towards phased playback of the same sample, a la Steve Reich.  Small differences in loop length or speed let their repetitions drift apart, creating interesting (maybe?) sounds.
+Phlooper is a sampler geared towards phased playback of the same sample, a la Steve Reich. Small differences in loop length or speed let their repetitions drift apart, creating interesting (maybe?) sounds.
 
 ## Quick start
 
@@ -11,15 +11,19 @@ Phlooper is a sampler geared towards phased playback of the same sample, a la St
 
 A mono input feeds every loop. Polyphonic inputs feed matching loops; missing channels are silent. An unpatched R copies the corresponding L channel. The first recording fills all sixteen loops, including those outside the selected loop count.
 
+## Loop count
+
+The two-part loop selector sets the number of loops and how new loops are filled. **Cycle** repeats existing recordings in order (1, 2 → 1, 2, 1, 2, 1, 2). **Normal** repeats a single recording, otherwise adds silence. **Zero** adds silence; **Stall** copies the last existing recording. Added recordings are independent: overdubbing or erasing one does not change its source. Reducing the loop count preserves recordings for later. WAV import still fills all sixteen loops.
+
 ## Recording and transport
 
-- **Record:** overdub addressed loops after the first recording. **Rec mix** sets how much input replaces the stored audio. The context menu’s default **Blend** mode progressively replaces it; **Add** retains the old audio and adds input at the selected amount.
+- **Record:** overdub loops enabled by the Record button or input after the first recording. **Rec mix** sets how much input replaces the stored audio. The context menu’s default **Blend** mode progressively replaces it; **Add** retains the old audio and adds input at the selected amount.
 - **Erase:** silence the portion beneath moving heads while held. Erasing takes priority over recording.
-- **Restart:** return addressed heads to their region’s starting point, or their captured position while held.
+- **Restart:** return heads controlled by the Restart button or input to their region’s starting point, or their captured position while held.
 - **Stop:** freeze playback, recording, and erasing; release to resume from the same position.
 - **Mute:** silence loops while heads, recording, and EOC continue. Dry input remains audible according to **Out mix**.
 
-Panel buttons affect all active loops. Mono gate/trigger cables affect all loops; polyphonic cables address matching loops, with missing channels inactive. Hold is global and uses channel 1 only.
+Panel buttons affect all active loops. Mono gate/trigger cables affect all loops; polyphonic cables control matching loops, with missing channels inactive. Hold is global and uses channel 1 only.
 
 Each row has **M** (Mute), **S** (Solo), **P** (Pause), and direction controls. Multiple loops can be soloed; Mute takes priority. **Ctrl** hides these controls and gives the waveform the full display width.
 
@@ -40,11 +44,20 @@ Directions are **Forward**, **Reverse**, **Forward then Reverse**, and **Reverse
 | Speed %  | Change playback speed and pitch                                 |
 | Beats    | Add fractions of the recorded clock beat without changing pitch |
 
-Positive Time/Length/Beats offsets extend the period with silence; negative offsets shorten it and truncate audio. Speed-mode offsets range from 5% to 800% playback speed. Loop periods stay between 1 ms and 60 seconds. New modules start in Time mode with −5 ms per loop.
+Positive Time/Length/Beats offsets extend the period with silence; negative offsets shorten it and truncate audio. Loop periods stay between 1 ms and 60 seconds. New modules start in Time mode with −5 ms per loop.
 
 **Speed** multiplies all playback rates from ¼× to 4×, with 1× at the center, changing pitch in every mode.
 
 **Ends** aligns region ends instead of starts. It keeps loop 1’s region and shifts other starts backward or forward to match that end. Per-channel Start CV still shifts its corresponding region. Ends changes the audio regions, not the phase relationship of playback.
+
+### Speed offsets
+
+In **Speed % Linear** and **Speed % Mult**, Offset ranges from −25% to +25% per loop. At −10%:
+
+- **Linear:** 100%, 90%, 80%, 70%…
+- **Mult:** 100%, 90%, 81%, 72.9%…
+
+Linear has a 5% minimum. Mult can go below 5%. Both have an 800% maximum before the main Speed knob/CV. In Mult mode, mono Offset CV multiplies every loop’s speed by the same ratio; polyphonic Offset CV sets each matching loop’s ratio.
 
 ### Record / erase clock
 
@@ -121,6 +134,8 @@ Use **Import WAV to all loops** or drop a WAV onto the module. Both copy the fil
 
 Patches save all audio, loop settings, playhead positions, custom regions, and held regions. Record always loads off. **Clear recording** empties all loops and resets Start to 0%, Length to 100%, custom points, and held regions; patched CV still applies.
 
+**Initialize** resets controls and restarts playback. It keeps recorded audio and beat markers. Use **Clear recording** to empty the loops.
+
 Randomize preserves loop count, 1-shot, Ctrl, Zoom, Out mix, and custom loop points.
 
 ## Keyboard shortcuts
@@ -131,22 +146,4 @@ Hover tooltips show shortcuts in brackets. Hold backtick/tilde while hovering ov
 
 ## Panel layout
 
-Choose **Panel → Max visual** in the context menu to expand the display vertically and collect the input/output jacks in a dense rail of tiny ports. Hover a jack for its label. Hidden controls keep their settings. Use **Normal UI** above the display, or **Panel → Normal**, to restore the controls and original module width. Cables remain connected, and the layout is saved with the patch.
-
-The two-part loop selector sets the number of loops and how new loops are filled. **Cycle** repeats existing recordings in order (1, 2 → 1, 2, 1, 2, 1, 2). **Normal** repeats a single recording, otherwise adds silence. **Zero** adds silence; **Stall** copies the last existing recording. Added recordings are independent: overdubbing or erasing one does not change its source. Reducing the loop count preserves recordings for later. WAV import still fills all sixteen loops.
-
-**Big** expands the waveform and puts the tiny jacks along the right edge,
-keeping the module width unchanged.
-**Big** stays pressed while expanded; click it again or press **Escape** to return to the normal panel. Hold backtick/tilde to see
-keyboard shortcuts in either view.
-
-In Speed mode, the Offset knob spans −25% to +25% speed per loop.
-
-The phase-mode menu offers **Speed % Linear** and **Speed % Mult**. At −10%, Linear gives 100%, 90%,
-80%, 70%…; Multiplicative gives 100%, 90%, 81%, 72.9%… . Linear has a 5% floor;
-Multiplicative continues below 5%. Both have an 800% ceiling before the main
-Speed knob/CV. Mono Offset CV multiplies every loop by its shared ratio;
-polyphonic Offset CV sets each addressed loop’s ratio directly. Other offset
-modes are unchanged. The choice saves with the patch and supports Undo.
-
-**Initialize** resets controls and restarts playback while keeping recorded audio and beat markers. Use **Clear recording** to empty the loops.
+Click **Big** to expand the waveform and move the jacks to the right edge. Click it again or press **Escape** to return. The module width stays the same. Hidden controls keep their settings, and cables stay connected. The layout saves with the patch. You can also select it with **Panel → Max visual / Normal** in the context menu.
