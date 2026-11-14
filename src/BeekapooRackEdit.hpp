@@ -190,25 +190,7 @@ struct RackEditSession : widget::Widget {
         highlight->session = this;
         highlight->sourceModule = w;
         highlight->box.size = w->box.size;
-        std::set<widget::Widget*> roots;
-        auto rootOf = [&](widget::Widget* control) {
-          while (control && control->parent != w) control = control->parent;
-          if (control) roots.insert(control);
-        };
-        for (auto* control : w->getParams()) rootOf(control);
-        for (auto* control : w->getPorts()) rootOf(control);
-        widget::Widget* first = nullptr;
-        for (auto* child : w->children)
-          if (roots.count(child)) {
-            first = child;
-            break;
-          }
-        if (first)
-          w->addChildBelow(highlight, first);
-        else if (w->getPanel())
-          w->addChildAbove(highlight, w->getPanel());
-        else
-          w->addChildBottom(highlight);
+        w->addChild(highlight);
         highlights.push_back(highlight);
       }
 
@@ -239,8 +221,8 @@ struct RackEditSession : widget::Widget {
   }
 };
 void RackEditHighlight::draw(const DrawArgs& args) {
-  if (!session || session->finished || !session->exposeMode ||
-      !session->owner || !sourceModule || !sourceModule->module)
+  if (!session || session->finished || !session->owner || !sourceModule ||
+      !sourceModule->module)
     return;
   auto* group = session->owner.get();
   auto* module = sourceModule.get();
@@ -250,21 +232,47 @@ void RackEditHighlight::draw(const DrawArgs& args) {
     for (auto* parent = control->parent; parent && parent != module;
          parent = parent->parent)
       if (!parent->visible) return;
-    Rect r(control->getRelativeOffset(Vec(), module) - Vec(3, 3),
-           control->box.size + Vec(6, 6));
+    auto* hovered = APP->event->getHoveredWidget();
+    bool hovering = false;
+    for (auto* p = hovered; p; p = p->parent)
+      if (p == control) {
+        hovering = true;
+        break;
+      }
+    Rect r(control->getRelativeOffset(Vec(), module), control->box.size);
     if (!r.pos.isFinite() || !r.size.isFinite()) return;
-    uint32_t seed =
-        uint32_t(module->module->id) ^ uint32_t(index + 1) * 2654435761u;
-    float a = float(seed % 9) * .25f, b = float((seed >> 5) % 9) * .25f;
-    nvgBeginPath(args.vg);
-    nvgMoveTo(args.vg, r.pos.x - 1, r.pos.y + a);
-    nvgLineTo(args.vg, r.getRight(), r.pos.y - 1 - b);
-    nvgLineTo(args.vg, r.getRight() + b, r.getBottom() - a);
-    nvgLineTo(args.vg, r.pos.x + a, r.getBottom() + 1);
-    nvgClosePath(args.vg);
-    nvgFillColor(args.vg, locked     ? nvgRGBA(214, 179, 48, 155)
-                          : selected ? nvgRGBA(28, 195, 147, 155)
-                                     : nvgRGBA(95, 143, 117, 90));
+    unsigned seed =
+        unsigned(module->module->id) ^ unsigned(index + 1) * 2654435761u;
+    float tilt = float(seed % 7) * .2f;
+    if (hovering) {
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, r.pos.x - 2, r.pos.y - 1 - tilt);
+      nvgLineTo(args.vg, r.getRight() + 1, r.pos.y - 2);
+      nvgLineTo(args.vg, r.getRight() + 2, r.getBottom() + 1 + tilt);
+      nvgLineTo(args.vg, r.pos.x - 1, r.getBottom() + 2);
+      nvgClosePath(args.vg);
+      nvgFillColor(args.vg, locked ? nvgRGBA(224, 184, 48, 55)
+                                   : nvgRGBA(31, 204, 156, 55));
+      nvgFill(args.vg);
+    }
+    if (!session->exposeMode || (!selected && !locked)) return;
+    Vec mark(r.getRight(), r.pos.y + 1);
+    auto quad = [&](float scale) {
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, mark.x - 3.5f * scale, mark.y - 3.f * scale);
+      nvgLineTo(args.vg, mark.x + 3.f * scale, mark.y - (3.5f + tilt) * scale);
+      nvgLineTo(args.vg, mark.x + 4.f * scale, mark.y + 3.f * scale);
+      nvgLineTo(args.vg, mark.x - 3.f * scale, mark.y + 4.f * scale);
+      nvgClosePath(args.vg);
+    };
+    quad(1);
+    nvgFillColor(args.vg, locked ? nvgRGB(224, 184, 48) : nvgRGB(31, 204, 156));
+    nvgFill(args.vg);
+    nvgStrokeColor(args.vg, nvgRGBA(15, 30, 23, 220));
+    nvgStrokeWidth(args.vg, .7f);
+    nvgStroke(args.vg);
+    quad(.43f);
+    nvgFillColor(args.vg, nvgRGB(244, 247, 240));
     nvgFill(args.vg);
   };
   for (auto* p : module->getParams())

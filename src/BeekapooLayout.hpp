@@ -98,7 +98,7 @@ inline ResponsiveLayout planLayout(float width, int tier, int params,
   }
   int rows = std::max(layoutRows(inputs, std::max(1, p.inputColumns)),
                       layoutRows(outputs, std::max(1, p.outputColumns)));
-  p.portHeight = rows ? header + rows * p.portRow + 6 : 0;
+  p.portHeight = rows ? 6 + rows * p.portRow + 6 : 0;
   return p;
 }
 inline float minimumLayoutWidth(int params, int inputs, int outputs) {

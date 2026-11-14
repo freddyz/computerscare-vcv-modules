@@ -7,7 +7,7 @@ Beekapoo groups modules into a smaller panel. Expose the controls and jacks you 
 1. Add Beekapoo.
 2. Select the modules to group, then choose **Abstract selected modules** from Beekapoo’s context menu.
 3. External connections appear on Beekapoo. Internal cables are hidden.
-4. Press **Edit**, then **Expose**. Click parameters or jacks to add or remove them from the panel. Yellow jacks have external connections and remain exposed.
+4. Press **Edit**, then **Expose**. Click parameters or jacks to add or remove them from the panel. Green-and-white markers show exposed controls. Yellow markers identify ports with external connections; those remain exposed. Hovering a control shows a translucent highlight.
 5. Press **Done**. Drag either panel edge to resize; labels appear as space allows.
 
 ## Editing
@@ -20,7 +20,7 @@ Modules added while editing join this Beekapoo after placement. Deleting a membe
 
 ## Panel
 
-**Panel arrangement** groups controls by type or by source module. **Show controls** hides or shows parameters, inputs, outputs, or controls from one module. Hiding a control preserves its mapping and connections. Hover for the full control and module name. Port tooltips show the normal live voltage readings. At the smallest widths, parameter knobs are hidden, including Amount. Edit, Expand, End, the action buttons, all jacks, and the computerscare logo remain visible. Module actions keep their own box, separate from the exposed jacks.
+**Panel arrangement** groups controls by type or by source module. **Show controls** hides or shows parameters, inputs, outputs, or controls from one module. Hiding a control preserves its mapping and connections. Hover for the full control and module name. Port tooltips show the normal live voltage readings. At small widths, exposed parameter knobs fill available space without labels. Module action buttons and Amount are hidden; their CV jacks stay visible. Edit, Expand, End, all jacks, and the computerscare logo remain visible. Module actions keep their own box, separate from the exposed jacks.
 
 Cables patched on Beekapoo’s front panel remain visible there, including connections between its own jacks. Internal wiring made while editing is hidden when you finish.
 

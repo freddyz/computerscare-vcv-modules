@@ -25,7 +25,8 @@ struct Face : app::ModuleWidget {
   Face(Gain* m) {
     setModule(m); box.size = Vec(90,380);
     for(int i=0;i<24;++i) {
-      addInput(createInputCentered<JackLargePointingDown>(Vec(25,20+i*14),m,i));
+      if(i==23)addInput(createInputCentered<ThemedPJ301MPort>(Vec(25,20+i*14),m,i));
+      else addInput(createInputCentered<JackLargePointingDown>(Vec(25,20+i*14),m,i));
       addOutput(createOutputCentered<JackLargePointingUp>(Vec(65,20+i*14),m,i));
     }
     addParam(createParamCentered<SmallKnob>(Vec(45,180),m,0));
@@ -138,6 +139,11 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   WeakPtr<ui::Tooltip> staleDragTip=outputFace->tip;outputFace->step();
   require(!outputFace->tip && !staleDragTip,"A tooltip must disappear after losing actual hover, even without a Leave event");
   APP->event->setHoveredWidget(outputFace);settings::tooltips=false;outputFace->step();require(!outputFace->tip,"Disabling tooltips must clear an already visible tooltip");settings::tooltips=true;APP->event->setHoveredWidget(nullptr);
+  auto* nativeJack=dynamic_cast<app::SvgPort*>(a->getInput(23));require(nativeJack,"Fixture must use Fundamental's themed jack widget");
+  beekapoo::PortFace separate;separate.source=nativeJack;separate.input=true;
+  auto* independent=dynamic_cast<app::SvgPort*>(separate.artwork());
+  require(independent && independent!=nativeJack && independent->fb!=nativeJack->fb,"Mapped ports must own independent native widgets and framebuffers");
+  require(independent->sw->svg==nativeJack->sw->svg,"Native ports may share immutable SVG artwork, not widget state");
   Vec savedGuardPosition=guard->box.pos;
   host->step();
   auto& proxy=host->ports.front();
@@ -324,7 +330,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   host->arrangeByModule=true;
   for(float width:{75.f,180.f,300.f,540.f,900.f}) {
     host->requestedWidth=width;host->layoutControls();
-    if(host->jacksOnly){for(auto& p:host->parameters)require(!p.knob->visible,"Small layout must hide parameters");continue;}
+    if(host->jacksOnly){for(auto& p:host->parameters)if(p.knob->visible)require(p.knob->box.getBottom()<host->inputFrame->box.pos.y,"Small parameter knobs must fit above I/O");continue;}
     auto bounds=beekapoo::Beekapoo::frameContent(host->frame);
     std::vector<Rect> occupied;
     auto check=[&](widget::Widget* control) {
@@ -745,7 +751,9 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   group->requestedWidth=45;group->layoutControls();
   require(group->jacksOnly && !group->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Minimum view must hide parameter knobs");
   for(auto* button:group->managementButtons)require(button->visible,"Edit, Expand and End must always stay visible");
-  for(auto* button:group->actionButtons)require(button->visible,"Module action buttons must stay visible at minimum width");
+  for(auto* button:group->actionButtons)require(!button->visible,"Small layouts must hide module action buttons");
+  int visibleKnobs=0;for(auto& p:group->parameters)if(p.knob->visible)++visibleKnobs;
+  require(visibleKnobs>0,"Small layouts must use spare space for unlabelled parameters");
   require(group->titleFrame->visible && group->ownFrame->visible,"Minimum layout must keep the logo and its separate module-controls block");
   auto* tinyParent=group->parent;auto tinyPosition=group->box.pos;tinyParent->removeChild(group);group->box.pos=Vec();
   capture(group,output+"/20-jacks-only.png",scale,false);group->box.pos=tinyPosition;tinyParent->addChild(group);
@@ -762,7 +770,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   realSession->exposeMode=true;realSession->showPanel=false;realSession->preview->visible=false;
   require(!realSession->highlights.empty(),"Expose must install native-module background highlight layers");
   for(auto& layer:realSession->highlights)if(layer)require(layer->parent==layer->sourceModule.get(),"Expose highlights must live behind the source module's controls");
-  capture(APP->scene,output+"/18-real-rack-expose.png",scale,false);
+  APP->event->setHoveredWidget(voly->getParam(0));
+  capture(APP->scene,output+"/18-real-rack-expose.png",scale,false);APP->event->setHoveredWidget(nullptr);
   realSession->finish(true);
   group->requestedWidth=300;group->layoutControls();group->step();
   APP->scene->box.size=Vec(520,740);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(520,710));
