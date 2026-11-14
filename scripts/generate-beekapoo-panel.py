@@ -30,6 +30,12 @@ asset_dir=ROOT/'res/Beekapoo';asset_dir.mkdir(exist_ok=True)
 title=E.Element(tag('svg'),width='150',height='23',viewBox='12 7 150 23')
 title.append(copy.deepcopy(svg[-1]))
 E.indent(title);E.ElementTree(title).write(asset_dir/'title.svg',encoding='utf-8',xml_declaration=True)
+panel=svg
+svg=E.Element(tag('svg'),width='80',height='52',viewBox='0 0 80 52')
+text('Beek',2,1,76,23,40)
+text('apoo',2,27,76,23,40)
+E.indent(svg);E.ElementTree(svg).write(asset_dir/'title-stacked.svg',encoding='utf-8',xml_declaration=True)
+svg=panel
 text('Visible',13,80,33,7,20)
 text('All',13,108,33,7,20)
 

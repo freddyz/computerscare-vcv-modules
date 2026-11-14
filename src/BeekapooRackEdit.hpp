@@ -33,7 +33,7 @@ struct RackEditSession : widget::Widget {
   RackLayoutSnapshot previousSelection;
   std::set<int64_t> known, admitted;
   bool exposeMode = false, showPanel = true, finished = false;
-  ActionButton *done, *exposeButton, *panelButton;
+  ActionButton *done, *exposeButton, *panelButton, *removeButton;
   RackEditPreview* preview;
   std::vector<WeakPtr<RackEditHighlight>> highlights;
   explicit RackEditSession(Beekapoo* group) : owner(group) {
@@ -68,6 +68,11 @@ struct RackEditSession : widget::Widget {
       }
     });
     panelButton->pressed = [this] { return showPanel; };
+    removeButton = addButton("Remove", 256, 79, [this] {
+      if (owner) owner->removeSelection();
+    });
+    removeButton->help = [] { return "Remove selected modules from Beekapoo"; };
+    removeButton->visible = false;
     preview = new RackEditPreview;
     preview->owner = group;
     addChild(preview);
@@ -177,6 +182,9 @@ struct RackEditSession : widget::Widget {
       return;
     }
     adoptNewModules();
+    removeButton->visible = false;
+    for (auto* selected : owner->homeRack->getSelected())
+      if (owner->contains(selected->module)) removeButton->visible = true;
     for (auto& member : owner->members)
       if (auto* w = member.widget.get()) {
         bool found = false;
@@ -213,7 +221,7 @@ struct RackEditSession : widget::Widget {
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 13);
     nvgFillColor(args.vg, nvgRGB(214, 225, 218));
-    nvgText(args.vg, 260, 25,
+    nvgText(args.vg, removeButton->visible ? 350 : 260, 25,
             exposeMode ? "Beekapoo: click controls to expose"
                        : "Editing Beekapoo — new modules join this group",
             nullptr);
@@ -276,6 +284,24 @@ void RackEditHighlight::draw(const DrawArgs& args) {
   for (auto* p : module->getPorts())
     paint(p, 1000 + p->portId + int(p->type) * 100, group->exposed(p),
           group->boundaryPort(p));
+}
+void Beekapoo::forgetEditedMembers(const std::set<int64_t>& removed) {
+  auto* session = dynamic_cast<RackEditSession*>(editSession.get());
+  if (!session) return;
+  for (auto id : removed) session->admitted.erase(id);
+  for (auto it = session->highlights.begin();
+       it != session->highlights.end();) {
+    auto* highlight = it->get();
+    auto* source = highlight ? highlight->sourceModule.get() : nullptr;
+    if (!source || removed.count(source->module->id)) {
+      if (highlight) {
+        highlight->hide();
+        highlight->requestDelete();
+      }
+      it = session->highlights.erase(it);
+    } else
+      ++it;
+  }
 }
 void Beekapoo::closeEditSession() {
   if (auto* session = dynamic_cast<RackEditSession*>(editSession.get()))

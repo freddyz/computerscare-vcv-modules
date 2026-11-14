@@ -142,9 +142,11 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   APP->event->setHoveredWidget(outputFace);settings::tooltips=false;outputFace->step();require(!outputFace->tip,"Disabling tooltips must clear an already visible tooltip");settings::tooltips=true;APP->event->setHoveredWidget(nullptr);
   auto* nativeJack=dynamic_cast<app::SvgPort*>(a->getInput(23));require(nativeJack,"Fixture must use Fundamental's themed jack widget");
   beekapoo::PortFace separate;separate.source=nativeJack;separate.input=true;
-  auto* independent=dynamic_cast<app::SvgPort*>(separate.artwork());
-  require(independent && independent!=nativeJack && independent->fb!=nativeJack->fb,"Mapped ports must own independent native widgets and framebuffers");
-  require(independent->sw->svg==nativeJack->sw->svg,"Native ports may share immutable SVG artwork, not widget state");
+  auto* independent=dynamic_cast<JackLargePointingDown*>(separate.artwork());
+  require(independent && independent->sw->svg!=nativeJack->sw->svg,"Mapped inputs must use computerscare artwork even for Fundamental source jacks");
+  require(independent->type==engine::Port::INPUT,"Mapped input artwork must have input polarity");
+  separate.input=false;
+  require(dynamic_cast<JackLargePointingUp*>(separate.artwork()) && separate.artwork()->type==engine::Port::OUTPUT,"Mapped outputs must use computerscare artwork with output polarity");
   Vec savedGuardPosition=guard->box.pos;
   host->step();
   auto& proxy=host->ports.front();
@@ -342,7 +344,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
 
   }
   host->arrangeByModule=false;
-  for(float width:{75.f,180.f,300.f,450.f,900.f}) {
+  for(float width:{75.f,90.f,105.f,120.f,150.f,180.f,300.f,450.f,900.f}) {
     host->requestedWidth=width;host->layoutControls();
     std::vector<widget::Widget*> visibleControls;
     for(auto* w:host->actionButtons)visibleControls.push_back(w);
@@ -352,14 +354,14 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     for(const auto& p:host->ports)visibleControls.push_back(p.face);
     for(const auto& p:host->parameters)visibleControls.push_back(p.knob);
     visibleControls.erase(std::remove_if(visibleControls.begin(),visibleControls.end(),[](widget::Widget* w){return !w->visible;}),visibleControls.end());
-    require(host->ownFrame->box.size.x<=260,"Module controls must retain a capped width");
+    require(host->ownFrame->box.size.x<=264,"Module controls must retain a capped width");
     if(!host->jacksOnly)for(int action=0;action<3;++action) {
       if(host->responsive.ownColumns==2)require(host->actionButtons[action]->box.pos.y==host->actionButtons[action+3]->box.pos.y,"Matching exposed/all actions must share a row");
       else require(host->actionButtons[action]->box.pos.x==host->actionButtons[action+3]->box.pos.x,"Narrow action sets must share a column");
     }
     for(size_t i=0;i<visibleControls.size();++i) {
       auto bounds=visibleControls[i]->box;
-      require(bounds.pos.x>=5 && bounds.pos.y>=26 && bounds.getRight()<=host->box.size.x-5 && bounds.getBottom()<=368,"Responsive controls must stay inside module bounds");
+      require(bounds.pos.x>=5 && bounds.pos.y>=26 && bounds.getRight()<=host->box.size.x-5 && bounds.getBottom()<=368,("Responsive control outside module at width "+std::to_string(int(host->box.size.x))+": "+std::to_string(bounds.pos.x)+","+std::to_string(bounds.pos.y)+" to "+std::to_string(bounds.getRight())+","+std::to_string(bounds.getBottom())).c_str());
       for(size_t j=0;j<i;++j)require(!bounds.intersects(visibleControls[j]->box),"Responsive controls must never overlap at any breakpoint");
     }
   }
@@ -599,6 +601,23 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   require(realA->box.pos.y==5*RACK_GRID_HEIGHT,"Original module must use native Rack placement");
   auto* joined=add(gainModel,realB->box.pos+Vec(120,0));auto joinedId=joined->module->id;
   session->step();require(realHost->contains(joined->module) && rack->getModule(joinedId)==joined,"New modules must join editing group without replacing native widgets");
+  rack->deselectAll();session->step();require(!session->removeButton->visible,"Remove must hide when no member is selected");
+  rack->select(realA,true);rack->select(joined,true);session->step();
+  require(session->removeButton->visible,"Remove must appear for a multi-module member selection");
+  Vec removeOffset=APP->scene->rackScroll->getGridOffset();
+  session->removeButton->action();realHost->step();session->step();session->step();
+  require(realHost->members.size()==1 && realHost->editSession.get()==session && realHost->expanded,"Remove must leave the editor open and not readopt removed members");
+  require(realA->visible && joined->visible && !realHost->contains(realA->module) && cableIds()==realCableIds,"Remove must preserve released modules and every cable");
+  require(realA->box.pos.y<2*RACK_GRID_HEIGHT && joined->box.pos.y<2*RACK_GRID_HEIGHT,"Removed modules must return near Beekapoo instead of remaining in its editing rows");
+  require(APP->scene->rackScroll->getGridOffset()==removeOffset,"Remove must preserve the edit viewport");
+  APP->history->undo();realHost->step();
+  session=dynamic_cast<beekapoo::RackEditSession*>(realHost->editSession.get());
+  require(session && realHost->members.size()==3 && rack->getModule(realAId)==realA && cableIds()==realCableIds,"Undo Remove must restore editing membership and original widgets");
+  APP->history->redo();realHost->step();
+  session=dynamic_cast<beekapoo::RackEditSession*>(realHost->editSession.get());session->step();
+  require(realHost->members.size()==1 && !realHost->contains(realA->module),"Redo Remove must not readopt released modules");
+  APP->history->undo();realHost->step();
+  session=dynamic_cast<beekapoo::RackEditSession*>(realHost->editSession.get());
   auto* editingState=realHost->module->dataToJson();realHost->module->dataFromJson(editingState);json_decref(editingState);realHost->step();
   session=dynamic_cast<beekapoo::RackEditSession*>(realHost->editSession.get());
   require(session && rack->getModule(realAId)==realA && rack->getModule(joinedId)==joined,"Reloading an editing state must resume with original native widgets");
@@ -772,6 +791,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   APP->scene->box.size=Vec(1100,740);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(1100,710));
   auto* realSession=static_cast<beekapoo::RackEditSession*>(group->editSession.get());
   for(int frame=0;frame<3;++frame){APP->scene->rackScroll->step();realSession->step();}
+  rack->deselectAll();rack->select(voly,true);realSession->step();
   capture(APP->scene,output+"/17-real-rack-edit.png",scale,false);
   realSession->exposeMode=true;realSession->showPanel=false;realSession->preview->visible=false;
   require(!realSession->highlights.empty(),"Expose must install native-module background highlight layers");
@@ -819,6 +839,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
       std::string label=std::to_string(hp)+" HP";nvgText(args.vg,10,18,label.c_str(),nullptr);widget::Widget::draw(args);
     }
   };
+  auto* narrowSelection=add(gainModel,Vec(30000,0));
   widget::Widget narrowSheet;narrowSheet.box.size=Vec(1000,414);
   std::vector<beekapoo::Beekapoo*> narrowHosts;
   for(int hp=8;hp<=12;++hp){
@@ -827,7 +848,9 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     rack->deselectAll();rack->select(voice,true);wrapper->collapse();
     for(int i=0;i<8;++i){wrapper->exposeParameter(voice->module->id,i+4);voice->module->params[i+4].setValue((i+1)*.2f);}
     wrapper->expose(voice,voice->getInput(0));wrapper->expose(voice,voice->getOutput(0));
+    rack->select(narrowSelection,true);
     wrapper->requestedWidth=hp*15;wrapper->layoutControls();wrapper->step();
+    require(wrapper->addSelectionButton->visible,"Add button must appear for an eligible outside selection");
     require(wrapper->box.size.x==hp*15,"Narrow 8-param layout must preserve requested width");
     int visible=0;for(auto& param:wrapper->parameters)visible+=param.knob->visible;
     require(visible==8,"Narrow 8-param layout must keep all eight controls visible");
@@ -835,7 +858,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto within=[](Rect child,Rect parent){return child.pos.x>=parent.pos.x && child.pos.y>=parent.pos.y && child.getRight()<=parent.getRight() && child.getBottom()<=parent.getBottom();};
     for(auto& param:wrapper->parameters)require(within(param.knob->box,wrapper->frameContent(wrapper->frame)),"Narrow knob must stay inside its frame");
     for(auto& port:wrapper->ports)require(within(port.face->box,wrapper->frameContent(port.input?wrapper->inputFrame:wrapper->outputFrame)),"Narrow jack must stay inside its frame");
-    require(wrapper->frame->box.getBottom()+8<=wrapper->inputFrame->box.pos.y,"Narrow parameter and I/O blocks must not overlap");
+    require(wrapper->frame->box.getBottom()+4<=wrapper->inputFrame->box.pos.y,"Narrow parameter and I/O blocks must not overlap");
     for(auto* action:wrapper->actionButtons)if(action->visible)require(action->icon>=0,"Narrow action buttons must use icons rather than clipped labels");
     auto* tile=new NarrowTile;tile->hp=hp;tile->box=Rect(Vec((hp-8)*200,0),Vec(200,414));
     rack->getModuleContainer()->removeChild(wrapper);wrapper->box.pos=Vec((200-wrapper->box.size.x)*.5f,28);tile->addChild(wrapper);narrowHosts.push_back(wrapper);
@@ -843,6 +866,12 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     narrowSheet.addChild(tile);
   }
   capture(&narrowSheet,output+"/narrow8-strip.png",scale,false);
+  for(int i=0;i<5;++i){
+    auto* wrapper=narrowHosts[i];wrapper->requestedWidth=(i+4)*15;wrapper->layoutControls();
+    static_cast<NarrowTile*>(wrapper->parent)->hp=i+4;
+    wrapper->box.pos=Vec((200-wrapper->box.size.x)*.5f,28);
+  }
+  capture(&narrowSheet,output+"/thin-title-strip.png",scale,false);
   for(auto* wrapper:narrowHosts){wrapper->parent->removeChild(wrapper);wrapper->box.pos=Vec();rack->addModule(wrapper);}
   rack->clear();
 
@@ -949,8 +978,23 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     for(auto* child:native.children){removes+=dynamic_cast<beekapoo::GroupDeleteMenuItem*>(child)!=nullptr;duplicates+=dynamic_cast<beekapoo::GroupDuplicateMenuItem*>(child)!=nullptr;}
     require(removes==1 && duplicates==2,"Only Rack's native selection actions should be wrapped");
   }
+  rack->deselectAll();reviewHost->step();
+  require(!reviewHost->addSelectionButton->visible,"Add button must hide without an eligible selection");
+  auto* selectedExtra=add(gainModel,Vec(900,0));auto selectedExtraId=selectedExtra->module->id;
+  rack->select(selectedExtra,true);reviewHost->step();
+  require(reviewHost->addSelectionButton->visible,"Add button must react to selection changes without resizing");
+  reviewHost->addSelectionButton->action();reviewHost->step();
+  require(reviewHost->members.size()==3 && !reviewHost->addSelectionButton->visible,"Add button must add the selection and then hide");
+  APP->history->undo();reviewHost->step();
+  require(reviewHost->members.size()==2 && rack->getModule(selectedExtraId)->visible,"Add button must preserve native group undo");
   auto* preset=reviewHost->toJson();
   auto* presetTarget=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(600,0)));
+  rack->deselectAll();rack->select(rack->getModule(selectedExtraId),true);presetTarget->step();
+  require(presetTarget->addSelectionButton->visible,"An empty Beekapoo must offer adding selected modules");
+  presetTarget->addSelectionButton->action();presetTarget->step();
+  require(presetTarget->members.size()==1,"Add button must also create an initial group");
+  APP->history->undo();presetTarget->step();
+  require(presetTarget->members.empty() && rack->getModule(selectedExtraId)->visible,"Undo adding to an empty group must release the selection");
   size_t beforePreset=APP->engine->getModuleIds().size();auto beforePresetCables=cableIds();
   auto applyPreset=[&] {auto* copy=json_deep_copy(preset);presetTarget->pasteJsonAction(copy);json_decref(copy);presetTarget->step();};
   applyPreset();

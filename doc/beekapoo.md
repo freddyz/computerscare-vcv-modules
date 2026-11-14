@@ -14,9 +14,9 @@ Beekapoo groups modules into a smaller panel. Expose the controls and jacks you 
 
 **Edit subpatch** reveals the original modules in the real rack, about four rows below Beekapoo. Occupied rows are skipped. Scrolling, shortcuts, selection, module movement, and patching work normally.
 
-Modules added while editing join this Beekapoo after placement. Deleting a member removes that module and its mappings; the rest of the group stays open. Expanders and nested Beekapoo groups are excluded. **Panel** shows or hides a preview of the compact panel. **Done** or Escape hides the group and returns to your previous view. Saving while editing preserves that session, including the return position.
+Modules added while editing join this Beekapoo after placement. Select members and press **Remove** in the editing toolbar to release them into free space near Beekapoo. They leave the editing area, keep their cables, and support undo; the editor stays open. Deleting a member removes that module and its mappings; the rest of the group stays open. Expanders and nested Beekapoo groups are excluded. **Panel** shows or hides a preview of the compact panel. **Done** or Escape hides the group and returns to your previous view. Saving while editing preserves that session, including the return position.
 
-**Expand** returns the group to the rack in a selected block. **Collapse** hides it again. **End** releases the group without deleting its modules. Deleting Beekapoo deletes its contained modules and cables; Undo restores the complete group. Use **Add selected modules** or **Remove selected members** to change membership. Group operations and exposure changes support undo/redo.
+**Expand** returns the group to the rack in a selected block. **Collapse** hides it again. **End** releases the group without deleting its modules. Deleting Beekapoo deletes its contained modules and cables; Undo restores the complete group. The **+** button appears when eligible modules outside the group are selected; press it to add them. **Add selected modules** and **Remove selected members** are also available in the context menu. Group operations and exposure changes support undo/redo.
 
 ## Panel
 
