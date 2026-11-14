@@ -7,7 +7,7 @@ Beekapoo groups modules into a smaller panel. Expose the controls and jacks you 
 1. Add Beekapoo.
 2. Select the modules to group, then choose **Abstract selected modules** from Beekapoo’s context menu.
 3. External connections appear on Beekapoo. Internal cables are hidden.
-4. Press **Edit**, then **Expose**. Click parameters or jacks to add or remove them from the panel. Green-and-white markers show exposed controls. Yellow markers identify ports with external connections; those remain exposed. Hovering a control shows a translucent highlight.
+4. Press **Edit**, then **Expose**. Click parameters or jacks to add or remove them from the panel. In Expose mode, translucent green rectangles outline all exposed parameters, inputs and outputs. Ports with external connections remain locked and exposed. Hovering a control turns its overlay bright yellow.
 5. Press **Done**. Drag either panel edge to resize; labels appear as space allows.
 
 ## Editing

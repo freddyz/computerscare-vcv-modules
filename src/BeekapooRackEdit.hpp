@@ -221,8 +221,8 @@ struct RackEditSession : widget::Widget {
   }
 };
 void RackEditHighlight::draw(const DrawArgs& args) {
-  if (!session || session->finished || !session->owner || !sourceModule ||
-      !sourceModule->module)
+  if (!session || session->finished || !session->exposeMode ||
+      !session->owner || !sourceModule || !sourceModule->module)
     return;
   auto* group = session->owner.get();
   auto* module = sourceModule.get();
@@ -243,37 +243,33 @@ void RackEditHighlight::draw(const DrawArgs& args) {
     if (!r.pos.isFinite() || !r.size.isFinite()) return;
     unsigned seed =
         unsigned(module->module->id) ^ unsigned(index + 1) * 2654435761u;
-    float tilt = float(seed % 7) * .2f;
-    if (hovering) {
-      nvgBeginPath(args.vg);
-      nvgMoveTo(args.vg, r.pos.x - 2, r.pos.y - 1 - tilt);
-      nvgLineTo(args.vg, r.getRight() + 1, r.pos.y - 2);
-      nvgLineTo(args.vg, r.getRight() + 2, r.getBottom() + 1 + tilt);
-      nvgLineTo(args.vg, r.pos.x - 1, r.getBottom() + 2);
-      nvgClosePath(args.vg);
-      nvgFillColor(args.vg, locked ? nvgRGBA(224, 184, 48, 55)
-                                   : nvgRGBA(31, 204, 156, 55));
-      nvgFill(args.vg);
-    }
-    if (!session->exposeMode || (!selected && !locked)) return;
-    Vec mark(r.getRight(), r.pos.y + 1);
-    auto quad = [&](float scale) {
-      nvgBeginPath(args.vg);
-      nvgMoveTo(args.vg, mark.x - 3.5f * scale, mark.y - 3.f * scale);
-      nvgLineTo(args.vg, mark.x + 3.f * scale, mark.y - (3.5f + tilt) * scale);
-      nvgLineTo(args.vg, mark.x + 4.f * scale, mark.y + 3.f * scale);
-      nvgLineTo(args.vg, mark.x - 3.f * scale, mark.y + 4.f * scale);
-      nvgClosePath(args.vg);
+    // Stable per-control corner variation, without jitter while hovering.
+    auto irregular = [&]() {
+      seed ^= seed << 13;
+      seed ^= seed >> 17;
+      seed ^= seed << 5;
+      return float(seed % 1024) / 1023.f * 2.8f - 1.4f;
     };
-    quad(1);
-    nvgFillColor(args.vg, locked ? nvgRGB(224, 184, 48) : nvgRGB(31, 204, 156));
+    Vec corners[] = {
+        r.pos + Vec(-4 + irregular(), -4 + irregular()),
+        Vec(r.getRight() + 4 + irregular(), r.pos.y - 4 + irregular()),
+        Vec(r.getRight() + 4 + irregular(), r.getBottom() + 4 + irregular()),
+        Vec(r.pos.x - 4 + irregular(), r.getBottom() + 4 + irregular())};
+    bool mapped = selected || locked;
+    if (!hovering && !mapped) return;
+    // Keep the original control visible beneath a full-size mapping overlay.
+    nvgBeginPath(args.vg);
+    nvgMoveTo(args.vg, corners[0].x, corners[0].y);
+    for (int i = 1; i < 4; ++i) nvgLineTo(args.vg, corners[i].x, corners[i].y);
+    nvgClosePath(args.vg);
+    NVGcolor color =
+        hovering ? nvgRGBA(247, 214, 65, 65) : nvgRGBA(31, 204, 156, 60);
+    nvgFillColor(args.vg, color);
     nvgFill(args.vg);
-    nvgStrokeColor(args.vg, nvgRGBA(15, 30, 23, 220));
-    nvgStrokeWidth(args.vg, .7f);
+    color.a = .95f;
+    nvgStrokeColor(args.vg, color);
+    nvgStrokeWidth(args.vg, 1.6f);
     nvgStroke(args.vg);
-    quad(.43f);
-    nvgFillColor(args.vg, nvgRGB(244, 247, 240));
-    nvgFill(args.vg);
   };
   for (auto* p : module->getParams())
     paint(p, p->paramId, group->exposed(p), false);
