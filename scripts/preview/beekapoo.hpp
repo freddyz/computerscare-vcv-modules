@@ -1,7 +1,8 @@
 // Isolated Rack-engine integration test, not connected to a live Rack process.
 namespace beekapoofixture {
 struct Gain : engine::Module {
-  int randomCalls=0,resetCalls=0;
+  int randomCalls=0,resetCalls=0,saveCalls=0;
+  void onSave(const SaveEvent&) override { ++saveCalls; }
   void onRandomize(const RandomizeEvent& e) override {++randomCalls;engine::Module::onRandomize(e);}
   void onReset(const ResetEvent& e) override {++resetCalls;engine::Module::onReset(e);}
   Gain() {
@@ -544,7 +545,9 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   rack->deselectAll();rack->select(realA,true);rack->select(realB,true);realHost->collapse();
   realA->module->params[0].setValue(.73f);
   auto initialModuleCount=APP->engine->getModuleIds().size();
+  int beforeDuplicateSave=static_cast<beekapoofixture::Gain*>(realA->module)->saveCalls;
   realHost->duplicateAction(false);
+  require(static_cast<beekapoofixture::Gain*>(realA->module)->saveCalls==beforeDuplicateSave+1,"Duplicate must prepare contained patch storage once");
   beekapoo::Beekapoo* cloned=nullptr;
   for(auto* w:rack->getModules())if(auto* candidate=dynamic_cast<beekapoo::Beekapoo*>(w))if(candidate!=realHost)cloned=candidate;
   require(cloned,"Native duplicate must create a container");cloned->step();
@@ -574,10 +577,13 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   APP->history->undo();require(cableIds()==realCableIds,"Selection paste undo must remove all copied wiring");
   rack->deselectAll();rack->select(realHost,true);
   auto* duplicateOverlay=new ui::MenuOverlay;auto* duplicateMenu=new ui::Menu;duplicateOverlay->addChild(duplicateMenu);APP->scene->addChild(duplicateOverlay);
-  duplicateMenu->addChild(createMenuItem("Duplicate with cables","",[&] {rack->cloneSelectionAction(true);}));
+  rack->appendSelectionContextMenu(duplicateMenu);
   beekapoo::BeekapooRackHooks* hooks=nullptr;for(auto* child:APP->scene->children)if(auto* h=dynamic_cast<beekapoo::BeekapooRackHooks*>(child))hooks=h;
   require(hooks,"Native rack copy policy hook must be installed");hooks->step();
-  auto* duplicateItem=dynamic_cast<beekapoo::GroupDuplicateMenuItem*>(duplicateMenu->children.front());
+  beekapoo::GroupDuplicateMenuItem* duplicateItem=nullptr;
+  for(auto* child:duplicateMenu->children)
+    if(auto* item=dynamic_cast<beekapoo::GroupDuplicateMenuItem*>(child))
+      if(item->cables)duplicateItem=item;
   require(duplicateItem,"Native selection menu must retain contained-cable policy");
   widget::Widget::ActionEvent duplicateEvent;duplicateItem->onAction(duplicateEvent);
   cloned=nullptr;for(auto* w:rack->getModules())if(auto* candidate=dynamic_cast<beekapoo::Beekapoo*>(w))if(candidate!=realHost)cloned=candidate;
@@ -803,6 +809,43 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   rack->clear();
 
 
+  // The narrow breakpoint is common for small abstractions: all eight
+  // parameters must remain accessible with one input and one output.
+  struct NarrowTile : widget::Widget {
+    int hp=0;
+    void draw(const DrawArgs& args) override {
+      nvgBeginPath(args.vg);nvgRect(args.vg,0,0,box.size.x,box.size.y);nvgFillColor(args.vg,nvgRGB(222,226,223));nvgFill(args.vg);
+      auto font=APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));nvgFontFaceId(args.vg,font->handle);nvgFontSize(args.vg,12);nvgFillColor(args.vg,nvgRGB(32,48,40));
+      std::string label=std::to_string(hp)+" HP";nvgText(args.vg,10,18,label.c_str(),nullptr);widget::Widget::draw(args);
+    }
+  };
+  widget::Widget narrowSheet;narrowSheet.box.size=Vec(1000,414);
+  std::vector<beekapoo::Beekapoo*> narrowHosts;
+  for(int hp=8;hp<=12;++hp){
+    float base=hp*2000.f;auto* voice=add(gainModel,Vec(base,0));
+    auto* wrapper=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(base+300,0)));
+    rack->deselectAll();rack->select(voice,true);wrapper->collapse();
+    for(int i=0;i<8;++i){wrapper->exposeParameter(voice->module->id,i+4);voice->module->params[i+4].setValue((i+1)*.2f);}
+    wrapper->expose(voice,voice->getInput(0));wrapper->expose(voice,voice->getOutput(0));
+    wrapper->requestedWidth=hp*15;wrapper->layoutControls();wrapper->step();
+    require(wrapper->box.size.x==hp*15,"Narrow 8-param layout must preserve requested width");
+    int visible=0;for(auto& param:wrapper->parameters)visible+=param.knob->visible;
+    require(visible==8,"Narrow 8-param layout must keep all eight controls visible");
+    require(wrapper->controlLabels.size()==10,"Narrow 8-param layout must label all eight knobs and both jacks");
+    auto within=[](Rect child,Rect parent){return child.pos.x>=parent.pos.x && child.pos.y>=parent.pos.y && child.getRight()<=parent.getRight() && child.getBottom()<=parent.getBottom();};
+    for(auto& param:wrapper->parameters)require(within(param.knob->box,wrapper->frameContent(wrapper->frame)),"Narrow knob must stay inside its frame");
+    for(auto& port:wrapper->ports)require(within(port.face->box,wrapper->frameContent(port.input?wrapper->inputFrame:wrapper->outputFrame)),"Narrow jack must stay inside its frame");
+    require(wrapper->frame->box.getBottom()+8<=wrapper->inputFrame->box.pos.y,"Narrow parameter and I/O blocks must not overlap");
+    for(auto* action:wrapper->actionButtons)if(action->visible)require(action->icon>=0,"Narrow action buttons must use icons rather than clipped labels");
+    auto* tile=new NarrowTile;tile->hp=hp;tile->box=Rect(Vec((hp-8)*200,0),Vec(200,414));
+    rack->getModuleContainer()->removeChild(wrapper);wrapper->box.pos=Vec((200-wrapper->box.size.x)*.5f,28);tile->addChild(wrapper);narrowHosts.push_back(wrapper);
+    capture(tile,output+"/narrow8-"+std::to_string(hp)+"hp.png",scale,false);
+    narrowSheet.addChild(tile);
+  }
+  capture(&narrowSheet,output+"/narrow8-strip.png",scale,false);
+  for(auto* wrapper:narrowHosts){wrapper->parent->removeChild(wrapper);wrapper->box.pos=Vec();rack->addModule(wrapper);}
+  rack->clear();
+
   // Sixteen real module renders at a common scale, covering sparse, skewed,
   // medium and crowded mappings. Captures are development-only artifacts.
   struct SpectrumCase {int p,in,out;float width;const char* name;};
@@ -865,6 +908,75 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   for(int r=0;r<4;++r) {row.row=r;capture(&row,output+"/spectrum-row-"+std::to_string(r+1)+".png",scale,false);}
   for(auto& entry:entries) {entry.tile->removeChild(entry.host);entry.host->box.pos=entry.position;rack->addModule(entry.host);}
   rack->clear();gainModel->name=previousName;
+
+  // Regression probes for exposure history, presets, native menu isolation,
+  // and save lifecycle. These use the same original engine objects as Rack.
+  auto* reviewA=add(gainModel,Vec(0,0));
+  auto* reviewB=add(gainModel,Vec(90,0));
+  auto* reviewHost=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(300,0)));
+  connect(reviewA,reviewB);
+  rack->deselectAll();rack->select(reviewA,true);rack->select(reviewB,true);reviewHost->collapse();reviewHost->step();
+  APP->engine->prepareSave();
+  require(static_cast<beekapoofixture::Gain*>(reviewA->module)->saveCalls==1 && static_cast<beekapoofixture::Gain*>(reviewB->module)->saveCalls==1,"Each child must receive exactly one callback per patch save");
+  int exposureHistory=APP->history->actionIndex;
+  reviewHost->toggleParameter(reviewA->getParam(0));
+  require(APP->history->actionIndex==exposureHistory+1 && reviewHost->exposed(reviewA->getParam(0)),"Expose parameter must create one undo action");
+  APP->history->undo();require(!reviewHost->exposed(reviewA->getParam(0)),"Undo exposing parameter failed");
+  APP->history->redo();require(reviewHost->exposed(reviewA->getParam(0)),"Redo exposing parameter failed");
+  reviewHost->toggleParameter(reviewA->getParam(0));APP->history->undo();
+  require(reviewHost->exposed(reviewA->getParam(0)),"Undo unexposing parameter failed");
+  reviewHost->togglePort(reviewA->getInput(4));
+  APP->history->undo();require(!reviewHost->exposed(reviewA->getInput(4)),"Undo exposing jack failed");
+  APP->history->redo();require(reviewHost->exposed(reviewA->getInput(4)),"Redo exposing jack failed");
+  reviewHost->exposeParameterAction(reviewA->module->id,3);APP->history->undo();
+  require(!reviewHost->exposed(reviewA->getParam(3)),"Context-menu exposure must also support undo");
+  reviewHost->exposeParameterAction(reviewA->module->id,8);
+  bool hiddenParameterMapped=false;for(auto& param:reviewHost->parameters)hiddenParameterMapped|=param.id==reviewA->module->id && param.paramId==8;
+  require(hiddenParameterMapped,"Context-menu exposure must support parameters without their own source widget");
+  APP->history->undo();
+  reviewHost->exposePortAction(reviewA->module->id,7,true);APP->history->undo();
+  require(!reviewHost->exposed(reviewA->getInput(7)),"Context-menu port exposure must also support undo");
+  rack->deselectAll();rack->select(reviewHost,true);
+  {
+    ui::Menu unrelated;
+    bool ran=false;auto* customDelete=createMenuItem("Delete","",[&] {ran=true;});unrelated.addChild(customDelete);
+    auto* submenu=new ui::Menu;unrelated.addChild(submenu);submenu->addChild(createMenuItem("Duplicate","",[] {}));
+    hooks->wrapMenus(&unrelated);
+    require(unrelated.children.front()==customDelete,"Custom Delete menu must not be intercepted");
+    widget::Widget::ActionEvent action;customDelete->onAction(action);require(ran,"Custom Delete action must remain intact");
+    ui::Menu native;rack->appendSelectionContextMenu(&native);hooks->wrapMenus(&native);
+    int removes=0,duplicates=0;
+    for(auto* child:native.children){removes+=dynamic_cast<beekapoo::GroupDeleteMenuItem*>(child)!=nullptr;duplicates+=dynamic_cast<beekapoo::GroupDuplicateMenuItem*>(child)!=nullptr;}
+    require(removes==1 && duplicates==2,"Only Rack's native selection actions should be wrapped");
+  }
+  auto* preset=reviewHost->toJson();
+  auto* presetTarget=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(600,0)));
+  size_t beforePreset=APP->engine->getModuleIds().size();auto beforePresetCables=cableIds();
+  auto applyPreset=[&] {auto* copy=json_deep_copy(preset);presetTarget->pasteJsonAction(copy);json_decref(copy);presetTarget->step();};
+  applyPreset();
+  require(presetTarget->members.size()==2 && APP->engine->getModuleIds().size()==beforePreset+2,"Preset must import the complete group");
+  std::set<int64_t> firstImport;for(auto& member:presetTarget->members)firstImport.insert(member.id);
+  for(int repeat=0;repeat<3;++repeat){
+    APP->history->undo();presetTarget->step();
+    require(presetTarget->members.empty() && APP->engine->getModuleIds().size()==beforePreset && cableIds()==beforePresetCables,"Preset Undo must remove imported children and wiring");
+    APP->history->redo();presetTarget->step();
+    std::set<int64_t> restored;for(auto& member:presetTarget->members)restored.insert(member.id);
+    require(restored==firstImport && APP->engine->getModuleIds().size()==beforePreset+2,"Preset Redo must restore the same child IDs without duplication");
+  }
+  // Replacement of an existing group must be one reversible transaction too.
+  auto* oldChild=presetTarget->members.front().widget.get();auto oldChildId=oldChild->module->id;
+  oldChild->module->params[0].setValue(.42f);
+  auto* incoming=connect(reviewA,oldChild);auto incomingId=incoming->cable->id;
+  presetTarget->step();applyPreset();
+  require(!rack->getModule(oldChildId) && !APP->engine->getCable(incomingId) && APP->engine->getModuleIds().size()==beforePreset+2,"Replacing a preset must remove its former contents");
+  for(int repeat=0;repeat<3;++repeat){
+    APP->history->undo();presetTarget->step();
+    require(presetTarget->members.size()==2 && rack->getModule(oldChildId) && APP->engine->getCable(incomingId),"Preset Undo must restore old members and boundary wiring");
+    require(std::abs(rack->getModule(oldChildId)->module->params[0].getValue()-.42f)<.0001f,"Preset Undo must restore old parameter values");
+    APP->history->redo();presetTarget->step();
+    require(!rack->getModule(oldChildId) && APP->engine->getModuleIds().size()==beforePreset+2,"Preset Redo must not leak the former group");
+  }
+  json_decref(preset);rack->clear();
 
   std::printf("Beekapoo: zero footprint, occupied-space expansion, native save/load, four-channel DSP, exposed controls, copy isolation, missing-member recovery and deletion checks passed.\n");
 }

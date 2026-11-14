@@ -49,6 +49,35 @@ inline bool attachContainedHistory(history::Action* action, int64_t id,
   }
   return false;
 }
+// Presets change an existing container rather than adding a new one. Its
+// children must be swapped before applying either side of the host state.
+struct ContainedPresetHistory : history::Action {
+  history::ModuleChange* change;
+  history::ComplexAction removed, added;
+  explicit ContainedPresetHistory(history::ModuleChange* action)
+      : change(action) {
+    name = action->name;
+  }
+  ~ContainedPresetHistory() override { delete change; }
+  Beekapoo* owner() const {
+    return dynamic_cast<Beekapoo*>(
+        APP->scene->rack->getModule(change->moduleId));
+  }
+  void undo() override {
+    if (auto* group = owner()) group->endAbstraction();
+    added.undo();
+    removed.undo();
+    change->undo();
+    if (auto* group = owner()) group->step();
+  }
+  void redo() override {
+    if (auto* group = owner()) group->endAbstraction();
+    removed.redo();
+    added.redo();
+    change->redo();
+    if (auto* group = owner()) group->step();
+  }
+};
 bool Beekapoo::importContents(json_t* root) {
   auto* contents = json_object_get(root, "contents");
   auto* list = json_object_get(contents, "modules");
@@ -57,6 +86,24 @@ bool Beekapoo::importContents(json_t* root) {
   std::vector<app::ModuleWidget*> created;
   std::vector<app::CableWidget*> wires;
   std::vector<history::Action*> history;
+  auto* state = APP->history;
+  int presetIndex = state->actionIndex - 1;
+  history::ModuleChange* preset = nullptr;
+  if (presetIndex >= 0 && size_t(presetIndex) < state->actions.size()) {
+    auto* candidate =
+        dynamic_cast<history::ModuleChange*>(state->actions[presetIndex]);
+    if (candidate && candidate->moduleId == module->id &&
+        !dynamic_cast<GroupHistory*>(candidate)) {
+      auto* saved = json_object_get(
+          json_object_get(candidate->newModuleJ, "data"), "group");
+      if (json_is_object(saved) &&
+          json_integer_value(json_object_get(saved, "owner")) != module->id)
+        preset = candidate;
+    }
+  }
+  std::set<int64_t> previous;
+  if (preset)
+    for (auto& member : members) previous.insert(member.id);
   auto* remapped = json_deep_copy(root);
   json_object_del(remapped, "contents");
   try {
@@ -171,11 +218,36 @@ bool Beekapoo::importContents(json_t* root) {
     restore(remapped);
     json_decref(remapped);
     auto* current = module->toJson();
-    auto* state = APP->history;
-    if (state->actionIndex > 0 &&
-        size_t(state->actionIndex) <= state->actions.size())
+    if (preset) {
+      auto* transaction = new ContainedPresetHistory(preset);
+      // Successful restore released the former group. Remove those originals
+      // with native history actions so Undo restores their IDs and cables.
+      for (auto* cw : homeRack->getCompleteCables())
+        if (previous.count(cw->cable->inputModule->id) ||
+            previous.count(cw->cable->outputModule->id)) {
+          auto* action = new history::CableRemove;
+          action->setCable(cw);
+          transaction->removed.push(action);
+          homeRack->removeCable(cw);
+          delete cw;
+        }
+      for (auto id : previous)
+        if (auto* w = homeRack->getModule(id)) {
+          auto* action = new history::ModuleRemove;
+          action->setModule(w);
+          transaction->removed.push(action);
+          homeRack->removeModule(w);
+          delete w;
+        }
+      transaction->added.actions.swap(history);
+      json_decref(preset->newModuleJ);
+      preset->newModuleJ = json_incref(current);
+      state->actions[presetIndex] = transaction;
+    } else if (state->actionIndex > 0 &&
+               size_t(state->actionIndex) <= state->actions.size()) {
       attachContainedHistory(state->actions[state->actionIndex - 1], module->id,
                              history, current);
+    }
     json_decref(current);
     for (auto* action : history) delete action;
     return true;
@@ -199,6 +271,7 @@ bool Beekapoo::importContents(json_t* root) {
 void Beekapoo::duplicateAction(bool cables) {
   auto* m = getModule<Module>();
   if (!m) return;
+  prepareContainedSave();
   m->copyBoundary = cables;
   app::ModuleWidget::cloneAction(cables);
   m->copyBoundary = false;

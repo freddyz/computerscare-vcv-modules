@@ -24,11 +24,14 @@ def text(s,x,y,w,h,rand=25,center=False):
     actual=min(w,h*bounds[2]/bounds[3])
     embed(root,x-actual*.5 if center else x,y,actual,h,bounds,'label-'+s.replace(' ','-'))
 text('Beekapoo',12,7,150,23,40)
+# The header artwork is drawn separately so it can fit narrow panel widths.
+import copy
+asset_dir=ROOT/'res/Beekapoo';asset_dir.mkdir(exist_ok=True)
+title=E.Element(tag('svg'),width='150',height='23',viewBox='12 7 150 23')
+title.append(copy.deepcopy(svg[-1]))
+E.indent(title);E.ElementTree(title).write(asset_dir/'title.svg',encoding='utf-8',xml_declaration=True)
 text('Visible',13,80,33,7,20)
 text('All',13,108,33,7,20)
 
 text('computerscare',130,374,80,4,30)
-logo=E.parse(ROOT/'res/components/computerscare-logo-normal.svg').getroot()
-embed(logo,166,8,18,22,name='computerscare-logo')
-svg[-1].set('transform','translate(2,0) skewX(-5) '+svg[-1].get('transform'))
 E.indent(svg);E.ElementTree(svg).write(ROOT/'res/panels/ComputerscareBeekapooPanel.svg',encoding='utf-8',xml_declaration=True)

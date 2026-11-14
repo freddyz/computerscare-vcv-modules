@@ -10,6 +10,7 @@ struct ScopedGroupCopyPolicy {
         auto* m = group->getModule<Module>();
         groups.push_back({group, m->copyBoundary});
         m->copyBoundary = cables;
+        group->prepareContainedSave();
       }
   }
   ~ScopedGroupCopyPolicy() {
@@ -125,30 +126,48 @@ struct BeekapooRackHooks : widget::Widget {
       if (dynamic_cast<Beekapoo*>(w)) return true;
     return false;
   }
+  WeakPtr<ui::Menu> inspectedMenu;
   void wrapMenus(widget::Widget* root) {
-    for (auto it = root->children.begin(); it != root->children.end();) {
-      auto* child = *it;
-      ++it;
-      if (auto* item = dynamic_cast<ui::MenuItem*>(child)) {
-        if (dynamic_cast<GroupDuplicateMenuItem*>(item) ||
-            dynamic_cast<GroupDeleteMenuItem*>(item))
-          continue;
-        if (item->text == "Delete") {
-          auto* wrapper = new GroupDeleteMenuItem(item);
-          root->addChildAbove(wrapper, item);
-          root->removeChild(item);
-          continue;
-        }
-        bool cables =
-            item->text.find("Duplicate with cables") != std::string::npos;
-        if (item->text == "Duplicate" || cables) {
-          auto* wrapper = new GroupDuplicateMenuItem(item, cables);
-          root->addChildAbove(wrapper, item);
-          root->removeChild(item);
-          continue;
-        }
-      }
-      wrapMenus(child);
+    // Compare against Rack's actual menu, including its native labels and
+    // shortcuts. This also works with older SDKs and translated Rack builds.
+    auto* menu = dynamic_cast<ui::Menu*>(root);
+    if (!menu || inspectedMenu.get() == menu) return;
+    inspectedMenu = menu;
+    ui::Menu native;
+    APP->scene->rack->appendSelectionContextMenu(&native);
+    if (native.children.size() < 3 ||
+        menu->children.size() < native.children.size())
+      return;
+    auto actual = menu->children.begin();
+    for (auto* expected : native.children) {
+      auto* child = *actual++;
+      if (auto* label = dynamic_cast<ui::MenuLabel*>(expected)) {
+        auto* found = dynamic_cast<ui::MenuLabel*>(child);
+        if (!found || label->text != found->text) return;
+      } else if (auto* item = dynamic_cast<ui::MenuItem*>(expected)) {
+        auto* found = dynamic_cast<ui::MenuItem*>(child);
+        if (!found || item->text != found->text ||
+            item->rightText != found->rightText)
+          return;
+      } else if (typeid(*expected) != typeid(*child))
+        return;
+    }
+    // Rack's final three selection commands are Duplicate, Duplicate with
+    // cables, and Delete. Do not recurse into arbitrary module submenus.
+    auto end = actual;
+    std::advance(actual, -3);
+    int command = 0;
+    while (actual != end) {
+      auto* item = dynamic_cast<ui::MenuItem*>(*actual++);
+      if (!item) return;
+      ui::MenuItem* wrapper =
+          command == 2
+              ? static_cast<ui::MenuItem*>(new GroupDeleteMenuItem(item))
+              : static_cast<ui::MenuItem*>(
+                    new GroupDuplicateMenuItem(item, command == 1));
+      menu->addChildAbove(wrapper, item);
+      menu->removeChild(item);
+      ++command;
     }
   }
   void step() override {
@@ -156,7 +175,8 @@ struct BeekapooRackHooks : widget::Widget {
     box.size = APP->scene->box.size;
     if (!hasSelectedGroup()) return;
     for (auto* child : APP->scene->children)
-      if (dynamic_cast<ui::MenuOverlay*>(child)) wrapMenus(child);
+      if (auto* overlay = dynamic_cast<ui::MenuOverlay*>(child))
+        for (auto* menu : overlay->children) wrapMenus(menu);
   }
   void onHoverKey(const HoverKeyEvent& e) override {
     bool deleting = (e.key == GLFW_KEY_DELETE || e.key == GLFW_KEY_BACKSPACE) &&

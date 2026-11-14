@@ -16,7 +16,7 @@ Beekapoo groups modules into a smaller panel. Expose the controls and jacks you 
 
 Modules added while editing join this Beekapoo after placement. Deleting a member removes that module and its mappings; the rest of the group stays open. Expanders and nested Beekapoo groups are excluded. **Panel** shows or hides a preview of the compact panel. **Done** or Escape hides the group and returns to your previous view. Saving while editing preserves that session, including the return position.
 
-**Expand** returns the group to the rack in a selected block. **Collapse** hides it again. **End** releases the group without deleting its modules. Deleting Beekapoo deletes its contained modules and cables; Undo restores the complete group. Use **Add selected modules** or **Remove selected members** to change membership. Group operations support undo/redo.
+**Expand** returns the group to the rack in a selected block. **Collapse** hides it again. **End** releases the group without deleting its modules. Deleting Beekapoo deletes its contained modules and cables; Undo restores the complete group. Use **Add selected modules** or **Remove selected members** to change membership. Group operations and exposure changes support undo/redo.
 
 ## Panel
 
@@ -28,7 +28,7 @@ Cables patched on Beekapoo’s front panel remain visible there, including conne
 
 **Duplicate** creates an independent copy, including contained modules, their settings, and internal cables. **Duplicate with cables** also copies incoming external connections. Cmd/Ctrl+D and Cmd/Ctrl+Shift+D over Beekapoo use the same options.
 
-Rack’s **Save selection as** saves a `.vcvs` selection file. Select Beekapoo to include its contained modules and internal wiring. Load that selection to reuse the group. Selection files do not bundle external sample files or other module assets; keep those files available separately.
+Rack’s **Save selection as** saves a `.vcvs` selection file. Select Beekapoo to include its contained modules and internal wiring. Load that selection to reuse the group. Selection files do not bundle external sample files or other module assets; keep those files available separately. Loading a Beekapoo preset replaces its contents; Undo restores the previous group and its connections.
 
 ## Randomization
 
