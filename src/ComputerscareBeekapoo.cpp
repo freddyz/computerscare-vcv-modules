@@ -1,15 +1,18 @@
 #include <atomic>
 #include <mutex>
+#include <plugin.hpp>
 
+#include "BeekapooLayout.hpp"
 #include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
-#include "PeekabooLayout.hpp"
 #include "Phlooper/Block.hpp"
 #include "Phlooper/Dropdown.hpp"
 
 // Engine modules and cables stay in Rack; only their UI layout is grouped.
-namespace peekaboo {
+namespace beekapoo {
 struct SubpatchNativeRack;
+void installRackHooks();
+void queueSubpatchDeletion(int64_t owner, const std::vector<int64_t>& members);
 // Temporarily lend the existing Rack's public containers to the subpatch UI.
 // No RackWidget construction or private SDK entry points are required.
 struct ScopedSubviewRack {
@@ -22,6 +25,10 @@ struct Module : engine::Module {
   std::atomic<float> panelWidth{180.f};
   std::mutex stateMutex;
   json_t* group = nullptr;
+  json_t* contents = nullptr;
+  std::function<json_t*(bool)> captureContents;
+  std::function<void()> saveContents;
+  bool copyBoundary = false;
   bool restorePending = false;
   enum { WIGGLE_AMOUNT, SHOW_CABLE_OPACITY, PARAM_COUNT };
   dsp::SchmittTrigger actionTriggers[6];
@@ -50,17 +57,34 @@ struct Module : engine::Module {
     pendingActions.fetch_or(1u << 1, std::memory_order_relaxed);
   }
 
-  ~Module() override { json_decref(group); }
+  void onSave(const SaveEvent&) override {
+    if (saveContents) saveContents();
+  }
+
+  ~Module() override {
+    json_decref(group);
+    json_decref(contents);
+  }
   void saveGroup(json_t* next) {
     std::lock_guard<std::mutex> lock(stateMutex);
     json_decref(group);
     group = next;
+    if (!group) {
+      json_decref(contents);
+      contents = nullptr;
+    }
   }
   json_t* dataToJson() override {
     std::lock_guard<std::mutex> lock(stateMutex);
     auto* root = json_object();
     json_object_set_new(root, "panelWidth", json_real(panelWidth.load()));
     if (group) json_object_set(root, "group", group);
+    auto* fresh = captureContents ? captureContents(copyBoundary) : nullptr;
+    if (fresh)
+      json_object_set_new(root, "contents", fresh);
+    else if (group && contents &&
+             json_array_size(json_object_get(group, "members")) > 0)
+      json_object_set(root, "contents", contents);
     return root;
   }
   void dataFromJson(json_t* root) override {
@@ -69,16 +93,20 @@ struct Module : engine::Module {
     auto* width = json_object_get(root, "panelWidth");
     float value =
         json_is_number(width) ? float(json_number_value(width)) : 180.f;
-    panelWidth.store(std::isfinite(value) ? clamp(value, 75.f, 30000.f)
+    panelWidth.store(std::isfinite(value) ? clamp(value, 45.f, 30000.f)
                                           : 180.f);
     group = json_deep_copy(json_object_get(root, "group"));
+    json_decref(contents);
+    contents = json_deep_copy(json_object_get(root, "contents"));
     restorePending = true;
   }
   json_t* takeRestore() {
     std::lock_guard<std::mutex> lock(stateMutex);
     if (!restorePending) return nullptr;
     restorePending = false;
-    return group ? json_deep_copy(group) : json_object();
+    auto* restored = group ? json_deep_copy(group) : json_object();
+    if (contents) json_object_set(restored, "contents", contents);
+    return restored;
   }
 };
 // Registered as the original engine module, but with no rack footprint while
@@ -137,7 +165,7 @@ struct Holder : app::ModuleWidget {
     module = nullptr;
   }
 };
-struct Peekaboo;
+struct Beekapoo;
 struct RackLayoutSnapshot {
   std::map<int64_t, Vec> positions;
   std::vector<int64_t> selected;
@@ -171,7 +199,7 @@ struct GroupHistory : history::ModuleChange {
 struct ActionButton : phlooper::WarpedDropdown {
   int icon = -1;
   std::function<std::string()> help;
-  ui::Tooltip* tooltip = nullptr;
+  WeakPtr<ui::Tooltip> tooltip;
   void onEnter(const EnterEvent&) override {
     if (!settings::tooltips || tooltip) return;
     tooltip = new ui::Tooltip;
@@ -182,8 +210,10 @@ struct ActionButton : phlooper::WarpedDropdown {
   void onLeave(const LeaveEvent&) override { clearTooltip(); }
   void clearTooltip() {
     if (tooltip) {
-      APP->scene->removeChild(tooltip);
-      delete tooltip;
+      // Scene may already be traversing its children while this control is
+      // destroyed. Leave sibling removal to that traversal.
+      tooltip->hide();
+      tooltip->requestDelete();
       tooltip = nullptr;
     }
   }
@@ -331,18 +361,20 @@ struct ExposedSwitch : app::Switch {
 struct MappingTooltip : ui::Tooltip {
   std::function<std::string()> caption;
   void step() override {
-    text = caption();
+    text = caption ? caption() : "";
     ui::Tooltip::step();
   }
 };
 template <class Base>
 struct MappedParam : Base {
   std::function<std::string()> caption;
-  MappingTooltip* tip = nullptr;
+  WeakPtr<MappingTooltip> tip;
   void clearTip() {
     if (tip) {
-      APP->scene->removeChild(tip);
-      delete tip;
+      // Drop callbacks before the source control dies; Scene owns deletion.
+      tip->caption = {};
+      tip->hide();
+      tip->requestDelete();
       tip = nullptr;
     }
   }
@@ -361,18 +393,27 @@ struct PortFace : widget::OpaqueWidget {
   JackSmallPointingDown tinyDown;
   JackSmallPointingUp tinyUp;
   std::function<std::string()> caption;
-  MappingTooltip* tip = nullptr;
+  WeakPtr<MappingTooltip> tip;
   void clearTip() {
     if (tip) {
-      APP->scene->removeChild(tip);
-      delete tip;
+      // Drop callbacks before the source control dies; Scene owns deletion.
+      tip->caption = {};
+      tip->hide();
+      tip->requestDelete();
       tip = nullptr;
     }
   }
   ~PortFace() override { clearTip(); }
   WeakPtr<app::PortWidget> source;
+  std::function<void(app::CableWidget*)> patched;
+  PortFace() {
+    tinyDown.type = engine::Port::INPUT;
+    tinyUp.type = engine::Port::OUTPUT;
+  }
   void draw(const DrawArgs& args) override {
     if (compact) {
+      tinyDown.type = engine::Port::INPUT;
+      tinyUp.type = engine::Port::OUTPUT;
       if (input)
         tinyDown.draw(args);
       else
@@ -387,7 +428,14 @@ struct PortFace : widget::OpaqueWidget {
     if (source) source->onButton(e);
   }
   void onDragDrop(const DragDropEvent& e) override {
+    std::vector<WeakPtr<app::CableWidget>> incomplete;
+    for (auto* child : APP->scene->rack->getCableContainer()->children)
+      if (auto* cable = dynamic_cast<app::CableWidget*>(child))
+        if (!cable->isComplete()) incomplete.push_back(cable);
     if (source) source->onDragDrop(e);
+    if (patched)
+      for (auto& cable : incomplete)
+        if (cable && cable->isComplete() && cable->cable) patched(cable.get());
   }
   void onDragEnter(const DragEnterEvent& e) override {
     if (source) source->onDragEnter(e);
@@ -404,7 +452,7 @@ struct PortFace : widget::OpaqueWidget {
   }
   void onLeave(const LeaveEvent& e) override { clearTip(); }
 };
-struct Peekaboo : app::ModuleWidget {
+struct Beekapoo : app::ModuleWidget {
   struct Member {
     int64_t id;
     Vec position;
@@ -422,6 +470,16 @@ struct Peekaboo : app::ModuleWidget {
   std::vector<Member> members;
   std::map<int64_t, Vec> subpatchPositions;
   bool expanded = false;
+  bool arrangeByModule = false;
+  bool jacksOnly = false;
+  std::set<int64_t> panelCableIds, knownCableIds, internalCableIds;
+  unsigned hiddenKinds = 0;
+  std::map<int64_t, unsigned> hiddenModuleKinds;
+  bool controlVisible(int64_t id, int kind) const {
+    auto it = hiddenModuleKinds.find(id);
+    unsigned local = it == hiddenModuleKinds.end() ? 0 : it->second;
+    return !((hiddenKinds | local) & (1u << kind));
+  }
   float actionPulse[6]{};
   std::vector<Port> ports;
   widget::Widget* controls = nullptr;
@@ -471,7 +529,19 @@ struct Peekaboo : app::ModuleWidget {
   }
   WeakPtr<widget::Widget> subview;
   void showView();
+  WeakPtr<widget::Widget> editSession;
+  bool editPreview = false;
+  json_t* portableContents(bool external);
+  bool importContents(json_t* root);
+  void duplicateAction(bool cables);
+  void deleteGroupAction();
+  void pruneMissingMembers();
+  void editSubpatch();
+  void closeEditSession();
+  json_t* editSessionState();
+  void resumeEditSession(json_t* saved);
   void closeView() {
+    closeEditSession();
     if (subview) {
       subview->setVisible(false);
       subview->requestDelete();
@@ -479,14 +549,14 @@ struct Peekaboo : app::ModuleWidget {
     }
   }
   std::string status = "Select modules, then right-click here";
-  Peekaboo(Module* m) {
+  Beekapoo(Module* m) {
     homeRack = APP->scene->rack;
     setModule(m);
     if (m) requestedWidth = m->panelWidth.load();
     auto* panel = new ComputerscareSVGPanel;
     artwork = panel;
     panel->setBackground(APP->window->loadSvg(asset::plugin(
-        pluginInstance, "res/panels/ComputerscarePeekabooPanel.svg")));
+        pluginInstance, "res/panels/ComputerscareBeekapooPanel.svg")));
     setPanel(panel);
     panel->visible = false;
     titleFrame = new phlooper::WarpedBlock;
@@ -510,12 +580,12 @@ struct Peekaboo : app::ModuleWidget {
                            nvgRGB(84, 101, 96));
     addChild(outputFrame);
     auto* show = new ActionButton;
-    show->text = "Show";
+    show->text = "Edit";
     show->configure(52, 24, 3, 2, .8f, 713);
     show->box.pos = Vec(15, 39);
-    show->help = [] { return "Show subpatch"; };
-    show->action = [this] { showView(); };
-    show->pressed = [this] { return bool(subview); };
+    show->help = [] { return "Edit subpatch in Rack"; };
+    show->action = [this] { editSubpatch(); };
+    show->pressed = [this] { return bool(editSession); };
     addChild(show);
     managementButtons.push_back(show);
     auto* reveal = new ActionButton;
@@ -578,8 +648,34 @@ struct Peekaboo : app::ModuleWidget {
     rightHandle->box.size.x = 5;
     addChild(rightHandle);
     layoutControls();
+    if (m) installRackHooks();
+    if (m)
+      m->saveContents = [this] {
+        engine::Module::SaveEvent event;
+        for (auto& member : members)
+          if (auto* w = find(member.id)) w->module->onSave(event);
+      };
+    if (m)
+      m->captureContents = [this](bool external) {
+        return portableContents(external);
+      };
   }
-  ~Peekaboo() override { endAbstraction(); }
+  ~Beekapoo() override {
+    if (auto* m = getModule<Module>()) {
+      std::lock_guard<std::mutex> lock(m->stateMutex);
+      m->captureContents = {};
+      m->saveContents = {};
+    }
+    closeView();
+    for (const auto& port : ports)
+      if (auto* source = findPort(port))
+        source->box.pos = port.originalPosition;
+    std::vector<int64_t> owned;
+    for (const auto& member : members) owned.push_back(member.id);
+    if (module && !owned.empty()) queueSubpatchDeletion(module->id, owned);
+    // The scene hook deletes siblings after native bulk-deletion traversals
+    // finish. Destroying them here would invalidate Rack's selected list.
+  }
   app::ModuleWidget* find(int64_t id) {
     ScopedSubviewRack mainScope(homeRack);
     auto* registered = APP && APP->scene ? homeRack->getModule(id) : nullptr;
@@ -598,14 +694,24 @@ struct Peekaboo : app::ModuleWidget {
   void saveGroup() {
     auto* m = getModule<Module>();
     if (!m) return;
-    if (members.empty()) {
+    if (members.empty() && !editSession) {
       m->saveGroup(nullptr);
       return;
     }
     auto* root = json_object();
 
     json_object_set_new(root, "owner", json_integer(m->id));
+    if (auto* editing = editSessionState())
+      json_object_set_new(root, "editing", editing);
     json_object_set_new(root, "expanded", json_boolean(expanded));
+    json_object_set_new(root, "arrangeByModule", json_boolean(arrangeByModule));
+    json_object_set_new(root, "hiddenKinds", json_integer(hiddenKinds));
+    auto* hidden = json_array();
+    for (auto& item : hiddenModuleKinds)
+      json_array_append_new(
+          hidden, json_pack("{s:I,s:i}", "module", (json_int_t)item.first,
+                            "kinds", int(item.second)));
+    json_object_set_new(root, "hiddenModules", hidden);
     auto* list = json_array();
     for (const auto& member : members)
       json_array_append_new(
@@ -613,6 +719,14 @@ struct Peekaboo : app::ModuleWidget {
           json_pack("{s:I,s:f,s:f}", "id", (json_int_t)member.id, "x",
                     (double)member.position.x, "y", (double)member.position.y));
     json_object_set_new(root, "members", list);
+    auto* panelCables = json_array();
+    for (auto id : panelCableIds)
+      json_array_append_new(panelCables, json_integer(id));
+    json_object_set_new(root, "panelCables", panelCables);
+    auto* internalCables = json_array();
+    for (auto id : internalCableIds)
+      json_array_append_new(internalCables, json_integer(id));
+    json_object_set_new(root, "internalCables", internalCables);
     auto* positions = json_array();
     for (const auto& p : subpatchPositions)
       json_array_append_new(
@@ -645,6 +759,14 @@ struct Peekaboo : app::ModuleWidget {
   void pack() {
     expanded = false;
     controls->visible = true;
+    knownCableIds.clear();
+    for (auto* cw : homeRack->getCompleteCables()) {
+      knownCableIds.insert(cw->cable->id);
+      if (contains(cw->cable->inputModule) &&
+          contains(cw->cable->outputModule) &&
+          !panelCableIds.count(cw->cable->id))
+        internalCableIds.insert(cw->cable->id);
+    }
     auto* rack = homeRack;
     for (auto& member : members) {
       auto* w = member.widget.get();
@@ -671,8 +793,73 @@ struct Peekaboo : app::ModuleWidget {
         Vec(std::max(0.f, block->box.size.x - block->depth - 8),
             std::max(0.f, block->box.size.y - block->depth * .65f - 6.5f)));
   }
+  static float minimumJackWidth(int inputs, int outputs) {
+    for (int width = 45; width < 30000; width += 15) {
+      int cols = std::max(1, int((width - 25) / 20));
+      int rows = layoutRows(inputs, cols) + layoutRows(outputs, cols);
+      float height = (width < 75 ? 6 : 40) + rows * 22 + (inputs ? 14 : 0) +
+                     (outputs ? 14 : 0) + (inputs && outputs ? 8 : 0);
+      if (height <= 368) return width;
+    }
+    return 30000;
+  }
+  void layoutOnlyJacks(std::vector<widget::Widget*> inputs,
+                       std::vector<widget::Widget*> outputs) {
+    jacksOnly = true;
+    for (auto* button : managementButtons) button->visible = false;
+    for (auto* button : actionButtons) button->visible = false;
+    getParam(Module::WIGGLE_AMOUNT)->visible = false;
+    for (auto& parameter : parameters) parameter.knob->visible = false;
+    for (int i = 5; i >= 0; --i) inputs.insert(inputs.begin(), getInput(i));
+    float minimum = minimumJackWidth(inputs.size(), outputs.size());
+    float width = std::max(minimum, std::ceil(requestedWidth / 15) * 15);
+    bool changed = box.size.x != width;
+    box.size.x = width;
+    lastLayoutWidth = width;
+    if (auto* m = getModule<Module>()) m->panelWidth.store(requestedWidth);
+    leftHandle->minWidth = rightHandle->minWidth = minimum;
+    rightHandle->box.pos.x = width - rightHandle->box.size.x;
+    controlLabels.clear();
+    headings.clear();
+    ownFrame->visible = false;
+    frame->visible = false;
+    titleFrame->visible = width >= 75;
+    titleFrame->box = Rect(Vec(6, 4), Vec(width - 12, 32));
+    layoutTier = 0;
+    responsive = ResponsiveLayout();
+    responsive.width = width;
+    float y = width < 75 ? 6 : 40;
+    int cols = std::max(1, int((width - 25) / 20));
+    auto place = [&](std::vector<widget::Widget*>& items,
+                     phlooper::WarpedBlock* block) {
+      block->visible = !items.empty();
+      if (items.empty()) return;
+      float height = 14 + layoutRows(items.size(), cols) * 22;
+      block->box = Rect(Vec(6, y), Vec(width - 12, height));
+      float step = (width - 25) / cols;
+      for (size_t i = 0; i < items.size(); ++i) {
+        auto* item = items[i];
+        item->visible = true;
+        if (auto* face = dynamic_cast<PortFace*>(item)) {
+          face->compact = true;
+          face->box.size = Vec(16, 16);
+        }
+        item->box.pos = Vec(10 + (i % cols) * step, y + 6 + (i / cols) * 22);
+      }
+      y += height + 8;
+    };
+    place(inputs, inputFrame);
+    place(outputs, outputFrame);
+    if (changed && parent == homeRack->getModuleContainer())
+      homeRack->setModulePosForce(this, box.pos);
+  }
   void layoutControls() {
     std::vector<widget::Widget*> items[3];
+    std::map<widget::Widget*, int> kinds;
+    std::map<widget::Widget*, int64_t> moduleIds;
+    for (auto& p : parameters) p.knob->visible = controlVisible(p.id, 0);
+    for (auto& p : ports)
+      p.face->visible = controlVisible(p.id, p.input ? 1 : 2) && findPort(p);
     std::map<widget::Widget*, std::pair<std::string, std::string>> names;
     std::vector<const Member*> ordered;
     for (const auto& m : members) ordered.push_back(&m);
@@ -685,9 +872,11 @@ struct Peekaboo : app::ModuleWidget {
       std::vector<const Parameter*> params;
       std::vector<const Port*> jacks;
       for (const auto& p : parameters)
-        if (p.id == m->id) params.push_back(&p);
+        if (p.id == m->id && controlVisible(p.id, 0)) params.push_back(&p);
       for (const auto& p : ports)
-        if (p.id == m->id) jacks.push_back(&p);
+        if (p.id == m->id && controlVisible(p.id, p.input ? 1 : 2) &&
+            findPort(p))
+          jacks.push_back(&p);
       std::sort(params.begin(), params.end(),
                 [](const Parameter* a, const Parameter* b) {
                   return a->paramId < b->paramId;
@@ -699,26 +888,73 @@ struct Peekaboo : app::ModuleWidget {
         if (auto* w = find(p->id))
           if (auto* q = w->module->getParamQuantity(p->paramId)) {
             items[0].push_back(p->knob);
+            kinds[p->knob] = 0;
+            moduleIds[p->knob] = p->id;
             names[p->knob] = {q->getLabel(), memberName(p->id)};
           }
       for (auto* p : jacks) {
         items[p->input ? 1 : 2].push_back(p->face);
+        kinds[p->face] = p->input ? 1 : 2;
+        moduleIds[p->face] = p->id;
         auto* source = findPort(*p);
         auto* info = source ? source->getPortInfo() : nullptr;
         names[p->face] = {info ? info->getName() : "Port", memberName(p->id)};
       }
     }
+    if (requestedWidth < 180 ||
+        minimumLayoutWidth(items[0].size(), items[1].size(), items[2].size()) >
+            requestedWidth) {
+      layoutOnlyJacks(items[1], items[2]);
+      return;
+    }
+    jacksOnly = false;
+    titleFrame->visible = true;
+    ownFrame->visible = true;
+    for (auto* button : managementButtons) button->visible = true;
+    for (auto* button : actionButtons) button->visible = true;
+    getParam(Module::WIGGLE_AMOUNT)->visible = true;
     if (auto* state = getModule<Module>())
       state->panelWidth.store(requestedWidth);
     responsive = responsiveLayout(requestedWidth, items[0].size(),
                                   items[1].size(), items[2].size());
+    if (arrangeByModule) {
+      std::vector<widget::Widget*> unified;
+      for (auto* m : ordered)
+        for (int k = 0; k < 3; ++k)
+          for (auto* item : items[k])
+            if (moduleIds[item] == m->id) unified.push_back(item);
+      responsive = responsiveLayout(requestedWidth, unified.size(), 0, 0);
+      // Each module starts a row. Feed the padding back to the same planner,
+      // so physical minimums still account for the complete grouped layout.
+      for (int pass = 0; pass < 12; ++pass) {
+        int cols = std::max(1, responsive.paramColumns);
+        std::vector<widget::Widget*> padded;
+        int64_t last = -1;
+        for (auto* item : unified) {
+          if (moduleIds[item] != last && !padded.empty())
+            while (padded.size() % cols) padded.push_back(nullptr);
+          padded.push_back(item);
+          last = moduleIds[item];
+        }
+        auto next = responsiveLayout(std::max(requestedWidth, responsive.width),
+                                     padded.size(), 0, 0);
+        if (next.paramColumns == cols) {
+          items[0] = padded;
+          responsive = next;
+          break;
+        }
+        responsive = next;
+        items[0] = padded;
+      }
+      items[1].clear();
+      items[2].clear();
+    }
     float width = responsive.width;
     layoutTier = responsive.tier;
     bool changed = box.size.x != width;
     box.size.x = width;
     lastLayoutWidth = width;
-    float minimumWidth =
-        minimumLayoutWidth(items[0].size(), items[1].size(), items[2].size());
+    float minimumWidth = minimumJackWidth(items[1].size() + 6, items[2].size());
     if (leftHandle) leftHandle->minWidth = minimumWidth;
     if (rightHandle) {
       rightHandle->minWidth = minimumWidth;
@@ -797,7 +1033,7 @@ struct Peekaboo : app::ModuleWidget {
     float py = responsive.paramTop;
     frame->box = Rect(Vec(responsive.paramLeft, py),
                       Vec(responsive.paramWidth, responsive.paramHeight));
-    frame->visible = responsive.paramHeight > 0 && !expanded;
+    frame->visible = responsive.paramHeight > 0 && (!expanded || editPreview);
     float portY = 368 - responsive.portHeight;
     float gap = items[1].empty() || items[2].empty() ? 0 : 8;
     int portColumns = responsive.inputColumns + responsive.outputColumns;
@@ -811,12 +1047,12 @@ struct Peekaboo : app::ModuleWidget {
     inputFrame->box = Rect(Vec(6, portY), Vec(inWidth, responsive.portHeight));
     outputFrame->box = Rect(Vec(width - 6 - outWidth, portY),
                             Vec(outWidth, responsive.portHeight));
-    inputFrame->visible = !items[1].empty() && !expanded;
-    outputFrame->visible = !items[2].empty() && !expanded;
+    inputFrame->visible = !items[1].empty() && (!expanded || editPreview);
+    outputFrame->visible = !items[2].empty() && (!expanded || editPreview);
     if (layoutTier) {
       if (frame->visible)
-        headings.push_back(
-            {Vec(frame->box.pos.x + 6, py + 11), "Parameters", false});
+        headings.push_back({Vec(frame->box.pos.x + 6, py + 11),
+                            arrangeByModule ? "Modules" : "Parameters", false});
       if (inputFrame->visible)
         headings.push_back({inputFrame->box.pos + Vec(6, 11), "Inputs", false});
       if (outputFrame->visible)
@@ -837,14 +1073,16 @@ struct Peekaboo : app::ModuleWidget {
       std::string lastModule;
       for (size_t i = 0; i < items[k].size(); ++i) {
         auto* item = items[k][i];
-        if (k) {
+        if (!item) continue;
+        int kind = kinds[item];
+        if (kind) {
           auto* face = static_cast<PortFace*>(item);
           face->compact = layoutTier < 2;
           face->box.size = face->compact ? Vec(16, 16) : face->source->box.size;
         }
-        bool centered = layoutTier == 0 || (layoutTier == 1 && k);
+        bool centered = layoutTier == 0 || (layoutTier == 1 && kind);
         float inset = centered ? step * .5f : item->box.size.x * .5f + 1.5f;
-        float rowCenter = (layoutTier == 1 && k) ? 10.f : row * .5f;
+        float rowCenter = (layoutTier == 1 && kind) ? 10.f : row * .5f;
         Vec center = region.pos + Vec(4 + (i % cols) * step + inset,
                                       header + (i / cols) * row + rowCenter);
         item->box.pos = center - item->box.size * .5f;
@@ -852,19 +1090,22 @@ struct Peekaboo : app::ModuleWidget {
         auto name = names[item];
         if (layoutTier == 1 && name.first.size() > 14)
           name.first = name.first.substr(0, 12) + "…";
-        if (layoutTier >= 3 && k == 0 && name.second != lastModule)
+        if ((layoutTier >= 3 || (arrangeByModule && layoutTier >= 2)) &&
+            k == 0 && name.second != lastModule)
           headings.push_back(
               {Vec(center.x - 10, center.y - 14), name.second, false});
         lastModule = name.second;
-        if (layoutTier == 1 && k) {
+        if (layoutTier == 1 && kind) {
           if (name.first.size() > 10)
             name.first = name.first.substr(0, 9) + "…";
           controlLabels.push_back({center + Vec(0, 16), step - 4, name.first,
-                                   k == 2, NVG_ALIGN_CENTER});
+                                   !arrangeByModule && kind == 2,
+                                   NVG_ALIGN_CENTER});
         } else
           controlLabels.push_back({center + Vec(item->box.size.x * .5f + 4, 0),
                                    std::max(12.f, step - item->box.size.x - 6),
-                                   name.first, k == 2, NVG_ALIGN_LEFT});
+                                   name.first, !arrangeByModule && kind == 2,
+                                   NVG_ALIGN_LEFT});
       }
     }
     if (changed && parent == homeRack->getModuleContainer())
@@ -913,12 +1154,42 @@ struct Peekaboo : app::ModuleWidget {
     // Refuse a copied container's references instead of stealing its group.
     auto* owner = json_object_get(root, "owner");
     if (!json_is_integer(owner) || json_integer_value(owner) != module->id) {
-      endAbstraction();
+      if (!importContents(root)) endAbstraction();
       return;
     }
     auto* list = json_object_get(root, "members");
-    if (!json_is_array(list) || json_array_size(list) == 0) return;
+    if (!json_is_array(list)) return;
+    if (json_array_size(list) == 0) {
+      endAbstraction();
+      if (auto* editing = json_object_get(root, "editing")) {
+        if (json_is_object(editing)) {
+          expanded = true;
+          resumeEditSession(editing);
+        }
+      }
+      saveGroup();
+      return;
+    }
     endAbstraction();
+    arrangeByModule = json_is_true(json_object_get(root, "arrangeByModule"));
+    hiddenKinds =
+        unsigned(json_integer_value(json_object_get(root, "hiddenKinds"))) & 7;
+    hiddenModuleKinds.clear();
+    auto* hidden = json_object_get(root, "hiddenModules");
+    for (size_t n = 0; n < json_array_size(hidden); ++n) {
+      auto* item = json_array_get(hidden, n);
+      hiddenModuleKinds[json_integer_value(json_object_get(item, "module"))] =
+          unsigned(json_integer_value(json_object_get(item, "kinds"))) & 7;
+    }
+    panelCableIds.clear();
+    auto* panelCables = json_object_get(root, "panelCables");
+    for (size_t n = 0; n < json_array_size(panelCables); ++n)
+      panelCableIds.insert(json_integer_value(json_array_get(panelCables, n)));
+    internalCableIds.clear();
+    auto* internalCables = json_object_get(root, "internalCables");
+    for (size_t n = 0; n < json_array_size(internalCables); ++n)
+      internalCableIds.insert(
+          json_integer_value(json_array_get(internalCables, n)));
     bool complete = true;
     std::set<int64_t> seen;
     for (size_t i = 0; i < json_array_size(list); ++i) {
@@ -931,7 +1202,8 @@ struct Peekaboo : app::ModuleWidget {
       double x = json_number_value(json_object_get(item, "x"));
       double y = json_number_value(json_object_get(item, "y"));
       if (!json_is_integer(idJ) || !w || w == this ||
-          dynamic_cast<Peekaboo*>(w) || !w->visible ||
+          dynamic_cast<Beekapoo*>(w) ||
+          (!w->visible && (!holder || ownedElsewhere(w->module))) ||
           !seen.insert(id).second || !std::isfinite(x) || !std::isfinite(y)) {
         complete = false;
         continue;
@@ -984,6 +1256,8 @@ struct Peekaboo : app::ModuleWidget {
     status = expanded ? "Modules expanded — abstraction retained"
                       : std::to_string(members.size()) +
                             " modules running behind this panel";
+    if (expanded && json_is_object(json_object_get(root, "editing")))
+      resumeEditSession(json_object_get(root, "editing"));
   }
   app::PortWidget* findPort(const Port& p) {
     auto* w = find(p.id);
@@ -1075,6 +1349,9 @@ struct Peekaboo : app::ModuleWidget {
     ports.clear();
     members.clear();
     subpatchPositions.clear();
+    panelCableIds.clear();
+    knownCableIds.clear();
+    internalCableIds.clear();
     controls->clearChildren();
     parameters.clear();
     expanded = false;
@@ -1092,6 +1369,13 @@ struct Peekaboo : app::ModuleWidget {
     auto* face = new PortFace;
     face->source = source;
     face->input = source->type == engine::Port::INPUT;
+    face->patched = [this](app::CableWidget* cable) {
+      panelCableIds.insert(cable->cable->id);
+      knownCableIds.insert(cable->cable->id);
+      cable->visible = true;
+      showPlugs(cable, true);
+      saveGroup();
+    };
     face->box.size = source->box.size;
     int64_t id = w->module->id;
     face->caption = [this, face, id] {
@@ -1207,7 +1491,7 @@ struct Peekaboo : app::ModuleWidget {
   }
   bool ownedElsewhere(engine::Module* m) const {
     for (auto* w : homeRack->getModules())
-      if (auto* group = dynamic_cast<Peekaboo*>(w))
+      if (auto* group = dynamic_cast<Beekapoo*>(w))
         if (group != this && group->contains(m)) return true;
     return false;
   }
@@ -1225,7 +1509,7 @@ struct Peekaboo : app::ModuleWidget {
     std::vector<app::ModuleWidget*> added;
     for (auto* w : homeRack->getSelected())
       if (w != this && w->visible && !contains(w->module) &&
-          !ownedElsewhere(w->module) && !dynamic_cast<Peekaboo*>(w) &&
+          !ownedElsewhere(w->module) && !dynamic_cast<Beekapoo*>(w) &&
           !w->module->leftExpander.producerMessage &&
           !w->module->rightExpander.producerMessage)
         added.push_back(w);
@@ -1349,8 +1633,9 @@ struct Peekaboo : app::ModuleWidget {
           for (auto* q : w->module->paramQuantities) change(q);
     } else {
       for (const auto& param : parameters)
-        if (auto* w = find(param.id))
-          change(w->module->getParamQuantity(param.paramId));
+        if (controlVisible(param.id, 0))
+          if (auto* w = find(param.id))
+            change(w->module->getParamQuantity(param.paramId));
     }
     if (batch) {
       if (batch->isEmpty())
@@ -1360,6 +1645,29 @@ struct Peekaboo : app::ModuleWidget {
     }
   }
   void onHoverKey(const HoverKeyEvent& e) override {
+    if (e.action == GLFW_PRESS && !(e.mods & RACK_MOD_MASK) &&
+        (e.key == GLFW_KEY_DELETE || e.key == GLFW_KEY_BACKSPACE)) {
+      deleteGroupAction();
+      e.consume(nullptr);
+      return;
+    }
+    if (e.action == GLFW_PRESS && e.key == GLFW_KEY_D &&
+        (e.mods & RACK_MOD_CTRL)) {
+      if (homeRack->isSelected(this)) {
+        std::vector<Module*> groups;
+        for (auto* selected : homeRack->getSelected())
+          if (auto* group = dynamic_cast<Beekapoo*>(selected)) {
+            auto* state = group->getModule<Module>();
+            state->copyBoundary = e.mods & GLFW_MOD_SHIFT;
+            groups.push_back(state);
+          }
+        homeRack->cloneSelectionAction(e.mods & GLFW_MOD_SHIFT);
+        for (auto* state : groups) state->copyBoundary = false;
+      } else
+        duplicateAction(e.mods & GLFW_MOD_SHIFT);
+      e.consume(this);
+      return;
+    }
     if ((e.action == GLFW_PRESS || e.action == GLFW_REPEAT) &&
         e.key == GLFW_KEY_R && (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL) {
       parameterAction(1, true);
@@ -1387,7 +1695,7 @@ struct Peekaboo : app::ModuleWidget {
     std::vector<app::ModuleWidget*> selected;
     for (auto* w : rack->getSelected()) {
       if (w == this || !w->module || !w->visible) continue;
-      if (dynamic_cast<Peekaboo*>(w) || ownedElsewhere(w->module) ||
+      if (dynamic_cast<Beekapoo*>(w) || ownedElsewhere(w->module) ||
           w->module->leftExpander.producerMessage ||
           w->module->rightExpander.producerMessage) {
         status = "Expanders and nested groups are not supported";
@@ -1450,15 +1758,25 @@ struct Peekaboo : app::ModuleWidget {
         if (actions & (1u << i))
           parameterAction(i, (histories & (1u << i)) != 0);
     }
+    // A native Undo can replace a member widget before pruning runs. Rebuild
+    // mappings against that restored widget instead of using its old quantity.
+    bool replaced = false;
+    for (auto& member : members)
+      if (!member.widget && homeRack->getModule(member.id)) replaced = true;
+    if (replaced) {
+      auto* saved = getModule<Module>()->dataToJson();
+      if (auto* group = json_object_get(saved, "group")) restore(group);
+      json_decref(saved);
+    }
     if (members.empty()) {
       ModuleWidget::step();
       return;
     }
-    // Deleting a hidden module through another tool fails open rather than
-    // leaving a dangling proxy. Do this before stepping any mapped controls.
+    // Prune deleted members before stepping their mapped controls. The native
+    // deletion transaction also restores this membership on Undo.
     for (const auto& member : members)
       if (!find(member.id)) {
-        endAbstraction();
+        pruneMissingMembers();
         break;
       }
     if (expanded) {
@@ -1484,15 +1802,37 @@ struct Peekaboo : app::ModuleWidget {
         source->box.pos = desired - source->box.size * .5f - parentOrigin;
       }
     }
+    std::set<int64_t> currentCables;
+    bool presentationChanged = false;
     for (auto* cable : homeRack->getCompleteCables()) {
-      if (contains(cable->cable->inputModule) &&
-          contains(cable->cable->outputModule)) {
-        if (cable->visible) {
-          cable->visible = false;
-          showPlugs(cable, false);
-        }
+      auto id = cable->cable->id;
+      currentCables.insert(id);
+      bool input = contains(cable->cable->inputModule),
+           output = contains(cable->cable->outputModule);
+      if ((input || output) && !knownCableIds.count(id) &&
+          !internalCableIds.count(id)) {
+        presentationChanged |= panelCableIds.insert(id).second;
+        cable->visible = true;
+        showPlugs(cable, true);
+      }
+      if (input != output) {
+        cable->visible = true;
+        showPlugs(cable, true);
+      }
+      if (input && output) {
+        bool visible = panelCableIds.count(id);
+        cable->visible = visible;
+        showPlugs(cable, visible);
       }
     }
+    knownCableIds = std::move(currentCables);
+    for (auto it = panelCableIds.begin(); it != panelCableIds.end();)
+      if (!knownCableIds.count(*it)) {
+        it = panelCableIds.erase(it);
+        presentationChanged = true;
+      } else
+        ++it;
+    if (presentationChanged) saveGroup();
     ModuleWidget::step();
   }
   void draw(const DrawArgs& args) override {
@@ -1501,7 +1841,7 @@ struct Peekaboo : app::ModuleWidget {
     nvgFillColor(args.vg, nvgRGB(198, 201, 199));
     nvgFill(args.vg);
     ModuleWidget::draw(args);
-    if (artwork && titleFrame) {
+    if (artwork && titleFrame && titleFrame->visible) {
       Rect area = frameContent(titleFrame);
       float scale = std::min({1.f, area.size.x / 184.f, area.size.y / 25.f});
       nvgSave(args.vg);
@@ -1565,9 +1905,78 @@ struct Peekaboo : app::ModuleWidget {
   }
   void appendContextMenu(ui::Menu* menu) override {
     if (!module) return;
+    std::vector<widget::Widget*> nativeDuplicates;
+    for (auto* child : menu->children)
+      if (auto* item = dynamic_cast<ui::MenuItem*>(child))
+        if (item->text == "Duplicate" || item->text == "Delete" ||
+            item->text.find("Duplicate with cables") != std::string::npos)
+          nativeDuplicates.push_back(item);
+    for (auto* item : nativeDuplicates) {
+      menu->removeChild(item);
+      delete item;
+    }
+    menu->addChild(
+        createMenuItem("Duplicate", "", [this] { duplicateAction(false); }));
+    menu->addChild(createMenuItem("Duplicate with cables", "",
+                                  [this] { duplicateAction(true); }));
+    menu->addChild(
+        createMenuItem("Delete", "", [this] { deleteGroupAction(); }));
     menu->addChild(new ui::MenuSeparator);
 
-    menu->addChild(createMenuItem("Show subpatch", "", [this] { showView(); }));
+    menu->addChild(
+        createMenuItem("Edit subpatch", "", [this] { editSubpatch(); }));
+    menu->addChild(
+        createSubmenuItem("Panel arrangement", "", [this](ui::Menu* sub) {
+          for (bool grouped : {false, true})
+            sub->addChild(createCheckMenuItem(
+                grouped ? "By module" : "By control type", "",
+                [this, grouped] { return arrangeByModule == grouped; },
+                [this, grouped] {
+                  arrangeByModule = grouped;
+                  layoutControls();
+                  saveGroup();
+                }));
+        }));
+    menu->addChild(
+        createSubmenuItem("Show controls", "", [this](ui::Menu* sub) {
+          const char* labels[] = {"Parameters", "Inputs", "Outputs"};
+          for (int kind = 0; kind < 3; ++kind)
+            sub->addChild(createCheckMenuItem(
+                labels[kind], "",
+                [this, kind] { return !(hiddenKinds & (1u << kind)); },
+                [this, kind] {
+                  hiddenKinds ^= 1u << kind;
+                  layoutControls();
+                  saveGroup();
+                }));
+          sub->addChild(new ui::MenuSeparator);
+          for (auto& member : members) {
+            auto id = member.id;
+            sub->addChild(createSubmenuItem(
+                memberName(id), "", [this, id](ui::Menu* options) {
+                  options->addChild(createCheckMenuItem(
+                      "All", "",
+                      [this, id] { return hiddenModuleKinds[id] == 0; },
+                      [this, id] {
+                        hiddenModuleKinds[id] = hiddenModuleKinds[id] ? 0 : 7;
+                        layoutControls();
+                        saveGroup();
+                      }));
+                  const char* kinds[] = {"Parameters", "Inputs", "Outputs"};
+                  for (int kind = 0; kind < 3; ++kind)
+                    options->addChild(createCheckMenuItem(
+                        kinds[kind], "",
+                        [this, id, kind] {
+                          return !(hiddenModuleKinds[id] & (1u << kind));
+                        },
+                        [this, id, kind] {
+                          hiddenModuleKinds[id] ^= 1u << kind;
+                          layoutControls();
+                          saveGroup();
+                        }));
+                }));
+          }
+        }));
     menu->addChild(createMenuItem(
         members.empty() ? "Abstract selected modules" : "Collapse modules", "",
         [this] { groupAction(true); }, !members.empty() && !expanded));
@@ -1618,25 +2027,35 @@ struct Peekaboo : app::ModuleWidget {
 void GroupHistory::undo() {
   history::ModuleChange::undo();
   if (auto* group =
-          dynamic_cast<Peekaboo*>(APP->scene->rack->getModule(moduleId)))
+          dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId)))
     group->step();
   before.restore();
 }
 void GroupHistory::redo() {
   history::ModuleChange::redo();
   if (auto* group =
-          dynamic_cast<Peekaboo*>(APP->scene->rack->getModule(moduleId)))
+          dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId)))
     group->step();
   after.restore();
 }
-#include "PeekabooSubview.hpp"
-}  // namespace peekaboo
-Model* modelComputerscarePeekaboo =
-    createModel<peekaboo::Module, peekaboo::Peekaboo>("computerscare-peekaboo");
+#include "BeekapooPortable.hpp"
+#include "BeekapooRackEdit.hpp"
+#include "BeekapooRackHooks.hpp"
+#include "BeekapooSubview.hpp"
+}  // namespace beekapoo
+Model* modelComputerscareBeekapoo =
+    createModel<beekapoo::Module, beekapoo::Beekapoo>("computerscare-beekapoo");
+
+Model* modelComputerscareBeekapooLegacy = [] {
+  auto* model = createModel<beekapoo::Module, beekapoo::Beekapoo>(
+      "computerscare-patch-abstractor");
+  model->hidden = true;
+  return model;
+}();
 
 Model* modelComputerscarePeekabooLegacy = [] {
-  auto* model = createModel<peekaboo::Module, peekaboo::Peekaboo>(
-      "computerscare-patch-abstractor");
+  auto* model = createModel<beekapoo::Module, beekapoo::Beekapoo>(
+      "computerscare-peekaboo");
   model->hidden = true;
   return model;
 }();

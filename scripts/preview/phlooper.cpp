@@ -1,8 +1,10 @@
-#define modelComputerscarePeekaboo modelPeekabooPreview
-#define modelComputerscarePeekabooLegacy modelPeekabooLegacyPreview
-#include "../../src/ComputerscarePeekaboo.cpp"
-#undef modelComputerscarePeekaboo
+#define modelComputerscareBeekapoo modelBeekapooPreview
+#define modelComputerscareBeekapooLegacy modelBeekapooLegacyPreview
+#define modelComputerscarePeekabooLegacy modelPeekabooOldNamePreview
+#include "../../src/ComputerscareBeekapoo.cpp"
 #undef modelComputerscarePeekabooLegacy
+#undef modelComputerscareBeekapoo
+#undef modelComputerscareBeekapooLegacy
 // Development-only renderer. Uses the real module/widget, never a panel mockup.
 #define modelComputerscarePhlooper modelPhlooperPreview
 #include "../../src/ComputerscarePhlooper.cpp"
@@ -117,7 +119,7 @@ void capture(widget::Widget* widget, const std::string& path, float scale,
 }
 
 #include "groups.hpp"
-#include "peekaboo.hpp"
+#include "beekapoo.hpp"
 
 void checkMaxVisual(app::ModuleWidget* widget,bool& compact,const std::string& path,float scale) {
   float width=widget->box.size.x;
@@ -847,13 +849,14 @@ int main(int argc, char** argv) {
     context.patch->autosavePath = asset::user("preview-patch");
     context.window = new window::Window;
     glfwHideWindow(context.window->win);
+    settings::showTipsOnLaunch = false;
     context.scene = new app::Scene;
     plugin::Plugin plugin;
     plugin.path = argv[1];
     plugin.slug = "computerscare";
     pluginInstance = &plugin;
-    if(argc==7 && std::string(argv[6])=="peekaboo") {
-      renderPeekabooPreview(plugin, argv[3], scale);
+    if(argc==7 && std::string(argv[6])=="beekapoo") {
+      renderBeekapooPreview(plugin, argv[3], scale);
       return 0;
     }
     if(argc==7 && std::string(argv[6])=="groups") {

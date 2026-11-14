@@ -181,15 +181,22 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/phlooper.md"
     },
     {
-      "slug": "computerscare-peekaboo",
-      "name": "Peekaboo",
+      "slug": "computerscare-beekapoo",
+      "name": "Beekapoo",
       "description": "Group modules and expose their controls",
       "tags": ["Utility"],
-      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/peekaboo.md"
+      "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/beekapoo.md"
     },
     {
       "slug": "computerscare-patch-abstractor",
-      "name": "Peekaboo",
+      "name": "Beekapoo",
+      "description": "Legacy identifier for saved patches",
+      "tags": ["Utility"],
+      "hidden": true
+    },
+    {
+      "slug": "computerscare-peekaboo",
+      "name": "Beekapoo",
       "description": "Legacy identifier for saved patches",
       "tags": ["Utility"],
       "hidden": true

@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace peekaboo {
+namespace beekapoo {
 // All responsive thresholds and physical control budgets live here. Nothing
 // in this planner depends on Rack, parameter values, or draw-time state.
 struct ResponsiveLayout {
@@ -117,4 +117,4 @@ inline ResponsiveLayout responsiveLayout(float requested, int params,
     p = planLayout(width, --tier, params, inputs, outputs);
   return p;
 }
-}  // namespace peekaboo
+}  // namespace beekapoo

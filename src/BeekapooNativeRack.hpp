@@ -1,5 +1,5 @@
 #pragma once
-// Included inside peekaboo, after the subview declarations.
+// Included inside beekapoo, after the subview declarations.
 struct ScopedSubviewOpacity {
   float previous;
   explicit ScopedSubviewOpacity(float opacity)

@@ -1,0 +1,21 @@
+# Beekapoo development
+
+Engine modules and cables remain in Rack. Collapsed module widgets live inside zero-size holders registered under their original engine IDs. Their original widgets keep stepping. Exposed controls use the original parameter quantities; mapped jacks retain the original engine endpoints.
+
+`BeekapooRackEdit.hpp` implements Edit subpatch. Editing unwraps originals into direct Rack children in a clear row four rows below Beekapoo. A nonmodal toolbar provides Done, Expose, and an optional read-only panel preview. The stock Rack handles movement, selection, keyboard shortcuts, browser placement and cables. New eligible modules join after the placement drag ends. Done recreates holders and restores zoom, offset and the previous visible selection. Only one editing target is active at a time.
+
+`BeekapooLayout.hpp` is the pure responsive planner. It runs on resize/mapping changes. `layoutControls()` applies control-type or module-first ordering and visibility filters. Hiding controls does not alter engine connections. Small layouts keep tiny jacks and icon controls; labels are added as space permits.
+
+`BeekapooPortable.hpp` serializes contained modules and internal cables when Rack requests JSON, not on the audio or UI tick. Imported/duplicated groups receive independent module and cable IDs, remapped exposure and visibility references, and child actions attached to the native duplicate/paste undo action. Normal full-patch loading still uses the existing engine modules. Missing dependencies fail open rather than binding another group's modules. Local duplication copies available per-module patch storage. Rack selection files do not bundle external assets.
+
+The older proxy-based subview remains as an internal regression fixture; panel and context-menu editing use the native-rack session. Its container-swapping API is not used for the new editing path.
+
+`computerscare-beekapoo` is the current slug. Hidden aliases support `computerscare-peekaboo` and `computerscare-patch-abstractor`. Expanders and nested groups are unsupported.
+
+## Validation and renders
+
+`scripts/preview-module.sh beekapoo` builds an isolated runner using local Rack graphics libraries. It does not operate live Rack or vcvmon. `--no-build` skips the plugin build, and unchanged runners are reused. The former `peekaboo` command is an alias.
+
+The fixture checks native JSON reload, legacy slugs, four-channel DSP, stable cable identities, free rack footprint, mappings, switch behavior, tooltips, grouping undo/redo, native browser return, real-rack editing, module adoption, viewport restoration, independent duplication and selection paste with undo/redo. It also renders 16 responsive layout cases and native editing screenshots into ignored `build/previews/beekapoo/`.
+
+Keyboard and menu deletion include the contents in Rack’s native selection-delete transaction. Other programmatic removal queues contained-module cleanup for the scene hook after native bulk-deletion traversal. This avoids invalidating Rack's copied selection/module lists. Surviving children and their cables are removed with actions inserted into the native delete transaction; Undo restores the complete group. A restored owner cancels an unprocessed removal. End abstraction still releases the children without deleting them.

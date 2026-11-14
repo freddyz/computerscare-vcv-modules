@@ -1,6 +1,6 @@
 #pragma once
 
-// Included inside peekaboo. The modal view renders the original widgets
+// Included inside beekapoo. The modal view renders the original widgets
 // and forwards control events; it never creates another engine or module copy.
 struct SubpatchHit;
 struct SubpatchCanvas;
@@ -34,7 +34,7 @@ struct SubpatchScroll : ui::ScrollWidget {
   }
 };
 struct SubpatchView : widget::OpaqueWidget {
-  WeakPtr<Peekaboo> owner;
+  WeakPtr<Beekapoo> owner;
   std::set<int64_t> selected, pendingRemoval, browserExisting;
   bool browserPending = false;
   Vec browserPosition;
@@ -74,7 +74,7 @@ struct SubpatchView : widget::OpaqueWidget {
   ActionButton *adjust = nullptr, *exposeButton = nullptr, *close = nullptr;
   ActionButton *zoomOut = nullptr, *zoomLabel = nullptr, *zoomIn = nullptr,
                *fit = nullptr;
-  explicit SubpatchView(Peekaboo* group);
+  explicit SubpatchView(Beekapoo* group);
   void choose(app::PortWidget* port);
   bool connect(app::PortWidget* a, app::PortWidget* b);
   void disconnect(app::PortWidget* port);
@@ -321,7 +321,7 @@ struct SubpatchHit : widget::OpaqueWidget {
 // back immediately. Engine processing never reads widget geometry.
 struct SourcePortLayout {
   std::vector<std::pair<app::PortWidget*, Vec>> moved;
-  SourcePortLayout(Peekaboo* owner, int64_t id) {
+  SourcePortLayout(Beekapoo* owner, int64_t id) {
     for (const auto& p : owner->ports)
       if (p.id == id)
         if (auto* source = owner->findPort(p)) {
@@ -333,7 +333,7 @@ struct SourcePortLayout {
     for (auto& p : moved) p.first->box.pos = p.second;
   }
 };
-#include "PeekabooNativeRack.hpp"
+#include "BeekapooNativeRack.hpp"
 struct SubpatchModuleFace : app::ModuleWidget {
   SubpatchView* view;
   WeakPtr<app::ModuleWidget> source;
@@ -626,7 +626,7 @@ struct SubpatchCanvas : widget::Widget {
     }
   }
 };
-SubpatchView::SubpatchView(Peekaboo* group) : owner(group) {
+SubpatchView::SubpatchView(Beekapoo* group) : owner(group) {
   adjust = new ActionButton;
   adjust->text = "Adjust subpatch";
   adjust->configure(155, 32, 4, 3, .9f, 871);
@@ -848,7 +848,7 @@ void SubpatchView::finishBrowser() {
   std::vector<app::ModuleWidget*> added;
   for (auto* w : rack->getModules())
     if (w->module && !browserExisting.count(w->module->id) &&
-        !dynamic_cast<Peekaboo*>(w) &&
+        !dynamic_cast<Beekapoo*>(w) &&
         !w->module->leftExpander.producerMessage &&
         !w->module->rightExpander.producerMessage)
       added.push_back(w);
@@ -1132,7 +1132,7 @@ void SubpatchView::disconnect(app::PortWidget* source) {
   if (!port || port->locked()) return;
   nativeAction([&] { port->deleteTopCableAction(); });
 }
-void Peekaboo::showView() {
+void Beekapoo::showView() {
   if (subview) {
     closeView();
     return;
