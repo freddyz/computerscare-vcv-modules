@@ -213,8 +213,8 @@ struct ComputerscarePhlooper : Module {
                  {"Normal", "Cycle", "Zero", "Stall"});
     getParamQuantity(EXPANSION)->randomizeEnabled = false;
     configParam(COUNT, 1, 16, 2, "Active loops")->snapEnabled = true;
-    configSwitch(MODE, 0, 3, 0, "Phase mode",
-                 {"Time (ms)", "Length (%)", "Speed (%)", "Beats"});
+    configSwitch(MODE, 0, 3, 1, "Phase mode",
+                 {"Length (ms)", "Length (%)", "Speed (%)", "Beats"});
     configSwitch(SHOW_TRANSPORT, 0, 1, 1, "Per-channel controls",
                  {"Hidden", "Visible"});
     configSwitch(SPEED_OFFSET_CURVE, 0, 1, 0, "Speed offset curve",
@@ -1439,7 +1439,7 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
              " loops";
     if (param == ComputerscarePhlooper::MODE)
       return std::string(
-          value == 0   ? "Time ms"
+          value == 0   ? "Length (ms)"
           : value == 1 ? "Length %"
           : value == 2
               ? (module && module->params
@@ -1490,7 +1490,7 @@ struct PhlooperChoice : phlooper::WarpedDropdown {
                            : param == ComputerscarePhlooper::COUNT
                                ? std::to_string(value) + " loops"
                            : param == ComputerscarePhlooper::MODE
-                               ? (i == 0   ? "Time (ms)"
+                               ? (i == 0   ? "Length (ms)"
                                   : i == 1 ? "Length (%)"
                                   : i == 2 ? "Speed % Linear"
                                   : i == 3 ? "Speed % Mult"
@@ -2672,9 +2672,9 @@ struct ComputerscarePhlooperWidget : ModuleWidget {
       nvgRestore(APP->window->vg);
       return width;
     };
-    float modeWidth =
-        std::max(buttonWidth("Length %"),
-                 std::max(buttonWidth("Time ms"), buttonWidth("Speed % mult")));
+    float modeWidth = std::max(
+        buttonWidth("Length %"),
+        std::max(buttonWidth("Length (ms)"), buttonWidth("Speed % mult")));
     float directionWidth =
         std::max(buttonWidth("Fwd / Rev"),
                  std::max(buttonWidth("Forward"), buttonWidth("Reverse")));

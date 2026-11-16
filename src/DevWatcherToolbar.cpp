@@ -2,6 +2,11 @@
 
 #include <osdialog.h>
 
+#include <atomic>
+#ifdef ARCH_MAC
+#include <dispatch/dispatch.h>
+#endif
+
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -266,16 +271,34 @@ struct WatcherToolbar : widget::OpaqueWidget {
   }
 };
 WeakPtr<WatcherToolbar> toolbar;
+#ifdef ARCH_MAC
+std::atomic<bool> retryQueued{false};
+void retryOnUIThread(void*) {
+  retryQueued.store(false, std::memory_order_relaxed);
+  installDevWatcherToolbar();
+}
+void queueUIRetry() {
+  if (!retryQueued.exchange(true, std::memory_order_relaxed))
+    dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, 100 * NSEC_PER_MSEC),
+                     dispatch_get_main_queue(), nullptr, retryOnUIThread);
+}
+#endif
 }  // namespace
 void installDevWatcherToolbar() {
   static const std::string control = []() {
     const char* value = std::getenv("VCVMON_CONTROL");
     return value ? std::string(value) : std::string();
   }();
-  if (control.empty() || toolbar.get() || !APP || !APP->scene || !APP->window ||
-      !APP->event)
+  if (control.empty() || toolbar.get() || settings::headless) return;
+  if (!APP || !APP->scene || !APP->window || !APP->event) {
+#ifdef ARCH_MAC
+    // Plugin init precedes Rack's Context/Scene creation. Retry through the
+    // macOS UI queue, never a worker thread or a particular module's panel.
+    queueUIRetry();
+#endif
     return;
+  }
   auto* widget = new WatcherToolbar(control);
-  toolbar = widget;
   APP->scene->addChild(widget);
+  toolbar = widget;
 }

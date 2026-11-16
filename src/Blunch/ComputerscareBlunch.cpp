@@ -764,6 +764,7 @@ struct ComputerscareBlunch : ComputerscarePolyModule {
         int(std::round(params[AUTO_ADVANCE_PARAM].getValue())) == 0);
   }
   int channelOverviewLine(int channel) {
+    channel = clampChannel(channel);
     return blunchChannelsSourceLine(sequenceEditorStates[channel].text,
                                     sequencerForChannel(channel).activeLine,
                                     sequenceEditorStates[channel].cursor,

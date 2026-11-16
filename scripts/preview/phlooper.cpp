@@ -831,6 +831,15 @@ int main(int argc, char** argv) {
     string::init();
     ui::init();
     window::init();
+    bool watcherChecks = std::getenv("VCVMON_PREVIEW_CHECKS");
+    if (watcherChecks) {
+      // Reproduce plugin init before Rack has any UI context or module panels.
+      // Always isolate commands from the user's watcher, even if inherited.
+      auto control = asset::user("isolated-watcher");
+      setenv("VCVMON_CONTROL", control.c_str(), 1);
+      installDevWatcherToolbar();installDevWatcherToolbar();
+      glfwPollEvents();
+    }
     Context context;
     contextSet(&context);
     context.engine = new engine::Engine;
@@ -842,6 +851,25 @@ int main(int argc, char** argv) {
     context.window = new window::Window;
     glfwHideWindow(context.window->win);
     context.scene = new app::Scene;
+    if (watcherChecks) {
+      auto toolbarCount = [&]() {
+        int count=0;
+        for(auto* child:context.scene->children)
+          for(auto* control:child->children)
+            if(auto* button=dynamic_cast<ui::Button*>(control))
+              if(button->text=="Save version")++count;
+        return count;
+      };
+      for(int i=0;i<40 && !toolbarCount();++i) {
+        glfwPollEvents();
+        std::this_thread::sleep_for(std::chrono::milliseconds(25));
+      }
+      if(toolbarCount()!=1)throw std::runtime_error("Watcher toolbar must attach before any computerscare module/browser panel exists");
+      installDevWatcherToolbar();installDevWatcherToolbar();
+      glfwPollEvents();
+      if(toolbarCount()!=1)throw std::runtime_error("Deferred and panel retries must not create duplicate toolbars");
+      std::puts("Watcher toolbar attaches without module panels after deferred UI startup, exactly once");
+    }
     plugin::Plugin plugin;
     plugin.path = argv[1];
     plugin.slug = "computerscare";
@@ -868,6 +896,13 @@ int main(int argc, char** argv) {
       std::puts("All six jack variants load at their expected sizes");
     }
     modelPhlooperPreview->plugin = &plugin;
+    {
+      auto fresh=std::unique_ptr<ComputerscarePhlooper>(static_cast<ComputerscarePhlooper*>(modelPhlooperPreview->createModule()));
+      if(fresh->params[ComputerscarePhlooper::MODE].getValue()!=1.f ||
+         fresh->params[ComputerscarePhlooper::OFFSET].getValue()!=-1.f ||
+         fresh->getParamQuantity(ComputerscarePhlooper::OFFSET)->getDisplayValue()!=-1.f)
+        throw std::runtime_error("New Phlooper must default to Length % and -1% offset per loop");
+    }
     checkPhlooperStorage(modelPhlooperPreview);
     if(std::getenv("PHLOOPER_DSP_BENCHMARK")){benchmarkPhlooper(modelPhlooperPreview);return 0;}
     {
@@ -1015,6 +1050,12 @@ int main(int argc, char** argv) {
     widget->step();
     simulate(*module, .1f, frame);
     save("02-playing-four-loops");
+    {
+      float previousMode=module->params[ComputerscarePhlooper::MODE].getValue();
+      module->params[ComputerscarePhlooper::MODE].setValue(0.f);
+      save("02-length-ms-label");
+      module->params[ComputerscarePhlooper::MODE].setValue(previousMode);
+    }
     {
       using P=ComputerscarePhlooper;
       int size=module->loop.size;int created=module->createdLoops;
