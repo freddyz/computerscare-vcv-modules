@@ -8,6 +8,7 @@ struct RackEditHighlight : widget::TransparentWidget {
 };
 struct RackEditPreview : widget::OpaqueWidget {
   WeakPtr<Beekapoo> owner;
+  std::function<void(const DrawArgs&)> badge;
   void draw(const DrawArgs& args) override {
     if (!owner) return;
     nvgSave(args.vg);
@@ -19,8 +20,26 @@ struct RackEditPreview : widget::OpaqueWidget {
     owner->expanded = false;
     DrawArgs local = args;
     local.clipBox = Rect(args.clipBox.pos / scale, args.clipBox.size / scale);
+    // This is a second drawing of live widgets at a different scale. Draw
+    // their artwork directly instead of reusing/mutating Rack's cached images.
+    std::vector<std::pair<widget::FramebufferWidget*, bool>> caches;
+    std::function<void(widget::Widget*)> bypassCaches = [&](widget::Widget* w) {
+      if (auto* fb = dynamic_cast<widget::FramebufferWidget*>(w)) {
+        caches.emplace_back(fb, fb->bypassed);
+        fb->bypassed = true;
+      }
+      for (auto* child : w->children) bypassCaches(child);
+    };
+    bypassCaches(owner.get());
     owner->draw(local);
     owner->drawLayer(local, 1);
+    if (badge) {
+      nvgSave(args.vg);
+      nvgTranslate(args.vg, owner->box.size.x - 24, 1);
+      badge(local);
+      nvgRestore(args.vg);
+    }
+    for (auto& cache : caches) cache.first->bypassed = cache.second;
     owner->expanded = expanded;
     owner->controls->visible = visible;
     nvgRestore(args.vg);
@@ -32,11 +51,37 @@ struct RackEditSession : widget::Widget {
   float previousZoom;
   RackLayoutSnapshot previousSelection;
   std::set<int64_t> known, admitted;
-  bool exposeMode = false, showPanel = true, finished = false;
-  ActionButton *done, *exposeButton, *panelButton, *removeButton;
+  bool exposeMode = false, showPanel = true, showMembers = true,
+       finished = false;
+  float toolbarHeight = 52;
+  Vec descriptionPosition;
+  widget::SvgWidget memberLogo;
+  struct MemberTag {
+    Vec corners[4];
+    float tilt, shear, width, height;
+    MemberTag() {
+      auto vary = [](float amount) {
+        return (random::uniform() * 2 - 1) * amount;
+      };
+      const Vec base[] = {Vec(0, 2), Vec(22, 0), Vec(24, 22), Vec(1, 24)};
+      for (int i = 0; i < 4; ++i)
+        corners[i] = base[i] + Vec(vary(1.2f), vary(1.2f));
+      tilt = vary(.085f);
+      shear = vary(.055f);
+      width = 18 * (1 + vary(.045f));
+      height = 18 * (1 + vary(.045f));
+    }
+  };
+  // One fresh variation per member per editing session, never per frame.
+  std::map<int64_t, MemberTag> memberTags;
+  ActionButton *done, *exposeButton, *panelButton, *removeButton,
+      *newModulesButton, *nearButton, *farButton, *membersButton;
   RackEditPreview* preview;
   std::vector<WeakPtr<RackEditHighlight>> highlights;
   explicit RackEditSession(Beekapoo* group) : owner(group) {
+    showMembers = group->markMembers;
+    memberLogo.setSvg(APP->window->loadSvg(
+        asset::plugin(pluginInstance, "res/Beekapoo/computerscare-logo.svg")));
     auto* scroll = APP->scene->rackScroll;
     previousOffset = scroll->getGridOffset();
     previousZoom = scroll->getZoom();
@@ -47,19 +92,21 @@ struct RackEditSession : widget::Widget {
                             std::function<void()> action) {
       auto* button = new ActionButton;
       button->text = label;
-      button->configure(width, 27, 3, 2, .8f, int(x) + 975);
+      button->textSize = 21;
+      button->configure(width, 35, 3, 2, .8f, int(x) + 975);
       button->box.pos = Vec(x, 7);
       button->action = std::move(action);
       addChild(button);
       return button;
     };
-    done = addButton("Done", 10, 65, [this] { finish(true); });
-    exposeButton = addButton("Expose", 87, 79, [this] {
+    done = addButton("Done", 10, 78, [this] { finish(true); });
+    done->help = [] { return "Finish editing [esc]"; };
+    exposeButton = addButton("Expose", 100, 94, [this] {
       exposeMode = !exposeMode;
       if (owner) owner->saveGroup();
     });
     exposeButton->pressed = [this] { return exposeMode; };
-    panelButton = addButton("Panel", 178, 66, [this] {
+    panelButton = addButton("Panel", 206, 80, [this] {
       showPanel = !showPanel;
       if (owner) {
         owner->editPreview = showPanel;
@@ -68,19 +115,76 @@ struct RackEditSession : widget::Widget {
       }
     });
     panelButton->pressed = [this] { return showPanel; };
-    removeButton = addButton("Remove", 256, 79, [this] {
+    panelButton->help = [] { return "Show Beekapoo panel"; };
+    newModulesButton = addButton("New: Inside", 298, 146, [this] {
+      if (owner) {
+        owner->captureNewModules = !owner->captureNewModules;
+        owner->saveGroup();
+      }
+    });
+    newModulesButton->caption = [this] {
+      return owner && owner->captureNewModules ? "New: Inside" : "New: Outside";
+    };
+    newModulesButton->pressed = [this] {
+      return owner && owner->captureNewModules;
+    };
+    newModulesButton->help = [] {
+      return "Choose whether new modules join this subpatch";
+    };
+    nearButton = addButton("Near", 456, 66, [this] {
+      if (owner) owner->moveEditedMembers(true);
+    });
+    farButton = addButton("Far", 534, 60, [this] {
+      if (owner) owner->moveEditedMembers(false);
+    });
+    nearButton->help = [] { return "Move this subpatch near Beekapoo"; };
+    farButton->help = [] { return "Move the subpatch somewhere quiet"; };
+    membersButton = addButton("Members", 606, 100, [this] {
+      showMembers = !showMembers;
+      if (owner) {
+        owner->markMembers = showMembers;
+        owner->saveGroup();
+      }
+    });
+    membersButton->pressed = [this] { return showMembers; };
+    membersButton->help = [] { return "Mark subpatch modules"; };
+    removeButton = addButton("Remove", 718, 96, [this] {
       if (owner) owner->removeSelection();
     });
     removeButton->help = [] { return "Remove selected modules from Beekapoo"; };
     removeButton->visible = false;
     preview = new RackEditPreview;
     preview->owner = group;
+    preview->badge = [this](const DrawArgs& args) {
+      if (owner && owner->module)
+        paintTag(args, owner->module->id, COLOR_COMPUTERSCARE_GREEN);
+    };
     addChild(preview);
+    layoutToolbar(APP->scene->box.size.x);
+  }
+  void layoutToolbar(float width) {
+    float x = 10, y = 7;
+    for (auto* button : {done, exposeButton, panelButton, newModulesButton,
+                         nearButton, farButton, membersButton, removeButton}) {
+      if (!button->visible) continue;
+      if (x > 10 && x + button->box.size.x + 10 > width) {
+        x = 10;
+        y += 48;
+      }
+      button->box.pos = Vec(x, y);
+      x += button->box.size.x + 12;
+    }
+    toolbarHeight = y + 45;
+    descriptionPosition = x + 210 < width ? Vec(x + 5, y + 25) : Vec(-1, -1);
   }
   void adoptNewModules() {
-    if (!owner || APP->scene->browser->visible ||
-        APP->event->getDraggedWidget())
+    if (!owner) return;
+    if (!owner->captureNewModules) {
+      for (auto* w : owner->homeRack->getModules())
+        if (w->module) known.insert(w->module->id);
       return;
+    }
+    if (APP->scene->browser->visible || APP->event->getDraggedWidget()) return;
     std::vector<app::ModuleWidget*> added;
     for (auto* w : owner->homeRack->getModules()) {
       if (!w->module ||
@@ -126,6 +230,7 @@ struct RackEditSession : widget::Widget {
           owner->collapse();
       }
       owner->layoutControls();
+      if (collapse) owner->returnHighlight = .8f;
     }
     auto* scroll = APP->scene->rackScroll;
     scroll->setZoom(previousZoom);
@@ -204,36 +309,84 @@ struct RackEditSession : widget::Widget {
 
     box.pos = Vec(0, APP->scene->menuBar->box.getBottom());
     box.size = APP->scene->box.size - box.pos;
+    layoutToolbar(box.size.x);
     preview->visible = showPanel;
     float width = std::min(280.f, owner->box.size.x);
     preview->box =
-        Rect(Vec(std::max(260.f, box.size.x - width - 14), 48),
+        Rect(Vec(std::max(260.f, box.size.x - width - 14), toolbarHeight + 5),
              Vec(width, width * RACK_GRID_HEIGHT / owner->box.size.x));
     widget::Widget::step();
   }
+  void paintTag(const DrawArgs& args, int64_t id, NVGcolor color) {
+    const auto& tag = memberTags[id];
+    auto& logo = memberLogo;
+    nvgBeginPath(args.vg);
+    nvgMoveTo(args.vg, tag.corners[0].x, tag.corners[0].y);
+    for (int i = 1; i < 4; ++i)
+      nvgLineTo(args.vg, tag.corners[i].x, tag.corners[i].y);
+    nvgClosePath(args.vg);
+    nvgFillColor(args.vg, color);
+    nvgFill(args.vg);
+    nvgStrokeColor(args.vg, nvgRGB(20, 24, 21));
+    nvgStrokeWidth(args.vg, .8f);
+    nvgStroke(args.vg);
+    nvgTranslate(args.vg, 12, 12);
+    nvgRotate(args.vg, tag.tilt);
+    nvgSkewX(args.vg, tag.shear);
+    nvgScale(args.vg, tag.width / logo.box.size.x,
+             tag.height / logo.box.size.y);
+    nvgTranslate(args.vg, -logo.box.size.x * .5f, -logo.box.size.y * .5f);
+    logo.draw(args);
+  }
   void draw(const DrawArgs& args) override {
     nvgBeginPath(args.vg);
-    nvgRect(args.vg, 0, 0, box.size.x, 43);
+    nvgRect(args.vg, 0, 0, box.size.x, toolbarHeight);
     nvgFillColor(args.vg, nvgRGB(60, 76, 70));
     nvgFill(args.vg);
     auto font =
         APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
     nvgFontFaceId(args.vg, font->handle);
-    nvgFontSize(args.vg, 13);
+    nvgFontSize(args.vg, 18);
     nvgFillColor(args.vg, nvgRGB(214, 225, 218));
-    nvgText(args.vg, removeButton->visible ? 350 : 260, 25,
-            exposeMode ? "Beekapoo: click controls to expose"
-                       : "Editing Beekapoo — new modules join this group",
-            nullptr);
+    const char* description =
+        exposeMode ? "Click controls to expose" : "Editing Beekapoo";
+    float textWidth =
+        nvgTextBounds(args.vg, 0, 0, description, nullptr, nullptr);
+    if (descriptionPosition.x >= 0 &&
+        descriptionPosition.x + textWidth < box.size.x - 8)
+      nvgText(args.vg, descriptionPosition.x, descriptionPosition.y,
+              description, nullptr);
+    if (owner) {
+      auto mark = [&](app::ModuleWidget* module, NVGcolor color) {
+        if (!module || !module->visible || !module->module) return;
+        float zoom = APP->scene->rackScroll->getZoom();
+        Vec position =
+            module->getAbsoluteOffset(Vec(module->box.size.x - 22, -2)) -
+            box.pos;
+        nvgSave(args.vg);
+        nvgIntersectScissor(args.vg, 0, toolbarHeight, box.size.x,
+                            box.size.y - toolbarHeight);
+        nvgTranslate(args.vg, position.x, position.y);
+        nvgScale(args.vg, zoom, zoom);
+        paintTag(args, module->module->id, color);
+        nvgRestore(args.vg);
+      };
+      if (showMembers)
+        for (auto& member : owner->members)
+          mark(member.widget.get(), COLOR_COMPUTERSCARE_YELLOW);
+      mark(owner.get(), COLOR_COMPUTERSCARE_GREEN);
+    }
     widget::Widget::draw(args);
   }
 };
 void RackEditHighlight::draw(const DrawArgs& args) {
-  if (!session || session->finished || !session->exposeMode ||
-      !session->owner || !sourceModule || !sourceModule->module)
+  if (!session || session->finished || !session->owner || !sourceModule ||
+      !sourceModule->module)
     return;
   auto* group = session->owner.get();
   auto* module = sourceModule.get();
+  if (!group->contains(module->module)) return;
+  if (!session->exposeMode) return;
   auto paint = [&](widget::Widget* control, int index, bool selected,
                    bool locked) {
     if (!control->visible) return;
@@ -319,7 +472,7 @@ void Beekapoo::editSubpatch() {
         static_cast<RackEditSession*>(group->editSession.get())->finish(true);
   closeView();
   auto* session = new RackEditSession(this);
-  revealMembers(true);
+  revealMembers(false);
   // Restore originals as direct Rack children. Native movement, hotkeys,
   // module menus, selection and browser placement now use their real widgets.
   for (auto& member : members)
@@ -336,40 +489,136 @@ void Beekapoo::editSubpatch() {
       member.holder = nullptr;
       delete holder;
     }
-  float width = 0;
-  for (auto& member : members)
-    if (member.widget) width += member.widget->box.size.x;
-  Vec origin(std::floor(box.pos.x / RACK_GRID_WIDTH) * RACK_GRID_WIDTH,
-             (std::floor(box.pos.y / RACK_GRID_HEIGHT) + 4) * RACK_GRID_HEIGHT);
-  bool blocked;
-  do {
-    blocked = false;
-    for (auto* w : homeRack->getModules())
-      if (w->visible && !contains(w->module) &&
-          Rect(origin, Vec(width, RACK_GRID_HEIGHT)).intersects(w->box)) {
-        origin.y += RACK_GRID_HEIGHT;
-        blocked = true;
-        break;
-      }
-  } while (blocked);
-  Vec cursor = origin;
   homeRack->deselectAll();
-  for (auto& member : members)
-    if (auto* w = member.widget.get()) {
-      w->box.pos = cursor;
-      member.position = cursor;
-      cursor.x += w->box.size.x;
-    }
   expanded = true;
   editPreview = true;
   controls->visible = false;
   editSession = session;
   layoutControls();
-  saveGroup();
   APP->scene->addChildBelow(session, APP->scene->browser);
+  moveEditedMembers(false, false, hasEditPlacement);
+}
+
+void Beekapoo::focusEditedMembers() {
+  if (!editSession) return;
+  Vec origin(INFINITY, INFINITY);
+  Vec end(-INFINITY, -INFINITY);
+  for (auto& member : members)
+    if (auto* w = member.widget.get()) {
+      origin.x = std::min(origin.x, w->box.pos.x);
+      origin.y = std::min(origin.y, w->box.pos.y);
+      end.x = std::max(end.x, w->box.getRight());
+      end.y = std::max(end.y, w->box.getBottom());
+    }
+  if (!origin.isFinite()) {
+    origin = box.pos + Vec(0, 4 * RACK_GRID_HEIGHT);
+    end = origin;
+  }
   auto* scroll = APP->scene->rackScroll;
-  // Keep normal zoom and leave breathing room below the editing toolbar.
-  scroll->setGridOffset((origin - RACK_OFFSET) / RACK_GRID_SIZE - Vec(1, .25f));
+  // Center below the editing toolbar, without changing the user's zoom.
+  auto* session = static_cast<RackEditSession*>(editSession.get());
+  session->layoutToolbar(scroll->box.size.x);
+  Vec viewportCenter(scroll->box.size.x * .5f,
+                     (scroll->box.size.y + session->toolbarHeight) * .5f);
+  Vec center = (origin + end) * .5f;
+  scroll->setGridOffset(
+      (center - viewportCenter / scroll->getZoom() - RACK_OFFSET) /
+      RACK_GRID_SIZE);
+}
+void Beekapoo::moveEditedMembers(bool near, bool recordHistory,
+                                 bool keepPosition) {
+  if (!editSession) return;
+  auto* action = recordHistory ? beginAction(near ? "move subpatch near"
+                                                  : "move subpatch far")
+                               : nullptr;
+  Vec minimum(INFINITY, INFINITY), maximum(-INFINITY, -INFINITY);
+  for (auto& member : members)
+    if (auto* w = member.widget.get()) {
+      minimum.x = std::min(minimum.x, w->box.pos.x);
+      minimum.y = std::min(minimum.y, w->box.pos.y);
+      maximum.x = std::max(maximum.x, w->box.getRight());
+      maximum.y = std::max(maximum.y, w->box.getBottom());
+    }
+  bool empty = !minimum.isFinite();
+  Vec origin(
+      near ? std::ceil((box.getRight() + RACK_GRID_WIDTH) / RACK_GRID_WIDTH) *
+                 RACK_GRID_WIDTH
+           : std::floor(box.pos.x / RACK_GRID_WIDTH) * RACK_GRID_WIDTH,
+      (std::floor(box.pos.y / RACK_GRID_HEIGHT) + (near ? 0 : 4)) *
+          RACK_GRID_HEIGHT);
+  if (keepPosition && !empty) origin = minimum;
+  if (!empty) {
+    auto outsideModules = homeRack->getModules();
+    if (near && !keepPosition) {
+      Vec size = maximum - minimum;
+      float best = INFINITY;
+      // Search away from each side, rather than always pushing right.
+      for (int side = 0; side < 4; ++side) {
+        Vec candidate = origin;
+        if (side == 1) candidate.x = box.pos.x - size.x - RACK_GRID_WIDTH;
+        if (side >= 2) {
+          candidate.x = box.pos.x;
+          candidate.y = side == 2 ? box.pos.y - size.y : box.getBottom();
+        }
+        bool collision;
+        do {
+          collision = false;
+          for (auto* outside : outsideModules)
+            if (outside->visible && !contains(outside->module) &&
+                Rect(candidate, size).intersects(outside->box)) {
+              if (side == 0)
+                candidate.x = outside->box.getRight() + RACK_GRID_WIDTH;
+              else if (side == 1)
+                candidate.x = outside->box.pos.x - size.x - RACK_GRID_WIDTH;
+              else if (side == 2)
+                candidate.y = outside->box.pos.y - size.y;
+              else
+                candidate.y = outside->box.getBottom();
+              candidate = (candidate / RACK_GRID_SIZE).round() * RACK_GRID_SIZE;
+              collision = true;
+              break;
+            }
+        } while (collision);
+        Vec distance = candidate + size * .5f - box.getCenter();
+        float score = distance.x * distance.x + distance.y * distance.y;
+        if (score < best) {
+          best = score;
+          origin = candidate;
+        }
+      }
+    }
+    bool blocked;
+    do {
+      blocked = false;
+      for (auto* outside : outsideModules)
+        if (outside->visible && !contains(outside->module) &&
+            Rect(origin, maximum - minimum).intersects(outside->box)) {
+          if (near && !keepPosition)
+            origin.x = std::ceil((outside->box.getRight() + RACK_GRID_WIDTH) /
+                                 RACK_GRID_WIDTH) *
+                       RACK_GRID_WIDTH;
+          else
+            origin.y += RACK_GRID_HEIGHT;
+          blocked = true;
+          break;
+        }
+    } while (blocked);
+    Vec delta = origin - minimum;
+    for (auto& member : members)
+      if (auto* w = member.widget.get()) w->box.pos += delta;
+    // All members are already in their non-colliding positions. Refresh native
+    // expander neighbors through Rack's public placement API.
+    for (auto& member : members)
+      if (auto* w = member.widget.get()) {
+        homeRack->requestModulePos(w, w->box.pos);
+        break;
+      }
+    syncMemberPositions();
+  }
+  hasEditPlacement = true;
+  saveGroup();
+  focusEditedMembers();
+  if (action) finishAction(action);
 }
 
 json_t* Beekapoo::editSessionState() {
@@ -379,6 +628,7 @@ json_t* Beekapoo::editSessionState() {
       "{s:f,s:f,s:f,s:b,s:b}", "x", double(session->previousOffset.x), "y",
       double(session->previousOffset.y), "zoom", double(session->previousZoom),
       "panel", session->showPanel, "expose", session->exposeMode);
+  json_object_set_new(saved, "members", json_boolean(session->showMembers));
   auto* selected = json_array();
   for (auto id : session->previousSelection.selected)
     json_array_append_new(selected, json_integer(id));
@@ -395,6 +645,7 @@ void Beekapoo::resumeEditSession(json_t* saved) {
     session->previousZoom = clamp(float(zoom), .1f, 4.f);
   session->showPanel = json_is_true(json_object_get(saved, "panel"));
   session->exposeMode = json_is_true(json_object_get(saved, "expose"));
+  session->showMembers = !json_is_false(json_object_get(saved, "members"));
   session->previousSelection.selected.clear();
   auto* selected = json_object_get(saved, "selected");
   for (size_t i = 0; i < json_array_size(selected); ++i)

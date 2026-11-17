@@ -44,6 +44,7 @@ struct Face : app::ModuleWidget {
   }
 };
 }
+#include "beekapoo-print.hpp"
 void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,float scale) {
   auto require=[](bool pass,const char* why){if(!pass)throw std::runtime_error(why);};
   for(int count:{0,1,4,8,24,64,128}) for(float width:{75.f,90.f,120.f,180.f,225.f,300.f,450.f,600.f,900.f,1500.f}) {
@@ -73,6 +74,10 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto* m=model->createModule();APP->engine->addModule(m);
     auto* w=model->createModuleWidget(m);w->box.pos=pos;rack->addModule(w);return w;
   };
+  if(std::getenv("BEEKAPOO_PRINT_SPECTRUM")) {
+    renderBeekapooPrintSpectrum(gainModel,output,scale);
+    return;
+  }
   auto* a=add(gainModel,Vec(0,0));
   auto* sink=add(gainModel,Vec(90,0));
   auto* b=add(gainModel,Vec(180,0));
@@ -137,13 +142,16 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   require(hoveredPort && rack->getCompleteCablesOnPort(hoveredPort).size()==1,"Native hovered endpoint must expose its connected cable");APP->event->setHoveredWidget(nullptr);
   APP->event->setHoveredWidget(outputFace);require(outputFace->nativeTooltip && outputFace->tip,"Mapped port must create the native Rack tooltip");
   outputFace->tip->step();require(outputFace->tip->text.find("4: ")!=std::string::npos && outputFace->tip->text.find("V")!=std::string::npos,"Native mapped-port tooltip must report every polyphonic voltage");
+  auto portCaption=outputFace->caption();
+  auto moduleHeading=portCaption.substr(0,portCaption.find('\n'));
+  require(outputFace->tip->text.rfind(moduleHeading+"\n",0)==0,"Mapped port tooltip must put the source module on its first line");
   b->module->outputs[0].setVoltage(3.125f,3);outputFace->tip->step();
   require(outputFace->tip->text.find("3.125V")!=std::string::npos,"Port tooltip must update live voltage values");
   APP->event->setHoveredWidget(nullptr);require(!outputFace->tip,"Native mapped-port tooltip must close on leave");APP->engine->stepBlock(64);
   widget::Widget::DragEnterEvent tipDrag;tipDrag.origin=a->getInput(1);tipDrag.button=GLFW_MOUSE_BUTTON_LEFT;
   outputFace->onDragEnter(tipDrag);require(outputFace->tip,"Drag-hover must track the native tooltip it creates");
   WeakPtr<ui::Tooltip> staleDragTip=outputFace->tip;outputFace->step();
-  require(!outputFace->tip && !staleDragTip,"A tooltip must disappear after losing actual hover, even without a Leave event");
+  require(!outputFace->tip && (!staleDragTip || !staleDragTip->visible),"A tooltip must disappear after losing actual hover, even without a Leave event");
   APP->event->setHoveredWidget(outputFace);settings::tooltips=false;outputFace->step();require(!outputFace->tip,"Disabling tooltips must clear an already visible tooltip");settings::tooltips=true;APP->event->setHoveredWidget(nullptr);
   auto* nativeJack=dynamic_cast<app::SvgPort*>(a->getInput(23));require(nativeJack,"Fixture must use Fundamental's themed jack widget");
   beekapoo::PortFace separate;separate.source=nativeJack;separate.input=true;
@@ -796,7 +804,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   APP->scene->rack->getModuleContainer()->addChild(group);
   group->requestedWidth=45;group->layoutControls();
   require(group->jacksOnly && !group->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Minimum view must hide parameter knobs");
-  for(auto* button:group->managementButtons)require(button->visible,"Edit, Expand and End must always stay visible");
+  for(auto* button:group->managementButtons)require(button->visible,"Edit and Eject must always stay visible");
   for(auto* button:group->actionButtons)require(!button->visible,"Small layouts must hide module action buttons");
   int visibleKnobs=0;for(auto& p:group->parameters)if(p.knob->visible)++visibleKnobs;
   require(visibleKnobs>0,"Small layouts must use spare space for unlabelled parameters");
@@ -808,8 +816,15 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   tinyParent->removeChild(group);group->box.pos=Vec();capture(group,output+"/21-panel-patching.png",scale,false);group->box.pos=tinyPosition;tinyParent->addChild(group);
   APP->event->setDraggedWidget(nullptr,GLFW_MOUSE_BUTTON_LEFT);
   group->requestedWidth=540;group->layoutControls();
+  require(group->managementButtons[0]->iconAndText && group->managementButtons[0]->icon==3 && group->managementButtons[1]->iconAndText && group->managementButtons[1]->icon==7,"Labeled Edit and Eject buttons must retain their icons");
+  {
+    auto* parent=group->parent;auto position=group->box.pos;parent->removeChild(group);group->box.pos=Vec();
+    capture(group,output+"/25-edit-eject-panel.png",scale,false);
+    group->box.pos=position;parent->addChild(group);
+  }
   group->editSubpatch();
   APP->scene->box.size=Vec(1100,740);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(1100,710));
+  group->focusEditedMembers();
   auto* realSession=static_cast<beekapoo::RackEditSession*>(group->editSession.get());
   for(int frame=0;frame<3;++frame){APP->scene->rackScroll->step();realSession->step();}
   rack->deselectAll();rack->select(voly,true);realSession->step();
@@ -820,9 +835,13 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   APP->event->setHoveredWidget(voly->getParam(0));
   capture(APP->scene,output+"/18-real-rack-expose.png",scale,false);APP->event->setHoveredWidget(nullptr);
   realSession->finish(true);
+  require(group->returnHighlight>.79f && !group->editSession,"Leaving Edit must start the 800 ms return highlight");
   group->requestedWidth=300;group->layoutControls();group->step();
   APP->scene->box.size=Vec(520,740);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(520,710));
   APP->scene->rackScroll->zoomToBound(group->box);APP->scene->rackScroll->step();group->step();
+  group->returnHighlight=.72f;
+  capture(APP->scene,output+"/26-return-to-patch.png",scale,false);
+  group->returnHighlight=0;
   beekapoo::PortFace* visibleOutput=nullptr;for(auto& port:group->ports)if(!port.input)visibleOutput=port.face;
   require(visibleOutput,"Screenshot needs a mapped output");visibleOutput->nativeTipAction([&] {APP->event->setHoveredWidget(visibleOutput->source.get());});
   require(visibleOutput->nativeTooltip && visibleOutput->tip,"Screenshot must use the native output tooltip");visibleOutput->tip->step();
@@ -1042,6 +1061,128 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     require(!rack->getModule(oldChildId) && APP->engine->getModuleIds().size()==beforePreset+2,"Preset Redo must not leak the former group");
   }
   json_decref(preset);rack->clear();
+
+  // Native bypass must affect the contained engine modules, including
+  // native routing, callbacks, mixed child states and one-step history.
+  auto* bypassDriver=add(gainModel,Vec(0,0));
+  auto* bypassA=add(gainModel,Vec(90,0));auto* bypassB=add(gainModel,Vec(180,0));
+  auto* bypassHost=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(330,0)));
+  bypassA->module->configBypass(0,0);bypassB->module->configBypass(0,0);
+  bypassA->module->params[0].setValue(2.f);bypassB->module->params[0].setValue(2.f);
+  connect(bypassDriver,bypassA);connect(bypassA,bypassB);auto bypassCables=cableIds();
+  rack->deselectAll();rack->select(bypassA,true);rack->select(bypassB,true);bypassHost->collapse();
+  APP->engine->stepBlock(64);
+  require(bypassB->module->outputs[0].getVoltage(3)==16.f,"Bypass fixture must start with processed polyphonic audio");
+  APP->engine->bypassModule(bypassA->module,true);
+  bypassHost->bypassAction(true);bypassHost->step();
+  require(bypassA->module->isBypassed() && bypassB->module->isBypassed() && !bypassDriver->module->isBypassed(),"Bypass must affect every child and no outside modules");
+  APP->engine->stepBlock(64);
+  require(bypassB->module->outputs[0].getVoltage(3)==4.f && cableIds()==bypassCables,"Group bypass must use native polyphonic bypass routing without changing cables");
+  bypassHost->bypassAction(false);bypassHost->step();
+  require(!bypassA->module->isBypassed() && !bypassB->module->isBypassed(),"Un-bypass must enable all children, including a previously bypassed child");
+  APP->history->undo();bypassHost->step();require(bypassA->module->isBypassed() && bypassB->module->isBypassed(),"Native bypass Undo must affect the full group");
+  APP->history->redo();bypassHost->step();require(!bypassA->module->isBypassed() && !bypassB->module->isBypassed(),"Native bypass Redo must affect the full group");
+  bypassHost->bypassAction(true);bypassHost->step();
+  auto* bypassJson=bypassHost->toJson();
+  APP->engine->bypassModule(bypassB->module,false);
+  bypassHost->fromJson(bypassJson);json_decref(bypassJson);bypassHost->step();
+  require(bypassHost->module->isBypassed() && bypassB->module->isBypassed(),"Reloaded group bypass must synchronize its children");
+  auto* addedBypassed=add(gainModel,Vec(600,0));rack->deselectAll();rack->select(addedBypassed,true);bypassHost->addSelection();bypassHost->step();
+  require(addedBypassed->module->isBypassed(),"New members of a bypassed group must also be bypassed");
+  auto bypassPosition=bypassHost->box.pos;rack->getModuleContainer()->removeChild(bypassHost);bypassHost->box.pos=Vec();
+  capture(bypassHost,output+"/24-bypassed-group.png",scale,false);bypassHost->box.pos=bypassPosition;rack->addModule(bypassHost);
+  bypassHost->editSubpatch();bypassHost->bypassAction(false);bypassHost->step();
+  require(!bypassA->module->isBypassed() && !bypassB->module->isBypassed() && !addedBypassed->module->isBypassed(),"Bypass must also work with the subpatch open in Rack");
+  rack->clear();
+  std::puts("Beekapoo native group bypass, un-bypass, undo/redo, reload, new members and four-channel routing passed");
+
+  // Unified editing: additions can stay outside; placement preserves a 2D
+  // layout; Eject releases the whole instrument and removes only its owner.
+  auto* jointA=add(gainModel,Vec(0,0));auto* jointB=add(gainModel,Vec(90,0));
+  auto* jointHost=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(330,0)));
+  auto jointHostId=jointHost->module->id;
+  connect(jointA,jointB);auto jointCables=cableIds();
+  rack->deselectAll();rack->select(jointA,true);rack->select(jointB,true);jointHost->collapse();jointHost->editSubpatch();
+  auto* joint=static_cast<beekapoo::RackEditSession*>(jointHost->editSession.get());
+  auto requireCentered=[&] {
+    Rect bounds;bool first=true;
+    for(auto& member:jointHost->members) {
+      auto box=member.widget->box;
+      if(first){bounds=box;first=false;}else bounds=bounds.expand(box);
+    }
+    auto* scroll=APP->scene->rackScroll;
+    Vec topLeft=scroll->getGridOffset()*RACK_GRID_SIZE+RACK_OFFSET;
+    Vec screenCenter=(bounds.getCenter()-topLeft)*scroll->getZoom();
+    auto* editing=static_cast<beekapoo::RackEditSession*>(jointHost->editSession.get());
+    Vec expected(scroll->box.size.x*.5f,(scroll->box.size.y+editing->toolbarHeight)*.5f);
+    require((screenCenter-expected).norm()<1.f,"Edit and Near/Far must center the complete subpatch below the toolbar");
+  };
+  requireCentered();
+  require(joint->showMembers && joint->membersButton->pressed(),"Subpatch member logos must be enabled by default");
+  joint->membersButton->action();
+  auto* markerState=jointHost->editSessionState();
+  require(!joint->showMembers && json_is_false(json_object_get(markerState,"members")),"Member logo toggle must be saved with the edit session");
+  json_decref(markerState);joint->membersButton->action();
+  require(joint->panelButton->help()=="Show Beekapoo panel" && joint->done->help().find("[esc]")!=std::string::npos,"Edit toolbar tooltips must explain Panel and Done's shortcut");
+  joint->layoutToolbar(520);
+  require(joint->toolbarHeight>52,"Larger edit controls must wrap in narrow windows");
+  joint->layoutToolbar(APP->scene->rackScroll->box.size.x);
+  require(jointHost->managementButtons.size()==2 && jointHost->managementButtons[1]->text=="Eject","Panel must have only Edit and Eject management buttons");
+  joint->newModulesButton->action();require(!jointHost->captureNewModules,"New module destination toggle must select Outside");
+  auto* stayOutside=add(gainModel,Vec(1200,4*RACK_GRID_HEIGHT));joint->step();
+  require(!jointHost->contains(stayOutside->module),"Modules added in Outside mode must remain in the main patch");
+  joint->newModulesButton->action();joint->step();
+  require(!jointHost->contains(stayOutside->module),"Switching Inside must not capture existing outside modules");
+  auto* jointC=add(gainModel,jointB->box.pos+Vec(150,0));joint->step();
+  require(jointHost->contains(jointC->module),"New modules must join when Inside is selected");
+  rack->setModulePosNearest(jointB,jointB->box.pos+Vec(0,RACK_GRID_HEIGHT));
+  Vec relativeB=jointB->box.pos-jointA->box.pos,relativeC=jointC->box.pos-jointA->box.pos;
+  joint->nearButton->action();
+  requireCentered();
+  require(jointA->box.pos.y<2*RACK_GRID_HEIGHT && jointB->box.pos-jointA->box.pos==relativeB && jointC->box.pos-jointA->box.pos==relativeC,"Near must preserve the group's relative arrangement");
+  APP->history->undo();jointHost->step();
+  joint=static_cast<beekapoo::RackEditSession*>(jointHost->editSession.get());
+  require(joint && jointA->box.pos.y>=4*RACK_GRID_HEIGHT,"Near Undo must restore the previous position and keep editing");
+  auto* leftBlock=add(gainModel,jointHost->box.pos-Vec(6000,0));
+  leftBlock->box.size=Vec(6000,2*RACK_GRID_HEIGHT);
+  auto* rightBlock=add(gainModel,Vec(jointHost->box.getRight(),jointHost->box.pos.y));
+  rightBlock->box.size=Vec(6000,2*RACK_GRID_HEIGHT);
+  jointHost->moveEditedMembers(true,false);
+  require(jointA->box.pos.y<jointHost->box.pos.y,"Near must use available space above instead of pushing far to the side");
+  auto* aboveBlock=add(gainModel,jointHost->box.pos-Vec(6000,2*RACK_GRID_HEIGHT));
+  aboveBlock->box.size=Vec(12000,2*RACK_GRID_HEIGHT);
+  jointHost->moveEditedMembers(true,false);
+  require(jointA->box.pos.y>=jointHost->box.getBottom() && jointA->box.pos.x==jointHost->box.pos.x,"Near must use space below when the other sides are occupied");
+  require(jointB->box.pos-jointA->box.pos==relativeB && jointC->box.pos-jointA->box.pos==relativeC,"Vertical Near placement must preserve the group's arrangement");
+  for(auto* blocker:{leftBlock,rightBlock,aboveBlock}) {rack->removeModule(blocker);delete blocker;}
+  joint->farButton->action();
+  requireCentered();
+  require(jointB->box.pos-jointA->box.pos==relativeB && jointC->box.pos-jointA->box.pos==relativeC,"Far must preserve the group's relative arrangement");
+  joint->newModulesButton->action();require(!jointHost->captureNewModules,"Outside preference selected before closing");
+  std::map<int64_t,Vec> kept;for(auto& member:jointHost->members)kept[member.id]=member.widget->box.pos;
+  joint->done->action();jointHost->editSubpatch();
+  joint=static_cast<beekapoo::RackEditSession*>(jointHost->editSession.get());
+  for(auto& member:jointHost->members)require(member.widget->box.pos==kept.at(member.id),"Reopening must retain the native subpatch layout");
+  require(!jointHost->captureNewModules,"New-module destination must persist across editing sessions");
+  size_t beforeEject=APP->engine->getModuleIds().size();
+  WeakPtr<beekapoo::Beekapoo> ejected=jointHost;
+  widget::EventContext ejectContext;widget::Widget::ButtonEvent ejectClick;
+  ejectClick.context=&ejectContext;ejectClick.action=GLFW_PRESS;ejectClick.button=GLFW_MOUSE_BUTTON_LEFT;
+  jointHost->managementButtons[1]->onButton(ejectClick);
+  require(!ejected && !rack->getModule(jointHostId) && APP->engine->getModuleIds().size()==beforeEject-1,"Eject button must delete only Beekapoo without a dangling button event");
+  require(jointA->visible && jointB->visible && jointC->visible && cableIds()==jointCables,"Eject must release all modules and preserve their wiring");
+  for(int repeat=0;repeat<2;++repeat){
+    APP->history->undo();jointHost=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(jointHostId));jointHost->step();
+    require(jointHost && jointHost->members.size()==3 && jointHost->editSession && cableIds()==jointCables,"One Eject Undo must restore the complete editing group");
+    APP->history->redo();
+    require(!rack->getModule(jointHostId) && APP->engine->getModuleIds().size()==beforeEject-1 && cableIds()==jointCables,"Eject Redo must keep released contents alive");
+  }
+  APP->history->undo();jointHost=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(jointHostId));jointHost->step();
+  static_cast<beekapoo::RackEditSession*>(jointHost->editSession.get())->done->action();
+  jointHost->ejectAction();APP->history->undo();jointHost=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(jointHostId));jointHost->step();
+  require(jointHost && jointHost->members.size()==3 && !jointHost->expanded && cableIds()==jointCables,"Collapsed Eject Undo must restore the collapsed group");
+  rack->clear();
+  std::puts("Unified Edit, Inside/Outside adoption, Near/Far placement, saved layout, Eject button and atomic Undo/Redo passed");
 
   std::printf("Beekapoo: zero footprint, occupied-space expansion, native save/load, four-channel DSP, exposed controls, copy isolation, missing-member recovery and deletion checks passed.\n");
 }

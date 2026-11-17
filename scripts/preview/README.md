@@ -78,3 +78,15 @@ Blunch's `--controls` checks also exercise Settings navigation, shared context-m
 Blunch Help is generated from `doc/blunch.md` with `python3 scripts/generate-blunch-help.py`. `scripts/dev.sh check` checks that it is current. The Settings fixture compiles every copyable example and checks reader navigation, clipboard copying, and preservation of editor text and selection; it also captures the Help pages.
 
 The Blunch interaction checks include repeat-argument sequences across line/page cycles and resets, plus complete Rack save/reload of per-channel started/stopped states with master Run on or off.
+
+For a sparse Beekapoo print spectrum, render 36 cases (mostly zero to five
+exposed controls, including mixed knobs/buttons and empty cases):
+
+```sh
+BEEKAPOO_PRINT_SPECTRUM=1 scripts/preview-module.sh beekapoo --scale 3 --output build/previews/beekapoo-print
+python3 scripts/preview/make-spectrum-pdf.py build/previews/beekapoo-print output/pdf/beekapoo-spectrum-36.pdf
+```
+
+The PDF command requires ReportLab and embeds its bundled Vera fonts. It produces
+two Letter pages, 18 layouts per page. Images and the count manifest stay in the
+ignored preview directory; no production module code is changed.

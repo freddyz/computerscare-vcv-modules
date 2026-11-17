@@ -33,6 +33,7 @@ struct Module : engine::Module {
   dsp::SchmittTrigger actionTriggers[6];
   std::atomic<unsigned> pendingActions{0};
   std::atomic<unsigned> pendingHistory{0};
+  std::atomic<int> pendingBypass{-1};
   Module() {
     config(PARAM_COUNT, 6, 0, 0);
     configParam(WIGGLE_AMOUNT, 0.f, 1.f, .1f, "Wiggle amount", "%", 0.f, 100.f);
@@ -50,6 +51,14 @@ struct Module : engine::Module {
     for (int i = 0; i < 6; ++i)
       if (actionTriggers[i].process(inputs[i].getVoltage()))
         pendingActions.fetch_or(1u << i, std::memory_order_relaxed);
+  }
+  // Rack invokes these while holding its engine lock. Apply child changes
+  // from the UI step, after that lock is released, using native bypassModule.
+  void onBypass(const BypassEvent&) override {
+    pendingBypass.store(1, std::memory_order_release);
+  }
+  void onUnBypass(const UnBypassEvent&) override {
+    pendingBypass.store(0, std::memory_order_release);
   }
   void onRandomize(const RandomizeEvent&) override {
     pendingHistory.fetch_or(1u << 1, std::memory_order_relaxed);
@@ -193,6 +202,7 @@ struct GroupHistory : history::ModuleChange {
 };
 struct ActionButton : phlooper::WarpedDropdown {
   int icon = -1;
+  bool iconAndText = false;
   std::function<std::string()> help;
   WeakPtr<ui::Tooltip> tooltip;
   void onEnter(const EnterEvent&) override {
@@ -215,16 +225,19 @@ struct ActionButton : phlooper::WarpedDropdown {
   }
   ~ActionButton() override { clearTooltip(); }
   void draw(const DrawArgs& args) override {
-    showLabel = icon < 0;
+    showLabel = icon < 0 || iconAndText;
+    if (iconAndText) textInset = 17;
     phlooper::WarpedDropdown::draw(args);
     if (icon < 0) return;
     Vec c = box.size * .5f + (isPressed() ? Vec(2, 1) : Vec(-1, -1));
+    if (iconAndText) c.x = 8 + (isPressed() ? 2 : -1);
     nvgSave(args.vg);
     nvgTranslate(args.vg, c.x, c.y);
     float iconScale =
         icon == 6 ? .75f * std::min({1.f, (box.size.x - 4) / 12.f,
                                      (box.size.y - 4) / 12.f})
                   : std::min(1.f, std::max(.4f, (box.size.x - 6) / 16.f));
+    if (iconAndText) iconScale = .7f * std::min(1.f, (box.size.y - 4) / 16.f);
     nvgScale(args.vg, iconScale, iconScale);
     nvgStrokeColor(args.vg, nvgRGB(15, 42, 36));
     nvgFillColor(args.vg, nvgRGB(15, 42, 36));
@@ -272,6 +285,21 @@ struct ActionButton : phlooper::WarpedDropdown {
       nvgLineTo(args.vg, 0, 6);
       nvgLineTo(args.vg, 7, 2);
       nvgStroke(args.vg);
+    } else if (icon == 7) {
+      // An uneven eject triangle above a separate tray.
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -6, 1);
+      nvgLineTo(args.vg, .5f, -6);
+      nvgLineTo(args.vg, 6, 1.5f);
+      nvgClosePath(args.vg);
+      nvgFill(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -6, 4);
+      nvgLineTo(args.vg, 6, 4.5f);
+      nvgLineTo(args.vg, 5.5f, 7);
+      nvgLineTo(args.vg, -5.5f, 6.5f);
+      nvgClosePath(args.vg);
+      nvgFill(args.vg);
     } else if (icon == 6) {
       nvgStrokeWidth(args.vg, 1.8f);
       nvgBeginPath(args.vg);
@@ -309,8 +337,11 @@ struct ActionButton : phlooper::WarpedDropdown {
   bool isPressed() override { return pressed && pressed(); }
   void onButton(const ButtonEvent& e) override {
     if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.action == GLFW_PRESS) {
-      if (action) action();
+      WeakPtr<widget::Widget> live = this;
+      auto callback = action;
       e.consume(this);
+      if (callback) callback();
+      if (!live) e.consume(nullptr);
       return;
     }
     widget::OpaqueWidget::onButton(e);
@@ -398,6 +429,27 @@ struct MappedParam : Base {
   }
   void onLeave(const widget::Widget::LeaveEvent&) override { clearTip(); }
 };
+// Keep Rack responsible for port details and live voltages; only add the
+// source module heading to the presentation on Beekapoo's front panel.
+struct MappedPortTooltip : ui::Tooltip {
+  WeakPtr<ui::Tooltip> native;
+  WeakPtr<widget::Widget> anchor;
+  std::function<std::string()> caption;
+  void step() override {
+    if (!native || !anchor) {
+      hide();
+      requestDelete();
+      return;
+    }
+    native->step();
+    std::string heading = caption ? caption() : "";
+    heading = heading.substr(0, heading.find('\n'));
+    text = heading.empty() ? native->text : heading + "\n" + native->text;
+    ui::Tooltip::step();
+    box.pos = anchor->getAbsoluteOffset(anchor->box.size).round();
+    if (parent) box = box.nudge(parent->box.zeroPos());
+  }
+};
 struct PortFace : widget::OpaqueWidget {
   bool compact = true, input = true;
   JackSmallPointingDown tinyDown;
@@ -418,9 +470,11 @@ struct PortFace : widget::OpaqueWidget {
       LeaveEvent leave;
       source->onLeave(leave);
     }
-    if (!nativeTooltip && tip) {
+    if (tip) {
       if (auto* fallback = dynamic_cast<MappingTooltip*>(tip.get()))
         fallback->caption = {};
+      if (auto* mapped = dynamic_cast<MappedPortTooltip*>(tip.get()))
+        mapped->caption = {};
       tip->hide();
       tip->requestDelete();
     }
@@ -434,7 +488,13 @@ struct PortFace : widget::OpaqueWidget {
     for (auto* child : APP->scene->children)
       if (!before.count(child))
         if (auto* tooltip = dynamic_cast<ui::Tooltip*>(child)) {
-          tip = tooltip;
+          auto* mapped = new MappedPortTooltip;
+          mapped->native = tooltip;
+          mapped->anchor = this;
+          mapped->caption = caption;
+          tooltip->hide();
+          APP->scene->addChild(mapped);
+          tip = mapped;
           nativeTooltip = true;
           break;
         }
@@ -536,6 +596,9 @@ struct Beekapoo : app::ModuleWidget {
   std::vector<Member> members;
   std::map<int64_t, Vec> subpatchPositions;
   bool expanded = false;
+  bool lastBypass = false;
+  bool captureNewModules = true, hasEditPlacement = false;
+  bool markMembers = true;
   bool arrangeByModule = false;
   bool jacksOnly = false;
   std::set<int64_t> panelCableIds, knownCableIds, internalCableIds;
@@ -551,6 +614,7 @@ struct Beekapoo : app::ModuleWidget {
     return !((hiddenKinds | local) & (1u << kind));
   }
   float actionPulse[6]{};
+  float returnHighlight = 0;
   std::vector<Port> ports;
   widget::Widget* controls = nullptr;
   struct Parameter {
@@ -612,6 +676,10 @@ struct Beekapoo : app::ModuleWidget {
   void deleteGroupAction();
   void pruneMissingMembers();
   void editSubpatch();
+  void ejectAction();
+  void focusEditedMembers();
+  void moveEditedMembers(bool near, bool recordHistory = true,
+                         bool keepPosition = false);
   void closeEditSession();
   void forgetEditedMembers(const std::set<int64_t>& removed);
   json_t* editSessionState();
@@ -669,29 +737,14 @@ struct Beekapoo : app::ModuleWidget {
     show->pressed = [this] { return bool(editSession); };
     addChild(show);
     managementButtons.push_back(show);
-    auto* reveal = new ActionButton;
-    reveal->configure(77, 24, 3, 2, .8f, 714);
-    reveal->box.pos = Vec(72, 39);
-    reveal->caption = [this] {
-      return members.empty() ? "Abstract" : expanded ? "Collapse" : "Expand";
-    };
-    reveal->help = [this] {
-      return members.empty() ? "Abstract selected modules"
-             : expanded      ? "Collapse modules"
-                             : "Expand modules";
-    };
-    reveal->pressed = [this] { return expanded; };
-    reveal->action = [this] { groupAction(members.empty() || expanded); };
-    addChild(reveal);
-    managementButtons.push_back(reveal);
-    auto* end = new ActionButton;
-    end->text = "End abstraction";
-    end->configure(131, 24, 3, 2, .8f, 715);
-    end->box.pos = Vec(154, 39);
-    end->help = [] { return "End abstraction"; };
-    end->action = [this] { endAction(); };
-    addChild(end);
-    managementButtons.push_back(end);
+    auto* eject = new ActionButton;
+    eject->text = "Eject";
+    eject->configure(50, 24, 3, 2, .8f, 715);
+    eject->icon = 7;
+    eject->help = [] { return "Release the subpatch and delete Beekapoo"; };
+    eject->action = [this] { ejectAction(); };
+    addChild(eject);
+    managementButtons.push_back(eject);
     addSelectionButton = new ActionButton;
     addSelectionButton->text = "+";
     addSelectionButton->icon = 6;
@@ -794,6 +847,11 @@ struct Beekapoo : app::ModuleWidget {
     if (auto* editing = editSessionState())
       json_object_set_new(root, "editing", editing);
     json_object_set_new(root, "expanded", json_boolean(expanded));
+    json_object_set_new(root, "captureNewModules",
+                        json_boolean(captureNewModules));
+    json_object_set_new(root, "hasEditPlacement",
+                        json_boolean(hasEditPlacement));
+    json_object_set_new(root, "markMembers", json_boolean(markMembers));
     json_object_set_new(root, "arrangeByModule", json_boolean(arrangeByModule));
     json_object_set_new(root, "hiddenKinds", json_integer(hiddenKinds));
     auto* hidden = json_array();
@@ -905,12 +963,12 @@ struct Beekapoo : app::ModuleWidget {
   }
   static float tinyOwnHeight(float width) {
     float available = std::min(width - 25, 247.f);
-    int managementCols = std::max(1, std::min(4, int(available / 16)));
+    int managementCols = std::max(1, std::min(3, int(available / 16)));
     int actionCols = std::max(1, std::min(2, int(available / 34)));
     int cvCols = std::max(1, int((available + 1) / 17));
     float actions = width < 180 ? layoutRows(6, cvCols) * 18
                                 : layoutRows(6, actionCols) * 20;
-    return layoutRows(4, managementCols) * 18 + actions + 12;
+    return layoutRows(3, managementCols) * 18 + actions + 12;
   }
   static float minimumJackWidth(int inputs, int outputs) {
     // `inputs` includes the six module CVs, which stay beside their buttons.
@@ -953,20 +1011,37 @@ struct Beekapoo : app::ModuleWidget {
     responsive.width = width;
     float ownWidth = std::min(width - 12, width < 180 ? 118.f : 92.f);
     float available = ownWidth - 13;
-    int managementCols = std::max(1, std::min(4, int(available / 16)));
+    int managementCols = std::max(1, std::min(3, int(available / 16)));
     int actionCols = std::max(1, std::min(2, int(available / 34)));
     ownFrame->visible = true;
     float ownTop = 8 + compactHeaderHeight(width);
     ownFrame->box = Rect(Vec(6, ownTop), Vec(ownWidth, tinyOwnHeight(width)));
-    for (int i = 0; i < 4; ++i) {
-      auto* button = i < 3 ? managementButtons[i] : addSelectionButton;
-      button->visible = i < 3 || canAddSelection();
-      button->icon = i < 3 ? 3 + i : 6;
+    for (int i = 0; i < 3; ++i) {
+      auto* button = i < 2 ? managementButtons[i] : addSelectionButton;
+      button->visible = i < 2 || canAddSelection();
+      button->icon = i == 0 ? 3 : i == 1 ? 7 : 6;
+      button->iconAndText = false;
       button->box = Rect(Vec(10 + (i % managementCols) * 16,
                              ownTop + 4 + (i / managementCols) * 18),
                          Vec(14, 16));
     }
-    float actionTop = ownTop + 4 + layoutRows(4, managementCols) * 18;
+    bool showAdd = addSelectionButton->visible;
+    float textAvailable = available - (showAdd ? 20.f : 0.f) - 3;
+    if (textAvailable >= 75) {
+      float x = 10;
+      for (int i = 0; i < 2; ++i) {
+        auto* button = managementButtons[i];
+        float bw = std::min(i == 0 ? 54.f : 62.f,
+                            textAvailable * (i == 0 ? .46f : .54f));
+        button->icon = i == 0 ? 3 : 7;
+        button->iconAndText = true;
+        button->textSize = 13;
+        button->box = Rect(Vec(x, ownTop + 4), Vec(bw, 16));
+        x += bw + 3;
+      }
+      addSelectionButton->box.pos = Vec(x, ownTop + 4);
+    }
+    float actionTop = ownTop + 4 + layoutRows(3, managementCols) * 18;
     for (int i = 0; i < 6; ++i) {
       int col = actionCols == 2 ? i / 3 : 0, row = actionCols == 2 ? i % 3 : i;
       Vec cell(10 + col * 34, actionTop + row * 20);
@@ -1192,27 +1267,26 @@ struct Beekapoo : app::ModuleWidget {
         Rect(Vec(6, 40), Vec(responsive.ownWidth, responsive.ownHeight));
     float ownLeft = ownFrame->box.pos.x + 4, ownTop = ownFrame->box.pos.y;
     float available = responsive.ownWidth - 12;
-    float managementWidths[] = {layoutTier >= 2 ? 42.f : 37.f,
-                                layoutTier >= 2 ? 58.f : 52.f,
-                                layoutTier >= 2 ? 34.f : 30.f};
-    float managementTotal =
-        managementWidths[0] + managementWidths[1] + managementWidths[2] + 27;
-    bool icons = layoutTier == 0 || managementTotal > available;
+    bool showAdd = canAddSelection();
+    float textAvailable = available - (showAdd ? 21.f : 0.f) -
+                          (responsive.amountInTop ? 36.f : 0.f) - 6;
+    bool icons = textAvailable < 75;
     float managementX = ownLeft;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 2; ++i) {
       auto* button = managementButtons[i];
-      float bw =
-          icons ? std::min(21.f, (available - 6) / 3) : managementWidths[i];
+      float bw = icons ? 21.f
+                       : std::min(i == 0 ? 54.f : 62.f,
+                                  textAvailable * (i == 0 ? .46f : .54f));
       button->box.pos = Vec(managementX, ownTop + 5);
       button->box.size = Vec(bw, 21);
-      button->textSize = 12;
-      button->icon = icons ? i + 3 : -1;
+      button->textSize = bw < 45 ? 12 : 14;
+      button->icon = i == 0 ? 3 : 7;
+      button->iconAndText = !icons;
       managementX += bw + 3;
     }
-    addSelectionButton->visible = canAddSelection();
+    addSelectionButton->visible = showAdd;
     addSelectionButton->box = Rect(Vec(managementX, ownTop + 5), Vec(18, 21));
-    managementX += 21;
-    managementButtons[2]->text = "End";
+    if (showAdd) managementX += 21;
     if (layoutTier && responsive.ownColumns == 2) {
       headings.push_back({Vec(ownLeft, ownTop + 36), "Exposed", false});
       headings.push_back(
@@ -1377,6 +1451,10 @@ struct Beekapoo : app::ModuleWidget {
       if (!importContents(root)) endAbstraction();
       return;
     }
+    captureNewModules =
+        !json_is_false(json_object_get(root, "captureNewModules"));
+    hasEditPlacement = json_is_true(json_object_get(root, "hasEditPlacement"));
+    markMembers = !json_is_false(json_object_get(root, "markMembers"));
     auto* list = json_object_get(root, "members");
     if (!json_is_array(list)) return;
     if (json_array_size(list) == 0) {
@@ -2030,8 +2108,24 @@ struct Beekapoo : app::ModuleWidget {
         std::to_string(members.size()) + " modules running behind this panel";
     step();
   }
+  void syncBypass() {
+    auto* m = getModule<Module>();
+    if (!m) return;
+    bool bypassed = m->isBypassed();
+    bool requested =
+        m->pendingBypass.exchange(-1, std::memory_order_acq_rel) >= 0;
+    // Also covers saved bypass state and new members added while bypassed.
+    // Normal un-bypassed playback does not scan or change child bypass states.
+    if (bypassed || requested || lastBypass != bypassed)
+      for (const auto& member : members)
+        if (auto* child = APP->engine->getModule(member.id))
+          APP->engine->bypassModule(child, bypassed);
+    lastBypass = bypassed;
+  }
   void step() override {
     addSelectionButton->visible = canAddSelection();
+    returnHighlight = std::max(
+        0.f, returnHighlight - float(APP->window->getLastFrameDuration()));
     auto* sizing = getModule<Module>();
     if (sizing && sizing->panelWidth.load() != requestedWidth) {
       requestedWidth = sizing->panelWidth.load();
@@ -2067,6 +2161,7 @@ struct Beekapoo : app::ModuleWidget {
       if (auto* group = json_object_get(saved, "group")) restore(group);
       json_decref(saved);
     }
+    syncBypass();
     if (members.empty()) {
       ModuleWidget::step();
       return;
@@ -2222,6 +2317,25 @@ struct Beekapoo : app::ModuleWidget {
                    nullptr);
       }
     }
+    if (returnHighlight > 0 && !editSession) {
+      float fade = returnHighlight / .8f;
+      fade = fade * fade * (3 - 2 * fade);
+      nvgSave(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, 2, 3);
+      nvgLineTo(args.vg, box.size.x - 2, 1);
+      nvgLineTo(args.vg, box.size.x - 1, box.size.y - 3);
+      nvgLineTo(args.vg, 3, box.size.y - 1);
+      nvgClosePath(args.vg);
+      nvgFillColor(args.vg,
+                   nvgTransRGBAf(COLOR_COMPUTERSCARE_GREEN, .55f * fade));
+      nvgFill(args.vg);
+      nvgStrokeColor(args.vg,
+                     nvgTransRGBAf(COLOR_COMPUTERSCARE_GREEN, .95f * fade));
+      nvgStrokeWidth(args.vg, 2);
+      nvgStroke(args.vg);
+      nvgRestore(args.vg);
+    }
   }
   void appendContextMenu(ui::Menu* menu) override {
     if (!module) return;
@@ -2297,14 +2411,11 @@ struct Beekapoo : app::ModuleWidget {
                 }));
           }
         }));
-    menu->addChild(createMenuItem(
-        members.empty() ? "Abstract selected modules" : "Collapse modules", "",
-        [this] { groupAction(true); }, !members.empty() && !expanded));
-    menu->addChild(createMenuItem(
-        "Expand modules", "", [this] { groupAction(false); },
-        members.empty() || expanded));
-    menu->addChild(createMenuItem(
-        "End abstraction", "", [this] { endAction(); }, members.empty()));
+    if (members.empty())
+      menu->addChild(createMenuItem("Abstract selected modules", "",
+                                    [this] { groupAction(true); }));
+    menu->addChild(
+        createMenuItem("Eject subpatch", "", [this] { ejectAction(); }));
     menu->addChild(createMenuItem(
         "Add selected modules", "", [this] { addSelection(); },
         members.empty()));
@@ -2350,12 +2461,37 @@ struct Beekapoo : app::ModuleWidget {
         }));
   }
 };
+void Beekapoo::ejectAction() {
+  if (!module) return;
+  auto* change = beginAction("eject subpatch");
+  std::vector<int64_t> released;
+  for (auto& member : members) released.push_back(member.id);
+  if (editSession) moveEditedMembers(true, false);
+  endAbstraction();
+  homeRack->deselectAll();
+  for (auto id : released)
+    if (auto* w = homeRack->getModule(id)) homeRack->select(w, true);
+  change->newModuleJ = toJson();
+  change->after.capture();
+  auto* removal = new history::ModuleRemove;
+  removal->setModule(this);
+  auto* batch = new history::ComplexAction;
+  batch->name = "eject subpatch";
+  batch->push(change);
+  batch->push(removal);
+  APP->history->push(batch);
+  homeRack->removeModule(this);
+  delete this;
+}
 void GroupHistory::undo() {
   history::ModuleChange::undo();
   if (auto* group =
           dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId)))
     group->step();
   before.restore();
+  if (auto* group =
+          dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId)))
+    group->focusEditedMembers();
 }
 void GroupHistory::redo() {
   history::ModuleChange::redo();
@@ -2363,6 +2499,9 @@ void GroupHistory::redo() {
           dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId)))
     group->step();
   after.restore();
+  if (auto* group =
+          dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId)))
+    group->focusEditedMembers();
 }
 #include "BeekapooPortable.hpp"
 #include "BeekapooRackEdit.hpp"
