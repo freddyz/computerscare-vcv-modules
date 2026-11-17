@@ -5,6 +5,9 @@ struct ProtectedQuantity : engine::ParamQuantity {
   void randomize() override {++randomCalls;setImmediateValue(getMaxValue());}
 };
 struct Gain : engine::Module {
+  void dataFromJson(json_t* data) override {
+    if(json_is_true(json_object_get(data,"failLoad")))throw Exception("Fixture load failure");
+  }
   int randomCalls=0,resetCalls=0,saveCalls=0;
   void onSave(const SaveEvent&) override { ++saveCalls; }
   void onRandomize(const RandomizeEvent& e) override {++randomCalls;engine::Module::onRandomize(e);}
@@ -25,6 +28,25 @@ struct Gain : engine::Module {
     outputs[0].setChannels(4);
     for(int ch=0;ch<4;++ch)
       outputs[0].setVoltage((inputs[0].isConnected() ? inputs[0].getVoltage(ch) : (ch+1.f)) * params[0].getValue(), ch);
+  }
+};
+struct Mapper : Gain {
+  engine::ParamHandle handle;
+  Mapper(){APP->engine->addParamHandle(&handle);}
+  ~Mapper() override {APP->engine->removeParamHandle(&handle);}
+  json_t* dataToJson() override {
+    auto* data=json_object();auto* maps=json_array();
+    json_array_append_new(maps,json_pack("{s:I,s:i}","moduleId",(json_int_t)handle.moduleId,"paramId",handle.paramId));
+    json_object_set_new(data,"maps",maps);return data;
+  }
+  void dataFromJson(json_t* data) override {
+    Gain::dataFromJson(data);
+    auto* target=json_array_get(json_object_get(data,"maps"),0);
+    APP->engine->updateParamHandle_NoLock(&handle,json_integer_value(json_object_get(target,"moduleId")),0,false);
+  }
+  void process(const ProcessArgs& args) override {
+    if(handle.module)handle.module->params[0].setValue(params[0].getValue());
+    Gain::process(args);
   }
 };
 struct Face : app::ModuleWidget {
@@ -56,6 +78,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   setenv("VCVMON_CONTROL",(output+"/isolated-watcher").c_str(),1);
   auto* rack=APP->scene->rack;
   auto* gainModel=createModel<beekapoofixture::Gain,beekapoofixture::Face>("demo-gain");
+  auto* mapperModel=createModel<beekapoofixture::Mapper,beekapoofixture::Face>("demo-mapper");
+  plugin.addModel(mapperModel);
   gainModel->name="Demo gain";
   plugin.addModel(gainModel); plugin.addModel(modelBeekapooPreview); plugin.addModel(modelBeekapooLegacyPreview); plugin.addModel(modelPeekabooOldNamePreview);
   require(modelBeekapooLegacyPreview->hidden,"Legacy model must stay hidden from the browser");
@@ -63,13 +87,13 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   auto* browserWidget=modelBeekapooPreview->createModuleWidget(nullptr);
   browserWidget->step();capture(browserWidget,output+"/00-browser.png",scale,false);delete browserWidget;
   struct Cleanup {
-    plugin::Plugin& plugin;plugin::Model* gain;
+    plugin::Plugin& plugin;plugin::Model *gain,*mapper;
     ~Cleanup() {
       APP->scene->rack->clear();
       plugin::plugins.erase(std::find(plugin::plugins.begin(),plugin::plugins.end(),&plugin));
-      plugin.models.remove(gain);plugin.models.remove(modelBeekapooPreview);plugin.models.remove(modelBeekapooLegacyPreview);plugin.models.remove(modelPeekabooOldNamePreview);delete gain;
+      plugin.models.remove(gain);plugin.models.remove(mapper);plugin.models.remove(modelBeekapooPreview);plugin.models.remove(modelBeekapooLegacyPreview);plugin.models.remove(modelPeekabooOldNamePreview);delete gain;delete mapper;
     }
-  } cleanup{plugin,gainModel};
+  } cleanup{plugin,gainModel,mapperModel};
   auto add=[&](plugin::Model* model,Vec pos){
     auto* m=model->createModule();APP->engine->addModule(m);
     auto* w=model->createModuleWidget(m);w->box.pos=pos;rack->addModule(w);return w;
@@ -103,6 +127,55 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   require(rack->getModule(aId)->box.size==Vec() && a->box.size==Vec(90,380),"Holder must have no footprint without resizing the real widget");
   require(!internal->visible && external->visible,"Internal cable must hide; external cable must stay visible");
   require(cableIds()==ids,"Collapse changed cable identities");
+  {
+    beekapoo::PortFace frontOutput;frontOutput.source=a->getOutput(0);frontOutput.input=false;
+    auto click=[&](int mods=0) {
+      widget::EventContext context;widget::Widget::ButtonEvent e;
+      e.context=&context;e.action=GLFW_PRESS;e.button=GLFW_MOUSE_BUTTON_LEFT;e.mods=mods;
+      frontOutput.onButton(e);
+    };
+    auto menuDelete=[&](bool expectVisible) {
+      std::set<widget::Widget*> before(APP->scene->children.begin(),APP->scene->children.end());
+      widget::EventContext context;widget::Widget::ButtonEvent e;e.context=&context;e.button=GLFW_MOUSE_BUTTON_RIGHT;e.action=GLFW_PRESS;
+      frontOutput.onButton(e);
+      beekapoo::VisiblePortDeleteItem* remove=nullptr;
+      std::vector<widget::Widget*> overlays;
+      for(auto* child:APP->scene->children)if(!before.count(child)) {
+        overlays.push_back(child);
+        for(auto* sub:child->children)if(auto* menu=dynamic_cast<ui::Menu*>(sub)) {
+          for(auto* entry:menu->children)if(auto* item=dynamic_cast<beekapoo::VisiblePortDeleteItem*>(entry))remove=item;
+          auto clone=menu->children.begin();std::advance(clone,2);
+          require(dynamic_cast<ui::MenuItem*>(*clone)->disabled==!expectVisible,"Clone top cable must only consider visible connections");
+        }
+      }
+      require(remove && remove->disabled==!expectVisible,"Jack menu Delete must only consider visible cables");
+      widget::Widget::ActionEvent action;remove->onAction(action);
+      for(auto* overlay:overlays){APP->scene->removeChild(overlay);delete overlay;}
+    };
+    menuDelete(false);require(cableIds()==ids,"Jack menu must not delete hidden-only wiring");
+    for(int attempt=0;attempt<2;++attempt) {
+      click();auto loose=rack->getIncompleteCables();
+      require(loose.size()==1 && loose[0]->visible && loose[0]->outputPort==a->getOutput(0),"First exposed-output click must immediately start a visible native cable");
+      require(cableIds()==ids && internal->cable && !internal->visible,"Starting a cable must not detach a hidden internal route");
+      APP->event->setDraggedWidget(nullptr,GLFW_MOUSE_BUTTON_LEFT);
+      require(cableIds()==ids && rack->getIncompleteCables().empty(),"Cancelling a front-panel drag must preserve all existing wiring");
+    }
+    click(GLFW_MOD_SHIFT);
+    require(cableIds()==ids,"Shift-click must not delete a hidden internal cable");
+    click();widget::Widget::DragDropEvent drop;drop.origin=a->getOutput(0);drop.button=GLFW_MOUSE_BUTTON_LEFT;
+    guard->getInput(0)->onDragDrop(drop);APP->event->setDraggedWidget(nullptr,GLFW_MOUSE_BUTTON_LEFT);
+    require(cableIds().size()==ids.size()+1 && internal->cable,"An exposed output must patch externally while keeping its internal route");
+    menuDelete(true);require(cableIds()==ids,"Mixed jack menu must only delete its visible cable");
+    APP->history->undo();require(cableIds().size()==ids.size()+1,"Undo jack-menu deletion must restore the visible cable");
+    click();require(internal->cable && APP->engine->getCable(internalId),"Grabbing a visible external cable must leave the hidden route intact");
+    APP->event->setDraggedWidget(nullptr,GLFW_MOUSE_BUTTON_LEFT);
+    require(cableIds()==ids,"Cancelling a visible cable move must only remove that visible cable");
+    beekapoo::PortFace frontInput;frontInput.source=b->getInput(0);frontInput.input=true;
+    widget::EventContext context;widget::Widget::ButtonEvent inputClick;inputClick.context=&context;inputClick.button=GLFW_MOUSE_BUTTON_LEFT;inputClick.action=GLFW_PRESS;inputClick.mods=0;
+    frontInput.onButton(inputClick);
+    require(cableIds()==ids && rack->getIncompleteCables().size()==1,"An exposed input must not pick up its hidden internal cable");
+    APP->event->setDraggedWidget(nullptr,GLFW_MOUSE_BUTTON_LEFT);
+  }
   APP->engine->stepBlock(64);
   for(int ch=0;ch<4;++ch)require(sink->module->outputs[0].getVoltage(ch)==reference[ch],"Collapse changed polyphonic output");
   require(rack->requestModulePos(sink,Vec(0,0)),"Freed rack space must accept another module");
@@ -165,6 +238,30 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   auto& proxy=host->ports.front();
   Vec expected=host->controls->getRelativeOffset(proxy.face->box.getCenter(),rack);
   require((external->getOutputPos()-expected).norm()<.01f,"Boundary cable must follow container movement");
+  auto checkDisconnect=[&](std::function<void()> action) {
+    action();
+    require(APP->engine->getCable(internalId) && !APP->engine->getCable(externalId),"Disconnect must remove boundary wiring and preserve hidden internal wiring");
+    APP->history->undo();host->step();
+    external=rack->getCable(externalId);
+    require(cableIds()==ids,"Disconnect Undo must restore precisely the prior cables");
+  };
+  checkDisconnect([&]{host->disconnectPanelAction();});
+  checkDisconnect([&]{
+    ui::Menu menu;menu.addChild(createMenuItem("Native disconnect","Ctrl+U",[&]{host->disconnectAction();}));
+    host->appendContextMenu(&menu);widget::Widget::ActionEvent action;
+    for(auto* child:menu.children)if(auto* item=dynamic_cast<ui::MenuItem*>(child))if(item->rightText=="Ctrl+U"){item->onAction(action);return;}
+    require(false,"Module menu must retain its native Disconnect command");
+  });
+  checkDisconnect([&]{
+    rack->deselectAll();rack->select(host,true);
+    ui::MenuOverlay overlay;auto* menu=new ui::Menu;overlay.addChild(menu);rack->appendSelectionContextMenu(menu);
+    beekapoo::BeekapooRackHooks* hooks=nullptr;for(auto* child:APP->scene->children)if(auto* h=dynamic_cast<beekapoo::BeekapooRackHooks*>(child))hooks=h;
+    require(hooks,"Selection hooks must exist");hooks->wrapMenus(menu);widget::Widget::ActionEvent action;
+    for(auto* child:menu->children)if(auto* item=dynamic_cast<beekapoo::GroupDisconnectMenuItem*>(child)){item->onAction(action);return;}
+    require(false,"Selection menu must use the same safe Disconnect policy");
+  });
+  checkDisconnect([&]{widget::EventContext context;widget::Widget::HoverKeyEvent e;e.context=&context;e.key=GLFW_KEY_U;e.mods=RACK_MOD_CTRL;e.action=GLFW_PRESS;host->onHoverKey(e);});
+  rack->deselectAll();
   if(std::getenv("VCVMON_CONTROL")) {
     bool pause=false, save=false;
     widget::Widget* toolbar=nullptr;
@@ -1060,8 +1157,56 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     APP->history->redo();presetTarget->step();
     require(!rack->getModule(oldChildId) && APP->engine->getModuleIds().size()==beforePreset+2,"Preset Redo must not leak the former group");
   }
+  for(int failure=0;failure<3;++failure) {
+    auto* broken=json_deep_copy(preset);
+    auto* children=json_object_get(json_object_get(broken,"data"),"contents");
+    auto* child=json_array_get(json_object_get(children,"modules"),1);
+    if(failure==0)json_object_set_new(child,"model",json_string("__missing_audit_model__"));
+    if(failure==1){auto* data=json_object();json_object_set_new(data,"failLoad",json_true());json_object_set_new(child,"data",data);}
+    if(failure==2)json_object_set(child,"sourceId",json_object_get(json_array_get(json_object_get(children,"modules"),0),"sourceId"));
+    auto beforeCount=APP->engine->getModuleIds().size();auto beforeWires=cableIds();
+    std::set<int64_t> beforeChildren;for(auto& member:presetTarget->members)beforeChildren.insert(member.id);
+    presetTarget->pasteJsonAction(broken);json_decref(broken);presetTarget->step();
+    std::set<int64_t> afterChildren;for(auto& member:presetTarget->members)afterChildren.insert(member.id);
+    require(afterChildren==beforeChildren && cableIds()==beforeWires && APP->engine->getModuleIds().size()==beforeCount,"Failed preset loads must preserve the original group, wires and engine modules");
+    APP->history->undo();presetTarget->step();
+    APP->history->redo();presetTarget->step();
+    require(presetTarget->members.size()==beforeChildren.size() && cableIds()==beforeWires,"Undo/Redo of a failed preset must not orphan or remove the original group");
+  }
   json_decref(preset);rack->clear();
+  {
+    auto* target=add(gainModel,Vec(0,0));auto* map=add(mapperModel,Vec(90,0));
+    auto* mapper=static_cast<beekapoofixture::Mapper*>(map->module);
+    APP->engine->updateParamHandle(&mapper->handle,target->module->id,0);
+    auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(240,0)));
+    rack->select(target,true);rack->select(map,true);owner->collapse();owner->duplicateAction(false);
+    beekapoo::Beekapoo* copied=nullptr;for(auto* w:rack->getModules())if(auto* group=dynamic_cast<beekapoo::Beekapoo*>(w))if(group!=owner)copied=group;
+    require(copied,"Mapper duplicate must create a complete group");copied->step();
+    beekapoofixture::Mapper* copiedMapper=nullptr;engine::Module* copiedTarget=nullptr;
+    for(auto& member:copied->members)if(auto* m=dynamic_cast<beekapoofixture::Mapper*>(member.widget->module))copiedMapper=m;else copiedTarget=member.widget->module;
+    require(copiedMapper && copiedMapper->handle.module==copiedTarget && mapper->handle.module==target->module,"Copied mapper must bind only to the copied target without stealing the original mapping");
+    mapper->params[0].setValue(.25f);copiedMapper->params[0].setValue(.75f);APP->engine->stepBlock(64);
+    require(std::abs(target->module->params[0].getValue()-.25f)<.001f && std::abs(copiedTarget->params[0].getValue()-.75f)<.001f,"Copied mapper must drive its own parameters independently");
+    auto copyId=copied->module->id;APP->history->undo();APP->history->redo();copied=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(copyId));copied->step();
+    for(auto& member:copied->members)if(auto* m=dynamic_cast<beekapoofixture::Mapper*>(member.widget->module))require(copied->contains(m->handle.module),"Mapper targets must stay internal after duplicate Undo/Redo");
+    rack->clear();
+  }
 
+  // Native bypass must affect the contained engine modules, including
+  {
+    auto* original=add(gainModel,Vec(0,0));auto originalId=original->module->id;
+    auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(180,0)));
+    rack->select(original,true);owner->collapse();auto* saved=owner->toJson();
+    original->module->params[0].setValue(.19f);
+    owner->pasteJsonAction(saved);owner->step();
+    require(owner->members.size()==1 && owner->members[0].id!=originalId && !rack->getModule(originalId),"Same-instance preset recall must replace children instead of reusing live settings");
+    require(std::abs(owner->members[0].widget->module->params[0].getValue()-1.f)<.001f,"Same-instance preset must restore saved child parameters");
+    APP->history->undo();owner->step();
+    require(owner->members[0].id==originalId && std::abs(owner->members[0].widget->module->params[0].getValue()-.19f)<.001f,"Same-instance preset Undo must recover the prior live child and its settings");
+    APP->history->redo();owner->step();
+    require(owner->members.size()==1 && owner->members[0].id!=originalId,"Same-instance preset Redo must restore the replacement without orphaning originals");
+    json_decref(saved);rack->clear();
+  }
   // Native bypass must affect the contained engine modules, including
   // native routing, callbacks, mixed child states and one-step history.
   auto* bypassDriver=add(gainModel,Vec(0,0));

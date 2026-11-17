@@ -78,79 +78,113 @@ struct ContainedPresetHistory : history::Action {
     if (auto* group = owner()) group->step();
   }
 };
+history::ModuleChange* incomingGroupPreset(int64_t owner, json_t* root) {
+  if (!json_object_get(root, "contents")) return nullptr;
+  auto* state = APP->history;
+  if (state->actionIndex <= 0 ||
+      size_t(state->actionIndex) > state->actions.size())
+    return nullptr;
+  auto* candidate = dynamic_cast<history::ModuleChange*>(
+      state->actions[state->actionIndex - 1]);
+  // Native preset paste strips the root module ID. Reset/randomize snapshots
+  // retain it. Already-handled presets use ContainedPresetHistory instead.
+  if (!candidate || dynamic_cast<GroupHistory*>(candidate) ||
+      candidate->moduleId != owner ||
+      json_object_get(candidate->newModuleJ, "id"))
+    return nullptr;
+  auto* data = json_object_get(candidate->newModuleJ, "data");
+  if (!json_equal(json_object_get(data, "contents"),
+                  json_object_get(root, "contents")))
+    return nullptr;
+  auto* group = json_deep_copy(root);
+  json_object_del(group, "contents");
+  bool matches = json_equal(group, json_object_get(data, "group"));
+  json_decref(group);
+  return matches ? candidate : nullptr;
+}
 bool Beekapoo::importContents(json_t* root) {
   auto* contents = json_object_get(root, "contents");
   auto* list = json_object_get(contents, "modules");
-  if (!json_is_array(list) || !json_array_size(list)) return false;
   std::map<int64_t, int64_t> ids, cableIds;
   std::vector<app::ModuleWidget*> created;
   std::vector<app::CableWidget*> wires;
   std::vector<history::Action*> history;
   auto* state = APP->history;
   int presetIndex = state->actionIndex - 1;
-  history::ModuleChange* preset = nullptr;
-  if (presetIndex >= 0 && size_t(presetIndex) < state->actions.size()) {
-    auto* candidate =
-        dynamic_cast<history::ModuleChange*>(state->actions[presetIndex]);
-    if (candidate && candidate->moduleId == module->id &&
-        !dynamic_cast<GroupHistory*>(candidate)) {
-      auto* saved = json_object_get(
-          json_object_get(candidate->newModuleJ, "data"), "group");
-      if (json_is_object(saved) &&
-          json_integer_value(json_object_get(saved, "owner")) != module->id)
-        preset = candidate;
-    }
-  }
+  history::ModuleChange* preset = incomingGroupPreset(module->id, root);
   std::set<int64_t> previous;
   if (preset)
     for (auto& member : members) previous.insert(member.id);
   auto* remapped = json_deep_copy(root);
   json_object_del(remapped, "contents");
+  saveGroup();
+  auto* previousState = preset ? json_incref(preset->oldModuleJ) : toJson();
+  DEFER({ json_decref(previousState); });
+  bool committing = false;
   try {
+    if (!json_is_array(list) || !json_array_size(list))
+      throw Exception("No contained modules in preset");
+    std::set<int64_t> sourceIds;
+    // Validate dependencies and identities before creating any children.
+    for (size_t i = 0; i < json_array_size(list); ++i) {
+      auto* item = json_array_get(list, i);
+      if (!plugin::modelFromJson(item))
+        throw Exception("A contained module is not installed");
+      auto* id = json_object_get(item, "sourceId");
+      if (!json_is_integer(id) ||
+          !sourceIds.insert(json_integer_value(id)).second)
+        throw Exception("Invalid contained module identity");
+    }
+    // Allocate every native ID before applying any saved module data. Mapper
+    // modules must never briefly bind to the original group's parameters.
     for (size_t i = 0; i < json_array_size(list); ++i) {
       auto* item = json_array_get(list, i);
       auto* model = plugin::modelFromJson(item);
-      if (!model) throw Exception("A contained module is not installed");
-      auto* copy = json_deep_copy(item);
       int64_t old = json_integer_value(json_object_get(item, "sourceId"));
-      json_object_del(copy, "id");
-      json_object_del(copy, "leftModuleId");
-      json_object_del(copy, "rightModuleId");
       auto* m = model->createModule();
-      try {
-        m->fromJson(copy);
-      } catch (...) {
-        delete m;
-        json_decref(copy);
-        throw;
-      }
       APP->engine->addModule(m);
       app::ModuleWidget* w = nullptr;
       try {
         w = model->createModuleWidget(m);
-        w->fromJson(copy);
       } catch (...) {
         APP->engine->removeModule(m);
-        if (w)
-          delete w;
-        else
-          delete m;
-        json_decref(copy);
+        delete m;
         throw;
       }
-      json_decref(copy);
       w->box.pos = parkingPosition();
       homeRack->addModule(w);
       created.push_back(w);
       ids[old] = m->id;
-      // Match Rack's native duplicate handling of per-module patch storage.
       if (auto* source = APP->engine->getModule(old))
         if (source->model == m->model &&
             system::isDirectory(source->getPatchStorageDirectory()))
           system::copy(source->getPatchStorageDirectory(),
                        m->getPatchStorageDirectory());
+    }
+    for (size_t i = 0; i < created.size(); ++i) {
+      auto* copy = json_deep_copy(json_array_get(list, i));
+      DEFER({ json_decref(copy); });
+      json_object_del(copy, "id");
+      json_object_del(copy, "leftModuleId");
+      json_object_del(copy, "rightModuleId");
+      // Rack MIDI Map, stoermelder's MapModuleBase and PatchMaster all use
+      // data.maps entries with explicit moduleId/paramId pairs. Only remap
+      // this known schema and targets inside the copied subpatch.
+      auto* maps = json_object_get(json_object_get(copy, "data"), "maps");
+      for (size_t j = 0; j < json_array_size(maps); ++j) {
+        auto* entry = json_array_get(maps, j);
+        auto* target = json_object_get(entry, "moduleId");
+        if (json_is_integer(target) &&
+            json_is_integer(json_object_get(entry, "paramId"))) {
+          auto found = ids.find(json_integer_value(target));
+          if (found != ids.end())
+            json_object_set_new(entry, "moduleId", json_integer(found->second));
+        }
+      }
+      // Widget::fromJson uses Engine::moduleFromJson's native engine lock.
+      created[i]->fromJson(copy);
       auto* action = new history::ModuleAdd;
-      action->setModule(w);
+      action->setModule(created[i]);
       history.push_back(action);
     }
     for (const char* key : {"members", "subpatchPositions", "ports",
@@ -215,6 +249,7 @@ bool Beekapoo::importContents(json_t* root) {
     json_object_del(remapped, "editing");
     json_object_set_new(remapped, "owner", json_integer(module->id));
     json_object_set_new(remapped, "expanded", json_false());
+    committing = true;
     restore(remapped);
     json_decref(remapped);
     auto* current = module->toJson();
@@ -253,7 +288,7 @@ bool Beekapoo::importContents(json_t* root) {
     return true;
   } catch (const std::exception& e) {
     WARN("Beekapoo import: %s", e.what());
-    endAbstraction();
+    if (committing) endAbstraction();
     for (auto* cw : wires) {
       homeRack->removeCable(cw);
       delete cw;
@@ -264,7 +299,22 @@ bool Beekapoo::importContents(json_t* root) {
     }
     for (auto* action : history) delete action;
     json_decref(remapped);
-    status = "Could not restore contained modules";
+    // Restore both the host and its original group immediately. A failed
+    // replacement must not release its members or leave changed host knobs.
+    fromJson(previousState);
+    if (auto* saved = getModule<Module>()->takeRestore()) {
+      if (json_integer_value(json_object_get(saved, "owner")) == module->id)
+        restore(saved);
+      else
+        endAbstraction();
+      json_decref(saved);
+    }
+    status = "Could not restore contained modules: " + std::string(e.what());
+    if (preset) {
+      json_decref(preset->newModuleJ);
+      preset->newModuleJ = json_incref(previousState);
+      state->actions[presetIndex] = new ContainedPresetHistory(preset);
+    }
     return false;
   }
 }

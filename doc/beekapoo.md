@@ -24,13 +24,13 @@ Rack’s **Bypass** command bypasses every contained module. Switching it off un
 
 **Panel arrangement** groups controls by type or by source module. **Show controls** hides or shows parameters, inputs, outputs, or controls from one module. Hiding a control preserves its mapping and connections. Hover for the full control and module name. Port tooltips show the normal live voltage readings. At small widths, exposed parameter knobs fill available space without labels. Module action buttons and Amount are hidden; their CV jacks stay visible. Edit, Eject, all jacks, and the computerscare logo remain visible. Module actions keep their own box, separate from the exposed jacks.
 
-Cables patched on Beekapoo’s front panel remain visible there, including connections between its own jacks. Internal wiring made while editing is hidden when you finish.
+Cables patched on Beekapoo’s front panel remain visible there, including connections between its own jacks. Internal wiring made while editing is hidden when you finish. Front-panel cable actions leave hidden wiring alone. **Disconnect cables** removes outside connections and visible front-panel cables; internal wiring stays connected.
 
 ## Copies and saved selections
 
-**Duplicate** creates an independent copy, including contained modules, their settings, and internal cables. **Duplicate with cables** also copies incoming external connections. Cmd/Ctrl+D and Cmd/Ctrl+Shift+D over Beekapoo use the same options.
+**Duplicate** creates an independent copy, including contained modules, their settings, and internal cables. **Duplicate with cables** also copies incoming external connections. Cmd/Ctrl+D and Cmd/Ctrl+Shift+D over Beekapoo use the same options. Contained MIDI Map, stoermelder CV/MIDI mapping, and PatchMaster mappings using the standard mapping format are redirected to the copied modules. Other mapping formats may need to be reassigned.
 
-Rack’s **Save selection as** saves a `.vcvs` selection file. Select Beekapoo to include its contained modules and internal wiring. Load that selection to reuse the group. Selection files do not bundle external sample files or other module assets; keep those files available separately. Loading a Beekapoo preset replaces its contents; Undo restores the previous group and its connections.
+Rack’s **Save selection as** saves a `.vcvs` selection file. Select Beekapoo to include its contained modules and internal wiring. Load that selection to reuse the group. Selection files do not bundle external sample files or other module assets; keep those files available separately. Loading a Beekapoo preset replaces its contents; Undo restores the previous group and its connections. If a preset cannot load, the current group stays intact.
 
 ## Randomization
 

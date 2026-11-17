@@ -1,4 +1,50 @@
 #pragma once
+inline void disconnectGroupPanels(const std::vector<Beekapoo*>& groups,
+                                  const std::set<int64_t>& ordinary = {}) {
+  auto* rack = APP->scene->rack;
+  auto* batch = new history::ComplexAction;
+  batch->name = "disconnect cables";
+  for (auto* cable : rack->getCompleteCables()) {
+    auto* c = cable->cable;
+    bool remove = ordinary.count(c->inputModule->id) ||
+                  ordinary.count(c->outputModule->id);
+    for (auto* group : groups) {
+      bool input = group->contains(c->inputModule),
+           output = group->contains(c->outputModule);
+      remove |= c->inputModule == group->module ||
+                c->outputModule == group->module || input != output ||
+                group->panelCableIds.count(c->id);
+    }
+    if (!remove) continue;
+    auto* action = new history::CableRemove;
+    action->setCable(cable);
+    batch->push(action);
+    rack->removeCable(cable);
+    delete cable;
+  }
+  if (batch->isEmpty())
+    delete batch;
+  else
+    APP->history->push(batch);
+}
+void Beekapoo::disconnectPanelAction() { disconnectGroupPanels({this}); }
+void disconnectBeekapooSelection() {
+  std::vector<Beekapoo*> groups;
+  auto selected = APP->scene->rack->getSelected();
+  for (auto* w : selected)
+    if (auto* group = dynamic_cast<Beekapoo*>(w)) groups.push_back(group);
+  std::set<int64_t> ordinary;
+  for (auto* w : selected) {
+    if (!w->module || dynamic_cast<Beekapoo*>(w)) continue;
+    bool included = false;
+    for (auto* group : groups) included |= group->contains(w->module);
+    if (!included) ordinary.insert(w->module->id);
+  }
+  disconnectGroupPanels(groups, ordinary);
+}
+struct GroupDisconnectMenuItem : ui::MenuItem {
+  void onAction(const ActionEvent&) override { disconnectBeekapooSelection(); }
+};
 // Rack's selection serializer does not tell contained modules whether its
 // caller requested external cables. Scope that policy around the stock
 // selection command; its placement, selection and history remain native.
@@ -155,6 +201,20 @@ struct BeekapooRackHooks : widget::Widget {
     // Rack's final three selection commands are Duplicate, Duplicate with
     // cables, and Delete. Do not recurse into arbitrary module submenus.
     auto end = actual;
+    if (menu->children.size() >= 5) {
+      // Disconnect precedes Bypass and the final three native commands.
+      auto position = end;
+      std::advance(position, -5);
+      if (auto* item = dynamic_cast<ui::MenuItem*>(*position)) {
+        auto* replacement = new GroupDisconnectMenuItem;
+        replacement->text = item->text;
+        replacement->rightText = item->rightText;
+        replacement->disabled = item->disabled;
+        menu->addChildAbove(replacement, item);
+        menu->removeChild(item);
+        delete item;
+      }
+    }
     std::advance(actual, -3);
     int command = 0;
     while (actual != end) {
@@ -182,7 +242,10 @@ struct BeekapooRackHooks : widget::Widget {
     bool deleting = (e.key == GLFW_KEY_DELETE || e.key == GLFW_KEY_BACKSPACE) &&
                     !(e.mods & RACK_MOD_MASK);
     bool duplicating = e.key == GLFW_KEY_D && (e.mods & RACK_MOD_CTRL);
-    if (e.action != GLFW_PRESS || (!deleting && !duplicating) ||
+    bool disconnecting =
+        e.key == GLFW_KEY_U && (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL;
+    if (e.action != GLFW_PRESS ||
+        (!deleting && !duplicating && !disconnecting) ||
         APP->scene->browser->visible || !hasSelectedGroup())
       return;
     auto* hovered = APP->event->getHoveredWidget();
@@ -191,6 +254,11 @@ struct BeekapooRackHooks : widget::Widget {
       return;
     if (deleting) {
       deleteSelectionIncludingContents();
+      e.consume(this);
+      return;
+    }
+    if (disconnecting) {
+      disconnectBeekapooSelection();
       e.consume(this);
       return;
     }

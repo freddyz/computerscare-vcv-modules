@@ -12,6 +12,8 @@
 namespace beekapoo {
 struct SubpatchNativeRack;
 void installRackHooks();
+void disconnectBeekapooSelection();
+history::ModuleChange* incomingGroupPreset(int64_t owner, json_t* root);
 void queueSubpatchDeletion(int64_t owner, const std::vector<int64_t>& members);
 // Temporarily lend the existing Rack's public containers to the subpatch UI.
 // No RackWidget construction or private SDK entry points are required.
@@ -450,6 +452,58 @@ struct MappedPortTooltip : ui::Tooltip {
     if (parent) box = box.nudge(parent->box.zeroPos());
   }
 };
+struct ScopedVisiblePortCables {
+  widget::Widget* container = nullptr;
+  std::list<widget::Widget*> hidden, hiddenCables;
+  widget::Widget* cableContainer;
+  ScopedVisiblePortCables(app::RackWidget* rack, app::PortWidget* source,
+                          bool filterCables = false) {
+    cableContainer = rack->getCableContainer();
+    std::set<void*> omit;
+    for (auto* cable : rack->getCompleteCablesOnPort(source))
+      if (!cable->visible) {
+        omit.insert(static_cast<void*>(cable->inputPlug));
+        omit.insert(static_cast<void*>(cable->outputPlug));
+      }
+    if (filterCables)
+      for (auto it = cableContainer->children.begin();
+           it != cableContainer->children.end();) {
+        auto current = it++;
+        if (auto* cable = dynamic_cast<app::CableWidget*>(*current))
+          if (!cable->visible &&
+              (cable->inputPort == source || cable->outputPort == source))
+            hiddenCables.splice(hiddenCables.end(), cableContainer->children,
+                                current);
+      }
+    // PlugWidget is opaque in released Rack SDKs. Find its public parent
+    // by identity, as the panel's plug-visibility code already does.
+    for (auto* child : rack->children)
+      for (auto* plug : child->children)
+        if (omit.count(static_cast<void*>(plug))) container = child;
+    if (!container) return;
+    for (auto it = container->children.begin();
+         it != container->children.end();) {
+      auto current = it++;
+      if (omit.count(static_cast<void*>(*current)))
+        hidden.splice(hidden.end(), container->children, current);
+    }
+  }
+  ~ScopedVisiblePortCables() {
+    cableContainer->children.splice(cableContainer->children.begin(),
+                                    hiddenCables);
+    // Keep hidden plugs below visible ones; their ownership never changes.
+    if (container)
+      container->children.splice(container->children.begin(), hidden);
+  }
+};
+struct VisiblePortDeleteItem : ui::MenuItem {
+  WeakPtr<app::PortWidget> source;
+  void onAction(const ActionEvent&) override {
+    if (!source) return;
+    ScopedVisiblePortCables scope(APP->scene->rack, source.get());
+    source->deleteTopCableAction();
+  }
+};
 struct PortFace : widget::OpaqueWidget {
   bool compact = true, input = true;
   JackSmallPointingDown tinyDown;
@@ -545,7 +599,44 @@ struct PortFace : widget::OpaqueWidget {
       widget::OpaqueWidget::onHover(e);
   }
   void onButton(const ButtonEvent& e) override {
-    if (source) source->onButton(e);
+    if (!source) return;
+    if (e.button == GLFW_MOUSE_BUTTON_RIGHT && e.action == GLFW_PRESS) {
+      std::set<widget::Widget*> before(APP->scene->children.begin(),
+                                       APP->scene->children.end());
+      ScopedVisiblePortCables scope(APP->scene->rack, source.get(), true);
+      source->onButton(e);
+      for (auto* child : APP->scene->children)
+        if (!before.count(child))
+          for (auto* sub : child->children)
+            if (auto* menu = dynamic_cast<ui::Menu*>(sub))
+              if (menu->children.size() > 1 &&
+                  dynamic_cast<ui::MenuLabel*>(menu->children.front()))
+                if (auto* item = dynamic_cast<ui::MenuItem*>(
+                        *std::next(menu->children.begin()))) {
+                  // Native port menus start with the port name and Delete top
+                  // cable.
+                  auto* safe = new VisiblePortDeleteItem;
+                  safe->source = source;
+                  safe->text = item->text;
+                  safe->rightText = item->rightText;
+                  safe->disabled = item->disabled;
+                  menu->addChildAbove(safe, item);
+                  menu->removeChild(item);
+                  delete item;
+                }
+      return;
+    }
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT || e.action != GLFW_PRESS) {
+      source->onButton(e);
+      return;
+    }
+    // Rack's getTopPlug() includes invisible plugs. Temporarily omit hidden
+    // internal plugs while it handles this click and starts the native drag,
+    // so a front-panel gesture cannot pick up an invisible internal cable.
+    ScopedVisiblePortCables hidden(APP->scene->rack, source.get());
+    source->onButton(e);
+    if (e.context && e.context->target == source.get())
+      APP->event->setDraggedWidget(source.get(), e.button);
   }
   void onDragDrop(const DragDropEvent& e) override {
     std::vector<WeakPtr<app::CableWidget>> incomplete;
@@ -669,6 +760,7 @@ struct Beekapoo : app::ModuleWidget {
   json_t* portableContents(bool external);
   bool importContents(json_t* root);
   void duplicateAction(bool cables);
+  void disconnectPanelAction();
   void prepareContainedSave() {
     for (auto& member : members)
       if (auto* w = find(member.id)) APP->engine->prepareSaveModule(w->module);
@@ -1444,11 +1536,18 @@ struct Beekapoo : app::ModuleWidget {
     saveGroup();
   }
   void restore(json_t* root) {
+    if (incomingGroupPreset(module->id, root)) {
+      importContents(root);
+      return;
+    }
     // Native duplicate/preset operations don't remap embedded module IDs.
     // Refuse a copied container's references instead of stealing its group.
     auto* owner = json_object_get(root, "owner");
     if (!json_is_integer(owner) || json_integer_value(owner) != module->id) {
-      if (!importContents(root)) endAbstraction();
+      if (json_object_get(root, "contents"))
+        importContents(root);
+      else
+        endAbstraction();
       return;
     }
     captureNewModules =
@@ -2020,6 +2119,15 @@ struct Beekapoo : app::ModuleWidget {
     }
   }
   void onHoverKey(const HoverKeyEvent& e) override {
+    if (e.action == GLFW_PRESS && e.key == GLFW_KEY_U &&
+        (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL) {
+      if (homeRack->isSelected(this))
+        disconnectBeekapooSelection();
+      else
+        disconnectPanelAction();
+      e.consume(this);
+      return;
+    }
     if (e.action == GLFW_PRESS && !(e.mods & RACK_MOD_MASK) &&
         (e.key == GLFW_KEY_DELETE || e.key == GLFW_KEY_BACKSPACE)) {
       deleteGroupAction();
@@ -2349,6 +2457,18 @@ struct Beekapoo : app::ModuleWidget {
       menu->removeChild(item);
       delete item;
     }
+    // Preserve Rack's own translated label and shortcut. This is its unique
+    // native U command; the SDK predates the translation helper API.
+    for (auto* child : menu->children)
+      if (auto* item = dynamic_cast<ui::MenuItem*>(child))
+        if (!item->rightText.empty() && item->rightText.back() == 'U') {
+          auto* replacement = createMenuItem(
+              item->text, item->rightText, [this] { disconnectPanelAction(); });
+          menu->addChildAbove(replacement, item);
+          menu->removeChild(item);
+          delete item;
+          break;
+        }
     menu->addChild(
         createMenuItem("Duplicate", "", [this] { duplicateAction(false); }));
     menu->addChild(createMenuItem("Duplicate with cables", "",
