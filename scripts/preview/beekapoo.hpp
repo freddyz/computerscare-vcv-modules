@@ -540,7 +540,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     for(const auto& p:host->ports)visibleControls.push_back(p.face);
     for(const auto& p:host->parameters)visibleControls.push_back(p.knob);
     visibleControls.erase(std::remove_if(visibleControls.begin(),visibleControls.end(),[](widget::Widget* w){return !w->visible;}),visibleControls.end());
-    require(host->ownFrame->box.size.x<=264,"Module controls must retain a capped width");
+    require(host->ownFrame->box.size.x==host->box.size.x && host->titleFrame->box.size.x==host->box.size.x,"Header and module controls frames must fill the panel width");
     if(!host->jacksOnly)for(int action=0;action<3;++action) {
       if(host->responsive.ownColumns==2)require(host->actionButtons[action]->box.pos.y==host->actionButtons[action+3]->box.pos.y,"Matching exposed/all actions must share a row");
       else require(host->actionButtons[action]->box.pos.x==host->actionButtons[action+3]->box.pos.x,"Narrow action sets must share a column");
@@ -962,7 +962,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   group->requestedWidth=45;group->layoutControls();
   require(group->jacksOnly && !group->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Minimum view must hide parameter knobs");
   for(auto* button:group->managementButtons)require(button->visible,"Edit and Eject must always stay visible");
-  for(auto* button:group->actionButtons)require(!button->visible,"Small layouts must hide module action buttons");
+  for(int i=0;i<6;++i)require(group->actionButtons[i]->visible==(i%3==0),"Smallest layouts must retain both Wiggle buttons");
   int visibleKnobs=0;for(auto& p:group->parameters)if(p.knob->visible)++visibleKnobs;
   require(visibleKnobs>0,"Small layouts must use spare space for unlabelled parameters");
   require(group->titleFrame->visible && group->ownFrame->visible,"Minimum layout must keep the logo and its separate module-controls block");
@@ -1080,7 +1080,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto within=[](Rect child,Rect parent){return child.pos.x>=parent.pos.x && child.pos.y>=parent.pos.y && child.getRight()<=parent.getRight() && child.getBottom()<=parent.getBottom();};
     for(auto& param:wrapper->parameters)require(within(param.knob->box,wrapper->frameContent(wrapper->frame)),"Narrow knob must stay inside its frame");
     for(auto& port:wrapper->ports)require(within(port.face->box,wrapper->frameContent(port.input?wrapper->inputFrame:wrapper->outputFrame)),"Narrow jack must stay inside its frame");
-    require(wrapper->frame->box.getBottom()+4<=wrapper->inputFrame->box.pos.y,"Narrow parameter and I/O blocks must not overlap");
+    require(wrapper->frame->box.getBottom()<=wrapper->inputFrame->box.pos.y,"Narrow parameter and I/O blocks must meet without overlap");
     for(auto* action:wrapper->actionButtons)if(action->visible)require(action->icon>=0,"Narrow action buttons must use icons rather than clipped labels");
     auto* tile=new NarrowTile;tile->hp=hp;tile->box=Rect(Vec((hp-8)*200,0),Vec(200,414));
     rack->getModuleContainer()->removeChild(wrapper);wrapper->box.pos=Vec((200-wrapper->box.size.x)*.5f,28);tile->addChild(wrapper);narrowHosts.push_back(wrapper);

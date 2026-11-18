@@ -8,7 +8,7 @@ namespace beekapoo {
 struct ResponsiveLayout {
   float width = 0, ownWidth = 0, ownHeight = 0, paramHeight = 0, portHeight = 0;
   float paramWidth = 0, paramLeft = 6, paramTop = 40;
-  bool parametersBeside = false, amountInTop = false;
+  bool amountInTop = false;
   float paramCell = 0, portCell = 0, ownCell = 0;
   float paramRow = 0, portRow = 0, ownRow = 0;
   bool horizontalFits = true;
@@ -16,9 +16,7 @@ struct ResponsiveLayout {
       ownColumns = 1;
   float totalHeight() const {
     if (!horizontalFits) return 100000;
-    float upper = parametersBeside
-                      ? std::max(ownHeight, paramHeight)
-                      : ownHeight + (paramHeight ? 8 + paramHeight : 0);
+    float upper = ownHeight + (paramHeight ? 8 + paramHeight : 0);
     return 40 + upper + (portHeight ? 8 + portHeight : 0);
   }
 };
@@ -52,21 +50,6 @@ inline ResponsiveLayout planLayout(float width, int tier, int params,
       params ? header + layoutRows(params, p.paramColumns) * p.paramRow + 6 : 0;
   p.paramWidth = width - 12;
   p.paramTop = 40 + p.ownHeight + 8;
-  float sideWidth = width - p.ownWidth - 20;
-  int sideColumns = std::max(0, int((sideWidth - 13) / p.paramCell));
-  if (params && sideColumns > 0) {
-    sideColumns = std::min(params, sideColumns);
-    float sideHeight =
-        header + layoutRows(params, sideColumns) * p.paramRow + 6;
-    if (std::max(p.ownHeight, sideHeight) < p.ownHeight + 8 + p.paramHeight) {
-      p.parametersBeside = true;
-      p.paramColumns = sideColumns;
-      p.paramHeight = sideHeight;
-      p.paramWidth = sideWidth;
-      p.paramLeft = 6 + p.ownWidth + 8;
-      p.paramTop = 40;
-    }
-  }
   p.portCell = tier >= 3 ? 100.f : tier >= 2 ? 84.f : tier == 1 ? 40.f : 22.f;
   p.portRow = tier >= 2 ? 32.f : tier == 1 ? 30.f : 22.f;
   int panes = (inputs ? 1 : 0) + (outputs ? 1 : 0);

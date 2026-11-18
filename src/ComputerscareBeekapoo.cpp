@@ -11,6 +11,20 @@
 
 // Engine modules and cables stay in Rack; only their UI layout is grouped.
 namespace beekapoo {
+// Keep the packed layout, but let the irregular plaques overhang their
+// allotted areas. Their sides overlap, with small unpainted gaps between
+// independently warped corners rather than a rectangular panel backdrop.
+struct PackedPanelBlock : phlooper::WarpedBlock {
+  void draw(const DrawArgs& args) override {
+    if (box.size.x <= 0 || box.size.y <= 0) return;
+    nvgSave(args.vg);
+    nvgTranslate(args.vg, -2.f, -2.f);
+    nvgScale(args.vg, (box.size.x + 4.f) / box.size.x,
+             (box.size.y + 4.f) / box.size.y);
+    phlooper::WarpedBlock::draw(args);
+    nvgRestore(args.vg);
+  }
+};
 struct SubpatchNativeRack;
 void installRackHooks();
 void disconnectBeekapooSelection();
@@ -815,23 +829,23 @@ struct Beekapoo : app::ModuleWidget {
         asset::plugin(pluginInstance, "res/Beekapoo/title-stacked.svg")));
     logoArtwork.setSvg(APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/Beekapoo/computerscare-logo.svg")));
-    titleFrame = new phlooper::WarpedBlock;
+    titleFrame = new PackedPanelBlock;
     titleFrame->configure(Rect(Vec(6, 4), Vec(168, 32)), 4, 1.1f, 809,
                           nvgRGB(198, 201, 199));
     addChild(titleFrame);
-    ownFrame = new phlooper::WarpedBlock;
+    ownFrame = new PackedPanelBlock;
     ownFrame->configure(Rect(Vec(6, 26), Vec(168, 100)), 4, 1.3f, 811,
                         nvgRGB(186, 198, 192));
     addChild(ownFrame);
-    frame = new phlooper::WarpedBlock;
+    frame = new PackedPanelBlock;
     frame->configure(Rect(Vec(9, 140), Vec(342, 213)), 5, 1.8f, 719,
                      nvgRGB(198, 206, 202));
     addChild(frame);
-    inputFrame = new phlooper::WarpedBlock;
+    inputFrame = new PackedPanelBlock;
     inputFrame->configure(Rect(Vec(9, 253), Vec(165, 100)), 5, 2.f, 723,
                           nvgRGB(198, 206, 202));
     addChild(inputFrame);
-    outputFrame = new phlooper::WarpedBlock;
+    outputFrame = new PackedPanelBlock;
     outputFrame->configure(Rect(Vec(186, 253), Vec(165, 100)), 5, 2.f, 727,
                            nvgRGB(105, 119, 114));
     addChild(outputFrame);
@@ -1049,20 +1063,42 @@ struct Beekapoo : app::ModuleWidget {
             std::max(0.f, block->box.size.y - block->depth * .65f - 6.5f)));
   }
   void finishFrames() {
-    // Keep the control grid precise, but let its irregular surrounds nearly
-    // meet. Reclaim the otherwise blank space below a short parameter grid.
-    if (frame->visible) {
-      float bottom = 368;
-      if (inputFrame->visible) bottom = std::min(bottom, inputFrame->box.pos.y);
-      if (outputFrame->visible)
-        bottom = std::min(bottom, outputFrame->box.pos.y);
-      frame->box.size.y =
-          std::max(frame->box.size.y, bottom - 8 - frame->box.pos.y);
+    // Tile the whole face without changing the control grid. Empty space
+    // belongs to the nearest section, never a separate panel backdrop.
+    float width = box.size.x, height = box.size.y;
+    float headerBottom = ownFrame->box.pos.y - 4;
+    float portsTop = height;
+    if (inputFrame->visible) portsTop = inputFrame->box.pos.y - 4;
+    if (outputFrame->visible)
+      portsTop = std::min(portsTop, outputFrame->box.pos.y - 4);
+    float ownBottom = frame->visible ? frame->box.pos.y - 4 : portsTop;
+    titleFrame->box = Rect(Vec(), Vec(width, headerBottom));
+    ownFrame->box =
+        Rect(Vec(0, headerBottom), Vec(width, ownBottom - headerBottom));
+    if (frame->visible)
+      frame->box = Rect(Vec(0, ownBottom), Vec(width, portsTop - ownBottom));
+    if (inputFrame->visible && outputFrame->visible) {
+      bool beside =
+          std::abs(inputFrame->box.pos.y - outputFrame->box.pos.y) < 1;
+      if (beside) {
+        float split =
+            (inputFrame->box.getRight() + outputFrame->box.pos.x) * .5f;
+        inputFrame->box = Rect(Vec(0, portsTop), Vec(split, height - portsTop));
+        outputFrame->box =
+            Rect(Vec(split, portsTop), Vec(width - split, height - portsTop));
+      } else {
+        float split =
+            (inputFrame->box.getBottom() + outputFrame->box.pos.y) * .5f;
+        inputFrame->box = Rect(Vec(0, portsTop), Vec(width, split - portsTop));
+        outputFrame->box = Rect(Vec(0, split), Vec(width, height - split));
+      }
+    } else {
+      auto* ports = inputFrame->visible ? inputFrame : outputFrame;
+      if (ports->visible)
+        ports->box = Rect(Vec(0, portsTop), Vec(width, height - portsTop));
     }
     for (auto* block : {titleFrame, ownFrame, frame, inputFrame, outputFrame}) {
-      block->box.pos -= Vec(2, 2);
-      block->box.size += Vec(4, 4);
-      block->screwup = block == titleFrame ? 2.f : 2.6f;
+      block->screwup = block == titleFrame ? 3.f : 4.f;
     }
   }
   static float compactHeaderHeight(float width) {
@@ -1071,10 +1107,7 @@ struct Beekapoo : app::ModuleWidget {
   static float tinyOwnHeight(float width) {
     float available = std::min(width - 25, 247.f);
     int managementCols = std::max(1, std::min(3, int(available / 16)));
-    int actionCols = std::max(1, std::min(2, int(available / 34)));
-    int cvCols = std::max(1, int((available + 1) / 17));
-    float actions = width < 180 ? layoutRows(6, cvCols) * 18
-                                : layoutRows(6, actionCols) * 20;
+    float actions = width < 90 ? 18 + 3 * 18 : 3 * 18;
     return layoutRows(3, managementCols) * 18 + actions + 12;
   }
   static float minimumJackWidth(int inputs, int outputs) {
@@ -1116,10 +1149,9 @@ struct Beekapoo : app::ModuleWidget {
     layoutTier = 0;
     responsive = ResponsiveLayout();
     responsive.width = width;
-    float ownWidth = std::min(width - 12, width < 180 ? 118.f : 92.f);
+    float ownWidth = width - 12;
     float available = ownWidth - 13;
     int managementCols = std::max(1, std::min(3, int(available / 16)));
-    int actionCols = std::max(1, std::min(2, int(available / 34)));
     ownFrame->visible = true;
     float ownTop = 8 + compactHeaderHeight(width);
     ownFrame->box = Rect(Vec(6, ownTop), Vec(ownWidth, tinyOwnHeight(width)));
@@ -1149,19 +1181,21 @@ struct Beekapoo : app::ModuleWidget {
       addSelectionButton->box.pos = Vec(x, ownTop + 4);
     }
     float actionTop = ownTop + 4 + layoutRows(3, managementCols) * 18;
+    bool pairedActions = width >= 90;
+    float scopeWidth =
+        std::min(std::max(pairedActions ? 34.f : 17.f, available * .5f), 66.f);
     for (int i = 0; i < 6; ++i) {
-      int col = actionCols == 2 ? i / 3 : 0, row = actionCols == 2 ? i % 3 : i;
-      Vec cell(10 + col * 34, actionTop + row * 20);
+      int scope = i / 3, action = i % 3;
+      Vec cell(10 + scope * scopeWidth, actionTop + action * 18);
       auto* button = actionButtons[i];
-      button->visible = width >= 180;
-      button->icon = i % 3;
-      button->box = Rect(cell, Vec(14, 16));
+      button->visible = pairedActions || action == 0;
+      button->icon = action;
+      button->box =
+          Rect(pairedActions ? cell : Vec(cell.x, actionTop), Vec(14, 16));
       auto* port = getInput(i);
       port->visible = true;
-      int cvCols = std::max(1, int((available + 1) / 17));
-      port->box.pos = width < 180 ? Vec(10 + (i % cvCols) * 17,
-                                        actionTop + (i / cvCols) * 18)
-                                  : cell + Vec(18, 0);
+      port->box.pos = pairedActions ? cell + Vec(18, 0)
+                                    : Vec(cell.x, actionTop + 18 + action * 18);
     }
     auto portPlan = planLayout(width, 0, 0, inputs.size(), outputs.size());
     bool portLabels = width >= 120 && inputs.size() + outputs.size() <= 4;
@@ -2358,10 +2392,6 @@ struct Beekapoo : app::ModuleWidget {
     ModuleWidget::step();
   }
   void draw(const DrawArgs& args) override {
-    nvgBeginPath(args.vg);
-    nvgRect(args.vg, 0, 0, box.size.x, box.size.y);
-    nvgFillColor(args.vg, nvgRGB(198, 201, 199));
-    nvgFill(args.vg);
     ModuleWidget::draw(args);
     if (titleFrame && titleFrame->visible) {
       Rect area = frameContent(titleFrame);
