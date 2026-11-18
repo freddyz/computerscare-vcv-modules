@@ -6,6 +6,9 @@ using namespace rack;
 
 // Forward-declare the Plugin, defined in Template.cpp
 extern Plugin* pluginInstance;
+// UI-thread installation; also called by browser previews before any instance
+// exists.
+void installBeekapooRackHooks();
 
 /*
         Toly Poolkit

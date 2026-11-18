@@ -3,6 +3,7 @@
 #include <plugin.hpp>
 
 #include "BeekapooLayout.hpp"
+#include "BeekapooPreferences.hpp"
 #include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
 #include "Phlooper/Block.hpp"
@@ -593,9 +594,20 @@ struct PortFace : widget::OpaqueWidget {
   void onHover(const HoverEvent& e) override {
     // Rack highlights cables by exact port-widget identity. Target the real
     // endpoint, as we already do for patching, rather than the artwork face.
-    if (source)
+    if (source) {
       source->onHover(e);
-    else
+      // Real mouse hover targets the original port for Rack's cable
+      // highlighting, so its Enter event bypasses this front-panel face.
+      // Create/decorate that same native tooltip before Rack dispatches Enter.
+      if (auto* mapped = dynamic_cast<MappedPortTooltip*>(tip.get()))
+        if (!mapped->native) clearTip();
+      if (settings::tooltips && !tip && e.context &&
+          e.context->target == source.get())
+        nativeTipAction([&] {
+          EnterEvent enter;
+          source->onEnter(enter);
+        });
+    } else
       widget::OpaqueWidget::onHover(e);
   }
   void onButton(const ButtonEvent& e) override {
@@ -656,6 +668,8 @@ struct PortFace : widget::OpaqueWidget {
     clearTip();
   }
   void onEnter(const EnterEvent& e) override {
+    if (auto* mapped = dynamic_cast<MappedPortTooltip*>(tip.get()))
+      if (!mapped->native) clearTip();
     if (!settings::tooltips || tip) return;
     if (source && source->module) {
       nativeTipAction([&] { source->onEnter(e); });
@@ -687,6 +701,7 @@ struct Beekapoo : app::ModuleWidget {
   std::vector<Member> members;
   std::map<int64_t, Vec> subpatchPositions;
   bool expanded = false;
+  bool ejecting = false;
   bool lastBypass = false;
   bool captureNewModules = true, hasEditPlacement = false;
   bool markMembers = true;
@@ -890,7 +905,7 @@ struct Beekapoo : app::ModuleWidget {
     rightHandle->box.size.x = 5;
     addChild(rightHandle);
     layoutControls();
-    if (m) installRackHooks();
+    installRackHooks();
     if (m)
       m->captureContents = [this](bool external) {
         return portableContents(external);
@@ -1242,7 +1257,7 @@ struct Beekapoo : app::ModuleWidget {
           beside ? width - 6 - outputWidth : 6, outputWidth, outputHeight,
           true);
     finishFrames();
-    if (changed && parent == homeRack->getModuleContainer())
+    if (changed && !ejecting && parent == homeRack->getModuleContainer())
       homeRack->setModulePosForce(this, box.pos);
   }
   void layoutControls() {
@@ -1494,7 +1509,7 @@ struct Beekapoo : app::ModuleWidget {
       }
     }
     finishFrames();
-    if (changed && parent == homeRack->getModuleContainer())
+    if (changed && !ejecting && parent == homeRack->getModuleContainer())
       homeRack->setModulePosForce(this, box.pos);
   }
   void exposeParameter(int64_t id, int index) {
@@ -2479,6 +2494,7 @@ struct Beekapoo : app::ModuleWidget {
 
     menu->addChild(
         createMenuItem("Edit subpatch", "", [this] { editSubpatch(); }));
+    menu->addChild(new OutsideFadeSlider);
     menu->addChild(
         createSubmenuItem("Panel arrangement", "", [this](ui::Menu* sub) {
           for (bool grouped : {false, true})
@@ -2581,12 +2597,89 @@ struct Beekapoo : app::ModuleWidget {
         }));
   }
 };
+// Closest collision-free placement of a complete rectangular subpatch. Sweep
+// obstacle row boundaries, merging forbidden grid columns in each row. This
+// runs only on Eject and never moves unrelated modules.
+Vec closestEjectPosition(Beekapoo* group, Vec size) {
+  std::vector<Rect> obstacles;
+  for (auto* outside : group->homeRack->getModules())
+    if (outside != group && outside->visible &&
+        !group->contains(outside->module))
+      obstacles.push_back(outside->box);
+  bool fits = true;
+  for (auto& obstacle : obstacles)
+    if (Rect(group->box.pos, size).intersects(obstacle)) fits = false;
+  if (fits) return group->box.pos;
+  Vec desired = group->box.getCenter() - size * .5f;
+  std::set<int> rows;
+  rows.insert(int(std::floor(desired.y / RACK_GRID_HEIGHT)));
+  rows.insert(int(std::ceil(desired.y / RACK_GRID_HEIGHT)));
+  rows.insert(int(std::round(group->box.pos.y / RACK_GRID_HEIGHT)));
+  for (auto& obstacle : obstacles) {
+    rows.insert(int(std::floor((obstacle.pos.y - size.y) / RACK_GRID_HEIGHT)));
+    rows.insert(int(std::ceil(obstacle.getBottom() / RACK_GRID_HEIGHT)));
+  }
+  Vec best = group->box.pos;
+  double bestDistance = INFINITY;
+  for (int row : rows) {
+    float y = row * RACK_GRID_HEIGHT;
+    std::vector<std::pair<int, int>> blocked, merged;
+    for (auto& obstacle : obstacles)
+      if (y < obstacle.getBottom() && y + size.y > obstacle.pos.y) {
+        int left =
+            int(std::floor((obstacle.pos.x - size.x) / RACK_GRID_WIDTH)) + 1;
+        int right = int(std::ceil(obstacle.getRight() / RACK_GRID_WIDTH)) - 1;
+        if (left <= right) blocked.emplace_back(left, right);
+      }
+    std::sort(blocked.begin(), blocked.end());
+    for (auto interval : blocked) {
+      if (!merged.empty() && interval.first <= merged.back().second + 1)
+        merged.back().second = std::max(merged.back().second, interval.second);
+      else
+        merged.push_back(interval);
+    }
+    for (int target : {int(std::floor(desired.x / RACK_GRID_WIDTH)),
+                       int(std::ceil(desired.x / RACK_GRID_WIDTH))}) {
+      int left = target, right = target;
+      for (auto interval : merged)
+        if (target >= interval.first && target <= interval.second) {
+          left = interval.first - 1;
+          right = interval.second + 1;
+          break;
+        }
+      for (int column : {left, right}) {
+        Vec candidate(column * RACK_GRID_WIDTH, y);
+        Vec distance = candidate - desired;
+        double score =
+            double(distance.x) * distance.x + double(distance.y) * distance.y;
+        if (score < bestDistance) {
+          bestDistance = score;
+          best = candidate;
+        }
+      }
+    }
+  }
+  return best;
+}
 void Beekapoo::ejectAction() {
   if (!module) return;
   auto* change = beginAction("eject subpatch");
   std::vector<int64_t> released;
   for (auto& member : members) released.push_back(member.id);
-  if (editSession) moveEditedMembers(true, false);
+  Vec minimum(INFINITY, INFINITY), maximum(-INFINITY, -INFINITY);
+  for (auto& member : members)
+    if (auto* w = member.widget.get()) {
+      minimum.x = std::min(minimum.x, member.position.x);
+      minimum.y = std::min(minimum.y, member.position.y);
+      maximum.x = std::max(maximum.x, member.position.x + w->box.size.x);
+      maximum.y = std::max(maximum.y, member.position.y + w->box.size.y);
+    }
+  ejecting = true;
+  if (minimum.isFinite()) {
+    Vec origin = closestEjectPosition(this, maximum - minimum);
+    for (auto& member : members) member.position += origin - minimum;
+    revealMembers(false);
+  }
   endAbstraction();
   homeRack->deselectAll();
   for (auto id : released)
@@ -2598,6 +2691,15 @@ void Beekapoo::ejectAction() {
   auto* batch = new history::ComplexAction;
   batch->name = "eject subpatch";
   batch->push(change);
+  for (auto* cable : homeRack->getCompleteCables())
+    if (cable->cable->inputModule == module ||
+        cable->cable->outputModule == module) {
+      auto* action = new history::CableRemove;
+      action->setCable(cable);
+      batch->push(action);
+      homeRack->removeCable(cable);
+      delete cable;
+    }
   batch->push(removal);
   APP->history->push(batch);
   homeRack->removeModule(this);
@@ -2628,6 +2730,7 @@ void GroupHistory::redo() {
 #include "BeekapooRackHooks.hpp"
 #include "BeekapooSubview.hpp"
 }  // namespace beekapoo
+void installBeekapooRackHooks() { beekapoo::installRackHooks(); }
 Model* modelComputerscareBeekapoo =
     createModel<beekapoo::Module, beekapoo::Beekapoo>("computerscare-beekapoo");
 

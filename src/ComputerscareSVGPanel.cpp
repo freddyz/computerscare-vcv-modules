@@ -16,6 +16,7 @@ void PanelBorder::draw(const DrawArgs& ctx) {
 
 void ComputerscareSVGPanel::step() {
   installDevWatcherToolbar();
+  installBeekapooRackHooks();
   if (math::isNear(APP->window->pixelRatio, 1.0)) {
     // Small details draw poorly at low DPI, so oversample when drawing to the
     // framebuffer

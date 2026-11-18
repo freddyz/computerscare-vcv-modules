@@ -8,7 +8,6 @@ struct RackEditHighlight : widget::TransparentWidget {
 };
 struct RackEditPreview : widget::OpaqueWidget {
   WeakPtr<Beekapoo> owner;
-  std::function<void(const DrawArgs&)> badge;
   void draw(const DrawArgs& args) override {
     if (!owner) return;
     nvgSave(args.vg);
@@ -33,12 +32,6 @@ struct RackEditPreview : widget::OpaqueWidget {
     bypassCaches(owner.get());
     owner->draw(local);
     owner->drawLayer(local, 1);
-    if (badge) {
-      nvgSave(args.vg);
-      nvgTranslate(args.vg, owner->box.size.x - 24, 1);
-      badge(local);
-      nvgRestore(args.vg);
-    }
     for (auto& cache : caches) cache.first->bypassed = cache.second;
     owner->expanded = expanded;
     owner->controls->visible = visible;
@@ -155,10 +148,6 @@ struct RackEditSession : widget::Widget {
     removeButton->visible = false;
     preview = new RackEditPreview;
     preview->owner = group;
-    preview->badge = [this](const DrawArgs& args) {
-      if (owner && owner->module)
-        paintTag(args, owner->module->id, COLOR_COMPUTERSCARE_GREEN);
-    };
     addChild(preview);
     layoutToolbar(APP->scene->box.size.x);
   }
@@ -339,6 +328,24 @@ struct RackEditSession : widget::Widget {
     logo.draw(args);
   }
   void draw(const DrawArgs& args) override {
+    if (owner && !finished) {
+      nvgSave(args.vg);
+      nvgIntersectScissor(args.vg, 0, toolbarHeight, box.size.x,
+                          box.size.y - toolbarHeight);
+      float zoom = APP->scene->rackScroll->getZoom();
+      for (auto* module : owner->homeRack->getModules()) {
+        if (!module->visible || !module->module || module == owner.get() ||
+            owner->contains(module->module))
+          continue;
+        Vec position = module->getAbsoluteOffset(Vec()) - box.pos;
+        nvgBeginPath(args.vg);
+        nvgRect(args.vg, position.x, position.y, module->box.size.x * zoom,
+                module->box.size.y * zoom);
+        nvgFillColor(args.vg, nvgRGBAf(0, 0, 0, preferences().outsideFade));
+        nvgFill(args.vg);
+      }
+      nvgRestore(args.vg);
+    }
     nvgBeginPath(args.vg);
     nvgRect(args.vg, 0, 0, box.size.x, toolbarHeight);
     nvgFillColor(args.vg, nvgRGB(60, 76, 70));

@@ -77,6 +77,21 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   // commands to the user's watcher or running Rack session.
   setenv("VCVMON_CONTROL",(output+"/isolated-watcher").c_str(),1);
   auto* rack=APP->scene->rack;
+  {
+    beekapoo::OutsideFadeQuantity first,second;
+    float previous=first.getValue();first.setDisplayValue(72);
+    require(std::abs(second.getValue()-.72f)<.0001f,"Edit fade must be shared across menus");
+    first.setDisplayValue(100);require(second.getValue()==.9f,"Edit fade must stop at 90 percent");
+    first.setDisplayValue(-10);require(second.getValue()==0,"Edit fade must allow no fading");
+    first.setValue(previous);
+    auto path=output+"/runtime/fade-preferences-test.json";system::remove(path);
+    beekapoo::Preferences fresh(path);
+    require(fresh.outsideFade==.45f,"Missing preferences must default to 45 percent");
+    fresh.outsideFade=.72f;fresh.save();
+    beekapoo::Preferences reopened(path);
+    require(std::abs(reopened.outsideFade-.72f)<.0001f,"Edit fade must survive a new Rack session");
+    system::remove(path);
+  }
   auto* gainModel=createModel<beekapoofixture::Gain,beekapoofixture::Face>("demo-gain");
   auto* mapperModel=createModel<beekapoofixture::Mapper,beekapoofixture::Face>("demo-mapper");
   plugin.addModel(mapperModel);
@@ -101,6 +116,48 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   if(std::getenv("BEEKAPOO_PRINT_SPECTRUM")) {
     renderBeekapooPrintSpectrum(gainModel,output,scale);
     return;
+  }
+  {
+    auto* first=add(gainModel,Vec(0,0));auto* second=add(gainModel,Vec(90,0));auto* outside=add(gainModel,Vec(600,0));
+    auto wire=[&](app::ModuleWidget* from,app::ModuleWidget* to) {
+      auto* c=new engine::Cable;c->outputModule=from->module;c->outputId=0;c->inputModule=to->module;c->inputId=0;APP->engine->addCable(c);
+      auto* w=new app::CableWidget;w->setCable(c);rack->addCable(w);return c->id;
+    };
+    auto internal=wire(first,second),boundary=wire(second,outside);
+    auto firstId=first->module->id,secondId=second->module->id;
+    Vec firstPosition=first->box.pos,secondPosition=second->box.pos;
+    rack->select(first,true);rack->select(second,true);
+    beekapoo::BeekapooRackHooks* hooks=nullptr;
+    for(auto* child:APP->scene->children)if(auto* candidate=dynamic_cast<beekapoo::BeekapooRackHooks*>(child))hooks=candidate;
+    require(hooks,"The browser preview must install selection support before any Beekapoo instance exists");
+    auto* overlay=new ui::MenuOverlay;auto* menu=new ui::Menu;overlay->addChild(menu);APP->scene->addChild(overlay);
+    rack->appendSelectionContextMenu(menu);hooks->step();
+    beekapoo::CreateBeekapooMenuItem* create=nullptr;
+    for(auto* child:menu->children)if(auto* item=dynamic_cast<beekapoo::CreateBeekapooMenuItem*>(child))create=item;
+    require(create && !create->disabled,"Native multi-selection menu must offer Create Beek-A-Poo without an existing instance");
+    menu->step();auto menuPosition=menu->box.pos;overlay->removeChild(menu);menu->box.pos=Vec();
+    capture(menu,output+"/27-create-selection-menu.png",scale,false);menu->box.pos=menuPosition;overlay->addChild(menu);
+    widget::Widget::ActionEvent action;create->onAction(action);
+    APP->scene->removeChild(overlay);delete overlay;
+    beekapoo::Beekapoo* group=nullptr;for(auto* w:rack->getModules())if(auto* candidate=dynamic_cast<beekapoo::Beekapoo*>(w))group=candidate;
+    require(group && group->members.size()==2 && rack->isSelected(group),"Create must group exactly the selection and select its new owner");
+    auto ownerId=group->module->id;
+    require(APP->engine->getCable(internal) && APP->engine->getCable(boundary) && rack->getCable(boundary)->visible && !rack->getCable(internal)->visible,"Create must preserve both internal and boundary cable identities");
+    for(int repeat=0;repeat<2;++repeat) {
+      APP->history->undo();
+      require(!rack->getModule(ownerId) && rack->getModule(firstId)->visible && rack->getModule(secondId)->visible,"One Undo must remove the owner and reveal both originals");
+      require(rack->getModule(firstId)->box.pos==firstPosition && rack->getModule(secondId)->box.pos==secondPosition && rack->isSelected(rack->getModule(firstId)) && rack->isSelected(rack->getModule(secondId)),"Undo must restore the original positions and selection");
+      require(beekapoo::canCreateSelectedGroup(),"Released modules must remain eligible for grouping again");
+      APP->history->redo();group=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(ownerId));group->step();
+      require(group->members.size()==2 && APP->engine->getCable(internal) && APP->engine->getCable(boundary),"Redo must restore the complete group without adding or losing cables");
+    }
+    rack->deselectAll();rack->select(group,true);rack->select(outside,true);
+    require(!beekapoo::canCreateSelectedGroup(),"Creation must reject nested groups");
+    group->editSubpatch();rack->select(first,true);rack->select(second,true);rack->select(group,false);rack->select(outside,false);
+    require(!beekapoo::canCreateSelectedGroup(),"Creation must reject modules already owned by an editing group");
+    static_cast<beekapoo::RackEditSession*>(group->editSession.get())->finish(true);
+    rack->clear();
+    std::puts("Create Beek-A-Poo native selection menu, one-step Undo/Redo, wiring, placement and ownership checks passed");
   }
   auto* a=add(gainModel,Vec(0,0));
   auto* sink=add(gainModel,Vec(90,0));
@@ -211,6 +268,9 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   widget::EventContext portHoverContext;widget::Widget::HoverEvent portHover;portHover.context=&portHoverContext;portHover.pos=outputFace->box.size*.5f;
   outputFace->onHover(portHover);require(portHoverContext.target==b->getOutput(0),"Mapped jack hover must target its actual cable endpoint for native cable highlighting");
   APP->event->setHoveredWidget(portHoverContext.target);
+  require(outputFace->tip,"Real source-targeted mouse hover must create the module-headed tooltip");outputFace->tip->step();
+  auto hoveredCaption=outputFace->caption();
+  require(outputFace->tip->text.rfind(hoveredCaption.substr(0,hoveredCaption.find('\n'))+"\n",0)==0,"Real mouse hover tooltip must put the source module above the native port details");
   auto* hoveredPort=dynamic_cast<app::PortWidget*>(APP->event->getHoveredWidget());
   require(hoveredPort && rack->getCompleteCablesOnPort(hoveredPort).size()==1,"Native hovered endpoint must expose its connected cable");APP->event->setHoveredWidget(nullptr);
   APP->event->setHoveredWidget(outputFace);require(outputFace->nativeTooltip && outputFace->tip,"Mapped port must create the native Rack tooltip");
@@ -925,7 +985,18 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   auto* realSession=static_cast<beekapoo::RackEditSession*>(group->editSession.get());
   for(int frame=0;frame<3;++frame){APP->scene->rackScroll->step();realSession->step();}
   rack->deselectAll();rack->select(voly,true);realSession->step();
+  auto editOutsidePosition=outside->box.pos;
+  outside->box.pos=Vec(mely->box.getRight()+15,mely->box.pos.y);
   capture(APP->scene,output+"/17-real-rack-edit.png",scale,false);
+  outside->box.pos=editOutsidePosition;
+  {
+    auto* overlay=new ui::MenuOverlay;auto* menu=new ui::Menu;
+    overlay->addChild(menu);APP->scene->addChild(overlay);
+    group->appendContextMenu(menu);menu->step();
+    overlay->removeChild(menu);menu->box.pos=Vec();
+    capture(menu,output+"/30-edit-fade-menu.png",scale,false);
+    delete menu;APP->scene->removeChild(overlay);delete overlay;
+  }
   realSession->exposeMode=true;realSession->showPanel=false;realSession->preview->visible=false;
   require(!realSession->highlights.empty(),"Expose must install native-module background highlight layers");
   for(auto& layer:realSession->highlights)if(layer)require(layer->parent==layer->sourceModule.get(),"Expose highlights must live behind the source module's controls");
@@ -940,9 +1011,19 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   capture(APP->scene,output+"/26-return-to-patch.png",scale,false);
   group->returnHighlight=0;
   beekapoo::PortFace* visibleOutput=nullptr;for(auto& port:group->ports)if(!port.input)visibleOutput=port.face;
-  require(visibleOutput,"Screenshot needs a mapped output");visibleOutput->nativeTipAction([&] {APP->event->setHoveredWidget(visibleOutput->source.get());});
+  require(visibleOutput,"Screenshot needs a mapped output");
+  widget::EventContext outputHoverContext;widget::Widget::HoverEvent outputHover;outputHover.context=&outputHoverContext;outputHover.pos=visibleOutput->box.size*.5f;
+  visibleOutput->onHover(outputHover);APP->event->setHoveredWidget(outputHoverContext.target);
   require(visibleOutput->nativeTooltip && visibleOutput->tip,"Screenshot must use the native output tooltip");visibleOutput->tip->step();
   capture(APP->scene,output+"/22-output-voltage-tooltip.png",scale,false);APP->event->setHoveredWidget(nullptr);
+  visibleOutput->step();
+  beekapoo::PortFace* visibleInput=nullptr;for(auto& port:group->ports)if(port.input)visibleInput=port.face;
+  require(visibleInput,"Screenshot needs a mapped input");
+  widget::EventContext inputHoverContext;widget::Widget::HoverEvent inputHover;inputHover.context=&inputHoverContext;inputHover.pos=visibleInput->box.size*.5f;
+  visibleInput->onHover(inputHover);APP->event->setHoveredWidget(inputHoverContext.target);visibleInput->tip->step();
+  auto inputCaption=visibleInput->caption();
+  require(visibleInput->tip->text.rfind(inputCaption.substr(0,inputCaption.find('\n'))+"\n",0)==0,"Real input hover must also include its source module heading");
+  capture(APP->scene,output+"/29-input-module-tooltip.png",scale,false);APP->event->setHoveredWidget(nullptr);visibleInput->step();
 
   auto* groupParent=group->parent;auto groupPosition=group->box.pos;
   groupParent->removeChild(group);group->box.pos=Vec();capture(group,output+"/08-action-grid.png",scale,false);
@@ -962,6 +1043,10 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   float right=0;for(auto* w:rack->getModules())if(w->visible){w->box.pos.y+=12;right=std::max(right,w->box.getRight());}
   rackParent->removeChild(rack);rack->box.pos=Vec();rack->box.size=Vec(right+20,404);
   capture(rack,output+"/06-expanded-selected.png",scale,false);
+  rack->box.pos=rackPosition;rack->box.size=rackSize;rackParent->addChild(rack);
+  group->ejectAction();
+  rackParent->removeChild(rack);rack->box.pos=Vec();rack->box.size=Vec(right+20,404);
+  capture(rack,output+"/28-ejected-nearby.png",scale,false);
   rack->box.pos=rackPosition;rack->box.size=rackSize;rackParent->addChild(rack);
   rack->clear();
 
@@ -1328,6 +1413,43 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   require(jointHost && jointHost->members.size()==3 && !jointHost->expanded && cableIds()==jointCables,"Collapsed Eject Undo must restore the collapsed group");
   rack->clear();
   std::puts("Unified Edit, Inside/Outside adoption, Near/Far placement, saved layout, Eject button and atomic Undo/Redo passed");
+
+  for(int variant=0;variant<6;++variant) {
+    auto* first=add(gainModel,Vec(0,0));auto* second=add(gainModel,Vec(90,variant==5?RACK_GRID_HEIGHT:0));
+    auto firstId=first->module->id,secondId=second->module->id;
+    Vec relative=second->box.pos-first->box.pos;
+    auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(600,2*RACK_GRID_HEIGHT)));
+    rack->select(first,true);rack->select(second,true);owner->collapse();
+    owner->requestedWidth=variant==0||variant==5?300:75;owner->layoutControls();
+    auto ownerId=owner->module->id;Rect oldSpace=owner->box;
+    std::map<int64_t,Rect> obstacles;
+    auto wall=[&](Vec pos,Vec size) {auto* w=add(gainModel,pos);w->box.size=size;obstacles[w->module->id]=w->box;};
+    if(variant==2||variant==3)wall(oldSpace.pos-Vec(6000,0),Vec(6000,RACK_GRID_HEIGHT));
+    if(variant>=2 && variant<=4)wall(Vec(oldSpace.getRight(),oldSpace.pos.y),Vec(6000,RACK_GRID_HEIGHT));
+    if(variant==3||variant==4)wall(oldSpace.pos-Vec(6000,RACK_GRID_HEIGHT),Vec(12000,RACK_GRID_HEIGHT));
+    if(variant==4)wall(oldSpace.pos+Vec(-6000,RACK_GRID_HEIGHT),Vec(12000,RACK_GRID_HEIGHT));
+    int64_t actionCable=-1;
+    if(variant==0) {auto* driver=add(gainModel,Vec(5000,8*RACK_GRID_HEIGHT));actionCable=connect(driver,owner)->cable->id;}
+    owner->ejectAction();
+    Rect a=rack->getModule(firstId)->box,b=rack->getModule(secondId)->box;
+    require(!rack->getModule(ownerId) && b.pos-a.pos==relative,"Eject must release one cohesive block and preserve its arrangement");
+    if(actionCable>=0)require(!APP->engine->getCable(actionCable),"Eject must remove cables connected to the deleted owner's action inputs");
+    if(variant<=1||variant==5)require(a.pos==oldSpace.pos,"Eject must reuse its own position when the complete group fits there");
+    if(variant==2)require(a.pos.y==oldSpace.pos.y-RACK_GRID_HEIGHT,"Eject must use the closest free row above");
+    if(variant==3)require(a.pos.y==oldSpace.getBottom(),"Eject must use the closest free row below when above is occupied");
+    if(variant==4)require(a.pos.y==oldSpace.pos.y && a.pos.x<oldSpace.pos.x,"Eject must use nearby space to the left when other directions are blocked");
+    for(auto& obstacle:obstacles) {
+      auto current=rack->getModule(obstacle.first)->box;
+      require(current.pos==obstacle.second.pos && current.size==obstacle.second.size && !a.intersects(current) && !b.intersects(current),"Eject must not overlap or move unrelated modules");
+    }
+    APP->history->undo();owner=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(ownerId));owner->step();
+    require(owner->members.size()==2,"Placement Undo must recover the complete abstraction");
+    if(actionCable>=0)require(APP->engine->getCable(actionCable),"Eject Undo must also recover cables to the owner's own inputs");
+    APP->history->redo();
+    require(rack->getModule(firstId)->box.pos==a.pos && rack->getModule(secondId)->box.pos==b.pos,"Placement Redo must restore the same nearby positions");
+    rack->clear();
+  }
+  std::puts("Eject current-space reuse, above/below/left placement, intact layout, obstacle preservation and Undo/Redo passed");
 
   std::printf("Beekapoo: zero footprint, occupied-space expansion, native save/load, four-channel DSP, exposed controls, copy isolation, missing-member recovery and deletion checks passed.\n");
 }

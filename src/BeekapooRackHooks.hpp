@@ -45,6 +45,78 @@ void disconnectBeekapooSelection() {
 struct GroupDisconnectMenuItem : ui::MenuItem {
   void onAction(const ActionEvent&) override { disconnectBeekapooSelection(); }
 };
+inline bool canCreateSelectedGroup() {
+  auto* rack = APP->scene->rack;
+  auto selected = rack->getSelected();
+  if (selected.size() < 2) return false;
+  for (auto* w : selected) {
+    if (!w->module || !w->visible || dynamic_cast<Beekapoo*>(w) ||
+        w->module->leftExpander.producerMessage ||
+        w->module->rightExpander.producerMessage)
+      return false;
+    for (auto* other : rack->getModules())
+      if (auto* group = dynamic_cast<Beekapoo*>(other))
+        if (group->contains(w->module)) return false;
+  }
+  return true;
+}
+inline void createSelectedGroup() {
+  if (!canCreateSelectedGroup()) return;
+  auto* rack = APP->scene->rack;
+  Vec minimum(INFINITY, INFINITY), maximum(-INFINITY, -INFINITY);
+  for (auto* w : rack->getSelected()) {
+    minimum.x = std::min(minimum.x, w->box.pos.x);
+    minimum.y = std::min(minimum.y, w->box.pos.y);
+    maximum.x = std::max(maximum.x, w->box.getRight());
+    maximum.y = std::max(maximum.y, w->box.getBottom());
+  }
+  auto* module = modelComputerscareBeekapoo->createModule();
+  APP->engine->addModule(module);
+  app::ModuleWidget* widget = nullptr;
+  try {
+    widget = modelComputerscareBeekapoo->createModuleWidget(module);
+  } catch (...) {
+    APP->engine->removeModule(module);
+    delete module;
+    throw;
+  }
+  auto* group = static_cast<Beekapoo*>(widget);
+  // Stage clear of the selection so responsive sizing cannot shove it aside.
+  group->box.pos =
+      Vec(maximum.x + RACK_GRID_WIDTH, maximum.y + RACK_GRID_HEIGHT);
+  rack->setModulePosNearest(group, group->box.pos);
+  rack->addModule(group);
+  auto* add = new history::ModuleAdd;
+  add->setModule(group);
+  auto* change = group->beginAction("create Beek-A-Poo");
+  group->collapse();
+  if (group->members.empty()) {
+    delete change;
+    delete add;
+    rack->removeModule(group);
+    delete group;
+    return;
+  }
+  rack->setModulePosNearest(group, minimum);
+  rack->deselectAll();
+  rack->select(group, true);
+  change->newModuleJ = group->toJson();
+  change->after.capture();
+  auto* transaction = new history::ComplexAction;
+  transaction->name = "create Beek-A-Poo";
+  transaction->push(add);
+  transaction->push(change);
+  APP->history->push(transaction);
+}
+struct CreateBeekapooMenuItem : ui::MenuItem {
+  CreateBeekapooMenuItem() {
+    text = "Create Beek-A-Poo";
+    disabled = !canCreateSelectedGroup();
+  }
+  void onAction(const ActionEvent&) override {
+    if (!disabled) createSelectedGroup();
+  }
+};
 // Rack's selection serializer does not tell contained modules whether its
 // caller requested external cables. Scope that policy around the stock
 // selection command; its placement, selection and history remain native.
@@ -198,6 +270,13 @@ struct BeekapooRackHooks : widget::Widget {
       } else if (typeid(*expected) != typeid(*child))
         return;
     }
+    if (!hasSelectedGroup()) {
+      if (APP->scene->rack->getSelected().size() >= 2) {
+        menu->addChild(new ui::MenuSeparator);
+        menu->addChild(new CreateBeekapooMenuItem);
+      }
+      return;
+    }
     // Rack's final three selection commands are Duplicate, Duplicate with
     // cables, and Delete. Do not recurse into arbitrary module submenus.
     auto end = actual;
@@ -229,11 +308,16 @@ struct BeekapooRackHooks : widget::Widget {
       menu->removeChild(item);
       ++command;
     }
+    if (APP->scene->rack->getSelected().size() >= 2) {
+      menu->addChild(new ui::MenuSeparator);
+      menu->addChild(new CreateBeekapooMenuItem);
+    }
   }
   void step() override {
     deleteSubpatches();
     box.size = APP->scene->box.size;
-    if (!hasSelectedGroup()) return;
+    if (!hasSelectedGroup() && APP->scene->rack->getSelected().size() < 2)
+      return;
     for (auto* child : APP->scene->children)
       if (auto* overlay = dynamic_cast<ui::MenuOverlay*>(child))
         for (auto* menu : overlay->children) wrapMenus(menu);
@@ -268,9 +352,17 @@ struct BeekapooRackHooks : widget::Widget {
   }
 };
 void installRackHooks() {
+  if (!APP || !APP->scene || !APP->engine) return;
+  static WeakPtr<BeekapooRackHooks> installed;
+  if (installed && installed->parent == APP->scene) return;
   for (auto* child : APP->scene->children)
-    if (dynamic_cast<BeekapooRackHooks*>(child)) return;
-  APP->scene->addChild(new BeekapooRackHooks);
+    if (auto* hooks = dynamic_cast<BeekapooRackHooks*>(child)) {
+      installed = hooks;
+      return;
+    }
+  auto* hooks = new BeekapooRackHooks;
+  APP->scene->addChild(hooks);
+  installed = hooks;
 }
 
 void queueSubpatchDeletion(int64_t owner, const std::vector<int64_t>& members) {

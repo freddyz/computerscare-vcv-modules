@@ -7,6 +7,7 @@ Plugin* pluginInstance;
 void init(Plugin* p) {
   pluginInstance = p;
   installDevWatcherToolbar();
+  installBeekapooRackHooks();
 
   p->addModel(modelComputerscareBeekapoo);
   p->addModel(modelComputerscareBeekapooLegacy);
