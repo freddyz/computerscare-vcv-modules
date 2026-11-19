@@ -159,6 +159,53 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     rack->clear();
     std::puts("Create Beek-A-Poo native selection menu, one-step Undo/Redo, wiring, placement and ownership checks passed");
   }
+  {
+    std::vector<beekapoo::Beekapoo*> targets;
+    const float widths[]={75,180,360};
+    for(int i=0;i<3;++i) {
+      auto* target=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(i*1500+300,0)));
+      if(i) {
+        auto* source=add(gainModel,Vec(i*1500,0));
+        rack->deselectAll();rack->select(source,true);target->collapse();
+        target->exposeParameter(source->module->id,0);
+        target->expose(source,source->getInput(0));target->expose(source,source->getOutput(0));
+      }
+      rack->deselectAll();target->requestedWidth=widths[i];target->layoutControls();
+      targets.push_back(target);
+    }
+    auto* outside=add(gainModel,Vec(6000,0));auto outsideId=outside->module->id;
+    auto refresh=[&] {for(auto* target:targets)target->step();};
+    auto selectOutside=[&] {rack->deselectAll();rack->select(rack->getModule(outsideId),true);refresh();};
+    selectOutside();
+    for(auto* target:targets) {
+      require(target->canAddSelection() && target->addSelectionButton->visible,"Every Beekapoo must offer the same unowned outside selection");
+      auto* plus=target->addSelectionButton;auto face=target->frameContent(target->ownFrame);
+      require(face.contains(plus->box.pos) && face.contains(plus->box.getBottomRight()),"Selection changes must position Add inside the controls face");
+      for(auto* control:target->managementButtons)
+        require(!plus->box.intersects(control->box),"Add must not overlap Edit or Eject after selection changes");
+      auto* amount=target->getParam(beekapoo::Module::WIGGLE_AMOUNT);
+      require(!amount->visible || !plus->box.intersects(amount->box),"Add must not overlap Amount after selection changes");
+    }
+    widget::Widget sheet;float x=0;
+    std::vector<Vec> positions;
+    for(auto* target:targets) {
+      positions.push_back(target->box.pos);rack->getModuleContainer()->removeChild(target);
+      target->box.pos=Vec(x,0);sheet.addChild(target);x+=target->box.size.x+15;
+    }
+    sheet.box.size=Vec(x-15,380);capture(&sheet,output+"/33-add-to-any-beekapoo.png",scale,false);
+    for(int i=0;i<3;++i) {sheet.removeChild(targets[i]);targets[i]->box.pos=positions[i];rack->addModule(targets[i]);}
+    rack->deselectAll();refresh();
+    for(auto* target:targets)require(!target->addSelectionButton->visible,"Add must disappear when the outside selection is cleared");
+    for(auto* target:targets) {
+      selectOutside();size_t count=target->members.size();
+      target->addSelectionButton->action();refresh();
+      require(target->members.size()==count+1 && target->contains(APP->engine->getModule(outsideId)),"The selected outside module must be addable to any of three Beekapoos");
+      APP->history->undo();refresh();
+      require(target->members.size()==count && rack->getModule(outsideId)->visible,"Undo must return the outside module for another Beekapoo to adopt");
+    }
+    rack->clear();
+    std::puts("Three Beekapoos: selection-driven Add layout, empty/populated adoption and Undo passed");
+  }
   auto* a=add(gainModel,Vec(0,0));
   auto* sink=add(gainModel,Vec(90,0));
   auto* b=add(gainModel,Vec(180,0));
@@ -394,6 +441,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   }
   // Real Rack save/load: serialize engine state and native widget positions,
   // destroy every widget and module, then recreate them through their models.
+  unsigned savedOutputShape=host->outputFrame->shapeSeed;
   json_t* patch=APP->engine->toJson();rack->mergeJson(patch);
   char* encoded=json_dumps(patch,JSON_INDENT(2));require(encoded,"Patch must serialize as valid JSON");
   std::ofstream(output+"/roundtrip.json")<<encoded;std::free(encoded);
@@ -401,6 +449,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   APP->engine->fromJson(patch);rack->fromJson(patch);
   host=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(hostId));require(host,"Reload lost container");
   host->step();
+  require(host->outputFrame->shapeSeed==savedOutputShape,"Frame shapes must stay stable across patch reload");
   require(rack->getModule(guardId)->box.pos==savedGuardPosition,"Reload shoved an unrelated module");
   a=host->find(aId);b=host->find(bId);sink=rack->getModule(sinkId);
   require(a && b && sink && host->members.size()==2 && !a->visible && !b->visible,"Saved grouping must restore on patch load");
@@ -1032,6 +1081,22 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   for(int i=0;i<4;++i) {
     group->requestedWidth=resizeWidths[i];group->layoutControls();
     capture(group,output+resizeFiles[i],scale,false);
+  }
+  {
+    bool meterWasEnabled=settings::cpuMeter;
+    settings::cpuMeter=true;
+    APP->engine->stepBlock(96000);
+    double expected=0;
+    for(const auto& member:group->members)
+      expected+=beekapoo::moduleCpuSeconds(APP->engine->getModule(member.id));
+    require(std::abs(group->subpatchCpuPercent()-expected*APP->engine->getSampleRate()*100)<.001,
+            "Subpatch CPU must sum native member readings without including the host");
+    group->requestedWidth=360;group->layoutControls();
+    capture(group,output+"/31-subpatch-cpu.png",scale,false);
+    group->requestedWidth=45;group->layoutControls();
+    capture(group,output+"/32-subpatch-cpu-small.png",scale,false);
+    require(settings::cpuMeter,"Drawing the custom CPU meter must not change Rack's global switch");
+    settings::cpuMeter=meterWasEnabled;
   }
   group->requestedWidth=180;group->layoutControls();group->box.pos=groupPosition;groupParent->addChild(group);
   // The external fixture only demonstrates a locked boundary in the subview;

@@ -12,6 +12,8 @@ Beekapoo groups modules into a smaller panel. Expose the controls and jacks you 
 
 You can also add Beekapoo first, select the modules, and choose **Abstract selected modules** from its context menu.
 
+When Rack’s CPU meters are enabled, the bottom-left readout shows the summed processing cost of the contained modules. Rack’s normal reading on the right measures Beekapoo itself. Narrow panels show `Σ` instead of “Subpatch”. This excludes Beekapoo’s own processing and graphics.
+
 ## Editing
 
 **Fade outside modules (global)** in the context menu dims modules outside the subpatch while editing. Set it from 0% (none) to 90%; the default is 45%. This preference applies to every Beekapoo and is remembered across Rack sessions.

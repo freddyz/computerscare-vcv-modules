@@ -2,6 +2,7 @@
 #include <mutex>
 #include <plugin.hpp>
 
+#include "BeekapooCpuMeter.hpp"
 #include "BeekapooLayout.hpp"
 #include "BeekapooPreferences.hpp"
 #include "Computerscare.hpp"
@@ -17,10 +18,45 @@ namespace beekapoo {
 struct PackedPanelBlock : phlooper::WarpedBlock {
   void draw(const DrawArgs& args) override {
     if (box.size.x <= 0 || box.size.y <= 0) return;
+    Vec first(-2.f, -2.f), last = box.size + Vec(2.f, 2.f);
+    // Fit the complete perspective silhouette, including its back corners,
+    // inside the module. Interior edges can still overlap adjacent blocks.
+    if (parent) {
+      first.x = std::max(first.x, .75f - box.pos.x);
+      first.y = std::max(first.y, .75f - box.pos.y);
+      last.x = std::min(last.x, parent->box.size.x - box.pos.x - .75f);
+      last.y = std::min(last.y, parent->box.size.y - box.pos.y - .75f);
+    }
+    // Fit the actual silhouette rather than the artwork's nominal rectangle,
+    // whose built-in margins otherwise leave an extra strip at the right.
+    float d = clamp(depth, 0.f, std::min(box.size.x, box.size.y) * .25f);
+    float amount = clamp(screwup, 0.f, std::min(box.size.x, box.size.y) * .12f);
+    float margin = .5f + amount * .5f;
+    auto jitter = [&](unsigned corner) {
+      unsigned bits = shapeSeed * 0x9e3779b9u + corner * 0x85ebca6bu;
+      bits ^= bits >> 16;
+      bits *= 0x7feb352du;
+      return (float(bits & 1023u) / 1023.f - .5f) * amount;
+    };
+    Vec face[] = {Vec(margin, margin), Vec(box.size.x - d - margin, margin),
+                  Vec(box.size.x - d - margin, box.size.y - d * .65f - margin),
+                  Vec(margin, box.size.y - d * .65f - margin)};
+    Vec minimum(INFINITY, INFINITY), maximum(-INFINITY, -INFINITY);
+    for (int i = 0; i < 4; ++i) {
+      Vec front =
+          face[i] + Vec(jitter(i * 2), jitter(i * 2 + 1)) + cornerOffsets[i];
+      for (Vec point : {front, front + Vec(d, d * .65f)}) {
+        minimum.x = std::min(minimum.x, point.x);
+        minimum.y = std::min(minimum.y, point.y);
+        maximum.x = std::max(maximum.x, point.x);
+        maximum.y = std::max(maximum.y, point.y);
+      }
+    }
     nvgSave(args.vg);
-    nvgTranslate(args.vg, -2.f, -2.f);
-    nvgScale(args.vg, (box.size.x + 4.f) / box.size.x,
-             (box.size.y + 4.f) / box.size.y);
+    nvgTranslate(args.vg, first.x, first.y);
+    nvgScale(args.vg, (last.x - first.x) / (maximum.x - minimum.x),
+             (last.y - first.y) / (maximum.y - minimum.y));
+    nvgTranslate(args.vg, -minimum.x, -minimum.y);
     phlooper::WarpedBlock::draw(args);
     nvgRestore(args.vg);
   }
@@ -721,6 +757,7 @@ struct Beekapoo : app::ModuleWidget {
   bool markMembers = true;
   bool arrangeByModule = false;
   bool jacksOnly = false;
+  bool editShowsText = false;
   std::set<int64_t> panelCableIds, knownCableIds, internalCableIds;
   struct PlugWidgets {
     WeakPtr<widget::Widget> input, output;
@@ -747,7 +784,8 @@ struct Beekapoo : app::ModuleWidget {
       0;  // derived responsive tier; retained only for old patch migration
   float requestedWidth = 180, lastLayoutWidth = -1;
   ResponsiveLayout responsive;
-  widget::SvgWidget titleArtwork, stackedTitleArtwork, logoArtwork;
+  widget::SvgWidget titleArtwork, logoArtwork;
+  Rect titleInk;
   ComputerscareResizeHandle *leftHandle = nullptr, *rightHandle = nullptr;
   phlooper::WarpedBlock *ownFrame = nullptr, *titleFrame = nullptr;
   struct ControlLabel {
@@ -825,8 +863,18 @@ struct Beekapoo : app::ModuleWidget {
     panel->visible = false;
     titleArtwork.setSvg(APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/Beekapoo/title.svg")));
-    stackedTitleArtwork.setSvg(APP->window->loadSvg(
-        asset::plugin(pluginInstance, "res/Beekapoo/title-stacked.svg")));
+    titleInk = Rect(Vec(), titleArtwork.box.size);
+    if (titleArtwork.svg && titleArtwork.svg->handle->shapes) {
+      Vec minimum(INFINITY, INFINITY), maximum(-INFINITY, -INFINITY);
+      for (auto* shape = titleArtwork.svg->handle->shapes; shape;
+           shape = shape->next) {
+        minimum.x = std::min(minimum.x, shape->bounds[0]);
+        minimum.y = std::min(minimum.y, shape->bounds[1]);
+        maximum.x = std::max(maximum.x, shape->bounds[2]);
+        maximum.y = std::max(maximum.y, shape->bounds[3]);
+      }
+      titleInk = Rect(minimum, maximum - minimum);
+    }
     logoArtwork.setSvg(APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/Beekapoo/computerscare-logo.svg")));
     titleFrame = new PackedPanelBlock;
@@ -849,8 +897,23 @@ struct Beekapoo : app::ModuleWidget {
     outputFrame->configure(Rect(Vec(186, 253), Vec(165, 100)), 5, 2.f, 727,
                            nvgRGB(105, 119, 114));
     addChild(outputFrame);
+    // Saved module IDs keep the artwork stable on reload. New instances and
+    // duplicates get different shapes; browser artwork is randomized once.
+    uint64_t identity = m && m->id >= 0 ? uint64_t(m->id) : random::u64();
+    unsigned artworkSeed = unsigned(identity) ^ unsigned(identity >> 32);
+    for (auto* block : {titleFrame, ownFrame, frame, inputFrame, outputFrame}) {
+      unsigned seed = block->shapeSeed ^ artworkSeed;
+      seed ^= seed >> 16;
+      seed *= 0x7feb352du;
+      seed ^= seed >> 15;
+      seed *= 0x846ca68bu;
+      block->shapeSeed = seed ^ (seed >> 16);
+    }
     auto* show = new ActionButton;
     show->text = "Edit";
+    show->caption = [this] {
+      return (editShowsText ? "Edit " : "") + std::to_string(members.size());
+    };
     show->configure(52, 24, 3, 2, .8f, 713);
     show->box.pos = Vec(15, 39);
     show->help = [] { return "Edit subpatch in Rack"; };
@@ -1098,17 +1161,34 @@ struct Beekapoo : app::ModuleWidget {
         ports->box = Rect(Vec(0, portsTop), Vec(width, height - portsTop));
     }
     for (auto* block : {titleFrame, ownFrame, frame, inputFrame, outputFrame}) {
-      block->screwup = block == titleFrame ? 3.f : 4.f;
+      block->screwup = block == titleFrame ? 2.f : 2.6f;
+      auto inset = [&](unsigned corner) {
+        unsigned bits = block->shapeSeed + corner * 0x9e3779b9u;
+        bits ^= bits >> 16;
+        bits *= 0x7feb352du;
+        bits ^= bits >> 15;
+        return float(bits & 1023u) / 1023.f * 1.2f;
+      };
+      // Inward corner offsets vary the dimensions and slant without ever
+      // pushing the full silhouette past its fitted drawing bounds.
+      block->cornerOffsets = {Vec(inset(1), inset(2)), Vec(-inset(3), inset(4)),
+                              Vec(-inset(5), -inset(6)),
+                              Vec(inset(7), -inset(8))};
+      float topSlope = (block == titleFrame ? 1.3f : 2.f) + inset(10);
+      float bottomSlope = (block == titleFrame ? 1.3f : 2.f) + inset(11);
+      // Independent slopes on the long edges make trapezoids rather than
+      // just adding small corner noise to otherwise horizontal sections.
+      block->cornerOffsets[(block->shapeSeed & 1u) ? 0 : 1].y += topSlope;
+      block->cornerOffsets[(block->shapeSeed & 2u) ? 2 : 3].y -= bottomSlope;
+      block->depth = 3.6f + inset(9);
     }
   }
   static float compactHeaderHeight(float width) {
     return width <= 90 ? 44.f : 32.f;
   }
   static float tinyOwnHeight(float width) {
-    float available = std::min(width - 25, 247.f);
-    int managementCols = std::max(1, std::min(3, int(available / 16)));
     float actions = width < 90 ? 18 + 3 * 18 : 3 * 18;
-    return layoutRows(3, managementCols) * 18 + actions + 12;
+    return (width < 105 ? 2 : 1) * 18 + actions + 12;
   }
   static float minimumJackWidth(int inputs, int outputs) {
     // `inputs` includes the six module CVs, which stay beside their buttons.
@@ -1151,36 +1231,38 @@ struct Beekapoo : app::ModuleWidget {
     responsive.width = width;
     float ownWidth = width - 12;
     float available = ownWidth - 13;
-    int managementCols = std::max(1, std::min(3, int(available / 16)));
     ownFrame->visible = true;
     float ownTop = 8 + compactHeaderHeight(width);
     ownFrame->box = Rect(Vec(6, ownTop), Vec(ownWidth, tinyOwnHeight(width)));
+    bool showAdd = canAddSelection();
+    float digits = std::to_string(members.size()).size();
+    float editTextWidth = 45 + digits * 6;
+    float usable = width - 20;
+    editShowsText = usable >= editTextWidth + 17 + (showAdd ? 17 : 0);
+    bool ejectText =
+        editShowsText && usable >= editTextWidth + 50 + (showAdd ? 17 : 0);
+    float x = 10;
+    int managementRow = 0;
     for (int i = 0; i < 3; ++i) {
       auto* button = i < 2 ? managementButtons[i] : addSelectionButton;
-      button->visible = i < 2 || canAddSelection();
+      button->visible = i < 2 || showAdd;
+      if (!button->visible) continue;
       button->icon = i == 0 ? 3 : i == 1 ? 7 : 6;
-      button->iconAndText = false;
-      button->box = Rect(Vec(10 + (i % managementCols) * 16,
-                             ownTop + 4 + (i / managementCols) * 18),
-                         Vec(14, 16));
-    }
-    bool showAdd = addSelectionButton->visible;
-    float textAvailable = available - (showAdd ? 20.f : 0.f) - 3;
-    if (textAvailable >= 75) {
-      float x = 10;
-      for (int i = 0; i < 2; ++i) {
-        auto* button = managementButtons[i];
-        float bw = std::min(i == 0 ? 54.f : 62.f,
-                            textAvailable * (i == 0 ? .46f : .54f));
-        button->icon = i == 0 ? 3 : 7;
-        button->iconAndText = true;
-        button->textSize = 13;
-        button->box = Rect(Vec(x, ownTop + 4), Vec(bw, 16));
-        x += bw + 3;
+      button->iconAndText = i == 0 || (i == 1 && ejectText);
+      button->textSize = i == 0 && !editShowsText ? 10 : 11;
+      float bw = i == 0 ? (editShowsText ? editTextWidth : 22 + digits * 6)
+                 : i == 1 && ejectText ? 47.f
+                                       : 14.f;
+      bw = std::min(bw, usable);
+      if (x + bw > width - 9) {
+        x = 10;
+        ++managementRow;
       }
-      addSelectionButton->box.pos = Vec(x, ownTop + 4);
+      button->box = Rect(Vec(x, ownTop + 4 + managementRow * 18), Vec(bw, 16));
+      x += bw + 3;
     }
-    float actionTop = ownTop + 4 + layoutRows(3, managementCols) * 18;
+    float actionTop =
+        ownTop + 4 + std::max(width < 105 ? 2 : 1, managementRow + 1) * 18;
     bool pairedActions = width >= 90;
     float scopeWidth =
         std::min(std::max(pairedActions ? 34.f : 17.f, available * .5f), 66.f);
@@ -1411,18 +1493,22 @@ struct Beekapoo : app::ModuleWidget {
     bool showAdd = canAddSelection();
     float textAvailable = available - (showAdd ? 21.f : 0.f) -
                           (responsive.amountInTop ? 36.f : 0.f) - 6;
-    bool icons = textAvailable < 75;
+    bool icons = textAvailable < 85;
+    editShowsText = !icons;
     float managementX = ownLeft;
     for (int i = 0; i < 2; ++i) {
       auto* button = managementButtons[i];
       float bw = icons ? 21.f
                        : std::min(i == 0 ? 54.f : 62.f,
                                   textAvailable * (i == 0 ? .46f : .54f));
+      if (i == 0)
+        bw = icons ? 23.f + 6.f * std::to_string(members.size()).size()
+                   : 53.f + 7.f * std::to_string(members.size()).size();
       button->box.pos = Vec(managementX, ownTop + 5);
       button->box.size = Vec(bw, 21);
       button->textSize = bw < 45 ? 12 : 14;
       button->icon = i == 0 ? 3 : 7;
-      button->iconAndText = !icons;
+      button->iconAndText = i == 0 || !icons;
       managementX += bw + 3;
     }
     addSelectionButton->visible = showAdd;
@@ -2280,7 +2366,7 @@ struct Beekapoo : app::ModuleWidget {
     lastBypass = bypassed;
   }
   void step() override {
-    addSelectionButton->visible = canAddSelection();
+    if (addSelectionButton->visible != canAddSelection()) layoutControls();
     returnHighlight = std::max(
         0.f, returnHighlight - float(APP->window->getLastFrameDuration()));
     auto* sizing = getModule<Module>();
@@ -2393,10 +2479,11 @@ struct Beekapoo : app::ModuleWidget {
   }
   void draw(const DrawArgs& args) override {
     ModuleWidget::draw(args);
+    auto font =
+        APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
     if (titleFrame && titleFrame->visible) {
       Rect area = frameContent(titleFrame);
       bool logoOnly = box.size.x <= 90;
-      bool stacked = box.size.x < 150;
       float logoWidth =
           logoOnly ? area.size.x : std::min(24.f, area.size.x * .5f);
       Rect logoArea(Vec(logoOnly ? area.getCenter().x - logoWidth * .5f
@@ -2405,24 +2492,23 @@ struct Beekapoo : app::ModuleWidget {
                     Vec(logoWidth, area.size.y));
       auto drawHeaderArt = [&](widget::SvgWidget& svg, Rect target) {
         if (!svg.svg || target.size.x <= 0 || target.size.y <= 0) return;
-        float scale = std::min(target.size.x / svg.box.size.x,
-                               target.size.y / svg.box.size.y);
+        Rect ink = &svg == &titleArtwork ? titleInk : Rect(Vec(), svg.box.size);
+        float scale =
+            std::min(target.size.x / ink.size.x, target.size.y / ink.size.y);
         nvgSave(args.vg);
-        nvgTranslate(args.vg,
-                     target.getCenter().x - svg.box.size.x * scale * .5f,
-                     target.getCenter().y - svg.box.size.y * scale * .5f);
+        nvgTranslate(args.vg, target.getCenter().x - ink.size.x * scale * .5f,
+                     target.getCenter().y - ink.size.y * scale * .5f);
         nvgScale(args.vg, scale, scale);
+        nvgTranslate(args.vg, -ink.pos.x, -ink.pos.y);
         svg.draw(args);
         nvgRestore(args.vg);
       };
       if (!logoOnly)
         drawHeaderArt(
-            stacked ? stackedTitleArtwork : titleArtwork,
+            titleArtwork,
             Rect(area.pos, Vec(area.size.x - logoWidth - 3, area.size.y)));
       drawHeaderArt(logoArtwork, logoArea);
     }
-    auto font =
-        APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
     if (!font) return;
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 8);
@@ -2489,6 +2575,46 @@ struct Beekapoo : app::ModuleWidget {
       nvgStroke(args.vg);
       nvgRestore(args.vg);
     }
+    if (module && settings::cpuMeter) drawSubpatchCpu(args, font->handle);
+  }
+  float subpatchCpuPercent() const {
+    double seconds = 0;
+    for (const auto& member : members)
+      seconds += moduleCpuSeconds(APP->engine->getModule(member.id));
+    return float(seconds * APP->engine->getSampleRate() * 100.);
+  }
+  void drawSubpatchCpu(const DrawArgs& args, int font) {
+    std::string total =
+        box.size.x < 135 ? string::f("Σ %.1f%%", subpatchCpuPercent())
+                         : string::f("Subpatch: %.1f%%", subpatchCpuPercent());
+    std::string host =
+        string::f("%.1f%%", moduleCpuSeconds(module) *
+                                APP->engine->getSampleRate() * 100.f);
+    nvgSave(args.vg);
+    // Retain Rack's native host plot. Repaint only the footer so both labels
+    // share a font size, rather than squeezing the total beside larger text.
+    float y = box.size.y - BND_WIDGET_HEIGHT;
+    bndMenuBackground(args.vg, 0, y, box.size.x, BND_WIDGET_HEIGHT,
+                      BND_CORNER_ALL);
+    nvgFontFaceId(args.vg, font);
+    float size = 10.f;
+    nvgFontSize(args.vg, size);
+    nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+    float totalWidth =
+        nvgTextBounds(args.vg, 0, 0, total.c_str(), nullptr, nullptr);
+    float hostWidth =
+        nvgTextBounds(args.vg, 0, 0, host.c_str(), nullptr, nullptr);
+    float available = std::max(1.f, box.size.x - 10.f);
+    if (totalWidth + hostWidth > available)
+      size *= available / (totalWidth + hostWidth);
+    nvgFontSize(args.vg, size);
+    nvgFillColor(args.vg, componentlibrary::SCHEME_ORANGE);
+    nvgText(args.vg, 3, y + BND_WIDGET_HEIGHT * .5f, total.c_str(), nullptr);
+    nvgTextAlign(args.vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+    nvgFillColor(args.vg, nvgRGB(180, 180, 180));
+    nvgText(args.vg, box.size.x - 3, y + BND_WIDGET_HEIGHT * .5f, host.c_str(),
+            nullptr);
+    nvgRestore(args.vg);
   }
   void appendContextMenu(ui::Menu* menu) override {
     if (!module) return;
