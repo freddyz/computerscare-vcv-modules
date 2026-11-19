@@ -12,6 +12,10 @@
 #include <patch.hpp>
 #include <stdexcept>
 
+#ifdef ARCH_MAC
+#include <dispatch/dispatch.h>
+#endif
+
 #include "Computerscare.hpp"
 #include "PatchSaveNaming.hpp"
 
@@ -269,10 +273,24 @@ struct WatcherToolbar : widget::OpaqueWidget {
   }
 };
 std::map<app::Scene*, WeakPtr<WatcherToolbar>> toolbars;
+#ifdef ARCH_MAC
+bool startupRetryQueued = false;
+void retryAfterUiStartup() {
+  if (startupRetryQueued) return;
+  startupRetryQueued = true;
+  // GLFW services the main queue while polling Cocoa events. This runs on
+  // Rack's UI thread, after plugin init, even with no computerscare widgets.
+  dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_MSEC),
+                   dispatch_get_main_queue(), nullptr, [](void*) {
+                     startupRetryQueued = false;
+                     installDevWatcherToolbar();
+                   });
+}
+#endif
 }  // namespace
 void installDevWatcherToolbar() {
-  // Plugin init runs before Rack creates its UI. Retry from UI callbacks;
-  // never cache an initially absent environment or a detached widget forever.
+  // Plugin init runs before Rack creates its UI. Never cache an initially
+  // absent environment or a detached widget forever.
   const char* value = std::getenv("VCVMON_CONTROL");
   static bool loggedMissing = false, loggedDeferred = false;
   if (!value || !*value) {
@@ -284,6 +302,9 @@ void installDevWatcherToolbar() {
   }
   loggedMissing = false;
   if (!APP || !APP->scene || !APP->window || !APP->event) {
+#ifdef ARCH_MAC
+    retryAfterUiStartup();
+#endif
     if (!loggedDeferred) {
       INFO("vcvmon toolbar waiting for Rack UI (control: %s)", value);
       loggedDeferred = true;

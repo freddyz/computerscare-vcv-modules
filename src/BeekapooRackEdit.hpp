@@ -124,7 +124,6 @@ struct RackEditSession : widget::Widget {
     panelButton = addButton("Panel", 206, 80, [this] {
       showPanel = !showPanel;
       if (owner) {
-        owner->editPreview = showPanel;
         owner->layoutControls();
         owner->saveGroup();
       }
@@ -591,7 +590,6 @@ void Beekapoo::editSubpatch() {
   homeRack->deselectAll();
   expanded = true;
   editPreview = true;
-  controls->visible = false;
   editSession = session;
   layoutControls();
   APP->scene->addChildBelow(session, APP->scene->browser);
@@ -769,8 +767,6 @@ void Beekapoo::resumeEditSession(json_t* saved) {
       delete holder;
     }
   editSession = session;
-  editPreview = session->showPanel;
-  controls->visible = false;
   layoutControls();
   APP->scene->addChildBelow(session, APP->scene->browser);
   saveGroup();

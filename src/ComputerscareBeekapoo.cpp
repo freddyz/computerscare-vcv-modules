@@ -1412,6 +1412,10 @@ struct Beekapoo : app::ModuleWidget {
       homeRack->setModulePosForce(this, box.pos);
   }
   void layoutControls() {
+    // Editing reveals the originals without blanking the owner's live panel.
+    // The optional floating preview is independent of this Rack presentation.
+    editPreview = bool(editSession);
+    controls->visible = !expanded || editPreview;
     std::vector<widget::Widget*> items[3];
     std::map<widget::Widget*, int> kinds;
     std::map<widget::Widget*, int64_t> moduleIds;

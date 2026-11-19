@@ -86,8 +86,11 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   };
   {
     auto* scene=APP->scene;APP->scene=nullptr;installDevWatcherToolbar();APP->scene=scene;
-    installDevWatcherToolbar();auto* bar=findToolbar();
-    require(bar,"Toolbar must recover after absent environment and deferred UI initialization");
+    // Service native UI events only: no module step or manual installer call.
+    // An empty patch must get its toolbar after deferred plugin startup too.
+    for(int i=0;i<100 && !findToolbar();++i){glfwPollEvents();system::sleep(.005);}
+    auto* bar=findToolbar();
+    require(bar,"Toolbar must attach after UI startup without a computerscare module callback");
     for(int i=0;i<4;++i)installDevWatcherToolbar();
     require(findToolbar()==bar,"Repeated installation must keep the same toolbar");
     std::ofstream(isolatedControl+".status")<<"paused "<<std::time(nullptr)<<'\n';
@@ -925,7 +928,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   auto* editingState=realHost->module->dataToJson();realHost->module->dataFromJson(editingState);json_decref(editingState);realHost->step();
   session=dynamic_cast<beekapoo::RackEditSession*>(realHost->editSession.get());
   require(session && rack->getModule(realAId)==realA && rack->getModule(joinedId)==joined,"Reloading an editing state must resume with original native widgets");
-  session->panelButton->action();require(!session->showPanel && !realHost->editPreview,"Panel preview must be optional");session->panelButton->action();
+  session->panelButton->action();session->step();require(!session->showPanel && !session->preview->visible && realHost->controls->visible,"Floating preview must be optional without hiding the actual Beekapoo panel");session->panelButton->action();
   session->exposeMode=true;
   APP->scene->box.size=Vec(1000,720);APP->scene->rackScroll->box.size=Vec(1000,690);
   APP->scene->rackScroll->step();session->step();
@@ -1102,6 +1105,18 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   APP->scene->box.size=Vec(1100,740);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(1100,710));
   group->focusEditedMembers();
   auto* realSession=static_cast<beekapoo::RackEditSession*>(group->editSession.get());
+  group->moveEditedMembers(true,false);
+  require(group->controls->visible && !group->parameters.empty(),"Near editing must retain the owner's mapped control layer");
+  for(auto& p:group->parameters)require(p.knob->visible,"Mapped parameters must remain drawn on Beekapoo itself in Near edit mode");
+  realSession->panelButton->action();
+  require(!realSession->showPanel && group->controls->visible && group->frame->visible,"Hiding the floating preview must not hide the actual panel controls or their frame");
+  realSession->panelButton->action();
+  {
+    auto* parent=group->parent;auto position=group->box.pos;parent->removeChild(group);group->box.pos=Vec();
+    capture(group,output+"/35-near-edit-panel.png",scale,false);
+    group->box.pos=position;parent->addChild(group);
+  }
+  group->moveEditedMembers(false,false);
   for(int frame=0;frame<3;++frame){APP->scene->rackScroll->step();realSession->step();}
   rack->deselectAll();rack->select(voly,true);realSession->step();
   auto editOutsidePosition=outside->box.pos;
