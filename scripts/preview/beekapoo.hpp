@@ -9,8 +9,9 @@ struct Gain : engine::Module {
     if(json_is_true(json_object_get(data,"failLoad")))throw Exception("Fixture load failure");
   }
   int randomCalls=0,resetCalls=0,saveCalls=0;
+  bool overwriteOnRandomize=false;
   void onSave(const SaveEvent&) override { ++saveCalls; }
-  void onRandomize(const RandomizeEvent& e) override {++randomCalls;engine::Module::onRandomize(e);}
+  void onRandomize(const RandomizeEvent& e) override {++randomCalls;engine::Module::onRandomize(e);if(overwriteOnRandomize)params[0].setValue(2.f);}
   void onReset(const ResetEvent& e) override {++resetCalls;engine::Module::onReset(e);}
   Gain() {
     config(24, 24, 24, 0);
@@ -75,7 +76,41 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   }
   // Only this renderer process gets a fake watcher control path. Never send
   // commands to the user's watcher or running Rack session.
-  setenv("VCVMON_CONTROL",(output+"/isolated-watcher").c_str(),1);
+  unsetenv("VCVMON_CONTROL");installDevWatcherToolbar();
+  const auto isolatedControl=output+"/isolated-watcher";
+  setenv("VCVMON_CONTROL",isolatedControl.c_str(),1);
+  auto findToolbar=[]() -> widget::Widget* {
+    for(auto* child:APP->scene->children)for(auto* control:child->children)
+      if(auto* button=dynamic_cast<ui::Button*>(control))if(button->text=="Save version")return child;
+    return nullptr;
+  };
+  {
+    auto* scene=APP->scene;APP->scene=nullptr;installDevWatcherToolbar();APP->scene=scene;
+    installDevWatcherToolbar();auto* bar=findToolbar();
+    require(bar,"Toolbar must recover after absent environment and deferred UI initialization");
+    for(int i=0;i<4;++i)installDevWatcherToolbar();
+    require(findToolbar()==bar,"Repeated installation must keep the same toolbar");
+    std::ofstream(isolatedControl+".status")<<"paused "<<std::time(nullptr)<<'\n';
+    bar->step();ui::Button* resume=nullptr;
+    for(auto* control:bar->children)if(auto* button=dynamic_cast<ui::Button*>(control))if(button->text=="Resume")resume=button;
+    require(resume,"Paused watcher must show Resume");
+    widget::Widget::ActionEvent resumeAction;resume->onAction(resumeAction);
+    std::ifstream command(isolatedControl+".command");std::string action;command>>action;
+    require(action=="resume" && bar->parent==scene && bar->visible,"Resume must write only a command and leave the toolbar attached");
+    command.close();system::remove(isolatedControl+".command");
+    std::ofstream(isolatedControl+".status")<<"watching "<<std::time(nullptr)<<'\n';
+    system::sleep(.26);bar->step();bool pause=false;
+    for(auto* control:bar->children)if(auto* button=dynamic_cast<ui::Button*>(control))pause|=button->text=="Pause";
+    require(pause && findToolbar()==bar,"Resume heartbeat must retain the toolbar and show Pause");
+    scene->removeChild(bar);bar->hide();installDevWatcherToolbar();
+    require(bar->parent==scene && bar->visible,"Detached or hidden toolbar must reattach and become visible");
+    widget::Widget other;scene->removeChild(bar);other.addChild(bar);installDevWatcherToolbar();
+    require(findToolbar() && findToolbar()!=bar,"A toolbar attached elsewhere must not block the current scene");
+    other.removeChild(bar);delete bar;
+    bar=findToolbar();scene->removeChild(bar);delete bar;installDevWatcherToolbar();
+    require(findToolbar(),"Deleted toolbar must be recreated");
+    std::puts("Dev toolbar late environment/UI, resume, detach, hidden, wrong-parent and deletion recovery passed");
+  }
   auto* rack=APP->scene->rack;
   {
     beekapoo::OutsideFadeQuantity first,second;
@@ -439,6 +474,37 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     protectedQ->randomizeEnabled=true;
     for(int i=0;i<24;++i){gainA->getParamQuantity(i)->setImmediateValue(savedA[i]);gainB->getParamQuantity(i)->setImmediateValue(savedB[i]);}
   }
+  {
+    auto* gainA=static_cast<beekapoofixture::Gain*>(a->module);
+    auto* gainB=static_cast<beekapoofixture::Gain*>(b->module);
+    std::vector<float> savedA,savedB;
+    for(int i=0;i<24;++i){savedA.push_back(gainA->params[i].getValue());savedB.push_back(gainB->params[i].getValue());}
+    host->toggleRandomLock(aId,-1);host->toggleRandomLock(bId,0);
+    gainB->overwriteOnRandomize=true;
+    int callbacks=gainA->randomCalls;
+    for(int action:{0,1,3,4}) {
+      gainA->params[0].setValue(.35f);gainB->params[0].setValue(.65f);
+      host->parameterAction(action,false);
+      require(gainA->params[0].getValue()==.35f && gainB->params[0].getValue()==.65f,
+              "Module and parameter locks must protect exposed/all randomize and wiggle, including custom callbacks");
+    }
+    require(gainA->randomCalls==callbacks,"A locked module's custom randomizer must not run");
+    auto* own=static_cast<beekapoo::Module*>(host->module);
+    engine::Module::ProcessArgs args;args.sampleRate=48000;args.sampleTime=1.f/48000;args.frame=0;
+    for(int input:{0,1,3,4}) {
+      own->inputs[input].setVoltage(5);own->process(args);host->step();
+      require(gainB->params[0].getValue()==.65f,"Action CV must obey randomization locks");
+      own->inputs[input].setVoltage(0);own->process(args);
+    }
+    host->parameterAction(5,false);
+    require(gainA->params[0].getValue()==1.f && gainB->params[0].getValue()==1.f,"Rnd Lock must leave Initialize available");
+    gainB->overwriteOnRandomize=false;
+    for(int i=0;i<24;++i){gainA->params[i].setValue(savedA[i]);gainB->params[i].setValue(savedB[i]);}
+    host->unlockRandomization();require(host->randomLocks.empty(),"Unlock all must clear both lock kinds");
+    APP->history->undo();host->step();require(host->randomLocks.size()==2,"Unlock all must support Undo");
+    APP->history->redo();host->step();require(host->randomLocks.empty(),"Unlock all must support Redo");
+    APP->history->undo();host->step();
+  }
   // Real Rack save/load: serialize engine state and native widget positions,
   // destroy every widget and module, then recreate them through their models.
   unsigned savedOutputShape=host->outputFrame->shapeSeed;
@@ -450,6 +516,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   host=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(hostId));require(host,"Reload lost container");
   host->step();
   require(host->outputFrame->shapeSeed==savedOutputShape,"Frame shapes must stay stable across patch reload");
+  require(host->randomLocked(aId,0) && host->randomLocks.count({bId,0}),"Randomization locks must survive native patch reload");
   require(rack->getModule(guardId)->box.pos==savedGuardPosition,"Reload shoved an unrelated module");
   a=host->find(aId);b=host->find(bId);sink=rack->getModule(sinkId);
   require(a && b && sink && host->members.size()==2 && !a->visible && !b->visible,"Saved grouping must restore on patch load");
@@ -561,6 +628,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   require(copy->members.size()==2 && host->members.size()==2 && !a->visible,"Copied container must clone rather than steal its group");
   std::vector<int64_t> copiedIds;for(auto& member:copy->members){require(member.id!=aId && member.id!=bId,"Copied members must have new engine IDs");copiedIds.push_back(member.id);}
   require(copy->parameters.size()==host->parameters.size() && copy->ports.size()==host->ports.size(),"Copy must preserve mappings");
+  require(copy->randomLocks.size()==2,"Copy must retain randomization locks");
+  for(const auto& lock:copy->randomLocks)require(lock.first!=aId && lock.first!=bId && copy->find(lock.first),"Copy must remap locks to its own new modules");
   rack->removeModule(copy);delete copy;
   for(auto id:copiedIds)if(auto* w=rack->getModule(id)){rack->removeModule(w);delete w;}
   for(const auto& port:host->ports)require(port.face->box.getRight()<host->box.size.x && port.face->box.getBottom()<=368,"Exposed port clipped outside panel");
@@ -860,6 +929,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   session->exposeMode=true;
   APP->scene->box.size=Vec(1000,720);APP->scene->rackScroll->box.size=Vec(1000,690);
   APP->scene->rackScroll->step();session->step();
+  realHost->focusEditedMembers();APP->scene->rackScroll->step();session->step();
   widget::EventContext exposeContext;widget::Widget::ButtonEvent exposeClick;
   exposeClick.context=&exposeContext;exposeClick.button=GLFW_MOUSE_BUTTON_LEFT;exposeClick.action=GLFW_PRESS;
   auto* exposeParam=realB->getParam(0);
@@ -1038,6 +1108,38 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   outside->box.pos=Vec(mely->box.getRight()+15,mely->box.pos.y);
   capture(APP->scene,output+"/17-real-rack-edit.png",scale,false);
   outside->box.pos=editOutsidePosition;
+  {
+    rack->deselectAll();rack->select(outside,true);rack->select(group,true);
+    widget::EventContext context;widget::Widget::HoverKeyEvent key;
+    key.context=&context;key.action=GLFW_PRESS;key.key=GLFW_KEY_A;key.mods=RACK_MOD_CTRL;
+    realSession->onHoverKey(key);
+    require(context.consumed && rack->getSelected().size()==2 && rack->isSelected(voly) && rack->isSelected(mely) && !rack->isSelected(group) && !rack->isSelected(outside),"Edit Cmd/Ctrl+A must select only subpatch members");
+    realSession->randomLockButton->action();
+    auto click=[&](Vec pos) {
+      widget::EventContext ctx;widget::Widget::ButtonEvent e;
+      e.context=&ctx;e.action=GLFW_PRESS;e.button=GLFW_MOUSE_BUTTON_LEFT;e.mods=0;e.pos=pos;
+      realSession->onButton(e);require(ctx.consumed,"Rnd Lock clicks must not reach native patch controls");
+    };
+    auto* parameter=voly->getParam(0);
+    click(parameter->getAbsoluteOffset(parameter->box.size*.5f)-realSession->box.pos);
+    click(mely->getAbsoluteOffset(Vec(3,200))-realSession->box.pos);
+    require(group->randomLocks.count({voly->module->id,0}) && group->randomLocks.count({mely->module->id,-1}),"Rnd Lock must toggle individual parameters and module backgrounds");
+    rack->deselectAll();realSession->step();
+    APP->event->setHoveredWidget(nullptr);
+    capture(APP->scene,output+"/34-randomization-locks.png",scale,false);
+    APP->event->setHoveredWidget(nullptr);
+    realSession->optionsButton->action();
+    ui::MenuOverlay* lockMenuOverlay=nullptr;ui::MenuItem* unlockItem=nullptr;
+    for(auto* child:APP->scene->children)if(auto* overlay=dynamic_cast<ui::MenuOverlay*>(child))
+      for(auto* nested:overlay->children)if(auto* menu=dynamic_cast<ui::Menu*>(nested))
+        for(auto* item:menu->children)if(auto* choice=dynamic_cast<ui::MenuItem*>(item))
+          if(choice->text=="Unlock all"){unlockItem=choice;lockMenuOverlay=overlay;}
+    require(unlockItem && !unlockItem->disabled,"Edit options must offer Unlock all while locks exist");
+    widget::Widget::ActionEvent unlock;unlockItem->onAction(unlock);
+    require(group->randomLocks.empty(),"Unlock all in the toolbar menu must remove both lock kinds");
+    APP->scene->removeChild(lockMenuOverlay);delete lockMenuOverlay;
+    realSession->randomLockMode=false;
+  }
   {
     auto* overlay=new ui::MenuOverlay;auto* menu=new ui::Menu;
     overlay->addChild(menu);APP->scene->addChild(overlay);

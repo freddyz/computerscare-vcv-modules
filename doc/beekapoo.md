@@ -16,6 +16,10 @@ When Rack’s CPU meters are enabled, the bottom-left readout shows the summed p
 
 ## Editing
 
+**Rnd Lock** lets you click a module or parameter to protect it from Beekapoo’s Randomize and Wiggle actions, including CV. Gray padlocks mark protected controls. Module locks protect the whole module; parameter locks protect only that value. Click again to unlock, or choose **Unlock all** from the edit toolbar’s **...** menu. Locks are saved with the subpatch and support Undo. Initialize still works normally.
+
+While editing, **Cmd/Ctrl+A** selects only the subpatch modules.
+
 **Fade outside modules (global)** in the context menu dims modules outside the subpatch while editing. Set it from 0% (none) to 90%; the default is 45%. This preference applies to every Beekapoo and is remembered across Rack sessions.
 
 **Edit** opens the original modules in the real rack. The first opening places them about four rows below Beekapoo, skipping occupied space. Reopening keeps their arrangement. Scrolling, shortcuts, selection, module movement, and patching work normally. Black computerscare logos on yellow markers identify modules in the subpatch; **Members** toggles these marks. **Panel** shows or hides the Beekapoo panel preview. **Near** and **Far** move the whole group close to Beekapoo or four rows away while preserving its layout.

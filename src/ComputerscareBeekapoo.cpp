@@ -5,8 +5,10 @@
 #include "BeekapooCpuMeter.hpp"
 #include "BeekapooLayout.hpp"
 #include "BeekapooPreferences.hpp"
+#include "BeekapooRandomLocks.hpp"
 #include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
+#include "DevWatcherToolbar.hpp"
 #include "Phlooper/Block.hpp"
 #include "Phlooper/Dropdown.hpp"
 
@@ -755,6 +757,24 @@ struct Beekapoo : app::ModuleWidget {
   bool lastBypass = false;
   bool captureNewModules = true, hasEditPlacement = false;
   bool markMembers = true;
+  std::set<std::pair<int64_t, int>> randomLocks;
+  bool randomLocked(int64_t id, int param) const {
+    return randomLocks.count({id, -1}) || randomLocks.count({id, param});
+  }
+  void toggleRandomLock(int64_t id, int param) {
+    auto* action = beginAction("toggle subpatch randomization lock");
+    auto key = std::make_pair(id, param);
+    if (!randomLocks.erase(key)) randomLocks.insert(key);
+    saveGroup();
+    finishAction(action);
+  }
+  void unlockRandomization() {
+    if (randomLocks.empty()) return;
+    auto* action = beginAction("unlock subpatch randomization");
+    randomLocks.clear();
+    saveGroup();
+    finishAction(action);
+  }
   bool arrangeByModule = false;
   bool jacksOnly = false;
   bool editShowsText = false;
@@ -854,6 +874,7 @@ struct Beekapoo : app::ModuleWidget {
   std::string status = "Select modules, then right-click here";
   Beekapoo(Module* m) {
     homeRack = APP->scene->rack;
+    installDevWatcherToolbar();
     setModule(m);
     if (m) requestedWidth = m->panelWidth.load();
     auto* panel = new ComputerscareSVGPanel;
@@ -1036,6 +1057,20 @@ struct Beekapoo : app::ModuleWidget {
     json_object_set_new(root, "hasEditPlacement",
                         json_boolean(hasEditPlacement));
     json_object_set_new(root, "markMembers", json_boolean(markMembers));
+    auto* locks = json_array();
+    for (auto it = randomLocks.begin(); it != randomLocks.end();) {
+      bool present = false;
+      for (const auto& member : members) present |= member.id == it->first;
+      if (!present) {
+        it = randomLocks.erase(it);
+        continue;
+      }
+      json_array_append_new(
+          locks, json_pack("{s:I,s:i}", "module", (json_int_t)it->first,
+                           "param", it->second));
+      ++it;
+    }
+    json_object_set_new(root, "randomLocks", locks);
     json_object_set_new(root, "arrangeByModule", json_boolean(arrangeByModule));
     json_object_set_new(root, "hiddenKinds", json_integer(hiddenKinds));
     auto* hidden = json_array();
@@ -1704,6 +1739,16 @@ struct Beekapoo : app::ModuleWidget {
     }
     endAbstraction();
     arrangeByModule = json_is_true(json_object_get(root, "arrangeByModule"));
+    auto* locks = json_object_get(root, "randomLocks");
+    for (size_t i = 0; i < json_array_size(locks); ++i) {
+      auto* lock = json_array_get(locks, i);
+      auto* id = json_object_get(lock, "module");
+      auto* param = json_object_get(lock, "param");
+      if (json_is_integer(id) && json_is_integer(param) &&
+          json_integer_value(param) >= -1)
+        randomLocks.insert(
+            {json_integer_value(id), int(json_integer_value(param))});
+    }
     hiddenKinds =
         unsigned(json_integer_value(json_object_get(root, "hiddenKinds"))) & 7;
     hiddenModuleKinds.clear();
@@ -1890,6 +1935,7 @@ struct Beekapoo : app::ModuleWidget {
     if (!expanded && !members.empty()) revealMembers(true);
     ports.clear();
     members.clear();
+    randomLocks.clear();
     subpatchPositions.clear();
     panelCableIds.clear();
     knownCableIds.clear();
@@ -2188,6 +2234,7 @@ struct Beekapoo : app::ModuleWidget {
     actionPulse[index] = .12f;
     auto change = [&](engine::ParamQuantity* q, bool momentary) {
       if (!q || !q->isBounded()) return;
+      if (operation != 2 && randomLocked(q->module->id, q->paramId)) return;
       if (operation == 2 ? !q->resetEnabled
                          : momentary || (all && !q->randomizeEnabled))
         return;
@@ -2216,10 +2263,18 @@ struct Beekapoo : app::ModuleWidget {
     if (all && operation != 0) {
       for (const auto& member : members)
         if (auto* w = find(member.id)) {
+          if (operation == 1 && randomLocked(member.id, -1)) continue;
           auto* before = batch ? APP->engine->moduleToJson(w->module) : nullptr;
-          if (operation == 1)
-            APP->engine->randomizeModule(w->module);
-          else
+          if (operation == 1) {
+            std::set<int> locked;
+            for (const auto& lock : randomLocks)
+              if (lock.first == member.id && lock.second >= 0)
+                locked.insert(lock.second);
+            if (locked.empty())
+              APP->engine->randomizeModule(w->module);
+            else
+              randomizeWithLocks(w->module, locked);
+          } else
             APP->engine->resetModule(w->module);
           if (batch) {
             auto* action = new history::ModuleChange;
@@ -2367,6 +2422,7 @@ struct Beekapoo : app::ModuleWidget {
   }
   void step() override {
     if (addSelectionButton->visible != canAddSelection()) layoutControls();
+    installDevWatcherToolbar();
     returnHighlight = std::max(
         0.f, returnHighlight - float(APP->window->getLastFrameDuration()));
     auto* sizing = getModule<Module>();

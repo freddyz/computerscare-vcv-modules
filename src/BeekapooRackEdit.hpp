@@ -44,8 +44,8 @@ struct RackEditSession : widget::Widget {
   float previousZoom;
   RackLayoutSnapshot previousSelection;
   std::set<int64_t> known, admitted;
-  bool exposeMode = false, showPanel = true, showMembers = true,
-       finished = false;
+  bool exposeMode = false, randomLockMode = false, showPanel = true,
+       showMembers = true, finished = false;
   float toolbarHeight = 52;
   Vec descriptionPosition;
   widget::SvgWidget memberLogo;
@@ -68,7 +68,8 @@ struct RackEditSession : widget::Widget {
   // One fresh variation per member per editing session, never per frame.
   std::map<int64_t, MemberTag> memberTags;
   ActionButton *done, *exposeButton, *panelButton, *removeButton,
-      *newModulesButton, *nearButton, *farButton, *membersButton;
+      *newModulesButton, *nearButton, *farButton, *membersButton,
+      *randomLockButton, *optionsButton;
   RackEditPreview* preview;
   std::vector<WeakPtr<RackEditHighlight>> highlights;
   explicit RackEditSession(Beekapoo* group) : owner(group) {
@@ -96,9 +97,30 @@ struct RackEditSession : widget::Widget {
     done->help = [] { return "Finish editing [esc]"; };
     exposeButton = addButton("Expose", 100, 94, [this] {
       exposeMode = !exposeMode;
+      randomLockMode = false;
       if (owner) owner->saveGroup();
     });
     exposeButton->pressed = [this] { return exposeMode; };
+    randomLockButton = addButton("Rnd Lock", 196, 112, [this] {
+      randomLockMode = !randomLockMode;
+      exposeMode = false;
+      if (owner) owner->saveGroup();
+    });
+    randomLockButton->pressed = [this] { return randomLockMode; };
+    randomLockButton->help = [] {
+      return "Click modules or parameters to lock randomization and wiggle";
+    };
+    optionsButton = addButton("...", 820, 38, [this] {
+      auto group = owner;
+      auto* menu = createMenu();
+      menu->addChild(createMenuItem(
+          "Unlock all", "",
+          [group] {
+            if (group) group->unlockRandomization();
+          },
+          !group || group->randomLocks.empty()));
+    });
+    optionsButton->help = [] { return "Edit options"; };
     panelButton = addButton("Panel", 206, 80, [this] {
       showPanel = !showPanel;
       if (owner) {
@@ -153,8 +175,9 @@ struct RackEditSession : widget::Widget {
   }
   void layoutToolbar(float width) {
     float x = 10, y = 7;
-    for (auto* button : {done, exposeButton, panelButton, newModulesButton,
-                         nearButton, farButton, membersButton, removeButton}) {
+    for (auto* button :
+         {done, exposeButton, randomLockButton, panelButton, newModulesButton,
+          nearButton, farButton, membersButton, removeButton, optionsButton}) {
       if (!button->visible) continue;
       if (x > 10 && x + button->box.size.x + 10 > width) {
         x = 10;
@@ -242,11 +265,23 @@ struct RackEditSession : widget::Widget {
           visit(Rect(p->getAbsoluteOffset(Vec()) - box.pos, p->box.size * zoom),
                 p, static_cast<app::ParamWidget*>(nullptr));
         for (auto* p : w->getParams())
-          visit(Rect(p->getAbsoluteOffset(Vec()) - box.pos, p->box.size * zoom),
+          if (p->module && p->paramId >= 0)
+            visit(
+                Rect(p->getAbsoluteOffset(Vec()) - box.pos, p->box.size * zoom),
                 static_cast<app::PortWidget*>(nullptr), p);
       }
   }
   void onHoverKey(const HoverKeyEvent& e) override {
+    if ((e.action == GLFW_PRESS || e.action == GLFW_REPEAT) &&
+        e.key == GLFW_KEY_A && (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL &&
+        !APP->scene->browser->visible && owner) {
+      owner->homeRack->deselectAll();
+      for (const auto& member : owner->members)
+        if (auto* w = member.widget.get())
+          if (w->visible) owner->homeRack->select(w, true);
+      e.consume(this);
+      return;
+    }
     if (e.action == GLFW_PRESS && e.key == GLFW_KEY_ESCAPE &&
         !APP->scene->browser->visible) {
       finish(true);
@@ -257,9 +292,30 @@ struct RackEditSession : widget::Widget {
   }
   void onButton(const ButtonEvent& e) override {
     widget::Widget::onButton(e);
-    if (e.isConsumed() || !exposeMode || !owner || e.action != GLFW_PRESS ||
-        e.button != GLFW_MOUSE_BUTTON_LEFT)
+    if (e.isConsumed() || (!exposeMode && !randomLockMode) || !owner ||
+        e.action != GLFW_PRESS || e.button != GLFW_MOUSE_BUTTON_LEFT ||
+        e.pos.y < toolbarHeight)
       return;
+    if (randomLockMode) {
+      forControls([&](Rect r, app::PortWidget*, app::ParamWidget* param) {
+        if (!e.isConsumed() && param && r.contains(e.pos)) {
+          owner->toggleRandomLock(param->module->id, param->paramId);
+          e.consume(this);
+        }
+      });
+      if (!e.isConsumed()) {
+        float zoom = APP->scene->rackScroll->getZoom();
+        for (const auto& member : owner->members)
+          if (auto* w = member.widget.get()) {
+            Rect r(w->getAbsoluteOffset(Vec()) - box.pos, w->box.size * zoom);
+            if (!e.isConsumed() && r.contains(e.pos)) {
+              owner->toggleRandomLock(member.id, -1);
+              e.consume(this);
+            }
+          }
+      }
+      return;
+    }
     forControls([&](Rect r, app::PortWidget* port, app::ParamWidget* param) {
       if (e.isConsumed() || !r.contains(e.pos)) return;
       if (port)
@@ -355,8 +411,10 @@ struct RackEditSession : widget::Widget {
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 18);
     nvgFillColor(args.vg, nvgRGB(214, 225, 218));
-    const char* description =
-        exposeMode ? "Click controls to expose" : "Editing Beekapoo";
+    const char* description = randomLockMode
+                                  ? "Click modules or parameters to lock"
+                              : exposeMode ? "Click controls to expose"
+                                           : "Editing Beekapoo";
     float textWidth =
         nvgTextBounds(args.vg, 0, 0, description, nullptr, nullptr);
     if (descriptionPosition.x >= 0 &&
@@ -381,6 +439,30 @@ struct RackEditSession : widget::Widget {
       if (showMembers)
         for (auto& member : owner->members)
           mark(member.widget.get(), COLOR_COMPUTERSCARE_YELLOW);
+      for (const auto& member : owner->members)
+        if (owner->randomLocks.count({member.id, -1}))
+          if (auto* w = member.widget.get()) {
+            Vec p = w->getAbsoluteOffset(Vec(w->box.size.x - 46, -2)) - box.pos;
+            float zoom = APP->scene->rackScroll->getZoom();
+            nvgSave(args.vg);
+            nvgIntersectScissor(args.vg, 0, toolbarHeight, box.size.x,
+                                box.size.y - toolbarHeight);
+            nvgTranslate(args.vg, p.x, p.y);
+            nvgScale(args.vg, zoom, zoom);
+            nvgBeginPath(args.vg);
+            nvgMoveTo(args.vg, 0, 2);
+            nvgLineTo(args.vg, 22, 0);
+            nvgLineTo(args.vg, 24, 22);
+            nvgLineTo(args.vg, 1, 24);
+            nvgClosePath(args.vg);
+            nvgFillColor(args.vg, nvgRGB(169, 177, 173));
+            nvgFill(args.vg);
+            nvgStrokeColor(args.vg, nvgRGB(24, 29, 26));
+            nvgStrokeWidth(args.vg, 1);
+            nvgStroke(args.vg);
+            drawRandomLock(args.vg, Vec(12, 12), 16);
+            nvgRestore(args.vg);
+          }
       mark(owner.get(), COLOR_COMPUTERSCARE_GREEN);
     }
     widget::Widget::draw(args);
@@ -393,7 +475,6 @@ void RackEditHighlight::draw(const DrawArgs& args) {
   auto* group = session->owner.get();
   auto* module = sourceModule.get();
   if (!group->contains(module->module)) return;
-  if (!session->exposeMode) return;
   auto paint = [&](widget::Widget* control, int index, bool selected,
                    bool locked) {
     if (!control->visible) return;
@@ -423,24 +504,35 @@ void RackEditHighlight::draw(const DrawArgs& args) {
         Vec(r.getRight() + 4 + irregular(), r.pos.y - 4 + irregular()),
         Vec(r.getRight() + 4 + irregular(), r.getBottom() + 4 + irregular()),
         Vec(r.pos.x - 4 + irregular(), r.getBottom() + 4 + irregular())};
-    bool mapped = selected || locked;
-    if (!hovering && !mapped) return;
+    bool randomLocked = index >= 0 &&
+                        dynamic_cast<app::ParamWidget*>(control) &&
+                        group->randomLocks.count({module->module->id, index});
+    bool mapped = session->exposeMode && (selected || locked);
+    hovering &= session->exposeMode || session->randomLockMode;
+    if (!hovering && !mapped && !randomLocked) return;
+    if (!session->exposeMode && !randomLocked &&
+        !dynamic_cast<app::ParamWidget*>(control))
+      return;
     // Keep the original control visible beneath a full-size mapping overlay.
     nvgBeginPath(args.vg);
     nvgMoveTo(args.vg, corners[0].x, corners[0].y);
     for (int i = 1; i < 4; ++i) nvgLineTo(args.vg, corners[i].x, corners[i].y);
     nvgClosePath(args.vg);
-    NVGcolor color =
-        hovering ? nvgRGBA(247, 214, 65, 65) : nvgRGBA(31, 204, 156, 60);
+    NVGcolor color = hovering       ? nvgRGBA(247, 214, 65, 65)
+                     : randomLocked ? nvgRGBA(165, 177, 170, 90)
+                                    : nvgRGBA(31, 204, 156, 60);
     nvgFillColor(args.vg, color);
     nvgFill(args.vg);
     color.a = .95f;
     nvgStrokeColor(args.vg, color);
     nvgStrokeWidth(args.vg, 1.6f);
     nvgStroke(args.vg);
+    if (randomLocked)
+      drawRandomLock(args.vg, Vec(r.getRight() - 1, r.pos.y + 1), 10);
   };
   for (auto* p : module->getParams())
-    paint(p, p->paramId, group->exposed(p), false);
+    if (p->module && p->paramId >= 0)
+      paint(p, p->paramId, group->exposed(p), false);
   for (auto* p : module->getPorts())
     paint(p, 1000 + p->portId + int(p->type) * 100, group->exposed(p),
           group->boundaryPort(p));
@@ -636,6 +728,8 @@ json_t* Beekapoo::editSessionState() {
       double(session->previousOffset.y), "zoom", double(session->previousZoom),
       "panel", session->showPanel, "expose", session->exposeMode);
   json_object_set_new(saved, "members", json_boolean(session->showMembers));
+  json_object_set_new(saved, "randomLock",
+                      json_boolean(session->randomLockMode));
   auto* selected = json_array();
   for (auto id : session->previousSelection.selected)
     json_array_append_new(selected, json_integer(id));
@@ -652,6 +746,8 @@ void Beekapoo::resumeEditSession(json_t* saved) {
     session->previousZoom = clamp(float(zoom), .1f, 4.f);
   session->showPanel = json_is_true(json_object_get(saved, "panel"));
   session->exposeMode = json_is_true(json_object_get(saved, "expose"));
+  session->randomLockMode = json_is_true(json_object_get(saved, "randomLock"));
+  if (session->randomLockMode) session->exposeMode = false;
   session->showMembers = !json_is_false(json_object_get(saved, "members"));
   session->previousSelection.selected.clear();
   auto* selected = json_object_get(saved, "selected");

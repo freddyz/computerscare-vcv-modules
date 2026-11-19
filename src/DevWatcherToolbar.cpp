@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <history.hpp>
+#include <map>
 #include <patch.hpp>
 #include <stdexcept>
 
@@ -219,7 +220,9 @@ struct WatcherToolbar : widget::OpaqueWidget {
     std::rename(temporary.c_str(), (control + ".command").c_str());
   }
   void step() override {
-    box.pos = Vec(std::max(4.f, parent->box.size.x - box.size.x - 10.f), 34.f);
+    if (parent)
+      box.pos =
+          Vec(std::max(4.f, parent->box.size.x - box.size.x - 10.f), 34.f);
     double now = system::getTime();
     if (now >= nextPoll) {
       nextPoll = now + .25;
@@ -265,17 +268,52 @@ struct WatcherToolbar : widget::OpaqueWidget {
     widget::OpaqueWidget::draw(args);
   }
 };
-WeakPtr<WatcherToolbar> toolbar;
+std::map<app::Scene*, WeakPtr<WatcherToolbar>> toolbars;
 }  // namespace
 void installDevWatcherToolbar() {
-  static const std::string control = []() {
-    const char* value = std::getenv("VCVMON_CONTROL");
-    return value ? std::string(value) : std::string();
-  }();
-  if (control.empty() || toolbar.get() || !APP || !APP->scene || !APP->window ||
-      !APP->event)
+  // Plugin init runs before Rack creates its UI. Retry from UI callbacks;
+  // never cache an initially absent environment or a detached widget forever.
+  const char* value = std::getenv("VCVMON_CONTROL");
+  static bool loggedMissing = false, loggedDeferred = false;
+  if (!value || !*value) {
+    if (settings::devMode && !loggedMissing) {
+      INFO("vcvmon toolbar inactive: VCVMON_CONTROL is not set");
+      loggedMissing = true;
+    }
     return;
+  }
+  loggedMissing = false;
+  if (!APP || !APP->scene || !APP->window || !APP->event) {
+    if (!loggedDeferred) {
+      INFO("vcvmon toolbar waiting for Rack UI (control: %s)", value);
+      loggedDeferred = true;
+    }
+    return;
+  }
+  auto* scene = APP->scene;
+  auto* existing = toolbars[scene].get();
+  if (existing && !existing->requestedDelete &&
+      (!existing->parent || existing->parent == scene)) {
+    if (!existing->parent) {
+      scene->addChild(existing);
+      INFO("vcvmon toolbar reattached to Rack UI");
+    }
+    existing->show();
+    if (existing->control != value) {
+      existing->control = value;
+      existing->nextPoll = 0;
+      INFO("vcvmon toolbar control updated: %s", value);
+    }
+    return;
+  }
+  for (auto it = toolbars.begin(); it != toolbars.end();)
+    if (!it->second)
+      it = toolbars.erase(it);
+    else
+      ++it;
+  std::string control(value);
   auto* widget = new WatcherToolbar(control);
-  toolbar = widget;
-  APP->scene->addChild(widget);
+  toolbars[scene] = widget;
+  scene->addChild(widget);
+  INFO("vcvmon toolbar attached to Rack UI (control: %s)", value);
 }

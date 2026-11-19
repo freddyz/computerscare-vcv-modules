@@ -15,7 +15,11 @@ Space pauses/resumes automatic rebuilds, R rebuilds without changing the pause s
 
 Rack sessions launched by the watcher show a small **vcvmon** toolbar in the upper right once a computerscare panel is loaded (opening the module browser also loads panels). It shows Watching, Paused, Changes queued, Building, or Build failed. **Pause/Resume** controls automatic rebuilding; **Rebuild** builds and restarts Rack. The controls do not affect audio transport. Normal Rack launches do not show the toolbar.
 
+Unpausing with queued changes rebuilds and restarts Rack. The toolbar is recreated in the new UI; Beekapoo also checks its attachment directly, so its custom panel does not depend on a browser preview to restore the toolbar. Missing, hidden, or detached toolbars are repaired automatically when computerscare UI steps.
+
 The toolbar uses `VCVMON_CONTROL`, set by the watcher, and small `.status` and `.command` files alongside `VCVMON_PAUSE` (default `/tmp/vcvmon.pause`). Removing the pause file from another terminal also rebuilds queued changes. The terminal keys and toolbar stay in sync. Restart the watcher after updating this script to enable the toolbar in the newly launched Rack session.
+
+For diagnosis, Rack’s log records `vcvmon toolbar attached`, `waiting for Rack UI`, or `inactive: VCVMON_CONTROL is not set` (the last message is dev mode only). A stale heartbeat displays Offline; it does not hide the toolbar.
 
 Defaults can be overridden before running:
 

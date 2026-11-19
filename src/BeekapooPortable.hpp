@@ -188,7 +188,7 @@ bool Beekapoo::importContents(json_t* root) {
       history.push_back(action);
     }
     for (const char* key : {"members", "subpatchPositions", "ports",
-                            "parameters", "hiddenModules"}) {
+                            "parameters", "hiddenModules", "randomLocks"}) {
       auto* entries = json_object_get(remapped, key);
       const char* field = (std::string(key) == "members" ||
                            std::string(key) == "subpatchPositions")
