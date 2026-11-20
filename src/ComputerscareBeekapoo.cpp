@@ -1682,12 +1682,16 @@ struct Beekapoo : app::ModuleWidget {
     auto* sourceSwitch = dynamic_cast<app::Switch*>(source);
     bool discrete = dynamic_cast<engine::SwitchQuantity*>(q) || q->snapEnabled;
     app::ParamWidget* knob;
-    if (sourceSwitch || (discrete && !dynamic_cast<app::Knob*>(source))) {
+    if (sourceSwitch || (dynamic_cast<engine::SwitchQuantity*>(q) &&
+                         !dynamic_cast<app::Knob*>(source))) {
       auto* button = createParamCentered<MappedParam<ExposedSwitch>>(
           Vec(), w->module, index);
       button->source = source;
       button->momentary = sourceSwitch && sourceSwitch->momentary;
       knob = button;
+    } else if (discrete) {
+      knob = createParamCentered<MappedParam<SmallDotSnapKnob>>(
+          Vec(), w->module, index);
     } else {
       knob =
           createParamCentered<MappedParam<SmallKnob>>(Vec(), w->module, index);
@@ -1703,6 +1707,8 @@ struct Beekapoo : app::ModuleWidget {
     if (auto* mapped = dynamic_cast<MappedParam<ExposedSwitch>*>(knob))
       mapped->caption = caption;
     if (auto* mapped = dynamic_cast<MappedParam<SmallKnob>*>(knob))
+      mapped->caption = caption;
+    if (auto* mapped = dynamic_cast<MappedParam<SmallDotSnapKnob>*>(knob))
       mapped->caption = caption;
     controls->addChild(knob);
     parameters.push_back({id, index, knob});

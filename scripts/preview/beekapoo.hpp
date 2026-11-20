@@ -24,6 +24,7 @@ struct Gain : engine::Module {
     configButton(1,"Momentary");
     configSwitch(2,0.f,1.f,0.f,"Toggle");
     configSwitch(3,0.f,3.f,0.f,"Position");
+    configParam(5,0.f,4.f,2.f,"Steps")->snapEnabled=true;
   }
   void process(const ProcessArgs&) override {
     outputs[0].setChannels(4);
@@ -59,6 +60,7 @@ struct Face : app::ModuleWidget {
       addOutput(createOutputCentered<JackLargePointingUp>(Vec(65,20+i*14),m,i));
     }
     addParam(createParamCentered<SmallKnob>(Vec(45,180),m,0));
+    addParam(createParamCentered<SmallSnapKnob>(Vec(45,160),m,5));
     for(int i=1;i<=3;++i) {
       auto* sw=createParamCentered<app::Switch>(Vec(45,200+i*20),m,i);
       sw->box=Rect(Vec(35,200+i*20),Vec(20,20));
@@ -336,6 +338,11 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   auto* toggle=dynamic_cast<beekapoo::ExposedSwitch*>(host->parameters[2].knob);
   auto* positions=dynamic_cast<beekapoo::ExposedSwitch*>(host->parameters[3].knob);
   require(moment && moment->momentary && toggle && !toggle->momentary && positions,"Exposed switch kinds must match original widgets");
+  auto* discrete=dynamic_cast<beekapoo::MappedParam<SmallDotSnapKnob>*>(host->parameters[5].knob);
+  require(discrete && discrete->snap && discrete->getParamQuantity()==b->module->getParamQuantity(5),"Discrete knobs must use the small dot selector and original quantity");
+  APP->event->setHoveredWidget(discrete);
+  require(discrete->tip && discrete->tip->caption().find("Steps")!=std::string::npos,"Dot selector tooltip must keep source module and parameter details");
+  APP->event->setHoveredWidget(nullptr);
   event::DragStart press;press.button=GLFW_MOUSE_BUTTON_LEFT;
   event::DragEnd release;release.button=GLFW_MOUSE_BUTTON_LEFT;
   moment->onDragStart(press);b->step();
@@ -1632,6 +1639,18 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     rack->clear();
   }
   std::puts("Eject current-space reuse, above/below/left placement, intact layout, obstacle preservation and Undo/Redo passed");
+
+  {
+    auto* source=add(gainModel,Vec());
+    auto* panel=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(150,0)));
+    rack->deselectAll();rack->select(source,true);panel->collapse();
+    for(int id:{0,5,1,2})panel->exposeParameter(source->module->id,id);
+    panel->expose(source,source->getInput(0));panel->expose(source,source->getOutput(0));
+    panel->requestedWidth=240;panel->layoutControls();
+    auto* parent=panel->parent;parent->removeChild(panel);panel->box.pos=Vec();
+    capture(panel,output+"/36-discrete-dot-knob.png",scale,false);
+    parent->addChild(panel);rack->clear();
+  }
 
   std::printf("Beekapoo: zero footprint, occupied-space expansion, native save/load, four-channel DSP, exposed controls, copy isolation, missing-member recovery and deletion checks passed.\n");
 }

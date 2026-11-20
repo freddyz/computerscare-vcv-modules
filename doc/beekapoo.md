@@ -30,6 +30,8 @@ While editing, **Cmd/Ctrl+A** selects only the subpatch modules.
 
 ## Panel
 
+Discrete knobs use a dot indicator and tick marks. Buttons and switches keep their momentary, toggle, or multi-position behavior.
+
 Rack’s **Bypass** command bypasses every contained module. Switching it off un-bypasses every contained module, including any that were previously bypassed individually. Each module uses its normal bypass routing.
 
 **Panel arrangement** groups controls by type or by source module. **Show controls** hides or shows parameters, inputs, outputs, or controls from one module. Hiding a control preserves its mapping and connections. Hover for the full control and module name. Port tooltips show the normal live voltage readings. At small widths, exposed parameter knobs fill available space without labels. Both Wiggle buttons and all module CV jacks stay visible at the minimum width. Randomize and Initialize buttons appear as the panel widens; Amount is hidden at small widths. Edit, Eject, all jacks, and the computerscare logo remain visible. Module actions keep their own box, separate from the exposed jacks.

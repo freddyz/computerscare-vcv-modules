@@ -531,6 +531,39 @@ struct SmallKnob : ComputerscareRoundKnob {
   }
 };
 
+struct SmallDotSnapKnob : ComputerscareRoundKnob {
+  SmallDotSnapKnob() {
+    snap = true;
+    shadow->opacity = 0.f;
+    setSvg(APP->window->loadSvg(asset::plugin(
+        pluginInstance,
+        "res/components/computerscare-small-knob-dot-indicator.svg")));
+  }
+  void draw(const DrawArgs& args) override {
+    auto* q = getParamQuantity();
+    if (q && q->isBounded() && q->getRange() >= 1) {
+      // Keep dense integer ranges legible: small selectors get a tick for
+      // every state, larger ranges get evenly spaced major divisions.
+      int ticks = int(std::min(16.f, q->getRange())) + 1;
+      nvgBeginPath(args.vg);
+      Vec center = box.size * .5f;
+      for (int i = 0; i < ticks; ++i) {
+        float step = std::round(i * (q->getRange() / (ticks - 1)));
+        float angle = minAngle + (maxAngle - minAngle) * step / q->getRange();
+        Vec direction(std::sin(angle), -std::cos(angle));
+        Vec inner = center + direction * (box.size.x * .5f + .7f);
+        Vec outer = inner + direction * 1.7f;
+        nvgMoveTo(args.vg, inner.x, inner.y);
+        nvgLineTo(args.vg, outer.x, outer.y);
+      }
+      nvgStrokeWidth(args.vg, .7f);
+      nvgStrokeColor(args.vg, nvgRGB(42, 67, 60));
+      nvgStroke(args.vg);
+    }
+    ComputerscareRoundKnob::draw(args);
+  }
+};
+
 struct DarkSmallKnob : ComputerscareRoundKnob {
   DarkSmallKnob() {
     setSvg(APP->window->loadSvg(asset::plugin(
