@@ -26,6 +26,17 @@ struct Output {
 struct Range {
   int param;
   float low, high;
+  bool randomPolarity;
+  Range(int param, float low, float high, bool randomPolarity = false)
+      : param(param), low(low), high(high), randomPolarity(randomPolarity) {}
+  static Range modulation(int param) { return {param, .6f, 1.f, true}; }
+  // Modulation uses two separate bands, avoiding near-zero CV depth.
+  float sample(float uniform) const {
+    bool negative = randomPolarity && uniform < .5f;
+    if (randomPolarity) uniform = 2.f * uniform - (negative ? 0.f : 1.f);
+    float value = low + uniform * (high - low);
+    return negative ? -value : value;
+  }
 };
 struct Control {
   int id;
@@ -72,7 +83,10 @@ inline const std::vector<Spec>& library() {
         {2, Signal::sound, {}},
         {3, Signal::sound, {}}},
        {2, {5, {}, {3}}},
-       {{2, -24, 12}, {4, .02f, .12f}, {5, .25f, .75f}, {6, .05f, .2f}}},
+       {{2, -24, 12},
+        Range::modulation(4),
+        {5, .25f, .75f},
+        Range::modulation(6)}},
       // LFO inputs: FM 0, reset 2, PWM 3, clock 4. Outputs: sin/tri/saw/square
       // 0..3.
       // Params: frequency 2, FM depth 3, pulse width 5, PWM depth 6.
@@ -83,7 +97,7 @@ inline const std::vector<Spec>& library() {
         {2, Signal::modulation, {}},
         {3, Signal::gate, {}}},
        {2, {5, {}, {3}}},
-       {{2, -3, 2}, {3, .05f, .2f}, {5, .3f, .7f}, {6, .05f, .2f}}},
+       {{2, -3, 2}, Range::modulation(3), {5, .3f, .7f}, Range::modulation(6)}},
       // Noise: white/pink/red outputs 0..2; no parameters or inputs.
       {"Noise",
        {},
@@ -91,13 +105,17 @@ inline const std::vector<Spec>& library() {
        {},
        {}},
       // VCF: cutoff/resonance CV 0/1 require audio 3; LP/HP outputs 0/1.
-      // Params: cutoff 0, resonance 2, cutoff depth 3, resonance depth 5.
+      // Params: cutoff 0, resonance 2, cutoff/resonance/drive CV depths 3/5/6.
       {"VCF",
        {{0, {{{3}, Signal::sound}}}, {1, {{{3}, Signal::sound}}}},
        {{0, Signal::sound, {{{3}, Signal::sound}}},
         {1, Signal::sound, {{{3}, Signal::sound}}}},
        {0, 2},
-       {{0, .45f, .8f}, {2, .05f, .4f}, {3, .04f, .14f}, {5, .05f, .15f}}},
+       {{0, .45f, .8f},
+        {2, .05f, .4f},
+        Range::modulation(3),
+        Range::modulation(5),
+        Range::modulation(6)}},
       // VCA: CV 0 requires signal 1; output 0; level parameter 0.
       {"VCA-1",
        {{0, {{{1}, Signal::sound}}}},
@@ -105,7 +123,8 @@ inline const std::vector<Spec>& library() {
        {0},
        {{0, .5f, .85f}}},
       // Delay: time/tone CV 0/2 require audio 4; Mix output 0.
-      // Params: time 0, feedback 1, mix 3, time/tone depth 4/6.
+      // Params: time 0, feedback 1, mix 3, time/feedback/tone/mix CV
+      // depths 4..7.
       {"Delay",
        {{0, {{{4}, Signal::sound}}}, {2, {{{4}, Signal::sound}}}},
        {{0, Signal::sound, {{{4}, Signal::sound}}}},
@@ -113,8 +132,10 @@ inline const std::vector<Spec>& library() {
        {{0, .45f, .75f},
         {1, .1f, .45f},
         {3, .2f, .55f},
-        {4, .02f, .08f},
-        {6, .05f, .2f}}},
+        Range::modulation(4),
+        Range::modulation(5),
+        Range::modulation(6),
+        Range::modulation(7)}},
       // ADSR: A/D/S/R CV 0..3 require gate 4; envelope output 0.
       // Params: A/D/S/R 0..3, corresponding CV depths 4..7.
       {"ADSR",
@@ -128,10 +149,10 @@ inline const std::vector<Spec>& library() {
         {1, .2f, .5f},
         {2, .3f, .8f},
         {3, .2f, .6f},
-        {4, .1f, .3f},
-        {5, .1f, .3f},
-        {6, .1f, .3f},
-        {7, .1f, .3f}}},
+        Range::modulation(4),
+        Range::modulation(5),
+        Range::modulation(6),
+        Range::modulation(7)}},
       // VCA Mix: Mix CV 0, channel signals 1..4, channel CVs 5..8;
       // Mix output/level 0, channel outputs/levels 1..4.
       // Priority 1 makes Mix the first output used. Direct outputs remain

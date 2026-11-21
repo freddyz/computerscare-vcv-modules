@@ -38,13 +38,10 @@ inline json_t* plan(int requestedCount = 0,
     modules.emplace_back(
         plugin::getModel("Fundamental", spec.slug)->createModule());
     auto* m = modules.back().get();
-    auto set = [&](int id, float low, float high) {
-      if (auto* q = m->getParamQuantity(id))
-        q->setImmediateValue(clamp(low + random::uniform() * (high - low),
-                                   q->getMinValue(), q->getMaxValue()));
-    };
     for (const auto& range : spec.initial)
-      set(range.param, range.low, range.high);
+      if (auto* q = m->getParamQuantity(range.param))
+        q->setImmediateValue(clamp(range.sample(random::uniform()),
+                                   q->getMinValue(), q->getMaxValue()));
     auto* node = m->toJson();
     json_object_set_new(node, "sourceId", json_integer(i + 1));
     json_array_append_new(nodes, node);

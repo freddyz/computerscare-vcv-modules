@@ -455,6 +455,7 @@ struct ActionButton : LetteredFace {
   ActionButton() { textColor = nvgRGB(36, 36, 36); }
   int icon = -1;
   bool iconAndText = false;
+  float iconTextInset = 17;
   std::function<std::string()> help;
   WeakPtr<ui::Tooltip> tooltip;
   void onEnter(const EnterEvent&) override {
@@ -478,7 +479,7 @@ struct ActionButton : LetteredFace {
   ~ActionButton() override { clearTooltip(); }
   void draw(const DrawArgs& args) override {
     showLabel = icon < 0 || iconAndText;
-    if (iconAndText) textInset = 17;
+    if (iconAndText) textInset = iconTextInset;
     phlooper::WarpedDropdown::draw(args);
     if (icon < 0) return;
     Vec c = box.size * .5f + (isPressed() ? Vec(2, 1) : Vec(-1, -1));
@@ -631,13 +632,12 @@ struct SelectionLogo : ActionButton {
   bool hovered = false;
   float phase = 0;
   void setDark(bool dark) {
-    static constexpr const char* paths[] = {
-        "res/Beekapoo/computerscare-chomp-1.svg",
-        "res/Beekapoo/computerscare-chomp-2.svg"};
-    for (size_t i = 0; i < jaws.size(); ++i) {
-      auto path = asset::plugin(pluginInstance, paths[i]);
-      jaws[i].setSvg(dark ? darkHeaderSvg(path) : APP->window->loadSvg(path));
-    }
+    auto load = [dark](widget::SvgWidget& frame, const char* filename) {
+      auto path = asset::plugin(pluginInstance, filename);
+      frame.setSvg(dark ? darkHeaderSvg(path) : APP->window->loadSvg(path));
+    };
+    load(jaws[0], "res/Beekapoo/computerscare-chomp-1.svg");
+    load(jaws[1], "res/Beekapoo/computerscare-chomp-2.svg");
   }
   void setAvailable(bool available) {
     if (visible == available) return;
@@ -1889,8 +1889,10 @@ struct Beekapoo : app::ModuleWidget {
         rack->select(w, false);
         parent->removeChild(w);
         holder = new Holder(w);
-        // Holders remain direct Rack children so native ID/port lookup works.
-        parent->addChildBelow(holder, this);
+        // Register hidden holders directly in Rack. The visible panel can
+        // have a different parent during view transitions, so it is not a
+        // reliable sibling anchor. Hidden holders need no relative z-order.
+        rack->getModuleContainer()->addChildBottom(holder);
         member.holder = holder;
       }
       rack->select(holder, false);
@@ -1990,8 +1992,10 @@ struct Beekapoo : app::ModuleWidget {
     HeaderLayout result;
     result.text = width >= 150;
     float editWidth =
-        (result.text ? 46.f : 19.f) + 5 * std::to_string(members).size();
-    float ejectWidth = result.text ? 47.f : 18.f;
+        (result.text ? 46.f : 18.f) +
+        (result.text ? 5.f : 8.f) * std::to_string(members).size();
+    editWidth = std::min(editWidth, width - 16);
+    float ejectWidth = result.text ? 47.f : (width < 75 ? 16.f : 18.f);
     float buttonWidth = editWidth + 2 + ejectWidth;
     float right = width - 10;
     bool beside = width >= 270;
@@ -2031,7 +2035,8 @@ struct Beekapoo : app::ModuleWidget {
       button->visible = true;
       button->icon = icons[i];
       button->iconAndText = i == 0 || (i == 1 && plan.text);
-      button->textSize = plan.text ? 10 : 9;
+      button->textSize = plan.text ? 10 : 13;
+      button->iconTextInset = plan.text ? 17 : 14;
       button->faceColor = nvgRGB(214, 214, 214);
       button->textColor = nvgRGB(45, 45, 45);
       button->upDepth = 1.1f;

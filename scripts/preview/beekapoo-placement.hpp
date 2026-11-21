@@ -49,6 +49,31 @@ void testBeekPlacement(const std::string& output,float scale,Add add,Require req
   APP->scene->box.size=Vec(1200,740);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(1200,710));
   auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,RACK_OFFSET+Vec(600,0)));
   require(owner->generateDefaultPatch(4),"Placement test needs a real generated patch");
+  // Collapsing must not use the visible panel as a sibling anchor. Its view
+  // can have a different parent while the actual modules stay in Rack.
+  for(bool escape:{false,true}) {
+    owner->editSubpatch();
+    auto moduleIds=APP->engine->getModuleIds();
+    std::set<int64_t> cableIds;
+    for(auto* cable:rack->getCompleteCables())cableIds.insert(cable->cable->id);
+    auto* container=rack->getModuleContainer();widget::Widget panelView;
+    container->removeChild(owner);panelView.addChild(owner);
+    auto* session=static_cast<beekapoo::RackEditSession*>(owner->editSession.get());
+    if(escape) {
+      widget::EventContext context;widget::Widget::HoverKeyEvent key;
+      key.context=&context;key.key=GLFW_KEY_ESCAPE;key.action=GLFW_PRESS;
+      session->onHoverKey(key);
+      require(key.isConsumed(),"Escape must consume the edit-close key");
+    } else session->done->action();
+    panelView.removeChild(owner);container->addChild(owner);
+    require(!owner->editSession&&!owner->expanded,"Done and Escape must finish with a temporarily reparented panel");
+    require(APP->engine->getModuleIds()==moduleIds,"Finishing Edit must preserve every engine module");
+    std::set<int64_t> after;
+    for(auto* cable:rack->getCompleteCables())after.insert(cable->cable->id);
+    require(after==cableIds,"Finishing Edit must preserve every cable");
+    for(const auto& member:owner->members)
+      require(member.holder&&member.holder->parent==container&&rack->getModule(member.id)==member.holder.get(),"Hidden members must stay registered directly in Rack");
+  }
   // The actual bug: four members have absolute positions, a newly grown one
   // is 103 rows away. Save/reload must repair once without further movement.
   for(auto& m:owner->members)m.position+=RACK_OFFSET+Vec(0,103*RACK_GRID_HEIGHT);

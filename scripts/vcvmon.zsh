@@ -50,6 +50,21 @@ _vcvmon_stamp () {
 		| cksum
 }
 
+# Rack's `make plugins` also tries to build archives and installed binaries.
+# Leave packages for Rack to extract on startup; only source trees need make.
+_vcvmon_build_dev () {
+	(
+		cd "$VCVMON_RACK" || exit 1
+		local plugin_dir
+		for plugin_dir in plugins/*(N); do
+			[[ -d "$plugin_dir" ]] || continue
+			[[ -f "$plugin_dir/Makefile" || -f "$plugin_dir/makefile" || -f "$plugin_dir/GNUmakefile" ]] || continue
+			make -C "$plugin_dir" || exit $?
+		done
+		make all
+	)
+}
+
 _vcvmon_kill_tree () {
 	local parent=$1
 	local child
@@ -170,7 +185,11 @@ vcvmon () {
 		fi
 		(
 			cd "$VCVMON_RACK" || exit 1
-			VCVMON_CONTROL="$VCVMON_PAUSE" exec ./Rack -d
+			# Release plugins link to /tmp/Rack2/libRack.dylib, but Rack -d
+			# skips that temporary link. Resolve against this checkout instead.
+			VCVMON_CONTROL="$VCVMON_PAUSE" \
+				DYLD_LIBRARY_PATH="$VCVMON_RACK${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \
+				exec ./Rack -d
 		) &!
 		runner_pid=$!
 	}
@@ -225,7 +244,7 @@ vcvmon () {
 				return 1
 			fi
 		else
-			if ! (cd "$VCVMON_RACK" && make plugins all); then
+			if ! _vcvmon_build_dev; then
 				failed=1; dirty=0; _vcvmon_status failed
 				_vcvmon_banner "1;97;41" "VCVMON BUILD FAILED - Rack left running   [r] retry"
 				return 1

@@ -202,6 +202,8 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     require(names.size()>180&&numbered>30&&plain>70&&oneWord>20&&threeWords>5&&separated>20&&prefixNumber>3,"Naming recipes must vary structure, word counts, separators, number presence and number position");
   }
   std::set<int> counts;
+  std::set<std::pair<std::string,int>> cvDepths;
+  int positiveDepths=0,negativeDepths=0;
   for(int trial=0;trial<40;++trial) {
     auto* plan=beekapoo::generated::plan();require(plan,"Generator must produce a plan");
     auto* contents=json_object_get(plan,"contents");auto* nodes=json_object_get(contents,"modules");auto* wires=json_object_get(contents,"cables");
@@ -209,6 +211,17 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     std::set<std::pair<int,int>> occupied;std::set<int> involved;
     for(size_t i=0;i<json_array_size(nodes);++i) {
       auto* node=json_array_get(nodes,i);require(std::string(json_string_value(json_object_get(node,"plugin")))=="Fundamental","Only Fundamental modules may be generated");
+      // Read the actual Fundamental quantities after loading the generated
+      // JSON: catches wrong parameter IDs, zero defaults and sign clamping.
+      auto* model=plugin::getModel("Fundamental",json_string_value(json_object_get(node,"model")));
+      std::unique_ptr<engine::Module> generated(model->createModule());generated->fromJson(node);
+      for(auto* q:generated->paramQuantities)if(q&&q->unit=="%"&&
+          (q->name.find("modulation")!=std::string::npos||q->name.find("CV")!=std::string::npos)) {
+        float depth=q->getValue();
+        require(q->getMinValue()==-1&&q->getMaxValue()==1,"Generated CV depths must match Fundamental's bipolar controls");
+        require(std::abs(depth)>=.6f&&std::abs(depth)<=1.f,"Every generated CV attenuverter must start at 60-100% in either polarity");
+        cvDepths.insert({model->slug,q->paramId});positiveDepths+=depth>0;negativeDepths+=depth<0;
+      }
       if(i){auto* members=json_object_get(plan,"members");auto* previous=json_array_get(nodes,i-1);auto* model=plugin::getModel("Fundamental",json_string_value(json_object_get(previous,"model")));double x=json_number_value(json_object_get(json_array_get(members,i),"x")),prev=json_number_value(json_object_get(json_array_get(members,i-1),"x"));require(std::abs(x-prev-beekapoo::generated::moduleWidth(model))<.01,"Generated modules must touch without gaps");}
     }
     for(size_t i=0;i<json_array_size(wires);++i) {
@@ -222,6 +235,7 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     require(json_array_size(json_object_get(plan,"parameters"))>=2,"Generator must expose some parameters");
     json_decref(plan);
   }
+  require(cvDepths.size()==15&&positiveDepths>0&&negativeDepths>0,"Generation must cover oscillator, filter, delay and envelope CV depths with both polarities");
   {
     std::set<int> sizes;int threes=0,elevens=0;
     for(unsigned i=0;i<100;++i){int n=beekapoo::generated::moduleCount(i);sizes.insert(n);threes+=n==3;elevens+=n==11;}

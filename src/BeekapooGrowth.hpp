@@ -109,9 +109,8 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
       if (spec.slug == std::string(slug))
         for (const auto& r : spec.initial)
           if (auto* q = m->getParamQuantity(r.param))
-            q->setImmediateValue(
-                clamp(r.low + random::uniform() * (r.high - r.low),
-                      q->getMinValue(), q->getMaxValue()));
+            q->setImmediateValue(clamp(r.sample(random::uniform()),
+                                       q->getMinValue(), q->getMaxValue()));
     if (std::string(slug) == "VCA-1")
       m->params[0].setValue(.25f + random::uniform() * .6f);
     APP->engine->addModule(m);

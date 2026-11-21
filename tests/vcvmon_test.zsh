@@ -18,6 +18,7 @@ VCVMON_PAUSE="$local_root/pause"
 make () {
   print -r -- "$PWD $*" >> "$local_root/make-log"
   [[ ${fail_build:-0} == 1 ]] && return 1
+  [[ -n ${fail_plugin:-} && "$*" == "-C $fail_plugin" ]] && return 1
   [[ "$*" == run ]] && print -r -- "launched:$VCVMON_CONTROL" >> "$local_root/log"
   if [[ "$*" == *dist* ]]; then
     mkdir -p "$VCVMON_REPO/dist"
@@ -31,6 +32,22 @@ read () {
   if [[ "$*" == *-sk1* ]]; then sleep .2;key=q;return 0;fi
   builtin read "$@"
 }
+# Packages and already-installed plugins are valid alongside source checkouts.
+# Include spaces and a symlink, as in a normal development Rack installation.
+mkdir -p "$VCVMON_RACK/plugins/ASource" "$VCVMON_RACK/plugins/B source" "$local_root/linked" "$VCVMON_RACK/plugins/Prebuilt"
+touch "$VCVMON_RACK/plugins/ASource/Makefile" "$VCVMON_RACK/plugins/B source/GNUmakefile" "$local_root/linked/makefile"
+ln -s "$local_root/linked" "$VCVMON_RACK/plugins/CLinked"
+touch "$VCVMON_RACK/plugins/Prebuilt/plugin.dylib" "$VCVMON_RACK/plugins/Spunoza-mac-arm64.vcvplugin" "$VCVMON_RACK/plugins/README"
+_vcvmon_build_dev
+expected=$(printf '%s\n' "$VCVMON_RACK -C plugins/ASource" "$VCVMON_RACK -C plugins/B source" "$VCVMON_RACK -C plugins/CLinked" "$VCVMON_RACK all")
+[[ $(<"$local_root/make-log") == "$expected" ]]
+[[ -f "$VCVMON_RACK/plugins/Spunoza-mac-arm64.vcvplugin" ]]
+rm "$local_root/make-log"
+fail_plugin=plugins/ASource
+if _vcvmon_build_dev; then exit 1; fi
+[[ $(<"$local_root/make-log") == "$VCVMON_RACK -C plugins/ASource" ]]
+unset fail_plugin
+rm "$local_root/make-log"
 vcvmon dist > "$local_root/dist-log" 2>&1
 [[ -f "$VCVMON_USER_DIR/plugins-mac-arm64/computerscare-1-mac-arm64.vcvplugin" ]]
 sleep .1
@@ -42,9 +59,10 @@ vcvmon dist > "$local_root/fail-log" 2>&1
 [[ ! -f "$local_root/log" ]]
 [[ $(cat "$local_root/fail-log") == *'BUILD FAILED'* ]]
 fail_build=0
+rm "$local_root/make-log"
 vcvmon dev > "$local_root/dev-log" 2>&1
 sleep .1
-[[ $(cat "$local_root/make-log") == *"$VCVMON_RACK plugins all"* ]]
+[[ $(cat "$local_root/make-log") == "$expected" ]]
 [[ $(cat "$local_root/log") == *"launched:$VCVMON_PAUSE"* ]]
 if vcvmon invalid > /dev/null 2>&1; then exit 1;fi
 vcvmon > "$local_root/default-log" 2>&1
@@ -91,5 +109,6 @@ vcvmon dev > "$local_root/commands-log" 2>&1
 [[ $(<"$VCVMON_PAUSE.status") == stopped* ]]
 [[ ! -f "$VCVMON_PAUSE.command" && ! -f "$VCVMON_PAUSE" ]]
 [[ $(<"$local_root/log") == *"launched:$VCVMON_PAUSE"* ]]
-[[ $(rg -c 'plugins all' "$local_root/make-log") == 7 ]]
-print 'vcvmon modes, toolbar commands, external resume, retry, and cleanup tests passed'
+[[ $(rg -c "^$VCVMON_RACK all$" "$local_root/make-log") == 6 ]]
+[[ $(rg -c 'plugins/ASource' "$local_root/make-log") == 7 ]]
+print 'vcvmon source/binary plugins, modes, toolbar commands, external resume, retry, and cleanup tests passed'

@@ -5,7 +5,7 @@ void renderBeekChomp(const std::string& output,float scale,Add add,Require requi
   std::vector<beekapoo::Beekapoo*> owners;
   for(int example=0;example<2;++example) {
     auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(example*2000,0)));
-    require(owner->generateDefaultPatch(3+example),"Chomp fixture must use real Fundamental modules");
+    require(owner->generateDefaultPatch(example?11:3),"Chomp fixture must use real Fundamental modules");
     owner->getModule<beekapoo::Module>()->panelTheme.store(example?2:1);
     owner->requestedWidth=example?210:150;owner->layoutControls();owner->step();
     owners.push_back(owner);
@@ -74,6 +74,13 @@ void renderBeekChomp(const std::string& output,float scale,Add add,Require requi
     capture(&sheet,output+string::f("/chomp-%02d.png",frame),scale,false);
     for(auto* w:owners)w->addSelectionButton->advance(.05f);
   }
+  x=0;
+  for(size_t i=0;i<owners.size();++i) {
+    auto* w=owners[i];w->requestedWidth=i?90:60;w->layoutControls();
+    w->box.pos=Vec(x,0);x+=w->box.size.x+16;
+  }
+  sheet.box.size=Vec(x-16,380);
+  capture(&sheet,output+"/compact-counts.png",scale,false);
   for(size_t i=0;i<owners.size();++i) {
     sheet.removeChild(owners[i]);owners[i]->box.pos=positions[i];rack->addModule(owners[i]);
   }
