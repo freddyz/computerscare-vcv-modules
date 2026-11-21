@@ -51,7 +51,7 @@ inline ResponsiveLayout planLayout(float width, int tier, int params,
   p.paramWidth = width - 12;
   p.paramTop = 40 + p.ownHeight + 8;
   p.portCell = tier >= 3 ? 100.f : tier >= 2 ? 84.f : tier == 1 ? 40.f : 22.f;
-  p.portRow = tier >= 2 ? 32.f : tier == 1 ? 30.f : 22.f;
+  p.portRow = tier > 0 ? 52.f : 22.f;
   int panes = (inputs ? 1 : 0) + (outputs ? 1 : 0);
   float portAvailable = width - 12 - panes * 13 - (panes == 2 ? 8 : 0);
   int columns = std::max(panes == 2 ? 2 : 1, int(portAvailable / p.portCell));

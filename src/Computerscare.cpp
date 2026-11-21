@@ -10,6 +10,7 @@ void init(Plugin* p) {
   installBeekapooRackHooks();
 
   p->addModel(modelComputerscareBeekapoo);
+  p->addModel(modelComputerscareBeekapooAudioPorts);
   p->addModel(modelComputerscareBeekapooLegacy);
   p->addModel(modelComputerscarePeekabooLegacy);
   p->addModel(modelComputerscarePhlooper);

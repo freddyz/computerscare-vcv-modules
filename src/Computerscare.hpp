@@ -791,6 +791,7 @@ struct SmallLetterDisplay : Widget {
 extern Model* modelComputerscarePhlooper;
 
 extern Model* modelComputerscareBeekapoo;
+extern Model* modelComputerscareBeekapooAudioPorts;
 extern Model* modelComputerscareBeekapooLegacy;
 
 extern Model* modelComputerscarePeekabooLegacy;

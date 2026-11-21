@@ -70,8 +70,126 @@ struct Face : app::ModuleWidget {
 };
 }
 #include "beekapoo-print.hpp"
+#include "beekapoo-files.hpp"
+#include "beekapoo-audio-import.hpp"
+#include "beekapoo-generator.hpp"
+#include "beekapoo-inputs.hpp"
 void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,float scale) {
   auto require=[](bool pass,const char* why){if(!pass)throw std::runtime_error(why);};
+  {
+    auto mono=beekapoo::monochromeJack("jack-small-pointing-down");
+    auto original=APP->window->loadSvg(asset::plugin(pluginInstance,"res/components/jack-small-pointing-down.svg"));
+    require(mono!=original,"Grayscale jack artwork must not mutate the shared Rack asset");
+    require(mono==beekapoo::monochromeJack("jack-small-pointing-down"),"Grayscale jack copies must be cached");
+    for(auto* shape=mono->handle->shapes;shape;shape=shape->next)
+      for(auto* paint:{&shape->fill,&shape->stroke})if(paint->type==NSVG_PAINT_COLOR){
+        unsigned c=paint->color;
+        require((c&255)==((c>>8)&255)&&((c>>8)&255)==((c>>16)&255),"Grayscale jack fills and strokes must be neutral");
+      }
+  }
+  {
+    using beekapoo::StyleCable;
+    std::vector<std::string> types{"Maker A/VCO","Maker B/VCF","Maker A/VCO"};
+    std::vector<StyleCable> cables{{0,0,1,2},{2,1,1,3}};
+    auto a=beekapoo::patchIdentity(types,cables);
+    auto permuted=beekapoo::patchIdentity({types[2],types[0],types[1]},{{1,0,2,2},{0,1,2,3}});
+    require(a==permuted,"All appearance hashes must be independent of module/cable insertion order and IDs");
+    auto single=beekapoo::patchIdentity({"Maker A/VCO","Maker B/VCF"},{});
+    std::vector<std::string> many(15,"Maker A/VCO");many.push_back("Maker B/VCF");auto duplicate=beekapoo::patchIdentity(many,{});
+    require(single.types==duplicate.types&&single.modules!=duplicate.modules,"Unique-type hash must collapse duplicates while counted hash retains multiplicity");
+    require(single.manufacturerTypes==duplicate.manufacturerTypes&&single.manufacturers!=duplicate.manufacturers,"Manufacturer set collapses duplicate makers while counted manufacturer hash retains their module counts");
+    auto otherModels=beekapoo::patchIdentity({"Maker A/LFO","Maker B/VCA"},{});
+    require(single.manufacturerTypes==otherModels.manufacturerTypes&&single.manufacturers==otherModels.manufacturers,"Manufacturer hashes must ignore model names");
+    auto anotherMaker=beekapoo::patchIdentity({"Maker C/VCO","Maker B/VCF"},{});
+    require(single.manufacturerTypes!=anotherMaker.manufacturerTypes&&single.manufacturers!=anotherMaker.manufacturers,"Changing a manufacturer must change both manufacturer hashes");
+    auto makerDescriptor=beekapoo::patchIdentity({std::string("Maker A")+'\x1f'+"VCO"+'\x1f'+"a/vco"},{});
+    auto slashDescriptor=beekapoo::patchIdentity({"Maker A/VCO"},{});
+    require(makerDescriptor.manufacturerTypes==slashDescriptor.manufacturerTypes,"Runtime descriptors must hash manufacturer independently of model and plugin slug");
+    auto repatched=beekapoo::patchIdentity(types,{{0,0,1,1},{2,1,1,3}});
+    require(a.modules==repatched.modules&&a.types==repatched.types&&a.wiring!=repatched.wiring,"Changing a cable endpoint must alter only the wiring hash");
+    auto external=beekapoo::patchIdentity(types,{{-1,0,0,0,"External/MIDI",""}});
+    require(external==beekapoo::patchIdentity(types,{}),"Exterior patching must not affect any appearance hash");
+    auto self=beekapoo::patchIdentity({"VCO","VCO"},{{0,0,0,0},{1,0,1,0}});
+    auto cycle=beekapoo::patchIdentity({"VCO","VCO"},{{0,0,1,0},{1,0,0,0}});
+    require(self.wiring!=cycle.wiring,"Self connections must differ from connections between identical modules");
+    auto connected=beekapoo::patchIdentity({"VCO","VCO","VCO","VCO"},{{0,0,1,0},{1,0,2,0},{2,0,3,0},{3,0,0,0}});
+    auto separate=beekapoo::patchIdentity({"VCO","VCO","VCO","VCO"},{{0,0,1,0},{1,0,0,0},{2,0,3,0},{3,0,2,0}});
+    require(connected.wiring!=separate.wiring,"Separate identical components must differ from a single connected cycle");
+    for(const auto& family:{"Frequency","Level","Attack","Resonance"}) {
+      auto style=beekapoo::controlStyle(family,"VCO",a);
+      auto base=beekapoo::controlStyle("Frequency","LFO",a);
+      auto gray=style.color();
+      require(gray.r==gray.g&&gray.g==gray.b,"Generated control skin must be grayscale");
+      auto cable=beekapoo::patchCableColor(a,3);
+      require(cable.r==cable.g&&cable.g==cable.b,"Generated cable colors must be grayscale");
+      require(std::abs(style.hue-base.hue)<=.026f,"One subpatch must use one narrow discrete palette across all parameter families");
+    }
+  }
+  {
+    auto a=beekapoo::controlStyle("Channel 1 CV","VCO"), b=beekapoo::controlStyle("Channel 2 CV","VCO");
+    auto same=beekapoo::controlStyle("Channel 1 CV","VCO"), other=beekapoo::controlStyle("Channel 1 CV","LFO");
+    require(a.hue==b.hue&&a.exponent==b.exponent&&a.ripple==b.ripple&&std::abs(a.lightness-b.lightness)<.04f,"Numbered controls must share family shape and palette with only subtle shade variation");
+    require(a.hue==same.hue&&a.rotation==same.rotation&&a.pointer==same.pointer,"Procedural styles must be stable for parameter/module names");
+    require(std::abs(a.hue-other.hue)<.04f&&a.exponent!=other.exponent,"Other source modules must keep the family palette while changing the profile");
+  }
+  {
+    std::array<Vec,4> corners{Vec(0,0),Vec(100,0),Vec(100,80),Vec(0,80)};
+    for(unsigned profile=0;profile<5;++profile) {
+      beekapoo::SectionSkin skin;skin.profile=profile;skin.seed=12345;
+      auto polygons=beekapoo::sectionPolygons(corners,skin);
+      require(polygons.size()==1,"Every section must be a single solid silhouette without a centre seam");
+      for(const auto& polygon:polygons)for(Vec p:polygon)
+        require(p.x>=0&&p.x<=100&&p.y>=0&&p.y<=80,"Section polygons must stay inside their content envelope");
+    }
+    auto a=beekapoo::patchIdentity({"Fundamental/VCO"},{});
+    auto first=beekapoo::sectionSkin(a,2),again=beekapoo::sectionSkin(a,2);
+    require(first.profile==again.profile&&first.seed==again.seed&&first.rounding==again.rounding,"Section shapes must be stable for the same structural hashes and role");
+    require(first.seed!=beekapoo::sectionSkin(a,3).seed,"Section roles must have distinct derived geometry");
+  }
+  {
+    auto measure=[](const std::string& text){return float(text.size());};
+    require(beekapoo::wholeWordLines("Frequency",3,measure)==std::vector<std::string>{"Frequency"},"An oversized word must never be split into fragments");
+    require(beekapoo::wholeWordLines("Cutoff frequency CV",10,measure)==std::vector<std::string>({"Cutoff","frequency","CV"}),"Labels may wrap only at whitespace");
+  }
+  require(beekapoo::paramFamily("Channel 1 CV")==beekapoo::paramFamily("Channel 12 CV"),"Numeric channel labels must share a family");
+  require(beekapoo::paramFamily("Frequency")==beekapoo::paramFamily("frequency"),"Identical labels must group regardless of case");
+  {
+    std::vector<beekapoo::ParamLayoutItem> labels{{"Channel 10 CV",0},{"Frequency",1},{"Channel 2 CV",0},{"Frequency",2},{"Level",0}};
+    auto groups=beekapoo::paramGroups(labels,false);
+    require(groups.size()==3&&groups[0][0]==2&&groups[0][1]==0&&groups[1][0]==1&&groups[1][1]==3,"Families must remain adjacent and numbered variants sort numerically");
+  }
+  for(float width:{35.f,65.f,95.f,185.f,420.f})for(float height:{40.f,100.f,160.f,240.f})for(int count:{1,3,4,8,16,32}) {
+    std::vector<beekapoo::ParamLayoutItem> labels;
+    for(int i=0;i<count;++i)labels.push_back({i%3==0?"Frequency":"Channel "+std::to_string(i)+" CV",i/4});
+    auto cells=beekapoo::layoutParams(labels,width,height,false);
+    std::set<int> placed;
+    for(const auto& cell:cells) {
+      require(placed.insert(cell.index).second&&cell.diameter>0&&cell.diameter<=64,"Adaptive controls must be unique and within the supported size range");
+      require(cell.x-cell.diameter*.5f>=-.01f&&cell.x+cell.diameter*.5f<=width+.01f&&cell.y-cell.diameter*.5f>=-.01f&&cell.y+cell.diameter*.5f<=height+.01f,"Adaptive controls must stay inside the available frame");
+      for(const auto& other:cells)if(other.index!=cell.index)require(std::abs(cell.x-other.x)>=(cell.diameter+other.diameter)*.5f- .01f||std::abs(cell.y-other.y)>=(cell.diameter+other.diameter)*.5f-.01f,"Adaptive controls must not overlap");
+    }
+  }
+  {
+    std::vector<beekapoo::ParamLayoutItem> varied{{"Frequency",0,.7f},{"Pulse width",0,1.4f},{"Mix",1,.7f},{"Time",1,1.4f}};
+    auto cells=beekapoo::layoutParams(varied,155,190,false);
+    require(cells.size()==4,"Spacious four-control layout must retain all controls");
+    for(const auto& cell:cells) require(cell.diameter>=40,"Spare space must produce usable controls rather than tiny hash-scaled controls");
+    auto narrow=beekapoo::layoutParams(varied,65,138,false);
+    require(narrow.size()==4,"Narrow layout must retain every parameter");
+    for(const auto& cell:narrow) require(cell.diameter>=30,"Compact narrow controls must use the available area");
+    std::vector<beekapoo::ParamLayoutItem> mixed{{"Frequency",0},{"Frequency",1},{"Pulse width",0},{"Level",1},{"Mix",2},{"Time",2},{"Attack",3},{"Release",3}};
+    auto roomy=beekapoo::layoutParams(mixed,215,230,false);
+    require(roomy.size()==mixed.size(),"Mixed groups must share rows to fit all eight controls");
+    for(const auto& cell:roomy) require(cell.diameter>=32,"Roomy mixed-group layout must not shrink to mini controls");
+  }
+  {
+    std::vector<beekapoo::ParamLayoutItem> repeated;
+    for(int i=0;i<3;++i)repeated.push_back({"Frequency",i});
+    for(int i=0;i<3;++i)repeated.push_back({"Pulse width",i});
+    auto cells=beekapoo::layoutParams(repeated,155,270,false);
+    require(cells.size()==6,"Spacious matching-family layout must show all six controls");
+    for(int family=0;family<2;++family){float y=-1;for(const auto& cell:cells)if(cell.index/3==family){if(y<0)y=cell.y;require(y==cell.y,"Matching family must stay on one balanced row even when there is extra height");}}
+  }
   for(int count:{0,1,4,8,24,64,128}) for(float width:{75.f,90.f,120.f,180.f,225.f,300.f,450.f,600.f,900.f,1500.f}) {
     auto layout=beekapoo::responsiveLayout(width,count,count,count/2);
     require(layout.width>=width && layout.totalHeight()<=368.01f,"Responsive planner must preserve requested width or enforce physical minimum without hiding controls");
@@ -136,7 +254,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   auto* mapperModel=createModel<beekapoofixture::Mapper,beekapoofixture::Face>("demo-mapper");
   plugin.addModel(mapperModel);
   gainModel->name="Demo gain";
-  plugin.addModel(gainModel); plugin.addModel(modelBeekapooPreview); plugin.addModel(modelBeekapooLegacyPreview); plugin.addModel(modelPeekabooOldNamePreview);
+  plugin.addModel(gainModel); plugin.addModel(modelBeekapooPreview); plugin.addModel(modelBeekapooLegacyPreview); plugin.addModel(modelPeekabooOldNamePreview);plugin.addModel(modelComputerscareBeekapooAudioPorts);
   require(modelBeekapooLegacyPreview->hidden,"Legacy model must stay hidden from the browser");
   plugin::plugins.push_back(&plugin);
   auto* browserWidget=modelBeekapooPreview->createModuleWidget(nullptr);
@@ -146,13 +264,14 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     ~Cleanup() {
       APP->scene->rack->clear();
       plugin::plugins.erase(std::find(plugin::plugins.begin(),plugin::plugins.end(),&plugin));
-      plugin.models.remove(gain);plugin.models.remove(mapper);plugin.models.remove(modelBeekapooPreview);plugin.models.remove(modelBeekapooLegacyPreview);plugin.models.remove(modelPeekabooOldNamePreview);delete gain;delete mapper;
+      plugin.models.remove(gain);plugin.models.remove(mapper);plugin.models.remove(modelBeekapooPreview);plugin.models.remove(modelBeekapooLegacyPreview);plugin.models.remove(modelPeekabooOldNamePreview);plugin.models.remove(modelComputerscareBeekapooAudioPorts);delete gain;delete mapper;
     }
   } cleanup{plugin,gainModel,mapperModel};
   auto add=[&](plugin::Model* model,Vec pos){
     auto* m=model->createModule();APP->engine->addModule(m);
     auto* w=model->createModuleWidget(m);w->box.pos=pos;rack->addModule(w);return w;
   };
+  if(std::getenv("BEEKAPOO_GENERATED_SPECTRUM")){testBeekGenerator(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_PRINT_SPECTRUM")) {
     renderBeekapooPrintSpectrum(gainModel,output,scale);
     return;
@@ -246,6 +365,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     rack->clear();
     std::puts("Three Beekapoos: selection-driven Add layout, empty/populated adoption and Undo passed");
   }
+  testBeekInputRoutes(add,require);
   auto* a=add(gainModel,Vec(0,0));
   auto* sink=add(gainModel,Vec(90,0));
   auto* b=add(gainModel,Vec(180,0));
@@ -262,7 +382,18 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   APP->engine->stepBlock(64);
   std::vector<float> reference;
   for(int ch=0;ch<4;++ch)reference.push_back(sink->module->outputs[0].getVoltage(ch));
-  auto cableIds=[] { auto ids=APP->engine->getCableIds();std::sort(ids.begin(),ids.end());return ids; };
+  // These assertions track musical wiring; attenuverter bridge cables are
+  // implementation-owned and are checked separately below.
+  auto cableIds=[] {
+    std::vector<int64_t> ids;
+    for (auto* cw : APP->scene->rack->getCompleteCables()) {
+      bool bridge=false;
+      for(auto* w:APP->scene->rack->getModules())
+        if(auto* beek=dynamic_cast<beekapoo::Beekapoo*>(w))bridge|=beek->inputBridge(cw->cable);
+      if(!bridge)ids.push_back(cw->cable->id);
+    }
+    std::sort(ids.begin(),ids.end());return ids;
+  };
   auto ids=cableIds();
   Vec originalInput=a->getInput(0)->box.pos,originalOutput=b->getOutput(0)->box.pos;
   rack->select(a,true);rack->select(b,true);host->collapse();
@@ -338,8 +469,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   auto* toggle=dynamic_cast<beekapoo::ExposedSwitch*>(host->parameters[2].knob);
   auto* positions=dynamic_cast<beekapoo::ExposedSwitch*>(host->parameters[3].knob);
   require(moment && moment->momentary && toggle && !toggle->momentary && positions,"Exposed switch kinds must match original widgets");
-  auto* discrete=dynamic_cast<beekapoo::MappedParam<SmallDotSnapKnob>*>(host->parameters[5].knob);
-  require(discrete && discrete->snap && discrete->getParamQuantity()==b->module->getParamQuantity(5),"Discrete knobs must use the small dot selector and original quantity");
+  auto* discrete=dynamic_cast<beekapoo::MappedParam<beekapoo::ParametricKnob>*>(host->parameters[5].knob);
+  require(discrete && discrete->snap && discrete->getParamQuantity()==b->module->getParamQuantity(5),"Discrete knobs must use the generated dot selector and original quantity");
   APP->event->setHoveredWidget(discrete);
   require(discrete->tip && discrete->tip->caption().find("Steps")!=std::string::npos,"Dot selector tooltip must keep source module and parameter details");
   APP->event->setHoveredWidget(nullptr);
@@ -654,12 +785,14 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
       require(control->box.pos.x>=bounds.pos.x-.1f && control->box.getRight()<=bounds.getRight()+.1f && control->box.pos.y>=bounds.pos.y-.1f && control->box.getBottom()<=bounds.getBottom()+.1f,"Module-first controls must stay inside their frame face");
       for(auto r:occupied)require(!control->box.intersects(r),"Module-first controls must not overlap");occupied.push_back(control->box);
     };
-    for(auto& p:host->parameters)check(p.knob);
+    for(auto& p:host->parameters)if(p.knob->visible)check(p.knob);
 
   }
   host->arrangeByModule=false;
   for(float width:{75.f,90.f,105.f,120.f,150.f,180.f,300.f,450.f,900.f}) {
     host->requestedWidth=width;host->layoutControls();
+    for(int i=0;i<6;++i){require(host->getInput(i)&&!host->getInput(i)->visible,"Action CV endpoints must remain registered but hidden");require(host->actionButtons[i]->visible==(i%3!=2),"Exactly four manual action buttons must be visible");}
+    require(host->getParam(beekapoo::Module::WIGGLE_AMOUNT)&&!host->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Wiggle quantity must remain available without occupying the panel");
     std::vector<widget::Widget*> visibleControls;
     for(auto* w:host->actionButtons)visibleControls.push_back(w);
     for(auto* w:host->managementButtons)visibleControls.push_back(w);
@@ -669,14 +802,14 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     for(const auto& p:host->parameters)visibleControls.push_back(p.knob);
     visibleControls.erase(std::remove_if(visibleControls.begin(),visibleControls.end(),[](widget::Widget* w){return !w->visible;}),visibleControls.end());
     require(host->ownFrame->box.size.x==host->box.size.x && host->titleFrame->box.size.x==host->box.size.x,"Header and module controls frames must fill the panel width");
-    if(!host->jacksOnly)for(int action=0;action<3;++action) {
+    if(!host->jacksOnly)for(int action=0;action<2;++action) {
       if(host->responsive.ownColumns==2)require(host->actionButtons[action]->box.pos.y==host->actionButtons[action+3]->box.pos.y,"Matching exposed/all actions must share a row");
       else require(host->actionButtons[action]->box.pos.x==host->actionButtons[action+3]->box.pos.x,"Narrow action sets must share a column");
     }
     for(size_t i=0;i<visibleControls.size();++i) {
       auto bounds=visibleControls[i]->box;
       require(bounds.pos.x>=5 && bounds.pos.y>=26 && bounds.getRight()<=host->box.size.x-5 && bounds.getBottom()<=368,("Responsive control outside module at width "+std::to_string(int(host->box.size.x))+": "+std::to_string(bounds.pos.x)+","+std::to_string(bounds.pos.y)+" to "+std::to_string(bounds.getRight())+","+std::to_string(bounds.getBottom())).c_str());
-      for(size_t j=0;j<i;++j)require(!bounds.intersects(visibleControls[j]->box),"Responsive controls must never overlap at any breakpoint");
+      for(size_t j=0;j<i;++j)require(!bounds.intersects(visibleControls[j]->box),("Responsive controls overlap width "+std::to_string(int(host->box.size.x))+" controls "+std::to_string(i)+"/"+std::to_string(j)+" y "+std::to_string(bounds.pos.y)+"/"+std::to_string(visibleControls[j]->box.pos.y)).c_str());
     }
   }
   host->requestedWidth=450;host->layoutControls();
@@ -731,7 +864,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   require(host->expanded && host->members.size()==2 && registeredA->box.pos==expandedA && registeredB->box.pos==expandedB,"Expanded grouping and block positions must survive reload");
 
   widget::EventContext eventContext;widget::Widget::ButtonEvent click;
-  click.context=&eventContext;click.button=GLFW_MOUSE_BUTTON_LEFT;click.action=GLFW_PRESS;click.pos=Vec(5,20);
+  click.context=&eventContext;click.button=GLFW_MOUSE_BUTTON_LEFT;click.action=GLFW_PRESS;click.mods=0;click.pos=Vec(5,20);
   registeredA->onButton(click);
   require(eventContext.target==registeredA,"Expanded module background must target registered wrapper");
   rack->select(registeredA,true);rack->select(registeredB,true);host->groupAction(true);
@@ -1091,9 +1224,9 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   group->requestedWidth=45;group->layoutControls();
   require(group->jacksOnly && !group->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Minimum view must hide parameter knobs");
   for(auto* button:group->managementButtons)require(button->visible,"Edit and Eject must always stay visible");
-  for(int i=0;i<6;++i)require(group->actionButtons[i]->visible==(i%3==0),"Smallest layouts must retain both Wiggle buttons");
+  for(int i=0;i<6;++i)require(group->actionButtons[i]->visible==(i%3!=2),"All layouts must retain the four manual Wiggle/Randomize actions");
   int visibleKnobs=0;for(auto& p:group->parameters)if(p.knob->visible)++visibleKnobs;
-  require(visibleKnobs>0,"Small layouts must use spare space for unlabelled parameters");
+  for(auto& p:group->parameters)require(p.knob->visible,"Small layouts must retain every exposed parameter");
   require(group->titleFrame->visible && group->ownFrame->visible,"Minimum layout must keep the logo and its separate module-controls block");
   auto* tinyParent=group->parent;auto tinyPosition=group->box.pos;tinyParent->removeChild(group);group->box.pos=Vec();
   capture(group,output+"/20-jacks-only.png",scale,false);group->box.pos=tinyPosition;tinyParent->addChild(group);
@@ -1102,16 +1235,23 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   tinyParent->removeChild(group);group->box.pos=Vec();capture(group,output+"/21-panel-patching.png",scale,false);group->box.pos=tinyPosition;tinyParent->addChild(group);
   APP->event->setDraggedWidget(nullptr,GLFW_MOUSE_BUTTON_LEFT);
   group->requestedWidth=540;group->layoutControls();
-  require(group->managementButtons[0]->iconAndText && group->managementButtons[0]->icon==3 && group->managementButtons[1]->iconAndText && group->managementButtons[1]->icon==7,"Labeled Edit and Eject buttons must retain their icons");
+  require(!group->editShowsText && group->managementButtons[0]->icon==3 && !group->managementButtons[1]->iconAndText && group->managementButtons[1]->icon==7,"Compact management controls must retain icons without text labels");
   {
     auto* parent=group->parent;auto position=group->box.pos;parent->removeChild(group);group->box.pos=Vec();
     capture(group,output+"/25-edit-eject-panel.png",scale,false);
     group->box.pos=position;parent->addChild(group);
   }
-  group->editSubpatch();
+  APP->event->setSelectedWidget(nullptr);APP->scene->browser->hide();
+  widget::EventContext editContext,kbdExposeContext,adjustContext;
+  widget::Widget::HoverKeyEvent editKey;editKey.context=&editContext;editKey.action=GLFW_PRESS;editKey.key=GLFW_KEY_E;editKey.mods=0;group->onHoverKey(editKey);
+  require(group->editSession&&editKey.isConsumed(),"E on hovered Beekapoo must open subpatch editing");
   APP->scene->box.size=Vec(1100,740);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(1100,710));
   group->focusEditedMembers();
   auto* realSession=static_cast<beekapoo::RackEditSession*>(group->editSession.get());
+  widget::Widget::HoverKeyEvent exposeKey;exposeKey.context=&kbdExposeContext;exposeKey.action=GLFW_PRESS;exposeKey.key=GLFW_KEY_X;exposeKey.mods=0;realSession->onHoverKey(exposeKey);
+  require(realSession->exposeMode&&exposeKey.isConsumed(),"X must enter Expose mode");
+  widget::Widget::HoverKeyEvent adjustKey;adjustKey.context=&adjustContext;adjustKey.action=GLFW_PRESS;adjustKey.key=GLFW_KEY_X;adjustKey.mods=0;realSession->onHoverKey(adjustKey);require(!realSession->exposeMode,"X again must return to Adjust mode");
+
   group->moveEditedMembers(true,false);
   require(group->controls->visible && !group->parameters.empty(),"Near editing must retain the owner's mapped control layer");
   for(auto& p:group->parameters)require(p.knob->visible,"Mapped parameters must remain drawn on Beekapoo itself in Near edit mode");
@@ -1263,11 +1403,16 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     wrapper->requestedWidth=hp*15;wrapper->layoutControls();wrapper->step();
     require(wrapper->addSelectionButton->visible,"Add button must appear for an eligible outside selection");
     require(wrapper->box.size.x==hp*15,"Narrow 8-param layout must preserve requested width");
+    require(wrapper->ownFrame->box.size.y<=62,"Top control strip must stay shallow at normal narrow widths");
+    for(auto* action:wrapper->actionButtons)if(action->visible)require(!action->iconAndText&&action->box.size.x==18&&action->box.size.y==18&&action->faceColor.r==action->faceColor.g&&action->faceColor.g==action->faceColor.b,"Random actions must be small neutral icon buttons");
     int visible=0;for(auto& param:wrapper->parameters)visible+=param.knob->visible;
-    require(visible==8,"Narrow 8-param layout must keep all eight controls visible");
-    require(wrapper->controlLabels.size()==10,"Narrow 8-param layout must label all eight knobs and both jacks");
+    require(visible==8&&wrapper->parameters.size()==8,"Narrow layout must retain all eight mappings, with readable controls shown as space permits");
+    std::set<std::string> families;
+    for(const auto& param:wrapper->parameters)if(param.knob->visible)families.insert(beekapoo::paramFamily(param.knob->getParamQuantity()->getLabel()));
+    require(wrapper->controlLabels.size()>=2,"Narrow layout must retain the jack labels");
+    for(const auto& family:families){int matches=0;for(const auto& label:wrapper->controlLabels)if(beekapoo::paramFamily(label.text)==family)++matches;require(matches<=1,"A visible family must not duplicate its caption");}
     auto within=[](Rect child,Rect parent){return child.pos.x>=parent.pos.x && child.pos.y>=parent.pos.y && child.getRight()<=parent.getRight() && child.getBottom()<=parent.getBottom();};
-    for(auto& param:wrapper->parameters)require(within(param.knob->box,wrapper->frameContent(wrapper->frame)),"Narrow knob must stay inside its frame");
+    for(auto& param:wrapper->parameters)if(param.knob->visible)require(within(param.knob->box,wrapper->frameContent(wrapper->frame)),"Narrow knob must stay inside its frame");
     for(auto& port:wrapper->ports)require(within(port.face->box,wrapper->frameContent(port.input?wrapper->inputFrame:wrapper->outputFrame)),"Narrow jack must stay inside its frame");
     require(wrapper->frame->box.getBottom()<=wrapper->inputFrame->box.pos.y,"Narrow parameter and I/O blocks must meet without overlap");
     for(auto* action:wrapper->actionButtons)if(action->visible)require(action->icon>=0,"Narrow action buttons must use icons rather than clipped labels");
@@ -1652,5 +1797,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     parent->addChild(panel);rack->clear();
   }
 
+  testBeekPatchFiles(output,scale,add,require,gainModel);
+  testBeekAllAudioInterfaces(output,scale,add,require,gainModel);
+  testBeekGenerator(output,scale,add,require);
   std::printf("Beekapoo: zero footprint, occupied-space expansion, native save/load, four-channel DSP, exposed controls, copy isolation, missing-member recovery and deletion checks passed.\n");
 }

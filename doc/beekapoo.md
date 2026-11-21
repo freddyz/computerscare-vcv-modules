@@ -10,7 +10,11 @@ Beekapoo groups modules into a smaller panel. Expose the controls and jacks you 
 4. Press **Edit**, then **Expose**. Click parameters or jacks to add or remove them from the panel. In Expose mode, translucent green rectangles outline all exposed parameters, inputs and outputs. Ports with external connections remain locked and exposed. Hovering a control turns its overlay bright yellow.
 5. Press **Done**. Drag either panel edge to resize; labels appear as space allows.
 
-You can also add Beekapoo first, select the modules, and choose **Abstract selected modules** from its context menu.
+Adding Beekapoo from the module browser creates a random subpatch of 3–11 VCV Free modules, with three inputs, one output, an attenuator for each input, and a few exposed parameters. Smaller sets are more common. Audio and MIDI interfaces are excluded. The panel starts compact; drag its edges to resize.
+
+Choose **Name** in the context menu to rename the subpatch. Press Enter to apply. The name appears in the header and is saved with the Beek.
+
+The small icon strip contains Edit, Eject, Generate new subpatch, and the Wiggle/Randomize actions. Hover for each action’s name. Generate replaces the subpatch; Undo restores the previous one. Existing exterior connections are retained by jack order. **E** opens editing while hovering Beekapoo; **X** switches Adjust/Expose while editing. Exposed controls grow to fit the available space. Narrow panels keep every parameter visible in a tighter layout and omit labels where necessary. Labels break only between words. Matching parameter names sit together under one shared label; numbered variants follow numeric order. The manufacturers, module collection and connections choose varied control shapes and gray shading. Patches using the same manufacturers share an overall shape family. Related controls share a label and style; discrete knobs have dots and tick marks. **Panel arrangement → By module** keeps each module’s controls together instead.
 
 When Rack’s CPU meters are enabled, the bottom-left readout shows the summed processing cost of the contained modules. Rack’s normal reading on the right measures Beekapoo itself. Narrow panels show `Σ` instead of “Subpatch”. This excludes Beekapoo’s own processing and graphics.
 
@@ -34,11 +38,19 @@ Discrete knobs use a dot indicator and tick marks. Buttons and switches keep the
 
 Rack’s **Bypass** command bypasses every contained module. Switching it off un-bypasses every contained module, including any that were previously bypassed individually. Each module uses its normal bypass routing.
 
-**Panel arrangement** groups controls by type or by source module. **Show controls** hides or shows parameters, inputs, outputs, or controls from one module. Hiding a control preserves its mapping and connections. Hover for the full control and module name. Port tooltips show the normal live voltage readings. At small widths, exposed parameter knobs fill available space without labels. Both Wiggle buttons and all module CV jacks stay visible at the minimum width. Randomize and Initialize buttons appear as the panel widens; Amount is hidden at small widths. Edit, Eject, all jacks, and the computerscare logo remain visible. Module actions keep their own box, separate from the exposed jacks.
+**Panel arrangement** groups controls by type or by source module. **Show controls** hides or shows parameters, inputs, outputs, or controls from one module. Hiding a control preserves its mapping and connections. Hover for the full control and module name. Port tooltips show the normal live voltage readings. At small widths, exposed parameter knobs fill available space without labels. The compact action strip shows four Wiggle/Randomize buttons. Initialize buttons and action CV jacks are hidden; their saved connections still work. Edit, Eject, exposed jacks, and the computerscare logo remain visible. Module actions keep their own box, separate from the exposed jacks.
 
 Cables patched on Beekapoo’s front panel remain visible there, including connections between its own jacks. Internal wiring made while editing is hidden when you finish. Front-panel cable actions leave hidden wiring alone. **Disconnect cables** removes outside connections and visible front-panel cables; internal wiring stays connected.
 
 ## Copies and saved selections
+
+**Save Beek…** saves this Beekapoo and its contained modules as a standard `.vcv` patch, including internal wiring, exposed controls, panel settings, and module patch-storage assets such as Phlooper recordings. Outside modules and cables are excluded. Saving a Beek does not switch your current patch file. Open the exported file normally in Rack, or use **Load Beek…** to bring it into an existing Beekapoo.
+
+**Load Beek…** accepts `.vcv` patches and `.vcvs` selections. If the file has several Beekapoos, choose one. A patch without Beekapoo is grouped on import. For VCV Audio 2/8/16 and stoermelder AUDIO-64, choose **Keep** or **Expose**. Expose removes the Audio interfaces and exposes their connected inputs and outputs, preserving fan-out, summed cables, and polyphony. Jacks are ordered by interface position (top to bottom, left to right), then channel number. Unused channels are omitted. Missing modules are reported before import. Replacing an existing group asks for confirmation and supports Undo.
+
+Selections do not contain module patch-storage assets. Files referenced elsewhere on disk are not collected by Save Beek; recipients need those files and all required plugins installed.
+
+Import choices open in a centered dialog. Click an option, then **Load**, or use Up/Down and Enter. **Cancel** or Escape leaves the current Beek unchanged.
 
 **Duplicate** creates an independent copy, including contained modules, their settings, and internal cables. **Duplicate with cables** also copies incoming external connections. Cmd/Ctrl+D and Cmd/Ctrl+Shift+D over Beekapoo use the same options. Contained MIDI Map, stoermelder CV/MIDI mapping, and PatchMaster mappings using the standard mapping format are redirected to the copied modules. Other mapping formats may need to be reassigned.
 
@@ -46,8 +58,8 @@ Rack’s **Save selection as** saves a `.vcvs` selection file. Select Beekapoo t
 
 ## Randomization
 
-The action grid has **Exposed** and **All** sets, each with Wiggle, Randomize, and Initialize buttons and trigger inputs. Exposed affects visible mapped parameters. Randomize and Wiggle ignore their normal randomization exclusions, but skip momentary buttons. All uses the grouped modules’ normal randomization behavior. **Amount** sets the wiggle range. Cmd/Ctrl+R randomizes visible mapped parameters.
+The action strip has **Shown/Exposed** and **All** sets, each with Wiggle and Randomize buttons. Exposed affects visible mapped parameters. Randomize and Wiggle ignore their normal randomization exclusions, but skip momentary buttons. All uses the grouped modules’ normal randomization behavior. **Wiggle amount** in the context menu sets the wiggle range. Cmd/Ctrl+R randomizes visible mapped parameters.
 
-Trigger inputs respond to rising signals of at least 1 V. These actions run at UI refresh rate, so rapid repeated triggers may combine. Manual button actions support undo.
+Existing connections to the hidden action CV inputs remain active, including Initialize. These inputs respond to rising signals of at least 1 V. These actions run at UI refresh rate, so rapid repeated triggers may combine. Manual button actions support undo.
 
 Groups, exposed controls, panel arrangement, visibility, and width are saved with the patch. The former Peekaboo and Patch Abstractor names remain compatible with saved patches.

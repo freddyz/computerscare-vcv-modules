@@ -188,6 +188,13 @@
       "manualUrl": "https://github.com/freddyz/computerscare-vcv-modules/blob/master/doc/beekapoo.md"
     },
     {
+      "slug": "computerscare-beekapoo-audio-ports",
+      "name": "Beekapoo audio routing",
+      "description": "Internal routing for imported audio connections",
+      "tags": ["Utility", "Polyphonic"],
+      "hidden": true
+    },
+    {
       "slug": "computerscare-patch-abstractor",
       "name": "Beekapoo",
       "description": "Legacy identifier for saved patches",

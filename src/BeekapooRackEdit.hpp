@@ -101,6 +101,7 @@ struct RackEditSession : widget::Widget {
       if (owner) owner->saveGroup();
     });
     exposeButton->pressed = [this] { return exposeMode; };
+    exposeButton->help = [] { return "Switch Adjust / Expose [X]"; };
     randomLockButton = addButton("Rnd Lock", 196, 112, [this] {
       randomLockMode = !randomLockMode;
       exposeMode = false;
@@ -271,6 +272,15 @@ struct RackEditSession : widget::Widget {
       }
   }
   void onHoverKey(const HoverKeyEvent& e) override {
+    if (e.action == GLFW_PRESS && !(e.mods & RACK_MOD_MASK) &&
+        e.key == GLFW_KEY_X && !APP->scene->browser->visible &&
+        !dynamic_cast<ui::TextField*>(APP->event->getSelectedWidget())) {
+      exposeMode = !exposeMode;
+      randomLockMode = false;
+      if (owner) owner->saveGroup();
+      e.consume(this);
+      return;
+    }
     if ((e.action == GLFW_PRESS || e.action == GLFW_REPEAT) &&
         e.key == GLFW_KEY_A && (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL &&
         !APP->scene->browser->visible && owner) {

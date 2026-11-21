@@ -13,6 +13,7 @@ json_t* Beekapoo::portableContents(bool external) {
   json_object_set_new(result, "modules", modules);
   auto* cables = json_array();
   for (auto* cw : homeRack->getCompleteCables()) {
+    if (inputBridge(cw->cable)) continue;
     bool input = contains(cw->cable->inputModule),
          output = contains(cw->cable->outputModule);
     // Like Rack's selection duplicate, external incoming connections are
@@ -102,19 +103,62 @@ history::ModuleChange* incomingGroupPreset(int64_t owner, json_t* root) {
   json_decref(group);
   return matches ? candidate : nullptr;
 }
-bool Beekapoo::importContents(json_t* root) {
+bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
+                              int64_t sourceOwner,
+                              history::ModuleChange* replacement) {
   auto* contents = json_object_get(root, "contents");
   auto* list = json_object_get(contents, "modules");
   std::map<int64_t, int64_t> ids, cableIds;
   std::vector<app::ModuleWidget*> created;
   std::vector<app::CableWidget*> wires;
+  std::vector<engine::Module*> staged;
+  std::vector<std::string> stagedStorage;
   std::vector<history::Action*> history;
   auto* state = APP->history;
   int presetIndex = state->actionIndex - 1;
-  history::ModuleChange* preset = incomingGroupPreset(module->id, root);
+  history::ModuleChange* preset =
+      replacement ? replacement : incomingGroupPreset(module->id, root);
   std::set<int64_t> previous;
   if (preset)
     for (auto& member : members) previous.insert(member.id);
+  struct Boundary {
+    bool input;
+    int ordinal;
+    int64_t outside;
+    int port;
+    NVGcolor color;
+  };
+  std::vector<Boundary> boundaries;
+  if (replacement)
+    for (auto* cw : homeRack->getCompleteCables()) {
+      auto* c = cw->cable;
+      if (inputBridge(c)) continue;
+      bool in = contains(c->inputModule), out = contains(c->outputModule);
+      const Port* proxy = nullptr;
+      if (c->inputModule == module)
+        for (const auto& p : ports)
+          if (p.route >= 0 && c->inputId == Module::inputBase + p.route) {
+            proxy = &p;
+            in = true;
+            break;
+          }
+      if (in == out) continue;
+      int ordinal = 0;
+      for (const auto& p : ports)
+        if (p.input == in) {
+          if (p.id == (proxy ? proxy->id
+                             : (in ? c->inputModule : c->outputModule)->id) &&
+              p.portId == (proxy ? proxy->portId
+                           : in  ? c->inputId
+                                 : c->outputId)) {
+            boundaries.push_back({in, ordinal,
+                                  (in ? c->outputModule : c->inputModule)->id,
+                                  in ? c->outputId : c->inputId, cw->color});
+            break;
+          }
+          ++ordinal;
+        }
+    }
   auto* remapped = json_deep_copy(root);
   json_object_del(remapped, "contents");
   saveGroup();
@@ -125,43 +169,60 @@ bool Beekapoo::importContents(json_t* root) {
     if (!json_is_array(list) || !json_array_size(list))
       throw Exception("No contained modules in preset");
     std::set<int64_t> sourceIds;
+    if (sourceOwner >= 0) ids[sourceOwner] = module->id;
     // Validate dependencies and identities before creating any children.
     for (size_t i = 0; i < json_array_size(list); ++i) {
       auto* item = json_array_get(list, i);
       if (!plugin::modelFromJson(item))
         throw Exception("A contained module is not installed");
       auto* id = json_object_get(item, "sourceId");
-      if (!json_is_integer(id) ||
+      if (!json_is_integer(id) || json_integer_value(id) < 0 ||
+          json_integer_value(id) == sourceOwner ||
           !sourceIds.insert(json_integer_value(id)).second)
         throw Exception("Invalid contained module identity");
     }
     // Allocate every native ID before applying any saved module data. Mapper
     // modules must never briefly bind to the original group's parameters.
+    std::set<int64_t> membership;
+    auto* savedMembers = json_object_get(root, "members");
+    for (size_t i = 0; i < json_array_size(savedMembers); ++i) {
+      auto* id = json_object_get(json_array_get(savedMembers, i), "id");
+      if (!json_is_integer(id) ||
+          !membership.insert(json_integer_value(id)).second)
+        throw Exception("Invalid contained module membership");
+    }
+    if (membership != sourceIds)
+      throw Exception("Contained module membership does not match the patch");
     for (size_t i = 0; i < json_array_size(list); ++i) {
       auto* item = json_array_get(list, i);
       auto* model = plugin::modelFromJson(item);
       int64_t old = json_integer_value(json_object_get(item, "sourceId"));
       auto* m = model->createModule();
-      APP->engine->addModule(m);
-      app::ModuleWidget* w = nullptr;
-      try {
-        w = model->createModuleWidget(m);
-      } catch (...) {
-        APP->engine->removeModule(m);
-        delete m;
-        throw;
-      }
-      w->box.pos = parkingPosition();
-      homeRack->addModule(w);
-      created.push_back(w);
+      staged.push_back(m);
+      do {
+        m->id = random::u64() % (1ull << 53);
+      } while (APP->engine->getModule(m->id) ||
+               system::exists(m->getPatchStorageDirectory()) ||
+               std::any_of(ids.begin(), ids.end(),
+                           [m](const std::pair<const int64_t, int64_t>& item) {
+                             return item.second == m->id;
+                           }));
       ids[old] = m->id;
-      if (auto* source = APP->engine->getModule(old))
-        if (source->model == m->model &&
-            system::isDirectory(source->getPatchStorageDirectory()))
-          system::copy(source->getPatchStorageDirectory(),
-                       m->getPatchStorageDirectory());
+      std::string sourceStorage;
+      if (!storageRoot.empty())
+        sourceStorage = system::join(storageRoot, std::to_string(old));
+      else if (auto* source = APP->engine->getModule(old))
+        if (source->model == m->model)
+          sourceStorage = source->getPatchStorageDirectory();
+      if (!sourceStorage.empty() && system::isDirectory(sourceStorage)) {
+        auto target = m->getPatchStorageDirectory();
+        stagedStorage.push_back(target);
+        system::createDirectories(system::getDirectory(target));
+        if (!system::copy(sourceStorage, target))
+          throw Exception("Could not restore contained module assets");
+      }
     }
-    for (size_t i = 0; i < created.size(); ++i) {
+    for (size_t i = 0; i < staged.size(); ++i) {
       auto* copy = json_deep_copy(json_array_get(list, i));
       DEFER({ json_decref(copy); });
       json_object_del(copy, "id");
@@ -179,12 +240,22 @@ bool Beekapoo::importContents(json_t* root) {
           auto found = ids.find(json_integer_value(target));
           if (found != ids.end())
             json_object_set_new(entry, "moduleId", json_integer(found->second));
+          else if (!storageRoot.empty())
+            json_object_set_new(entry, "moduleId", json_integer(-1));
         }
       }
-      // Widget::fromJson uses Engine::moduleFromJson's native engine lock.
-      created[i]->fromJson(copy);
+      // Like Rack's patch loader, restore state and storage before onAdd.
+      // In particular Phlooper reads its WAV files during onAdd, not later.
+      auto* m = staged[i];
+      APP->engine->moduleFromJson(m, copy);
+      APP->engine->addModule(m);
+      auto* w = m->model->createModuleWidget(m);
+      w->box.pos = parkingPosition();
+      homeRack->addModule(w);
+      created.push_back(w);
+      staged[i] = nullptr;
       auto* action = new history::ModuleAdd;
-      action->setModule(created[i]);
+      action->setModule(w);
       history.push_back(action);
     }
     for (const char* key : {"members", "subpatchPositions", "ports",
@@ -207,10 +278,15 @@ bool Beekapoo::importContents(json_t* root) {
       auto* item = json_array_get(cables, i);
       auto oldIn = json_integer_value(json_object_get(item, "inputModuleId"));
       auto oldOut = json_integer_value(json_object_get(item, "outputModuleId"));
+      auto* savedOwner = json_object_get(root, "owner");
+      if (json_is_integer(savedOwner) &&
+          oldOut == json_integer_value(savedOwner) && ids.count(oldIn))
+        continue;
       auto* input =
           ids.count(oldIn) ? APP->engine->getModule(ids.at(oldIn)) : nullptr;
-      auto* output =
-          APP->engine->getModule(ids.count(oldOut) ? ids.at(oldOut) : oldOut);
+      auto* output = APP->engine->getModule(ids.count(oldOut) ? ids.at(oldOut)
+                                            : storageRoot.empty() ? oldOut
+                                                                  : -1);
       int in = json_integer_value(json_object_get(item, "inputId")),
           out = json_integer_value(json_object_get(item, "outputId"));
       if (!input || !output || in < 0 || out < 0 ||
@@ -233,11 +309,13 @@ bool Beekapoo::importContents(json_t* root) {
       history.push_back(action);
     }
     auto* panel = json_object_get(remapped, "panelCables");
+    auto* mappedPanel = json_array();
     for (size_t i = 0; i < json_array_size(panel); ++i) {
       auto old = json_integer_value(json_array_get(panel, i));
       if (cableIds.count(old))
-        json_array_set_new(panel, i, json_integer(cableIds.at(old)));
+        json_array_append_new(mappedPanel, json_integer(cableIds.at(old)));
     }
+    json_object_set_new(remapped, "panelCables", mappedPanel);
     auto* internal = json_object_get(remapped, "internalCables");
     auto* mappedInternal = json_array();
     for (size_t i = 0; i < json_array_size(internal); ++i) {
@@ -251,6 +329,14 @@ bool Beekapoo::importContents(json_t* root) {
     json_object_set_new(remapped, "expanded", json_false());
     committing = true;
     restore(remapped);
+    if (json_is_true(json_object_get(remapped, "exposeUnpatched"))) {
+      for (const auto& member : members)
+        if (auto* w = find(member.id))
+          for (auto* port : w->getPorts())
+            if (homeRack->getCompleteCablesOnPort(port).empty())
+              expose(w, port);
+      saveGroup();
+    }
     json_decref(remapped);
     auto* current = module->toJson();
     if (preset) {
@@ -274,10 +360,50 @@ bool Beekapoo::importContents(json_t* root) {
           homeRack->removeModule(w);
           delete w;
         }
+      for (const auto& boundary : boundaries) {
+        int ordinal = 0;
+        app::PortWidget* endpoint = nullptr;
+        for (const auto& p : ports)
+          if (p.input == boundary.input) {
+            if (ordinal++ == boundary.ordinal) {
+              endpoint = findPort(p);
+              break;
+            }
+          }
+        auto* outside = homeRack->getModule(boundary.outside);
+        auto* other = outside
+                          ? (boundary.input ? outside->getOutput(boundary.port)
+                                            : outside->getInput(boundary.port))
+                          : nullptr;
+        if (!endpoint || !other) continue;
+        auto* cable = new engine::Cable;
+        cable->inputModule = boundary.input ? endpoint->module : other->module;
+        cable->inputId = boundary.input ? endpoint->portId : other->portId;
+        cable->outputModule = boundary.input ? other->module : endpoint->module;
+        cable->outputId = boundary.input ? other->portId : endpoint->portId;
+        APP->engine->addCable(cable);
+        auto* cw = new app::CableWidget;
+        cw->setCable(cable);
+        cw->color = boundary.color;
+        homeRack->addCable(cw);
+        panelCableIds.insert(cable->id);
+        knownCableIds.insert(cable->id);
+        auto* addition = new history::CableAdd;
+        addition->setCable(cw);
+        history.push_back(addition);
+      }
+      if (!boundaries.empty()) {
+        saveGroup();
+        json_decref(current);
+        current = module->toJson();
+      }
       transaction->added.actions.swap(history);
       json_decref(preset->newModuleJ);
       preset->newModuleJ = json_incref(current);
-      state->actions[presetIndex] = transaction;
+      if (replacement)
+        state->push(transaction);
+      else
+        state->actions[presetIndex] = transaction;
     } else if (state->actionIndex > 0 &&
                size_t(state->actionIndex) <= state->actions.size()) {
       attachContainedHistory(state->actions[state->actionIndex - 1], module->id,
@@ -297,6 +423,12 @@ bool Beekapoo::importContents(json_t* root) {
       homeRack->removeModule(w);
       delete w;
     }
+    for (auto* m : staged)
+      if (m) {
+        if (APP->engine->getModule(m->id) == m) APP->engine->removeModule(m);
+        delete m;
+      }
+    for (const auto& path : stagedStorage) system::removeRecursively(path);
     for (auto* action : history) delete action;
     json_decref(remapped);
     // Restore both the host and its original group immediately. A failed
@@ -310,7 +442,7 @@ bool Beekapoo::importContents(json_t* root) {
       json_decref(saved);
     }
     status = "Could not restore contained modules: " + std::string(e.what());
-    if (preset) {
+    if (preset && !replacement) {
       json_decref(preset->newModuleJ);
       preset->newModuleJ = json_incref(previousState);
       state->actions[presetIndex] = new ContainedPresetHistory(preset);

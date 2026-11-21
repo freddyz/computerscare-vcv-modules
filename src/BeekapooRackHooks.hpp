@@ -9,6 +9,7 @@ inline void disconnectGroupPanels(const std::vector<Beekapoo*>& groups,
     bool remove = ordinary.count(c->inputModule->id) ||
                   ordinary.count(c->outputModule->id);
     for (auto* group : groups) {
+      if (group->inputBridge(c)) continue;
       bool input = group->contains(c->inputModule),
            output = group->contains(c->outputModule);
       remove |= c->inputModule == group->module ||
@@ -406,6 +407,7 @@ void Beekapoo::pruneMissingMembers() {
   }
   for (auto it = ports.begin(); it != ports.end();) {
     if (missing.count(it->id)) {
+      detachInput(*it);
       controls->removeChild(it->face);
       delete it->face;
       it = ports.erase(it);

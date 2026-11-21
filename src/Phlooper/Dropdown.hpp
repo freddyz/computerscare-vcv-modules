@@ -14,6 +14,7 @@ struct WarpedDropdown : widget::OpaqueWidget {
   float screwup = .8f;
   unsigned shapeSeed = 1;
   NVGcolor faceColor = nvgRGB(222, 222, 222);
+  NVGcolor textColor = nvgRGB(15, 42, 36);
   virtual std::string label() = 0;
   virtual bool isPressed() = 0;
 
@@ -95,7 +96,7 @@ struct WarpedDropdown : widget::OpaqueWidget {
       nvgFontFaceId(args.vg, font->handle);
       nvgFontSize(args.vg, textSize);
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-      nvgFillColor(args.vg, nvgRGB(15, 42, 36));
+      nvgFillColor(args.vg, textColor);
       nvgText(args.vg, face[0].x + textInset, (face[0].y + face[3].y) * .5f,
               label().c_str(), nullptr);
     }

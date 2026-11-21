@@ -1,0 +1,130 @@
+{
+  "words": {
+    "animals": [
+      "pig",
+      "cow",
+      "moth",
+      "elk",
+      "frog",
+      "shrew",
+      "newt",
+      "goat",
+      "hare",
+      "tern",
+      "mole",
+      "yak"
+    ],
+    "objects": [
+      "bolt",
+      "cup",
+      "spool",
+      "sock",
+      "brick",
+      "fork",
+      "tin",
+      "comb",
+      "hinge",
+      "plug",
+      "pail",
+      "spoon"
+    ],
+    "terrain": [
+      "bog",
+      "ridge",
+      "fen",
+      "dune",
+      "bank",
+      "glen",
+      "bay",
+      "creek",
+      "bluff",
+      "knoll",
+      "marsh",
+      "cove"
+    ],
+    "verbs": [
+      "fold",
+      "bend",
+      "poke",
+      "roll",
+      "tug",
+      "spin",
+      "skip",
+      "drag",
+      "bump",
+      "drift",
+      "rub",
+      "tap"
+    ]
+  },
+  "definitions": {
+    "word": "(pick \"(ref animals)\" \"(ref objects)\" \"(ref terrain)\" \"(ref verbs)\")",
+    "number": "(wpick 4 \"(nrange 1 9)\" 4 \"(nrange 10 99)\" 1 \"(nrange 100 999)\")"
+  },
+  "patterns": [
+    {
+      "weight": 6,
+      "template": "(ref word)"
+    },
+    {
+      "weight": 9,
+      "template": "(distinct \"(ref word)\" 2 \" \")"
+    },
+    {
+      "weight": 4,
+      "template": "(ref animals)(ref objects)"
+    },
+    {
+      "weight": 4,
+      "template": "(distinct \"(ref word)\" 2 \"-\")"
+    },
+    {
+      "weight": 3,
+      "template": "(distinct \"(ref word)\" 3 \" \")"
+    },
+    {
+      "weight": 4,
+      "template": "(ref verbs) (pick \"(ref objects)\" \"(ref animals)\")"
+    },
+    {
+      "weight": 2,
+      "template": "(ref terrain) (ref verbs) (ref objects)"
+    },
+    {
+      "weight": 2,
+      "template": "(ref objects) / (ref animals)"
+    },
+    {
+      "weight": 3,
+      "template": "(ref word)(ref number)"
+    },
+    {
+      "weight": 3,
+      "template": "(ref word) (ref word)(wpick 3 \"\" 2 \" (ref number)\")"
+    },
+    {
+      "weight": 2,
+      "template": "(ref number) (ref objects)"
+    },
+    {
+      "weight": 2,
+      "template": "(ref animals)-(ref objects)-(ref number)"
+    },
+    {
+      "weight": 2,
+      "template": "(ref verbs)(ref number) (ref terrain)"
+    },
+    {
+      "weight": 2,
+      "template": "(repeat \"(ref word)\" (nrange 1 3) \"\")"
+    },
+    {
+      "weight": 1,
+      "template": "(ref objects) #(ref number)"
+    },
+    {
+      "weight": 1,
+      "template": "(ref terrain).(ref number)"
+    }
+  ]
+}

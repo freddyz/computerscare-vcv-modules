@@ -39,6 +39,16 @@ fi
 OUTPUT_DIR=${OUTPUT_DIR:-$REPO_DIR/build/previews/$MODULE}
 mkdir -p "$OUTPUT_DIR" "$REPO_DIR/build/previews"
 OUTPUT_DIR=$(cd "$OUTPUT_DIR" && pwd)
+if [[ "$MODULE" == beekapoo ]]; then
+  # Fundamental and our plugin both use the install name plugin.dylib. Give
+  # the isolated test copy a unique identity; never modify the installed one.
+  FUNDAMENTAL_SOURCE="$RACK_PREVIEW_DIR/plugins/Fundamental/plugin.dylib"
+  FUNDAMENTAL_COPY="$REPO_DIR/build/previews/fundamental-preview.dylib"
+  if [[ ! -f "$FUNDAMENTAL_COPY" || "$FUNDAMENTAL_SOURCE" -nt "$FUNDAMENTAL_COPY" ]]; then
+    cp "$FUNDAMENTAL_SOURCE" "$FUNDAMENTAL_COPY"
+    install_name_tool -id fnd.dylib "$FUNDAMENTAL_COPY"
+  fi
+fi
 if [[ $BUILD_PLUGIN == 1 ]]; then
   make -C "$REPO_DIR" RACK_DIR="$RACK_PREVIEW_DIR" -j4
 fi
