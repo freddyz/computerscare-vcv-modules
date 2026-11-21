@@ -98,6 +98,7 @@ inline void createSelectedGroup() {
     delete group;
     return;
   }
+  group->exposeSelectionDefaults();
   rack->setModulePosNearest(group, minimum);
   rack->deselectAll();
   rack->select(group, true);
@@ -377,7 +378,7 @@ void queueSubpatchDeletion(int64_t owner, const std::vector<int64_t>& members) {
 
 inline bool attachMemberPrune(history::Action* action,
                               const std::set<int64_t>& missing,
-                              GroupHistory* change) {
+                              history::Action* change) {
   auto* batch = dynamic_cast<history::ComplexAction*>(action);
   if (!batch) return false;
   for (auto* child : batch->actions) {
@@ -397,6 +398,9 @@ void Beekapoo::pruneMissingMembers() {
     if (!find(member.id)) missing.insert(member.id);
   if (missing.empty()) return;
   auto* action = beginAction("remove deleted subpatch members");
+  auto* transaction = new history::ComplexAction;
+  transaction->name = action->name;
+  transaction->push(action);
   for (auto it = parameters.begin(); it != parameters.end();) {
     if (missing.count(it->id)) {
       controls->removeChild(it->knob);
@@ -407,6 +411,19 @@ void Beekapoo::pruneMissingMembers() {
   }
   for (auto it = ports.begin(); it != ports.end();) {
     if (missing.count(it->id)) {
+      if (it->route >= 0) {
+        auto* proxy = findPort(*it);
+        for (auto* cw : homeRack->getCompleteCables()) {
+          if (cw->cable->inputModule != module ||
+              cw->cable->inputId != proxy->portId)
+            continue;
+          auto* removed = new history::CableRemove;
+          removed->setCable(cw);
+          transaction->push(removed);
+          homeRack->removeCable(cw);
+          delete cw;
+        }
+      }
       detachInput(*it);
       controls->removeChild(it->face);
       delete it->face;
@@ -427,6 +444,6 @@ void Beekapoo::pruneMissingMembers() {
   bool attached = false;
   auto* state = APP->history;
   for (int i = state->actionIndex - 1; i >= 0 && !attached; --i)
-    attached = attachMemberPrune(state->actions[i], missing, action);
-  if (!attached) delete action;
+    attached = attachMemberPrune(state->actions[i], missing, transaction);
+  if (!attached) delete transaction;
 }

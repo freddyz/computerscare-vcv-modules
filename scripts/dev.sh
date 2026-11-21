@@ -259,6 +259,7 @@ build() {
 
 run_tests() {
   echo "==> Tests..."
+  python3 tests/test_packaged_assets.py
   g++ -std=c++11 -I src tests/beekapoo_patch_planner_test.cpp -o /tmp/cs_beekapoo_patch_planner_test
   /tmp/cs_beekapoo_patch_planner_test
   g++ -std=c++11 -I src tests/patch_save_naming_test.cpp -o /tmp/cs_patch_save_naming_test

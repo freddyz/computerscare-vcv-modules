@@ -7,11 +7,13 @@
 #include <plugin.hpp>
 
 #include "BeekapooCpuMeter.hpp"
+#include "BeekapooExposurePlan.hpp"
 #include "BeekapooKnob.hpp"
 #include "BeekapooLabels.hpp"
 #include "BeekapooLayout.hpp"
 #include "BeekapooParamLayout.hpp"
 #include "BeekapooPatchPlanner.hpp"
+#include "BeekapooPortLayout.hpp"
 #include "BeekapooPreferences.hpp"
 #include "BeekapooRandomLocks.hpp"
 #include "BeekapooSection.hpp"
@@ -129,7 +131,10 @@ struct Module : engine::Module {
     INPUT_GAIN_BASE,
     PARAM_COUNT = INPUT_GAIN_BASE + routeCapacity
   };
-  static constexpr int inputBase = 8;
+  // Already saved by users: never insert actions before these route IDs.
+  static constexpr int inputBase = 6;
+  static constexpr int GENERATE_INPUT = inputBase + routeCapacity;
+  static constexpr int GROW_INPUT = GENERATE_INPUT + 1;
   std::atomic<uint64_t> activeInputs[routeCapacity / 64]{};
   void enableInput(int route, bool enabled) {
     uint64_t bit = uint64_t(1) << (route % 64);
@@ -143,7 +148,7 @@ struct Module : engine::Module {
   std::atomic<unsigned> pendingHistory{0};
   std::atomic<int> pendingBypass{-1};
   Module() {
-    config(PARAM_COUNT, inputBase + routeCapacity, routeCapacity, 0);
+    config(PARAM_COUNT, GROW_INPUT + 1, routeCapacity, 0);
     for (int i = 0; i < routeCapacity; ++i) {
       configParam(INPUT_GAIN_BASE + i, -1.f, 1.f, 1.f, "Input attenuverter",
                   "%", 0, 100);
@@ -162,8 +167,8 @@ struct Module : engine::Module {
                            "Initialize visible", "Wiggle all",
                            "Randomize all",      "Initialize all"};
     for (int i = 0; i < 6; ++i) configInput(i, names[i]);
-    configInput(6, "Generate new subpatch");
-    configInput(7, "Grow subpatch");
+    configInput(GENERATE_INPUT, "Generate new subpatch");
+    configInput(GROW_INPUT, "Grow subpatch");
   }
   void process(const ProcessArgs&) override {
     for (int block = 0; block < routeCapacity / 64; ++block) {
@@ -179,9 +184,12 @@ struct Module : engine::Module {
           // propagation accepts zero, which preserves a child's unpatched
           // input normalization (including its default VCA gain).
           output.channels = 0;
-          output.setVoltage(0);
+          for (int c = 0; c < 16; ++c) output.setVoltage(0, c);
           continue;
         }
+        // setChannels() ignores a port whose previous channel count is zero.
+        // This active route has a real bridge cable, so reconnect it first.
+        if (!output.channels) output.channels = 1;
         output.setChannels(channels);
         float gain = params[INPUT_GAIN_BASE + route].getValue();
         for (int c = 0; c < channels; c += 4)
@@ -190,7 +198,10 @@ struct Module : engine::Module {
       }
     }
     for (int i = 0; i < 8; ++i)
-      if (actionTriggers[i].process(inputs[i].getVoltage()))
+      if (actionTriggers[i].process(inputs[i < 6    ? i
+                                           : i == 6 ? GENERATE_INPUT
+                                                    : GROW_INPUT]
+                                        .getVoltage()))
         pendingActions.fetch_or(1u << i, std::memory_order_relaxed);
   }
   // Rack invokes these while holding its engine lock. Apply child changes
@@ -737,6 +748,8 @@ inline std::shared_ptr<Svg> monochromeJack(const std::string& name) {
 }
 struct PortFace : widget::OpaqueWidget {
   bool compact = true, input = true;
+  bool gainLaidOut = false;
+  Vec gainCenter;
   app::ParamWidget* gain = nullptr;
   JackSmallPointingDown tinyDown;
   JackSmallPointingUp tinyUp;
@@ -810,6 +823,7 @@ struct PortFace : widget::OpaqueWidget {
     tinyUp.type = engine::Port::OUTPUT;
   }
   void draw(const DrawArgs& args) override {
+    nvgSave(args.vg);
     if (compact) {
       tinyDown.type = engine::Port::INPUT;
       tinyUp.type = engine::Port::OUTPUT;
@@ -817,13 +831,20 @@ struct PortFace : widget::OpaqueWidget {
         tinyDown.draw(args);
       else
         tinyUp.draw(args);
-    } else if (source) {
+    } else {
+      Vec size = artwork()->box.size;
+      nvgScale(args.vg, box.size.x / size.x, box.size.y / size.y);
       artwork()->draw(args);
     }
+    nvgRestore(args.vg);
   }
   void drawLayer(const DrawArgs& args, int layer) override {
-    if (!compact && source) {
+    if (!compact) {
+      nvgSave(args.vg);
+      Vec size = artwork()->box.size;
+      nvgScale(args.vg, box.size.x / size.x, box.size.y / size.y);
       artwork()->drawLayer(args, layer);
+      nvgRestore(args.vg);
     }
   }
   void onHover(const HoverEvent& e) override {
@@ -924,15 +945,21 @@ struct ActionJack : JackSmallPointingDown {
     box.size = Vec(11, 11);
   }
   void draw(const DrawArgs& args) override {
+    auto scaled = args;
+    scaled.clipBox.pos = scaled.clipBox.pos / (11.f / 16);
+    scaled.clipBox.size = scaled.clipBox.size / (11.f / 16);
     nvgSave(args.vg);
     nvgScale(args.vg, 11.f / 16, 11.f / 16);
-    JackSmallPointingDown::draw(args);
+    JackSmallPointingDown::draw(scaled);
     nvgRestore(args.vg);
   }
   void drawLayer(const DrawArgs& args, int layer) override {
+    auto scaled = args;
+    scaled.clipBox.pos = scaled.clipBox.pos / (11.f / 16);
+    scaled.clipBox.size = scaled.clipBox.size / (11.f / 16);
     nvgSave(args.vg);
     nvgScale(args.vg, 11.f / 16, 11.f / 16);
-    JackSmallPointingDown::drawLayer(args, layer);
+    JackSmallPointingDown::drawLayer(scaled, layer);
     nvgRestore(args.vg);
   }
 };
@@ -964,6 +991,9 @@ struct Beekapoo : app::ModuleWidget {
   void attachInput(Port& p, int preferred, int64_t bridge, float gain);
   void detachInput(Port& p);
   bool inputBridge(const engine::Cable* c) const;
+  void syncInputCables(bool editing);
+  void withInputCablePresentation(app::PortWidget* target,
+                                  const std::function<void()>& action);
   void rewireInput(app::CableWidget* cw, app::PortWidget* target);
   app::RackWidget* homeRack = nullptr;
   std::vector<Member> members;
@@ -1126,7 +1156,7 @@ struct Beekapoo : app::ModuleWidget {
   void loadBeekDialog();
   bool generateDefaultPatch(int requestedCount = 0);
   bool regeneratePatch();
-  bool growPatch();
+  bool growPatch(history::ComplexAction* parent = nullptr);
   void initializeBrowserPreview();
   std::vector<std::unique_ptr<engine::Module>> browserModules;
   std::unique_ptr<engine::Module> browserInputGains;
@@ -1250,7 +1280,7 @@ struct Beekapoo : app::ModuleWidget {
     addSelectionButton->action = [this] {
       if (!canAddSelection()) return;
       if (members.empty())
-        groupAction(true);
+        groupAction(true, true);
       else
         addSelection();
     };
@@ -1298,7 +1328,8 @@ struct Beekapoo : app::ModuleWidget {
       }
     addParam(
         createParamCentered<SmallKnob>(Vec(328, 94), m, Module::WIGGLE_AMOUNT));
-    for (int i = 6; i < 8; ++i) addInput(createInput<ActionJack>(Vec(), m, i));
+    for (int i : {Module::GENERATE_INPUT, Module::GROW_INPUT})
+      addInput(createInput<ActionJack>(Vec(), m, i));
     if (m) {
       auto* saved = json_object_get(m->group, "ports");
       for (size_t i = 0; i < json_array_size(saved); ++i) {
@@ -1557,33 +1588,41 @@ struct Beekapoo : app::ModuleWidget {
     return width <= 90 ? 44.f : 32.f;
   }
   static float tinyOwnHeight(float width) {
-    return width >= 180   ? 29.f
-           : width >= 105 ? 49.f
-           : width >= 90  ? 69.f
-                          : 109.f;
+    float usable = width - 16;
+    return std::ceil(168.f / usable) * 20 + std::ceil(72.f / usable) * 12 + 2;
   }
   float layoutOwnControls(float width, float top) {
     getParam(Module::WIGGLE_AMOUNT)->visible = false;
-    for (int i = 0; i < 8; ++i) getInput(i)->visible = false;
+    for (int i = 0; i < 6; ++i) getInput(i)->visible = false;
+    getInput(Module::GENERATE_INPUT)->visible = false;
+    getInput(Module::GROW_INPUT)->visible = false;
     for (int i = 0; i < 6; ++i) actionButtons[i]->visible = i % 3 != 2;
-    float usable = width - 16, left = 8, x = left, y = top + 3;
+    float left = 8, usable = width - 16, x = left, y = top + 1;
     editShowsText = false;
-    bool add = canAddSelection();
-    for (int i = 0; i < 3; ++i) {
-      auto* button = i < 2 ? managementButtons[i] : addSelectionButton;
-      button->visible = i < 2 || add;
-      if (!button->visible) continue;
-      button->icon = i == 0 ? 3 : i == 1 ? 7 : 6;
-      button->iconAndText = i == 0;
+    std::vector<ActionButton*> buttons = {managementButtons[0],
+                                          managementButtons[1]};
+    addSelectionButton->visible = canAddSelection();
+    if (addSelectionButton->visible) buttons.push_back(addSelectionButton);
+    for (auto* b : {actionButtons[0], actionButtons[1], actionButtons[3],
+                    actionButtons[4], regenerateButton, growButton})
+      buttons.push_back(b);
+    managementButtons[0]->icon = 3;
+    managementButtons[1]->icon = 7;
+    addSelectionButton->icon = 6;
+    for (int i : {0, 1, 3, 4}) actionButtons[i]->icon = i % 3;
+    for (auto* button : buttons) {
+      button->visible = true;
+      button->iconAndText = button == managementButtons[0];
       button->textSize = 9;
       button->faceColor = nvgRGB(214, 214, 214);
       button->textColor = nvgRGB(70, 70, 70);
       button->upDepth = 1.1f;
       button->downDepth = .8f;
-      float bw = i == 0 ? 23 + 5 * std::to_string(module ? members.size()
-                                                         : browserMemberCount)
-                                       .size()
-                        : 18;
+      float bw = button == managementButtons[0]
+                     ? 19 + 5 * std::to_string(module ? members.size()
+                                                      : browserMemberCount)
+                                    .size()
+                     : 18;
       if (x + bw > left + usable) {
         x = left;
         y += 20;
@@ -1591,34 +1630,16 @@ struct Beekapoo : app::ModuleWidget {
       button->box = Rect(Vec(x, y), Vec(bw, 18));
       x += bw + 2;
     }
-    const int ids[] = {0, 1, 3, 4, 6, 7};
-    std::vector<ActionButton*> buttons = {actionButtons[0], actionButtons[1],
-                                          actionButtons[3], actionButtons[4],
-                                          regenerateButton, growButton};
-    float actionY = y + 21;
-    int columns = std::max(2, std::min(6, int(usable / 20)));
-    bool inlineRow = x + 6 * 20 <= left + usable;
-    if (inlineRow) {
-      actionY = top + 3;
-      left = x;
-      columns = 6;
-    }
+    float jackTop = y + 18;
+    const int ids[] = {0, 1, 3, 4, Module::GENERATE_INPUT, Module::GROW_INPUT};
+    int columns = std::max(1, std::min(6, int(usable / 12)));
     for (int i = 0; i < 6; ++i) {
-      auto* button = buttons[i];
-      button->visible = true;
-      button->iconAndText = false;
-      if (i < 4) button->icon = i % 2;
-      button->faceColor = nvgRGB(214, 214, 214);
-      button->textColor = nvgRGB(70, 70, 70);
-      button->upDepth = 1.1f;
-      button->downDepth = .8f;
-      Vec pos(left + (i % columns) * 20, actionY + (i / columns) * 32);
-      button->box = Rect(pos, Vec(18, 18));
       auto* jack = getInput(ids[i]);
       jack->visible = true;
-      jack->box.pos = pos + Vec(1, 18);
+      jack->box.pos =
+          Vec(left + (i % columns) * 12, jackTop + (i / columns) * 12);
     }
-    float height = actionY - top + ((6 + columns - 1) / columns) * 32 + 3;
+    float height = jackTop - top + ((6 + columns - 1) / columns) * 12 + 3;
     ownFrame->visible = true;
     ownFrame->box = Rect(Vec(6, top), Vec(width - 12, height));
     responsive.ownColumns = columns;
@@ -1634,9 +1655,10 @@ struct Beekapoo : app::ModuleWidget {
       int cols = std::max(1, int((width - 25) / 20));
       float height =
           8 + compactHeaderHeight(width) + tinyOwnHeight(width) + 8 +
-          (layoutRows(inputs, cols) + layoutRows(outputs, cols)) * 22 +
+          layoutRows(inputs, cols) * 45 + layoutRows(outputs, cols) * 22 +
           (inputs ? 14 : 0) + (outputs ? 14 : 0) + (inputs && outputs ? 8 : 0) +
-          (parameterCount ? 64 : 0);
+          (parameterCount ? std::max(32, layoutRows(parameterCount, cols) * 16)
+                          : 0);
       if (height <= 368) return width;
     }
     return 30000;
@@ -1695,10 +1717,13 @@ struct Beekapoo : app::ModuleWidget {
         layoutParams(metadata, box.size.x - 25, available, arrangeByModule);
     frame->box =
         Rect(Vec(6, top), Vec(box.size.x - 12, std::max(0.f, bottom - top)));
-    frame->visible = !cells.empty() && (!expanded || editPreview);
+    // The empty parameter area is still its own section. It must not make
+    // the action strip grow to occupy the whole panel when nothing is mapped.
+    frame->visible = available > 0 && (!expanded || editPreview);
     struct Caption {
       std::string text;
-      float left = INFINITY, right = -INFINITY, bottom = 0, size = 0, row = -1;
+      float left = INFINITY, right = -INFINITY, bottom = 0, size = 0, row = -1,
+            height = 0;
       int count = 0;
     };
     std::map<std::string, Caption> captions;
@@ -1760,6 +1785,7 @@ struct Beekapoo : app::ModuleWidget {
         caption.left = INFINITY;
         caption.right = -INFINITY;
         caption.row = cell.y;
+        caption.height = cell.labelHeight;
       }
       float half = cell.labelWidth * .5f;
       caption.left = std::min(caption.left, center.x - half);
@@ -1767,7 +1793,8 @@ struct Beekapoo : app::ModuleWidget {
       caption.bottom =
           std::max(caption.bottom, center.y + cell.diameter * .5f + 5);
       caption.size =
-          std::max(caption.size, clamp(cell.diameter * .36f, 14.f, 18.f));
+          std::max(caption.size,
+                   clamp(cell.diameter * .36f, 14.f, 18.f) * cell.labelScale);
       ++caption.count;
     }
     for (const auto& entry : captions) {
@@ -1775,7 +1802,44 @@ struct Beekapoo : app::ModuleWidget {
       controlLabels.push_back(
           {Vec((caption.left + caption.right) * .5f, caption.bottom),
            caption.right - caption.left, caption.text, false, NVG_ALIGN_CENTER,
-           caption.size, 32});
+           caption.size, caption.height});
+    }
+  }
+  void layoutPortBlock(
+      const std::vector<widget::Widget*>& items, phlooper::WarpedBlock* block,
+      int columns, Rect region, bool output,
+      const std::map<widget::Widget*, std::pair<std::string, std::string>>&
+          names) {
+    block->visible = !items.empty() && (!expanded || editPreview);
+    block->box = region;
+    if (items.empty()) return;
+    columns = std::max(1, columns);
+    int rows = layoutRows(items.size(), columns);
+    float cellW = (region.size.x - 8) / columns;
+    // finishFrames extends the bottom sections to the panel edge. Use that
+    // existing space too, while keeping a little clearance for their bevel.
+    float bottomSpace = region.getBottom() >= 368 ? 6.f : 0.f;
+    float cellH = (region.size.y + bottomSpace - 6) / rows;
+    for (size_t i = 0; i < items.size(); ++i) {
+      auto* face = static_cast<PortFace*>(items[i]);
+      auto cell = planPortCell(cellW, cellH, !output);
+      int rowCount =
+          std::min(columns, int(items.size()) - int(i / columns) * columns);
+      Vec origin = region.pos + Vec(4 + (columns - rowCount) * cellW * .5f +
+                                        (i % columns) * cellW,
+                                    3 + (i / columns) * cellH);
+      face->compact = !cell.large;
+      face->box = Rect(origin + Vec(cell.jack.x, cell.jack.y),
+                       Vec(cell.jack.w, cell.jack.h));
+      face->visible = true;
+      face->gainLaidOut = !output;
+      face->gainCenter = origin + Vec(cell.gain.x + 10, cell.gain.y + 10);
+      auto found = names.find(face);
+      if (found != names.end() && cell.label.h > 0)
+        controlLabels.push_back(
+            {origin + Vec(cell.label.x + cell.label.w * .5f, cell.label.y),
+             cell.label.w, found->second.first, output, NVG_ALIGN_CENTER,
+             cell.fontSize, cell.label.h});
     }
   }
   void layoutOnlyJacks(
@@ -1813,16 +1877,16 @@ struct Beekapoo : app::ModuleWidget {
     // Captions require a real label column, not a tiny sliver beside a jack.
     bool beside = !inputs.empty() && !outputs.empty() && width >= 90;
     if (beside) {
-      int total = std::max(2, int((width - 24) / 20));
+      int total = std::max(2, int((width - 46) / 20));
       inputCols = std::max(1, std::min(int(inputs.size()), total / 2));
       outputCols =
           std::max(1, std::min(int(outputs.size()), total - inputCols));
       inputCols = std::max(1, std::min(int(inputs.size()), total - outputCols));
     }
     if (beside) {
-      float side = 12 + 22 * std::max(layoutRows(inputs.size(), inputCols),
+      float side = 12 + 45 * std::max(layoutRows(inputs.size(), inputCols),
                                       layoutRows(outputs.size(), outputCols));
-      float stack = 32 + 22 * (layoutRows(inputs.size(), cols) +
+      float stack = 32 + 45 * (layoutRows(inputs.size(), cols) +
                                layoutRows(outputs.size(), cols));
       if (side > stack) {
         beside = false;
@@ -1831,63 +1895,41 @@ struct Beekapoo : app::ModuleWidget {
       }
     }
     float slotWidth = beside
-                          ? (width - 24) / std::max(1, inputCols + outputCols)
+                          ? (width - 46) / std::max(1, inputCols + outputCols)
                           : (width - 25) / std::max(1, cols);
     bool portLabels =
         width >= 120 && inputs.size() + outputs.size() <= 4 && slotWidth >= 35;
-    float portRow = portLabels ? 73.f : 45.f;
-    auto paneHeight = [&](size_t count, int columns) {
-      return count ? 12 + layoutRows(count, std::max(1, columns)) * portRow
-                   : 0.f;
+    float inputRow = portLabels ? 73.f : 45.f;
+    float outputRow = portLabels ? 50.f : 22.f;
+    auto paneHeight = [&](size_t count, int columns, float row) {
+      return count ? 12 + layoutRows(count, std::max(1, columns)) * row : 0.f;
     };
-    float besideHeight = std::max(paneHeight(inputs.size(), inputCols),
-                                  paneHeight(outputs.size(), outputCols));
+    float besideHeight =
+        std::max(paneHeight(inputs.size(), inputCols, inputRow),
+                 paneHeight(outputs.size(), outputCols, outputRow));
     float inputHeight =
-        beside ? besideHeight : paneHeight(inputs.size(), inputCols);
+        beside ? besideHeight : paneHeight(inputs.size(), inputCols, inputRow);
     float outputHeight =
-        beside ? besideHeight : paneHeight(outputs.size(), outputCols);
+        beside ? besideHeight
+               : paneHeight(outputs.size(), outputCols, outputRow);
     float y =
         368 - (beside ? std::max(inputHeight, outputHeight)
                       : inputHeight + outputHeight +
                             (!inputs.empty() && !outputs.empty() ? 8 : 0));
     float parameterTop = ownFrame->box.getBottom() + 8;
     float parameterBottom = y - 8;
-    auto label = [&](widget::Widget* item, Vec pos, float available,
-                     bool output) {
-      auto found = names.find(item);
-      if (found != names.end())
-        controlLabels.push_back({pos, available, found->second.first, output,
-                                 NVG_ALIGN_CENTER, 12, 32});
-    };
-    float portColumns = inputCols + outputCols;
-    float sharedCell = (width - 24) / std::max(1.f, portColumns);
-    float inputWidth = beside ? inputCols * sharedCell + 6 : width - 12;
-    float outputWidth = beside ? outputCols * sharedCell + 6 : width - 12;
-    auto place = [&](std::vector<widget::Widget*>& items,
-                     phlooper::WarpedBlock* block, int columns, float x,
-                     float blockWidth, float height, bool output) {
-      block->visible = !items.empty() && (!expanded || editPreview);
-      if (items.empty()) return;
-      block->box = Rect(Vec(x, y), Vec(blockWidth, height));
-      float cell = (blockWidth - (beside ? 6 : 13)) / columns;
-      for (size_t i = 0; i < items.size(); ++i) {
-        auto* item = items[i];
-        item->visible = true;
-        if (auto* face = dynamic_cast<PortFace*>(item)) {
-          face->compact = true;
-          face->box.size = Vec(16, 16);
-        }
-        Vec center(x + 4 + (i % columns) * cell + cell * .5f,
-                   y + (output ? 14 : 37) + (i / columns) * portRow);
-        item->box.pos = center - item->box.size * .5f;
-        if (portLabels) label(item, center + Vec(0, 17), cell - 4, output);
-      }
-    };
-    place(inputs, inputFrame, inputCols, 6, inputWidth, inputHeight, false);
+    auto space =
+        portPaneSpace(width - 46, inputCols, outputCols, outputs.size());
+    float inputWidth = beside ? space.first + 13 : width - 12;
+    float outputWidth = beside ? space.second + 13 : width - 12;
+    layoutPortBlock(inputs, inputFrame, inputCols,
+                    Rect(Vec(6, y), Vec(inputWidth, inputHeight)), false,
+                    names);
     if (!beside && !inputs.empty()) y += inputHeight + 8;
-    place(outputs, outputFrame, outputCols,
-          beside ? width - 6 - outputWidth : 6, outputWidth, outputHeight,
-          true);
+    layoutPortBlock(outputs, outputFrame, outputCols,
+                    Rect(Vec(beside ? width - 6 - outputWidth : 6, y),
+                         Vec(outputWidth, outputHeight)),
+                    true, names);
     layoutMappedParameters(knobs, names, parameterTop, parameterBottom);
     layoutInputGains();
     finishFrames();
@@ -1901,8 +1943,6 @@ struct Beekapoo : app::ModuleWidget {
     editPreview = bool(editSession);
     controls->visible = !expanded || editPreview;
     std::vector<widget::Widget*> items[3];
-    std::map<widget::Widget*, int> kinds;
-    std::map<widget::Widget*, int64_t> moduleIds;
     for (auto& p : parameters) p.knob->visible = controlVisible(p.id, 0);
     for (auto& p : ports) {
       p.face->visible = controlVisible(p.id, p.input ? 1 : 2) && findPort(p);
@@ -1936,14 +1976,10 @@ struct Beekapoo : app::ModuleWidget {
         if (auto* w = find(p->id))
           if (auto* q = w->module->getParamQuantity(p->paramId)) {
             items[0].push_back(p->knob);
-            kinds[p->knob] = 0;
-            moduleIds[p->knob] = p->id;
             names[p->knob] = {q->getLabel(), memberName(p->id)};
           }
       for (auto* p : jacks) {
         items[p->input ? 1 : 2].push_back(p->face);
-        kinds[p->face] = p->input ? 1 : 2;
-        moduleIds[p->face] = p->id;
         auto* source = originalPort(*p);
         auto* info = source ? source->getPortInfo() : nullptr;
         names[p->face] = {info ? info->getName() : "Port", memberName(p->id)};
@@ -1985,68 +2021,32 @@ struct Beekapoo : app::ModuleWidget {
                       Vec(responsive.paramWidth, responsive.paramHeight));
     frame->visible = responsive.paramHeight > 0 && (!expanded || editPreview);
     if (!items[1].empty()) responsive.portHeight += 23;
+    // Every input row needs its own attenuverters, not just the first row.
+    responsive.portHeight = std::max(
+        responsive.portHeight,
+        items[1].empty()
+            ? 0.f
+            : 12.f + 43 * layoutRows(items[1].size(), responsive.inputColumns));
+    if (responsive.portHeight >
+        368 - responsive.paramTop - (items[0].empty() ? 8 : 40)) {
+      layoutOnlyJacks(items[1], items[2], items[0], names);
+      return;
+    }
     float portY = 368 - responsive.portHeight;
     float gap = items[1].empty() || items[2].empty() ? 0 : 8;
-    int portColumns = responsive.inputColumns + responsive.outputColumns;
     int panes = (!items[1].empty() ? 1 : 0) + (!items[2].empty() ? 1 : 0);
-    float portAvailable = width - 12 - gap - panes * 13;
-    float portStep = portColumns ? portAvailable / portColumns : 0;
-    float inWidth =
-        responsive.inputColumns ? responsive.inputColumns * portStep + 13 : 0;
-    float outWidth =
-        responsive.outputColumns ? responsive.outputColumns * portStep + 13 : 0;
-    inputFrame->box = Rect(Vec(6, portY), Vec(inWidth, responsive.portHeight));
-    outputFrame->box = Rect(Vec(width - 6 - outWidth, portY),
-                            Vec(outWidth, responsive.portHeight));
-    inputFrame->visible = !items[1].empty() && (!expanded || editPreview);
-    outputFrame->visible = !items[2].empty() && (!expanded || editPreview);
-    for (int k = 1; k < 3; ++k) {
-      Rect region = k == 0   ? frame->box
-                    : k == 1 ? inputFrame->box
-                             : outputFrame->box;
-      int cols = k == 0   ? responsive.paramColumns
-                 : k == 1 ? responsive.inputColumns
-                          : responsive.outputColumns;
-      if (!cols) continue;
-      float row = k == 0 ? responsive.paramRow : responsive.portRow;
-      float step = (region.size.x - 13) / cols;
-      float header = k == 0 && layoutTier ? 14 : 6;
-      std::string lastModule;
-      for (size_t i = 0; i < items[k].size(); ++i) {
-        auto* item = items[k][i];
-        if (!item) continue;
-        int kind = kinds[item];
-        if (kind) {
-          auto* face = static_cast<PortFace*>(item);
-          face->compact = layoutTier < 2;
-          face->box.size =
-              face->compact ? Vec(16, 16) : face->artwork()->box.size;
-        }
-        bool centered = kind || layoutTier == 0;
-        float inset = centered ? step * .5f : item->box.size.x * .5f + 1.5f;
-        float rowCenter = kind ? 10.f + (kind == 1 ? 23.f : 0.f) : row * .5f;
-        Vec center = region.pos + Vec(4 + (i % cols) * step + inset,
-                                      header + (i / cols) * row + rowCenter);
-        item->box.pos = center - item->box.size * .5f;
-        if (!layoutTier) continue;
-        auto name = names[item];
-
-        if ((layoutTier >= 3 || (arrangeByModule && layoutTier >= 2)) &&
-            k == 0 && name.second != lastModule)
-          headings.push_back(
-              {Vec(center.x - 10, center.y - 14), name.second, false});
-        lastModule = name.second;
-        if (kind) {
-          controlLabels.push_back({center + Vec(0, 16), step - 4, name.first,
-                                   !arrangeByModule && kind == 2,
-                                   NVG_ALIGN_CENTER, 12, 32});
-        } else
-          controlLabels.push_back({center + Vec(item->box.size.x * .5f + 4, 0),
-                                   std::max(12.f, step - item->box.size.x - 6),
-                                   name.first, !arrangeByModule && kind == 2,
-                                   NVG_ALIGN_LEFT});
-      }
-    }
+    auto space =
+        portPaneSpace(width - 12 - gap - panes * 13, responsive.inputColumns,
+                      responsive.outputColumns, items[2].size());
+    float inWidth = responsive.inputColumns ? space.first + 13 : 0;
+    float outWidth = responsive.outputColumns ? space.second + 13 : 0;
+    layoutPortBlock(items[1], inputFrame, responsive.inputColumns,
+                    Rect(Vec(6, portY), Vec(inWidth, responsive.portHeight)),
+                    false, names);
+    layoutPortBlock(items[2], outputFrame, responsive.outputColumns,
+                    Rect(Vec(width - 6 - outWidth, portY),
+                         Vec(outWidth, responsive.portHeight)),
+                    true, names);
     layoutMappedParameters(items[0], names, responsive.paramTop, portY - 8);
     layoutInputGains();
     finishFrames();
@@ -2316,6 +2316,7 @@ struct Beekapoo : app::ModuleWidget {
       rack->select(registered, true);
     }
     expanded = true;
+    syncInputCables(true);
     controls->visible = false;
     for (auto* cable : rack->getCompleteCables())
       if (contains(cable->cable->inputModule) &&
@@ -2393,8 +2394,11 @@ struct Beekapoo : app::ModuleWidget {
           p.portId == port->portId && port->type == engine::Port::INPUT) {
         auto* proxy =
             const_cast<Beekapoo*>(this)->getInput(Module::inputBase + p.route);
-        for (auto* cable : homeRack->getCompleteCablesOnPort(proxy))
-          if (!contains(cable->cable->outputModule)) return true;
+        for (auto* cable : homeRack->getCompleteCables())
+          if (cable->cable->inputModule == module &&
+              cable->cable->inputId == proxy->portId &&
+              !contains(cable->cable->outputModule))
+            return true;
       }
     for (auto* cable : homeRack->getCompleteCables())
       if (!inputBridge(cable->cable) &&
@@ -2493,7 +2497,8 @@ struct Beekapoo : app::ModuleWidget {
     action->after.capture();
     APP->history->push(action);
   }
-  void groupAction(bool collapsing) {
+  void exposeSelectionDefaults();
+  void groupAction(bool collapsing, bool exposeDefaults = false) {
     if (!module || (!collapsing && (members.empty() || expanded)) ||
         (collapsing && !members.empty() && !expanded))
       return;
@@ -2501,6 +2506,7 @@ struct Beekapoo : app::ModuleWidget {
         beginAction(collapsing ? (members.empty() ? "abstract modules"
                                                   : "collapse abstraction")
                                : "expand abstraction");
+    bool creating = collapsing && members.empty();
     if (collapsing)
       collapse();
     else
@@ -2509,6 +2515,7 @@ struct Beekapoo : app::ModuleWidget {
       delete action;
       return;
     }
+    if (creating && exposeDefaults) exposeSelectionDefaults();
     finishAction(action);
   }
   void endAction() {
@@ -2574,10 +2581,12 @@ struct Beekapoo : app::ModuleWidget {
     }
     closeView();
     bool wasExpanded = expanded;
+    std::set<int64_t> addedIds;
     for (auto* registered : added) {
       auto* holder = dynamic_cast<Holder*>(registered);
       auto* w = holder ? holder->original : registered;
       if (!w || !w->module) continue;
+      addedIds.insert(w->module->id);
       members.push_back({w->module->id, registered->box.pos, w, holder});
     }
     // An incoming source that has just joined is now an internal wire.
@@ -2588,14 +2597,18 @@ struct Beekapoo : app::ModuleWidget {
         auto* target = originalPort(p);
         auto* proxy = findPort(p);
         for (auto* cw : homeRack->getCompleteCables())
-          if (cw->inputPort == proxy && contains(cw->cable->outputModule)) {
+          if (cw->cable->inputModule == module &&
+              cw->cable->inputId == proxy->portId &&
+              addedIds.count(cw->cable->outputModule->id)) {
             rewireInput(cw, target);
             internalizedInputs.insert({p.id, p.portId});
           }
       }
     for (auto* cw : homeRack->getCompleteCables())
       if (contains(cw->cable->inputModule) &&
-          contains(cw->cable->outputModule)) {
+          contains(cw->cable->outputModule) &&
+          (addedIds.count(cw->cable->inputModule->id) ||
+           addedIds.count(cw->cable->outputModule->id))) {
         panelCableIds.erase(cw->cable->id);
         internalCableIds.insert(cw->cable->id);
       }
@@ -2605,10 +2618,12 @@ struct Beekapoo : app::ModuleWidget {
       bool affected = previous.count({it->id, it->portId}) ||
                       internalizedInputs.count({it->id, it->portId});
       bool outside = source && boundaryPort(source);
-      if (it->route >= 0) {
+      if (it->route >= 0 && source) {
         outside = false;
-        for (auto* cw : homeRack->getCompleteCablesOnPort(source))
-          outside |= !contains(cw->cable->outputModule);
+        for (auto* cw : homeRack->getCompleteCables())
+          if (cw->cable->inputModule == module &&
+              cw->cable->inputId == source->portId)
+            outside |= !contains(cw->cable->outputModule);
       }
       if (source && affected && !outside) {
         if (auto* original = originalPort(*it))
@@ -2699,11 +2714,13 @@ struct Beekapoo : app::ModuleWidget {
     saveGroup();
     finishAction(action);
   }
-  void parameterAction(int index, bool recordHistory) {
+  void parameterAction(int index, bool recordHistory,
+                       history::ComplexAction* parent = nullptr) {
     if (!module || members.empty() || index < 0 || index >= 6) return;
     const int operation = index % 3;
     const bool all = index >= 3;
-    auto* batch = recordHistory ? new history::ComplexAction : nullptr;
+    auto* batch =
+        recordHistory || parent ? new history::ComplexAction : nullptr;
     if (batch)
       batch->name = std::string(operation == 0   ? "wiggle "
                                 : operation == 1 ? "randomize "
@@ -2782,6 +2799,8 @@ struct Beekapoo : app::ModuleWidget {
     if (batch) {
       if (batch->isEmpty())
         delete batch;
+      else if (parent)
+        parent->push(batch);
       else
         APP->history->push(batch);
     }
@@ -2973,6 +2992,7 @@ struct Beekapoo : app::ModuleWidget {
           showPlugs(cw, false);
         }
       syncBoundaryPorts();
+      syncInputCables(true);
       for (auto& p : ports)
         if (auto* source = originalPort(p))
           p.originalPosition = source->box.pos;
@@ -2980,6 +3000,7 @@ struct Beekapoo : app::ModuleWidget {
       ModuleWidget::step();
       return;
     }
+    syncInputCables(false);
     const Vec parking = parkingPosition();
     for (const auto& member : members)
       if (member.holder) {
@@ -3077,18 +3098,25 @@ struct Beekapoo : app::ModuleWidget {
         for (int halfPoints = 48; halfPoints >= 8; --halfPoints) {
           nvgFontSize(args.vg, halfPoints * .5f);
           bool wordsFit = true;
+          float widestWord = 0;
           for (size_t start = name.find_first_not_of(" \t\r\n");
                start != std::string::npos;) {
             size_t end = name.find_first_of(" \t\r\n", start);
             if (end == std::string::npos) end = name.size();
-            if (nvgTextBounds(args.vg, 0, 0, name.c_str() + start,
-                              name.c_str() + end, nullptr) > textArea.size.x)
-              wordsFit = false;
+            widestWord = std::max(
+                widestWord, nvgTextBounds(args.vg, 0, 0, name.c_str() + start,
+                                          name.c_str() + end, nullptr));
+            if (widestWord > textArea.size.x - 1) wordsFit = false;
             start = name.find_first_not_of(" \t\r\n", end);
           }
           nvgTextBoxBounds(args.vg, 0, 0, textArea.size.x, name.c_str(),
                            nullptr, bounds);
           if (wordsFit && bounds[3] - bounds[1] <= textArea.size.y - 2) break;
+          // The smallest header can need less than 4 pt. Never let NanoVG
+          // split a long name in the middle of a word at the size floor.
+          if (halfPoints == 8 && !wordsFit && widestWord > 0)
+            nvgFontSize(args.vg,
+                        4.f * std::max(1.f, textArea.size.x - 1) / widestWord);
         }
         nvgFillColor(args.vg, nvgRGB(25, 25, 25));
         nvgTextBox(args.vg, textArea.pos.x, textArea.pos.y + 1, textArea.size.x,
@@ -3117,12 +3145,13 @@ struct Beekapoo : app::ModuleWidget {
                    (label.align == NVG_ALIGN_CENTER ? label.width * .5f : 0);
       float top =
           label.maxHeight > 0 ? label.pos.y : label.pos.y - height * .5f;
-      int preferred = int(std::max(14.f, label.fontSize) * 2);
+      int preferred =
+          int(std::max(8.f, label.fontSize > 0 ? label.fontSize : 14.f) * 2);
       nvgSave(args.vg);
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
       if (!label.prepared) {
         for (const auto& text : {label.text, abbreviatedLabel(label.text)}) {
-          for (int halfPoints = preferred; halfPoints >= 24; --halfPoints) {
+          for (int halfPoints = preferred; halfPoints >= 16; --halfPoints) {
             label.preparedSize = halfPoints * .5f;
             nvgFontSize(args.vg, label.preparedSize);
             auto measure = [&](const std::string& text) {
@@ -3319,7 +3348,7 @@ struct Beekapoo : app::ModuleWidget {
         }));
     if (members.empty())
       menu->addChild(createMenuItem("Abstract selected modules", "",
-                                    [this] { groupAction(true); }));
+                                    [this] { groupAction(true, true); }));
     menu->addChild(
         createMenuItem("Eject subpatch", "", [this] { ejectAction(); }));
     menu->addChild(createMenuItem(
@@ -3495,6 +3524,7 @@ void GroupHistory::redo() {
           dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId)))
     group->focusEditedMembers();
 }
+#include "BeekapooExposure.hpp"
 #include "BeekapooGenerator.hpp"
 #include "BeekapooGrowth.hpp"
 #include "BeekapooImportDialog.hpp"

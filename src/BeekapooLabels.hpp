@@ -15,10 +15,13 @@ inline const std::vector<LabelAlias>& labelAliases() {
       {"pulse width modulation", "PW"},
       {"pulse width", "PW"},
       {"high pass filter", "HP"},
+      {"highpass filter", "HP"},
       {"high pass", "HP"},
       {"low pass filter", "LP"},
+      {"lowpass filter", "LP"},
       {"low pass", "LP"},
       {"band pass filter", "BP"},
+      {"bandpass filter", "BP"},
       {"band pass", "BP"},
       {"resonance", "Res"},
       {"amplitude", "Amp"},
@@ -48,6 +51,8 @@ inline std::string abbreviatedLabel(const std::string& full) {
                  [](unsigned char c) { return char(std::tolower(c)); });
   // Long phrases win over component words. Match whole terms, preserving
   // channel numbers and meaningful suffixes rather than arbitrary clipping.
+  const LabelAlias* best = nullptr;
+  size_t bestPos = 0, bestLength = 0;
   for (const auto& alias : labelAliases()) {
     size_t pos = lower.find(alias.full);
     if (pos == std::string::npos) continue;
@@ -56,8 +61,15 @@ inline std::string abbreviatedLabel(const std::string& full) {
         (end < lower.size() &&
          std::isalnum(static_cast<unsigned char>(lower[end]))))
       continue;
+    if (end - pos > bestLength) {
+      best = &alias;
+      bestPos = pos;
+      bestLength = end - pos;
+    }
+  }
+  if (best) {
     std::string result = full;
-    result.replace(pos, end - pos, alias.shortName);
+    result.replace(bestPos, bestLength, best->shortName);
     return result;
   }
   return full;

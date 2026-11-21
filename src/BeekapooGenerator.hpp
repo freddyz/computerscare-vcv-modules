@@ -108,6 +108,23 @@ bool Beekapoo::generateDefaultPatch(int requestedCount) {
 bool Beekapoo::regeneratePatch() {
   if (!module) return false;
   ScopedSubviewRack mainScope(homeRack);
+  if (!randomLocks.empty()) {
+    // Keep native identities and every locked connection intact. Locks turn
+    // replacement into an in-place variation of the unlocked graph.
+    auto* batch = new history::ComplexAction;
+    batch->name = "regenerate unlocked subpatch";
+    parameterAction(4, true, batch);
+    int growth = 1 + random::u32() % 3;
+    for (int i = 0; i < growth; ++i) growPatch(batch);
+    if (batch->isEmpty()) {
+      delete batch;
+      status = "All subpatch modules are locked";
+      return false;
+    }
+    APP->history->push(batch);
+    status = "Unlocked subpatch regenerated";
+    return true;
+  }
   auto* root = generated::plan();
   if (!root) {
     status = "Install VCV Free to generate a subpatch";

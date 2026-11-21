@@ -90,3 +90,6 @@ python3 scripts/preview/make-spectrum-pdf.py build/previews/beekapoo-print outpu
 The PDF command requires ReportLab and embeds its bundled Vera fonts. It produces
 two Letter pages, 18 layouts per page. Images and the count manifest stay in the
 ignored preview directory; no production module code is changed.
+
+For Beekapoo review PDFs, use one page unless requested otherwise. Keep source
+module names below each panel; omit HP and parameter/input/output counts.

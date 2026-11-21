@@ -174,7 +174,11 @@ def validate_one(target, refs):
     missing = []
 
     for asset, locations in refs.items():
-        if asset not in files:
+        # Dynamically selected assets can quote a directory prefix, e.g.
+        # "res/components/" + name + ".svg". Archives need not contain
+        # explicit directory entries, so check the files under that prefix.
+        present = any(path.startswith(asset) for path in files) if asset.endswith("/") else asset in files
+        if not present:
             missing.append((asset, locations))
 
     if not missing:

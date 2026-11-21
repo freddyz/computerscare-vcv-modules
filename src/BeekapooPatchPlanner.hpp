@@ -18,8 +18,7 @@ struct Requirement {
 struct Output {
   int port;
   Signal signal;
-  std::vector<Requirement>
-    requires;
+  std::vector<Requirement> requirements;
 };
 struct Range {
   int param;
@@ -163,6 +162,24 @@ class Planner {
       : random(seed), specs(catalog) {}
   Plan make(int count = 0) {
     count = count ? std::max(3, std::min(11, count)) : moduleCount(random());
+    std::vector<int> sources, processors, envelopes;
+    for (int i = 0; i < int(specs.size()); ++i) {
+      bool free = false, sound = false, gate = false;
+      for (const auto& out : specs[i].outputs) {
+        free |= out.requirements.empty();
+        for (const auto& req : out.requirements) {
+          sound |= req.signal == Signal::sound;
+          gate |= req.signal == Signal::gate;
+        }
+      }
+      if (free)
+        sources.push_back(i);
+      else if (gate && !sound)
+        envelopes.push_back(i);
+      else if (sound && !gate)
+        processors.push_back(i);
+    }
+    if (sources.empty() || processors.empty()) return {};
     for (int attempt = 0; attempt < 256; ++attempt) {
       Plan p;
       std::set<std::pair<int, int>> occupied;
@@ -172,7 +189,7 @@ class Planner {
         p.cables.push_back({a, b});
         return true;
       };
-      p.modules.push_back(pick(3));
+      p.modules.push_back(sources[pick(int(sources.size()))]);
       auto chooseOutput = [&](int node) {
         const auto& out = specs[p.modules[node]].outputs;
         return Endpoint{node, out[pick(int(out.size()))].port};
@@ -192,16 +209,24 @@ class Planner {
         // through a processor. No node is added as unused decoration.
         bool modulator = i > 1 && !targets.empty() && pick(100) < 45;
         if (modulator) {
-          int type = pick(gates.empty() ? 3 : 4);
-          p.modules.push_back(type == 3 ? 6 : type);
-          if (type == 3) wire(gates[pick(int(gates.size()))], {i, 4});
-          wire(chooseOutput(i), targets[pick(int(targets.size()))]);
+          auto choices = sources;
+          if (!gates.empty())
+            choices.insert(choices.end(), envelopes.begin(), envelopes.end());
+          int type = choices[pick(int(choices.size()))];
+          p.modules.push_back(type);
+          Endpoint output = chooseOutput(i);
+          for (const auto& out : specs[type].outputs)
+            if (out.port == output.port)
+              for (const auto& req : out.requirements)
+                wire(gates[pick(int(gates.size()))],
+                     {i, req.anyOf[pick(int(req.anyOf.size()))]});
+          wire(output, targets[pick(int(targets.size()))]);
         } else {
-          int type = std::vector<int>{3, 4, 5, 7}[pick(4)];
+          int type = processors[pick(int(processors.size()))];
           p.modules.push_back(type);
           const auto& outs = specs[type].outputs;
           const auto& chosen = outs[pick(int(outs.size()))];
-          for (const auto& req : chosen.requires)
+          for (const auto& req : chosen.requirements)
             wire(main, {i, req.anyOf[pick(int(req.anyOf.size()))]});
           main = {i, chosen.port};
           p.outputs = {main};
@@ -255,7 +280,7 @@ class Planner {
     for (auto e : used) {
       const auto* o = output(e);
       if (!o) return "Invalid output";
-      for (const auto& r : o->requires) {
+      for (const auto& r : o->requirements) {
         bool found = false;
         for (const auto& c : p.cables)
           if (c.to.node == e.node && std::find(r.anyOf.begin(), r.anyOf.end(),

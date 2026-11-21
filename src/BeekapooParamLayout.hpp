@@ -56,7 +56,16 @@ inline int paramNumber(const std::string& label) {
 }
 struct ParamCell {
   int index;
-  float x, y, diameter, labelWidth;
+  float x, y, diameter, labelWidth, labelScale, labelHeight;
+  ParamCell(int index, float x, float y, float diameter, float labelWidth,
+            float labelScale = 1, float labelHeight = 32)
+      : index(index),
+        x(x),
+        y(y),
+        diameter(diameter),
+        labelWidth(labelWidth),
+        labelScale(labelScale),
+        labelHeight(labelHeight) {}
 };
 inline std::vector<std::vector<int>> paramGroups(
     const std::vector<ParamLayoutItem>& items, bool byModule) {
@@ -105,20 +114,40 @@ inline std::vector<ParamCell> compactParams(
     order.insert(order.end(), group.begin(), group.end());
   int columns = 1;
   float size = 0;
-  for (int cols = 1; cols <= int(items.size()); ++cols) {
-    int rows = (int(items.size()) + cols - 1) / cols;
-    float gap = std::min(2.f, std::min(width / cols, height / rows) * .08f);
-    float candidate =
-        std::min(64.f, std::min((width - gap * (cols - 1)) / cols,
-                                (height - gap * (rows - 1)) / rows));
-    if (candidate > size) {
-      size = candidate;
-      columns = cols;
+  float reservedCaption = 0;
+  // If full captions could not fit, retain small captions wherever possible
+  // instead of making the entire dense grid anonymous. Never trade a usable
+  // control for a label: very dense grids still fall back to controls alone.
+  for (float caption : {24.f, 12.f, 0.f}) {
+    int bestColumns = 1;
+    float bestSize = 0;
+    for (int cols = 1; cols <= int(items.size()); ++cols) {
+      int rows = (int(items.size()) + cols - 1) / cols;
+      float gap = std::min(2.f, std::min(width / cols, height / rows) * .08f);
+      float candidate =
+          std::min(64.f, std::min((width - gap * (cols - 1)) / cols,
+                                  (height - gap * (rows - 1)) / rows -
+                                      (caption > 0 ? caption + 6 : 0)));
+      if (candidate > bestSize) {
+        bestSize = candidate;
+        bestColumns = cols;
+      }
+    }
+    if (caption == 0 || bestSize >= 30) {
+      size = bestSize;
+      columns = bestColumns;
+      reservedCaption = caption;
+      break;
     }
   }
   if (size <= 0) return {};
   int rows = (int(items.size()) + columns - 1) / columns;
   float rowStep = height / rows;
+  // Dense grids often still have vertical room for a small caption. Keep
+  // their control sizes; use that space before dropping labels altogether.
+  float captionHeight =
+      std::max(reservedCaption, std::min(28.f, rowStep - size - 6.f));
+  bool captions = size >= 28.f && captionHeight >= 12.f;
   std::vector<ParamCell> cells;
   for (int i = 0; i < int(order.size()); ++i) {
     int row = i / columns, col = i % columns;
@@ -129,8 +158,13 @@ inline std::vector<ParamCell> compactParams(
         .94f +
         .06f *
             std::max(0.f, std::min(1.f, (items[order[i]].scale - .7f) / .7f));
-    cells.push_back({order[i], left + col * (size + gap) + size * .5f,
-                     (row + .5f) * rowStep, size * variation, 0});
+    cells.push_back(
+        {order[i], left + col * (size + gap) + size * .5f,
+         (row + .5f) * rowStep - (captions ? (captionHeight + 6) * .5f : 0),
+         captions ? std::min(size, std::max(30.f, size * variation))
+                  : size * variation,
+         captions ? (rowCount == 1 ? width - 2 : size + gap - 2) : 0, .65f,
+         captions ? captionHeight : 0});
   }
   return cells;
 }
@@ -159,7 +193,11 @@ inline std::vector<ParamCell> layoutParams(
   std::vector<Row> rows;
   std::vector<float> diameters, footprints;
   bool fitted = false;
-  for (float minimum : {width < 90 ? 32.f : 36.f}) {
+  float fittedLabelScale = 1;
+  // Preserve the roomy layout first, then try smaller captions while keeping
+  // the same usable knob sizes. Only the final fallback omits labels.
+  for (float labelScale : {1.f, .8f, .6f}) {
+    float minimum = width < 90 || labelScale < 1 ? 32.f : 36.f;
     for (int base = 64; base >= 16; base -= 2) {
       diameters.clear();
       footprints.clear();
@@ -172,8 +210,8 @@ inline std::vector<ParamCell> layoutParams(
         if (caption <= 0)
           for (const auto& word : labelWords(items[index].label))
             caption = std::max(caption, float(word.size()) * 7.f + 4);
-        footprints.push_back(
-            std::max(size, std::min(width, caption) / counts[key(index)]));
+        footprints.push_back(std::max(
+            size, std::min(width, caption * labelScale) / counts[key(index)]));
       }
       // Keep a small matching family together when it can fit at normal
       // size. Extra vertical room must not turn a balanced group into 2+1.
@@ -206,7 +244,8 @@ inline std::vector<ParamCell> layoutParams(
               words += std::any_of(
                   word.begin(), word.end(),
                   [](unsigned char c) { return c >= 128 || std::isalpha(c); });
-            captionSpace = std::max(captionSpace, words > 1 ? 38.f : 24.f);
+            captionSpace = std::max(captionSpace,
+                                    (words > 1 ? 32.f : 18.f) * labelScale + 6);
           }
           float rowHeight = tallest + std::max(6.f, captionSpace);
           if (end + 1 < count && key(order[end]) == key(order[end + 1]) &&
@@ -235,6 +274,7 @@ inline std::vector<ParamCell> layoutParams(
       }
       if (used <= height && !rows.empty() && rows.back().end == count) {
         fitted = true;
+        fittedLabelScale = labelScale;
         break;
       }
     }
@@ -253,7 +293,8 @@ inline std::vector<ParamCell> layoutParams(
       float captionWidth =
           std::max(8.f, 2 * std::min(center - before, after - center) - 2);
       cells.push_back({order[column], center, y + row.controlHeight * .5f,
-                       diameters[column], captionWidth});
+                       diameters[column], captionWidth, fittedLabelScale,
+                       std::max(0.f, row.height - row.controlHeight - 6)});
       x += footprints[column] + 6;
     }
     y += row.height;

@@ -16,11 +16,23 @@ json_t* Beekapoo::portableContents(bool external) {
     if (inputBridge(cw->cable)) continue;
     bool input = contains(cw->cable->inputModule),
          output = contains(cw->cable->outputModule);
+    const Port* proxy = nullptr;
+    if (cw->cable->inputModule == module)
+      for (const auto& p : ports)
+        if (p.route >= 0 && cw->cable->inputId == Module::inputBase + p.route) {
+          proxy = &p;
+          input = true;
+          break;
+        }
     // Like Rack's selection duplicate, external incoming connections are
     // copied only by Duplicate with cables. Internal wiring always belongs
     // to the encapsulated instrument, even in a cable-free panel duplicate.
     if (!(input && output) && !(external && input)) continue;
     auto* item = cw->cable->toJson();
+    if (proxy) {
+      json_object_set_new(item, "inputModuleId", json_integer(proxy->id));
+      json_object_set_new(item, "inputId", json_integer(proxy->portId));
+    }
     cw->mergeJson(item);
     json_array_append_new(cables, item);
   }

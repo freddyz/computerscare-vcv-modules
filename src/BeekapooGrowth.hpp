@@ -1,7 +1,7 @@
 #pragma once
 // Grow in place: existing module/parameter IDs and external cables survive.
 // Each mutation uses native Rack history, followed by the membership change.
-bool Beekapoo::growPatch() {
+bool Beekapoo::growPatch(history::ComplexAction* parent) {
   if (!module || members.empty()) return false;
   ScopedSubviewRack mainScope(homeRack);
   struct Destination {
@@ -46,7 +46,7 @@ bool Beekapoo::growPatch() {
           auto* port = w->getOutput(out.port);
           if (!port) continue;
           bool ready = true;
-          for (const auto& req : out.requires) {
+          for (const auto& req : out.requirements) {
             bool met = false;
             for (int id : req.anyOf)
               if (auto* p = w->getInput(id))
@@ -152,7 +152,10 @@ bool Beekapoo::growPatch() {
   state->newModuleJ = toJson();
   state->after.capture();
   batch->push(state);
-  APP->history->push(batch);
+  if (parent)
+    parent->push(batch);
+  else
+    APP->history->push(batch);
   status = "Subpatch grown";
   return true;
 }

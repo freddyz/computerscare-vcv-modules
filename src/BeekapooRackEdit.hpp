@@ -1,6 +1,17 @@
 #pragma once
 // A nonmodal session over the actual Rack. No proxy modules or cable aliases.
 struct RackEditSession;
+struct EditedInputDeleteItem : ui::MenuItem {
+  WeakPtr<Beekapoo> owner;
+  WeakPtr<app::PortWidget> port;
+  void onAction(const ActionEvent&) override {
+    if (!owner || !port) return;
+    owner->withInputCablePresentation(port.get(), [&] {
+      ScopedVisiblePortCables hidden(owner->homeRack, port.get(), true);
+      port->deleteTopCableAction();
+    });
+  }
+};
 struct RackEditHighlight : widget::TransparentWidget {
   WeakPtr<RackEditSession> session;
   WeakPtr<app::ModuleWidget> sourceModule;
@@ -301,10 +312,49 @@ struct RackEditSession : widget::Widget {
   }
   void onButton(const ButtonEvent& e) override {
     widget::Widget::onButton(e);
-    if (e.isConsumed() || (!exposeMode && !randomLockMode) || !owner ||
-        e.action != GLFW_PRESS || e.button != GLFW_MOUSE_BUTTON_LEFT ||
+    if (e.isConsumed() || !owner || e.action != GLFW_PRESS ||
+        (e.button != GLFW_MOUSE_BUTTON_LEFT &&
+         e.button != GLFW_MOUSE_BUTTON_RIGHT) ||
         e.pos.y < toolbarHeight)
       return;
+    if (!exposeMode && !randomLockMode) {
+      forControls([&](Rect r, app::PortWidget* port, app::ParamWidget*) {
+        if (e.isConsumed() || !port || !r.contains(e.pos) ||
+            port->type != engine::Port::INPUT || !owner->exposed(port))
+          return;
+        // Only visible musical cables belong in Rack's native plug stack.
+        // The invisible gain bridge must never be picked up by this gesture.
+        owner->withInputCablePresentation(port, [&] {
+          ScopedVisiblePortCables hidden(owner->homeRack, port, true);
+          std::set<widget::Widget*> before(APP->scene->children.begin(),
+                                           APP->scene->children.end());
+          port->onButton(e);
+          if (e.button == GLFW_MOUSE_BUTTON_LEFT && e.context &&
+              e.context->target == port)
+            APP->event->setDraggedWidget(port, e.button);
+          if (e.button == GLFW_MOUSE_BUTTON_RIGHT)
+            for (auto* child : APP->scene->children)
+              if (!before.count(child))
+                for (auto* sub : child->children)
+                  if (auto* menu = dynamic_cast<ui::Menu*>(sub))
+                    if (menu->children.size() > 1)
+                      if (auto* item = dynamic_cast<ui::MenuItem*>(
+                              *std::next(menu->children.begin()))) {
+                        auto* safe = new EditedInputDeleteItem;
+                        safe->owner = owner;
+                        safe->port = port;
+                        safe->text = item->text;
+                        safe->rightText = item->rightText;
+                        safe->disabled = item->disabled;
+                        menu->addChildAbove(safe, item);
+                        menu->removeChild(item);
+                        delete item;
+                      }
+        });
+      });
+      return;
+    }
+    if (e.button != GLFW_MOUSE_BUTTON_LEFT) return;
     if (randomLockMode) {
       forControls([&](Rect r, app::PortWidget*, app::ParamWidget* param) {
         if (!e.isConsumed() && param && r.contains(e.pos)) {
