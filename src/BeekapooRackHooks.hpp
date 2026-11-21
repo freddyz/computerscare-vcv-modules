@@ -10,11 +10,8 @@ inline void disconnectGroupPanels(const std::vector<Beekapoo*>& groups,
                   ordinary.count(c->outputModule->id);
     for (auto* group : groups) {
       if (group->inputBridge(c)) continue;
-      bool input = group->contains(c->inputModule),
-           output = group->contains(c->outputModule);
-      remove |= c->inputModule == group->module ||
-                c->outputModule == group->module || input != output ||
-                group->panelCableIds.count(c->id);
+      remove |= group->cableRole(c) == Beekapoo::CableRole::Panel ||
+                (c->inputModule == group->module && !group->inputRoute(c));
     }
     if (!remove) continue;
     auto* action = new history::CableRemove;
@@ -322,6 +319,7 @@ void Beekapoo::pruneMissingMembers() {
   auto* transaction = new history::ComplexAction;
   transaction->name = action->name;
   transaction->push(action);
+  pruneSharedInputs(missing);
   for (auto it = parameters.begin(); it != parameters.end();) {
     if (missing.count(it->id)) {
       controls->removeChild(it->knob);

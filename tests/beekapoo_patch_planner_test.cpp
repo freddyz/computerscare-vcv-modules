@@ -9,6 +9,18 @@
 #include <set>
 using namespace beekapoo_patch;
 int main() {
+  {
+    std::vector<Spec> sourcesOnly{library()[0], library()[1]};
+    std::vector<Spec> empty;
+    assert(Planner(1, empty).make().modules.empty());
+    for(unsigned seed=0;seed<50;++seed) {
+      Planner planner(seed,sourcesOnly);
+      auto p=planner.make(4);
+      assert(p.modules.size()==4 && planner.validate(p).empty());
+      for(int type:p.modules) assert(type==0 || type==1);
+    }
+  }
+
   for (int count=1;count<=64;++count) {
     std::vector<float> widths;
     for(int i=0;i<count;++i)widths.push_back(15.f*(3+(i*7)%18));

@@ -104,77 +104,7 @@ struct BeekPatchFile {
   BeekPatchFile& operator=(const BeekPatchFile&) = delete;
 };
 
-inline void exposeBeekAudioInterfaces(BeekPatchFile& file, json_t* group) {
-  auto* cables = json_object_get(file.root, "cables");
-  auto* nodes = json_object_get(file.root, "modules");
-  for (size_t interface = 0; interface < file.audio.size(); ++interface) {
-    auto id = file.audio[interface];
-    auto* original = file.modules.at(id);
-    auto slug = beekJsonString(original, "model");
-    int channels = slug == "AudioInterface2"    ? 2
-                   : slug == "AudioInterface"   ? 8
-                   : slug == "AudioInterface16" ? 16
-                                                : 64;
-    std::string label =
-        (channels == 64 ? "AUDIO-64" : "Audio " + std::to_string(channels)) +
-        " #" + std::to_string(interface + 1);
-    std::set<int> inputs, outputs;
-    for (size_t i = 0; i < json_array_size(cables); ++i) {
-      auto* cable = json_array_get(cables, i);
-      for (bool fromDevice : {true, false}) {
-        const char* field = fromDevice ? "outputModuleId" : "inputModuleId";
-        if (json_integer_value(json_object_get(cable, field)) != id) continue;
-        auto* port =
-            json_object_get(cable, fromDevice ? "outputId" : "inputId");
-        if (!json_is_integer(port) || json_integer_value(port) < 0 ||
-            json_integer_value(port) >= channels)
-          throw Exception("Invalid Audio interface channel");
-        (fromDevice ? inputs : outputs).insert(int(json_integer_value(port)));
-      }
-    }
-    std::map<int, int> inputSlots, outputSlots;
-    auto* names = json_array();
-    for (bool input : {true, false})
-      for (int channel : input ? inputs : outputs) {
-        int slot = int(json_array_size(names));
-        (input ? inputSlots : outputSlots)[channel] = slot;
-        std::string name = label + (input ? " input " : " output ") +
-                           std::to_string(channel + 1);
-        json_array_append_new(names, json_string(name.c_str()));
-        json_array_append_new(
-            json_object_get(group, "ports"),
-            json_pack("{s:I,s:i,s:b}", "module", json_int_t(id), "port", slot,
-                      "input", input));
-      }
-    // Each used hardware channel becomes a unique relay pair. Native cables
-    // retain fan-out, sums, polyphony and links between interfaces unchanged.
-    for (size_t i = 0; i < json_array_size(cables); ++i) {
-      auto* cable = json_array_get(cables, i);
-      if (json_integer_value(json_object_get(cable, "outputModuleId")) == id)
-        json_object_set_new(cable, "outputId",
-                            json_integer(inputSlots.at(int(json_integer_value(
-                                json_object_get(cable, "outputId"))))));
-      if (json_integer_value(json_object_get(cable, "inputModuleId")) == id)
-        json_object_set_new(cable, "inputId",
-                            json_integer(outputSlots.at(int(json_integer_value(
-                                json_object_get(cable, "inputId"))))));
-    }
-    auto* replacement = json_deep_copy(original);
-    json_object_set_new(replacement, "plugin", json_string("computerscare"));
-    json_object_set_new(replacement, "model",
-                        json_string("computerscare-beekapoo-audio-ports"));
-    json_object_set_new(replacement, "params", json_array());
-    json_object_set_new(replacement, "data",
-                        json_pack("{s:o}", "names", names));
-    for (size_t i = 0; i < json_array_size(nodes); ++i)
-      if (json_integer_value(json_object_get(json_array_get(nodes, i), "id")) ==
-          id) {
-        file.modules[id] = replacement;
-        json_array_set_new(nodes, i, replacement);
-        break;
-      }
-  }
-}
+#include "BeekapooAudioImport.hpp"
 
 inline BeekImportDialog* makeBeekImportDialog(
     const BeekPatchFile& file, const std::string& path,
@@ -344,6 +274,8 @@ bool Beekapoo::loadBeek(const std::string& path, int64_t sourceOwner,
       throw Exception(
           "Audio conversion requires an ordinary patch with Audio interfaces");
     exposeBeekAudioInterfaces(file, group);
+    selected.clear();
+    for (const auto& item : file.modules) selected.insert(item.first);
   }
   if (selected.empty()) throw Exception("No contained modules to load");
   auto* contents = json_object();

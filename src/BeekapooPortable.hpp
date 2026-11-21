@@ -30,6 +30,10 @@ json_t* Beekapoo::portableContents(bool external) {
     if (!(input && output) && !(external && input)) continue;
     auto* item = cw->cable->toJson();
     if (proxy) {
+      json_object_set_new(item, "attenuated", json_true());
+      if (proxy->shared.key >= 0)
+        json_object_set_new(item, "sharedInput",
+                            json_integer(proxy->shared.key));
       json_object_set_new(item, "inputModuleId", json_integer(proxy->id));
       json_object_set_new(item, "inputId", json_integer(proxy->portId));
     }
@@ -121,6 +125,8 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
   auto* contents = json_object_get(root, "contents");
   auto* list = json_object_get(contents, "modules");
   std::map<int64_t, int64_t> ids, cableIds;
+  std::set<int64_t> importedAttenuated;
+  std::map<int64_t, std::set<int64_t>> sharedIncoming;
   std::vector<app::ModuleWidget*> created;
   std::vector<app::CableWidget*> wires;
   std::vector<engine::Module*> staged;
@@ -285,6 +291,19 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
         json_object_set_new(entry, field, json_integer(ids.at(old)));
       }
     }
+    auto* sharedPorts = json_object_get(remapped, "ports");
+    for (size_t i = 0; i < json_array_size(sharedPorts); ++i) {
+      auto* p = json_array_get(sharedPorts, i);
+      auto* targets = json_object_get(p, "targets");
+      for (size_t j = 0; j < json_array_size(targets); ++j) {
+        auto* to = json_array_get(targets, j);
+        auto old = json_integer_value(json_object_get(to, "module"));
+        if (!ids.count(old))
+          throw Exception("Invalid shared input destination");
+        json_object_set_new(to, "module", json_integer(ids.at(old)));
+        json_object_set_new(to, "bridge", json_integer(-1));
+      }
+    }
     auto* cables = json_object_get(contents, "cables");
     for (size_t i = 0; i < json_array_size(cables); ++i) {
       auto* item = json_array_get(cables, i);
@@ -310,32 +329,59 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
       cable->outputModule = output;
       cable->outputId = out;
       APP->engine->addCable(cable);
+      if (input == module && in >= Module::inputBase &&
+          in < Module::inputBase + Module::routeCapacity)
+        ensureInputEndpoints(in - Module::inputBase);
       auto* cw = new app::CableWidget;
       cw->setCable(cable);
       cw->fromJson(item);
       homeRack->addCable(cw);
       wires.push_back(cw);
       cableIds[json_integer_value(json_object_get(item, "id"))] = cable->id;
+      if (json_is_true(json_object_get(item, "attenuated")))
+        importedAttenuated.insert(cable->id);
+      if (auto* key = json_object_get(item, "sharedInput"))
+        sharedIncoming[json_integer_value(key)].insert(cable->id);
       auto* action = new history::CableAdd;
       action->setCable(cw);
       history.push_back(action);
     }
-    auto* panel = json_object_get(remapped, "panelCables");
-    auto* mappedPanel = json_array();
-    for (size_t i = 0; i < json_array_size(panel); ++i) {
-      auto old = json_integer_value(json_array_get(panel, i));
-      if (cableIds.count(old))
-        json_array_append_new(mappedPanel, json_integer(cableIds.at(old)));
+    for (size_t i = 0; i < json_array_size(sharedPorts); ++i) {
+      auto* p = json_array_get(sharedPorts, i);
+      auto* key = json_object_get(p, "shared");
+      if (!key) continue;
+      auto* incoming = json_array();
+      std::set<int64_t> mapped = sharedIncoming[json_integer_value(key)];
+      auto* saved = json_object_get(p, "incoming");
+      for (size_t j = 0; j < json_array_size(saved); ++j) {
+        auto old = json_integer_value(json_array_get(saved, j));
+        if (cableIds.count(old)) mapped.insert(cableIds.at(old));
+      }
+      for (auto id : mapped) json_array_append_new(incoming, json_integer(id));
+      json_object_set_new(p, "incoming", incoming);
+      json_object_set_new(p, "shared",
+                          json_integer(random::u64() % (1ull << 53)));
     }
-    json_object_set_new(remapped, "panelCables", mappedPanel);
-    auto* internal = json_object_get(remapped, "internalCables");
-    auto* mappedInternal = json_array();
-    for (size_t i = 0; i < json_array_size(internal); ++i) {
-      auto old = json_integer_value(json_array_get(internal, i));
-      if (cableIds.count(old))
-        json_array_append_new(mappedInternal, json_integer(cableIds.at(old)));
+    // Older saved groups used panel markers for both rendering and gain.
+    if (!json_is_array(json_object_get(remapped, "attenuatedCables")))
+      json_object_set(remapped, "attenuatedCables",
+                      json_object_get(remapped, "panelCables"));
+    for (const char* key :
+         {"panelCables", "internalCables", "attenuatedCables"}) {
+      auto* saved = json_object_get(remapped, key);
+      auto* mapped = json_array();
+      for (size_t i = 0; i < json_array_size(saved); ++i) {
+        auto old = json_integer_value(json_array_get(saved, i));
+        if (cableIds.count(old))
+          json_array_append_new(mapped, json_integer(cableIds.at(old)));
+      }
+      json_object_set_new(remapped, key, mapped);
     }
-    json_object_set_new(remapped, "internalCables", mappedInternal);
+    // Contents are captured directly from native cables, including a patch
+    // made immediately before Duplicate, before the next widget step.
+    auto* routed = json_object_get(remapped, "attenuatedCables");
+    for (auto id : importedAttenuated)
+      json_array_append_new(routed, json_integer(id));
     json_object_del(remapped, "editing");
     json_object_set_new(remapped, "owner", json_integer(module->id));
     json_object_set_new(remapped, "expanded", json_false());

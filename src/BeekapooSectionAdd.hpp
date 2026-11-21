@@ -1,5 +1,6 @@
 #pragma once
-// Section actions change exposed controls without modifying the subpatch.
+// Section actions change exposed controls. Input minus can also fold a
+// self-patch inside, preserving the native stack and any input attenuation.
 void Beekapoo::updateSectionAddButtons(Vec mouse) {
   std::array<phlooper::WarpedBlock*, 3> blocks{
       {frame, inputFrame, outputFrame}};
@@ -131,8 +132,10 @@ bool Beekapoo::addExposedControl(int kind) {
 // members made on the outside panel. Internal native wires are untouched.
 bool Beekapoo::sectionPortProtected(const Port& p) {
   if (randomLocked(p.id, -1)) return true;
+  for (const auto& to : p.shared.extra)
+    if (randomLocked(to.id, -1)) return true;
   auto* source = originalPort(p);
-  if (!source || boundaryPort(source)) return true;
+  if (!source || (p.shared.key < 0 && boundaryPort(source))) return true;
   for (auto* wire : homeRack->getCompleteCables()) {
     auto* c = wire->cable;
     if (p.input && c->inputModule == module &&
@@ -156,6 +159,75 @@ bool Beekapoo::rerollExposedControls(int kind) {
 bool Beekapoo::removeExposedControl(int kind) {
   return changeExposedControls(kind, false);
 }
+bool Beekapoo::foldSelfPatchedInput() {
+  std::vector<size_t> candidates;
+  for (size_t i = 0; i < ports.size(); ++i) {
+    const auto& p = ports[i];
+    if (!p.input || p.route < 0 || randomLocked(p.id, -1)) continue;
+    bool locked = false;
+    for (const auto& to : p.shared.extra) locked |= randomLocked(to.id, -1);
+    if (locked) continue;
+    auto* target = originalPort(p);
+    if (!target || (p.shared.key < 0 && boundaryPort(target))) continue;
+    bool connected = false, selfOnly = true;
+    for (auto* cw : homeRack->getCompleteCables()) {
+      if (inputRoute(cw->cable) != &p) continue;
+      connected = true;
+      selfOnly &= contains(cw->cable->outputModule) && exposed(cw->outputPort);
+    }
+    if (connected && selfOnly) candidates.push_back(i);
+  }
+  if (candidates.empty()) {
+    status = "No unpatched or self-patched inputs to remove";
+    return false;
+  }
+  size_t index = candidates[random::u32() % candidates.size()];
+  auto& p = ports[index];
+  EjectedInputGains gains(this, true, p.route);
+  if (gains.adapterCount() && !gains.model) {
+    status = "Install VCV Free to preserve input attenuation";
+    return false;
+  }
+  auto* state = beginAction("internalize exposed input");
+  auto* batch = new TopologyHistory(module->id);
+  batch->name = state->name;
+  CableMutation mutation;
+  std::vector<int64_t> routed;
+  for (auto* cw : homeRack->getCompleteCables())
+    if (inputRoute(cw->cable) == &p) routed.push_back(cw->cable->id);
+
+  // Reuse Eject's native 8vert conversion, but keep the adapter inside.
+  // Unity routes need no module; detachInput reconnects those directly.
+  gains.position = parkingPosition();
+  for (auto* w : gains.install(this, batch, false)) {
+    Vec pos = members.front().position;
+    for (const auto& member : members)
+      if (auto* child = find(member.id))
+        if (member.position.x + child->box.size.x > pos.x)
+          pos = member.position + Vec(child->box.size.x, 0);
+    members.push_back({w->module->id, pos, w, nullptr});
+  }
+  originalPort(p)->box.pos = p.originalPosition;
+  detachInput(p);
+  controls->removeChild(p.face);
+  delete p.face;
+  ports.erase(ports.begin() + index);
+  for (auto id : routed) {
+    panelCableIds.erase(id);
+    attenuatedCableIds.erase(id);
+    internalCableIds.insert(id);
+  }
+  if (!gains.routes.empty()) compactMembers();
+  if (!expanded) pack();
+  layoutControls();
+  mutation.finish();
+  reconcileCablePresentation();
+  saveGroup();
+  finishAction(state, batch);
+  APP->history->push(batch);
+  status = "Input moved inside the subpatch";
+  return true;
+}
 bool Beekapoo::changeExposedControls(int kind, bool reroll) {
   if (!module || members.empty() || kind < 0 || kind > 2) return false;
   ScopedSubviewRack mainScope(homeRack);
@@ -170,6 +242,7 @@ bool Beekapoo::changeExposedControls(int kind, bool reroll) {
         removable.emplace_back(p.id, p.portId);
   }
   if (removable.empty()) {
+    if (kind == 1 && !reroll) return foldSelfPatchedInput();
     status = "No unlocked controls to change in this section";
     return false;
   }

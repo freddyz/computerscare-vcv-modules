@@ -101,7 +101,7 @@ class Planner {
       else if (sound && !gate)
         processors.push_back(i);
     }
-    if (sources.empty() || processors.empty()) return {};
+    if (sources.empty()) return {};
     for (int attempt = 0; attempt < 256; ++attempt) {
       // Retry with more capacity rather than silently changing the panel.
       if (exact && attempt && attempt % 8 == 0) ++count;
@@ -131,7 +131,9 @@ class Planner {
         }
         // Extra generators modulate a live path. Otherwise extend that path
         // through a processor. No node is added as unused decoration.
-        bool modulator = i > 1 && !targets.empty() && pick(100) < 45;
+        bool modulator = !targets.empty() &&
+                         (processors.empty() || (i > 1 && pick(100) < 45));
+        if (!modulator && processors.empty()) break;
         if (modulator) {
           auto choices = sources;
           if (!gates.empty())
@@ -156,6 +158,7 @@ class Planner {
           p.outputs = {main};
         }
       }
+      if (int(p.modules.size()) != count) continue;
       if (exact && exact->outputs > 1) {
         std::vector<Endpoint> additional;
         for (int i = 0; i < count; ++i)
@@ -189,7 +192,9 @@ class Planner {
         } else if (!eligible.empty())
           p.parameters.push_back({i, eligible[pick(int(eligible.size()))]});
       }
-      int inputCount = exact ? exact->inputs : 3;
+      int inputCount =
+          exact ? exact->inputs
+                : (attempt < 128 ? 3 : std::min(3, int(p.inputs.size())));
       int paramCount =
           exact ? exact->parameters : std::min(4, int(p.parameters.size()));
       if (int(p.inputs.size()) < inputCount ||

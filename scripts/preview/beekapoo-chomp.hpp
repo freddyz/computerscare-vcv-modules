@@ -36,8 +36,12 @@ void renderBeekChomp(const std::string& output,float scale,Add add,Require requi
     widget::Widget::EnterEvent enter;logo->onEnter(enter);
     logo->phase=0;logo->advance(.05f);
     require(logo->hovered&&logo->phase>idle*2,"Hover must speed up the chomp");
+    require(logo->cursorActive && beekapoo::AddCursor::get(),"An available logo uses the native add cursor");
+    widget::Widget::LeaveEvent leave;logo->onLeave(leave);
+    require(!logo->cursorActive&&!logo->hovered,"Leaving the logo restores the pointer and clears its hover");
+    logo->onEnter(enter);
     rack->deselectAll();owner->step();
-    require(!logo->visible&&!logo->hovered&&!logo->tooltip&&logo->pose()==0,"Clearing selection must stop animation and remove its tooltip");
+    require(!logo->visible&&!logo->hovered&&!logo->cursorActive&&!logo->tooltip&&logo->pose()==0,"Clearing selection must stop animation and remove its tooltip");
     require(owner->growButton->icon==9,"Grow must retain its own wavy plus");
     auto* m=owner->getModule<beekapoo::Module>();auto name=m->getPatchName();
     owner->requestedWidth=75;owner->layoutControls();
@@ -70,6 +74,22 @@ void renderBeekChomp(const std::string& output,float scale,Add add,Require requi
     w->box.pos=Vec(x,0);sheet.addChild(w);x+=w->box.size.x+16;
   }
   sheet.box.size=Vec(x-16,380);
+  // Offscreen captures do not include the OS cursor. Draw the exact same
+  // native bitmap at the hovered logo so the screenshot shows that cue too.
+  struct PointerPreview : widget::TransparentWidget {
+    beekapoo::SelectionLogo* target=nullptr;
+    void draw(const DrawArgs& args) override {
+      if(!target||!target->visible||!target->hovered)return;
+      Vec pos=target->getRelativeOffset(target->box.size*.55f,parent)-Vec(1,1);
+      const auto& pixels=beekapoo::AddCursor::pixels();
+      for(int y=0;y<beekapoo::AddCursor::size;++y)for(int x=0;x<beekapoo::AddCursor::size;++x) {
+        int i=(y*beekapoo::AddCursor::size+x)*4;if(!pixels[i+3])continue;
+        nvgBeginPath(args.vg);nvgRect(args.vg,pos.x+x,pos.y+y,1,1);
+        nvgFillColor(args.vg,nvgRGBA(pixels[i],pixels[i+1],pixels[i+2],pixels[i+3]));nvgFill(args.vg);
+      }
+    }
+  };
+  auto* pointer=new PointerPreview;pointer->target=owners[1]->addSelectionButton;pointer->box.size=sheet.box.size;sheet.addChild(pointer);
   for(int frame=0;frame<40;++frame) {
     capture(&sheet,output+string::f("/chomp-%02d.png",frame),scale,false);
     for(auto* w:owners)w->addSelectionButton->advance(.05f);
@@ -84,5 +104,5 @@ void renderBeekChomp(const std::string& output,float scale,Add add,Require requi
   for(size_t i=0;i<owners.size();++i) {
     sheet.removeChild(owners[i]);owners[i]->box.pos=positions[i];rack->addModule(owners[i]);
   }
-  std::puts("Chomping logo: real mouse hit testing, owner-in-selection, Undo/Redo, stable header, hover speed, tooltip cleanup, light/dark and unchanged Grow passed");
+  std::puts("Chomping logo: real mouse hit testing, owner-in-selection, Undo/Redo, stable header, hover speed, add cursor/hover cleanup, light/dark and unchanged Grow passed");
 }

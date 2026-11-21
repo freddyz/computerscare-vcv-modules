@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <vector>
 
 // Declarative Fundamental generation rules. These IDs match Fundamental's
@@ -64,7 +65,7 @@ inline bool controlUseful(const Control& control, InputConnected inputConnected,
   return false;
 }
 struct Spec {
-  const char* slug;
+  std::string slug;
   std::vector<Control> modulationInputs;
   std::vector<Output> outputs;
   std::vector<Control> parameters;

@@ -16,12 +16,19 @@ inline float moduleWidth(plugin::Model* model) {
 // signal input; envelopes get a running gate. Spare inputs stay available on
 // the front, rather than breaking a required connection to expose a jack.
 inline json_t* plan(int requestedCount = 0,
-                    const beekapoo_patch::ExposureCounts* exact = nullptr) {
-  const auto& specs = library();
-  for (const auto& spec : specs)
-    if (!plugin::getModel("Fundamental", spec.slug)) return nullptr;
+                    const beekapoo_patch::ExposureCounts* exact = nullptr,
+                    const std::string& setId = moduleSets().defaultId,
+                    std::string* error = nullptr) {
+  Catalog catalog(setId);
+  if (!catalog.error.empty()) {
+    if (error) *error = catalog.error;
+    return nullptr;
+  }
+  const auto& specs = catalog.specs;
   auto graph =
-      beekapoo_patch::Planner(random::u32()).make(requestedCount, exact);
+      beekapoo_patch::Planner(random::u32(), specs).make(requestedCount, exact);
+  if (graph.modules.empty() && error)
+    *error = "This set cannot supply a connected patch with these controls";
   if (graph.modules.empty()) return nullptr;
   const auto& selected = graph.modules;
   int count = int(selected.size());
@@ -35,8 +42,7 @@ inline json_t* plan(int requestedCount = 0,
   double nextX = 0;
   for (int i = 0; i < count; ++i) {
     const auto& spec = specs[selected[i]];
-    modules.emplace_back(
-        plugin::getModel("Fundamental", spec.slug)->createModule());
+    modules.emplace_back(catalog.models[selected[i]]->createModule());
     auto* m = modules.back().get();
     for (const auto& range : spec.initial)
       if (auto* q = m->getParamQuantity(range.param))
@@ -93,6 +99,10 @@ inline json_t* plan(int requestedCount = 0,
 // cables, exposure, layout and theme do not change this identity. Restore
 // seeds a new baseline so Undo, duplication and patch reload keep saved names.
 void Beekapoo::refreshGeneratedName() {
+  if (cableMutationDepth()) {
+    namedTopologyReady = false;
+    return;
+  }
   if (!module) return;
   refreshAppearance();
   if (namedTopologyReady && namedTopology != appearance.wiring &&
@@ -106,11 +116,14 @@ void Beekapoo::refreshGeneratedName() {
 
 bool Beekapoo::generateDefaultPatch(int requestedCount) {
   if (!module || !members.empty()) return false;
-  auto* root = generated::plan(requestedCount);
+  auto* root =
+      generated::plan(requestedCount, nullptr,
+                      getModule<Module>()->getGenerationSet(), &status);
   if (!root) {
-    status = "Install VCV Free to generate a subpatch";
+    generationError = status;
     return false;
   }
+  generationError.clear();
   DEFER({ json_decref(root); });
   auto* m = getModule<Module>();
   auto previous = m->getPatchName();
@@ -143,11 +156,13 @@ bool Beekapoo::regeneratePatch() {
   }
   beekapoo_patch::ExposureCounts counts{0, 0, int(parameters.size())};
   for (const auto& p : ports) ++(p.input ? counts.inputs : counts.outputs);
-  auto* root = generated::plan(0, &counts);
+  auto* root = generated::plan(
+      0, &counts, getModule<Module>()->getGenerationSet(), &status);
   if (!root) {
-    status = "Could not generate a subpatch with these control counts";
+    generationError = status;
     return false;
   }
+  generationError.clear();
   DEFER({ json_decref(root); });
   auto* change = new history::ModuleChange;
   change->name = "generate new subpatch";

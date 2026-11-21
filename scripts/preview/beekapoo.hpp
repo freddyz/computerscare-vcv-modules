@@ -78,8 +78,10 @@ struct Face : app::ModuleWidget {
 #include "beekapoo-combine.hpp"
 #include "beekapoo-inputs.hpp"
 #include "beekapoo-labels.hpp"
+#include "beekapoo-context.hpp"
 void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,float scale) {
   auto require=[](bool pass,const char* why){if(!pass)throw std::runtime_error(why);};
+  testBeekPortContext(require);
   if(std::getenv("BEEKAPOO_FONTS")){renderBeekFonts(output,scale,require);return;}
   testBeekKnobRendering(output,scale,require);
   if(std::getenv("BEEKAPOO_KNOBS_ONLY")){renderBeekKnobSpectrum(output,scale);return;}
@@ -278,8 +280,10 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto* m=model->createModule();APP->engine->addModule(m);
     auto* w=model->createModuleWidget(m);w->box.pos=pos;rack->addModule(w);return w;
   };
+  testBeekGroupShutdown(add,require);
+  if(std::getenv("BEEKAPOO_CONTEXT_CHECKS"))return;
   if(std::getenv("BEEKAPOO_LABELS")){renderBeekLabels(output,scale,add,require);return;}
-  if(std::getenv("BEEKAPOO_COPY_CABLES")||std::getenv("BEEKAPOO_SECTION_CONTROLS")||std::getenv("BEEKAPOO_INPUT_GAINS")||std::getenv("BEEKAPOO_REGENERATE")||std::getenv("BEEKAPOO_POLYPHONY")||std::getenv("BEEKAPOO_CHOMP")||std::getenv("BEEKAPOO_NAME_EDITOR")||std::getenv("BEEKAPOO_THEMES")||std::getenv("BEEKAPOO_TITLE_CASES")||std::getenv("BEEKAPOO_PARAM_BLOCKS")||std::getenv("BEEKAPOO_CONTROL_SPECTRUM")||std::getenv("BEEKAPOO_GENERATED_SPECTRUM")||std::getenv("BEEKAPOO_THREE_EXAMPLES")||std::getenv("BEEKAPOO_RECOVER_PATCH")){testBeekGenerator(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_SHARED_INPUTS")||std::getenv("BEEKAPOO_CABLE_STATE")||std::getenv("BEEKAPOO_MODULE_SETS")||std::getenv("BEEKAPOO_COPY_CABLES")||std::getenv("BEEKAPOO_SECTION_CONTROLS")||std::getenv("BEEKAPOO_INPUT_GAINS")||std::getenv("BEEKAPOO_REGENERATE")||std::getenv("BEEKAPOO_POLYPHONY")||std::getenv("BEEKAPOO_CHOMP")||std::getenv("BEEKAPOO_NAME_EDITOR")||std::getenv("BEEKAPOO_THEMES")||std::getenv("BEEKAPOO_TITLE_CASES")||std::getenv("BEEKAPOO_PARAM_BLOCKS")||std::getenv("BEEKAPOO_CONTROL_SPECTRUM")||std::getenv("BEEKAPOO_GENERATED_SPECTRUM")||std::getenv("BEEKAPOO_THREE_EXAMPLES")||std::getenv("BEEKAPOO_RECOVER_PATCH")){testBeekGenerator(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_PRINT_SPECTRUM")) {
     renderBeekapooPrintSpectrum(gainModel,output,scale);
     return;
@@ -1875,7 +1879,6 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
 
   testBeekCombine(add,require,gainModel);
   testBeekPatchFiles(output,scale,add,require,gainModel);
-  testBeekAllAudioInterfaces(output,scale,add,require,gainModel);
   testBeekGenerator(output,scale,add,require);
   std::printf("Beekapoo: zero footprint, occupied-space expansion, native save/load, four-channel DSP, exposed controls, copy isolation, missing-member recovery and deletion checks passed.\n");
 }

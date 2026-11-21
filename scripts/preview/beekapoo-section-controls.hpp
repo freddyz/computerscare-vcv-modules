@@ -108,7 +108,9 @@ void testBeekSectionControls(const std::string& output, float scale, Add add, Re
     require(after[kind].size() + 1 == before[kind].size(), "Minus removes exactly one eligible control");
     for (int otherKind = 0; otherKind < 3; ++otherKind)
       if (kind != otherKind) require(before[otherKind] == after[otherKind], "Minus must affect only its own section");
-    require(!owner->removeExposedControl(kind) && !owner->rerollExposedControls(kind), "Protected-only section must be a no-op");
+    require(!owner->rerollExposedControls(kind), "Patched/locked-only section cannot be re-rolled");
+    // Input minus can now fold the remaining self-patch (covered separately).
+    if(kind!=1) require(!owner->removeExposedControl(kind), "Protected-only section must be a no-op");
     APP->history->undo(); owner->step(); verify(); require(sets() == before && gains() == savedGains, "Undo minus restores mappings and gains in one step");
   }
   rack->clear(); APP->history->clear();

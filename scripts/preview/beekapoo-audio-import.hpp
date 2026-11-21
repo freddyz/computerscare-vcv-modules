@@ -29,18 +29,17 @@ void testBeekAllAudioInterfaces(const std::string& output,float scale,Add add,Re
     const char* plugin=family==3?"Stoermelder-P1":"Core";
     auto* r=root();auto* nodes=json_object_get(r,"modules");auto* cables=json_object_get(r,"cables");
     json_array_append_new(nodes,gain(1001,1.f,0,0));json_array_append_new(nodes,device(17,plugin,model,0,1));
-    // Two hardware channels fed from the SAME signal must remain two jacks.
+    // Two hardware channels fed from the same signal share its native jack.
     for(int i=0;i<count;++i)json_array_append_new(cables,cable(100+i,1001,0,17,i?cap-1:0));
     auto path=output+"/audio-family-"+std::to_string(family)+"-"+std::to_string(count)+".vcvs";json_dump_file(r,path.c_str(),0);json_decref(r);
     require(target->loadBeek(path,-1,false),"Keep must import each supported Audio model");
     bool kept=false;for(auto& member:target->members)if(auto* m=APP->engine->getModule(member.id))kept|=m->model->slug==model && m->model->plugin->slug==plugin;
     require(kept && target->ports.empty(),"Keep must retain hardware modules without replacing/exposing them");
-    require(target->loadBeek(path,-1,true) && target->ports.size()==size_t(count),"Expose must support mono/stereo on Core 2/8/16 and stoermelder 64");
+    require(target->loadBeek(path,-1,true) && target->ports.size()==1,"Expose must support mono/stereo on Core 2/8/16 and stoermelder 64");
     int outputIndex=0;for(auto& p:target->ports)wire(target->find(p.id),p.portId,sink,outputIndex++);
     APP->engine->stepBlock(64);
-    for(auto& port:target->ports){auto* m=APP->engine->getModule(port.id);require(!port.input && m->model==modelComputerscareBeekapooAudioPorts,"Exposed audio outputs must be independent native routing endpoints");require(m->outputs[port.portId].getChannels()==4 && std::abs(m->outputs[port.portId].getVoltage(3)-4.f)<.0001f,"Output conversion must preserve polyphonic audio");}
-    require(label(target->ports.front()).find("output 1")!=std::string::npos,"First used output must be channel one");
-    if(count==2)require(label(target->ports.back()).find("output "+std::to_string(cap))!=std::string::npos,"Nonconsecutive outputs must remain ordered by original channel");
+    for(auto& port:target->ports){auto* m=APP->engine->getModule(port.id);require(!port.input && m->model==gainModel,"Imported outputs must expose the actual source, without any relay");require(m->outputs[port.portId].getChannels()==4 && std::abs(m->outputs[port.portId].getVoltage(3)-4.f)<.0001f,"Output conversion must preserve polyphonic audio");}
+    require(target->members.size()==1,"A simple mono/stereo import adds no helper modules; duplicate sources share one jack");
   }
   {
     plugin::plugins.erase(std::find(plugin::plugins.begin(),plugin::plugins.end(),&stoer));
@@ -60,36 +59,33 @@ void testBeekAllAudioInterfaces(const std::string& output,float scale,Add add,Re
   json_array_append_new(cables,cable(205,17,3,1001,2));json_array_append_new(cables,cable(206,17,3,1002,3));
   json_array_append_new(cables,cable(207,18,7,1001,4));
   auto mixed=output+"/mixed-audio-interfaces.vcvs";json_dump_file(r,mixed.c_str(),0);json_decref(r);
-  require(target->loadBeek(mixed,-1,true) && target->members.size()==4 && target->ports.size()==5,"Multiple mixed Audio interfaces must expose every used input/output");
+  require(target->loadBeek(mixed,-1,true) && target->members.size()==3 && target->ports.size()==5,"Multiple mixed Audio interfaces must expose every used input/output");
   std::vector<std::string> ins,outs;
   for(auto& p:target->ports)(p.input?ins:outs).push_back(label(p));
-  require(ins.size()==2 && ins[0].find("Audio 8 #1 input 4")!=std::string::npos && ins[1].find("AUDIO-64 #2 input 8")!=std::string::npos,"Input jacks must be ordered by interface then channel");
-  require(outs.size()==3 && outs[0].find("Audio 8 #1 output 2")!=std::string::npos && outs[1].find("AUDIO-64 #2 output 9")!=std::string::npos && outs[2].find("output 64")!=std::string::npos,"Output jacks must be ordered by interface then channel");
+  require(ins.size()==2 && ins[0].find("Audio 8 #1 input 4")!=std::string::npos && ins[1].find("Audio 64 #2 input 8")!=std::string::npos,"Input jacks must be ordered by interface then channel");
+  require(outs.size()==3,"Every distinct playback signal must remain exposed");
   auto* driver1=add(gainModel,Vec(1200,0));auto* driver2=add(gainModel,Vec(1290,0));driver1->module->params[0].setValue(3.f);driver2->module->params[0].setValue(4.f);
   int incoming=0;app::CableWidget* connection=nullptr;
-  for(auto& p:target->ports)if(p.input){auto* cw=wire(incoming++?driver2:driver1,0,target->find(p.id),p.portId);if(!connection)connection=cw;}
+  for(auto& p:target->ports)if(p.input){auto* cw=([&]{auto* endpoint=target->findPort(p);return wire(incoming++?driver2:driver1,0,endpoint->getAncestorOfType<app::ModuleWidget>(),endpoint->portId);}());if(!connection)connection=cw;}
   int outputIndex=0;for(auto& p:target->ports)if(!p.input)wire(target->find(p.id),p.portId,sink,outputIndex++);
   APP->engine->stepBlock(64);
   for(auto& member:target->members)if(auto* m=APP->engine->getModule(member.id))if(m->model==gainModel){int port=m->params[0].getValue()==1.f?2:3;require(m->inputs[port].getChannels()==4 && m->inputs[port].getVoltage(3)==12.f,"Hardware input fan-out must preserve every destination and poly channel");if(port==2)require(m->inputs[4].getVoltage(3)==16.f,"The second interface input must remain separate");}
-  for(auto& p:target->ports)if(!p.input){auto* m=APP->engine->getModule(p.id);float expected=label(p).find("output 9")!=std::string::npos?4.f:12.f;require(std::abs(m->outputs[p.portId].getVoltage(3)-expected)<.0001f,"Output sums and connections between interfaces must be preserved");}
+  for(auto& p:target->ports)if(!p.input){auto* m=APP->engine->getModule(p.id);float expected=m->model==gainModel?4.f:12.f;require(std::abs(m->outputs[p.portId].getVoltage(3)-expected)<.0001f,"Output sums and connections between interfaces must be preserved");}
   rack->removeCable(connection);delete connection;APP->engine->stepBlock(64);
-  for(auto& p:target->ports)if(!p.input && label(p).find("output 64")!=std::string::npos)require(APP->engine->getModule(p.id)->outputs[p.portId].getVoltage()==0.f,"Unpatching an imported input must silence its routes");
+  for(auto& p:target->ports)if(!p.input && APP->engine->getModule(p.id)->model->slug=="8vert" && p.portId==1)require(APP->engine->getModule(p.id)->outputs[p.portId].getVoltage()==0.f,"Unpatching an imported input must silence its routes");
   target->requestedWidth=360;target->layoutControls();target->step();
   auto* parent=target->parent;auto pos=target->box.pos;parent->removeChild(target);target->box.pos=Vec();capture(target,output+"/39-all-audio-ports.png",scale,false);target->box.pos=pos;parent->addChild(target);
   auto saved=output+"/converted-audio-beek.vcv";target->saveBeek(saved);require(target->loadBeek(saved),"Converted routing must survive Save/Load Beek");
   std::vector<std::string> loaded;for(auto& p:target->ports)loaded.push_back(label(p));
-  std::vector<std::string> expected={ins[0],outs[0],ins[1],outs[1],outs[2]};require(loaded==expected,"Converted port names and interface/channel ordering must survive reload");
+  std::vector<std::string> expected={outs[0],outs[1],outs[2],ins[0],ins[1]};require(loaded==expected,"Converted port names and interface/channel ordering must survive reload");
   APP->history->undo();target->step();require(target->ports.size()==5,"Converted import Undo must restore every exposed port");APP->history->redo();target->step();require(target->ports.size()==5,"Converted import Redo must restore every exposed port");
   r=root();nodes=json_object_get(r,"modules");cables=json_object_get(r,"cables");
   json_array_append_new(nodes,gain(1001,1.f,0,0));json_array_append_new(nodes,device(17,"Stoermelder-P1","AudioInterface64",0,1));
   for(int channel=0;channel<64;++channel){json_array_append_new(cables,cable(100+channel,1001,0,17,channel));json_array_append_new(cables,cable(200+channel,17,channel,1001,2));}
   auto all=output+"/all-64-audio-channels.vcvs";json_dump_file(r,all.c_str(),0);json_decref(r);
-  require(target->loadBeek(all,-1,true) && target->ports.size()==128,"All 64 capture and 64 playback channels must be exposable together");
+  require(target->loadBeek(all,-1,true) && target->ports.size()==65,"All 64 capture and 64 playback channels must be exposable together");
   int inputs=0,outputs=0;engine::Module* routing=nullptr;for(auto& p:target->ports){p.input?++inputs:++outputs;routing=APP->engine->getModule(p.id);}
-  require(inputs==64 && outputs==64 && routing,"Full AUDIO-64 conversion must preserve both directions");
-  auto* state=routing->toJson();engine::Module::jsonStripIds(state);
-  auto* clone=modelComputerscareBeekapooAudioPorts->createModule();clone->fromJson(state);json_decref(state);APP->engine->addModule(clone);
-  auto* face=modelComputerscareBeekapooAudioPorts->createModuleWidget(clone);face->step();capture(face,output+"/40-audio-routing-helper.png",scale,false);delete face;
-  auto* null=modelComputerscareBeekapooAudioPorts->createModuleWidget(nullptr);null->step();delete null;
+  require(inputs==64 && outputs==1 && routing,"Full AUDIO-64 conversion must preserve both directions");
+  for(const auto& member:target->members) require(APP->engine->getModule(member.id)->model!=modelComputerscareBeekapooAudioPorts,"New imports must never create the legacy audio relay");
   std::puts("Audio import: Core 2/8/16 and stoermelder 64, Keep/Expose, mono/stereo, duplicate sources, mixed interfaces, channel order, input fan-out, output sums, inter-interface routing, polyphony, unpatch silence and Save/Load/Undo passed");
 }

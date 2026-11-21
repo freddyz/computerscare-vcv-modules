@@ -80,7 +80,7 @@ struct RackEditSession : widget::Widget {
   std::map<int64_t, MemberTag> memberTags;
   ActionButton *done, *exposeButton, *panelButton, *removeButton,
       *newModulesButton, *nearButton, *farButton, *membersButton,
-      *randomLockButton, *optionsButton;
+      *randomLockButton, *optionsButton, *setsButton;
   RackEditPreview* preview;
   std::vector<WeakPtr<RackEditHighlight>> highlights;
   explicit RackEditSession(Beekapoo* group) : owner(group) {
@@ -121,6 +121,12 @@ struct RackEditSession : widget::Widget {
     randomLockButton->pressed = [this] { return randomLockMode; };
     randomLockButton->help = [] {
       return "Click modules or parameters to lock randomization and wiggle";
+    };
+    setsButton = addButton("Module sets", 870, 144, [this] {
+      if (owner) owner->editModuleSets();
+    });
+    setsButton->help = [] {
+      return "Choose modules for new patches and growth";
     };
     optionsButton = addButton("...", 820, 38, [this] {
       auto group = owner;
@@ -186,9 +192,9 @@ struct RackEditSession : widget::Widget {
   }
   void layoutToolbar(float width) {
     float x = 10, y = 7;
-    for (auto* button :
-         {done, exposeButton, randomLockButton, panelButton, newModulesButton,
-          nearButton, farButton, membersButton, removeButton, optionsButton}) {
+    for (auto* button : {done, exposeButton, randomLockButton, panelButton,
+                         newModulesButton, nearButton, farButton, membersButton,
+                         removeButton, setsButton, optionsButton}) {
       if (!button->visible) continue;
       if (x > 10 && x + button->box.size.x + 10 > width) {
         x = 10;
@@ -242,6 +248,18 @@ struct RackEditSession : widget::Widget {
         highlight->requestDelete();
       }
     highlights.clear();
+    if (!APP->window) {
+      // Rack destroys the graphics context before the scene. During that
+      // teardown, detach the session without rebuilding fonts, panel artwork,
+      // or the viewport as a normal Done/Escape operation would.
+      if (owner) {
+        owner->editSession = nullptr;
+        owner->editPreview = false;
+      }
+      hide();
+      requestDelete();
+      return;
+    }
     if (owner) {
       owner->editSession = nullptr;
       owner->editPreview = false;

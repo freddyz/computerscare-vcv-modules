@@ -5,13 +5,16 @@
 #include <mutex>
 #include <patch.hpp>
 #include <plugin.hpp>
+#include <tag.hpp>
 
+#include "BeekapooAddCursor.hpp"
 #include "BeekapooCpuMeter.hpp"
 #include "BeekapooExposurePlan.hpp"
 #include "BeekapooKnob.hpp"
 #include "BeekapooLabels.hpp"
 #include "BeekapooLayout.hpp"
 #include "BeekapooMemberLayout.hpp"
+#include "BeekapooModuleSets.hpp"
 #include "BeekapooParamLayout.hpp"
 #include "BeekapooPatchPlanner.hpp"
 #include "BeekapooPortLayout.hpp"
@@ -113,6 +116,15 @@ struct Module : engine::Module {
   std::atomic<int> panelTheme{0};
   std::mutex stateMutex;
   std::string patchName;
+  std::string generationSet;
+  std::string getGenerationSet() {
+    std::lock_guard<std::mutex> lock(stateMutex);
+    return generationSet;
+  }
+  void setGenerationSet(const std::string& id) {
+    std::lock_guard<std::mutex> lock(stateMutex);
+    generationSet = id;
+  }
   bool customPatchName = false;
   bool freshDefault = true;
   std::string getPatchName() {
@@ -156,6 +168,14 @@ struct Module : engine::Module {
   static constexpr int GENERATE_INPUT = inputBase + routeCapacity;
   static constexpr int GROW_INPUT = GENERATE_INPUT + 1;
   std::atomic<uint64_t> activeInputs[routeCapacity / 64]{};
+  std::atomic<uint64_t> silentInputs[routeCapacity / 64]{};
+  void setInputSilence(int route, bool silent) {
+    uint64_t bit = uint64_t(1) << (route % 64);
+    if (silent)
+      silentInputs[route / 64].fetch_or(bit, std::memory_order_release);
+    else
+      silentInputs[route / 64].fetch_and(~bit, std::memory_order_release);
+  }
   void enableInput(int route, bool enabled) {
     uint64_t bit = uint64_t(1) << (route % 64);
     if (enabled)
@@ -168,6 +188,7 @@ struct Module : engine::Module {
   std::atomic<unsigned> pendingHistory{0};
   std::atomic<int> pendingBypass{-1};
   Module() {
+    generationSet = moduleSets().defaultId;
     config(PARAM_COUNT, GROW_INPUT + 1, routeCapacity, 0);
     for (int i = 0; i < routeCapacity; ++i) {
       configParam(INPUT_GAIN_BASE + i, -1.f, 1.f, 1.f, "Input attenuverter",
@@ -190,9 +211,10 @@ struct Module : engine::Module {
     configInput(GENERATE_INPUT, "Generate new subpatch");
     configInput(GROW_INPUT, "Grow subpatch");
   }
-  void process(const ProcessArgs&) override {
+  void processInputRoutes(bool bypass) {
     for (int block = 0; block < routeCapacity / 64; ++block) {
       uint64_t bits = activeInputs[block].load(std::memory_order_acquire);
+      uint64_t silent = silentInputs[block].load(std::memory_order_acquire);
       while (bits) {
         int bit = __builtin_ctzll(bits), route = block * 64 + bit;
         bits &= bits - 1;
@@ -203,7 +225,7 @@ struct Module : engine::Module {
           // Rack's public setChannels(0) forces one channel. Native cable
           // propagation accepts zero, which preserves a child's unpatched
           // input normalization (including its default VCA gain).
-          output.channels = 0;
+          output.channels = (silent & (uint64_t(1) << bit)) ? 1 : 0;
           for (int c = 0; c < 16; ++c) output.setVoltage(0, c);
           continue;
         }
@@ -211,12 +233,16 @@ struct Module : engine::Module {
         // This active route has a real bridge cable, so reconnect it first.
         if (!output.channels) output.channels = 1;
         output.setChannels(channels);
-        float gain = params[INPUT_GAIN_BASE + route].getValue();
+        float gain = bypass ? 1.f : params[INPUT_GAIN_BASE + route].getValue();
         for (int c = 0; c < channels; c += 4)
           output.setVoltageSimd(input.getVoltageSimd<simd::float_4>(c) * gain,
                                 c);
       }
     }
+  }
+  void processBypass(const ProcessArgs&) override { processInputRoutes(true); }
+  void process(const ProcessArgs&) override {
+    processInputRoutes(false);
     for (int i = 0; i < 8; ++i)
       if (actionTriggers[i].process(inputs[i < 6    ? i
                                            : i == 6 ? GENERATE_INPUT
@@ -257,6 +283,8 @@ struct Module : engine::Module {
     json_object_set_new(root, "panelTheme", json_integer(panelTheme.load()));
     json_object_set_new(root, "name", json_string(patchName.c_str()));
     json_object_set_new(root, "customName", json_boolean(customPatchName));
+    json_object_set_new(root, "generationSet",
+                        json_string(generationSet.c_str()));
     if (group) {
       // Structure is cached, but knob values belong to native parameters.
       // Knob drags/MIDI don't call saveGroup(); never export an old gain from
@@ -290,6 +318,8 @@ struct Module : engine::Module {
   void dataFromJson(json_t* root) override {
     std::lock_guard<std::mutex> lock(stateMutex);
     freshDefault = false;
+    auto* set = json_string_value(json_object_get(root, "generationSet"));
+    generationSet = set && *set ? set : "fundamental";
     auto* theme = json_object_get(root, "panelTheme");
     panelTheme.store(json_is_integer(theme)
                          ? validPanelTheme(json_integer_value(theme))
@@ -421,6 +451,24 @@ struct RackLayoutSnapshot {
         if (w->visible) rack->select(w, true);
   }
 };
+// Suppress presentation repair while native Undo or a merge is restoring
+// several owners. Intermediate bridge endpoints are not a finished graph.
+inline unsigned& cableMutationDepth() {
+  static unsigned depth = 0;
+  return depth;
+}
+struct CableMutation {
+  bool active = true;
+  CableMutation() { ++cableMutationDepth(); }
+  void finish() {
+    if (active) {
+      active = false;
+      --cableMutationDepth();
+    }
+  }
+  ~CableMutation() { finish(); }
+};
+void reconcileBeekCables();
 struct GroupHistory : history::ModuleChange {
   RackLayoutSnapshot before, after;
   void undo() override;
@@ -433,11 +481,19 @@ struct TopologyHistory : history::ComplexAction {
   explicit TopologyHistory(int64_t id) : owner(id) {}
   void resetName();
   void undo() override {
-    history::ComplexAction::undo();
+    {
+      CableMutation mutation;
+      history::ComplexAction::undo();
+    }
+    reconcileBeekCables();
     resetName();
   }
   void redo() override {
-    history::ComplexAction::redo();
+    {
+      CableMutation mutation;
+      history::ComplexAction::redo();
+    }
+    reconcileBeekCables();
     resetName();
   }
 };
@@ -630,7 +686,14 @@ struct ActionButton : LetteredFace {
 struct SelectionLogo : ActionButton {
   std::array<widget::SvgWidget, 2> jaws;
   bool hovered = false;
+  bool cursorActive = false;
   float phase = 0;
+  void releaseCursor() {
+    if (cursorActive && APP && APP->window && APP->window->win)
+      glfwSetCursor(APP->window->win, nullptr);
+    cursorActive = false;
+  }
+  ~SelectionLogo() override { releaseCursor(); }
   void setDark(bool dark) {
     auto load = [dark](widget::SvgWidget& frame, const char* filename) {
       auto path = asset::plugin(pluginInstance, filename);
@@ -643,6 +706,7 @@ struct SelectionLogo : ActionButton {
     if (visible == available) return;
     visible = available;
     hovered = false;
+    releaseCursor();
     phase = 0;
     clearTooltip();
   }
@@ -659,12 +723,38 @@ struct SelectionLogo : ActionButton {
     ActionButton::step();
   }
   void onEnter(const EnterEvent& e) override {
+    if (!visible) return;
     hovered = true;
+    if (APP && APP->window && APP->window->win) {
+      glfwSetCursor(APP->window->win, AddCursor::get());
+      cursorActive = true;
+    }
     ActionButton::onEnter(e);
   }
   void onLeave(const LeaveEvent& e) override {
     hovered = false;
+    releaseCursor();
     ActionButton::onLeave(e);
+  }
+  void drawHover(NVGcontext* vg, Rect area, bool dark) const {
+    if (!visible || !hovered) return;
+    nvgSave(vg);
+    nvgTranslate(vg, area.pos.x, area.pos.y);
+    float w = area.size.x, h = area.size.y;
+    nvgBeginPath(vg);
+    nvgMoveTo(vg, -1, h * .06f);
+    nvgLineTo(vg, w * .97f, -1);
+    nvgLineTo(vg, w + 1, h * .94f);
+    nvgLineTo(vg, 0, h + 1);
+    nvgClosePath(vg);
+    nvgFillColor(vg,
+                 dark ? nvgRGBA(235, 235, 235, 44) : nvgRGBA(25, 25, 25, 34));
+    nvgFill(vg);
+    nvgStrokeColor(
+        vg, dark ? nvgRGBA(220, 220, 220, 180) : nvgRGBA(45, 45, 45, 160));
+    nvgStrokeWidth(vg, 1.1f);
+    nvgStroke(vg);
+    nvgRestore(vg);
   }
   void draw(const DrawArgs&) override {}  // The panel draws the logo last.
 };
@@ -965,6 +1055,23 @@ struct PortFace : widget::OpaqueWidget {
     tinyDown.type = engine::Port::INPUT;
     tinyUp.type = engine::Port::OUTPUT;
   }
+  void onContextCreate(const ContextCreateEvent& e) override {
+    tinyDown.onContextCreate(e);
+    tinyUp.onContextCreate(e);
+    largeDown.onContextCreate(e);
+    largeUp.onContextCreate(e);
+    widget::OpaqueWidget::onContextCreate(e);
+  }
+  void onContextDestroy(const ContextDestroyEvent& e) override {
+    // These manually drawn members are not in the widget child tree. Release
+    // every variant's cache before Rack destroys its graphics context, even
+    // when a resize has switched to different jack artwork.
+    tinyDown.onContextDestroy(e);
+    tinyUp.onContextDestroy(e);
+    largeDown.onContextDestroy(e);
+    largeUp.onContextDestroy(e);
+    widget::OpaqueWidget::onContextDestroy(e);
+  }
   void draw(const DrawArgs& args) override {
     nvgSave(args.vg);
     if (compact) {
@@ -1113,6 +1220,19 @@ struct Beekapoo : app::ModuleWidget {
     WeakPtr<app::ModuleWidget> widget;
     WeakPtr<Holder> holder;
   };
+  struct InputDestination {
+    int64_t id;
+    int port;
+    int64_t bridge = -1;
+    InputDestination(int64_t id, int port, int64_t bridge = -1)
+        : id(id), port(port), bridge(bridge) {}
+  };
+  struct SharedInput {
+    int64_t key = -1;
+    std::string label;
+    std::vector<InputDestination> extra;
+    std::set<int64_t> incoming;
+  };
   struct Port {
     int64_t id;
     int portId;
@@ -1121,6 +1241,13 @@ struct Beekapoo : app::ModuleWidget {
     PortFace* face;
     int route = -1;
     int64_t bridge = -1;
+    SharedInput shared;
+    bool targets(int64_t moduleId, int inputId) const {
+      if (id == moduleId && portId == inputId) return true;
+      for (const auto& to : shared.extra)
+        if (to.id == moduleId && to.port == inputId) return true;
+      return false;
+    }
     app::ParamWidget* gain = nullptr;
     Port(int64_t id, int port, bool input, Vec pos, PortFace* face)
         : id(id),
@@ -1133,9 +1260,17 @@ struct Beekapoo : app::ModuleWidget {
   void layoutInputGains();
   void attachInput(Port& p, int preferred, int64_t bridge, float gain);
   void detachInput(Port& p);
+  void pruneSharedInputs(const std::set<int64_t>& removed);
+  bool releaseSharedInputs(const std::set<int64_t>& removed,
+                           history::ComplexAction* batch);
   bool inputBridge(const engine::Cable* c) const;
   bool discardInvalidBridge(app::CableWidget* cable);
   void syncInputCables(bool editing);
+  const Port* inputRoute(const engine::Cable* cable) const;
+  bool panelEndpoint(int64_t id, int port, bool input) const;
+  enum class CableRole { Unrelated, Bridge, Internal, Panel };
+  CableRole cableRole(const engine::Cable* cable) const;
+  bool reconcileCablePresentation();
   void withInputCablePresentation(app::PortWidget* target,
                                   const std::function<void()>& action);
   void rewireInput(app::CableWidget* cw, app::PortWidget* target);
@@ -1169,6 +1304,8 @@ struct Beekapoo : app::ModuleWidget {
   bool jacksOnly = false;
   bool editShowsText = false;
   std::set<int64_t> panelCableIds, knownCableIds, internalCableIds;
+  // Signal routing is independent of whether a cable is drawn on the panel.
+  std::set<int64_t> attenuatedCableIds;
   struct PlugWidgets {
     WeakPtr<widget::Widget> input, output;
   };
@@ -1370,6 +1507,7 @@ struct Beekapoo : app::ModuleWidget {
   bool addExposedControl(int kind);
   bool rerollExposedControls(int kind);
   bool removeExposedControl(int kind);
+  bool foldSelfPatchedInput();
   bool changeExposedControls(int kind, bool reroll);
   void updateSectionAddButtons(Vec mouse);
   phlooper::WarpedBlock* frame = nullptr;
@@ -1417,7 +1555,8 @@ struct Beekapoo : app::ModuleWidget {
   unsigned browserMemberCount = 0;
   void generateOnBrowserAdd();
   void renameMenu(ui::Menu* menu);
-  WeakPtr<widget::Widget> nameEditor;
+  WeakPtr<widget::Widget> nameEditor, moduleSetEditor;
+  void editModuleSets();
   void editName();
   void rename(const std::string& name) {
     if (!module) return;
@@ -1482,6 +1621,7 @@ struct Beekapoo : app::ModuleWidget {
     }
   }
   std::string status = "Select modules, then right-click here";
+  std::string generationError;
   Beekapoo(Module* m) {
     homeRack = APP->scene->rack;
     installDevWatcherToolbar();
@@ -1573,17 +1713,19 @@ struct Beekapoo : app::ModuleWidget {
     regenerateButton = new ActionButton;
     regenerateButton->configure(14, 14, 1.1f, .8f, .8f, 718);
     regenerateButton->icon = 8;
-    regenerateButton->help = [] {
-      return "Generate new subpatch (replace contents)";
+    regenerateButton->help = [this] {
+      return generationError.empty()
+                 ? std::string("Generate new subpatch (replace contents)")
+                 : generationError;
     };
-    regenerateButton->action = [this] { regeneratePatch(); };
+    regenerateButton->action = [this] {
+      if (!regeneratePatch() && !generationError.empty()) editModuleSets();
+    };
     addChild(regenerateButton);
     growButton = new ActionButton;
     growButton->configure(18, 18, 1.1f, .8f, .8f, 719);
     growButton->icon = 9;
-    growButton->help = [] {
-      return "Grow subpatch: add a cable or VCA connection";
-    };
+    growButton->help = [] { return "Grow subpatch: add a cable or module"; };
     growButton->action = [this] { growPatch(); };
     addChild(growButton);
     const char* captions[] = {"Wiggle", "Randomize", "Initialize"};
@@ -1832,6 +1974,10 @@ struct Beekapoo : app::ModuleWidget {
     for (auto id : panelCableIds)
       json_array_append_new(panelCables, json_integer(id));
     json_object_set_new(root, "panelCables", panelCables);
+    auto* attenuated = json_array();
+    for (auto id : attenuatedCableIds)
+      json_array_append_new(attenuated, json_integer(id));
+    json_object_set_new(root, "attenuatedCables", attenuated);
     auto* internalCables = json_array();
     for (auto id : internalCableIds)
       json_array_append_new(internalCables, json_integer(id));
@@ -1843,14 +1989,31 @@ struct Beekapoo : app::ModuleWidget {
                                double(p.second.x), "y", double(p.second.y)));
     json_object_set_new(root, "subpatchPositions", positions);
     list = json_array();
-    for (const auto& port : ports)
-      json_array_append_new(
-          list,
-          json_pack("{s:I,s:i,s:b,s:i,s:I,s:f}", "module", (json_int_t)port.id,
-                    "port", port.portId, "input", port.input, "route",
-                    port.route, "bridge", (json_int_t)port.bridge, "gain",
-                    double(port.gain ? port.gain->getParamQuantity()->getValue()
-                                     : 1)));
+    for (const auto& port : ports) {
+      auto* item = json_pack(
+          "{s:I,s:i,s:b,s:i,s:I,s:f}", "module", (json_int_t)port.id, "port",
+          port.portId, "input", port.input, "route", port.route, "bridge",
+          (json_int_t)port.bridge, "gain",
+          double(port.gain ? port.gain->getParamQuantity()->getValue() : 1));
+      if (port.shared.key >= 0) {
+        json_object_set_new(item, "shared", json_integer(port.shared.key));
+        json_object_set_new(item, "label",
+                            json_string(port.shared.label.c_str()));
+        auto* targets = json_array();
+        for (const auto& to : port.shared.extra)
+          json_array_append_new(
+              targets,
+              json_pack("{s:I,s:i,s:I}", "module", json_int_t(to.id), "port",
+                        to.port, "bridge", json_int_t(to.bridge)));
+        json_object_set_new(item, "targets", targets);
+        auto* incoming = json_array();
+        for (auto* cw : homeRack->getCompleteCables())
+          if (inputRoute(cw->cable) == &port)
+            json_array_append_new(incoming, json_integer(cw->cable->id));
+        json_object_set_new(item, "incoming", incoming);
+      }
+      json_array_append_new(list, item);
+    }
     json_object_set_new(root, "ports", list);
     list = json_array();
     for (const auto& param : parameters)
@@ -2448,7 +2611,10 @@ struct Beekapoo : app::ModuleWidget {
         items[p->input ? 1 : 2].push_back(p->face);
         auto* source = originalPort(*p);
         auto* info = source ? source->getPortInfo() : nullptr;
-        names[p->face] = {info ? info->getName() : "Port", memberName(p->id)};
+        names[p->face] = {p->shared.label.empty()
+                              ? (info ? info->getName() : "Port")
+                              : p->shared.label,
+                          memberName(p->id)};
       }
     }
     if (requestedWidth < 210 ||
@@ -2630,6 +2796,12 @@ struct Beekapoo : app::ModuleWidget {
     auto* panelCables = json_object_get(root, "panelCables");
     for (size_t n = 0; n < json_array_size(panelCables); ++n)
       panelCableIds.insert(json_integer_value(json_array_get(panelCables, n)));
+    attenuatedCableIds.clear();
+    auto* attenuated = json_object_get(root, "attenuatedCables");
+    if (!json_is_array(attenuated)) attenuated = panelCables;
+    for (size_t n = 0; n < json_array_size(attenuated); ++n)
+      attenuatedCableIds.insert(
+          json_integer_value(json_array_get(attenuated, n)));
     internalCableIds.clear();
     auto* internalCables = json_object_get(root, "internalCables");
     for (size_t n = 0; n < json_array_size(internalCables); ++n)
@@ -2684,9 +2856,30 @@ struct Beekapoo : app::ModuleWidget {
         auto* route = json_object_get(item, "route");
         auto* bridge = json_object_get(item, "bridge");
         auto* gain = json_object_get(item, "gain");
+        SharedInput shared;
+        if (auto* key = json_object_get(item, "shared")) {
+          shared.key = json_integer_value(key);
+          if (auto* label = json_string_value(json_object_get(item, "label")))
+            shared.label = label;
+          auto* targets = json_object_get(item, "targets");
+          for (size_t j = 0; j < json_array_size(targets); ++j) {
+            auto* to = json_array_get(targets, j);
+            int64_t child = json_integer_value(json_object_get(to, "module"));
+            int input = json_integer_value(json_object_get(to, "port"));
+            if (contains(APP->engine->getModule(child)) &&
+                find(child)->getInput(input))
+              shared.extra.push_back(
+                  {child, input,
+                   json_integer_value(json_object_get(to, "bridge"))});
+          }
+          auto* incoming = json_object_get(item, "incoming");
+          for (size_t j = 0; j < json_array_size(incoming); ++j)
+            shared.incoming.insert(
+                json_integer_value(json_array_get(incoming, j)));
+        }
         expose(w, port, json_is_integer(route) ? json_integer_value(route) : -1,
                json_is_integer(bridge) ? json_integer_value(bridge) : -1,
-               json_is_number(gain) ? json_number_value(gain) : 1.f);
+               json_is_number(gain) ? json_number_value(gain) : 1.f, shared);
       }
     }
     auto restoreParam = [&](json_t* param) {
@@ -2802,12 +2995,7 @@ struct Beekapoo : app::ModuleWidget {
     expanded = true;
     syncInputCables(true);
     controls->visible = false;
-    for (auto* cable : rack->getCompleteCables())
-      if (contains(cable->cable->inputModule) &&
-          contains(cable->cable->outputModule)) {
-        cable->visible = true;
-        showPlugs(cable, true);
-      }
+    reconcileCablePresentation();
     if (!ordered.empty()) {
       auto* w = rack->getModule(ordered.front()->id);
       rack->requestModulePos(w, w->box.pos);
@@ -2828,6 +3016,7 @@ struct Beekapoo : app::ModuleWidget {
     randomLocks.clear();
     subpatchPositions.clear();
     panelCableIds.clear();
+    attenuatedCableIds.clear();
     knownCableIds.clear();
     internalCableIds.clear();
     plugWidgets.clear();
@@ -2839,12 +3028,13 @@ struct Beekapoo : app::ModuleWidget {
     saveGroup();
     status = "Abstraction ended — modules remain in rack";
   }
-  void expose(app::ModuleWidget* w, app::PortWidget* source, int route = -1,
-              int64_t bridge = -1, float gain = 1) {
+  void expose(app::ModuleWidget* w, app::PortWidget* source, int route,
+              int64_t bridge, float gain, const SharedInput& shared) {
     for (const auto& p : ports)
-      if (p.id == w->module->id &&
-          p.input == (source->type == engine::Port::INPUT) &&
-          p.portId == source->portId)
+      if (shared.key >= 0 ? p.shared.key == shared.key
+                          : (p.id == w->module->id &&
+                             p.input == (source->type == engine::Port::INPUT) &&
+                             p.portId == source->portId && p.shared.key < 0))
         return;
     // Let the original panel establish its own layout before we relocate any
     // native endpoint. Panels such as Voly Pector cache child positions on
@@ -2866,6 +3056,7 @@ struct Beekapoo : app::ModuleWidget {
     face->input = source->type == engine::Port::INPUT;
     face->patched = [this](app::CableWidget* cable) {
       panelCableIds.insert(cable->cable->id);
+      if (inputRoute(cable->cable)) attenuatedCableIds.insert(cable->cable->id);
       knownCableIds.insert(cable->cable->id);
       cable->visible = true;
       showPlugs(cable, true);
@@ -2874,6 +3065,14 @@ struct Beekapoo : app::ModuleWidget {
     face->box.size = face->artwork()->box.size;
     int64_t id = w->module->id;
     face->caption = [this, face, id] {
+      for (const auto& p : ports)
+        if (p.face == face && p.shared.key >= 0) {
+          std::set<int64_t> seen{p.id};
+          std::string names = memberName(p.id);
+          for (const auto& to : p.shared.extra)
+            if (seen.insert(to.id).second) names += ", " + memberName(to.id);
+          return names + "\n" + p.shared.label;
+        }
       auto* source = face->source.get();
       auto* info = source ? source->getPortInfo() : nullptr;
       return memberName(id) + "\n" + (info ? info->getName() : "Port");
@@ -2882,9 +3081,14 @@ struct Beekapoo : app::ModuleWidget {
     ports.push_back({w->module->id, source->portId,
                      source->type == engine::Port::INPUT, source->box.pos,
                      face});
+    ports.back().shared = shared;
     if (face->input) attachInput(ports.back(), route, bridge, gain);
     layoutControls();
     saveGroup();
+  }
+  void expose(app::ModuleWidget* w, app::PortWidget* source, int route = -1,
+              int64_t bridge = -1, float gain = 1) {
+    expose(w, source, route, bridge, gain, SharedInput{});
   }
   bool boundaryPort(app::PortWidget* port) const {
     ScopedSubviewRack mainScope(homeRack);
@@ -2910,7 +3114,7 @@ struct Beekapoo : app::ModuleWidget {
   bool exposed(app::PortWidget* port) const {
     if (!port || !port->module) return false;
     for (const auto& p : ports)
-      if (p.id == port->module->id && p.portId == port->portId &&
+      if (p.targets(port->module->id, port->portId) &&
           p.input == (port->type == engine::Port::INPUT))
         return true;
     return false;
@@ -2923,9 +3127,15 @@ struct Beekapoo : app::ModuleWidget {
   }
   void togglePort(app::PortWidget* source) {
     if (!source || !source->module || boundaryPort(source)) return;
+    for (const auto& p : ports)
+      if (p.input && p.shared.key >= 0 &&
+          p.targets(source->module->id, source->portId) &&
+          !homeRack->getCompleteCablesOnPort(findPort(p)).empty())
+        return;
     auto* action = beginAction("change exposed port");
     for (auto it = ports.begin(); it != ports.end(); ++it)
-      if (originalPort(*it) == source) {
+      if (it->input == (source->type == engine::Port::INPUT) &&
+          it->targets(source->module->id, source->portId)) {
         source->box.pos = it->originalPosition;
         detachInput(*it);
         controls->removeChild(it->face);
@@ -3036,13 +3246,23 @@ struct Beekapoo : app::ModuleWidget {
     return false;
   }
   void syncBoundaryPorts() {
+    if (cableMutationDepth()) return;
     for (auto* cable : homeRack->getCompleteCables()) {
-      if (inputBridge(cable->cable)) continue;
-      bool in = contains(cable->cable->inputModule),
+      if (inputBridge(cable->cable) || inputRoute(cable->cable)) continue;
+      bool in = inputRoute(cable->cable) || contains(cable->cable->inputModule),
            out = contains(cable->cable->outputModule);
       if (in == out) continue;
       auto* port = in ? cable->inputPort : cable->outputPort;
-      if (!exposed(port)) expose(find(port->module->id), port);
+      bool mapped = exposed(port);
+      if (in) {
+        // An independent cable to a shared destination is not another cable
+        // on the shared bus. Give this native boundary its own input.
+        mapped = false;
+        for (const auto& p : ports)
+          mapped |= p.input && p.shared.key < 0 &&
+                    p.targets(port->module->id, port->portId);
+      }
+      if (!mapped) expose(find(port->module->id), port);
     }
   }
   bool canAbsorb(app::ModuleWidget* w) const {
@@ -3107,13 +3327,15 @@ struct Beekapoo : app::ModuleWidget {
     // Keep remaining outside sources on the attenuated input, summed by Rack.
     std::set<std::pair<int64_t, int>> internalizedInputs;
     for (auto& p : ports)
-      if (p.route >= 0 && !preservePanelRoutes) {
+      if (p.route >= 0 && p.shared.key < 0 && !preservePanelRoutes &&
+          p.gain->getParamQuantity()->getValue() == 1.f) {
         auto* target = originalPort(p);
         auto* proxy = findPort(p);
         for (auto* cw : homeRack->getCompleteCables())
           if (cw->cable->inputModule == module &&
               cw->cable->inputId == proxy->portId &&
               addedIds.count(cw->cable->outputModule->id)) {
+            attenuatedCableIds.erase(cw->cable->id);
             rewireInput(cw, target);
             internalizedInputs.insert({p.id, p.portId});
           }
@@ -3139,7 +3361,14 @@ struct Beekapoo : app::ModuleWidget {
               cw->cable->inputId == source->portId)
             outside |= !contains(cw->cable->outputModule);
       }
-      if (source && affected && !outside && !preservePanelRoutes) {
+      // Retain a non-unity gain route even after its source joins. Removing
+      // that control requires materializing an attenuator, not bypassing it.
+      bool preserveGain = it->route >= 0 &&
+                          (it->shared.key >= 0 ||
+                           it->gain->getParamQuantity()->getValue() != 1.f) &&
+                          !homeRack->getCompleteCablesOnPort(source).empty();
+      if (source && affected && !outside && !preservePanelRoutes &&
+          !preserveGain) {
         if (auto* original = originalPort(*it))
           original->box.pos = it->originalPosition;
         detachInput(*it);
@@ -3180,6 +3409,14 @@ struct Beekapoo : app::ModuleWidget {
                            : a->box.pos.y < b->box.pos.y;
               });
     auto* action = beginAction("remove selected members from abstraction");
+    auto* batch = new TopologyHistory(module->id);
+    batch->name = action->name;
+    CableMutation mutation;
+    if (!releaseSharedInputs(removed, batch)) {
+      delete action;
+      delete batch;
+      return;
+    }
     bool editing = bool(editSession);
     if (editing)
       forgetEditedMembers(removed);
@@ -3187,6 +3424,7 @@ struct Beekapoo : app::ModuleWidget {
       closeView();
     if (!expanded) revealMembers(true);
     for (auto id : removed) subpatchPositions.erase(id);
+    pruneSharedInputs(removed);
     for (auto it = ports.begin(); it != ports.end();)
       if (removed.count(it->id)) {
         detachInput(*it);
@@ -3227,8 +3465,13 @@ struct Beekapoo : app::ModuleWidget {
       }
     }
     compactMembers();
+    mutation.finish();
+    syncBoundaryPorts();
+    layoutControls();
     saveGroup();
-    finishAction(action);
+    finishAction(action, batch);
+    reconcileBeekCables();
+    APP->history->push(batch);
   }
   void parameterAction(int index, bool recordHistory,
                        history::ComplexAction* parent = nullptr) {
@@ -3502,15 +3745,9 @@ struct Beekapoo : app::ModuleWidget {
       refreshGeneratedName();
     }
     if (expanded) {
-      for (auto* cw : homeRack->getCompleteCables()) {
-        if (discardInvalidBridge(cw)) continue;
-        if (inputBridge(cw->cable)) {
-          cw->visible = false;
-          showPlugs(cw, false);
-        }
-      }
       syncBoundaryPorts();
       syncInputCables(true);
+      if (reconcileCablePresentation()) saveGroup();
       for (auto& p : ports)
         if (auto* source = originalPort(p))
           p.originalPosition = source->box.pos;
@@ -3534,47 +3771,7 @@ struct Beekapoo : app::ModuleWidget {
         source->box.pos = desired - source->box.size * .5f - parentOrigin;
       }
     }
-    std::set<int64_t> currentCables;
-    bool presentationChanged = false;
-    for (auto* cable : homeRack->getCompleteCables()) {
-      if (discardInvalidBridge(cable)) continue;
-      auto id = cable->cable->id;
-      currentCables.insert(id);
-      if (inputBridge(cable->cable)) {
-        cable->visible = false;
-        showPlugs(cable, false);
-        continue;
-      }
-      bool input = contains(cable->cable->inputModule),
-           output = contains(cable->cable->outputModule);
-      if ((input || output) && !knownCableIds.count(id) &&
-          !internalCableIds.count(id)) {
-        presentationChanged |= panelCableIds.insert(id).second;
-        cable->visible = true;
-        showPlugs(cable, true);
-      }
-      if (input != output) {
-        cable->visible = true;
-        showPlugs(cable, true);
-      }
-      if (input && output) {
-        bool visible = panelCableIds.count(id);
-        cable->visible = visible;
-        showPlugs(cable, visible);
-      }
-    }
-    knownCableIds = std::move(currentCables);
-    for (auto it = plugWidgets.begin(); it != plugWidgets.end();)
-      if (!knownCableIds.count(it->first))
-        it = plugWidgets.erase(it);
-      else
-        ++it;
-    for (auto it = panelCableIds.begin(); it != panelCableIds.end();)
-      if (!knownCableIds.count(*it)) {
-        it = panelCableIds.erase(it);
-        presentationChanged = true;
-      } else
-        ++it;
+    bool presentationChanged = reconcileCablePresentation();
     if (presentationChanged) saveGroup();
     ModuleWidget::step();
   }
@@ -3653,6 +3850,7 @@ struct Beekapoo : app::ModuleWidget {
       } else if (!logoOnly)
         drawHeaderArt(titleArtwork, area);
       int pose = addSelectionButton->pose();
+      addSelectionButton->drawHover(args.vg, logoArea, darkPanel());
       drawHeaderArt(pose ? addSelectionButton->jaws[pose - 1] : logoArtwork,
                     logoArea);
     }
@@ -4029,7 +4227,7 @@ void Beekapoo::ejectAction(history::ComplexAction* parentAction,
                            bool preserveGains) {
   if (!module) return;
   EjectedInputGains gains(this, preserveGains);
-  if (!gains.routes.empty() && !gains.model) {
+  if (gains.adapterCount() && !gains.model) {
     status = "Install VCV Free to preserve input attenuation when ejecting";
     return;
   }
@@ -4084,11 +4282,14 @@ void Beekapoo::ejectAction(history::ComplexAction* parentAction,
   delete this;
 }
 void GroupHistory::undo() {
+  CableMutation mutation;
   history::ModuleChange::undo();
   if (auto* group =
           dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId)))
     group->step();
   before.restore();
+  mutation.finish();
+  reconcileBeekCables();
   if (auto* group =
           dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId))) {
     group->resetNameTopology();
@@ -4096,11 +4297,14 @@ void GroupHistory::undo() {
   }
 }
 void GroupHistory::redo() {
+  CableMutation mutation;
   history::ModuleChange::redo();
   if (auto* group =
           dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId)))
     group->step();
   after.restore();
+  mutation.finish();
+  reconcileBeekCables();
   if (auto* group =
           dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(moduleId))) {
     group->resetNameTopology();
@@ -4111,11 +4315,14 @@ void TopologyHistory::resetName() {
   if (auto* group = dynamic_cast<Beekapoo*>(APP->scene->rack->getModule(owner)))
     group->resetNameTopology();
 }
+#include "BeekapooCablePresentation.hpp"
 #include "BeekapooExposure.hpp"
+#include "BeekapooGenerationCatalog.hpp"
 #include "BeekapooGenerator.hpp"
 #include "BeekapooGrowth.hpp"
 #include "BeekapooImportDialog.hpp"
 #include "BeekapooInputRoutes.hpp"
+#include "BeekapooModuleSetEditor.hpp"
 #include "BeekapooNameEditor.hpp"
 #include "BeekapooPatchFile.hpp"
 #include "BeekapooPortable.hpp"

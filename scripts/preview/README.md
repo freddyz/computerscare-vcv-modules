@@ -132,3 +132,28 @@ and Undo/Redo, then renders the hover strips at four widths in light/dark.
 `BEEKAPOO_COPY_CABLES=1 scripts/preview-module.sh beekapoo --no-build` checks
 native duplication with and without cables, stacked inputs, panel loopbacks,
 hidden bridge plugs, Undo/Redo and repair of old phantom connections.
+
+`BEEKAPOO_CONTEXT_CHECKS=1 scripts/preview-module.sh beekapoo --no-build`
+checks graphics cleanup and recreation for all exposed jack sizes, then tests
+window-before-scene shutdown with collapsed, expanded and editing subpatches.
+
+`BEEKAPOO_MODULE_SETS=1 scripts/preview-module.sh beekapoo --no-build` checks
+module-set persistence, per-Beek selection, defaults, restricted generation and
+growth, Undo/Redo, and browser interactions. It renders `module-sets.png` and
+writes preferences only in the isolated runner's scratch directory.
+
+`BEEKAPOO_CABLE_STATE=1 scripts/preview-module.sh beekapoo --no-build` checks
+merge/absorb wiring in both directions, native plug positions and visibility,
+stacked polyphonic signal gains, Edit/Near/Far, Eject, Undo/Redo and reload.
+It also checks input minus: unpatched-first removal, self-patch folding,
+outside-source protection, locks and native 8vert gain preservation.
+Optionally set `BEEKAPOO_MERGE_PATCH` to an extracted `patch.json` to inspect
+the reported dangling-cable topology. Device modules are excluded; the source
+patch is read only. This capture is written as `merged-panel.png`.
+
+`BEEKAPOO_SHARED_INPUTS=1 scripts/preview-module.sh beekapoo --no-build`
+checks Core/stoermelder conversion without custom relays, shared fan-out,
+overlapping input destinations, duplicate stacks, four-channel attenuation,
+self-patching, input-minus internalization, silence on unplug/bypass, destination
+removal, native and portable save/load, duplication, both merge paths, Eject and
+Undo/Redo. It renders a shared-input example and uses the real Fundamental 8vert for output sums and retained gains.

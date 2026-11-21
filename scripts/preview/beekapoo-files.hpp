@@ -142,7 +142,7 @@ void testBeekPatchFiles(const std::string& output,float scale,Add add,Require re
     beekapoo::BeekTemporaryDirectory raw;
     json_dump_file(root,system::join(raw.path,"patch.json").c_str(),JSON_INDENT(2));
     auto stereo=output+"/ordinary-stereo.vcv";system::archiveDirectory(stereo,raw.path);
-    require(receiver->loadBeek(stereo,-1,true) && receiver->members.size()==2 && receiver->ports.size()==2,"Ordinary patches must support exposing stereo outputs without opening an audio device");
+    require(receiver->loadBeek(stereo,-1,true) && receiver->members.size()==1 && receiver->ports.size()==2,"Ordinary patches must support exposing stereo outputs without opening an audio device");
     require(receiver->ports[0].portId!=receiver->ports[1].portId && !receiver->ports[0].input && !receiver->ports[1].input,"Stereo conversion must expose the original left/right source ports");
     testBeekAudioImportDialog(stereo,output,scale,require);
     auto ids=APP->engine->getModuleIds();

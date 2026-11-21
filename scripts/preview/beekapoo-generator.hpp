@@ -73,6 +73,10 @@ inline void renderGeneratedBeekRow(beekapoo::Beekapoo* owner,const std::string& 
 #include "beekapoo-input-gains.hpp"
 #include "beekapoo-copy-cables.hpp"
 #include "beekapoo-section-controls.hpp"
+#include "beekapoo-module-sets.hpp"
+#include "beekapoo-cable-state.hpp"
+#include "beekapoo-input-minus.hpp"
+#include "beekapoo-shared-inputs.hpp"
 
 // Real Fundamental modules in this isolated renderer, never the live Rack.
 template <class Add, class Require>
@@ -94,6 +98,9 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     plugin::Plugin* plugin;void* library;
     ~Cleanup(){APP->scene->rack->clear();APP->history->clear();plugin::plugins.erase(std::find(plugin::plugins.begin(),plugin::plugins.end(),plugin));delete plugin;dlclose(library);}
   } cleanup{fundamental,library};
+  if(std::getenv("BEEKAPOO_SHARED_INPUTS")){testBeekAllAudioInterfaces(output,scale,add,require,plugin::getModel("computerscare","demo-gain"));testBeekSharedInputs(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_CABLE_STATE")){testBeekCableState(output,scale,add,require);testBeekInputMinus(add,require);return;}
+  if(std::getenv("BEEKAPOO_MODULE_SETS")){testBeekModuleSets(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_COPY_CABLES")){testBeekCopyCables(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_SECTION_CONTROLS")){testBeekSectionControls(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_INPUT_GAINS")){testBeekInputGains(add,require);return;}
@@ -105,6 +112,11 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
   if(std::getenv("BEEKAPOO_TITLE_CASES")){renderBeekTitleCases(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_PARAM_BLOCKS")){renderBeekParamBlocks(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_CONTROL_SPECTRUM")){renderBeekControlSpectrum(output,scale,add,require);return;}
+  testBeekAllAudioInterfaces(output,scale,add,require,plugin::getModel("computerscare","demo-gain"));
+  testBeekSharedInputs(output,scale,add,require);
+  testBeekCableState(output,scale,add,require);
+  testBeekInputMinus(add,require);
+  testBeekModuleSets(output,scale,add,require);
   testBeekCopyCables(output,scale,add,require);
   testBeekSectionControls(output,scale,add,require);
   testBeekInputGains(add,require);
@@ -273,7 +285,11 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
       auto oldParams=owner->parameters.size(),oldPorts=owner->ports.size();
       require(owner->growPatch(),"Grow must find an unlocked cable or processor insertion");
       require(owner->parameters.size()==oldParams&&owner->ports.size()==oldPorts,"Top Grow must not expose controls");
-      for(const auto& member:owner->members)if(std::find(original.begin(),original.end(),member.id)==original.end())require(owner->find(member.id)->model->slug=="VCA-1","Top Grow may insert only a VCA");
+      for(const auto& member:owner->members)if(std::find(original.begin(),original.end(),member.id)==original.end()) {
+        auto* model=owner->find(member.id)->model;
+        auto* set=beekapoo::moduleSets().find(owner->getModule<beekapoo::Module>()->getGenerationSet());
+        require(set&&set->modules.count({model->plugin->slug,model->slug}),"Top Grow may only add models in this Beek's selected set");
+      }
       for(auto id:original)require(APP->engine->getModule(id),"Growth must retain original native module IDs");
       for(auto id:protectedCables)require(APP->engine->getCable(id),"Growth must preserve every locked module connection");
       APP->history->undo();owner->step();require(int(owner->members.size())==count,"Grow Undo must restore original membership");
