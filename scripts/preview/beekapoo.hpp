@@ -70,12 +70,19 @@ struct Face : app::ModuleWidget {
 };
 }
 #include "beekapoo-print.hpp"
+#include "beekapoo-knobs.hpp"
+#include "beekapoo-fonts.hpp"
 #include "beekapoo-files.hpp"
 #include "beekapoo-audio-import.hpp"
 #include "beekapoo-generator.hpp"
+#include "beekapoo-combine.hpp"
 #include "beekapoo-inputs.hpp"
+#include "beekapoo-labels.hpp"
 void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,float scale) {
   auto require=[](bool pass,const char* why){if(!pass)throw std::runtime_error(why);};
+  if(std::getenv("BEEKAPOO_FONTS")){renderBeekFonts(output,scale,require);return;}
+  testBeekKnobRendering(output,scale,require);
+  if(std::getenv("BEEKAPOO_KNOBS_ONLY")){renderBeekKnobSpectrum(output,scale);return;}
   {
     auto mono=beekapoo::monochromeJack("jack-small-pointing-down");
     auto original=APP->window->loadSvg(asset::plugin(pluginInstance,"res/components/jack-small-pointing-down.svg"));
@@ -188,7 +195,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     for(int i=0;i<3;++i)repeated.push_back({"Pulse width",i});
     auto cells=beekapoo::layoutParams(repeated,155,270,false);
     require(cells.size()==6,"Spacious matching-family layout must show all six controls");
-    for(int family=0;family<2;++family){float y=-1;for(const auto& cell:cells)if(cell.index/3==family){if(y<0)y=cell.y;require(y==cell.y,"Matching family must stay on one balanced row even when there is extra height");}}
+    for(int family=0;family<2;++family){int labels=0,block=-1;for(const auto& cell:cells)if(cell.index/3==family){if(block<0)block=cell.block;require(block==cell.block,"Matching family must remain in its own region");labels+=cell.labelWidth>0;}require(labels==1,"Each family has one shared caption");}
   }
   for(int count:{0,1,4,8,24,64,128}) for(float width:{75.f,90.f,120.f,180.f,225.f,300.f,450.f,600.f,900.f,1500.f}) {
     auto layout=beekapoo::responsiveLayout(width,count,count,count/2);
@@ -271,7 +278,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto* m=model->createModule();APP->engine->addModule(m);
     auto* w=model->createModuleWidget(m);w->box.pos=pos;rack->addModule(w);return w;
   };
-  if(std::getenv("BEEKAPOO_GENERATED_SPECTRUM")||std::getenv("BEEKAPOO_THREE_EXAMPLES")){testBeekGenerator(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_LABELS")){renderBeekLabels(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_COPY_CABLES")||std::getenv("BEEKAPOO_SECTION_CONTROLS")||std::getenv("BEEKAPOO_INPUT_GAINS")||std::getenv("BEEKAPOO_REGENERATE")||std::getenv("BEEKAPOO_POLYPHONY")||std::getenv("BEEKAPOO_CHOMP")||std::getenv("BEEKAPOO_NAME_EDITOR")||std::getenv("BEEKAPOO_THEMES")||std::getenv("BEEKAPOO_TITLE_CASES")||std::getenv("BEEKAPOO_PARAM_BLOCKS")||std::getenv("BEEKAPOO_CONTROL_SPECTRUM")||std::getenv("BEEKAPOO_GENERATED_SPECTRUM")||std::getenv("BEEKAPOO_THREE_EXAMPLES")||std::getenv("BEEKAPOO_RECOVER_PATCH")){testBeekGenerator(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_PRINT_SPECTRUM")) {
     renderBeekapooPrintSpectrum(gainModel,output,scale);
     return;
@@ -300,6 +308,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     APP->scene->removeChild(overlay);delete overlay;
     beekapoo::Beekapoo* group=nullptr;for(auto* w:rack->getModules())if(auto* candidate=dynamic_cast<beekapoo::Beekapoo*>(w))group=candidate;
     require(group && group->members.size()==2 && rack->isSelected(group),"Create must group exactly the selection and select its new owner");
+    auto groupName=group->getModule<beekapoo::Module>()->getPatchName();
+    require(!groupName.empty(),"Create from selection must assign a generated name too");
     int defaultIns=0,defaultOuts=0;
     for(const auto& p:group->ports)(p.input?defaultIns:defaultOuts)++;
     require(defaultIns>=2&&defaultIns<=3&&defaultOuts==1&&group->parameters.size()>=3&&group->parameters.size()<=5,"Create must expose a module-count-based set of inputs, outputs and parameters");
@@ -316,9 +326,10 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
       require(group->members.size()==2 && APP->engine->getCable(internal) && APP->engine->getCable(boundary),"Redo must restore the complete group without adding or losing cables");
       std::set<std::pair<int64_t,int>> redone;for(const auto& p:group->parameters)redone.insert({p.id,p.paramId});
       require(redone==defaultParams,"Redo must retain the selected defaults, not randomize them again");
+      require(group->getModule<beekapoo::Module>()->getPatchName()==groupName,"Redo must retain the generated selection name");
     }
     rack->deselectAll();rack->select(group,true);rack->select(outside,true);
-    require(!beekapoo::canCreateSelectedGroup(),"Creation must reject nested groups");
+    require(beekapoo::canCreateSelectedGroup(),"Creation must allow combining a Beek with ordinary modules");
     group->editSubpatch();rack->select(first,true);rack->select(second,true);rack->select(group,false);rack->select(outside,false);
     require(!beekapoo::canCreateSelectedGroup(),"Creation must reject modules already owned by an editing group");
     static_cast<beekapoo::RackEditSession*>(group->editSession.get())->finish(true);
@@ -345,8 +356,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     selectOutside();
     for(auto* target:targets) {
       require(target->canAddSelection() && target->addSelectionButton->visible,"Every Beekapoo must offer the same unowned outside selection");
-      auto* plus=target->addSelectionButton;auto face=target->frameContent(target->ownFrame);
-      require(face.contains(plus->box.pos) && face.contains(plus->box.getBottomRight()),"Selection changes must position Add inside the controls face");
+      auto* plus=target->addSelectionButton;auto face=target->frameContent(target->titleFrame);
+      require(face.contains(plus->box.pos) && face.contains(plus->box.getBottomRight()),"Selection changes must position Add inside the header face");
       for(auto* control:target->managementButtons)
         require(!plus->box.intersects(control->box),"Add must not overlap Edit or Eject after selection changes");
       auto* amount=target->getParam(beekapoo::Module::WIGGLE_AMOUNT);
@@ -805,16 +816,26 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     for(auto* w:host->actionButtons)visibleControls.push_back(w);
     for(auto* w:host->managementButtons)visibleControls.push_back(w);
     visibleControls.push_back(host->growButton);visibleControls.push_back(host->regenerateButton);
+    visibleControls.push_back(host->getInput(beekapoo::Module::GENERATE_INPUT));visibleControls.push_back(host->getInput(beekapoo::Module::GROW_INPUT));
     for(int i=0;i<6;++i)visibleControls.push_back(host->getInput(i));
     visibleControls.push_back(host->getParam(beekapoo::Module::WIGGLE_AMOUNT));
     for(const auto& p:host->ports)visibleControls.push_back(p.face);
     for(const auto& p:host->parameters)visibleControls.push_back(p.knob);
     visibleControls.erase(std::remove_if(visibleControls.begin(),visibleControls.end(),[](widget::Widget* w){return !w->visible;}),visibleControls.end());
     require(host->ownFrame->box.size.x==host->box.size.x && host->titleFrame->box.size.x==host->box.size.x,"Header and module controls frames must fill the panel width");
-    for(int input:{0,1,3,4})require(host->getInput(input)->box.pos.y>=host->actionButtons[input]->box.getBottom(),"Each trigger jack must sit below its own button");
+    std::vector<std::pair<beekapoo::ActionButton*,int>> actionPairs = {
+      {host->actionButtons[0],0},{host->actionButtons[1],1},
+      {host->actionButtons[3],3},{host->actionButtons[4],4},
+      {host->regenerateButton,beekapoo::Module::GENERATE_INPUT},
+      {host->growButton,beekapoo::Module::GROW_INPUT}};
+    for(const auto& pair:actionPairs) {
+      auto button=pair.first->box, jack=host->getInput(pair.second)->box;
+      require(std::abs(jack.getCenter().x-button.getCenter().x)<.01f && std::abs(jack.pos.y-button.getBottom()-1)<.01f,"Each action CV must stay centered directly below its own button, including after wrapping");
+    }
+    require(host->actionButtons[3]->faceColor.r < host->actionButtons[0]->faceColor.r-.3f && host->actionButtons[4]->faceColor.r < host->actionButtons[1]->faceColor.r-.3f,"All and Exposed actions must remain visually distinct");
     for(size_t i=0;i<visibleControls.size();++i) {
       auto bounds=visibleControls[i]->box;
-      require(bounds.pos.x>=5 && bounds.pos.y>=26 && bounds.getRight()<=host->box.size.x-5 && bounds.getBottom()<=host->box.size.y-10,("Responsive control outside module at width "+std::to_string(int(host->box.size.x))+": "+std::to_string(bounds.pos.x)+","+std::to_string(bounds.pos.y)+" to "+std::to_string(bounds.getRight())+","+std::to_string(bounds.getBottom())).c_str());
+      require(bounds.pos.x>=5 && bounds.pos.y>=5 && bounds.getRight()<=host->box.size.x-5 && bounds.getBottom()<=host->box.size.y-6,("Responsive control outside module at width "+std::to_string(int(host->box.size.x))+": "+std::to_string(bounds.pos.x)+","+std::to_string(bounds.pos.y)+" to "+std::to_string(bounds.getRight())+","+std::to_string(bounds.getBottom())).c_str());
       for(size_t j=0;j<i;++j)require(!bounds.intersects(visibleControls[j]->box),("Responsive controls overlap width "+std::to_string(int(host->box.size.x))+" controls "+std::to_string(i)+"/"+std::to_string(j)+" y "+std::to_string(bounds.pos.y)+"/"+std::to_string(visibleControls[j]->box.pos.y)).c_str());
     }
   }
@@ -1164,6 +1185,50 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   // Show actual computerscare modules in both subview modes for visual QA.
   modelVolyMultiPreview->plugin=&plugin;modelComputerscareMelyPorge->plugin=&plugin;
   modelVolyMultiPreview->name="Voly Pector";modelComputerscareMelyPorge->name="Mely Porge";
+  // Reproduce first-step caching after port relocation, as seen with Voly.
+  {
+    auto* native=add(modelVolyMultiPreview,Vec(0,0));
+    auto* other=add(gainModel,Vec(900,0));
+    auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(1200,0)));
+    std::vector<std::pair<int,Vec>> positions;
+    for(auto* port:native->getOutputs())positions.push_back({port->portId,port->box.pos});
+    rack->deselectAll();rack->select(native,true);rack->select(other,true);owner->collapse();
+    owner->expose(native,native->getOutput(7));
+    auto* c=new engine::Cable;c->outputModule=native->module;c->outputId=7;c->inputModule=other->module;c->inputId=0;
+    APP->engine->addCable(c);auto* cw=new app::CableWidget;cw->setCable(c);rack->addCable(cw);
+    for(int f=0;f<3;++f)rack->step();
+    owner->editSubpatch();
+    for(int f=0;f<3;++f)rack->step();
+    for(const auto& position:positions)require(native->getOutput(position.first)->box.pos==position.second,"Edit must restore native Voly jacks, not first-step cached panel coordinates");
+    require(cw->outputPort==native->getOutput(7),"Cable must remain attached to the real restored jack");
+    APP->scene->box.size=Vec(1100,760);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(1100,730));owner->focusEditedMembers();
+    for(int f=0;f<3;++f)APP->scene->rackScroll->step();
+    capture(APP->scene,output+"/restored-voly-jacks.png",scale,false);
+    static_cast<beekapoo::RackEditSession*>(owner->editSession.get())->finish(true);
+    // Hover buttons change only their section, and support Undo/Redo.
+    owner->exposeParameter(native->module->id,0);owner->expose(other,other->getInput(1));
+    for(int kind=0;kind<3;++kind) {
+      auto counts=[&] {std::array<size_t,3> result{{owner->parameters.size(),0,0}};for(const auto& p:owner->ports)++result[p.input?1:2];return result;};
+      auto before=counts();auto cables=cableIds();
+      auto* block=kind==0?owner->frame:kind==1?owner->inputFrame:owner->outputFrame;
+      owner->updateSectionAddButtons(block->box.getCenter());
+      auto* corner=owner->sectionAddButtons[kind];
+      require(corner->visible,"Section plus must appear on hover");
+      require(corner->box.pos.y<block->box.pos.y && corner->box.getRight()<=owner->box.size.x,"Section plus must hang above the frame without leaving the module");
+      owner->updateSectionAddButtons(corner->box.pos+Vec(2,2));
+      require(corner->visible,"Hover must stay active on the overhanging part of the button");
+      owner->sectionAddButtons[kind]->action();auto after=before;++after[kind];
+      require(counts()==after,"Section plus must add exactly one matching control");
+      APP->history->undo();owner->step();require(counts()==before&&cableIds()==cables,"Undo must restore exposure and bridge cables");
+      APP->history->redo();owner->step();require(counts()==after,"Redo must restore section exposure");
+    }
+    owner->requestedWidth=210;owner->layoutControls();owner->step();
+    owner->updateSectionAddButtons(owner->frame->box.getCenter());
+    auto* parent=owner->parent;auto position=owner->box.pos;parent->removeChild(owner);owner->box.pos=Vec();capture(owner,output+"/section-plus.png",scale,false);owner->box.pos=position;parent->addChild(owner);
+    owner->updateSectionAddButtons(Vec(-1,-1));for(auto* b:owner->sectionAddButtons)require(!b->visible,"Section buttons must hide after leaving");
+    rack->clear();APP->history->clear();
+    std::puts("First-step Voly jack restoration and section-specific expose buttons/Undo/Redo passed");
+  }
   auto* voly=add(modelVolyMultiPreview,Vec(0,0));
   auto* mely=add(modelComputerscareMelyPorge,Vec(voly->box.size.x+30,0));
   auto* outside=add(gainModel,Vec(mely->box.getRight()+30,0));
@@ -1242,7 +1307,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   tinyParent->removeChild(group);group->box.pos=Vec();capture(group,output+"/21-panel-patching.png",scale,false);group->box.pos=tinyPosition;tinyParent->addChild(group);
   APP->event->setDraggedWidget(nullptr,GLFW_MOUSE_BUTTON_LEFT);
   group->requestedWidth=540;group->layoutControls();
-  require(!group->editShowsText && group->managementButtons[0]->icon==3 && !group->managementButtons[1]->iconAndText && group->managementButtons[1]->icon==7,"Compact management controls must retain icons without text labels");
+  require(group->managementButtons[0]->icon==3 && group->managementButtons[1]->icon==7 && group->editShowsText==(group->box.size.x>=150),"Header management controls must retain icons and add text when there is room");
   {
     auto* parent=group->parent;auto position=group->box.pos;parent->removeChild(group);group->box.pos=Vec();
     capture(group,output+"/25-edit-eject-panel.png",scale,false);
@@ -1410,7 +1475,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     wrapper->requestedWidth=hp*15;wrapper->layoutControls();wrapper->step();
     require(wrapper->addSelectionButton->visible,"Add button must appear for an eligible outside selection");
     require(wrapper->box.size.x==hp*15,"Narrow 8-param layout must preserve requested width");
-    require(wrapper->ownFrame->box.size.y<=62,"Top control strip must stay shallow at normal narrow widths");
+    // Two wrapped rows, each including its own 18 px button and 11 px CV jack.
+    require(wrapper->ownFrame->box.size.y<=beekapoo::Beekapoo::ownControlLayout(wrapper->box.size.x).height+14,"Top controls must fit their compact action layout");
     for(auto* action:wrapper->actionButtons)if(action->visible)require(!action->iconAndText&&action->box.size.x==18&&action->box.size.y==18&&action->faceColor.r==action->faceColor.g&&action->faceColor.g==action->faceColor.b,"Random actions must be small neutral icon buttons");
     int visible=0;for(auto& param:wrapper->parameters)visible+=param.knob->visible;
     require(visible==8&&wrapper->parameters.size()==8,"Narrow layout must retain all eight mappings, with readable controls shown as space permits");
@@ -1473,7 +1539,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     for(int n=0;n<c.out;++n)wrapper->expose(right,right->getOutput(n));
     wrapper->requestedWidth=c.width;wrapper->layoutControls();wrapper->step();
     for(auto* button:wrapper->actionButtons)if(button->visible)require(inside(button->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": action outside controls face").c_str());
-    for(auto* button:wrapper->managementButtons)if(button->visible)require(inside(button->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": management outside controls face").c_str());
+    for(auto* button:wrapper->managementButtons)if(button->visible)require(inside(button->box,wrapper->frameContent(wrapper->titleFrame)),("Spectrum "+std::to_string(index+1)+": management outside header face").c_str());
     for(int i:{0,1,2,3,4,5,beekapoo::Module::GENERATE_INPUT,beekapoo::Module::GROW_INPUT})if(wrapper->getInput(i)->visible)require(inside(wrapper->getInput(i)->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": CV outside controls face").c_str());
     for(const auto& p:wrapper->parameters)if(p.knob->visible)require(inside(p.knob->box,wrapper->frameContent(wrapper->frame)),("Spectrum "+std::to_string(index+1)+": parameter extends into a perspective wall").c_str());
     for(const auto& p:wrapper->ports)require(inside(p.face->box,wrapper->frameContent(p.input?wrapper->inputFrame:wrapper->outputFrame)),("Spectrum "+std::to_string(index+1)+": jack extends into a perspective wall").c_str());
@@ -1762,6 +1828,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     Vec relative=second->box.pos-first->box.pos;
     auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(600,2*RACK_GRID_HEIGHT)));
     rack->select(first,true);rack->select(second,true);owner->collapse();
+    // Preserve the deliberately edited two-row fixture after initial packing.
+    if(variant==5){for(auto& member:owner->members)if(member.id==secondId)member.position=Vec(90,RACK_GRID_HEIGHT);owner->saveGroup();}
     owner->requestedWidth=variant==0||variant==5?300:75;owner->layoutControls();
     auto ownerId=owner->module->id;Rect oldSpace=owner->box;
     std::map<int64_t,Rect> obstacles;
@@ -1805,6 +1873,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     parent->addChild(panel);rack->clear();
   }
 
+  testBeekCombine(add,require,gainModel);
   testBeekPatchFiles(output,scale,add,require,gainModel);
   testBeekAllAudioInterfaces(output,scale,add,require,gainModel);
   testBeekGenerator(output,scale,add,require);

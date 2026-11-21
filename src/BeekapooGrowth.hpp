@@ -19,33 +19,30 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
     for (const auto& spec : specs)
       if (w->model->plugin->slug == "Fundamental" &&
           w->model->slug == spec.slug) {
+        auto inputConnected = [&](int id) {
+          auto* p = w->getInput(id);
+          return p && !homeRack->getCompleteCablesOnPort(p).empty();
+        };
+        auto outputUsed = [&](int id) {
+          auto* p = w->getOutput(id);
+          return p &&
+                 (exposed(p) || !homeRack->getCompleteCablesOnPort(p).empty());
+        };
         for (const auto& in : spec.modulationInputs) {
-          auto* port = w->getInput(in.port);
-          if (!port || exposed(port) ||
-              !homeRack->getCompleteCablesOnPort(port).empty())
-            continue;
-          bool useful = true;
-          for (const auto& req : in.prerequisites) {
-            bool met = false;
-            for (int id : req.anyOf)
-              if (auto* p = w->getInput(id))
-                met |= !homeRack->getCompleteCablesOnPort(p).empty();
-            useful &= met;
-          }
-          if (!in.affectedOutputs.empty()) {
-            bool live = false;
-            for (int id : in.affectedOutputs)
-              if (auto* p = w->getOutput(id))
-                live |=
-                    exposed(p) || !homeRack->getCompleteCablesOnPort(p).empty();
-            useful &= live;
-          }
-          if (useful) free.push_back({w, in.port});
+          auto* port = w->getInput(in.id);
+          if (!port || exposed(port) || inputConnected(in.id)) continue;
+          if (beekapoo_patch::controlUseful(in, inputConnected, outputUsed))
+            free.push_back({w, in.id});
         }
         for (const auto& out : spec.outputs) {
           auto* port = w->getOutput(out.port);
           if (!port) continue;
           bool ready = true;
+          // Use a preferred main output before adding secondary taps.
+          for (const auto& preferred : spec.outputs)
+            if (preferred.priority > out.priority &&
+                !outputUsed(preferred.port))
+              ready = false;
           for (const auto& req : out.requirements) {
             bool met = false;
             for (int id : req.anyOf)
@@ -72,7 +69,7 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
     return false;
   }
   auto* state = beginAction("grow subpatch");
-  auto* batch = new history::ComplexAction;
+  auto* batch = new TopologyHistory(module->id);
   batch->name = "grow subpatch";
   auto wire = [&](app::PortWidget* from, app::PortWidget* to) {
     auto* c = new engine::Cable;
@@ -99,8 +96,7 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
     auto* old = insertions[random::u32() % insertions.size()];
     auto* from = old->outputPort;
     auto* to = old->inputPort;
-    const char* slug =
-        choice < 92 ? "VCA-1" : (random::u32() % 2 ? "VCF" : "Delay");
+    const char* slug = "VCA-1";
     auto* model = plugin::getModel("Fundamental", slug);
     if (!model) {
       delete state;
@@ -125,30 +121,32 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
     auto* add = new history::ModuleAdd;
     add->setModule(w);
     batch->push(add);
-    Vec pos;
+    Vec pos(-INFINITY, 0);
     for (const auto& member : members)
-      if (auto* other = find(member.id))
-        pos.x = std::max(pos.x, member.position.x + other->box.size.x);
+      if (auto* other = find(member.id)) {
+        float right = member.position.x + other->box.size.x;
+        if (right > pos.x) pos = Vec(right, member.position.y);
+      }
+    if (expanded) {
+      homeRack->setModulePosNearest(w, pos);
+      pos = w->box.pos;
+    }
     members.push_back({m->id, pos, w, nullptr});
     auto* remove = new history::CableRemove;
     remove->setCable(old);
     batch->push(remove);
     homeRack->removeCable(old);
     delete old;
-    int input = std::string(slug) == "VCA-1" ? 1
-                : std::string(slug) == "VCF" ? 3
-                                             : 4;
-    wire(from, w->getInput(input));
+    wire(from, w->getInput(1));
     wire(w->getOutput(0), to);
     if (std::string(slug) == "VCA-1" && !sources.empty())
       wire(sources[random::u32() % sources.size()], w->getInput(0));
   }
-  bool wasExpanded = expanded;
-  if (wasExpanded) syncMemberPositions();
-  pack();
+  compactMembers();
+  if (!expanded) pack();
   layoutControls();
-  if (wasExpanded) revealMembers(true);
   saveGroup();
+  refreshGeneratedName();
   state->newModuleJ = toJson();
   state->after.capture();
   batch->push(state);

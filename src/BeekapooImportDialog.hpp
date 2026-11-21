@@ -13,7 +13,7 @@ struct BeekImportChoice {
 };
 // Modal import choices belong to the scene, not to the mouse/context menu.
 struct BeekImportDialog : ui::MenuOverlay {
-  struct Button : ui::Button {
+  struct Button : computerscare::type::Button {
     BeekImportDialog* dialog = nullptr;
     std::function<void()> action;
     void onAction(const ActionEvent&) override { action(); }
@@ -48,7 +48,7 @@ struct BeekImportDialog : ui::MenuOverlay {
         nvgFillColor(args.vg, nvgRGB(30, 91, 70));
         nvgFill(args.vg);
       }
-      nvgFontFaceId(args.vg, APP->window->uiFont->handle);
+      nvgFontFaceId(args.vg, computerscare::type::handle());
       nvgFillColor(args.vg, nvgRGB(24, 39, 31));
       nvgFontSize(args.vg, 16);
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
@@ -73,7 +73,7 @@ struct BeekImportDialog : ui::MenuOverlay {
     void draw(const DrawArgs& args) override {
       widget::OpaqueWidget::draw(args);
       nvgSave(args.vg);
-      nvgFontFaceId(args.vg, APP->window->uiFont->handle);
+      nvgFontFaceId(args.vg, computerscare::type::handle());
       nvgFillColor(args.vg, nvgRGB(23, 39, 30));
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
       nvgFontSize(args.vg, 23);

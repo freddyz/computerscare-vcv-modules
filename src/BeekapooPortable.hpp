@@ -462,11 +462,9 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
     return false;
   }
 }
+#include "BeekapooCopy.hpp"
 void Beekapoo::duplicateAction(bool cables) {
-  auto* m = getModule<Module>();
-  if (!m) return;
-  prepareContainedSave();
-  m->copyBoundary = cables;
+  if (!module) return;
+  ScopedGroupCopyPolicy scope({this}, cables);
   app::ModuleWidget::cloneAction(cables);
-  m->copyBoundary = false;
 }

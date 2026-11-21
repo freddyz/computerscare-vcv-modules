@@ -34,25 +34,25 @@ inline PortCell planPortCell(float width, float height, bool input) {
   for (bool beside : {false, true}) {
     if (beside && !input) continue;
     for (bool captions : {true, false}) {
-      if (!input && !captions) continue;
+      // Prefer a small labelled jack over a large anonymous one.
+      if (!captions) continue;
       float w = std::max(0.f, width - 4), h = std::max(0.f, height - 4);
       float side = beside ? 25.f : 0.f;
       float above = input && !beside ? 23.f : 0.f;
-      if (w - side < 16 || h - above < 16 || (input && w < 20)) continue;
+      if (w - side < 16 || h - above < 16 || (input && width < 20)) continue;
       float labelHeight = 0;
       float baseline = beside ? 20.f : 16.f;
       float room = h - above - baseline - 4;
-      if (captions && w >= 20 && room >= 10)
+      if (captions && w >= 14 && room >= 10)
         labelHeight = std::min(room, std::min(36.f, std::max(12.f, h * .28f)));
       float gap = labelHeight ? 4.f : 0.f;
       float jackW = w - side, jackH = h - above - labelHeight - gap;
       PortCell candidate;
       candidate.large = jackW >= 27 && jackH >= 29;
-      float scale = candidate.large
-                        ? std::min(1.5f, std::min(jackW / 27, jackH / 29))
-                        : 1;
-      jackW = candidate.large ? 27 * scale : 16;
-      jackH = candidate.large ? 29 * scale : 16;
+      // Use the native Computerscare sizes; extra room is for spacing and
+      // captions, not enlarged ports.
+      jackW = candidate.large ? 27 : 16;
+      jackH = candidate.large ? 29 : 16;
       float bodyHeight = above + std::max(jackH, beside ? 20.f : 0.f);
       float top = (height - bodyHeight - gap - labelHeight) * .5f;
       float left = (width - jackW - side) * .5f;
@@ -68,7 +68,7 @@ inline PortCell planPortCell(float width, float height, bool input) {
         candidate.fontSize = std::max(8.f, std::min(18.f, labelHeight * .7f));
       }
       float score = jackW + (input && candidate.large ? 12 : 0) +
-                    (labelHeight ? (input ? 12 : 20) : 0) +
+                    (labelHeight ? 100 : 0) +
                     std::min(labelHeight, 24.f) * .25f;
       if (score > bestScore) {
         bestScore = score;

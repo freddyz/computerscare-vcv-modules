@@ -1070,7 +1070,7 @@ void SubpatchView::draw(const DrawArgs& args) {
   nvgRect(args.vg, 0, 0, box.size.x, box.size.y);
   nvgFillColor(args.vg, nvgRGBA(10, 15, 13, 240));
   nvgFill(args.vg);
-  auto font = APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
+  auto font = computerscare::type::font();
   nvgFontFaceId(args.vg, font->handle);
   nvgFontSize(args.vg, 12);
   nvgFillColor(args.vg, nvgRGB(148, 164, 155));

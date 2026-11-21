@@ -15,11 +15,13 @@ inline float moduleWidth(plugin::Model* model) {
 // Build a portable group without touching the rack. Each processor gets its
 // signal input; envelopes get a running gate. Spare inputs stay available on
 // the front, rather than breaking a required connection to expose a jack.
-inline json_t* plan(int requestedCount = 0) {
+inline json_t* plan(int requestedCount = 0,
+                    const beekapoo_patch::ExposureCounts* exact = nullptr) {
   const auto& specs = library();
   for (const auto& spec : specs)
     if (!plugin::getModel("Fundamental", spec.slug)) return nullptr;
-  auto graph = beekapoo_patch::Planner(random::u32()).make(requestedCount);
+  auto graph =
+      beekapoo_patch::Planner(random::u32()).make(requestedCount, exact);
   if (graph.modules.empty()) return nullptr;
   const auto& selected = graph.modules;
   int count = int(selected.size());
@@ -90,6 +92,21 @@ inline json_t* plan(int requestedCount = 0) {
 }
 }  // namespace generated
 
+// Only structural edits rename generated titles. Native knobs, external
+// cables, exposure, layout and theme do not change this identity. Restore
+// seeds a new baseline so Undo, duplication and patch reload keep saved names.
+void Beekapoo::refreshGeneratedName() {
+  if (!module) return;
+  refreshAppearance();
+  if (namedTopologyReady && namedTopology != appearance.wiring &&
+      !members.empty()) {
+    auto* m = getModule<Module>();
+    if (!m->hasCustomPatchName()) m->setPatchName(generated::name());
+  }
+  namedTopology = appearance.wiring;
+  namedTopologyReady = true;
+}
+
 bool Beekapoo::generateDefaultPatch(int requestedCount) {
   if (!module || !members.empty()) return false;
   auto* root = generated::plan(requestedCount);
@@ -102,6 +119,8 @@ bool Beekapoo::generateDefaultPatch(int requestedCount) {
   auto previous = m->getPatchName();
   m->setPatchName(generated::name());
   bool result = importContents(root);
+  namedTopologyReady = false;
+  refreshGeneratedName();
   if (!result) m->setPatchName(previous);
   return result;
 }
@@ -111,7 +130,7 @@ bool Beekapoo::regeneratePatch() {
   if (!randomLocks.empty()) {
     // Keep native identities and every locked connection intact. Locks turn
     // replacement into an in-place variation of the unlocked graph.
-    auto* batch = new history::ComplexAction;
+    auto* batch = new TopologyHistory(module->id);
     batch->name = "regenerate unlocked subpatch";
     parameterAction(4, true, batch);
     int growth = 1 + random::u32() % 3;
@@ -125,9 +144,11 @@ bool Beekapoo::regeneratePatch() {
     status = "Unlocked subpatch regenerated";
     return true;
   }
-  auto* root = generated::plan();
+  beekapoo_patch::ExposureCounts counts{0, 0, int(parameters.size())};
+  for (const auto& p : ports) ++(p.input ? counts.inputs : counts.outputs);
+  auto* root = generated::plan(0, &counts);
   if (!root) {
-    status = "Install VCV Free to generate a subpatch";
+    status = "Could not generate a subpatch with these control counts";
     return false;
   }
   DEFER({ json_decref(root); });
@@ -135,11 +156,15 @@ bool Beekapoo::regeneratePatch() {
   change->name = "generate new subpatch";
   change->moduleId = module->id;
   change->oldModuleJ = toJson();
+  auto previous = getModule<Module>()->getPatchName();
   getModule<Module>()->setPatchName(generated::name());
   if (!importContents(root, "", -1, change)) {
+    getModule<Module>()->setPatchName(previous);
     delete change;
     return false;
   }
+  namedTopologyReady = false;
+  refreshGeneratedName();
   return true;
 }
 void Beekapoo::initializeBrowserPreview() {
@@ -225,7 +250,7 @@ void Beekapoo::initializeBrowserPreview() {
     if (port->input) {
       browserInputGains->configParam(i, -1, 1, 1, "Input attenuverter", "%", 0,
                                      100);
-      auto* gain = new MappedParam<SmallKnob>;
+      auto* gain = new MappedParam<ThemedSmallKnob>;
       gain->module = browserInputGains.get();
       gain->paramId = i;
       gain->initParamQuantity();
@@ -259,29 +284,5 @@ void Beekapoo::generateOnBrowserAdd() {
   if (added(history->actions[history->actionIndex - 1])) generateDefaultPatch();
 }
 void Beekapoo::renameMenu(ui::Menu* menu) {
-  menu->addChild(createSubmenuItem("Name", "", [this](ui::Menu* child) {
-    struct Field : ui::TextField {
-      WeakPtr<Beekapoo> owner;
-      void onSelectKey(const SelectKeyEvent& e) override {
-        if (e.action == GLFW_PRESS &&
-            (e.key == GLFW_KEY_ENTER || e.key == GLFW_KEY_KP_ENTER)) {
-          if (owner) {
-            auto* action = owner->beginAction("rename Beekapoo");
-            owner->getModule<Module>()->setPatchName(text);
-            owner->finishAction(action);
-          }
-          if (auto* overlay = getAncestorOfType<ui::MenuOverlay>())
-            overlay->requestDelete();
-          e.consume(this);
-        } else
-          ui::TextField::onSelectKey(e);
-      }
-    };
-    auto* field = new Field;
-    field->owner = this;
-    field->text = getModule<Module>()->getPatchName();
-    field->placeholder = "Beekapoo";
-    field->box.size = Vec(220, 25);
-    child->addChild(field);
-  }));
+  menu->addChild(createMenuItem("Rename…", "", [this] { editName(); }));
 }

@@ -1,12 +1,13 @@
 #pragma once
 
-#include "Computerscare.hpp"
+#include "BeekapooTheme.hpp"
 
 namespace beekapoo {
 // UI-only preferences belong to the Rack user, not a patch or module instance.
 struct Preferences {
   float outsideFade = .45f;
   float savedOutsideFade = .45f;
+  int defaultTheme = 0, savedDefaultTheme = 0;
   std::string path;
 
   explicit Preferences(std::string path) : path(std::move(path)) {
@@ -16,17 +17,24 @@ struct Preferences {
     if (json_is_number(fade))
       outsideFade = math::clamp(float(json_number_value(fade)), 0.f, .9f);
     savedOutsideFade = outsideFade;
+    auto* theme = json_object_get(root, "defaultTheme");
+    if (json_is_integer(theme))
+      defaultTheme = validPanelTheme(json_integer_value(theme));
+    savedDefaultTheme = defaultTheme;
     json_decref(root);
   }
 
   void save() {
-    if (outsideFade == savedOutsideFade) return;
-    auto* root = json_pack("{s:f}", "outsideFade", double(outsideFade));
+    if (outsideFade == savedOutsideFade && defaultTheme == savedDefaultTheme)
+      return;
+    auto* root = json_pack("{s:f,s:i}", "outsideFade", double(outsideFade),
+                           "defaultTheme", defaultTheme);
     std::string temporary = path + ".tmp";
     int result = json_dump_file(root, temporary.c_str(), JSON_INDENT(2));
     json_decref(root);
     if (result == 0 && system::rename(temporary, path)) {
       savedOutsideFade = outsideFade;
+      savedDefaultTheme = defaultTheme;
     } else {
       system::remove(temporary);
       WARN("Could not save Beekapoo preferences: %s", path.c_str());

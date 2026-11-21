@@ -57,6 +57,10 @@ inline int paramNumber(const std::string& label) {
 struct ParamCell {
   int index;
   float x, y, diameter, labelWidth, labelScale, labelHeight;
+  // Block layouts own a single shared caption, independently of knob rows.
+  int block = -1;
+  float captionX = 0, captionY = 0;
+  std::string captionText;
   ParamCell(int index, float x, float y, float diameter, float labelWidth,
             float labelScale = 1, float labelHeight = 32)
       : index(index),
@@ -170,7 +174,7 @@ inline std::vector<ParamCell> compactParams(
 }
 // Choose row breaks by available space rather than forcing each group onto
 // its own row. Search largest controls first; group order remains stable.
-inline std::vector<ParamCell> layoutParams(
+inline std::vector<ParamCell> rowParams(
     const std::vector<ParamLayoutItem>& items, float width, float height,
     bool byModule) {
   if (items.empty() || width <= 0 || height <= 0) return {};
@@ -302,3 +306,5 @@ inline std::vector<ParamCell> layoutParams(
   return cells;
 }
 }  // namespace beekapoo
+
+#include "BeekapooParamBlocks.hpp"

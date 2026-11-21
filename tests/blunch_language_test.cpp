@@ -1,8 +1,10 @@
 #include <algorithm>
 #include <sstream>
+#include <set>
 #include <stdexcept>
 #include "BlunchLanguage/BlunchLanguage.hpp"
 #include "Blunch/BlunchRandomProgram.hpp"
+#include "PatchSaveNaming.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -1727,6 +1729,33 @@ void testRandomProgramGenerator() {
   require(expandTemplate(catalogue, "(pick ok)", 1) == "ok", "discrete choices expand");
   require(expandTemplate(catalogue, "(repeat x 3 ,)", 1) == "x,x,x",
           "repeat supports custom separators");
+  require(expandTemplate(catalogue, "(replace cocoa o ae)", 1) == "caecaea",
+          "literal substitution supports letter-to-chunk replacements");
+  require(expandTemplate(catalogue, "(replace bob b bed)", 1) == "bedobed",
+          "inserted replacement chunks are not recursively replaced");
+  require(expandTemplate(catalogue, "(replace banana na \"\")", 1) == "ba",
+          "replacement can remove literal chunks");
+  require(expandTemplate(catalogue, "(mutate café a ae)", 1) == "caefé",
+          "ASCII substitutions preserve surrounding UTF-8");
+  require(expandTemplate(catalogue, "(mutate bob z \"(ref missing)\")", 1) == "bob",
+          "missing matches leave text intact without expanding replacements");
+  require(expandTemplate(catalogue, "(mutate bob b \"(pick bed)\")", 1).find("bed") != std::string::npos,
+          "selected replacements can use nested choices");
+  std::set<std::string> vowelResults, chunkResults, ruleResults;
+  for(unsigned seed=1;seed<256;++seed) {
+    auto vowel=expandTemplate(catalogue,"(mutate cocoa o ae)",seed);
+    require(vowel=="caecoa"||vowel=="cocaea","mutation changes exactly one matching occurrence");
+    require(vowel==expandTemplate(catalogue,"(mutate cocoa o ae)",seed),"mutations are reproducible");
+    vowelResults.insert(vowel);
+    auto chunk=expandTemplate(catalogue,"(mutate bob b bed)",seed);
+    require(chunk=="bedob"||chunk=="bobed","mutation inserts a chunk without altering other occurrences");
+    chunkResults.insert(chunk);
+    auto rule=expandTemplate(catalogue,"(mutate bob b bed o ae z unused)",seed);
+    require(rule=="bedob"||rule=="bobed"||rule=="baeb","mutation chooses only rules that match the original word");
+    ruleResults.insert(rule);
+  }
+  require(vowelResults.size()==2&&chunkResults.size()==2&&ruleResults.size()==3,
+          "different entropy explores matching positions and replacement rules");
   require(expandTemplate(catalogue, "(repeat \"(nrange 1 1000000)\" 4 ,)", 42) !=
           expandTemplate(catalogue, "(repeat \"(nrange 1 1000000)\" 4 ,)", 43),
           "different seeds draw different repeated expressions");
@@ -1734,7 +1763,9 @@ void testRandomProgramGenerator() {
   const char* invalid[] = {"(ref missing)", "(ref cycle)", "(repeat x 1000000)",
       "(wpick -1 x 2 y)", "(wpick 0 x)", "(nrange 1)", "(nrange 0.5 3)",
       "(frange 1 2 9)", "(unknown x)", "(distinct x 2)", "(pick", "(pick \"unterminated)",
-      "(nrange 0 1000000000)", "(repeat \"(repeat x 16)\" 16 ,"};
+      "(nrange 0 1000000000)", "(repeat \"(repeat x 16)\" 16 ,",
+      "(replace x \"\" y)", "(mutate x \"\" y)", "(mutate word a)",
+      "(mutate word a e i)", "(replace word a e i o)"};
   for (auto text : invalid) {
     bool rejected = false;
     try { expandTemplate(catalogue, text, 1); }
@@ -1757,8 +1788,41 @@ void testRandomProgramGenerator() {
   try { expandTemplate(catalogue, "(repeat \"(ref bulk)\" 5)", 1); }
   catch (const std::runtime_error&) { expandedTooLong = true; }
   require(expandedTooLong, "expanded output respects the byte limit");
+  require(expandTemplate(catalogue,"(mutate x x (repeat (ref bulk) 4 \"\"))",1).size()==4000,
+          "large but bounded nested replacements remain valid");
+  for(const char* text:{"(replace xxxxx x \"(ref bulk)\")",
+                        "(mutate (ref bulk) x (repeat (ref bulk) 4 \"\"))"}) {
+    bool tooLarge=false;
+    try {expandTemplate(catalogue,text,1);}
+    catch(const std::runtime_error&){tooLarge=true;}
+    require(tooLarge,"replacement growth respects the output byte limit");
+  }
   require(expandTemplate(catalogue, "(wpick 0 \"(ref missing)\" 1 ok)", 3) == "ok",
           "unselected branches are not evaluated");
+  {
+    auto names=testBeekNameCatalogue();
+    std::set<std::string> corpus,rawWords,generated;
+    for(const auto& definition:names.definitions)for(const auto& choice:definition.second)
+      if(choice.text.find('(')==std::string::npos)corpus.insert(choice.text);
+    for(const auto* word:computerscare::patch_saves::words())
+      require(corpus.count(word),"Beekapoo includes the complete existing save-branch word corpus");
+    int changed=0,numbered=0;
+    for(unsigned seed=0;seed<4096;++seed) {
+      auto raw=expandTemplate(names,"(ref raw)",seed);
+      require(corpus.count(raw),"raw naming vocabulary remains unmodified");rawWords.insert(raw);
+      auto word=expandTemplate(names,"(ref word)",seed);
+      changed+=!corpus.count(word);
+      auto name=expandTemplate(names,"(ref name)",seed);
+      require(!name.empty()&&name.size()<=96&&name.find('\n')==std::string::npos,
+              "shipped naming recipes always produce a bounded single-line title");
+      require(name==expandTemplate(names,"(ref name)",seed),"shipped naming recipes remain deterministic");
+      numbered+=std::any_of(name.begin(),name.end(),[](char c){return c>='0'&&c<='9';});
+      generated.insert(name);
+    }
+    require(rawWords.size()>250&&generated.size()>3000,"expanded naming corpus supplies broad variety");
+    require(changed>400&&changed<1600,"word mutations are occasional, with most words left intact");
+    require(numbered>500&&numbered<2500,"names continue to mix numbered and unnumbered forms");
+  }
 }
 
 }  // namespace

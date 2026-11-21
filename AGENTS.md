@@ -21,3 +21,4 @@
 - Use appearance-based jack names: `JackSmallPointingUp/Down`, `JackLargePointingUp/Down`, and `JackLargeOutlinePointingUp/Down` (spell out the full class name in code). `Outline` means an extra outer pentagon border. Names do not imply input/output routing. See `doc/development/jacks.md`; preserve a module’s chosen artwork when refactoring.
 
 - For this UI session, show a freshly rendered, inspected screenshot after every UI change, including when working locally. Vary representative module parameters and arrangements between captures so screenshots exercise different states; preserve the actual browser preview when that is specifically requested.
+- For galleries, use roughly half light and half dark examples, with different modules/arrangements in each. Do not duplicate each example in both themes unless explicitly requested.

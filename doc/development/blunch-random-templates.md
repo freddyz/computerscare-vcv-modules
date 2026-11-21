@@ -16,16 +16,20 @@ Counted-repeat examples use two successive clocks or a compound choice, such as 
 
 The small template language is independent of Blunch’s clock parser:
 
-| Expression                     | Result                                               |
-| ------------------------------ | ---------------------------------------------------- |
-| `(nrange 50 180)`              | Random integer, including both endpoints             |
-| `(frange 0.84 3 2)`            | Random decimal, formatted to two decimal places      |
-| `(pick 2 3 4 6 8)`             | One discrete choice                                  |
-| `(wpick 6 1 4 2 2 3 1 4)`      | One value from weight/value pairs                    |
-| `(ref tempo)`                  | Expand a named definition or weighted recipe         |
-| `(repeat "(ref tempo)" 2 " ")` | Two independently drawn tempos, separated by a space |
+| Expression                     | Result                                                  |
+| ------------------------------ | ------------------------------------------------------- |
+| `(nrange 50 180)`              | Random integer, including both endpoints                |
+| `(frange 0.84 3 2)`            | Random decimal, formatted to two decimal places         |
+| `(pick 2 3 4 6 8)`             | One discrete choice                                     |
+| `(wpick 6 1 4 2 2 3 1 4)`      | One value from weight/value pairs                       |
+| `(ref tempo)`                  | Expand a named definition or weighted recipe            |
+| `(repeat "(ref tempo)" 2 " ")` | Two independently drawn tempos, separated by a space    |
+| `(replace "cocoa" "o" "ae")`   | Replace every literal match: `caecaea`                  |
+| `(mutate "cocoa" "o" "ae")`    | Replace one randomly chosen match: `caecoa` or `cocaea` |
 
 `(distinct "(ref tempo)" 2 "|")` draws different values, for choices such as `{100|120}bpm`. It retries duplicates up to 64 times per value and reports an error if the recipe cannot produce enough distinct results.
+
+`mutate` accepts several from/to pairs: `(mutate "bob" "b" "bed" "o" "ae")` produces `bedob`, `bobed`, or `baeb`. It selects one matching occurrence in the original text. Replacements can use nested choices; only the selected replacement is expanded. Both replacement functions use literal, case-sensitive, non-overlapping matches, leave unmatched text alone, reject empty search strings, and never reprocess inserted text. Beekapoo uses these for occasional spelling changes; Blunch's clock recipes are unchanged.
 
 Literal text surrounds expressions: `[(nrange 333 1000) (nrange 333 1000)]ms` can become `[397 602]ms`. Quote arguments containing spaces; `\n` inside a quoted argument inserts a newline (written as `\\n` inside a JSON string). Templates can nest. Escape literal parentheses with a backslash, doubled for JSON.
 

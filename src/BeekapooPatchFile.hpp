@@ -309,6 +309,11 @@ bool Beekapoo::loadBeek(const std::string& path, int64_t sourceOwner,
   DEFER({ json_decref(snapshot); });
   auto* data = json_object_get(snapshot, "data");
   if (!json_is_object(data)) throw Exception("Invalid Beek settings");
+  if (getModule<Module>()->hasCustomPatchName()) {
+    json_object_set_new(
+        data, "name", json_string(getModule<Module>()->getPatchName().c_str()));
+    json_object_set_new(data, "customName", json_true());
+  }
   json_t* group;
   std::set<int64_t> selected;
   if (sourceOwner >= 0) {

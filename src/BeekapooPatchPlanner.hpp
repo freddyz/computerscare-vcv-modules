@@ -6,104 +6,11 @@
 #include <string>
 #include <vector>
 
-// Standalone graph planning. Port numbers belong only to the catalog below;
+#include "BeekapooPatchCatalog.hpp"
+
+// Standalone graph planning. Port numbers belong only to the separate catalog;
 // no Rack modules, JSON, UI objects or engine state are needed here.
 namespace beekapoo_patch {
-enum class Signal { sound, modulation, gate };
-struct Requirement {
-  // All groups must be satisfied. Within a group, any one input is enough.
-  std::vector<int> anyOf;
-  Signal signal;
-};
-struct Output {
-  int port;
-  Signal signal;
-  std::vector<Requirement> requirements;
-};
-struct Range {
-  int param;
-  float low, high;
-};
-struct ControlInput {
-  int port;
-  std::vector<Requirement> prerequisites;
-  std::vector<int> affectedOutputs;
-  ControlInput(int port, std::vector<Requirement> prerequisites = {},
-               std::vector<int> outputs = {})
-      : port(port), prerequisites(prerequisites), affectedOutputs(outputs) {}
-};
-struct Spec {
-  const char* slug;
-  std::vector<ControlInput> modulationInputs;
-  std::vector<Output> outputs;
-  std::vector<int> parameters;
-  std::vector<Range> initial;
-};
-inline const std::vector<Spec>& library() {
-  static const std::vector<Spec> specs = {
-      {"VCO",
-       {0, 1, 3},
-       {{0, Signal::sound, {}},
-        {1, Signal::sound, {}},
-        {2, Signal::sound, {}},
-        {3, Signal::sound, {}}},
-       {2, 5},
-       {{2, -24, 12}, {4, .02f, .12f}, {5, .25f, .75f}, {6, .05f, .2f}}},
-      {"LFO",
-       {0, 2, 3, 4},
-       {{0, Signal::modulation, {}},
-        {1, Signal::modulation, {}},
-        {2, Signal::modulation, {}},
-        {3, Signal::gate, {}}},
-       {2, 5},
-       {{2, -3, 2}, {3, .05f, .2f}, {5, .3f, .7f}, {6, .05f, .2f}}},
-      {"Noise",
-       {},
-       {{0, Signal::sound, {}}, {1, Signal::sound, {}}, {2, Signal::sound, {}}},
-       {},
-       {}},
-      {"VCF",
-       {0, 1},
-       {{0, Signal::sound, {{{3}, Signal::sound}}},
-        {1, Signal::sound, {{{3}, Signal::sound}}}},
-       {0, 2},
-       {{0, .45f, .8f}, {2, .05f, .4f}, {3, .04f, .14f}, {5, .05f, .15f}}},
-      {"VCA-1",
-       {0},
-       {{0, Signal::sound, {{{1}, Signal::sound}}}},
-       {0},
-       {{0, .5f, .85f}}},
-      {"Delay",
-       {0, 2},
-       {{0, Signal::sound, {{{4}, Signal::sound}}}},
-       {0, 1, 3},
-       {{0, .45f, .75f},
-        {1, .1f, .45f},
-        {3, .2f, .55f},
-        {4, .02f, .08f},
-        {6, .05f, .2f}}},
-      {"ADSR",
-       {0, 1, 2, 3},
-       {{0, Signal::modulation, {{{4}, Signal::gate}}}},
-       {0, 1, 2, 3},
-       {{0, .15f, .45f}, {1, .2f, .5f}, {2, .3f, .8f}, {3, .2f, .6f}}},
-      // Mix needs at least one channel signal. A direct output needs its own
-      // channel signal, never just its CV. CV remains optional at unity gain.
-      {"VCMixer",
-       {{0, {}, {0}},
-        {5, {{{1}, Signal::sound}}, {0, 1}},
-        {6, {{{2}, Signal::sound}}, {0, 2}},
-        {7, {{{3}, Signal::sound}}, {0, 3}},
-        {8, {{{4}, Signal::sound}}, {0, 4}}},
-       {{0, Signal::sound, {{{1, 2, 3, 4}, Signal::sound}}},
-        {1, Signal::sound, {{{1}, Signal::sound}}},
-        {2, Signal::sound, {{{2}, Signal::sound}}},
-        {3, Signal::sound, {{{3}, Signal::sound}}},
-        {4, Signal::sound, {{{4}, Signal::sound}}}},
-       {0, 1, 2, 3, 4},
-       {{0, .6f, 1}, {1, .7f, 1}, {2, .7f, 1}, {3, .7f, 1}, {4, .7f, 1}}}};
-  return specs;
-}
 struct Endpoint {
   int node, port;
 };
@@ -117,6 +24,9 @@ struct Plan {
   std::vector<int> modules;
   std::vector<Cable> cables;
   std::vector<Endpoint> inputs, outputs, parameters;
+};
+struct ExposureCounts {
+  int inputs, outputs, parameters;
 };
 inline int moduleCount(unsigned value) {
   const int weights[] = {14, 22, 20, 14, 10, 7, 6, 4, 3};
@@ -135,33 +45,45 @@ class Planner {
     for (int i = int(v.size()) - 1; i > 0; --i) std::swap(v[i], v[pick(i + 1)]);
   }
   const std::vector<Spec>& specs;
-  bool useful(const Plan& p, int node, const ControlInput& input) const {
-    for (const auto& req : input.prerequisites) {
-      bool found = false;
-      for (const auto& c : p.cables)
-        found |= c.to.node == node &&
-                 std::find(req.anyOf.begin(), req.anyOf.end(), c.to.port) !=
-                     req.anyOf.end();
-      if (!found) return false;
-    }
-    if (input.affectedOutputs.empty()) return true;
-    auto matches = [&](Endpoint e) {
-      return e.node == node && std::find(input.affectedOutputs.begin(),
-                                         input.affectedOutputs.end(),
-                                         e.port) != input.affectedOutputs.end();
-    };
-    for (auto e : p.outputs)
-      if (matches(e)) return true;
-    for (const auto& c : p.cables)
-      if (matches(c.from)) return true;
-    return false;
+  bool useful(const Plan& p, int node, const Control& control) const {
+    return controlUseful(
+        control,
+        [&](int input) {
+          for (const auto& c : p.cables)
+            if (c.to == Endpoint{node, input}) return true;
+          return false;
+        },
+        [&](int output) {
+          for (auto e : p.outputs)
+            if (e == Endpoint{node, output}) return true;
+          for (const auto& c : p.cables)
+            if (c.from == Endpoint{node, output}) return true;
+          return false;
+        });
+  }
+  int chooseOutput(const Spec& spec) {
+    int priority = spec.outputs.front().priority;
+    for (const auto& out : spec.outputs)
+      priority = std::max(priority, out.priority);
+    std::vector<int> choices;
+    for (int i = 0; i < int(spec.outputs.size()); ++i)
+      if (spec.outputs[i].priority == priority) choices.push_back(i);
+    return choices[pick(int(choices.size()))];
   }
 
  public:
   explicit Planner(uint32_t seed, const std::vector<Spec>& catalog = library())
       : random(seed), specs(catalog) {}
-  Plan make(int count = 0) {
+  Plan make(int count = 0, const ExposureCounts* exact = nullptr) {
     count = count ? std::max(3, std::min(11, count)) : moduleCount(random());
+    if (exact) {
+      if (exact->inputs < 0 || exact->outputs < 0 || exact->parameters < 0)
+        return {};
+      // Dense existing panels may need more processors than a fresh Beek.
+      count = std::max(
+          count, std::max((exact->parameters + 3) / 4,
+                          std::max((exact->inputs + 1) / 2, exact->outputs)));
+    }
     std::vector<int> sources, processors, envelopes;
     for (int i = 0; i < int(specs.size()); ++i) {
       bool free = false, sound = false, gate = false;
@@ -181,6 +103,8 @@ class Planner {
     }
     if (sources.empty() || processors.empty()) return {};
     for (int attempt = 0; attempt < 256; ++attempt) {
+      // Retry with more capacity rather than silently changing the panel.
+      if (exact && attempt && attempt % 8 == 0) ++count;
       Plan p;
       std::set<std::pair<int, int>> occupied;
       auto wire = [&](Endpoint a, Endpoint b) {
@@ -191,8 +115,8 @@ class Planner {
       };
       p.modules.push_back(sources[pick(int(sources.size()))]);
       auto chooseOutput = [&](int node) {
-        const auto& out = specs[p.modules[node]].outputs;
-        return Endpoint{node, out[pick(int(out.size()))].port};
+        const auto& spec = specs[p.modules[node]];
+        return Endpoint{node, spec.outputs[this->chooseOutput(spec)].port};
       };
       Endpoint main = chooseOutput(0);
       p.outputs = {main};
@@ -200,8 +124,8 @@ class Planner {
         std::vector<Endpoint> targets, gates;
         for (int j = 0; j < i; ++j) {
           for (const auto& in : specs[p.modules[j]].modulationInputs)
-            if (!occupied.count({j, in.port}) && useful(p, j, in))
-              targets.push_back({j, in.port});
+            if (!occupied.count({j, in.id}) && useful(p, j, in))
+              targets.push_back({j, in.id});
           for (const auto& out : specs[p.modules[j]].outputs)
             if (out.signal == Signal::gate) gates.push_back({j, out.port});
         }
@@ -224,29 +148,61 @@ class Planner {
         } else {
           int type = processors[pick(int(processors.size()))];
           p.modules.push_back(type);
-          const auto& outs = specs[type].outputs;
-          const auto& chosen = outs[pick(int(outs.size()))];
+          const auto& chosen =
+              specs[type].outputs[this->chooseOutput(specs[type])];
           for (const auto& req : chosen.requirements)
             wire(main, {i, req.anyOf[pick(int(req.anyOf.size()))]});
           main = {i, chosen.port};
           p.outputs = {main};
         }
       }
+      if (exact && exact->outputs > 1) {
+        std::vector<Endpoint> additional;
+        for (int i = 0; i < count; ++i)
+          for (const auto& out : specs[p.modules[i]].outputs) {
+            Endpoint e{i, out.port};
+            if (e == main) continue;
+            bool ready = true;
+            for (const auto& req : out.requirements) {
+              bool connected = false;
+              for (int input : req.anyOf)
+                connected |= occupied.count({i, input});
+              ready &= connected;
+            }
+            if (ready) additional.push_back(e);
+          }
+        shuffle(additional);
+        if (int(additional.size()) < exact->outputs - 1) continue;
+        p.outputs.insert(p.outputs.end(), additional.begin(),
+                         additional.begin() + exact->outputs - 1);
+      }
+      if (exact && exact->outputs == 0) p.outputs.clear();
       for (int i = 0; i < count; ++i) {
         for (const auto& in : specs[p.modules[i]].modulationInputs)
-          if (!occupied.count({i, in.port}) && useful(p, i, in))
-            p.inputs.push_back({i, in.port});
-        if (!specs[p.modules[i]].parameters.empty()) {
-          const auto& v = specs[p.modules[i]].parameters;
-          p.parameters.push_back({i, v[pick(int(v.size()))]});
-        }
+          if (!occupied.count({i, in.id}) && useful(p, i, in))
+            p.inputs.push_back({i, in.id});
+        std::vector<int> eligible;
+        for (const auto& param : specs[p.modules[i]].parameters)
+          if (useful(p, i, param)) eligible.push_back(param.id);
+        if (exact) {
+          for (int id : eligible) p.parameters.push_back({i, id});
+        } else if (!eligible.empty())
+          p.parameters.push_back({i, eligible[pick(int(eligible.size()))]});
       }
-      if (p.inputs.size() < 3) continue;
+      int inputCount = exact ? exact->inputs : 3;
+      int paramCount =
+          exact ? exact->parameters : std::min(4, int(p.parameters.size()));
+      if (int(p.inputs.size()) < inputCount ||
+          int(p.parameters.size()) < paramCount)
+        continue;
       shuffle(p.inputs);
-      p.inputs.resize(3);
+      p.inputs.resize(inputCount);
       shuffle(p.parameters);
-      if (p.parameters.size() > 4) p.parameters.resize(4);
-      if (validate(p).empty()) return p;
+      p.parameters.resize(paramCount);
+      if (!validate(p).empty()) continue;
+      // A deliberately output-free panel still gets a connected inner patch.
+      if (exact && exact->outputs == 0) p.outputs.clear();
+      return p;
     }
     return {};
   }
@@ -273,6 +229,23 @@ class Planner {
     for (auto e : p.inputs)
       if (!validNode(e) || occupied.count({e.node, e.port}))
         return "Invalid exposed input";
+    for (const auto& c : p.cables)
+      for (const auto& rule : specs[p.modules[c.to.node]].modulationInputs)
+        if (rule.id == c.to.port && !useful(p, c.to.node, rule))
+          return "Unused control input";
+    for (auto e : p.inputs) {
+      bool found = false;
+      for (const auto& rule : specs[p.modules[e.node]].modulationInputs)
+        if (rule.id == e.port && useful(p, e.node, rule)) found = true;
+      if (!found) return "Unused exposed input";
+    }
+    for (auto e : p.parameters) {
+      if (!validNode(e)) return "Invalid exposed parameter";
+      bool found = false;
+      for (const auto& rule : specs[p.modules[e.node]].parameters)
+        if (rule.id == e.port && useful(p, e.node, rule)) found = true;
+      if (!found) return "Unused exposed parameter";
+    }
     // Validate requirements for every output actually used, including the
     // external output. A cable into a CV alone cannot make a mixer live.
     std::vector<Endpoint> used = p.outputs;
@@ -297,7 +270,7 @@ class Planner {
     for (size_t pass = 0; pass < p.modules.size(); ++pass)
       for (const auto& c : p.cables)
         if (live.count(c.to.node)) live.insert(c.from.node);
-    if (live.size() != p.modules.size())
+    if (!p.outputs.empty() && live.size() != p.modules.size())
       return "Module has no path to an exposed output";
     return "";
   }

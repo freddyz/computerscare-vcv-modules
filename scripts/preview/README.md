@@ -93,3 +93,42 @@ ignored preview directory; no production module code is changed.
 
 For Beekapoo review PDFs, use one page unless requested otherwise. Keep source
 module names below each panel; omit HP and parameter/input/output counts.
+
+`BEEKAPOO_THEMES=1 scripts/preview-module.sh beekapoo --no-build` renders three
+panels in Light and Dark, plus both browser themes. It checks saved overrides,
+the shared default, live Rack preference changes, and unchanged parameter
+values and positions. Preferences are written only to the preview's scratch
+directory.
+
+`BEEKAPOO_FONTS=1 scripts/preview-module.sh beekapoo --no-build` renders both
+computerscare fonts with alphabets, numbers, punctuation, four glyph variants
+and real label examples in light and dark. It checks equal advances, stable
+cached selection, Unicode/whitespace preservation, and native name-field hit
+testing. Font sources, profiles and regeneration instructions are under
+`scripts/fonts/` and `res/fonts/computerscare/`.
+
+`BEEKAPOO_CHOMP=1 scripts/preview-module.sh beekapoo --no-build` captures the
+selection-logo animation in light and dark (idle and hover speed). It checks
+header hit testing and stable placement across widths, selection with the
+owner included, undo/redo and tooltip cleanup.
+
+`BEEKAPOO_POLYPHONY=1 scripts/preview-module.sh beekapoo --no-build` validates
+native input/output polyphony, attenuation and Eject/Undo persistence, then
+renders four different panel widths, alternating light and dark themes.
+
+`BEEKAPOO_LABELS=1 scripts/preview-module.sh beekapoo --no-build` checks compact
+input/output label fitting using library names and renders four widths,
+alternating light and dark themes.
+
+`BEEKAPOO_REGENERATE=1 scripts/preview-module.sh beekapoo --no-build` checks
+exact exposed-control counts (including zero), exterior cable stacks,
+generated/custom names, locks and Undo/Redo. Full Beekapoo checks also test
+logo-based merging alongside Create Beek-A-Poo, including feedback and gains.
+
+`BEEKAPOO_SECTION_CONTROLS=1 scripts/preview-module.sh beekapoo --no-build` checks
+section re-roll/remove actions, locks, input gains, stacked cables, self-patches
+and Undo/Redo, then renders the hover strips at four widths in light/dark.
+
+`BEEKAPOO_COPY_CABLES=1 scripts/preview-module.sh beekapoo --no-build` checks
+native duplication with and without cables, stacked inputs, panel loopbacks,
+hidden bridge plugs, Undo/Redo and repair of old phantom connections.

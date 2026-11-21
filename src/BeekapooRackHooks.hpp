@@ -46,70 +46,7 @@ void disconnectBeekapooSelection() {
 struct GroupDisconnectMenuItem : ui::MenuItem {
   void onAction(const ActionEvent&) override { disconnectBeekapooSelection(); }
 };
-inline bool canCreateSelectedGroup() {
-  auto* rack = APP->scene->rack;
-  auto selected = rack->getSelected();
-  if (selected.size() < 2) return false;
-  for (auto* w : selected) {
-    if (!w->module || !w->visible || dynamic_cast<Beekapoo*>(w) ||
-        w->module->leftExpander.producerMessage ||
-        w->module->rightExpander.producerMessage)
-      return false;
-    for (auto* other : rack->getModules())
-      if (auto* group = dynamic_cast<Beekapoo*>(other))
-        if (group->contains(w->module)) return false;
-  }
-  return true;
-}
-inline void createSelectedGroup() {
-  if (!canCreateSelectedGroup()) return;
-  auto* rack = APP->scene->rack;
-  Vec minimum(INFINITY, INFINITY), maximum(-INFINITY, -INFINITY);
-  for (auto* w : rack->getSelected()) {
-    minimum.x = std::min(minimum.x, w->box.pos.x);
-    minimum.y = std::min(minimum.y, w->box.pos.y);
-    maximum.x = std::max(maximum.x, w->box.getRight());
-    maximum.y = std::max(maximum.y, w->box.getBottom());
-  }
-  auto* module = modelComputerscareBeekapoo->createModule();
-  APP->engine->addModule(module);
-  app::ModuleWidget* widget = nullptr;
-  try {
-    widget = modelComputerscareBeekapoo->createModuleWidget(module);
-  } catch (...) {
-    APP->engine->removeModule(module);
-    delete module;
-    throw;
-  }
-  auto* group = static_cast<Beekapoo*>(widget);
-  // Stage clear of the selection so responsive sizing cannot shove it aside.
-  group->box.pos =
-      Vec(maximum.x + RACK_GRID_WIDTH, maximum.y + RACK_GRID_HEIGHT);
-  rack->setModulePosNearest(group, group->box.pos);
-  rack->addModule(group);
-  auto* add = new history::ModuleAdd;
-  add->setModule(group);
-  auto* change = group->beginAction("create Beek-A-Poo");
-  group->collapse();
-  if (group->members.empty()) {
-    delete change;
-    delete add;
-    rack->removeModule(group);
-    delete group;
-    return;
-  }
-  group->exposeSelectionDefaults();
-  rack->setModulePosNearest(group, minimum);
-  rack->deselectAll();
-  rack->select(group, true);
-  change->newModuleJ = group->toJson();
-  change->after.capture();
-  auto* transaction = new history::ComplexAction;
-  transaction->name = "create Beek-A-Poo";
-  transaction->push(add);
-  transaction->push(change);
-  APP->history->push(transaction);
-}
+#include "BeekapooCreateSelection.hpp"
 struct CreateBeekapooMenuItem : ui::MenuItem {
   CreateBeekapooMenuItem() {
     text = "Create Beek-A-Poo";
@@ -119,26 +56,10 @@ struct CreateBeekapooMenuItem : ui::MenuItem {
     if (!disabled) createSelectedGroup();
   }
 };
-// Rack's selection serializer does not tell contained modules whether its
-// caller requested external cables. Scope that policy around the stock
-// selection command; its placement, selection and history remain native.
-struct ScopedGroupCopyPolicy {
-  std::vector<std::pair<WeakPtr<Beekapoo>, bool>> groups;
-  explicit ScopedGroupCopyPolicy(bool cables) {
-    for (auto* w : APP->scene->rack->getSelected())
-      if (auto* group = dynamic_cast<Beekapoo*>(w)) {
-        auto* m = group->getModule<Module>();
-        groups.push_back({group, m->copyBoundary});
-        m->copyBoundary = cables;
-        group->prepareContainedSave();
-      }
-  }
-  ~ScopedGroupCopyPolicy() {
-    for (auto& pair : groups)
-      if (pair.first)
-        pair.first->getModule<Module>()->copyBoundary = pair.second;
-  }
-};
+void duplicateBeekapooSelection(bool cables) {
+  ScopedGroupCopyPolicy scope(cables);
+  APP->scene->rack->cloneSelectionAction(cables);
+}
 inline void deleteSelectionIncludingContents(Beekapoo* target = nullptr) {
   auto* rack = APP->scene->rack;
   if (target && !rack->isSelected(target)) {
@@ -437,8 +358,10 @@ void Beekapoo::pruneMissingMembers() {
                                  return missing.count(member.id);
                                }),
                 members.end());
+  compactMembers();
   layoutControls();
   saveGroup();
+  refreshGeneratedName();
   action->newModuleJ = toJson();
   action->after.capture();
   bool attached = false;

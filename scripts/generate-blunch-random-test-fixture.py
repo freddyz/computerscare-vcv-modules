@@ -29,4 +29,25 @@ for name, definition in config['definitions'].items():
         out.append(f'  result.definitions[{literal(name)}].emplace_back({weight}, {literal(choice["template"])});')
     assert math.isfinite(total) and total > 0
 out += ['  return result;', '}']
+
+# Beekapoo uses the same expander. Exercise its shipped vocabulary and
+# transformation recipes in the normal test suite, without loading Rack.
+names = json.loads((root / 'res/programs/beekapoo-names.json').read_text())
+out += ['inline blunch::random_program::Catalogue testBeekNameCatalogue() {',
+        '  blunch::random_program::Catalogue result;']
+seen_words = set()
+for category, words in names['words'].items():
+    assert words and len(words) == len(set(words))
+    for word in words:
+        assert word and word.strip() == word
+        assert word not in seen_words
+        seen_words.add(word)
+        out.append(f'  result.definitions[{literal(category)}].emplace_back(1, {literal(word)});')
+for name, definition in names['definitions'].items():
+    out.append(f'  result.definitions[{literal(name)}].emplace_back(1, {literal(definition)});')
+for pattern in names['patterns']:
+    weight = pattern['weight']
+    assert type(weight) in (int, float) and math.isfinite(weight) and weight > 0
+    out.append(f'  result.definitions["name"].emplace_back({weight}, {literal(pattern["template"])});')
+out += ['  return result;', '}']
 Path(sys.argv[1]).write_text('\n'.join(out) + '\n')

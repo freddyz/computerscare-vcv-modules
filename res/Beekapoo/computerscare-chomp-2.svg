@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 7.9374997 7.9375005">
+  <g id="g9547" transform="matrix(0.34537854,-0.08593646,0,0.33853324,-3.2465207,0.04172361)" style="display:inline;enable-background:new">
+    <g style="display:inline" id="layer4" />
+    <path id="rect5872" d="m 10.824508,8.5885813 9.154305,0.071938 v 4.4354567 l -9.154305,-0.07194 z" style="opacity:1;fill:#0f0f00;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+    <path id="rect5874" d="m 14.188582,10.226536 4.474555,0.43556 v 1.331921 h -3.995763 z" style="opacity:1;fill:#ffffff;fill-opacity:0.985714;stroke:#000000;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+    <path id="rect5878" d="m 29.59725,9.811592 -7.989551,0 v 3.995761 l 7.989551,0 z" style="opacity:1;fill:#0c0c00;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+    <path id="rect5880" d="m 28.114807,11.34942 -4.436612,-0.11216 v 1.331921 l 4.436612,0.11216 z" style="opacity:1;fill:#ffffff;fill-opacity:0.985714;stroke:#000000;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+    <path id="rect5882" d="m 19.995058,14.667374 h 1.331921 v 3.995762 h -1.331921 z" style="opacity:1;fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+    <path id="rect5884" d="m 20.888507,17.21991 2.81849,0.381491 v 1.33192 l -2.81849,-0.381491 z" style="opacity:1;fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+    <path id="chomping-jaw" d="M12,20.5 L29.6,19.7 L29.3,28.3 L12.4,25.6 Z M14,21.9 L14.3,24.1 L27.7,26.7 L27.8,21.5 Z" fill="#000200" fill-rule="evenodd" />
+    <path id="upper-tooth" d="M17,21 L19.7,20.8 L19.3,23.2 L17.2,22.8 Z" fill="#000200" />
+    <path id="lower-tooth" d="M23,27.3 L25.5,27.6 L25.1,25.2 L23.2,24.900000000000002 Z" fill="#000200" />
+  </g>
+</svg>

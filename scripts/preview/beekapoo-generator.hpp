@@ -2,7 +2,7 @@
 #include <dlfcn.h>
 // Compact comparison of the real child widgets/cables and their front panel.
 // Borrow engine cables only for drawing; no routing or live Rack is changed.
-inline void renderGeneratedBeekRow(beekapoo::Beekapoo* owner,const std::string& path,float scale) {
+inline void renderGeneratedBeekRow(beekapoo::Beekapoo* owner,const std::string& path,float scale,bool packed = false) {
   owner->step();
   // The collapsed panel relocates its native endpoints. Draw the originals
   // at their real panel positions, and restore those endpoints afterwards.
@@ -36,10 +36,13 @@ inline void renderGeneratedBeekRow(beekapoo::Beekapoo* owner,const std::string& 
   move(owner,Vec(8,8));
   row.divider=owner->box.size.x+22;
   float x=owner->box.size.x+36;
+  Vec origin(INFINITY,INFINITY),end(x,388);
+  for(const auto& member:owner->members){origin.x=std::min(origin.x,member.position.x);origin.y=std::min(origin.y,member.position.y);}
   for(const auto& member:owner->members) {
-    auto* w=owner->find(member.id);move(w,Vec(x,8));w->step();x+=w->box.size.x;
+    auto* w=owner->find(member.id);move(w,packed?Vec(owner->box.size.x+36,8)+member.position-origin:Vec(x,8));w->step();x+=w->box.size.x;
+    end.x=std::max(end.x,w->box.getRight());end.y=std::max(end.y,w->box.getBottom());
   }
-  row.box.size=Vec(x+8,396);
+  row.box.size=end+Vec(8,8);
   auto tension=settings::cableTension;settings::cableTension=.7f;
   for(auto* wire:cables) {
     auto a=wire->getInputPos(),b=wire->getOutputPos();
@@ -58,6 +61,18 @@ inline void renderGeneratedBeekRow(beekapoo::Beekapoo* owner,const std::string& 
   }
   for(const auto& p:portPositions)p.first->box.pos=p.second;
 }
+
+#include "beekapoo-placement.hpp"
+#include "beekapoo-eject-gains.hpp"
+#include "beekapoo-controls-spectrum.hpp"
+#include "beekapoo-themes.hpp"
+#include "beekapoo-name-editor.hpp"
+#include "beekapoo-chomp.hpp"
+#include "beekapoo-polyphony.hpp"
+#include "beekapoo-regenerate.hpp"
+#include "beekapoo-input-gains.hpp"
+#include "beekapoo-copy-cables.hpp"
+#include "beekapoo-section-controls.hpp"
 
 // Real Fundamental modules in this isolated renderer, never the live Rack.
 template <class Add, class Require>
@@ -79,6 +94,24 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     plugin::Plugin* plugin;void* library;
     ~Cleanup(){APP->scene->rack->clear();APP->history->clear();plugin::plugins.erase(std::find(plugin::plugins.begin(),plugin::plugins.end(),plugin));delete plugin;dlclose(library);}
   } cleanup{fundamental,library};
+  if(std::getenv("BEEKAPOO_COPY_CABLES")){testBeekCopyCables(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_SECTION_CONTROLS")){testBeekSectionControls(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_INPUT_GAINS")){testBeekInputGains(add,require);return;}
+  if(std::getenv("BEEKAPOO_REGENERATE")){testBeekRegenerate(add,require);return;}
+  if(std::getenv("BEEKAPOO_POLYPHONY")){renderBeekPolyphony(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_CHOMP")){renderBeekChomp(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_NAME_EDITOR")){testBeekNameEditor(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_THEMES")){renderBeekThemes(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_TITLE_CASES")){renderBeekTitleCases(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_PARAM_BLOCKS")){renderBeekParamBlocks(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_CONTROL_SPECTRUM")){renderBeekControlSpectrum(output,scale,add,require);return;}
+  testBeekCopyCables(output,scale,add,require);
+  testBeekSectionControls(output,scale,add,require);
+  testBeekInputGains(add,require);
+  testBeekRegenerate(add,require);
+  testBeekEjectGains(add,require,plugin::getModel("computerscare","demo-gain"));
+  testBeekPlacement(output,scale,add,require);
+  if(std::getenv("BEEKAPOO_RECOVER_PATCH")) return;
   if(std::getenv("BEEKAPOO_THREE_EXAMPLES")) {
     const int counts[]={3,5,7}, widths[]={120,150,240}, amounts[]={5,8,12};
     for(int example=0;example<3;++example) {
@@ -223,7 +256,10 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     for(auto* cw:rack->getCompleteCables())if(cw->cable->inputModule->id==locked||cw->cable->outputModule->id==locked)protectedCables.push_back(cw->cable->id);
     auto* protectedState=owner->find(locked)->module->toJson();
     for(int attempt=0;attempt<6;++attempt) {
+      auto oldParams=owner->parameters.size(),oldPorts=owner->ports.size();
       require(owner->growPatch(),"Grow must find an unlocked cable or processor insertion");
+      require(owner->parameters.size()==oldParams&&owner->ports.size()==oldPorts,"Top Grow must not expose controls");
+      for(const auto& member:owner->members)if(std::find(original.begin(),original.end(),member.id)==original.end())require(owner->find(member.id)->model->slug=="VCA-1","Top Grow may insert only a VCA");
       for(auto id:original)require(APP->engine->getModule(id),"Growth must retain original native module IDs");
       for(auto id:protectedCables)require(APP->engine->getCable(id),"Growth must preserve every locked module connection");
       APP->history->undo();owner->step();require(int(owner->members.size())==count,"Grow Undo must restore original membership");
@@ -284,6 +320,7 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec()));require(owner->generateDefaultPatch(),"Reroll fixture must generate");
     auto* source=add(plugin::getModel("Fundamental","VCO"),Vec(1000,0));auto* sink=add(plugin::getModel("Fundamental","VCF"),Vec(1200,0));
     std::set<int64_t> oldIds;for(const auto& member:owner->members)oldIds.insert(member.id);
+    owner->getModule<beekapoo::Module>()->setPatchName("Old fixture name");
     auto oldName=owner->getModule<beekapoo::Module>()->getPatchName();auto style=owner->appearance;
     app::PortWidget *in=nullptr,*out=nullptr;for(const auto& port:owner->ports){if(port.input&&!in)in=owner->findPort(port);if(!port.input)out=owner->findPort(port);}
     auto wire=[&](app::PortWidget* from,app::PortWidget* to){auto* c=new engine::Cable;c->outputModule=from->module;c->outputId=from->portId;c->inputModule=to->module;c->inputId=to->portId;APP->engine->addCable(c);auto* cw=new app::CableWidget;cw->setCable(c);rack->addCable(cw);return c->id;};
@@ -291,6 +328,7 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     owner->step();owner->refreshAppearance();require(owner->appearance==style,"Exterior cables must leave the drawing identity unchanged");
     int beforeHistory=APP->history->actionIndex;owner->regenerateButton->action();
     require(APP->history->actionIndex==beforeHistory+1,"Generate button must form one undo transaction");
+    require(!owner->getModule<beekapoo::Module>()->getPatchName().empty()&&owner->getModule<beekapoo::Module>()->getPatchName()!=oldName,"Generate must replace the name using the new-module naming recipes");
     int inputs=0,outputs=0;for(const auto& p:owner->ports)(p.input?inputs:outputs)++;
     require(inputs==3&&outputs==1,"Regeneration must expose three inputs and one output");
     std::set<int64_t> nextIds;for(const auto& member:owner->members){nextIds.insert(member.id);require(!oldIds.count(member.id),"Regeneration must replace the old contents");}
@@ -377,11 +415,20 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
   grouped->expose(oscillators[0],oscillators[0]->getInput(0));grouped->expose(oscillators[1],oscillators[1]->getInput(0));
   grouped->expose(oscillators[0],oscillators[0]->getOutput(0));grouped->expose(oscillators[2],oscillators[2]->getOutput(2));
   grouped->requestedWidth=180;grouped->layoutControls();
+  std::vector<Rect> familyBounds;
   for(int param:{2,5}) {
-    float y=-1;std::vector<float> xs;
-    for(const auto& mapped:grouped->parameters)if(mapped.paramId==param){require(mapped.knob->visible&&mapped.knob->box.size.x>=16,"Repeated parameters must grow when there is room");if(y<0)y=mapped.knob->box.getCenter().y;require(std::abs(y-mapped.knob->box.getCenter().y)<.01f,"Matching controls must occupy one symmetrical row");xs.push_back(mapped.knob->box.getCenter().x);}
-    require(xs.size()==3&&std::abs((xs[1]-xs[0])-(xs[2]-xs[1]))<.01f,"Matching controls must be evenly spaced");
+    Vec start(INFINITY,INFINITY),end(-INFINITY,-INFINITY);float diameter=-1;int count=0;
+    for(const auto& mapped:grouped->parameters)if(mapped.paramId==param){
+      const auto& box=mapped.knob->box;
+      require(mapped.knob->visible&&box.size.x>=28,"Repeated parameters must grow when there is room");
+      if(diameter<0)diameter=box.size.x;
+      require(std::abs(diameter-box.size.x)<.01f,"Members of a family keep a consistent control size");
+      start=start.min(box.pos);end=end.max(box.getBottomRight());++count;
+    }
+    require(count==3,"Every matching control must remain visible");
+    familyBounds.push_back(Rect(start,end-start));
   }
+  require(!familyBounds[0].intersects(familyBounds[1]),"Separate families must occupy disjoint regions");
   for(const char* label:{"Frequency","Pulse width"}) {
     int captions=0;for(const auto& caption:grouped->controlLabels)if(caption.text==label)++captions;
     require(captions==1,"Matching controls must share exactly one caption across their group");
@@ -390,5 +437,18 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
   auto* secondKnob=dynamic_cast<beekapoo::ParametricKnob*>(grouped->parameters[2].knob);
   require(firstKnob&&secondKnob&&firstKnob->style.hue==secondKnob->style.hue&&firstKnob->profile==secondKnob->profile,"Identical parameters from identical module types must share procedural appearance");
   renderGeneratedBeekRow(grouped,output+"/grouped-vco-controls.png",scale);
+  rack->clear();APP->history->clear();
+  {
+    auto* a=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(100,0)));
+    auto* b=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(3100,1900)));
+    require(a->generateDefaultPatch(4)&&b->generateDefaultPatch(5),"Compact combined render needs two real patches");
+    rack->deselectAll();rack->select(a,true);rack->select(b,true);beekapoo::createSelectedGroup();
+    beekapoo::Beekapoo* result=nullptr;for(auto* w:rack->getSelected())if(auto* group=dynamic_cast<beekapoo::Beekapoo*>(w))result=group;
+    require(result&&result->members.size()==9,"Combined generated patch must retain all nine members");
+    result->requestedWidth=240;result->layoutControls();result->compactMembers();result->saveGroup();
+    renderGeneratedBeekRow(result,output+"/joined-subpatch.png",std::min(scale,1.5f),true);
+    result->step();result->updateSectionAddButtons(result->frame->box.getCenter());
+    auto* parent=result->parent;auto position=result->box.pos;parent->removeChild(result);result->box.pos=Vec();capture(result,output+"/section-plus-generated.png",scale,false);result->box.pos=position;parent->addChild(result);
+  }
   std::puts("Generated Beek: real Fundamental 3-11 modules, required inputs, connected graph, exposure, six HP, browser add, Undo/Redo, rename and export/import passed");
 }

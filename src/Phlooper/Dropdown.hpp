@@ -17,6 +17,12 @@ struct WarpedDropdown : widget::OpaqueWidget {
   NVGcolor textColor = nvgRGB(15, 42, 36);
   virtual std::string label() = 0;
   virtual bool isPressed() = 0;
+  virtual std::shared_ptr<window::Font> labelFont() {
+    return APP->window->loadFont(
+        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+  }
+  virtual std::string displayLabel() { return label(); }
+  virtual bool fitLabel() const { return false; }
 
   void configure(float width, float height, float raised, float recessed,
                  float distortion, unsigned seed) {
@@ -90,15 +96,22 @@ struct WarpedDropdown : widget::OpaqueWidget {
     nvgSave(args.vg);
     nvgIntersectScissor(args.vg, left, top, std::max(0.f, right - left),
                         std::max(0.f, bottom - top));
-    auto font = APP->window->loadFont(
-        asset::plugin(pluginInstance, "res/fonts/Oswald-Regular.ttf"));
+    auto font = labelFont();
     if (font && showLabel) {
       nvgFontFaceId(args.vg, font->handle);
       nvgFontSize(args.vg, textSize);
+      auto text = displayLabel();
+      if (fitLabel()) {
+        float width =
+            nvgTextBounds(args.vg, 0, 0, text.c_str(), nullptr, nullptr);
+        float available = right - face[0].x - textInset;
+        if (width > available && width > 0)
+          nvgFontSize(args.vg, textSize * std::max(1.f, available) / width);
+      }
       nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
       nvgFillColor(args.vg, textColor);
       nvgText(args.vg, face[0].x + textInset, (face[0].y + face[3].y) * .5f,
-              label().c_str(), nullptr);
+              text.c_str(), nullptr);
     }
     nvgRestore(args.vg);
   }

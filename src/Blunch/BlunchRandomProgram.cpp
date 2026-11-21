@@ -7,6 +7,7 @@
 #include <locale>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 namespace blunch {
 namespace random_program {
@@ -198,6 +199,53 @@ class Expander {
       std::vector<double> weights;
       for (const auto& choice : found->second) weights.push_back(choice.weight);
       return expand(found->second[weighted(weights)].text, depth + 1);
+    }
+    if (name == "replace" || name == "mutate") {
+      arity(args, 3, name == "replace" ? 3 : 63);
+      if (args.size() % 2 == 0)
+        throw std::runtime_error("mutate needs text followed by from/to pairs");
+      std::string source = expand(args[0], depth + 1);
+      std::vector<std::string> needles;
+      std::vector<double> matches;
+      size_t total = 0;
+      for (size_t i = 1; i < args.size(); i += 2) {
+        auto needle = expand(args[i], depth + 1);
+        if (needle.empty())
+          throw std::runtime_error("Replacement search text must not be empty");
+        size_t count = 0;
+        for (size_t at = source.find(needle); at != std::string::npos;
+             at = source.find(needle, at + needle.size()))
+          ++count;
+        needles.push_back(std::move(needle));
+        matches.push_back(double(count));
+        total += count;
+      }
+      if (!total) return source;
+      size_t rule = name == "replace" ? 0 : weighted(matches);
+      auto replacement = expand(args[rule * 2 + 2], depth + 1);
+      const auto& needle = needles[rule];
+      std::string result;
+      if (name == "mutate") {
+        // Select one occurrence in the original text. Inserted chunks are
+        // literal output, never recursively rewritten or re-expanded.
+        size_t occurrence = size_t(random() * matches[rule]);
+        size_t at = source.find(needle);
+        for (size_t i = 0; i < occurrence; ++i)
+          at = source.find(needle, at + needle.size());
+        append(result, source.substr(0, at));
+        append(result, replacement);
+        append(result, source.substr(at + needle.size()));
+      } else {
+        size_t begin = 0;
+        for (size_t at = source.find(needle); at != std::string::npos;
+             at = source.find(needle, begin)) {
+          append(result, source.substr(begin, at - begin));
+          append(result, replacement);
+          begin = at + needle.size();
+        }
+        append(result, source.substr(begin));
+      }
+      return result;
     }
     if (name == "repeat" || name == "distinct") {
       arity(args, 2, 3);

@@ -1,0 +1,18 @@
+[
+  {
+    "family": "Computerscare Text",
+    "file": "ComputerscareText.ttf",
+    "source": "Barlow-Medium.ttf",
+    "weight": 500,
+    "distortion": 25,
+    "rotation_scale": 0.5
+  },
+  {
+    "family": "Computerscare Display",
+    "file": "ComputerscareDisplay.ttf",
+    "source": "Barlow-SemiBold.ttf",
+    "weight": 600,
+    "distortion": 34,
+    "rotation_scale": 0.45
+  }
+]

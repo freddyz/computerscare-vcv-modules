@@ -14,8 +14,15 @@ struct SectionSkin {
 inline SectionSkin sectionSkin(const PatchIdentity& patch, unsigned role) {
   SectionSkin skin;
   skin.seed = mixIdentity(mixIdentity(patch.manufacturers, patch.wiring), role);
-  skin.profile = unsigned(
-      mixIdentity(patch.manufacturerTypes, mixIdentity(patch.types, role)) % 5);
+  unsigned choice = unsigned(
+      mixIdentity(patch.manufacturerTypes, mixIdentity(patch.types, role)) %
+      100);
+  // Mostly square plaques, occasional clipped corners, rarely rounded.
+  skin.profile = choice < 65   ? 0
+                 : choice < 73 ? 1
+                 : choice < 85 ? 2
+                 : choice < 95 ? 3
+                               : 4;
   skin.rounding = skin.profile == 1 ? 2.5f + float(skin.seed % 30) / 10.f : 0;
   return skin;
 }

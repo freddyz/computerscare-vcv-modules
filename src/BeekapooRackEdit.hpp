@@ -228,6 +228,7 @@ struct RackEditSession : widget::Widget {
       admitted.insert(w->module->id);
     }
     owner->syncBoundaryPorts();
+    owner->compactMembers();
     owner->layoutControls();
     owner->saveGroup();
     owner->finishAction(action);
@@ -465,8 +466,7 @@ struct RackEditSession : widget::Widget {
     nvgRect(args.vg, 0, 0, box.size.x, toolbarHeight);
     nvgFillColor(args.vg, nvgRGB(60, 76, 70));
     nvgFill(args.vg);
-    auto font =
-        APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
+    auto font = computerscare::type::font();
     nvgFontFaceId(args.vg, font->handle);
     nvgFontSize(args.vg, 18);
     nvgFillColor(args.vg, nvgRGB(214, 225, 218));
@@ -630,6 +630,7 @@ void Beekapoo::editSubpatch() {
         static_cast<RackEditSession*>(group->editSession.get())->finish(true);
   closeView();
   auto* session = new RackEditSession(this);
+  repairSeparatedRows();
   revealMembers(false);
   // Restore originals as direct Rack children. Native movement, hotkeys,
   // module menus, selection and browser placement now use their real widgets.

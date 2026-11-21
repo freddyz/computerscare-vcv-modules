@@ -9,6 +9,17 @@ bool Beekapoo::inputBridge(const engine::Cable* c) const {
       return true;
   return false;
 }
+// All outputs owned by the container are private input bridges. Public
+// outputs belong to the child modules. Older native duplication could copy
+// a bridge back into the original Beek, leaving black plugs and a cross-link.
+// Repair that impossible route on load/Undo without touching public cables.
+bool Beekapoo::discardInvalidBridge(app::CableWidget* cable) {
+  if (cable->cable->outputModule != module || inputBridge(cable->cable))
+    return false;
+  homeRack->removeCable(cable);
+  delete cable;
+  return true;
+}
 void Beekapoo::rewireInput(app::CableWidget* cw, app::PortWidget* target) {
   auto* c = cw->cable;
   APP->engine->removeCable(c);
@@ -42,8 +53,9 @@ void Beekapoo::attachInput(Port& p, int preferred, int64_t bridge, float gain) {
   m->configInput(Module::inputBase + slot, label);
   m->getParamQuantity(Module::INPUT_GAIN_BASE + slot)->name =
       label + " attenuverter";
-  m->params[Module::INPUT_GAIN_BASE + slot].setValue(clamp(gain, -1.f, 1.f));
-  auto* knob = new MappedParam<SmallKnob>;
+  // Cancel any old smoothing target when restoring/reusing this native slot.
+  m->getParamQuantity(Module::INPUT_GAIN_BASE + slot)->setImmediateValue(gain);
+  auto* knob = new MappedParam<ThemedSmallKnob>;
   knob->module = m;
   knob->paramId = Module::INPUT_GAIN_BASE + slot;
   knob->initParamQuantity();
