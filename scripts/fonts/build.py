@@ -18,6 +18,7 @@ from fontTools.feaLib.builder import addOpenTypeFeaturesFromString
 from fontTools.fontBuilder import FontBuilder
 from fontTools.pens.recordingPen import DecomposingRecordingPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables._g_l_y_f import GlyphCoordinates
 
@@ -40,6 +41,33 @@ def outline(source, name):
     pen = TTGlyphPen(None)
     record.replay(pen)
     return pen.glyph()
+
+
+def capital_q(source, width):
+    # Barlow's Q has a central vertical stem, easily mistaken for O at small
+    # sizes. Use its O bowl with a conventional, broad diagonal tail instead.
+    name = source.getBestCmap()[ord("O")]
+    pen = TTGlyphPen(None)
+    source.getGlyphSet()[name].draw(
+        TransformPen(pen, (width / source["hmtx"].metrics[name][0], 0, 0, 1, 0, 0)))
+    cap = source["OS/2"].sCapHeight
+    pen.moveTo((width * .51, cap * .20))
+    pen.lineTo((width * .64, cap * .23))
+    pen.lineTo((width * .91, -cap * .07))
+    pen.lineTo((width * .76, -cap * .10))
+    pen.closePath()
+    return pen.glyph()
+
+
+def mutation_profile(config, cp):
+    amount = config.get("glyph_distortion", {}).get(chr(cp), config["distortion"])
+    profile = distort.mutation_profile(amount)
+    profile["rotation"] *= config["rotation_scale"]
+    profile["translate_y"] *= .55
+    profile["spacing"] *= .3
+    profile["drop_chance"] = 0
+    profile["transform_chance"] = 1
+    return profile
 
 
 def mutate(glyph, width, upm, profile, key):
@@ -74,12 +102,6 @@ def build(config, codepoints):
     source = TTFont(source_path)
     cmap = source.getBestCmap()
     upm = source["head"].unitsPerEm
-    profile = distort.mutation_profile(config["distortion"])
-    profile["rotation"] *= config["rotation_scale"]
-    profile["translate_y"] *= .55
-    profile["spacing"] *= .3
-    profile["drop_chance"] = 0
-    profile["transform_chance"] = 1
     font = FontBuilder(upm, isTTF=True)
     glyphs = {".notdef": outline(source, ".notdef")}
     metrics = {".notdef": source["hmtx"].metrics[".notdef"]}
@@ -88,6 +110,9 @@ def build(config, codepoints):
         original_name = cmap[cp]
         original = outline(source, original_name)
         width = source["hmtx"].metrics[original_name][0]
+        if cp == ord("Q"):
+            original = capital_q(source, width)
+        profile = mutation_profile(config, cp)
         for variant in range(COUNT):
             name = f"u{cp:04X}.v{variant}"
             shape = mutate(original, width, upm, profile, seed(f"{config['family']}:{cp}:{variant}"))

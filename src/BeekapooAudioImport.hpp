@@ -98,6 +98,11 @@ inline void exposeBeekAudioInterfaces(BeekPatchFile& file, json_t* group) {
   // Every used capture channel is one independent exposed input, even when
   // several hardware channels happen to feed the same internal destination.
   int route = 0;
+  for (size_t i = 0; i < json_array_size(ports); ++i) {
+    auto* saved = json_object_get(json_array_get(ports, i), "route");
+    if (json_is_integer(saved))
+      route = std::max(route, int(json_integer_value(saved)) + 1);
+  }
   for (size_t interface = 0; interface < file.audio.size(); ++interface) {
     auto id = file.audio[interface];
     for (int channel = 0; channel < capacities.at(id); ++channel) {

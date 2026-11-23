@@ -18,7 +18,7 @@ void renderBeekTitleCases(const std::string& output,float scale,Add add,Require 
     for(const auto& slug:cases[example]){auto* w=add(plugin::getModel("Fundamental",slug),Vec(x,0));sources.push_back(w);x+=w->box.size.x;}
     auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(x+90,0)));
     rack->deselectAll();for(auto* w:sources)rack->select(w,true);owner->collapse();
-    owner->getModule<beekapoo::Module>()->setPatchName("moss / reed 7");
+    owner->resetNameTopology();
     std::vector<std::vector<app::ParamWidget*>> candidates;
     for(auto* w:sources){candidates.emplace_back();for(auto* p:w->getParams())if(!dynamic_cast<app::Switch*>(p)&&p->getParamQuantity()->isBounded())candidates.back().push_back(p);}
     int wanted=3+example;
@@ -34,7 +34,7 @@ void renderBeekTitleCases(const std::string& output,float scale,Add add,Require 
     auto* parent=owner->parent;auto pos=owner->box.pos;parent->removeChild(owner);owner->box.pos=Vec();
     capture(owner,output+"/title-"+modes[example]+".png",scale,false);
     owner->box.pos=pos;parent->addChild(owner);
-    require(owner->getModule<beekapoo::Module>()->getPatchName()=="moss / reed 7","Title styling must not overwrite the saved user name");
+    require(owner->getModule<beekapoo::Module>()->getPatchName()==beekapoo::generated::topologyName(owner->appearance.wiring),"Generated title must come from the actual topology hash");
   }
   rack->clear();APP->history->clear();
 }

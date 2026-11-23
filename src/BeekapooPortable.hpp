@@ -390,7 +390,14 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
     committing = true;
     restore(remapped);
     if (json_is_true(json_object_get(remapped, "exposeUnpatched"))) {
+      auto* subset = json_object_get(root, "exposeUnpatchedModules");
+      std::set<int64_t> unwrapped;
+      for (size_t i = 0; i < json_array_size(subset); ++i) {
+        auto found = ids.find(json_integer_value(json_array_get(subset, i)));
+        if (found != ids.end()) unwrapped.insert(found->second);
+      }
       for (const auto& member : members)
+        if (!json_is_array(subset) || unwrapped.count(member.id))
         if (auto* w = find(member.id))
           for (auto* port : w->getPorts())
             if (homeRack->getCompleteCablesOnPort(port).empty())

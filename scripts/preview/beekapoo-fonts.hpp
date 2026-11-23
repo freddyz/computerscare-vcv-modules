@@ -65,5 +65,28 @@ void renderBeekFonts(const std::string& output,float scale,Require require) {
     specimen.face=face;
     capture(&specimen,output+(face==Face::Text?"/font-text.png":"/font-display.png"),scale,false);
   }
+  struct Capitals:widget::Widget {
+    void draw(const DrawArgs& args) override {
+      auto* vg=args.vg;
+      for(int column=0;column<2;++column) {
+        auto face=column?Face::Display:Face::Text;
+        nvgSave(vg);nvgTranslate(vg,column*370.f,0);
+        nvgBeginPath(vg);nvgRect(vg,0,0,370,390);
+        nvgFillColor(vg,column?nvgRGB(30,30,30):nvgRGB(226,226,224));nvgFill(vg);
+        nvgFontFaceId(vg,handle(face));nvgTextAlign(vg,NVG_ALIGN_LEFT|NVG_ALIGN_TOP);
+        nvgFillColor(vg,column?nvgRGB(236,236,233):nvgRGB(30,30,30));
+        auto line=[&](std::string source,float size,float y,int variant) {
+          auto text=alternates(source,421,variant);nvgFontSize(vg,size);nvgText(vg,20,y,text.c_str(),nullptr);
+        };
+        line(column?"Display":"Text",24,14,0);
+        for(int variant=0;variant<4;++variant)line("Q  P  W",54,52+variant*62,variant);
+        line("PULSE WIDTH   Q",20,310,-1);
+        line("SQUARE   POWER",20,343,-1);
+        nvgRestore(vg);
+      }
+    }
+  } capitals;
+  capitals.box.size=Vec(740,390);
+  capture(&capitals,output+"/font-capitals.png",scale,false);
   std::puts("Custom fonts: both faces, four equal-width alternates, Unicode/whitespace, cached labels and name-field hit testing passed");
 }

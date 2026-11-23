@@ -4,8 +4,7 @@
 // layout. These are normal editable mappings, saved in the same transaction.
 void Beekapoo::exposeSelectionDefaults() {
   if (!module || members.empty()) return;
-  auto* state = getModule<Module>();
-  if (state->getPatchName().empty()) state->setPatchName(generated::name());
+  refreshGeneratedName();
   std::mt19937 rng(random::u32());
   auto targets = defaultExposureCounts(int(members.size()), rng);
   struct Candidates {

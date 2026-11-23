@@ -5,7 +5,8 @@
     "source": "Barlow-Medium.ttf",
     "weight": 500,
     "distortion": 25,
-    "rotation_scale": 0.5
+    "rotation_scale": 0.5,
+    "glyph_distortion": { "Q": 18, "P": 42, "W": 40 }
   },
   {
     "family": "Computerscare Display",
@@ -13,6 +14,7 @@
     "source": "Barlow-SemiBold.ttf",
     "weight": 600,
     "distortion": 34,
-    "rotation_scale": 0.45
+    "rotation_scale": 0.45,
+    "glyph_distortion": { "Q": 24, "P": 48, "W": 46 }
   }
 ]

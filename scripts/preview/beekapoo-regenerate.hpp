@@ -10,7 +10,7 @@ void testBeekRegenerate(Add add,Require require) {
     auto* m=owner->getModule<beekapoo::Module>();
     auto* root=beekapoo::generated::plan(0,&wanted);require(root,"Exact generation must find enough useful controls");
     require(owner->importContents(root),"Exact generation must import");json_decref(root);
-    m->setPatchName(beekapoo::generated::name());owner->refreshGeneratedName();
+    owner->resetNameTopology();
     auto counts=[&] {
       Counts result{0,0,int(owner->parameters.size())};
       for(const auto& p:owner->ports)++(p.input?result.inputs:result.outputs);
@@ -74,26 +74,43 @@ void testBeekRegenerate(Add add,Require require) {
       APP->history->redo();for(int tick=0;tick<20;++tick)owner->step();verify();exterior();require(m->getPatchName()==after,"Redo must restore the replacement title");
     }
     {
+      auto savedName=m->getPatchName();
       auto ownerId=owner->module->id,sourceId=source->module->id,sinkId=sink->module->id;
       auto* saved=APP->engine->toJson();rack->mergeJson(saved);rack->clear();APP->history->clear();
       APP->engine->fromJson(saved);rack->fromJson(saved);json_decref(saved);
       owner=static_cast<beekapoo::Beekapoo*>(rack->getModule(ownerId));m=owner->getModule<beekapoo::Module>();
       source=rack->getModule(sourceId);sink=rack->getModule(sinkId);
       for(int i=0;i<3;++i)owner->step();verify();exterior();
+      require(m->getPatchName()==savedName,"Reload must retain the topology-derived name");
     }
     name=m->getPatchName();owner->refreshGeneratedName();
     require(owner->growPatch(),"Grow must find an unlocked connection");
-    require(m->getPatchName()!=name,"Grow must refresh a generated title");
+    owner->refreshGeneratedName();
+    require(m->getPatchName()==beekapoo::generated::topologyName(owner->appearance.wiring),"Grow must derive the title from topology, including when only exposing another control");
     APP->history->undo();for(int tick=0;tick<20;++tick)owner->step();require(m->getPatchName()==name,"Grow Undo must restore the name");
     // A real internal cable edit also changes a generated name; resizing,
     // exposure and parameter edits do not.
+    owner->editSubpatch();
     owner->refreshGeneratedName();name=m->getPatchName();
     app::CableWidget* internal=nullptr;
     for(auto* cw:rack->getCompleteCables())if(owner->cableRole(cw->cable)==beekapoo::Beekapoo::CableRole::Internal){internal=cw;break;}
     require(internal,"Generated patches need internal wiring");
+    auto* from=internal->outputPort;auto* to=internal->inputPort;
     rack->removeCable(internal);delete internal;
     for(int tick=0;tick<20;++tick)owner->step();
     require(m->getPatchName()!=name,"Manual internal wiring changes must refresh generated names");
+    auto without=m->getPatchName();
+    for(int cycle=0;cycle<3;++cycle) {
+      auto* restored=wire(from,to);
+      for(int tick=0;tick<20;++tick)owner->step();
+      require(m->getPatchName()==name,"Repatching the same connection with a new cable ID must restore the exact generated name");
+      rack->removeCable(restored);delete restored;
+      for(int tick=0;tick<20;++tick)owner->step();
+      require(m->getPatchName()==without,"Removing the connection again must restore the same disconnected name");
+    }
+    wire(from,to);for(int tick=0;tick<20;++tick)owner->step();
+    static_cast<beekapoo::RackEditSession*>(owner->editSession.get())->finish(true);
+    owner->step();require(m->getPatchName()==name,"Closing Edit must retain the topology-derived name");
     name=m->getPatchName();owner->requestedWidth+=15;owner->layoutControls();owner->parameterAction(0,false);
     for(int tick=0;tick<20;++tick)owner->step();
     require(m->getPatchName()==name,"Resizing and changing knob values must keep the name");

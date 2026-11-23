@@ -173,6 +173,11 @@ struct Module : engine::Module {
   static constexpr int inputBase = 6;
   static constexpr int GENERATE_INPUT = inputBase + routeCapacity;
   static constexpr int GROW_INPUT = GENERATE_INPUT + 1;
+  static constexpr int ACTIONS_INPUT = GROW_INPUT + 1;
+  static int polyAction(int channel) {
+    const int actions[] = {0, 1, 3, 4, 6, 7};
+    return actions[channel];
+  }
   std::atomic<uint64_t> activeInputs[routeCapacity / 64]{};
   std::atomic<uint64_t> silentInputs[routeCapacity / 64]{};
   void setInputSilence(int route, bool silent) {
@@ -190,12 +195,13 @@ struct Module : engine::Module {
       activeInputs[route / 64].fetch_and(~bit, std::memory_order_release);
   }
   dsp::SchmittTrigger actionTriggers[8];
+  dsp::SchmittTrigger polyActionTriggers[6];
   std::atomic<unsigned> pendingActions{0};
   std::atomic<unsigned> pendingHistory{0};
   std::atomic<int> pendingBypass{-1};
   Module() {
     generationSet = moduleSets().defaultId;
-    config(PARAM_COUNT, GROW_INPUT + 1, routeCapacity, 0);
+    config(PARAM_COUNT, ACTIONS_INPUT + 1, routeCapacity, 0);
     for (int i = 0; i < routeCapacity; ++i) {
       // Reserved for older patches and their MIDI mappings. New ordinary
       // input exposures use the child jack directly and allocate no gain.
@@ -218,6 +224,7 @@ struct Module : engine::Module {
     for (int i = 0; i < 6; ++i) configInput(i, names[i]);
     configInput(GENERATE_INPUT, "Generate new subpatch");
     configInput(GROW_INPUT, "Grow subpatch");
+    configInput(ACTIONS_INPUT, "Actions");
   }
   void processInputRoutes(bool bypass) {
     for (int block = 0; block < routeCapacity / 64; ++block) {
@@ -251,6 +258,13 @@ struct Module : engine::Module {
   void processBypass(const ProcessArgs&) override { processInputRoutes(true); }
   void process(const ProcessArgs&) override {
     processInputRoutes(false);
+    for (int ch = 0; ch < 6; ++ch)
+      if (polyActionTriggers[ch].process(
+              ch < inputs[ACTIONS_INPUT].getChannels()
+                  ? inputs[ACTIONS_INPUT].getVoltage(ch)
+                  : 0.f))
+        pendingActions.fetch_or(1u << polyAction(ch),
+                                std::memory_order_relaxed);
     for (int i = 0; i < 8; ++i)
       if (actionTriggers[i].process(inputs[i < 6    ? i
                                            : i == 6 ? GENERATE_INPUT
@@ -621,13 +635,29 @@ struct ActionButton : LetteredFace {
       nvgLineTo(args.vg, -5.5f, 6.5f);
       nvgClosePath(args.vg);
       nvgFill(args.vg);
+    } else if (icon == 11) {
+      for (float x : {-5.f, 0.f, 5.f}) {
+        nvgBeginPath(args.vg);
+        nvgCircle(args.vg, x, 0, 1.3f);
+        nvgFill(args.vg);
+      }
     } else if (icon == 9) {
+      // An angular branching plus, distinct from the section add buttons.
       nvgBeginPath(args.vg);
-      nvgMoveTo(args.vg, -7, 1);
-      nvgBezierTo(args.vg, -3, -2, 3, 2, 7, -1);
-      nvgMoveTo(args.vg, -1, -7);
-      nvgBezierTo(args.vg, 2, -3, -2, 3, 1, 7);
+      nvgMoveTo(args.vg, -7, 1.5f);
+      nvgLineTo(args.vg, 0, .5f);
+      nvgLineTo(args.vg, 6, -1);
+      nvgMoveTo(args.vg, -.5f, 7);
+      nvgLineTo(args.vg, 0, .5f);
+      nvgLineTo(args.vg, 1, -6);
+      nvgMoveTo(args.vg, 0, .5f);
+      nvgLineTo(args.vg, 5, 5);
       nvgStroke(args.vg);
+      for (Vec p : {Vec(-7, 1.5f), Vec(6, -1), Vec(1, -6), Vec(5, 5)}) {
+        nvgBeginPath(args.vg);
+        nvgRect(args.vg, p.x - 1, p.y - 1, 2, 2);
+        nvgFill(args.vg);
+      }
     } else if (icon == 8) {
       for (Vec offset : {Vec(-2, -2), Vec(2, 2)}) {
         nvgBeginPath(args.vg);
@@ -1403,8 +1433,8 @@ struct Beekapoo : app::ModuleWidget {
     for (auto* button : managementButtons)
       buttonStyle(button, titleFrame->faceColor);
     addSelectionButton->setDark(dark);
-    for (auto* button : {regenerateButton, growButton})
-      buttonStyle(button, ownFrame->faceColor);
+    buttonStyle(regenerateButton, ownFrame->faceColor);
+    buttonStyle(growButton, titleFrame->faceColor);
     for (size_t i = 0; i < actionButtons.size(); ++i)
       buttonStyle(actionButtons[i], ownFrame->faceColor, i >= 3);
     std::array<phlooper::WarpedBlock*, 3> sections{
@@ -1463,9 +1493,8 @@ struct Beekapoo : app::ModuleWidget {
   bool namedTopologyReady = false;
   void refreshGeneratedName();
   void resetNameTopology() {
-    refreshAppearance();
-    namedTopology = appearance.wiring;
-    namedTopologyReady = true;
+    namedTopologyReady = false;
+    refreshGeneratedName();
   }
   uint64_t appearanceSnapshot = 0;
   unsigned appearancePoll = 0;
@@ -1547,13 +1576,15 @@ struct Beekapoo : app::ModuleWidget {
     std::vector<app::ParamWidget*> parameters;
     std::vector<app::PortWidget*> inputs, outputs;
   };
-  SectionCandidates sectionCandidates();
+  SectionCandidates sectionCandidates(bool allParameters = false);
   bool sectionPortProtected(const Port& p);
   bool addExposedControl(int kind);
   bool rerollExposedControls(int kind);
   bool removeExposedControl(int kind);
-  bool foldSelfPatchedInput();
-  bool changeExposedControls(int kind, bool reroll);
+  bool foldSelfPatchedInput(history::ComplexAction* parent = nullptr);
+  bool changeExposedControls(int kind, bool reroll,
+                             history::ComplexAction* parent = nullptr);
+  void compactSubpatch();
   void updateSectionAddButtons(Vec mouse);
   phlooper::WarpedBlock* frame = nullptr;
   phlooper::WarpedBlock *inputFrame = nullptr, *outputFrame = nullptr;
@@ -1768,9 +1799,22 @@ struct Beekapoo : app::ModuleWidget {
     addChild(regenerateButton);
     growButton = new ActionButton;
     growButton->configure(18, 18, 1.1f, .8f, .8f, 719);
-    growButton->icon = 9;
-    growButton->help = [] { return "Grow subpatch: add a cable or module"; };
-    growButton->action = [this] { growPatch(); };
+    growButton->icon = 11;
+    growButton->help = [] { return "Subpatch functions"; };
+    growButton->action = [this] {
+      if (!module) return;
+      growButton->clearTooltip();
+      auto* menu = createMenu();
+      menu->box.pos =
+          growButton->getAbsoluteOffset(Vec(0, growButton->box.size.y));
+      WeakPtr<Beekapoo> live = this;
+      menu->addChild(createMenuItem("Grow", "", [live] {
+        if (live) live->growPatch();
+      }));
+      menu->addChild(createMenuItem("Compact subpatch", "", [live] {
+        if (live) live->compactSubpatch();
+      }));
+    };
     addChild(growButton);
     const char* captions[] = {"Wiggle", "Randomize", "Initialize"};
     for (int row = 0; row < 2; ++row)
@@ -1799,7 +1843,8 @@ struct Beekapoo : app::ModuleWidget {
       }
     addParam(createParamCentered<ThemedSmallKnob>(Vec(328, 94), m,
                                                   Module::WIGGLE_AMOUNT));
-    for (int i : {Module::GENERATE_INPUT, Module::GROW_INPUT})
+    for (int i :
+         {Module::GENERATE_INPUT, Module::GROW_INPUT, Module::ACTIONS_INPUT})
       addInput(createInput<ActionJack>(Vec(), m, i));
     if (m) {
       auto* saved = json_object_get(m->group, "ports");
@@ -2190,7 +2235,7 @@ struct Beekapoo : app::ModuleWidget {
   }
   struct HeaderLayout {
     Rect artwork, logo;
-    std::array<Rect, 2> buttons{};
+    std::array<Rect, 3> buttons{};
     float height = 0;
     bool text = false;
   };
@@ -2202,7 +2247,9 @@ struct Beekapoo : app::ModuleWidget {
         (result.text ? 5.f : 8.f) * std::to_string(members).size();
     editWidth = std::min(editWidth, width - 16);
     float ejectWidth = result.text ? 47.f : (width < 75 ? 16.f : 18.f);
-    float buttonWidth = editWidth + 2 + ejectWidth;
+    float functionsWidth = width < 75 ? 16.f : 20.f;
+    float buttonGap = width < 60 ? 1.f : 2.f;
+    float buttonWidth = editWidth + ejectWidth + functionsWidth + 2 * buttonGap;
     float right = width - 10;
     bool beside = width >= 270;
     float titleHeight = width <= 90 ? 32.f : 27.f;
@@ -2215,14 +2262,14 @@ struct Beekapoo : app::ModuleWidget {
             titleHeight));
     float x = beside ? result.logo.pos.x - buttonWidth - 4 : 6;
     float y = beside ? 9 : titleHeight + 8;
-    for (int i = 0; i < 2; ++i) {
-      float w = i == 0 ? editWidth : ejectWidth;
-      if (x + w > right && x > 6) {
+    for (int i = 0; i < 3; ++i) {
+      float w = i == 0 ? editWidth : i == 1 ? ejectWidth : functionsWidth;
+      if (x + w > (width < 60 ? width - 6 : right) && x > 6) {
         x = 6;
         y += 21;
       }
       result.buttons[i] = Rect(Vec(x, y), Vec(w, 18));
-      x += w + 2;
+      x += w + buttonGap;
     }
     result.height = std::max(result.artwork.getBottom(), y + 18) + 8;
     return result;
@@ -2249,6 +2296,8 @@ struct Beekapoo : app::ModuleWidget {
       button->downDepth = .8f;
       button->box = plan.buttons[i];
     }
+    growButton->box = plan.buttons[2];
+    growButton->visible = true;
     return plan.height;
   }
   struct OwnControlLayout {
@@ -2261,11 +2310,11 @@ struct Beekapoo : app::ModuleWidget {
     OwnControlLayout result;
     result.size = width < 60 ? 16 : 18;
     float x = 6, y = 1, right = width - 6;
-    // Keep each button and its CV directly above/below one another.
+    // Keep the action pairs together; the final cell is the shared CV jack.
     for (int first : {0, 2, 4}) {
       if (x + result.size * 2 + 1 > right && x > 6) {
         x = 6;
-        y += result.size + 14;
+        y += result.size + 3;
       }
       for (int i = first; i < first + 2; ++i) {
         result.positions[i] = Vec(x, y);
@@ -2274,7 +2323,7 @@ struct Beekapoo : app::ModuleWidget {
       result.columns =
           std::max(result.columns, int((x - 6) / (result.size + 1)));
     }
-    result.height = y + result.size + 15;
+    result.height = y + result.size + 4;
     return result;
   }
   static float tinyOwnHeight(float width) {
@@ -2283,14 +2332,15 @@ struct Beekapoo : app::ModuleWidget {
   float layoutOwnControls(float width, float top) {
     getParam(Module::WIGGLE_AMOUNT)->visible = false;
     for (int i = 0; i < 6; ++i) getInput(i)->visible = false;
+    getInput(Module::GENERATE_INPUT)->visible = false;
+    getInput(Module::GROW_INPUT)->visible = false;
     for (int i = 0; i < 6; ++i) actionButtons[i]->visible = i % 3 != 2;
     auto plan = ownControlLayout(width);
-    const std::array<ActionButton*, 6> buttons = {
-        actionButtons[0], actionButtons[1], actionButtons[3],
-        actionButtons[4], regenerateButton, growButton};
+    const std::array<ActionButton*, 5> buttons = {
+        actionButtons[0], actionButtons[1], actionButtons[3], actionButtons[4],
+        regenerateButton};
     for (int i : {0, 1, 3, 4}) actionButtons[i]->icon = i % 3;
-    const int ids[] = {0, 1, 3, 4, Module::GENERATE_INPUT, Module::GROW_INPUT};
-    for (int i = 0; i < 6; ++i) {
+    for (int i = 0; i < 5; ++i) {
       auto* button = buttons[i];
       button->visible = true;
       button->iconAndText = false;
@@ -2302,11 +2352,16 @@ struct Beekapoo : app::ModuleWidget {
       button->downDepth = .8f;
       button->box =
           Rect(plan.positions[i] + Vec(0, top), Vec(plan.size, plan.size));
-      auto* jack = getInput(ids[i]);
-      jack->visible = true;
-      jack->box.pos = Vec(button->box.getCenter().x - jack->box.size.x * .5f,
-                          button->box.getBottom() + 1);
     }
+    auto* jack = getInput(Module::ACTIONS_INPUT);
+    jack->visible = true;
+    jack->box.pos =
+        plan.positions[5] + Vec((plan.size - jack->box.size.x) * .5f,
+                                top + (plan.size - jack->box.size.y) * .5f);
+    // Preserve old cable endpoints and IDs without drawing six extra jacks.
+    for (int id :
+         {0, 1, 2, 3, 4, 5, Module::GENERATE_INPUT, Module::GROW_INPUT})
+      getInput(id)->box.pos = jack->box.pos;
     ownFrame->visible = true;
     ownFrame->box = Rect(Vec(6, top), Vec(width - 12, plan.height));
     responsive.ownColumns = plan.columns;
@@ -2353,6 +2408,15 @@ struct Beekapoo : app::ModuleWidget {
           controlStyle(metadata[i].label, moduleStyleName(q->module->model),
                        appearance)
               .size;
+      // Identity always uses the complete source label. Caption fitting below
+      // may abbreviate it, but resizing must never choose a different skin.
+      if (auto* knob = dynamic_cast<ParametricKnob*>(q))
+        knob->setIdentity(metadata[i].label, moduleStyleName(q->module->model),
+                          appearance);
+      if (auto* button = dynamic_cast<ExposedSwitch*>(q))
+        button->setIdentity(metadata[i].label,
+                            moduleStyleName(q->module->model), appearance,
+                            darkPanel(), frame->faceColor);
     }
     if (auto font = computerscare::type::font()) {
       auto* vg = APP->window->vg;
@@ -2393,14 +2457,7 @@ struct Beekapoo : app::ModuleWidget {
     std::map<std::string, Caption> captions;
     for (const auto& cell : cells) {
       auto* item = active[cell.index];
-      auto* parameter = dynamic_cast<app::ParamWidget*>(item);
       auto label = metadata[cell.index].label;
-      if (auto* knob = dynamic_cast<ParametricKnob*>(item))
-        knob->setIdentity(label, moduleStyleName(parameter->module->model),
-                          appearance);
-      if (auto* button = dynamic_cast<ExposedSwitch*>(item))
-        button->setIdentity(label, moduleStyleName(parameter->module->model),
-                            appearance, darkPanel(), frame->faceColor);
       if (auto* visual = dynamic_cast<ParamVisual*>(item))
         visual->setVisualSize(cell.diameter);
       Vec center(10 + cell.x, top + 5 + cell.y);
@@ -3872,9 +3929,9 @@ struct Beekapoo : app::ModuleWidget {
           int minimum = original == label.text &&
                                 abbreviatedLabel(label.text) != label.text
                             ? std::max(20, preferred - 6)
-                            : (label.required ? 13
-                               : height < 12  ? 12
-                                              : 16);
+                            : (label.required                   ? 13
+                               : height < 12 && box.size.x < 90 ? 12
+                                                                : 16);
           for (int halfPoints = preferred; halfPoints >= minimum;
                --halfPoints) {
             label.preparedSize = halfPoints * .5f;

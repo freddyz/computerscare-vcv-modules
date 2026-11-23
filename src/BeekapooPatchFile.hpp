@@ -93,6 +93,10 @@ struct BeekPatchFile {
             json_array_append(wires, json_array_get(inner, i));
         }
       }
+      for (const auto& entry : modules)
+        if (isBeekAudioInterface(entry.second) &&
+            std::find(audio.begin(), audio.end(), entry.first) == audio.end())
+          audio.push_back(entry.first);
     } catch (...) {
       json_decref(root);
       root = nullptr;
@@ -105,14 +109,15 @@ struct BeekPatchFile {
 };
 
 #include "BeekapooAudioImport.hpp"
+#include "BeekapooWholePatch.hpp"
 
 inline BeekImportDialog* makeBeekImportDialog(
     const BeekPatchFile& file, const std::string& path,
-    std::function<void(int64_t, bool)> apply) {
+    std::function<void(int64_t, bool)> apply, bool entirePatchAudio = false) {
   std::vector<BeekImportChoice> choices;
   std::string title;
-  if (file.beeks.size() > 1) {
-    title = "Choose Beek";
+  if (!file.beeks.empty() && !entirePatchAudio) {
+    title = "Import Beek";
     for (size_t i = 0; i < file.beeks.size(); ++i) {
       auto id = file.beeks[i];
       auto* group = json_object_get(
@@ -121,15 +126,18 @@ inline BeekImportDialog* makeBeekImportDialog(
       choices.emplace_back("Beek " + std::to_string(i + 1),
                            std::to_string(count) + " contained modules", id);
     }
-  } else if (file.beeks.empty() && !file.audio.empty()) {
+    choices.emplace_back("Entire patch", "Combine all Beeks and other modules.",
+                         beekEntirePatch);
+  } else if (!file.audio.empty()) {
     title = "Import patch audio";
     choices.emplace_back("Expose",
                          "Remove the Audio interfaces and expose all connected "
                          "inputs and outputs.",
-                         -1, true);
+                         entirePatchAudio ? beekEntirePatch : -1, true);
     choices.emplace_back("Keep",
                          "Keep the original Audio modules and their device "
-                         "connections inside the Beekapoo subpatch.");
+                         "connections inside the Beekapoo subpatch.",
+                         entirePatchAudio ? beekEntirePatch : -1);
   } else
     return nullptr;
   return new BeekImportDialog(title, system::getFilename(path),
@@ -227,9 +235,13 @@ void Beekapoo::saveBeek(const std::string& path) {
 bool Beekapoo::loadBeek(const std::string& path, int64_t sourceOwner,
                         bool convertAudio) {
   BeekPatchFile file(path);
-  if (sourceOwner < 0 && file.beeks.size() == 1)
+  if (sourceOwner == beekEntirePatch && !file.beeks.empty()) {
+    sourceOwner = combineBeekPatch(file, toJson(), convertAudio);
+    convertAudio = false;
+  }
+  if (sourceOwner == -1 && file.beeks.size() == 1)
     sourceOwner = file.beeks.front();
-  if (sourceOwner < 0 && file.beeks.size() > 1)
+  if (sourceOwner == -1 && file.beeks.size() > 1)
     throw Exception("Choose which Beek to load");
   if (sourceOwner >= 0 && !file.modules.count(sourceOwner))
     throw Exception("The chosen Beek is not in this file");
@@ -384,7 +396,24 @@ void Beekapoo::loadBeekDialog() {
         osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK, e.what());
       }
     };
-    if (auto* dialog = makeBeekImportDialog(file, path, apply)) {
+    auto choose = [safe, path, apply](int64_t id, bool audio) {
+      if (!safe) return;
+      try {
+        if (id == beekEntirePatch) {
+          BeekPatchFile selected(path);
+          if (auto* dialog =
+                  makeBeekImportDialog(selected, path, apply, true)) {
+            APP->scene->addChild(dialog);
+            dialog->step();
+            return;
+          }
+        }
+        apply(id, audio);
+      } catch (const std::exception& e) {
+        osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK, e.what());
+      }
+    };
+    if (auto* dialog = makeBeekImportDialog(file, path, choose)) {
       APP->scene->addChild(dialog);
       dialog->step();
     } else

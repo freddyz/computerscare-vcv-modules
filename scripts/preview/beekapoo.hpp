@@ -827,29 +827,23 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   host->arrangeByModule=false;
   for(float width:{75.f,90.f,105.f,120.f,150.f,180.f,300.f,450.f,900.f}) {
     host->requestedWidth=width;host->layoutControls();
-    for(int i=0;i<6;++i){require(host->getInput(i)&&host->getInput(i)->visible==(i%3!=2),"Wiggle/Random CVs must be visible; Initialize CVs stay hidden");require(host->actionButtons[i]->visible==(i%3!=2),"Exactly four manual action buttons must be visible");}
-    require(host->growButton->visible&&host->regenerateButton->visible&&host->getInput(beekapoo::Module::GENERATE_INPUT)->visible&&host->getInput(beekapoo::Module::GROW_INPUT)->visible,"Generate and Grow buttons and CV inputs must be visible");
+    for(int i=0;i<6;++i){require(host->getInput(i)&&!host->getInput(i)->visible,"Legacy single-action CV jacks must stay hidden");require(host->actionButtons[i]->visible==(i%3!=2),"Exactly four manual action buttons must be visible");}
+    require(host->growButton->visible&&host->regenerateButton->visible&&host->getInput(beekapoo::Module::ACTIONS_INPUT)->visible,"Generate and Grow buttons and shared poly CV must be visible");
     require(host->getParam(beekapoo::Module::WIGGLE_AMOUNT)&&!host->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Wiggle quantity must remain available without occupying the panel");
     std::vector<widget::Widget*> visibleControls;
     for(auto* w:host->actionButtons)visibleControls.push_back(w);
     for(auto* w:host->managementButtons)visibleControls.push_back(w);
     visibleControls.push_back(host->growButton);visibleControls.push_back(host->regenerateButton);
-    visibleControls.push_back(host->getInput(beekapoo::Module::GENERATE_INPUT));visibleControls.push_back(host->getInput(beekapoo::Module::GROW_INPUT));
+    visibleControls.push_back(host->getInput(beekapoo::Module::ACTIONS_INPUT));
     for(int i=0;i<6;++i)visibleControls.push_back(host->getInput(i));
     visibleControls.push_back(host->getParam(beekapoo::Module::WIGGLE_AMOUNT));
     for(const auto& p:host->ports)visibleControls.push_back(p.face);
     for(const auto& p:host->parameters)visibleControls.push_back(p.knob);
     visibleControls.erase(std::remove_if(visibleControls.begin(),visibleControls.end(),[](widget::Widget* w){return !w->visible;}),visibleControls.end());
     require(host->ownFrame->box.size.x==host->box.size.x && host->titleFrame->box.size.x==host->box.size.x,"Header and module controls frames must fill the panel width");
-    std::vector<std::pair<beekapoo::ActionButton*,int>> actionPairs = {
-      {host->actionButtons[0],0},{host->actionButtons[1],1},
-      {host->actionButtons[3],3},{host->actionButtons[4],4},
-      {host->regenerateButton,beekapoo::Module::GENERATE_INPUT},
-      {host->growButton,beekapoo::Module::GROW_INPUT}};
-    for(const auto& pair:actionPairs) {
-      auto button=pair.first->box, jack=host->getInput(pair.second)->box;
-      require(std::abs(jack.getCenter().x-button.getCenter().x)<.01f && std::abs(jack.pos.y-button.getBottom()-1)<.01f,"Each action CV must stay centered directly below its own button, including after wrapping");
-    }
+    auto jack=host->getInput(beekapoo::Module::ACTIONS_INPUT)->box;
+    require(jack.getCenter().x>host->regenerateButton->box.getCenter().x&&std::abs(jack.getCenter().y-host->regenerateButton->box.getCenter().y)<.01f,"Shared action CV must follow New subpatch on the same row");
+    require(host->growButton->box.getBottom()<host->ownFrame->box.pos.y,"Functions menu must stay in the header");
     require(host->actionButtons[3]->faceColor.r < host->actionButtons[0]->faceColor.r-.3f && host->actionButtons[4]->faceColor.r < host->actionButtons[1]->faceColor.r-.3f,"All and Exposed actions must remain visually distinct");
     for(size_t i=0;i<visibleControls.size();++i) {
       auto bounds=visibleControls[i]->box;

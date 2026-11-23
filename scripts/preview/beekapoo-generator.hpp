@@ -342,7 +342,7 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
   require(!rack->getModule(id)&&APP->engine->getModuleIds().empty(),"Undo browser add must remove the entire generated patch");
   APP->history->redo();owner=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(id));require(owner,"Redo must restore Beekapoo");owner->step();
   require(int(owner->members.size())==count&&owner->getModule<beekapoo::Module>()->getPatchName()==name,"Redo must restore the same patch and name");
-  auto* rename=owner->beginAction("rename Beekapoo");owner->getModule<beekapoo::Module>()->setPatchName("fold reed 27");owner->finishAction(rename);
+  owner->rename("fold reed 27");
   APP->history->undo();owner->step();require(owner->getModule<beekapoo::Module>()->getPatchName()==name,"Rename must undo");
   APP->history->redo();owner->step();require(owner->getModule<beekapoo::Module>()->getPatchName()=="fold reed 27","Rename must redo");
   auto exportPath=output+"/generated-beek.vcv";owner->saveBeek(exportPath);
@@ -353,7 +353,7 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec()));require(owner->generateDefaultPatch(),"Reroll fixture must generate");
     auto* source=add(plugin::getModel("Fundamental","VCO"),Vec(1000,0));auto* sink=add(plugin::getModel("Fundamental","VCF"),Vec(1200,0));
     std::set<int64_t> oldIds;for(const auto& member:owner->members)oldIds.insert(member.id);
-    owner->getModule<beekapoo::Module>()->setPatchName("Old fixture name");
+    owner->resetNameTopology();
     auto oldName=owner->getModule<beekapoo::Module>()->getPatchName();auto style=owner->appearance;
     app::PortWidget *in=nullptr,*out=nullptr;for(const auto& port:owner->ports){if(port.input&&!in)in=owner->findPort(port);if(!port.input)out=owner->findPort(port);}
     auto wire=[&](app::PortWidget* from,app::PortWidget* to){auto* c=new engine::Cable;c->outputModule=from->module;c->outputId=from->portId;c->inputModule=to->module;c->inputId=to->portId;APP->engine->addCable(c);auto* cw=new app::CableWidget;cw->setCable(c);rack->addCable(cw);return c->id;};

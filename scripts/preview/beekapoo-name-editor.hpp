@@ -13,7 +13,8 @@ void testBeekNameEditor(const std::string& output,float scale,Add add,Require re
   owner->expose(a,a->getInputs()[0]);owner->expose(c,c->getOutputs()[0]);
   owner->requestedWidth=150;owner->layoutControls();owner->step();
   auto* m=owner->getModule<beekapoo::Module>();
-  m->setPatchName("reed cog");
+  owner->resetNameTopology();
+  auto generatedName=m->getPatchName();
   auto members=owner->members;
   std::string exact="MOSS / ReED 7";
   auto open=[&] {
@@ -33,7 +34,7 @@ void testBeekNameEditor(const std::string& output,float scale,Add add,Require re
     auto* parent=editor->parent;parent->removeChild(editor);delete editor;
   };
   auto* editor=open();editor->field->insertText("do not save");key(editor,GLFW_KEY_ESCAPE);
-  require(m->getPatchName()=="reed cog"&&!m->hasCustomPatchName(),"Escape must leave both title and generated/custom state alone");
+  require(m->getPatchName()==generatedName&&!m->hasCustomPatchName(),"Escape must leave both title and generated/custom state alone");
   editor=open();editor->field->insertText(exact);
   {
     struct Stage:widget::Widget {
@@ -54,7 +55,7 @@ void testBeekNameEditor(const std::string& output,float scale,Add add,Require re
   key(editor,GLFW_KEY_ENTER);
   require(m->getPatchName()==exact&&m->hasCustomPatchName(),"Enter must save a custom name");
   for(uint64_t hash:{0ull,1ull,432ull,9981ull})require(m->displayPatchName(hash)==exact,"Hash changes must never recase custom titles");
-  APP->history->undo();require(m->getPatchName()=="reed cog"&&!m->hasCustomPatchName(),"Rename undo must restore generated-name state");
+  APP->history->undo();require(m->getPatchName()==generatedName&&!m->hasCustomPatchName(),"Rename undo must restore generated-name state");
   APP->history->redo();require(m->getPatchName()==exact&&m->hasCustomPatchName(),"Rename redo must restore custom-name state");
   for(size_t i=0;i<members.size();++i)require(owner->members[i].id==members[i].id&&owner->find(members[i].id)==members[i].widget.get(),"Rename undo/redo must not recreate child modules");
   for(int i=0;i<6;++i){owner->parameterAction(i,false);require(m->getPatchName()==exact,"Wiggle, randomize and initialize must preserve custom names");}

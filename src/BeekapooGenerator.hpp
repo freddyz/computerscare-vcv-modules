@@ -96,8 +96,8 @@ inline json_t* plan(int requestedCount = 0,
 }  // namespace generated
 
 // Only structural edits rename generated titles. Native knobs, external
-// cables, exposure, layout and theme do not change this identity. Restore
-// seeds a new baseline so Undo, duplication and patch reload keep saved names.
+// cables, exposure, layout and theme do not change this identity. Identical
+// topology always restores the same generated name, including after reload.
 void Beekapoo::refreshGeneratedName() {
   if (cableMutationDepth()) {
     namedTopologyReady = false;
@@ -105,10 +105,11 @@ void Beekapoo::refreshGeneratedName() {
   }
   if (!module) return;
   refreshAppearance();
-  if (namedTopologyReady && namedTopology != appearance.wiring &&
+  if ((!namedTopologyReady || namedTopology != appearance.wiring) &&
       !members.empty()) {
     auto* m = getModule<Module>();
-    if (!m->hasCustomPatchName()) m->setPatchName(generated::name());
+    if (!m->hasCustomPatchName())
+      m->setPatchName(generated::topologyName(appearance.wiring));
   }
   namedTopology = appearance.wiring;
   namedTopologyReady = true;
@@ -127,7 +128,6 @@ bool Beekapoo::generateDefaultPatch(int requestedCount) {
   DEFER({ json_decref(root); });
   auto* m = getModule<Module>();
   auto previous = m->getPatchName();
-  m->setPatchName(generated::name());
   bool result = importContents(root);
   namedTopologyReady = false;
   refreshGeneratedName();
@@ -170,7 +170,6 @@ bool Beekapoo::regeneratePatch() {
   change->moduleId = module->id;
   change->oldModuleJ = toJson();
   auto previous = getModule<Module>()->getPatchName();
-  getModule<Module>()->setPatchName(generated::name());
   if (!importContents(root, "", -1, change)) {
     getModule<Module>()->setPatchName(previous);
     delete change;
@@ -183,7 +182,6 @@ bool Beekapoo::regeneratePatch() {
 void Beekapoo::initializeBrowserPreview() {
   requestedWidth = 90;
   auto* root = generated::plan();
-  browserName = generated::name();
   std::vector<std::string> types;
   std::vector<StyleCable> wires;
   std::map<int64_t, size_t> ids;
@@ -227,6 +225,7 @@ void Beekapoo::initializeBrowserPreview() {
   }
   browserMemberCount = std::max(size_t(3), browserModules.size());
   appearance = patchIdentity(types, wires);
+  browserName = generated::topologyName(appearance.wiring);
   std::vector<widget::Widget*> knobs, ins, outs;
   std::map<widget::Widget*, std::pair<std::string, std::string>> names;
   auto addKnob = [&](engine::Module* m, int param) {

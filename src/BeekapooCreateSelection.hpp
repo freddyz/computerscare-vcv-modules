@@ -141,6 +141,7 @@ inline void createSelectedGroup() {
   group->syncInputCables(false);
   mutation.finish();
   group->step();
+  group->refreshGeneratedName();
   group->saveGroup();
   rack->setModulePosNearest(group, minimum);
   rack->deselectAll();

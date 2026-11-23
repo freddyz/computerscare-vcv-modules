@@ -167,5 +167,59 @@ void testBeekSectionControls(const std::string& output, float scale, Add add, Re
     for(auto* b:owner->sectionAddButtons)require(!b->visible,"Releasing the resize handle restores section hover behavior");
   }
   rack->clear(); APP->history->clear();
+  std::vector<app::ModuleWidget*> sources;
+  for(const char* slug:{"VCO","Delay","Random","8vert"})
+    sources.push_back(add(plugin::getModel("Fundamental",slug),Vec(sources.size()*180,0)));
+  owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(900,0)));
+  rack->deselectAll();for(auto* w:sources)rack->select(w,true);owner->collapse();
+  std::set<Key> all;
+  std::map<int64_t,json_t*> snapshots;
+  for(auto* w:sources) {
+    for(auto* p:w->getParams()) {
+      auto* q=p->getParamQuantity();if(!q||!q->isBounded()||q->getRange()<=0)continue;
+      all.insert({w->module->id,p->paramId});
+      auto* button=dynamic_cast<app::Switch*>(p);
+      q->setImmediateValue(button&&button->momentary?q->getMaxValue():q->getMinValue()+q->getRange()*.37f);
+    }
+    snapshots[w->module->id]=w->module->toJson();
+  }
+  auto verifyValues=[&] {
+    for(auto* w:sources) {
+      auto* now=w->module->toJson();
+      // Rack refreshes neighbour IDs during Undo; compare actual DSP state.
+      for(const char* key:{"params","data","bypass"}) {
+        auto* before=json_object_get(snapshots[w->module->id],key);
+        auto* after=json_object_get(now,key);
+        require((!before&&!after)||(before&&after&&json_equal(before,after)),"Adding parameter exposure must preserve values and private state, including momentary buttons");
+      }
+      json_decref(now);
+    }
+  };
+  Key held{sources.front()->module->id,0};
+  owner->randomLocks.insert(held);owner->randomLocks.insert({sources.back()->module->id,-1});
+  auto exhaust=[&] {
+    for(size_t i=0;i<=all.size();++i) {
+      auto before=owner->parameters.size();
+      if(!owner->addExposedControl(0))break;
+      require(owner->parameters.size()==before+1,"Every parameter plus click adds one distinct mapping");verifyValues();
+    }
+  };
+  exhaust();
+  std::set<Key> expected=all;
+  expected.erase(held);for(auto it=expected.begin();it!=expected.end();)if(it->first==sources.back()->module->id)it=expected.erase(it);else ++it;
+  auto keys=[&] {std::set<Key> result;for(auto& p:owner->parameters)result.insert({p.id,p.paramId});return result;};
+  require(keys()==expected,"Manual plus must exhaust all unlocked controls, beyond generator usefulness rules");
+  owner->randomLocks.clear();exhaust();
+  require(all.size()>16&&keys()==all,"Parameter exposure must continue beyond sixteen until every real control is exposed");
+  auto index=APP->history->actionIndex;
+  require(!owner->addExposedControl(0)&&APP->history->actionIndex==index,"Exhaustion adds neither duplicate mappings nor undo entries");
+  APP->history->undo();require(owner->parameters.size()+1==all.size(),"Undo removes just the final mapping");verifyValues();
+  APP->history->redo();require(keys()==all,"Redo restores the final mapping");verifyValues();
+  owner->getModule<Module>()->panelTheme.store(2);owner->requestedWidth=240;owner->layoutControls();owner->step();
+  auto* parent=owner->parent;auto pos=owner->box.pos;parent->removeChild(owner);owner->box.pos=Vec();
+  capture(owner,output+"/all-parameters-exposed.png",scale,false);owner->box.pos=pos;parent->addChild(owner);
+  for(auto& saved:snapshots)json_decref(saved.second);
+  std::printf("Parameter plus: all %zu Fundamental controls, momentary buttons, locks, exhaustion, values and Undo/Redo passed\n",all.size());
+  rack->clear(); APP->history->clear();
   std::puts("Section dice/minus: counts, choice changes, locks, native values, stacked/self-patched cables, attenuverter IDs/gains, Undo/Redo and compact hover strips passed");
 }

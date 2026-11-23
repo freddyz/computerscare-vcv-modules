@@ -65,6 +65,23 @@ void testBeekInputMinus(Add add, Require require) {
       require(rack->getCable(direct)&&rack->getCable(outbound),"Unrelated internal and outside cables survive");
       for(auto id:routes) require(rack->getCable(id),"Each stacked self-patch retains its cable ID");
     };
+    // Compact shares minus routing, but folds all eligible inputs and removes
+    // now-unused output exposures as one undoable edit.
+    auto originalPorts=owner->ports.size();auto historyIndex=APP->history->actionIndex;
+    auto verifyCompact=[&] {
+      settle();
+      require(owner->ports.size()==1&&!owner->ports.front().input&&owner->ports.front().id==source->module->id,"Compact retains the externally connected output only");
+      for(int ch=0;ch<4;++ch)require(std::abs(target->module->inputs[1].getVoltage(ch)-expected[ch])<.0001f,"Compact preserves stacked polyphonic signals and legacy attenuation");
+      for(auto id:routes)require(rack->getCable(id)&&owner->internalCableIds.count(id),"Compact internalizes each self-patch without removing its cable");
+      require(rack->getCable(outbound)&&rack->getCable(direct),"Compact preserves outside and internal cables");
+    };
+    owner->compactSubpatch();verifyCompact();
+    require(APP->history->actionIndex==historyIndex+1,"Compact is one undo transaction");
+    APP->history->undo();settle();require(owner->ports.size()==originalPorts&&owner->members.size()==3,"Compact undo restores exposures and original modules");
+    APP->history->redo();verifyCompact();
+    auto compactHistory=APP->history->actionIndex;owner->compactSubpatch();
+    require(APP->history->actionIndex==compactHistory,"Compact with nothing eligible must not add history");
+    APP->history->undo();settle();verifySignal();
     // Unpatched has priority even when the self-patched slot was exposed first.
     phase="remove unpatched";require(owner->removeExposedControl(1),"Minus removes an unpatched input first");
     verifySignal();

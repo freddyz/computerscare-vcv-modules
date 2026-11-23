@@ -42,7 +42,7 @@ void renderBeekChomp(const std::string& output,float scale,Add add,Require requi
     logo->onEnter(enter);
     rack->deselectAll();owner->step();
     require(!logo->visible&&!logo->hovered&&!logo->cursorActive&&!logo->tooltip&&logo->pose()==0,"Clearing selection must stop animation and remove its tooltip");
-    require(owner->growButton->icon==9,"Grow must retain its own wavy plus");
+    require(owner->growButton->icon==11,"Subpatch functions must retain their three-dot menu");
     auto* m=owner->getModule<beekapoo::Module>();auto name=m->getPatchName();
     owner->requestedWidth=75;owner->layoutControls();
     for(const auto& caption:{std::string(),name}) {

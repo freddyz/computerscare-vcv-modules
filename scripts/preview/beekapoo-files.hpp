@@ -65,7 +65,7 @@ void testBeekPatchFiles(const std::string& output,float scale,Add add,Require re
   wire(sample,P::OUT_L,gain,0);wire(gain,0,outside,0);
   rack->deselectAll();rack->select(sample,true);rack->select(gain,true);owner->collapse();
   owner->exposeParameter(sampleId,P::LENGTH);owner->toggleRandomLock(sampleId,P::LENGTH);owner->requestedWidth=240;owner->layoutControls();owner->saveGroup();
-  wire(gain,1,owner,5);
+  owner->expose(gain,gain->getOutput(1));wire(gain,1,owner,5);
   auto path=output+"/shared-beek.vcv";
   auto patchPath=APP->patch->path;auto historyIndex=APP->history->actionIndex;
   owner->saveBeek(path);
@@ -113,9 +113,78 @@ void testBeekPatchFiles(const std::string& output,float scale,Add add,Require re
   bool choose=false;try{receiver->loadBeek(multiple);}catch(const Exception&){choose=true;}
   require(choose && receiver->members.empty(),"Multi-Beek files must require a choice before changing the target");
   require(receiver->loadBeek(multiple,secondId) && receiver->members.size()==1 && !loadedAudio(receiver),"Choosing a Beek must import only its own children");
+  {
+    beekapoo::BeekPatchFile file(multiple);
+    int64_t chosen=-1;
+    auto* dialog=beekapoo::makeBeekImportDialog(file,multiple,[&](int64_t id,bool){chosen=id;});
+    require(dialog&&dialog->choices.size()==3&&dialog->choices.back().title=="Entire patch","Every multi-Beek import must offer the entire patch");
+    auto* scene=APP->scene;auto size=scene->box.size;scene->box.size=Vec(900,600);
+    scene->addChild(dialog);dialog->step();dialog->choose(2);
+    capture(scene,output+"/entire-patch-import.png",scale,false);
+    dialog->submit();require(chosen==beekapoo::beekEntirePatch,"Entire patch choice must bypass automatic single-Beek selection");
+    scene->removeChild(dialog);delete dialog;scene->box.size=size;
+    // The original fixture has a CV connection to the wrapper's own actions.
+    // Refuse unsupported control semantics before modifying the destination.
+    auto before=receiver->toJson();auto history=APP->history->actionIndex;
+    bool refused=false;try{receiver->loadBeek(multiple,beekapoo::beekEntirePatch);}catch(const Exception&){refused=true;}
+    auto after=receiver->toJson();require(refused&&json_equal(before,after)&&APP->history->actionIndex==history,"Unsupported wrapper action wiring must not silently disappear or partially import");json_decref(before);json_decref(after);
+    auto* wires=json_object_get(file.root,"cables");
+    for(size_t i=json_array_size(wires);i-- >0;) {
+      auto* c=json_array_get(wires,i);
+      if(json_integer_value(json_object_get(c,"inputModuleId"))==ownerId&&json_integer_value(json_object_get(c,"inputId"))==5)json_array_remove(wires,i);
+    }
+    int64_t looseId=0;while(file.modules.count(looseId))++looseId;
+    auto* loose=json_deep_copy(file.modules.at(secondChildId));json_object_set_new(loose,"id",json_integer(looseId));
+    json_array_append_new(json_object_get(file.root,"modules"),loose);
+    auto* firstGroup=json_object_get(json_object_get(file.modules.at(ownerId),"data"),"group");
+    auto* secondGroup=json_object_get(json_object_get(file.modules.at(secondId),"data"),"group");
+    int64_t firstGain=-1;
+    auto* children=json_object_get(firstGroup,"members");
+    for(size_t i=0;i<json_array_size(children);++i){auto id=json_integer_value(json_object_get(json_array_get(children,i),"id"));if(id!=sampleId)firstGain=id;}
+    auto port=[&](json_t* group,int64_t child,int input,float gain,bool shared) {
+      auto* p=json_pack("{s:I,s:i,s:b,s:i,s:f}","module",json_int_t(child),"port",input,"input",true,"route",0,"gain",double(gain));
+      if(shared){json_object_set_new(p,"shared",json_integer(731));json_object_set_new(p,"targets",json_pack("[{s:I,s:i,s:I}]","module",json_int_t(child),"port",1,"bridge",json_int_t(-1)));}
+      json_array_append_new(json_object_get(group,"ports"),p);
+    };
+    port(firstGroup,firstGain,2,.5f,false);port(secondGroup,secondChildId,0,-.5f,true);
+    auto cable=[&](int64_t from,int out,int64_t to,int in) {
+      json_array_append_new(wires,json_pack("{s:I,s:I,s:i,s:I,s:i,s:s}","id",json_int_t(900000+json_array_size(wires)),"outputModuleId",json_int_t(from),"outputId",out,"inputModuleId",json_int_t(to),"inputId",in,"color","#30a070"));
+    };
+    cable(looseId,0,ownerId,beekapoo::Module::inputBase);cable(looseId,0,ownerId,beekapoo::Module::inputBase);
+    cable(secondChildId,0,ownerId,beekapoo::Module::inputBase);
+    cable(firstGain,1,secondId,beekapoo::Module::inputBase);cable(secondChildId,0,secondId,beekapoo::Module::inputBase);
+    cable(ownerId,0,firstGain,2);cable(secondId,0,secondChildId,0);cable(secondId,0,secondChildId,1);
+    json_dump_file(file.root,system::join(file.temporary.path,"patch.json").c_str(),JSON_INDENT(2));
+    auto whole=output+"/whole-patch.vcv";system::archiveDirectory(whole,file.temporary.path,1);
+    auto oldChild=receiver->members.front().id;history=APP->history->actionIndex;
+    require(receiver->loadBeek(whole,beekapoo::beekEntirePatch),"Entire patch must combine wrappers and loose modules");
+    auto verify=[&] {
+      for(int tick=0;tick<3;++tick)rack->step();
+      require(receiver->members.size()==4,"Entire patch must import every child and loose module exactly once");checkAudio(loadedAudio(receiver));
+      for(const auto& member:receiver->members)require(!dynamic_cast<beekapoo::Module*>(APP->engine->getModule(member.id)),"Whole patch must not create nested Beek wrappers");
+      int routes=0;
+      for(const auto& p:receiver->ports)if(p.route>=0) {
+        ++routes;int incoming=0;
+        for(auto* c:rack->getCompleteCables())if(c->cable->inputModule==receiver->module&&c->cable->inputId==beekapoo::Module::inputBase+p.route)++incoming;
+        bool shared=p.shared.key>=0;
+        require(incoming==(shared?2:3),"Whole-patch import must preserve duplicate stacks, self-patches and connections between Beeks");
+        require(std::abs(receiver->inputGain(p)-(shared?-.5f:.5f))<.0001f,"Merged legacy input routes must retain independent gains");
+        require(!shared||p.shared.extra.size()==1,"Shared input fanout must survive the merge");
+      }
+      require(routes==2,"Equal route numbers in separate Beeks must become distinct routes");
+      checkBeekCablePresentation(require);
+    };
+    verify();require(APP->history->actionIndex==history+1,"Entire patch replacement must be one Undo action");
+    APP->history->undo();receiver->step();require(receiver->members.size()==1&&receiver->members.front().id==oldChild,"Undo must restore the previous Beek");
+    APP->history->redo();receiver->step();verify();
+    auto roundtrip=output+"/whole-patch-roundtrip.vcv";receiver->saveBeek(roundtrip);require(receiver->loadBeek(roundtrip),"Combined patch must save and reload");verify();
+    beekapoo::BeekPatchFile single(roundtrip);std::unique_ptr<beekapoo::BeekImportDialog> singleDialog(beekapoo::makeBeekImportDialog(single,roundtrip,[](int64_t,bool){}));
+    require(singleDialog&&singleDialog->choices.size()==2&&singleDialog->choices.back().owner==beekapoo::beekEntirePatch,"Single-Beek files must also offer Entire patch");
+  }
   rack->deselectAll();rack->select(second,true);
   auto selection=output+"/shared-beek.vcvs";rack->saveSelection(selection);
   require(receiver->loadBeek(selection) && receiver->members.size()==1,"Load Beek must accept native selections");
+  require(receiver->loadBeek(selection,beekapoo::beekEntirePatch) && receiver->members.size()==1,"Entire patch must also load native selections with embedded Beek contents");
   {
     beekapoo::BeekPatchFile valid(multiple);
     auto* root=json_deep_copy(valid.root);auto* modules=json_object_get(root,"modules");

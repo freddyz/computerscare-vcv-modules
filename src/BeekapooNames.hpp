@@ -38,4 +38,7 @@ inline std::string name(unsigned entropy = random::u32()) {
   }
   return "Beek " + std::to_string(entropy % 1000);
 }
+inline std::string topologyName(uint64_t hash) {
+  return name(unsigned(hash ^ (hash >> 32)));
+}
 }  // namespace generated

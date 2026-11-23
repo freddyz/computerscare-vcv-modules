@@ -1,8 +1,71 @@
 #pragma once
+// Resizing may abbreviate captions, never the source identity used for skins.
+template<class Add,class Require>
+void testBeekResizeSkins(const std::string& output,float scale,Add add,Require require) {
+  auto* rack=APP->scene->rack;
+  for(int example=0;example<2;++example) {
+    rack->clear();APP->history->clear();
+    auto* vco=add(plugin::getModel("Fundamental","VCO"),Vec());
+    auto* random=add(plugin::getModel("Fundamental","Random"),Vec(180,0));
+    auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(360,0)));
+    rack->deselectAll();rack->select(vco,true);rack->select(random,true);owner->collapse();
+    for(auto* source:{vco,random})for(auto* p:source->getParams()) {
+      auto* q=p->getParamQuantity();
+      bool wanted=source==vco?(q->name=="Frequency"||q->name=="Frequency modulation"||q->name=="FM mode")
+                             :(q->name=="Internal trigger rate"||q->name=="Offset"||(example&&q->name=="Trigger probability"));
+      if(!wanted)continue;
+      if(q->name=="FM mode")q->name="Frequency modulation mode";
+      if(q->name=="Offset")q->name="Channel 12 offset";
+      q->setImmediateValue(q->getMinValue()+q->getRange()*.35f);
+      owner->exposeParameter(source->module->id,p->paramId);
+    }
+    require(owner->parameters.size()==size_t(5+example),"Resize fixture must include long knob and switch labels");
+    owner->expose(vco,vco->getInputs()[0]);owner->expose(vco,vco->getOutputs()[0]);
+    owner->getModule<beekapoo::Module>()->panelTheme.store(example?2:1);
+    owner->requestedWidth=360;owner->layoutControls();owner->step();
+    auto fingerprint=[&] {
+      std::vector<std::pair<std::string,std::vector<float>>> result;
+      for(const auto& p:owner->parameters) {
+        std::string identity;std::vector<float> geometry;
+        if(auto* knob=dynamic_cast<beekapoo::ParametricKnob*>(p.knob)) {
+          identity=knob->identity;
+          for(auto point:knob->profile){geometry.push_back(point.x);geometry.push_back(point.y);}
+          for(auto radius:knob->pointerRadii)geometry.push_back(radius);
+          geometry.insert(geometry.end(),{float(knob->style.shape),float(knob->style.indicator),knob->style.pointer,float(knob->channelNumber),knob->style.lightness});
+        } else if(auto* button=dynamic_cast<beekapoo::ExposedSwitch*>(p.knob)) {
+          for(auto* child:button->children)if(auto* face=dynamic_cast<beekapoo::ExposedSwitch::Face*>(child)) {
+            identity=std::to_string(face->shapeSeed);
+            for(auto corner:face->cornerOffsets){geometry.push_back(corner.x);geometry.push_back(corner.y);}
+            geometry.insert(geometry.end(),{face->box.size.x,face->box.size.y,face->upDepth,face->downDepth,face->borderWidth,button->skin.lightness});
+          }
+        }
+        require(!identity.empty(),"Every control must participate in resize identity checks");
+        geometry.push_back(p.knob->getParamQuantity()->getValue());
+        result.push_back({identity,geometry});
+      }
+      return result;
+    };
+    auto original=fingerprint();
+    // Cross abbreviation breakpoints in both directions, including minimum.
+    for(int width:{45,60,75,90,120,180,270,360,270,120,75,45}) {
+      owner->requestedWidth=width;owner->layoutControls();owner->step();
+      require(fingerprint()==original,"Resize must preserve knob silhouettes, pointers, numbered identity, button geometry, shades and parameter values");
+    }
+    for(int width:{75,135,240}) {
+      owner->requestedWidth=width;owner->layoutControls();owner->step();
+      auto* parent=owner->parent;auto pos=owner->box.pos;parent->removeChild(owner);owner->box.pos=Vec();
+      capture(owner,output+string::f("/resize-shapes-%d-%d.png",example,width),scale,false);
+      owner->box.pos=pos;parent->addChild(owner);
+    }
+  }
+  rack->clear();APP->history->clear();
+  std::puts("Resize skins: full source identity, continuous/snap knobs and switches, narrow/wide/back, both themes and unchanged source values passed");
+}
 // Real Rack widget/text measurement at several compact widths, using long
 // names found in the library checkout rather than short synthetic labels.
 template<class Add,class Require>
 void renderBeekLabels(const std::string& output,float scale,Add add,Require require) {
+  testBeekResizeSkins(output,scale,add,require);
   auto* rack=APP->scene->rack;
   auto* model=plugin::getModel("computerscare","demo-gain");
   const char* inputs[]={"Frequency modulation","Channel 12 CV input","Left clock input","High-pass filter input","Probability","1V/Octave pitch","Reset","Cutoff frequency","Threshold","Retrigger","External oscillator frequency","Right channel 2"};

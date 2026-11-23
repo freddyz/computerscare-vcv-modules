@@ -50,7 +50,7 @@ void Beekapoo::updateSectionAddButtons(Vec mouse) {
       if (!button->visible) button->clearTooltip();
     }
 }
-Beekapoo::SectionCandidates Beekapoo::sectionCandidates() {
+Beekapoo::SectionCandidates Beekapoo::sectionCandidates(bool allParameters) {
   SectionCandidates choices;
   const auto& specs = beekapoo_patch::library();
   for (const auto& member : members) {
@@ -73,10 +73,11 @@ Beekapoo::SectionCandidates Beekapoo::sectionCandidates() {
       auto* q = p->getParamQuantity();
       auto* button = dynamic_cast<app::Switch*>(p);
       if (!q || !q->isBounded() || q->getRange() <= 0 || exposed(p) ||
-          randomLocked(member.id, p->paramId) || (button && button->momentary))
+          randomLocked(member.id, p->paramId) ||
+          (!allParameters && button && button->momentary))
         continue;
-      bool useful = !spec;
-      if (spec)
+      bool useful = allParameters || !spec;
+      if (spec && !allParameters)
         for (const auto& control : spec->parameters)
           if (control.id == p->paramId)
             useful = beekapoo_patch::controlUseful(control, inputConnected,
@@ -115,6 +116,10 @@ bool Beekapoo::addExposedControl(int kind) {
   if (!module || members.empty() || kind < 0 || kind > 2) return false;
   ScopedSubviewRack mainScope(homeRack);
   auto choices = sectionCandidates();
+  // Prefer controls relevant to the current wiring, but manual + must not
+  // stop at the generator's curated list. Exposing a control does not fire it.
+  if (kind == 0 && choices.parameters.empty())
+    choices = sectionCandidates(true);
   if ((kind == 0 && choices.parameters.empty()) ||
       (kind == 1 && choices.inputs.empty()) ||
       (kind == 2 && choices.outputs.empty())) {
@@ -166,7 +171,7 @@ bool Beekapoo::rerollExposedControls(int kind) {
 bool Beekapoo::removeExposedControl(int kind) {
   return changeExposedControls(kind, false);
 }
-bool Beekapoo::foldSelfPatchedInput() {
+bool Beekapoo::foldSelfPatchedInput(history::ComplexAction* parent) {
   std::vector<size_t> candidates;
   for (size_t i = 0; i < ports.size(); ++i) {
     const auto& p = ports[i];
@@ -234,11 +239,15 @@ bool Beekapoo::foldSelfPatchedInput() {
   reconcileCablePresentation();
   saveGroup();
   finishAction(state, batch);
-  APP->history->push(batch);
+  if (parent)
+    parent->push(batch);
+  else
+    APP->history->push(batch);
   status = "Input moved inside the subpatch";
   return true;
 }
-bool Beekapoo::changeExposedControls(int kind, bool reroll) {
+bool Beekapoo::changeExposedControls(int kind, bool reroll,
+                                     history::ComplexAction* parent) {
   if (!module || members.empty() || kind < 0 || kind > 2) return false;
   ScopedSubviewRack mainScope(homeRack);
   std::vector<std::pair<int64_t, int>> removable;
@@ -252,7 +261,7 @@ bool Beekapoo::changeExposedControls(int kind, bool reroll) {
         removable.emplace_back(p.id, p.portId);
   }
   if (removable.empty()) {
-    if (kind == 1 && !reroll) return foldSelfPatchedInput();
+    if (kind == 1 && !reroll) return foldSelfPatchedInput(parent);
     status = "No unlocked controls to change in this section";
     return false;
   }
@@ -308,6 +317,23 @@ bool Beekapoo::changeExposedControls(int kind, bool reroll) {
   }
   layoutControls();
   saveGroup();
-  finishAction(change);
+  finishAction(change, parent);
   return true;
+}
+
+void Beekapoo::compactSubpatch() {
+  if (!module || members.empty()) return;
+  ScopedSubviewRack mainScope(homeRack);
+  if (reconcileCablePresentation()) saveGroup();
+  auto* batch = new TopologyHistory(module->id);
+  batch->name = "compact subpatch";
+  size_t before = ports.size();
+  for (int kind : {1, 2})
+    while (changeExposedControls(kind, false, batch)) {
+    }
+  if (batch->isEmpty())
+    delete batch;
+  else
+    APP->history->push(batch);
+  status = std::to_string(before - ports.size()) + " exposed ports removed";
 }
