@@ -1,4 +1,5 @@
 #pragma once
+template<class Require> void checkBeekCablePresentation(Require require);
 template<class Add,class Require>
 void testBeekRegenerate(Add add,Require require) {
   auto* rack=APP->scene->rack;
@@ -20,8 +21,22 @@ void testBeekRegenerate(Add add,Require require) {
     auto* sink=add(plugin::getModel("Fundamental","8vert"),Vec(4300,0));
     auto wire=[&](app::PortWidget* from,app::PortWidget* to) {
       auto* c=new engine::Cable;c->outputModule=from->module;c->outputId=from->portId;c->inputModule=to->module;c->inputId=to->portId;
-      APP->engine->addCable(c);auto* cw=new app::CableWidget;cw->setCable(c);rack->addCable(cw);
+      APP->engine->addCable(c);auto* cw=new app::CableWidget;cw->setCable(c);rack->addCable(cw);return cw;
     };
+    std::vector<std::tuple<int,int,std::string>> selfWires;
+    auto slot=[&](int index,bool input) -> app::PortWidget* {
+      for(const auto& p:owner->ports)if(p.input==input && index--==0)return owner->findPort(p);
+      return nullptr;
+    };
+    auto selfWire=[&](int out,int in) {
+      auto* cw=wire(slot(out,false),slot(in,true));
+      cw->color=nvgRGB(80+int(selfWires.size())*20,110,180);
+      selfWires.push_back({out,in,color::toHexString(cw->color)});
+    };
+    if(wanted.inputs&&wanted.outputs) {
+      selfWire(0,0);selfWire(0,0);
+      selfWire(wanted.outputs-1,wanted.inputs-1);
+    }
     int next=0;
     for(const auto& p:owner->ports)if(p.input){wire(source->getOutput(0),owner->findPort(p));wire(source->getOutput(0),owner->findPort(p));}
       else wire(owner->findPort(p),sink->getInput(next++));
@@ -32,18 +47,39 @@ void testBeekRegenerate(Add add,Require require) {
     auto exterior=[&] {
       int ins=0,outs=0;
       for(auto* cw:rack->getCompleteCables()) {
-        ins+=cw->cable->outputModule==source->module && cw->cable->inputModule==m;
+        ins+=cw->cable->outputModule==source->module && (cw->cable->inputModule==m || owner->contains(cw->cable->inputModule));
         outs+=cw->cable->inputModule==sink->module && owner->contains(cw->cable->outputModule);
       }
       require(ins==wanted.inputs*2&&outs==wanted.outputs,"Regeneration must retain every exterior cable, including stacked inputs");
+      auto expected=selfWires;
+      std::vector<std::tuple<int,int,std::string>> found;
+      for(auto* cw:rack->getCompleteCables())
+        if(owner->cableRole(cw->cable)==beekapoo::Beekapoo::CableRole::Panel)
+          for(int out=0;out<wanted.outputs;++out)for(int in=0;in<wanted.inputs;++in)
+            if(cw->outputPort==slot(out,false)&&cw->inputPort==slot(in,true)) {
+              require(cw->visible,"Regenerated self-patch must remain visible");
+              found.push_back({out,in,color::toHexString(cw->color)});
+            }
+      std::sort(expected.begin(),expected.end());std::sort(found.begin(),found.end());
+      require(found==expected,"Regeneration must preserve both panel slot indices, colors and duplicate self-patch stacks");
+      checkBeekCablePresentation(require);
     };
     verify();exterior();
     for(int i=0;i<3;++i) {
       name=m->getPatchName();
+      if(i==0&&wanted.inputs&&wanted.outputs)selfWire(0,wanted.inputs-1);
       require(owner->regeneratePatch(),"Double dice regeneration must succeed");owner->step();verify();exterior();
       auto after=m->getPatchName();require(after!=name,"Generated names must change on regeneration");
       APP->history->undo();for(int tick=0;tick<20;++tick)owner->step();verify();exterior();require(m->getPatchName()==name,"Undo must restore the previous generated title");
       APP->history->redo();for(int tick=0;tick<20;++tick)owner->step();verify();exterior();require(m->getPatchName()==after,"Redo must restore the replacement title");
+    }
+    {
+      auto ownerId=owner->module->id,sourceId=source->module->id,sinkId=sink->module->id;
+      auto* saved=APP->engine->toJson();rack->mergeJson(saved);rack->clear();APP->history->clear();
+      APP->engine->fromJson(saved);rack->fromJson(saved);json_decref(saved);
+      owner=static_cast<beekapoo::Beekapoo*>(rack->getModule(ownerId));m=owner->getModule<beekapoo::Module>();
+      source=rack->getModule(sourceId);sink=rack->getModule(sinkId);
+      for(int i=0;i<3;++i)owner->step();verify();exterior();
     }
     name=m->getPatchName();owner->refreshGeneratedName();
     require(owner->growPatch(),"Grow must find an unlocked connection");
@@ -53,7 +89,7 @@ void testBeekRegenerate(Add add,Require require) {
     // exposure and parameter edits do not.
     owner->refreshGeneratedName();name=m->getPatchName();
     app::CableWidget* internal=nullptr;
-    for(auto* cw:rack->getCompleteCables())if(owner->contains(cw->cable->inputModule)&&owner->contains(cw->cable->outputModule)){internal=cw;break;}
+    for(auto* cw:rack->getCompleteCables())if(owner->cableRole(cw->cable)==beekapoo::Beekapoo::CableRole::Internal){internal=cw;break;}
     require(internal,"Generated patches need internal wiring");
     rack->removeCable(internal);delete internal;
     for(int tick=0;tick<20;++tick)owner->step();
@@ -69,5 +105,5 @@ void testBeekRegenerate(Add add,Require require) {
     require(old.inputs==now.inputs&&old.outputs==now.outputs&&old.parameters==now.parameters,"Locked generation must not add or remove exposed controls");
   }
   rack->clear();APP->history->clear();
-  std::puts("Beek regeneration: exact sparse/dense/zero exposure counts, exterior stacks, names, locks and Undo/Redo passed");
+  std::puts("Beek regeneration: exact exposure counts, exterior/self-patch stacks, immediate patching, slot/color preservation, reload, names, locks and Undo/Redo passed");
 }

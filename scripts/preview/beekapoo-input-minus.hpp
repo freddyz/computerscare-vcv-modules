@@ -12,7 +12,8 @@ void testBeekInputMinus(Add add, Require require) {
     auto* cw = new app::CableWidget; cw->setCable(c); rack->addCable(cw);
     return c->id;
   };
-  for (float gain : {1.f, .37f, -.6f, 0.f}) for (bool edit : {false, true}) {
+  for (int scenario=0;scenario<5;++scenario) for (bool edit : {false, true}) {
+    const float gains[]={1.f,1.f,.37f,-.6f,0.f};float gain=gains[scenario];
     rack->clear(); APP->history->clear();
     auto* source = add(model, Vec());
     auto* second = add(model, Vec(90,0));
@@ -30,12 +31,12 @@ void testBeekInputMinus(Add add, Require require) {
     owner->expose(second,second->getOutput(0));
     for(int i:{1,0}) owner->expose(target,target->getInput(i));
     auto proxy = [&](int input) {
-      for (const auto& p : owner->ports)
+      for (auto& p : owner->ports)
         if (p.input && p.id==targetId && p.portId==input) return owner->findPort(p);
       return static_cast<app::PortWidget*>(nullptr);
     };
-    for (auto& p : owner->ports) if (p.input && p.portId==1)
-      p.gain->getParamQuantity()->setImmediateValue(gain);
+    for (auto& p : owner->ports) if (scenario && p.input && p.portId==1)
+      legacyBeekGain(owner,p)->setImmediateValue(gain);
     std::vector<int64_t> routes;
     routes.push_back(wire(source->getOutput(0),proxy(1)));
     routes.push_back(wire(source->getOutput(0),proxy(1))); // duplicate source stack

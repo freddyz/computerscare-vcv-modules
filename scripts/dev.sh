@@ -262,6 +262,8 @@ run_tests() {
   python3 tests/test_packaged_assets.py
   g++ -std=c++11 -I src -I"$RACK_DEP_INCLUDE_DIR" tests/computerscare_font_test.cpp -o /tmp/cs_font_test
   /tmp/cs_font_test
+  g++ -std=c++11 -I src tests/control_contrast_test.cpp -o /tmp/cs_control_contrast_test
+  /tmp/cs_control_contrast_test
   g++ -std=c++11 -I src tests/beekapoo_patch_planner_test.cpp -o /tmp/cs_beekapoo_patch_planner_test
   /tmp/cs_beekapoo_patch_planner_test
   g++ -std=c++11 -I src tests/patch_save_naming_test.cpp -o /tmp/cs_patch_save_naming_test

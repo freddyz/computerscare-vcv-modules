@@ -139,44 +139,46 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
   std::set<int64_t> previous;
   if (preset)
     for (auto& member : members) previous.insert(member.id);
+  struct BoundaryEnd {
+    int ordinal = -1;
+    int64_t moduleId = -1;
+    int port = -1;
+  };
   struct Boundary {
-    bool input;
-    int ordinal;
-    int64_t outside;
-    int port;
+    BoundaryEnd input, output;
     NVGcolor color;
   };
   std::vector<Boundary> boundaries;
-  if (replacement)
-    for (auto* cw : homeRack->getCompleteCables()) {
-      auto* c = cw->cable;
-      if (inputBridge(c)) continue;
-      bool in = contains(c->inputModule), out = contains(c->outputModule);
-      const Port* proxy = nullptr;
-      if (c->inputModule == module)
-        for (const auto& p : ports)
-          if (p.route >= 0 && c->inputId == Module::inputBase + p.route) {
-            proxy = &p;
-            in = true;
-            break;
-          }
-      if (in == out) continue;
+  if (replacement) {
+    // Capture logical panel slots on both ends. A self-patch is external
+    // panel wiring even though both native endpoints are contained modules.
+    // Also recognize a drag completed just before Generate, before a UI tick.
+    reconcileCablePresentation();
+    auto endpoint = [&](engine::Module* target, int port, bool input) {
+      BoundaryEnd result;
+      result.moduleId = target->id;
+      result.port = port;
       int ordinal = 0;
       for (const auto& p : ports)
-        if (p.input == in) {
-          if (p.id == (proxy ? proxy->id
-                             : (in ? c->inputModule : c->outputModule)->id) &&
-              p.portId == (proxy ? proxy->portId
-                           : in  ? c->inputId
-                                 : c->outputId)) {
-            boundaries.push_back({in, ordinal,
-                                  (in ? c->outputModule : c->inputModule)->id,
-                                  in ? c->outputId : c->inputId, cw->color});
+        if (p.input == input) {
+          auto* native = findPort(p);
+          if (native && native->module == target && native->portId == port) {
+            result.ordinal = ordinal;
             break;
           }
           ++ordinal;
         }
+      return result;
+    };
+    for (auto* cw : homeRack->getCompleteCables()) {
+      auto* c = cw->cable;
+      if (cableRole(c) != CableRole::Panel) continue;
+      auto in = endpoint(c->inputModule, c->inputId, true);
+      auto out = endpoint(c->outputModule, c->outputId, false);
+      if (in.ordinal >= 0 || out.ordinal >= 0)
+        boundaries.push_back({in, out, cw->color});
     }
+  }
   auto* remapped = json_deep_copy(root);
   json_object_del(remapped, "contents");
   saveGroup();
@@ -418,27 +420,29 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
           homeRack->removeModule(w);
           delete w;
         }
+      auto resolveBoundary = [&](const BoundaryEnd& end,
+                                 bool input) -> app::PortWidget* {
+        if (end.ordinal >= 0) {
+          int ordinal = 0;
+          for (const auto& p : ports)
+            if (p.input == input && ordinal++ == end.ordinal)
+              return findPort(p);
+          return nullptr;
+        }
+        auto* outside = homeRack->getModule(end.moduleId);
+        return outside ? (input ? outside->getInput(end.port)
+                                : outside->getOutput(end.port))
+                       : nullptr;
+      };
       for (const auto& boundary : boundaries) {
-        int ordinal = 0;
-        app::PortWidget* endpoint = nullptr;
-        for (const auto& p : ports)
-          if (p.input == boundary.input) {
-            if (ordinal++ == boundary.ordinal) {
-              endpoint = findPort(p);
-              break;
-            }
-          }
-        auto* outside = homeRack->getModule(boundary.outside);
-        auto* other = outside
-                          ? (boundary.input ? outside->getOutput(boundary.port)
-                                            : outside->getInput(boundary.port))
-                          : nullptr;
-        if (!endpoint || !other) continue;
+        auto* input = resolveBoundary(boundary.input, true);
+        auto* output = resolveBoundary(boundary.output, false);
+        if (!input || !output) continue;
         auto* cable = new engine::Cable;
-        cable->inputModule = boundary.input ? endpoint->module : other->module;
-        cable->inputId = boundary.input ? endpoint->portId : other->portId;
-        cable->outputModule = boundary.input ? other->module : endpoint->module;
-        cable->outputId = boundary.input ? other->portId : endpoint->portId;
+        cable->inputModule = input->module;
+        cable->inputId = input->portId;
+        cable->outputModule = output->module;
+        cable->outputId = output->portId;
         APP->engine->addCable(cable);
         auto* cw = new app::CableWidget;
         cw->setCable(cable);

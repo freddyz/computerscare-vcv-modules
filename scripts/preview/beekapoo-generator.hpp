@@ -65,12 +65,15 @@ inline void renderGeneratedBeekRow(beekapoo::Beekapoo* owner,const std::string& 
 #include "beekapoo-placement.hpp"
 #include "beekapoo-eject-gains.hpp"
 #include "beekapoo-controls-spectrum.hpp"
+#include "beekapoo-labels.hpp"
 #include "beekapoo-themes.hpp"
 #include "beekapoo-name-editor.hpp"
 #include "beekapoo-chomp.hpp"
 #include "beekapoo-polyphony.hpp"
 #include "beekapoo-regenerate.hpp"
 #include "beekapoo-input-gains.hpp"
+#include "beekapoo-exposure-state.hpp"
+#include "beekapoo-saved-exposure.hpp"
 #include "beekapoo-copy-cables.hpp"
 #include "beekapoo-section-controls.hpp"
 #include "beekapoo-module-sets.hpp"
@@ -98,6 +101,9 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     plugin::Plugin* plugin;void* library;
     ~Cleanup(){APP->scene->rack->clear();APP->history->clear();plugin::plugins.erase(std::find(plugin::plugins.begin(),plugin::plugins.end(),plugin));delete plugin;dlclose(library);}
   } cleanup{fundamental,library};
+  if(std::getenv("BEEKAPOO_LABELS")){renderBeekLabels(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_EXPOSURE_PATCH")){testBeekSavedExposure(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_EXPOSURE_STATE")){testBeekExposureState(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_SHARED_INPUTS")){testBeekAllAudioInterfaces(output,scale,add,require,plugin::getModel("computerscare","demo-gain"));testBeekSharedInputs(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_CABLE_STATE")){testBeekCableState(output,scale,add,require);testBeekInputMinus(add,require);return;}
   if(std::getenv("BEEKAPOO_MODULE_SETS")){testBeekModuleSets(output,scale,add,require);return;}
@@ -119,6 +125,8 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
   testBeekModuleSets(output,scale,add,require);
   testBeekCopyCables(output,scale,add,require);
   testBeekSectionControls(output,scale,add,require);
+  testBeekExposureState(output,scale,add,require);
+  renderBeekLabels(output,scale,add,require);
   testBeekInputGains(add,require);
   testBeekRegenerate(add,require);
   testBeekEjectGains(add,require,plugin::getModel("computerscare","demo-gain"));
@@ -150,8 +158,6 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
       owner->requestedWidth=widths[example];owner->layoutControls();
       for(const auto& p:owner->ports) {
         if(example==2)require(!p.face->compact,"Roomy exposed ports must use full-size jacks");
-        if(p.gain&&p.gain->visible)
-          for(const auto& other:owner->ports)require(!p.gain->box.intersects(other.face->box),"Larger jacks must stay clear of input attenuverters");
         for(const auto& other:owner->ports)if(&p!=&other)require(!p.face->box.intersects(other.face->box),"Exposed jacks must not overlap");
       }
       renderGeneratedBeekRow(owner,output+string::f("/comparison-%d.png",example+1),scale);
@@ -179,10 +185,7 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
       for(const auto& member:owner->members){auto* w=owner->find(member.id);for(auto* q:w->module->paramQuantities)if(q&&q->getRange()>0&&w->getParam(q->paramId)&&int(owner->parameters.size())<wanted)owner->exposeParameter(member.id,q->paramId);}
       owner->requestedWidth=widths[i%21]*15;owner->layoutControls();
       for(const auto& p:owner->parameters)require(p.knob->visible,"Every spectrum parameter must remain visible");
-      for(const auto& p:owner->ports)if(p.gain&&p.gain->visible) {
-        for(const auto& other:owner->ports)require(!p.gain->box.intersects(other.face->box),"Input attenuverter must not cover a jack");
-        for(int input:{0,1,3,4,beekapoo::Module::GENERATE_INPUT,beekapoo::Module::GROW_INPUT})require(!p.gain->box.intersects(owner->getInput(input)->box),"Action jacks must not overlap input attenuverters at narrow widths");
-      }
+
       std::string modules;for(const auto& member:owner->members){if(!modules.empty())modules+=" / ";modules+=owner->find(member.id)->model->slug;}
       std::string image=string::f("spectrum-%02d.png",i+1);
       auto* parent=owner->parent;auto position=owner->box.pos;parent->removeChild(owner);owner->box.pos=Vec();capture(owner,output+"/"+image,scale,false);owner->box.pos=position;parent->addChild(owner);
@@ -260,19 +263,14 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
   require(owner->members.size()>=3&&owner->members.size()<=11&&owner->box.size.x==90,"Browser add must generate at six HP");
   require(owner->ports.size()==4&&!owner->parameters.empty(),"Browser add must expose controls and ports");
   {
-    auto* m=owner->getModule<beekapoo::Module>();
-    int gains=0;
+    int inputs=0;
     for(const auto& p:owner->ports)if(p.input) {
-      ++gains;require(p.route>=0&&p.gain&&p.gain->visible,"Every exposed input needs an adjacent attenuverter");
-      int route=p.route,in=beekapoo::Module::inputBase+route,param=beekapoo::Module::INPUT_GAIN_BASE+route;
-      engine::Module::ProcessArgs args;args.sampleRate=48000;args.sampleTime=1.f/48000;
-      m->inputs[in].channels=2;m->inputs[in].setVoltage(4,0);m->inputs[in].setVoltage(-2,1);m->params[param].setValue(-.5f);m->outputs[route].channels=2;m->process(args);
-      require(m->outputs[route].getChannels()==2&&std::abs(m->outputs[route].getVoltage(0)+2)<.001&&std::abs(m->outputs[route].getVoltage(1)-1)<.001,"Attenuverters must invert and preserve polyphonic signals");
-      m->params[param].setValue(0);m->process(args);require(m->outputs[route].getVoltage(0)==0,"Zero gain must silence the input");
-      m->params[param].setValue(1);m->inputs[in].channels=0;m->process(args);require(m->outputs[route].getChannels()==0,"Unpatched bridge must preserve child input normalization");
+      ++inputs;
+      require(p.route<0&&owner->findPort(p)==owner->originalPort(p),"Generated inputs must alias native jacks without attenuverters");
     }
-    require(gains==3,"Generated patches need three adjacent input attenuverters");
+    require(inputs==3,"Generated patches need three inputs");
   }
+
   auto name=owner->getModule<beekapoo::Module>()->getPatchName();require(!name.empty(),"New random subpatch needs a name");
   int count=int(owner->members.size());
   {
@@ -306,8 +304,13 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     require(json_equal(protectedState,after),"A locked module must retain its complete saved state");json_decref(after);json_decref(protectedState);
     APP->history->undo();owner->step();require(int(owner->members.size())==count,"Locked regeneration must undo in one step");
     owner->randomLocks.clear();owner->saveGroup();
-    auto* m=owner->getModule<beekapoo::Module>();m->inputs[beekapoo::Module::GROW_INPUT].channels=1;m->inputs[beekapoo::Module::GROW_INPUT].setVoltage(10);
-    engine::Module::ProcessArgs args;args.sampleRate=48000;args.sampleTime=1.f/48000;m->process(args);owner->step();
+    auto* m=owner->getModule<beekapoo::Module>();
+    engine::Module::ProcessArgs args;args.sampleRate=48000;args.sampleTime=1.f/48000;
+    // Rack must observe the low level before the first rising edge.
+    m->inputs[beekapoo::Module::GROW_INPUT].channels=1;
+    m->inputs[beekapoo::Module::GROW_INPUT].setVoltage(0);m->process(args);
+    m->inputs[beekapoo::Module::GROW_INPUT].setVoltage(10);m->process(args);
+    require(m->pendingActions.load()&(1u<<7),"Grow edge must queue its action");owner->step();
     require(owner->status=="Subpatch grown","Grow CV must invoke the same native graph action");
     m->inputs[beekapoo::Module::GROW_INPUT].setVoltage(0);m->inputs[beekapoo::Module::GROW_INPUT].channels=0;m->process(args);APP->history->undo();owner->step();
   }
@@ -409,9 +412,17 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
       }
     }
     if(example==4 && fresh->parameters.size()<=4) {
-      // Long captions can use the compact 30-32 px controls. The separate
-      // roomy-layout regression still checks that spare space enlarges them.
-      for(const auto& p:fresh->parameters)if(p.knob->visible)require(p.knob->box.size.x>=30,"Sparse panel must retain usable control sizes alongside its captions");
+      // The compact labeled grid permits standard 24 px controls. Captions
+      // and generated button proportions vary; check the longer side, not
+      // a guaranteed 30 px width. Roomy-layout tests verify enlargement.
+      for(const auto& p:fresh->parameters)if(p.knob->visible) {
+        float diameter=std::max(p.knob->box.size.x,p.knob->box.size.y);
+        if(diameter<23.99f) {
+          std::fprintf(stderr,"Sparse control: %s %.9f x %.9f, panel %.9f x %.9f, %zu parameters\n",p.knob->getParamQuantity()->getLabel().c_str(),p.knob->box.size.x,p.knob->box.size.y,fresh->box.size.x,fresh->box.size.y,fresh->parameters.size());
+          renderGeneratedBeekRow(fresh,output+"/sparse-control-failure.png",scale);
+        }
+        require(diameter>=23.99f,"Sparse panel must retain usable control sizes alongside its captions");
+      }
     }
     APP->engine->stepBlock(4096);
     renderGeneratedBeekRow(fresh,output+"/generated-example-"+std::to_string(example)+".png",scale);

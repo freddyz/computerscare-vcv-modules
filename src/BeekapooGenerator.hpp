@@ -164,6 +164,7 @@ bool Beekapoo::regeneratePatch() {
   }
   generationError.clear();
   DEFER({ json_decref(root); });
+  if (reconcileCablePresentation()) saveGroup();
   auto* change = new history::ModuleChange;
   change->name = "generate new subpatch";
   change->moduleId = module->id;
@@ -251,24 +252,11 @@ void Beekapoo::initializeBrowserPreview() {
     }
   } else
     for (int i = 0; i < 3; ++i) addKnob(browserModules.front().get(), i);
-  browserInputGains.reset(new engine::Module);
-  browserInputGains->model = modelComputerscareBeekapoo;
-  browserInputGains->config(3, 0, 0, 0);
   for (int i = 0; i < 4; ++i) {
     auto* port = new PortFace;
     port->input = i < 3;
     port->box.size = Vec(16, 16);
     controls->addChild(port);
-    if (port->input) {
-      browserInputGains->configParam(i, -1, 1, 1, "Input attenuverter", "%", 0,
-                                     100);
-      auto* gain = new MappedParam<ThemedSmallKnob>;
-      gain->module = browserInputGains.get();
-      gain->paramId = i;
-      gain->initParamQuantity();
-      controls->addChild(gain);
-      port->gain = gain;
-    }
     (port->input ? ins : outs).push_back(port);
     names[port] = {port->input ? "Input" : "Output", ""};
   }

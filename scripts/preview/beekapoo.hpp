@@ -69,21 +69,31 @@ struct Face : app::ModuleWidget {
   }
 };
 }
+// Compatibility fixtures deliberately recreate pre-removal gain routes.
+// New ordinary exposures must never allocate one.
+inline engine::ParamQuantity* legacyBeekGain(beekapoo::Beekapoo* owner, beekapoo::Beekapoo::Port& p) {
+  if(p.route<0) {owner->attachInput(p,0,-1,1.f);owner->saveGroup();}
+  return owner->module->getParamQuantity(beekapoo::Module::INPUT_GAIN_BASE+p.route);
+}
 #include "beekapoo-print.hpp"
 #include "beekapoo-knobs.hpp"
+#include "beekapoo-buttons.hpp"
 #include "beekapoo-fonts.hpp"
 #include "beekapoo-files.hpp"
 #include "beekapoo-audio-import.hpp"
 #include "beekapoo-generator.hpp"
 #include "beekapoo-combine.hpp"
 #include "beekapoo-inputs.hpp"
-#include "beekapoo-labels.hpp"
 #include "beekapoo-context.hpp"
+#include "beekapoo-menus.hpp"
+#include "beekapoo-compact.hpp"
 void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,float scale) {
   auto require=[](bool pass,const char* why){if(!pass)throw std::runtime_error(why);};
+  testBeekMenuStartup(require);
   testBeekPortContext(require);
   if(std::getenv("BEEKAPOO_FONTS")){renderBeekFonts(output,scale,require);return;}
   testBeekKnobRendering(output,scale,require);
+  if(std::getenv("BEEKAPOO_BUTTONS_ONLY")){renderBeekButtonSamples(output,scale);return;}
   if(std::getenv("BEEKAPOO_KNOBS_ONLY")){renderBeekKnobSpectrum(output,scale);return;}
   {
     auto mono=beekapoo::monochromeJack("jack-small-pointing-down");
@@ -281,9 +291,11 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto* w=model->createModuleWidget(m);w->box.pos=pos;rack->addModule(w);return w;
   };
   testBeekGroupShutdown(add,require);
+  testBeekCompact(output,scale,add,require);
+  if(std::getenv("BEEKAPOO_COMPACT"))return;
   if(std::getenv("BEEKAPOO_CONTEXT_CHECKS"))return;
-  if(std::getenv("BEEKAPOO_LABELS")){renderBeekLabels(output,scale,add,require);return;}
-  if(std::getenv("BEEKAPOO_SHARED_INPUTS")||std::getenv("BEEKAPOO_CABLE_STATE")||std::getenv("BEEKAPOO_MODULE_SETS")||std::getenv("BEEKAPOO_COPY_CABLES")||std::getenv("BEEKAPOO_SECTION_CONTROLS")||std::getenv("BEEKAPOO_INPUT_GAINS")||std::getenv("BEEKAPOO_REGENERATE")||std::getenv("BEEKAPOO_POLYPHONY")||std::getenv("BEEKAPOO_CHOMP")||std::getenv("BEEKAPOO_NAME_EDITOR")||std::getenv("BEEKAPOO_THEMES")||std::getenv("BEEKAPOO_TITLE_CASES")||std::getenv("BEEKAPOO_PARAM_BLOCKS")||std::getenv("BEEKAPOO_CONTROL_SPECTRUM")||std::getenv("BEEKAPOO_GENERATED_SPECTRUM")||std::getenv("BEEKAPOO_THREE_EXAMPLES")||std::getenv("BEEKAPOO_RECOVER_PATCH")){testBeekGenerator(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_LABELS")){testBeekGenerator(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_EXPOSURE_PATCH")||std::getenv("BEEKAPOO_EXPOSURE_STATE")||std::getenv("BEEKAPOO_SHARED_INPUTS")||std::getenv("BEEKAPOO_CABLE_STATE")||std::getenv("BEEKAPOO_MODULE_SETS")||std::getenv("BEEKAPOO_COPY_CABLES")||std::getenv("BEEKAPOO_SECTION_CONTROLS")||std::getenv("BEEKAPOO_INPUT_GAINS")||std::getenv("BEEKAPOO_REGENERATE")||std::getenv("BEEKAPOO_POLYPHONY")||std::getenv("BEEKAPOO_CHOMP")||std::getenv("BEEKAPOO_NAME_EDITOR")||std::getenv("BEEKAPOO_THEMES")||std::getenv("BEEKAPOO_TITLE_CASES")||std::getenv("BEEKAPOO_PARAM_BLOCKS")||std::getenv("BEEKAPOO_CONTROL_SPECTRUM")||std::getenv("BEEKAPOO_GENERATED_SPECTRUM")||std::getenv("BEEKAPOO_THREE_EXAMPLES")||std::getenv("BEEKAPOO_RECOVER_PATCH")){testBeekGenerator(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_PRINT_SPECTRUM")) {
     renderBeekapooPrintSpectrum(gainModel,output,scale);
     return;
@@ -300,7 +312,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     rack->select(first,true);rack->select(second,true);
     beekapoo::BeekapooRackHooks* hooks=nullptr;
     for(auto* child:APP->scene->children)if(auto* candidate=dynamic_cast<beekapoo::BeekapooRackHooks*>(child))hooks=candidate;
-    require(hooks,"The browser preview must install selection support before any Beekapoo instance exists");
+    require(hooks,"Selection support must remain installed before any Beekapoo instance exists");
+    testBeekEditMenu(output+"/27-create-edit-menu.png",scale,false,require);
     auto* overlay=new ui::MenuOverlay;auto* menu=new ui::Menu;overlay->addChild(menu);APP->scene->addChild(overlay);
     rack->appendSelectionContextMenu(menu);hooks->step();
     beekapoo::CreateBeekapooMenuItem* create=nullptr;
@@ -334,6 +347,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     }
     rack->deselectAll();rack->select(group,true);rack->select(outside,true);
     require(beekapoo::canCreateSelectedGroup(),"Creation must allow combining a Beek with ordinary modules");
+    testBeekEditMenu("",scale,true,require);
     group->editSubpatch();rack->select(first,true);rack->select(second,true);rack->select(group,false);rack->select(outside,false);
     require(!beekapoo::canCreateSelectedGroup(),"Creation must reject modules already owned by an editing group");
     static_cast<beekapoo::RackEditSession*>(group->editSession.get())->finish(true);
@@ -1561,7 +1575,6 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     for(int i:{0,1,2,3,4,5,beekapoo::Module::GENERATE_INPUT,beekapoo::Module::GROW_INPUT})if(wrapper->getInput(i)->visible)require(inside(wrapper->getInput(i)->box,wrapper->frameContent(wrapper->ownFrame)),("Spectrum "+std::to_string(index+1)+": CV outside controls face").c_str());
     for(const auto& p:wrapper->parameters)if(p.knob->visible)require(inside(p.knob->box,wrapper->frameContent(wrapper->frame)),("Spectrum "+std::to_string(index+1)+": parameter extends into a perspective wall").c_str());
     for(const auto& p:wrapper->ports)require(inside(p.face->box,wrapper->frameContent(p.input?wrapper->inputFrame:wrapper->outputFrame)),("Spectrum "+std::to_string(index+1)+": jack extends into a perspective wall").c_str());
-    for(const auto& p:wrapper->ports)if(p.gain)require(inside(p.gain->box,wrapper->frameContent(wrapper->inputFrame)),("Spectrum "+std::to_string(index+1)+": input attenuverter extends outside its block").c_str());
     auto* tile=new SpectrumTile;tile->box=Rect(Vec((index%4)*620,(index/4)*420),Vec(620,420));
     tile->caption=std::to_string(index+1)+". "+c.name+" | "+std::to_string(c.p)+" params / "+std::to_string(c.in)+" in / "+std::to_string(c.out)+" out | width "+std::to_string(int(wrapper->box.size.x));
     auto position=wrapper->box.pos;rack->getModuleContainer()->removeChild(wrapper);wrapper->box.pos=Vec((620-wrapper->box.size.x)*.5f,30);tile->addChild(wrapper);entries.push_back({tile,wrapper,position});
@@ -1621,7 +1634,12 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     hooks->wrapMenus(&unrelated);
     require(unrelated.children.front()==customDelete,"Custom Delete menu must not be intercepted");
     widget::Widget::ActionEvent action;customDelete->onAction(action);require(ran,"Custom Delete action must remain intact");
-    ui::Menu native;rack->appendSelectionContextMenu(&native);hooks->wrapMenus(&native);
+    ui::Menu native;
+    auto* prefix=createMenuItem("Before selection","",[] {});native.addChild(prefix);
+    rack->appendSelectionContextMenu(&native);
+    auto* suffix=createMenuItem("After selection","",[] {});native.addChild(suffix);
+    hooks->wrapMenus(&native);
+    require(native.children.front()==prefix && native.children.back()==suffix,"Menu wrapping must leave unrelated prefix and suffix actions alone");
     int removes=0,duplicates=0;
     for(auto* child:native.children){removes+=dynamic_cast<beekapoo::GroupDeleteMenuItem*>(child)!=nullptr;duplicates+=dynamic_cast<beekapoo::GroupDuplicateMenuItem*>(child)!=nullptr;}
     require(removes==1 && duplicates==2,"Only Rack's native selection actions should be wrapped");

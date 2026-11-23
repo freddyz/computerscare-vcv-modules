@@ -2,12 +2,16 @@
 // Section actions change exposed controls. Input minus can also fold a
 // self-patch inside, preserving the native stack and any input attenuation.
 void Beekapoo::updateSectionAddButtons(Vec mouse) {
+  auto* dragged = APP->event->getDraggedWidget();
+  bool resizing = dragged && (dragged == leftHandle || dragged == rightHandle);
+  bool onHandle = (leftHandle && leftHandle->box.contains(mouse)) ||
+                  (rightHandle && rightHandle->box.contains(mouse));
   std::array<phlooper::WarpedBlock*, 3> blocks{
       {frame, inputFrame, outputFrame}};
   std::array<Rect, 3> bars;
-  float size = std::min(16.f, (box.size.x - 12.f) / 3.f);
   for (int kind = 0; kind < 3; ++kind) {
     auto* block = blocks[kind];
+    float size = std::min(16.f, (box.size.x - 12.f) / 3.f);
     // Hang the whole strip over the corner, keeping its hit area inside the
     // panel. Narrow sections can borrow room to their left while hovered.
     float right =
@@ -23,23 +27,26 @@ void Beekapoo::updateSectionAddButtons(Vec mouse) {
       buttons[i]->box.pos = origin + Vec(i * (size + 1), 0);
     }
   }
-  // Keep the strip open while moving between its buttons, even where it
-  // overhangs a neighbouring section. Never show two overlapping strips.
+  // Only section hover opens a strip. Its overhanging buttons remain
+  // reachable, but hovering or dragging a resize handle always hides it.
   int active = -1;
-  if (hoveredSection >= 0 && blocks[hoveredSection]->visible &&
-      bars[hoveredSection].contains(mouse))
-    active = hoveredSection;
-  else
-    for (int kind = 0; kind < 3; ++kind)
-      if (blocks[kind]->visible && blocks[kind]->box.contains(mouse)) {
-        active = kind;
-        break;
-      }
+  if (!resizing && !onHandle) {
+    if (hoveredSection >= 0 && blocks[hoveredSection]->visible &&
+        bars[hoveredSection].contains(mouse))
+      active = hoveredSection;
+    else
+      for (int kind = 0; kind < 3; ++kind)
+        if (blocks[kind]->visible && blocks[kind]->box.contains(mouse)) {
+          active = kind;
+          break;
+        }
+  }
   hoveredSection = active;
   for (int kind = 0; kind < 3; ++kind)
     for (auto* button : {sectionAddButtons[kind], sectionRerollButtons[kind],
                          sectionRemoveButtons[kind]}) {
-      button->visible = module && controls->visible && kind == active;
+      button->visible = module && controls->visible && blocks[kind]->visible &&
+                        kind == active;
       if (!button->visible) button->clearTooltip();
     }
 }
@@ -163,7 +170,7 @@ bool Beekapoo::foldSelfPatchedInput() {
   std::vector<size_t> candidates;
   for (size_t i = 0; i < ports.size(); ++i) {
     const auto& p = ports[i];
-    if (!p.input || p.route < 0 || randomLocked(p.id, -1)) continue;
+    if (!p.input || randomLocked(p.id, -1)) continue;
     bool locked = false;
     for (const auto& to : p.shared.extra) locked |= randomLocked(to.id, -1);
     if (locked) continue;
@@ -171,7 +178,8 @@ bool Beekapoo::foldSelfPatchedInput() {
     if (!target || (p.shared.key < 0 && boundaryPort(target))) continue;
     bool connected = false, selfOnly = true;
     for (auto* cw : homeRack->getCompleteCables()) {
-      if (inputRoute(cw->cable) != &p) continue;
+      if (p.route >= 0 ? inputRoute(cw->cable) != &p : cw->inputPort != target)
+        continue;
       connected = true;
       selfOnly &= contains(cw->cable->outputModule) && exposed(cw->outputPort);
     }
@@ -183,7 +191,7 @@ bool Beekapoo::foldSelfPatchedInput() {
   }
   size_t index = candidates[random::u32() % candidates.size()];
   auto& p = ports[index];
-  EjectedInputGains gains(this, true, p.route);
+  EjectedInputGains gains(this, p.route >= 0, p.route);
   if (gains.adapterCount() && !gains.model) {
     status = "Install VCV Free to preserve input attenuation";
     return false;
@@ -194,7 +202,9 @@ bool Beekapoo::foldSelfPatchedInput() {
   CableMutation mutation;
   std::vector<int64_t> routed;
   for (auto* cw : homeRack->getCompleteCables())
-    if (inputRoute(cw->cable) == &p) routed.push_back(cw->cable->id);
+    if (p.route >= 0 ? inputRoute(cw->cable) == &p
+                     : cw->inputPort == originalPort(p))
+      routed.push_back(cw->cable->id);
 
   // Reuse Eject's native 8vert conversion, but keep the adapter inside.
   // Unity routes need no module; detachInput reconnects those directly.
@@ -281,7 +291,7 @@ bool Beekapoo::changeExposedControls(int kind, bool reroll) {
                p.input == (kind == 1);
       });
       int route = it->route;
-      float gain = it->gain ? it->gain->getParamQuantity()->getValue() : 1.f;
+      float gain = inputGain(*it);
       if (auto* source = originalPort(*it))
         source->box.pos = it->originalPosition;
       detachInput(*it);

@@ -1,6 +1,6 @@
 #pragma once
 // Native Rack endpoints/cables provide summing, cable dragging, persistence,
-// MIDI mapping and undo. Only the per-exposed-input multiplication is new DSP.
+// MIDI mapping and undo. Ordinary exposed inputs alias their original jack.
 bool Beekapoo::inputBridge(const engine::Cable* c) const {
   if (!c || c->outputModule != module) return false;
   for (const auto& p : ports)
@@ -35,6 +35,14 @@ void Beekapoo::attachInput(Port& p, int preferred, int64_t bridge, float gain) {
   auto* m = getModule<Module>();
   auto* target = originalPort(p);
   if (!m || !target) return;
+  // New ordinary inputs are presentation only: no extra cable, engine
+  // module hop, connected-state change or latency. Retain old routes when
+  // loading a patch so its sound and existing MIDI targets remain intact.
+  if (preferred < 0 && gain == 1.f && p.shared.key < 0 &&
+      p.shared.extra.empty()) {
+    p.face->source = target;
+    return;
+  }
   auto used = [&](int slot) {
     for (const auto& other : ports)
       if (&other != &p && other.route == slot) return true;
@@ -55,27 +63,13 @@ void Beekapoo::attachInput(Port& p, int preferred, int64_t bridge, float gain) {
   m->configInput(Module::inputBase + slot, label);
   m->getParamQuantity(Module::INPUT_GAIN_BASE + slot)->name =
       label + " attenuverter";
+  // Preserve the removed knob's smoothing for legacy MIDI mappings.
+  m->getParamQuantity(Module::INPUT_GAIN_BASE + slot)->smoothEnabled = true;
   // Cancel any old smoothing target when restoring/reusing this native slot.
   m->getParamQuantity(Module::INPUT_GAIN_BASE + slot)->setImmediateValue(gain);
-  auto* knob = new MappedParam<ThemedSmallKnob>;
-  knob->module = m;
-  knob->paramId = Module::INPUT_GAIN_BASE + slot;
-  knob->initParamQuantity();
-  knob->caption = [this, slot] {
-    auto* q =
-        getModule<Module>()->getParamQuantity(Module::INPUT_GAIN_BASE + slot);
-    int64_t id = -1;
-    for (const auto& p : ports)
-      if (p.route == slot) id = p.id;
-    return memberName(id) + "\n" + q->getLabel() + ": " +
-           q->getDisplayValueString() + q->getUnit();
-  };
-  controls->addChild(knob);
-  p.gain = knob;
-  p.face->gain = knob;
   p.face->source = getInput(Module::inputBase + slot);
   // Existing internal wires stay direct. Only exterior sources pass through
-  // the new attenuverter, alongside any internal sources at the native sum.
+  // the saved/shared route, alongside internal sources at the native sum.
   for (auto* cw : homeRack->getCompleteCables())
     if ((p.shared.key >= 0 ? p.shared.incoming.count(cw->cable->id) != 0
                            : (cw->cable->inputModule == target->module &&
@@ -136,12 +130,6 @@ void Beekapoo::detachInput(Port& p) {
       homeRack->removeCable(cw);
       delete cw;
     }
-  if (p.gain) {
-    controls->removeChild(p.gain);
-    delete p.gain;
-    p.gain = nullptr;
-    p.face->gain = nullptr;
-  }
   p.route = -1;
   p.bridge = -1;
   p.face->source = target;
@@ -159,19 +147,6 @@ void Beekapoo::ensureInputEndpoints(int slot) {
   out->box.size = Vec(16, 16);
   out->visible = false;
   addOutput(out);
-}
-void Beekapoo::layoutInputGains() {
-  for (auto* item : controls->children)
-    if (auto* face = dynamic_cast<PortFace*>(item))
-      if (face->gain && face->visible) {
-        if (auto* visual = dynamic_cast<ParamVisual*>(face->gain))
-          visual->setVisualSize(20);
-        face->gain->box.pos =
-            face->gainLaidOut
-                ? face->gainCenter - Vec(10, 10)
-                : Vec(face->box.getCenter().x - 10, face->box.pos.y - 23);
-        face->gain->visible = true;
-      }
 }
 void Beekapoo::syncInputCables(bool editing) {
   if (cableMutationDepth()) return;

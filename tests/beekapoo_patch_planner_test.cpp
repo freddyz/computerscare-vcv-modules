@@ -4,11 +4,39 @@
 #include "BeekapooExposurePlan.hpp"
 #include "BeekapooParamLayout.hpp"
 #include "BeekapooPortLayout.hpp"
+#include "BeekapooCompactLayout.hpp"
 #include <cassert>
 #include <iostream>
 #include <set>
 using namespace beekapoo_patch;
 int main() {
+  {
+    // At 4 HP, three inputs and one output no longer reserve three rows of
+    // removed attenuverters. Compression sacrifices captions before jacks.
+    auto small=beekapoo::compactPanelLayout(60,200,5,3,1);
+    assert(small.fits && small.portHeight+small.parameterMinimum+16<=200);
+    assert(small.inputColumns==2 && small.outputColumns==1);
+    auto dense=beekapoo::compactPanelLayout(45,180,3,1,1);
+    assert(dense.fits);
+    for(int params:{0,3,5,10,24,64})for(int ins:{0,1,3,8,24})for(int outs:{0,1,4,12}) {
+      bool fitted=false;
+      for(float width=45;width<=900;width+=15) {
+        auto plan=beekapoo::compactPanelLayout(width,180,params,ins,outs);
+        if(!plan.fits)continue;
+        assert(plan.inputColumns>=1 && plan.outputColumns>=1);
+        assert(plan.portHeight>=0 && plan.parameterMinimum>=0);
+        assert(plan.portHeight+plan.parameterMinimum+16<=180.01f);
+        assert(!ins || plan.inputWidth>=16);
+        assert(!outs || plan.outputWidth>=16);
+        fitted=true;break;
+      }
+      assert(fitted);
+    }
+    auto tightPort=beekapoo::planPortCell(22,30,true);
+    assert(tightPort.label.h==8 && tightPort.jack.h==16);
+    auto barePort=beekapoo::planPortCell(20,20,true);
+    assert(barePort.label.h==0 && barePort.jack.h==16);
+  }
   {
     std::vector<Spec> sourcesOnly{library()[0], library()[1]};
     std::vector<Spec> empty;
@@ -53,10 +81,10 @@ int main() {
     };
     for(float width:{24.f,30.f,42.f,60.f,100.f})for(float height:{45.f,65.f,100.f,160.f})for(bool input:{false,true}) {
       auto cell=beekapoo::planPortCell(width,height,input);
-      for(auto r:{cell.jack,cell.gain,cell.label})if(r.w>0) {
+      for(auto r:{cell.jack,cell.label})if(r.w>0) {
         assert(r.x>=-.01f&&r.y>=-.01f&&r.x+r.w<=width+.01f&&r.y+r.h<=height+.01f);
       }
-      assert(!overlap(cell.jack,cell.gain)&&!overlap(cell.jack,cell.label)&&!overlap(cell.gain,cell.label));
+      assert(!overlap(cell.jack,cell.label));
     }
   }
   {
@@ -201,7 +229,7 @@ int main() {
     for(float height:{64.f,80.f,120.f}) {
       auto cell=beekapoo::planPortCell(width,height,true);
       assert(cell.label.h>=10&&cell.label.w>=14);
-      assert(cell.fontSize>=8&&cell.gain.w==20);
+      assert(cell.fontSize>=8);
     }
 
   std::set<std::string> destinations;

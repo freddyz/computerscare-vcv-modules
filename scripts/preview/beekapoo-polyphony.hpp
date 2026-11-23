@@ -48,7 +48,7 @@ void renderBeekPolyphony(const std::string& output,float scale,Add add,Require r
     rack->deselectAll();rack->select(child,true);owner->collapse();
     for(int i=0;i<3;++i)owner->expose(child,child->getInput(i));
     for(auto& p:owner->ports)if(p.input) {
-      owner->module->params[Module::INPUT_GAIN_BASE+p.route].setValue(p.portId==1?-.5f:1.f);
+      legacyBeekGain(owner,p)->setImmediateValue(p.portId==1?-.5f:1.f);
       if(p.portId==2)continue;
       auto* endpoint=owner->findPort(p);auto* c=new engine::Cable;
       c->outputModule=source->module;c->outputId=0;c->inputModule=endpoint->module;c->inputId=endpoint->portId;

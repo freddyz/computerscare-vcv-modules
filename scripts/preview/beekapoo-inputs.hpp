@@ -15,9 +15,10 @@ void testBeekInputRoutes(Add add,Require require) {
   wire(a,0,b,0);auto c1=wire(s1,0,a,0),c2=wire(s2,0,a,0),c3=wire(s3,0,a,0);
   auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(600,0)));
   rack->deselectAll();rack->select(a,true);rack->select(b,true);owner->groupAction(true);owner->step();
+  for(auto& p:owner->ports)if(p.input)legacyBeekGain(owner,p);
   APP->engine->stepBlock(64);float expected=b->module->outputs[0].getVoltage();
   require(expected==3,"Three incoming native cables must sum before absorption");
-  owner->expose(a,a->getInput(1));
+  owner->expose(a,a->getInput(1));legacyBeekGain(owner,owner->ports.back());
   int routedInput=-1;for(const auto& p:owner->ports)if(p.id==aId&&p.input&&p.portId==1)routedInput=6+p.route;
   for(int repeat=0;repeat<2;++repeat) {
     APP->engine->stepBlock(64);

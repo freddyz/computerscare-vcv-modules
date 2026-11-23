@@ -15,7 +15,7 @@ void testBeekInputGains(Add add,Require require) {
     struct Gain {int input,route,param;float value;};std::vector<Gain> gains;
     float values[]={-.37f,.23f,0.f};
     for(auto& p:owner->ports)if(p.input) {
-      auto* q=p.gain->getParamQuantity();q->setValue(values[p.portId]);
+      auto* q=legacyBeekGain(owner,p);q->setValue(values[p.portId]);
       gains.push_back({p.portId,p.route,q->paramId,values[p.portId]});
     }
     // Deliberately do not saveGroup after turning a knob: normal knob edits
@@ -24,8 +24,8 @@ void testBeekInputGains(Add add,Require require) {
       owner=dynamic_cast<beekapoo::Beekapoo*>(rack->getModule(ownerId));require(owner,"Original owner must survive");
       for(const auto& saved:gains) {
         bool found=false;
-        for(const auto& p:owner->ports)if(p.id==childId&&p.input&&p.portId==saved.input) {
-          found=true;auto* q=p.gain->getParamQuantity();
+        for(auto& p:owner->ports)if(p.id==childId&&p.input&&p.portId==saved.input) {
+          found=true;auto* q=legacyBeekGain(owner,p);
           require(p.route==saved.route&&q->paramId==saved.param,"Existing gain/port IDs must not change when adding controls or modules");
           if(std::abs(q->getValue()-saved.value)>.00001f)
             throw std::runtime_error(std::string("Input gain changed during ")+phase+": expected "+std::to_string(saved.value)+", got "+std::to_string(q->getValue()));
@@ -54,9 +54,9 @@ void testBeekInputGains(Add add,Require require) {
       auto* otherChild=add(utility,Vec(1000,0));auto* other=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(1200,0)));
       rack->deselectAll();rack->select(otherChild,true);other->collapse();other->expose(otherChild,otherChild->getInput(0));
       auto otherId=otherChild->module->id;
-      other->ports.front().gain->getParamQuantity()->setValue(-.61f);
+      legacyBeekGain(other,other->ports.front())->setValue(-.61f);
       rack->deselectAll();rack->select(other,true);owner->addSelection();owner->step();verify("merging a Beek");
-      bool copied=false;for(const auto& p:owner->ports)if(p.id==otherId&&p.input)copied=std::abs(p.gain->getParamQuantity()->getValue()+.61f)<.00001f;
+      bool copied=false;for(auto& p:owner->ports)if(p.id==otherId&&p.input)copied=std::abs(legacyBeekGain(owner,p)->getValue()+.61f)<.00001f;
       require(copied,"Merge must retain the incoming knob's smoothing target, not its old instantaneous value");
       APP->history->undo();owner->step();verify("Undo merge");APP->history->redo();owner->step();verify("Redo merge");
     }

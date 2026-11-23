@@ -27,7 +27,7 @@ void checkBeekCablePresentation(Require require) {
           require((actual-target->getRelativeOffset(target->box.size*.5f,rack)).norm()<.01f,"Edit cable endpoint must land on its original jack");
         } else {
           bool found=false;
-          for(const auto& p:owner->ports)if(owner->findPort(p)==native) {
+          for(auto& p:owner->ports)if(owner->findPort(p)==native) {
             auto center=p.face->getRelativeOffset(p.face->box.size*.5f,rack);
             found=p.face->visible&&(actual-center).norm()<.01f;
           }
@@ -77,7 +77,7 @@ void testBeekCableState(const std::string& output,float scale,Add add,Require re
       auto* owner=static_cast<Owner*>(add(modelBeekapooPreview,Vec(n*600+240,0)));
       rack->deselectAll();rack->select(source,true);rack->select(child,true);owner->collapse();
       owner->expose(child,child->getInput(1));owner->expose(source,source->getOutput(0));owner->exposeParameter(source->module->id,0);
-      float gains[]={.37f,-.61f,0.f,1.f};owner->ports.front().gain->getParamQuantity()->setImmediateValue(gains[(scenario+n)%4]);
+      float gains[]={.37f,-.61f,0.f,1.f};legacyBeekGain(owner,owner->ports.front())->setImmediateValue(gains[(scenario+n)%4]);
       owners.push_back(owner);ownerIds.push_back(owner->module->id);sourceIds.push_back(source->module->id);childIds.push_back(child->module->id);
     }
     auto* ordinary=add(model,Vec(2600,0));auto ordinaryId=ordinary->module->id;
@@ -132,7 +132,7 @@ void testBeekCableState(const std::string& output,float scale,Add add,Require re
     auto* first=add(model,Vec(500,0));auto* last=add(model,Vec(600,0));
     auto* owner=static_cast<Owner*>(add(modelBeekapooPreview,Vec(200,0)));
     rack->deselectAll();rack->select(child,true);owner->collapse();owner->expose(child,child->getInput(1));
-    owner->ports.front().gain->getParamQuantity()->setImmediateValue(gain);
+    legacyBeekGain(owner,owner->ports.front())->setImmediateValue(gain);
     wire(first->getOutput(0),owner->findPort(owner->ports.front()));wire(last->getOutput(0),owner->findPort(owner->ports.front()));settle();auto before=gainInputs();
     for(auto* source:{first,last}) {
       rack->deselectAll();rack->select(source,true);owner->addSelection();settle();compare(before);
@@ -148,7 +148,7 @@ void testBeekCableState(const std::string& output,float scale,Add add,Require re
     auto* target=add(model,Vec(90,0));
     auto* owner=static_cast<Owner*>(add(modelBeekapooPreview,Vec(240,0)));
     rack->deselectAll();rack->select(source,true);rack->select(target,true);owner->collapse();
-    owner->expose(target,target->getInput(1));owner->ports.front().gain->getParamQuantity()->setImmediateValue(.42f);
+    owner->expose(target,target->getInput(1));legacyBeekGain(owner,owner->ports.front())->setImmediateValue(.42f);
     wire(source->getOutput(0),owner->findPort(owner->ports.front()));
     owner->duplicateAction(false);settle();
     Owner* copy=nullptr;for(auto* w:rack->getModules())if(auto* o=dynamic_cast<Owner*>(w))if(o!=owner)copy=o;

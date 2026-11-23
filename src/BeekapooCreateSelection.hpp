@@ -29,9 +29,8 @@ struct MergedControls {
       for (auto* cw : owner->homeRack->getCompleteCables())
         if (owner->inputRoute(cw->cable) == &p)
           shared.incoming.insert(cw->cable->id);
-      mappings.push_back({p.id, p.portId, p.input,
-                          p.gain ? p.gain->getParamQuantity()->getValue() : 1.f,
-                          shared});
+      mappings.push_back(
+          {p.id, p.portId, p.input, owner->inputGain(p), shared});
     }
     for (auto* cw : owner->homeRack->getCompleteCables()) {
       if (owner->inputRoute(cw->cable)) attenuated.insert(cw->cable->id);
@@ -64,11 +63,13 @@ struct MergedControls {
           owner->expose(w, source, -1, -1, p.gain, p.shared);
         } else if (source)
           owner->expose(w, source);
-        for (const auto& mapped : owner->ports)
+        for (auto& mapped : owner->ports)
           if (mapped.id == p.id && mapped.input && p.input &&
               mapped.portId == p.port && mapped.shared.key == p.shared.key &&
-              mapped.gain)
-            mapped.gain->getParamQuantity()->setImmediateValue(p.gain);
+              p.gain != owner->inputGain(mapped)) {
+            owner->detachInput(mapped);
+            owner->attachInput(mapped, -1, -1, p.gain);
+          }
       }
   }
 };

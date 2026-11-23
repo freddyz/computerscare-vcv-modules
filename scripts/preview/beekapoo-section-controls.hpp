@@ -31,7 +31,7 @@ void testBeekSectionControls(const std::string& output, float scale, Add add, Re
   owner->randomLocks.insert({other->module->id, 7}); // hidden locked parameter
   owner->randomLocks.insert({locked->module->id, -1});
   auto proxy = [&](int input) {
-    for (const auto& p : owner->ports)
+    for (auto& p : owner->ports)
       if (p.id == child->module->id && p.input && p.portId == input) return owner->findPort(p);
     return static_cast<app::PortWidget*>(nullptr);
   };
@@ -50,18 +50,18 @@ void testBeekSectionControls(const std::string& output, float scale, Add add, Re
   owner->panelCableIds.insert(loopback->cable->id);
   connect(child->getOutput(2), other->getInput(3)); // internal wire survives hiding
   owner->pack(); owner->step();
-  for (const auto& p : owner->ports)
-    if (p.input) p.gain->getParamQuantity()->setValue(-.5f + p.route * .23f);
+  for (auto& p : owner->ports)
+    if (p.input) legacyBeekGain(owner,p)->setValue(-.5f + p.route * .23f);
   owner->saveGroup();
   auto sets = [&] {
     std::array<std::set<Key>, 3> result;
     for (const auto& p : owner->parameters) result[0].insert({p.id, p.paramId});
-    for (const auto& p : owner->ports) result[p.input ? 1 : 2].insert({p.id, p.portId});
+    for (auto& p : owner->ports) result[p.input ? 1 : 2].insert({p.id, p.portId});
     return result;
   };
   auto gains = [&] {
     std::map<int, float> result;
-    for (const auto& p : owner->ports) if (p.input) result[p.route] = p.gain->getParamQuantity()->getValue();
+    for (auto& p : owner->ports) if (p.input) result[p.route] = legacyBeekGain(owner,p)->getValue();
     return result;
   };
   auto wires = [&] {
@@ -149,6 +149,22 @@ void testBeekSectionControls(const std::string& output, float scale, Add add, Re
     }
     owner->updateSectionAddButtons(Vec(-1, -1));
     for (auto* b : buttons) require(!b->visible, "Section actions must hide on leave");
+    for(auto* handle:{owner->leftHandle,owner->rightHandle}) {
+      owner->updateSectionAddButtons(block->box.getCenter());
+      owner->updateSectionAddButtons(Vec(handle->box.getCenter().x,block->box.getCenter().y));
+      for(auto* b:owner->sectionAddButtons) require(!b->visible,"Hovering a resize handle must hide section actions");
+    }
+    APP->event->setDraggedWidget(example % 2 ? owner->leftHandle : owner->rightHandle, GLFW_MOUSE_BUTTON_LEFT);
+    owner->updateSectionAddButtons(block->box.getCenter());
+    for (int section=0;section<3;++section)
+      for (auto* b:{owner->sectionRemoveButtons[section],owner->sectionRerollButtons[section],owner->sectionAddButtons[section]})
+        require(!b->visible,"Resizing must hide every section's actions even when the pointer crosses a section");
+    parent->removeChild(owner); owner->box.pos=Vec();
+    capture(owner,output+string::f("/resizing-sections-%d.png",example+1),scale,false);
+    owner->box.pos=position;parent->addChild(owner);
+    APP->event->setDraggedWidget(nullptr,GLFW_MOUSE_BUTTON_LEFT);
+    owner->updateSectionAddButtons(Vec(-100,-100));
+    for(auto* b:owner->sectionAddButtons)require(!b->visible,"Releasing the resize handle restores section hover behavior");
   }
   rack->clear(); APP->history->clear();
   std::puts("Section dice/minus: counts, choice changes, locks, native values, stacked/self-patched cables, attenuverter IDs/gains, Undo/Redo and compact hover strips passed");

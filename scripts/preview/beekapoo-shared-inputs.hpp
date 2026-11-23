@@ -38,8 +38,8 @@ void testBeekSharedInputs(const std::string& output, float scale, Add add, Requi
     };
     require(input(1)&&input(2)&&input(1)->shared.extra.size()==2,"One input must retain every destination, including duplicate connections");
     auto firstTarget=input(1)->id;
-    input(1)->gain->getParamQuantity()->setImmediateValue(gain);
-    input(2)->gain->getParamQuantity()->setImmediateValue(.25f);
+    legacyBeekGain(owner,*input(1))->setImmediateValue(gain);
+    legacyBeekGain(owner,*input(2))->setImmediateValue(.25f);
     auto* first=add(model,Vec(1200,0));first->module->params[0].setValue(.4f);
     auto* second=add(model,Vec(1300,0));second->module->params[0].setValue(.7f);
     auto* other=add(model,Vec(1400,0));other->module->params[0].setValue(.8f);

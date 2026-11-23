@@ -13,7 +13,7 @@ void testBeekCombine(Add add, Require require, plugin::Model* gainModel) {
       rack->deselectAll(); rack->select(a,true); rack->select(b,true); owner->collapse();
       owner->exposeParameter(a->module->id,3);
       owner->expose(a,a->getInput(0)); owner->expose(b,b->getOutput(0));
-      for (const auto& p:owner->ports) if(p.input) owner->module->params[beekapoo::Module::INPUT_GAIN_BASE+p.route].setValue(.37f);
+      for (auto& p:owner->ports) if(p.input) legacyBeekGain(owner,p)->setImmediateValue(.37f);
       owner->saveGroup(); return owner;
     };
     auto* first=make(0); auto firstId=first->module->id;

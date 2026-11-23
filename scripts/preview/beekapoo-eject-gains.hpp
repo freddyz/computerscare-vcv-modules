@@ -17,7 +17,7 @@ void testBeekEjectGains(Add add,Require require,plugin::Model* gainModel) {
     for(int i=0;i<attenuated+2;++i) {
       owner->expose(child,child->getInput(i));
       auto& port=owner->ports.back();float gain=i>=attenuated?1.f:(i%3==0?.5f:i%3==1?-.3f:0.f);
-      gains.push_back(gain);owner->module->params[beekapoo::Module::INPUT_GAIN_BASE+port.route].setValue(gain);
+      gains.push_back(gain);legacyBeekGain(owner,port)->setImmediateValue(gain);
       if(i!=attenuated-1)incoming.push_back(wire(source->getOutput(0),owner->findPort(port)));
     }
     // Two sources stacked with feedback on the same exposed input.

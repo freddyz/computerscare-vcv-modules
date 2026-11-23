@@ -21,67 +21,28 @@ struct PortRect {
   PortRect(float x, float y, float w, float h) : x(x), y(y), w(w), h(h) {}
 };
 struct PortCell {
-  PortRect jack, gain, label;
+  PortRect jack, label;
   bool large = false;
   float fontSize = 0;
 };
-// Two bounded arrangements: gain above the jack, or beside it. Use spare
-// space for artwork and captions, preserving a stable centered group. This
-// is only called on layout changes, never from DSP or the draw loop.
-inline PortCell planPortCell(float width, float height, bool input) {
-  PortCell best;
-  float bestScore = -1;
-  for (bool beside : {false, true}) {
-    if (beside && !input) continue;
-    for (bool captions : {true, false}) {
-      // Prefer a small labelled jack over a large anonymous one.
-      if (!captions) continue;
-      float w = std::max(0.f, width - 4), h = std::max(0.f, height - 4);
-      float side = beside ? 25.f : 0.f;
-      float above = input && !beside ? 23.f : 0.f;
-      if (w - side < 16 || h - above < 16 || (input && width < 20)) continue;
-      float labelHeight = 0;
-      float baseline = beside ? 20.f : 16.f;
-      float room = h - above - baseline - 4;
-      if (captions && w >= 14 && room >= 10)
-        labelHeight = std::min(room, std::min(36.f, std::max(12.f, h * .28f)));
-      float gap = labelHeight ? 4.f : 0.f;
-      float jackW = w - side, jackH = h - above - labelHeight - gap;
-      PortCell candidate;
-      candidate.large = jackW >= 27 && jackH >= 29;
-      // Use the native Computerscare sizes; extra room is for spacing and
-      // captions, not enlarged ports.
-      jackW = candidate.large ? 27 : 16;
-      jackH = candidate.large ? 29 : 16;
-      float bodyHeight = above + std::max(jackH, beside ? 20.f : 0.f);
-      float top = (height - bodyHeight - gap - labelHeight) * .5f;
-      float left = (width - jackW - side) * .5f;
-      candidate.jack = {left + side,
-                        top + above + (beside ? (bodyHeight - jackH) * .5f : 0),
-                        jackW, jackH};
-      if (input)
-        candidate.gain =
-            beside ? PortRect(left, top + (bodyHeight - 20) * .5f, 20, 20)
-                   : PortRect((width - 20) * .5f, top, 20, 20);
-      if (labelHeight) {
-        candidate.label = {2, top + bodyHeight + gap, w, labelHeight};
-        candidate.fontSize = std::max(8.f, std::min(18.f, labelHeight * .7f));
-      }
-      float score = jackW + (input && candidate.large ? 12 : 0) +
-                    (labelHeight ? 100 : 0) +
-                    std::min(labelHeight, 24.f) * .25f;
-      if (score > bestScore) {
-        bestScore = score;
-        best = candidate;
-      }
-    }
+// Center the native jack and its caption together. Inputs no longer reserve
+// an extra row for Beek-owned gain knobs. Reflow only on layout changes.
+inline PortCell planPortCell(float width, float height, bool /*input*/) {
+  PortCell cell;
+  float w = std::max(0.f, width - 4), h = std::max(0.f, height - 4);
+  float labelHeight = h >= 30   ? std::min(36.f, std::max(10.f, h * .3f))
+                      : h >= 26 ? 8.f
+                                : 0.f;
+  float gap = labelHeight ? (h >= 30 ? 4.f : 2.f) : 0.f;
+  cell.large = w >= 27 && h - labelHeight - gap >= 29;
+  float jackW = cell.large ? 27.f : 16.f;
+  float jackH = cell.large ? 29.f : 16.f;
+  float top = (height - jackH - gap - labelHeight) * .5f;
+  cell.jack = {(width - jackW) * .5f, top, jackW, jackH};
+  if (labelHeight) {
+    cell.label = {2, top + jackH + gap, w, labelHeight};
+    cell.fontSize = std::max(8.f, std::min(18.f, labelHeight * .7f));
   }
-  // Very dense existing grids must still show every endpoint.
-  if (bestScore < 0) {
-    best.jack = {(width - 16) * .5f, input ? height - 18 : (height - 16) * .5f,
-                 16, 16};
-    if (input) best.gain = {(width - 20) * .5f, best.jack.y - 23, 20, 20};
-  }
-  return best;
+  return cell;
 }
 }  // namespace beekapoo

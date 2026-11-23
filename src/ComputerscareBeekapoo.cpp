@@ -7,7 +7,13 @@
 #include <plugin.hpp>
 #include <tag.hpp>
 
+#ifdef ARCH_MAC
+#include <dispatch/dispatch.h>
+#endif
+
 #include "BeekapooAddCursor.hpp"
+#include "BeekapooButton.hpp"
+#include "BeekapooCompactLayout.hpp"
 #include "BeekapooCpuMeter.hpp"
 #include "BeekapooExposurePlan.hpp"
 #include "BeekapooKnob.hpp"
@@ -191,6 +197,8 @@ struct Module : engine::Module {
     generationSet = moduleSets().defaultId;
     config(PARAM_COUNT, GROW_INPUT + 1, routeCapacity, 0);
     for (int i = 0; i < routeCapacity; ++i) {
+      // Reserved for older patches and their MIDI mappings. New ordinary
+      // input exposures use the child jack directly and allocate no gain.
       configParam(INPUT_GAIN_BASE + i, -1.f, 1.f, 1.f, "Input attenuverter",
                   "%", 0, 100);
       getParamQuantity(INPUT_GAIN_BASE + i)->randomizeEnabled = false;
@@ -508,7 +516,10 @@ struct LetteredFace : phlooper::WarpedDropdown {
   bool fitLabel() const override { return true; }
 };
 struct ActionButton : LetteredFace {
-  ActionButton() { textColor = nvgRGB(36, 36, 36); }
+  ActionButton() {
+    textColor = nvgRGB(36, 36, 36);
+    borderWidth = .5f;
+  }
   int icon = -1;
   bool iconAndText = false;
   float iconTextInset = 17;
@@ -549,8 +560,8 @@ struct ActionButton : LetteredFace {
             : std::min(1.f, std::max(.4f, (box.size.x - 6) / 16.f));
     if (iconAndText) iconScale = .7f * std::min(1.f, (box.size.y - 4) / 16.f);
     nvgScale(args.vg, iconScale, iconScale);
-    nvgStrokeColor(args.vg, textColor);
-    nvgFillColor(args.vg, textColor);
+    nvgStrokeColor(args.vg, foregroundColor());
+    nvgFillColor(args.vg, foregroundColor());
     nvgStrokeWidth(args.vg, 1.3f);
     if (icon == 1) {
       nvgBeginPath(args.vg);
@@ -764,6 +775,10 @@ struct ExposedSwitch : app::Switch {
   WeakPtr<app::ParamWidget> source;
   struct Face : LetteredFace {
     ExposedSwitch* control;
+    void setColors(const ControlStyle& skin, bool dark, NVGcolor background) {
+      faceColor = skin.color(0, dark);
+      updateContrast(background);
+    }
     std::string label() override {
       auto* q = control->getParamQuantity();
       if (!q) return "";
@@ -790,6 +805,24 @@ struct ExposedSwitch : app::Switch {
     face->textColor = nvgRGB(36, 36, 36);
     face->faceColor = nvgRGB(140, 140, 140);
     addChild(face);
+  }
+  void setIdentity(const std::string& label, const std::string& source,
+                   const PatchIdentity& patch, bool dark, NVGcolor background) {
+    skin = controlStyle(label, source, patch);
+    auto style = buttonStyle(label, source, patch);
+    for (auto* child : children)
+      if (auto* face = dynamic_cast<Face*>(child)) {
+        face->setColors(skin, dark, background);
+        face->shapeSeed = style.seed;
+        face->screwup = .4f;
+        face->upDepth = style.raised;
+        face->downDepth = style.recessed;
+        face->borderWidth = style.border;
+        face->cornerOffsets = style.corners;
+        face->box.size = style.size;
+        face->box.pos = (Vec(25, 24) - face->box.size) * .5f;
+        face->textSize = 12;
+      }
   }
   void onHover(const HoverEvent& e) override { e.consume(this); }
   void onDragStart(const DragStartEvent& e) override {
@@ -827,6 +860,9 @@ struct MappedParam : Base, ParamVisual {
   Vec naturalSize;
   float visualScale = 1;
   MappedParam() : naturalSize(this->box.size) {}
+  // This is another view of an existing parameter, not its defining widget.
+  // Rack's Knob/Switch initializers change the source quantity's behavior.
+  void initParamQuantity() override {}
   void setVisualSize(float size) override {
     visualScale = size / std::max(naturalSize.x, naturalSize.y);
     this->box.size = naturalSize * visualScale;
@@ -981,9 +1017,6 @@ inline std::shared_ptr<Svg> monochromeJack(const std::string& name) {
 }
 struct PortFace : widget::OpaqueWidget {
   bool compact = true, input = true;
-  bool gainLaidOut = false;
-  Vec gainCenter;
-  app::ParamWidget* gain = nullptr;
   JackSmallPointingDown tinyDown;
   JackSmallPointingUp tinyUp;
   JackLargePointingDown largeDown;
@@ -1248,7 +1281,6 @@ struct Beekapoo : app::ModuleWidget {
         if (to.id == moduleId && to.port == inputId) return true;
       return false;
     }
-    app::ParamWidget* gain = nullptr;
     Port(int64_t id, int port, bool input, Vec pos, PortFace* face)
         : id(id),
           portId(port),
@@ -1257,7 +1289,12 @@ struct Beekapoo : app::ModuleWidget {
           face(face) {}
   };
   void ensureInputEndpoints(int slot);
-  void layoutInputGains();
+  float inputGain(const Port& p) const {
+    return p.route >= 0
+               ? module->getParamQuantity(Module::INPUT_GAIN_BASE + p.route)
+                     ->getValue()
+               : 1.f;
+  }
   void attachInput(Port& p, int preferred, int64_t bridge, float gain);
   void detachInput(Port& p);
   void pruneSharedInputs(const std::set<int64_t>& removed);
@@ -1341,7 +1378,7 @@ struct Beekapoo : app::ModuleWidget {
     if (!force && appliedTheme == int(dark)) return;
     appliedTheme = int(dark);
     titleFrame->faceColor = dark ? nvgRGB(44, 44, 44) : nvgRGB(200, 200, 200);
-    ownFrame->faceColor = dark ? nvgRGB(52, 52, 52) : nvgRGB(214, 214, 214);
+    ownFrame->faceColor = dark ? nvgRGB(40, 40, 40) : nvgRGB(214, 214, 214);
     frame->faceColor = dark ? nvgRGB(46, 46, 46) : nvgRGB(204, 204, 204);
     inputFrame->faceColor = dark ? nvgRGB(55, 55, 55) : nvgRGB(204, 204, 204);
     outputFrame->faceColor = dark ? nvgRGB(25, 25, 25) : nvgRGB(116, 116, 116);
@@ -1352,21 +1389,30 @@ struct Beekapoo : app::ModuleWidget {
                                     : "res/Beekapoo/computerscare-logo.svg");
       svg->setSvg(dark ? darkHeaderSvg(path) : APP->window->loadSvg(path));
     }
-    auto buttonStyle = [dark](ActionButton* button, bool all = false) {
+    auto buttonStyle = [dark](ActionButton* button, NVGcolor background,
+                              bool all = false) {
       button->faceColor =
-          all ? (dark ? nvgRGB(165, 165, 165) : nvgRGB(92, 92, 92))
-              : (dark ? nvgRGB(82, 82, 82) : nvgRGB(214, 214, 214));
+          all ? (dark ? nvgRGB(26, 26, 26) : nvgRGB(92, 92, 92))
+              : (dark ? nvgRGB(70, 70, 70) : nvgRGB(214, 214, 214));
       button->textColor =
           (all != dark) ? nvgRGB(242, 242, 242) : nvgRGB(35, 35, 35);
+      button->updateContrast(background, dark ? .57f : .8f);
+      if (dark)
+        for (auto& ink : button->textInks) ink = std::min(ink, .87f);
     };
-    for (auto* button : managementButtons) buttonStyle(button);
+    for (auto* button : managementButtons)
+      buttonStyle(button, titleFrame->faceColor);
     addSelectionButton->setDark(dark);
-    for (auto* button : {regenerateButton, growButton}) buttonStyle(button);
+    for (auto* button : {regenerateButton, growButton})
+      buttonStyle(button, ownFrame->faceColor);
     for (size_t i = 0; i < actionButtons.size(); ++i)
-      buttonStyle(actionButtons[i], i >= 3);
-    for (const auto& buttons :
-         {sectionAddButtons, sectionRerollButtons, sectionRemoveButtons})
-      for (auto* button : buttons) buttonStyle(button);
+      buttonStyle(actionButtons[i], ownFrame->faceColor, i >= 3);
+    std::array<phlooper::WarpedBlock*, 3> sections{
+        {frame, inputFrame, outputFrame}};
+    for (int i = 0; i < 3; ++i)
+      for (auto* button : {sectionAddButtons[i], sectionRerollButtons[i],
+                           sectionRemoveButtons[i]})
+        buttonStyle(button, sections[i]->faceColor);
     for (auto* own : {getParam(Module::WIGGLE_AMOUNT)})
       if (auto* knob = dynamic_cast<ThemedSmallKnob*>(own)) knob->setDark(dark);
     for (auto* item : controls->children) {
@@ -1376,8 +1422,7 @@ struct Beekapoo : app::ModuleWidget {
       if (auto* button = dynamic_cast<ExposedSwitch*>(item)) {
         for (auto* child : button->children)
           if (auto* face = dynamic_cast<ExposedSwitch::Face*>(child)) {
-            face->faceColor = button->skin.color(0, dark);
-            face->textColor = button->skin.indicatorColor(dark);
+            face->setColors(button->skin, dark, frame->faceColor);
           }
       }
     }
@@ -1550,7 +1595,6 @@ struct Beekapoo : app::ModuleWidget {
   bool growPatch(history::ComplexAction* parent = nullptr);
   void initializeBrowserPreview();
   std::vector<std::unique_ptr<engine::Module>> browserModules;
-  std::unique_ptr<engine::Module> browserInputGains;
   std::string browserName;
   unsigned browserMemberCount = 0;
   void generateOnBrowserAdd();
@@ -1993,8 +2037,7 @@ struct Beekapoo : app::ModuleWidget {
       auto* item = json_pack(
           "{s:I,s:i,s:b,s:i,s:I,s:f}", "module", (json_int_t)port.id, "port",
           port.portId, "input", port.input, "route", port.route, "bridge",
-          (json_int_t)port.bridge, "gain",
-          double(port.gain ? port.gain->getParamQuantity()->getValue() : 1));
+          (json_int_t)port.bridge, "gain", double(inputGain(port)));
       if (port.shared.key >= 0) {
         json_object_set_new(item, "shared", json_integer(port.shared.key));
         json_object_set_new(item, "label",
@@ -2212,23 +2255,26 @@ struct Beekapoo : app::ModuleWidget {
     std::array<Vec, 6> positions{};
     float height = 0;
     int columns = 0;
+    float size = 18;
   };
   static OwnControlLayout ownControlLayout(float width) {
     OwnControlLayout result;
+    result.size = width < 60 ? 16 : 18;
     float x = 6, y = 1, right = width - 6;
     // Keep each button and its CV directly above/below one another.
     for (int first : {0, 2, 4}) {
-      if (x + 37 > right && x > 6) {
+      if (x + result.size * 2 + 1 > right && x > 6) {
         x = 6;
-        y += 32;
+        y += result.size + 14;
       }
       for (int i = first; i < first + 2; ++i) {
         result.positions[i] = Vec(x, y);
-        x += 19;
+        x += result.size + 1;
       }
-      result.columns = std::max(result.columns, int((x - 6) / 19));
+      result.columns =
+          std::max(result.columns, int((x - 6) / (result.size + 1)));
     }
-    result.height = y + 33;
+    result.height = y + result.size + 15;
     return result;
   }
   static float tinyOwnHeight(float width) {
@@ -2254,7 +2300,8 @@ struct Beekapoo : app::ModuleWidget {
       button->textColor = all ? nvgRGB(242, 242, 242) : nvgRGB(45, 45, 45);
       button->upDepth = 1.1f;
       button->downDepth = .8f;
-      button->box = Rect(plan.positions[i] + Vec(0, top), Vec(18, 18));
+      button->box =
+          Rect(plan.positions[i] + Vec(0, top), Vec(plan.size, plan.size));
       auto* jack = getInput(ids[i]);
       jack->visible = true;
       jack->box.pos = Vec(button->box.getCenter().x - jack->box.size.x * .5f,
@@ -2266,19 +2313,16 @@ struct Beekapoo : app::ModuleWidget {
     responsive.ownHeight = plan.height;
     return plan.height;
   }
-  static float minimumJackWidth(int inputs, int outputs,
-                                int parameterCount = 0) {
+  static float minimumJackWidth(int inputs, int outputs, int parameterCount = 0,
+                                int memberCount = 9) {
     // Fixed action inputs are budgeted above, not in the exposed-port rows.
     inputs = std::max(0, inputs - 6);
     for (int width = 45; width < 30000; width += 15) {
-      int cols = std::max(1, int((width - 25) / 20));
-      float height =
-          4 + headerLayout(width, 9).height + tinyOwnHeight(width) + 8 +
-          layoutRows(inputs, cols) * 64 + layoutRows(outputs, cols) * 40 +
-          (inputs ? 14 : 0) + (outputs ? 14 : 0) + (inputs && outputs ? 8 : 0) +
-          (parameterCount ? std::max(32, layoutRows(parameterCount, cols) * 16)
-                          : 0);
-      if (height <= 368) return width;
+      float top =
+          4 + headerLayout(width, memberCount).height + tinyOwnHeight(width);
+      if (compactPanelLayout(width, 368 - top, parameterCount, inputs, outputs)
+              .fits)
+        return width;
     }
     return 30000;
   }
@@ -2354,24 +2398,9 @@ struct Beekapoo : app::ModuleWidget {
       if (auto* knob = dynamic_cast<ParametricKnob*>(item))
         knob->setIdentity(label, moduleStyleName(parameter->module->model),
                           appearance);
-      if (auto* button = dynamic_cast<ExposedSwitch*>(item)) {
-        auto skin = controlStyle(
-            label, moduleStyleName(parameter->module->model), appearance);
-        button->skin = skin;
-        for (auto* child : button->children)
-          if (auto* face = dynamic_cast<ExposedSwitch::Face*>(child)) {
-            face->faceColor = skin.color();
-            face->textColor = skin.indicatorColor();
-            face->shapeSeed = unsigned(controlHash(label) ^ appearance.wiring);
-            face->screwup = .3f + skin.ripple * 5;
-            face->upDepth = skin.bevel * 1.5f;
-            face->downDepth = skin.bevel * .7f;
-            face->box.size = Vec(25 * std::max(.85f, skin.aspectX),
-                                 24 * std::max(.85f, skin.aspectY));
-            face->box.pos = (Vec(25, 24) - face->box.size) * .5f;
-            face->textSize = 12;
-          }
-      }
+      if (auto* button = dynamic_cast<ExposedSwitch*>(item))
+        button->setIdentity(label, moduleStyleName(parameter->module->model),
+                            appearance, darkPanel(), frame->faceColor);
       if (auto* visual = dynamic_cast<ParamVisual*>(item))
         visual->setVisualSize(cell.diameter);
       Vec center(10 + cell.x, top + 5 + cell.y);
@@ -2420,7 +2449,9 @@ struct Beekapoo : app::ModuleWidget {
       caption.left = std::min(caption.left, center.x - half);
       caption.right = std::max(caption.right, center.x + half);
       caption.bottom =
-          std::max(caption.bottom, center.y + cell.diameter * .5f + 5);
+          std::max(caption.bottom, cell.fixedCaption
+                                       ? top + 5 + cell.captionY
+                                       : center.y + cell.diameter * .5f + 5);
       caption.size =
           std::max(caption.size,
                    clamp(cell.diameter * .36f, 14.f, 18.f) * cell.labelScale);
@@ -2464,8 +2495,6 @@ struct Beekapoo : app::ModuleWidget {
       face->box = Rect(origin + Vec(cell.jack.x, cell.jack.y),
                        Vec(cell.jack.w, cell.jack.h));
       face->visible = true;
-      face->gainLaidOut = !output;
-      face->gainCenter = origin + Vec(cell.gain.x + 10, cell.gain.y + 10);
       auto found = names.find(face);
       if (found != names.end() && cell.label.h > 0)
         controlLabels.push_back(
@@ -2483,7 +2512,8 @@ struct Beekapoo : app::ModuleWidget {
     getParam(Module::WIGGLE_AMOUNT)->visible = false;
     for (auto& parameter : parameters) parameter.knob->visible = false;
     float minimum =
-        minimumJackWidth(inputs.size() + 6, outputs.size(), knobs.size());
+        minimumJackWidth(inputs.size() + 6, outputs.size(), knobs.size(),
+                         module ? members.size() : browserMemberCount);
     float width = std::max(minimum, std::ceil(requestedWidth / 15) * 15);
     bool changed = box.size.x != width;
     box.size.x = width;
@@ -2500,54 +2530,13 @@ struct Beekapoo : app::ModuleWidget {
     responsive.width = width;
     float ownTop = layoutHeaderControls(width) + 4;
     layoutOwnControls(width, ownTop);
-    int cols = std::max(1, int((width - 25) / 20));
-    int inputCols = std::min(int(inputs.size()), cols);
-    int outputCols = std::min(int(outputs.size()), cols);
-    // Fill both port blocks horizontally before spending vertical space.
-    // Captions require a real label column, not a tiny sliver beside a jack.
-    bool beside = !inputs.empty() && !outputs.empty() && width >= 150;
-    if (beside) {
-      int total = std::max(2, int((width - 46) / 20));
-      inputCols = std::max(1, std::min(int(inputs.size()), total / 2));
-      outputCols =
-          std::max(1, std::min(int(outputs.size()), total - inputCols));
-      inputCols = std::max(1, std::min(int(inputs.size()), total - outputCols));
-    }
-    if (beside) {
-      float side = 12 + 45 * std::max(layoutRows(inputs.size(), inputCols),
-                                      layoutRows(outputs.size(), outputCols));
-      float stack = 32 + 45 * (layoutRows(inputs.size(), cols) +
-                               layoutRows(outputs.size(), cols));
-      if (side > stack) {
-        beside = false;
-        inputCols = std::min(int(inputs.size()), cols);
-        outputCols = std::min(int(outputs.size()), cols);
-      }
-    }
-    float slotWidth = beside
-                          ? (width - 46) / std::max(1, inputCols + outputCols)
-                          : (width - 25) / std::max(1, cols);
-    bool portLabels =
-        width >= 120 && inputs.size() + outputs.size() <= 4 && slotWidth >= 35;
-    float inputRow = portLabels ? 76.f : 64.f;
-    float outputRow = portLabels ? 50.f : 40.f;
-    auto paneHeight = [&](size_t count, int columns, float row) {
-      return count ? 12 + layoutRows(count, std::max(1, columns)) * row : 0.f;
-    };
-    auto space =
-        portPaneSpace(width - 46, inputCols, outputCols, outputs.size());
-    float inputWidth = beside ? space.first + 13 : width - 12;
-    float outputWidth = beside ? space.second + 13 : width - 12;
-    float outputPaneHeight = paneHeight(outputs.size(), outputCols, outputRow);
-    float besideHeight = std::max(
-        paneHeight(inputs.size(), inputCols, inputRow), outputPaneHeight);
-    float inputHeight =
-        beside ? besideHeight : paneHeight(inputs.size(), inputCols, inputRow);
-    float outputHeight = beside ? besideHeight : outputPaneHeight;
-    float y =
-        368 - (beside ? std::max(inputHeight, outputHeight)
-                      : inputHeight + outputHeight +
-                            (!inputs.empty() && !outputs.empty() ? 8 : 0));
+    auto plan = compactPanelLayout(width, 368 - ownFrame->box.getBottom(),
+                                   knobs.size(), inputs.size(), outputs.size());
+    int inputCols = plan.inputColumns, outputCols = plan.outputColumns;
+    bool beside = plan.beside;
+    float inputWidth = plan.inputWidth, outputWidth = plan.outputWidth;
+    float inputHeight = plan.inputHeight, outputHeight = plan.outputHeight;
+    float y = 368 - plan.portHeight;
     float parameterTop = ownFrame->box.getBottom() + 8;
     float parameterBottom = y - 8;
     layoutPortBlock(inputs, inputFrame,
@@ -2561,7 +2550,6 @@ struct Beekapoo : app::ModuleWidget {
     finishFrames();
     layoutPortControls(inputs, inputFrame, inputCols, false, names);
     layoutPortControls(outputs, outputFrame, outputCols, true, names);
-    layoutInputGains();
     if (changed && !ejecting && parent == homeRack->getModuleContainer())
       homeRack->setModulePosForce(this, box.pos);
   }
@@ -2575,7 +2563,6 @@ struct Beekapoo : app::ModuleWidget {
     for (auto& p : parameters) p.knob->visible = controlVisible(p.id, 0);
     for (auto& p : ports) {
       p.face->visible = controlVisible(p.id, p.input ? 1 : 2) && findPort(p);
-      if (p.gain) p.gain->visible = p.face->visible;
     }
     std::map<widget::Widget*, std::pair<std::string, std::string>> names;
     std::vector<const Member*> ordered;
@@ -2637,7 +2624,8 @@ struct Beekapoo : app::ModuleWidget {
     bool changed = box.size.x != width;
     box.size.x = width;
     lastLayoutWidth = width;
-    float minimumWidth = minimumJackWidth(items[1].size() + 6, items[2].size());
+    float minimumWidth = minimumJackWidth(items[1].size() + 6, items[2].size(),
+                                          items[0].size(), members.size());
     if (leftHandle) leftHandle->minWidth = minimumWidth;
     if (rightHandle) {
       rightHandle->minWidth = minimumWidth;
@@ -2652,7 +2640,6 @@ struct Beekapoo : app::ModuleWidget {
     frame->box = Rect(Vec(responsive.paramLeft, py),
                       Vec(responsive.paramWidth, responsive.paramHeight));
     frame->visible = responsive.paramHeight > 0 && (!expanded || editPreview);
-    if (!items[1].empty()) responsive.portHeight += 23;
     float gap = items[1].empty() || items[2].empty() ? 0 : 8;
     int panes = (!items[1].empty() ? 1 : 0) + 1;
     auto space =
@@ -2664,12 +2651,12 @@ struct Beekapoo : app::ModuleWidget {
         std::max(responsive.portHeight,
                  12.f + 40 * layoutRows(items[2].size(),
                                         std::max(1, responsive.outputColumns)));
-    // Every input row needs its own attenuverters, not just the first row.
+    // Inputs and outputs use the same jack-and-caption cells.
     responsive.portHeight = std::max(
         responsive.portHeight,
         items[1].empty()
             ? 0.f
-            : 12.f + 64 * layoutRows(items[1].size(), responsive.inputColumns));
+            : 12.f + 40 * layoutRows(items[1].size(), responsive.inputColumns));
     if (responsive.portHeight >
         368 - responsive.paramTop - (items[0].empty() ? 8 : 40)) {
       layoutOnlyJacks(items[1], items[2], items[0], names);
@@ -2688,7 +2675,6 @@ struct Beekapoo : app::ModuleWidget {
                        names);
     layoutPortControls(items[2], outputFrame, responsive.outputColumns, true,
                        names);
-    layoutInputGains();
     if (changed && !ejecting && parent == homeRack->getModuleContainer())
       homeRack->setModulePosForce(this, box.pos);
   }
@@ -3328,7 +3314,7 @@ struct Beekapoo : app::ModuleWidget {
     std::set<std::pair<int64_t, int>> internalizedInputs;
     for (auto& p : ports)
       if (p.route >= 0 && p.shared.key < 0 && !preservePanelRoutes &&
-          p.gain->getParamQuantity()->getValue() == 1.f) {
+          inputGain(p) == 1.f) {
         auto* target = originalPort(p);
         auto* proxy = findPort(p);
         for (auto* cw : homeRack->getCompleteCables())
@@ -3364,8 +3350,7 @@ struct Beekapoo : app::ModuleWidget {
       // Retain a non-unity gain route even after its source joins. Removing
       // that control requires materializing an attenuator, not bypassing it.
       bool preserveGain = it->route >= 0 &&
-                          (it->shared.key >= 0 ||
-                           it->gain->getParamQuantity()->getValue() != 1.f) &&
+                          (it->shared.key >= 0 || inputGain(*it) != 1.f) &&
                           !homeRack->getCompleteCablesOnPort(source).empty();
       if (source && affected && !outside && !preservePanelRoutes &&
           !preserveGain) {
@@ -3782,7 +3767,7 @@ struct Beekapoo : app::ModuleWidget {
     bool unnamed = module ? getModule<Module>()->getPatchName().empty()
                           : browserName.empty();
     return box.size.x <= 90 && unnamed
-               ? Rect(Vec(6, 5), Vec(box.size.x - 16, headerArtworkArea.size.y))
+               ? Rect(Vec(8, 5), Vec(box.size.x - 16, headerArtworkArea.size.y))
                : headerLogoArea;
   }
   void draw(const DrawArgs& args) override {
@@ -3804,7 +3789,7 @@ struct Beekapoo : app::ModuleWidget {
             std::min(target.size.x / ink.size.x, target.size.y / ink.size.y);
         nvgSave(args.vg);
         nvgTranslate(args.vg,
-                     (&svg != &titleArtwork
+                     (&svg != &titleArtwork && !logoOnly
                           ? target.getRight() - ink.size.x * scale
                           : target.getCenter().x - ink.size.x * scale * .5f),
                      target.getCenter().y - ink.size.y * scale * .5f);
@@ -3887,7 +3872,9 @@ struct Beekapoo : app::ModuleWidget {
           int minimum = original == label.text &&
                                 abbreviatedLabel(label.text) != label.text
                             ? std::max(20, preferred - 6)
-                            : (label.required ? 13 : 16);
+                            : (label.required ? 13
+                               : height < 12  ? 12
+                                              : 16);
           for (int halfPoints = preferred; halfPoints >= minimum;
                --halfPoints) {
             label.preparedSize = halfPoints * .5f;

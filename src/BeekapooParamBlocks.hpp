@@ -11,8 +11,8 @@ constexpr float gap = 8, knobGap = 6, maximumDiameter = 64;
 constexpr int maxFrontier = 20;
 struct Family {
   std::vector<int> indices;
-  std::string label;
-  float wordWidth = 0;
+  std::string label, compactLabel;
+  float wordWidth = 0, compactWidth = 0;
 };
 inline std::string commonLabel(const std::vector<ParamLayoutItem>& items,
                                const std::vector<int>& indices) {
@@ -63,10 +63,10 @@ inline Choices frontier(Choices choices) {
   return sampled;
 }
 inline float captionHeight(const Family& family, float width, float scale) {
-  auto lines =
-      wholeWordLines(family.label, width, [scale](const std::string& text) {
-        return float(text.size()) * 7.f * scale;
-      });
+  auto lines = wholeWordLines(scale < 1 ? family.compactLabel : family.label,
+                              width, [scale](const std::string& text) {
+                                return float(text.size()) * 7.f * scale;
+                              });
   return std::max(1, int(lines.size())) * 16.f * scale;
 }
 inline Choices join(const Choices& left, const Choices& right, float width,
@@ -219,6 +219,10 @@ inline std::vector<ParamCell> layout(const std::vector<ParamLayoutItem>& items,
     }
   for (auto& family : families) {
     family.label = commonLabel(items, family.indices);
+    family.compactLabel = abbreviatedLabel(family.label, true);
+    for (const auto& word : labelWords(family.compactLabel))
+      family.compactWidth =
+          std::max(family.compactWidth, float(word.size()) * 7 + 4);
     if (family.wordWidth <= 0)
       for (const auto& word : labelWords(family.label))
         family.wordWidth =
@@ -237,8 +241,9 @@ inline std::vector<ParamCell> layout(const std::vector<ParamLayoutItem>& items,
         int count = int(family.indices.size());
         Choices shapes;
         for (int cols = 1; cols <= count; ++cols) {
-          float w = std::max(cols * base + (cols - 1) * knobGap,
-                             family.wordWidth * scale);
+          float w = std::max(
+              cols * base + (cols - 1) * knobGap,
+              (scale < 1 ? family.compactWidth : family.wordWidth) * scale);
           int rows = (count + cols - 1) / cols;
           float h = rows * base + (rows - 1) * knobGap + 5 +
                     captionHeight(family, w, scale);

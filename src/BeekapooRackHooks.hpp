@@ -165,31 +165,62 @@ struct BeekapooRackHooks : widget::Widget {
     return false;
   }
   WeakPtr<ui::Menu> inspectedMenu;
+  size_t inspectedChildren = 0;
   void wrapMenus(widget::Widget* root) {
     // Compare against Rack's actual menu, including its native labels and
     // shortcuts. This also works with older SDKs and translated Rack builds.
     auto* menu = dynamic_cast<ui::Menu*>(root);
-    if (!menu || inspectedMenu.get() == menu) return;
+    if (!menu || (inspectedMenu.get() == menu &&
+                  inspectedChildren == menu->children.size()))
+      return;
     inspectedMenu = menu;
+    inspectedChildren = menu->children.size();
+    // More than one menu can be open at once. Do not append or wrap again
+    // when visiting the original menu after inspecting a submenu.
+    for (auto* child : menu->children)
+      if (dynamic_cast<CreateBeekapooMenuItem*>(child) ||
+          dynamic_cast<GroupDeleteMenuItem*>(child))
+        return;
     ui::Menu native;
     APP->scene->rack->appendSelectionContextMenu(&native);
     if (native.children.size() < 3 ||
         menu->children.size() < native.children.size())
       return;
-    auto actual = menu->children.begin();
-    for (auto* expected : native.children) {
-      auto* child = *actual++;
+    auto matches = [](widget::Widget* expected, widget::Widget* child) {
       if (auto* label = dynamic_cast<ui::MenuLabel*>(expected)) {
         auto* found = dynamic_cast<ui::MenuLabel*>(child);
-        if (!found || label->text != found->text) return;
+        return found && label->text == found->text;
       } else if (auto* item = dynamic_cast<ui::MenuItem*>(expected)) {
         auto* found = dynamic_cast<ui::MenuItem*>(child);
-        if (!found || item->text != found->text ||
-            item->rightText != found->rightText)
-          return;
-      } else if (typeid(*expected) != typeid(*child))
-        return;
+        return found && item->text == found->text &&
+               item->rightText == found->rightText;
+      }
+      return typeid(*expected) == typeid(*child);
+    };
+    // The context menu starts with the selection commands. Rack's Edit menu
+    // has Undo/Redo/etc before the same section. Find the complete native
+    // section instead of assuming it is at the beginning of the menu.
+    auto actual = menu->children.end();
+    bool foundSection = false;
+    for (auto start = menu->children.begin(); start != menu->children.end();
+         ++start) {
+      auto candidate = start;
+      bool matched = true;
+      for (auto* expected : native.children) {
+        if (candidate == menu->children.end() ||
+            !matches(expected, *candidate)) {
+          matched = false;
+          break;
+        }
+        ++candidate;
+      }
+      if (matched) {
+        actual = candidate;
+        foundSection = true;
+        break;
+      }
     }
+    if (!foundSection) return;
     if (!hasSelectedGroup()) {
       if (APP->scene->rack->getSelected().size() >= 2) {
         menu->addChild(new ui::MenuSeparator);
@@ -271,8 +302,27 @@ struct BeekapooRackHooks : widget::Widget {
     e.consume(this);
   }
 };
+#ifdef ARCH_MAC
+inline void retryRackHooksAfterUiStartup() {
+  static bool queued = false;
+  if (queued || settings::headless) return;
+  queued = true;
+  // Plugin init precedes Context/Scene creation. Cocoa's main queue is
+  // serviced by GLFW on the UI thread, even with no computerscare modules.
+  dispatch_after_f(dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_MSEC),
+                   dispatch_get_main_queue(), nullptr, [](void*) {
+                     queued = false;
+                     installRackHooks();
+                   });
+}
+#endif
 void installRackHooks() {
-  if (!APP || !APP->scene || !APP->engine) return;
+  if (!APP || !APP->scene || !APP->engine) {
+#ifdef ARCH_MAC
+    retryRackHooksAfterUiStartup();
+#endif
+    return;
+  }
   static WeakPtr<BeekapooRackHooks> installed;
   if (installed && installed->parent == APP->scene) return;
   for (auto* child : APP->scene->children)

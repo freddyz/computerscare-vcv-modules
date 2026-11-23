@@ -152,8 +152,6 @@ void renderBeekControlSpectrum(const std::string& output, float scale, Add add, 
     for(const auto& p:owner->parameters)require(p.knob->visible,"Small spectrum must keep every parameter visible");
     for(const auto& p:owner->ports) {
       require(p.face->visible,"Every requested jack must be visible");
-      if(p.gain&&p.gain->visible)for(const auto& other:owner->ports)
-        require(!p.gain->box.intersects(other.face->box),"Input attenuverters must stay clear of jacks");
     }
     std::string modules;for(auto* w:sources){if(!modules.empty())modules+=" / ";modules+=w->model->name;}
     std::string name=string::f("controls-%02d.png",example+1);

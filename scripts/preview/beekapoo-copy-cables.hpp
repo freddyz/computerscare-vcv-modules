@@ -20,14 +20,14 @@ void testBeekCopyCables(const std::string& output, float scale, Add add, Require
     }
     return result;
   };
-  for (bool selection : {false, true}) for (bool withCables : {false, true}) {
+  for (bool legacy : {false,true}) for (bool selection : {false, true}) for (bool withCables : {false, true}) {
     rack->clear(); APP->history->clear();
     auto* a = add(utility, Vec()); auto* b = add(utility, Vec(90, 0));
     auto* outside = add(utility, Vec(1500, 0));
     connect(a->getOutput(2), b->getInput(0));
     auto* owner = static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview, Vec(300, 0)));
     rack->deselectAll(); rack->select(a, true); rack->select(b, true); owner->collapse();
-    for (int i = 0; i < 3; ++i) owner->expose(a, a->getInput(i));
+    for (int i = 0; i < 3; ++i) {owner->expose(a, a->getInput(i));if(legacy)legacyBeekGain(owner,owner->ports.back());}
     owner->expose(a, a->getOutput(1)); owner->exposeParameter(a->module->id, 0);
     auto proxy = [&](beekapoo::Beekapoo* group, int index) {
       for (const auto& p : group->ports) if (p.input && p.portId == index) return group->findPort(p);
@@ -55,7 +55,7 @@ void testBeekCopyCables(const std::string& output, float scale, Add add, Require
       require(owner && copy && copy->members.size() == 2, "Duplicate retains the contained modules");
       auto current = wiring();
       for (const auto& entry : before) require(current[entry.first] == entry.second, "Duplicate must not change the original cables or IDs");
-      require(current.size() == before.size() + (withCables ? 8 : 5), "Copy must include internal wiring once, never duplicate exposed input signals or private bridges");
+      require(current.size() == before.size() + (withCables ? 5 : 2) + (legacy ? 3 : 0), "Copy must include internal wiring once, never duplicate exposed input signals or private bridges");
       for (auto* group : {owner, copy})
         for (auto* cw : rack->getCompleteCables()) {
           auto* c = cw->cable;
@@ -79,6 +79,7 @@ void testBeekCopyCables(const std::string& output, float scale, Add add, Require
     require(wiring() == after, "Redo must retain exact cable IDs");
     // Recreate the saved cherry8 fault: clone's private outputs were copied
     // into the original panel's inputs. They must be removed, not just hidden.
+    if(!legacy)continue;
     for (int i = 0; i < 3; ++i) connect(copy->getOutput(i), proxy(owner, i));
     require(wiring().size() == after.size() + 3, "Legacy phantom fixture must contain three extra cables");
     auto* saved = APP->engine->toJson(); rack->mergeJson(saved); rack->clear(); APP->history->clear(); APP->engine->fromJson(saved); rack->fromJson(saved); json_decref(saved);

@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "BeekapooLabels.hpp"
+
 namespace beekapoo {
 struct ParamLayoutItem {
   std::string label;
@@ -59,6 +61,7 @@ struct ParamCell {
   float x, y, diameter, labelWidth, labelScale, labelHeight;
   // Block layouts own a single shared caption, independently of knob rows.
   int block = -1;
+  bool fixedCaption = false;
   float captionX = 0, captionY = 0;
   std::string captionText;
   ParamCell(int index, float x, float y, float diameter, float labelWidth,
@@ -119,28 +122,38 @@ inline std::vector<ParamCell> compactParams(
   int columns = 1;
   float size = 0;
   float reservedCaption = 0;
+  float captionGap = 6;
   // If full captions could not fit, retain small captions wherever possible
   // instead of making the entire dense grid anonymous. Never trade a usable
   // control for a label: very dense grids still fall back to controls alone.
-  for (float caption : {24.f, 12.f, 0.f}) {
+  for (float caption : {24.f, 12.f, 10.f, 8.f, 0.f}) {
+    float separation = caption > 0 && caption <= 10 ? 2.f : 6.f;
     int bestColumns = 1;
     float bestSize = 0;
     for (int cols = 1; cols <= int(items.size()); ++cols) {
       int rows = (int(items.size()) + cols - 1) / cols;
       float gap = std::min(2.f, std::min(width / cols, height / rows) * .08f);
-      float candidate =
-          std::min(64.f, std::min((width - gap * (cols - 1)) / cols,
-                                  (height - gap * (rows - 1)) / rows -
-                                      (caption > 0 ? caption + 6 : 0)));
+      float candidate = std::min(
+          64.f,
+          std::min(
+              (width - gap * (cols - 1)) / cols,
+              (height - (caption > 0 && caption <= 10 ? 0 : gap * (rows - 1))) /
+                      rows -
+                  (caption > 0 ? caption + separation : 0)));
       if (candidate > bestSize) {
         bestSize = candidate;
         bestColumns = cols;
       }
     }
-    if (caption == 0 || bestSize >= 30) {
+    float minimum = caption >= 24   ? 30.f
+                    : caption >= 12 ? 24.f
+                    : caption >= 10 ? 20.f
+                                    : 16.f;
+    if (caption == 0 || bestSize >= minimum) {
       size = bestSize;
       columns = bestColumns;
       reservedCaption = caption;
+      captionGap = separation;
       break;
     }
   }
@@ -150,25 +163,36 @@ inline std::vector<ParamCell> compactParams(
   // Dense grids often still have vertical room for a small caption. Keep
   // their control sizes; use that space before dropping labels altogether.
   float captionHeight =
-      std::max(reservedCaption, std::min(28.f, rowStep - size - 6.f));
-  bool captions = size >= 28.f && captionHeight >= 12.f;
+      std::max(reservedCaption, std::min(28.f, rowStep - size - captionGap));
+  bool captions = size >= 16.f && captionHeight >= 8.f;
   std::vector<ParamCell> cells;
   for (int i = 0; i < int(order.size()); ++i) {
     int row = i / columns, col = i % columns;
     int rowCount = std::min(columns, int(order.size()) - row * columns);
-    float gap = std::min(2.f, size * .08f);
-    float left = (width - rowCount * size - (rowCount - 1) * gap) * .5f;
+    float columnStep = width / columns;
+    float left = (width - rowCount * columnStep) * .5f;
     float variation =
         .94f +
         .06f *
             std::max(0.f, std::min(1.f, (items[order[i]].scale - .7f) / .7f));
     cells.push_back(
-        {order[i], left + col * (size + gap) + size * .5f,
-         (row + .5f) * rowStep - (captions ? (captionHeight + 6) * .5f : 0),
-         captions ? std::min(size, std::max(30.f, size * variation))
-                  : size * variation,
-         captions ? (rowCount == 1 ? width - 2 : size + gap - 2) : 0, .65f,
-         captions ? captionHeight : 0});
+        {order[i], left + (col + .5f) * columnStep,
+         (row + .5f) * rowStep -
+             (captions ? (captionHeight + captionGap) * .5f : 0),
+         captions ? std::min(size, std::max(reservedCaption >= 24   ? 30.f
+                                            : reservedCaption >= 10 ? 20.f
+                                                                    : 16.f,
+                                            size * variation))
+                  : std::max(std::min(16.f, size), size * variation),
+         captions ? columnStep - 2 : 0, .65f, captions ? captionHeight : 0});
+    if (captions) {
+      // Explicit caption bounds use the full cell and its actual gap. The
+      // renderer must not assume the larger spacing of the roomy layout.
+      auto& cell = cells.back();
+      cell.fixedCaption = true;
+      cell.captionX = cell.x;
+      cell.captionY = (row + 1) * rowStep - captionHeight;
+    }
   }
   return cells;
 }
@@ -178,6 +202,10 @@ inline std::vector<ParamCell> rowParams(
     const std::vector<ParamLayoutItem>& items, float width, float height,
     bool byModule) {
   if (items.empty() || width <= 0 || height <= 0) return {};
+  std::vector<std::string> compactLabels;
+  compactLabels.reserve(items.size());
+  for (const auto& item : items)
+    compactLabels.push_back(abbreviatedLabel(item.label, true));
   std::vector<int> order;
   for (const auto& group : paramGroups(items, byModule))
     order.insert(order.end(), group.begin(), group.end());
@@ -210,9 +238,11 @@ inline std::vector<ParamCell> rowParams(
         float size = std::min(
             width - 2, std::max(minimum, std::min(64.f, base * variation)));
         diameters.push_back(size);
-        float caption = items[index].captionWidth;
+        const auto& text =
+            labelScale < 1 ? compactLabels[index] : items[index].label;
+        float caption = labelScale < 1 ? 0 : items[index].captionWidth;
         if (caption <= 0)
-          for (const auto& word : labelWords(items[index].label))
+          for (const auto& word : labelWords(text))
             caption = std::max(caption, float(word.size()) * 7.f + 4);
         footprints.push_back(std::max(
             size, std::min(width, caption * labelScale) / counts[key(index)]));
@@ -244,7 +274,9 @@ inline std::vector<ParamCell> rowParams(
           tallest = std::max(tallest, diameters[end]);
           if (last[key(order[end])] == end) {
             int words = 0;
-            for (const auto& word : labelWords(items[order[end]].label))
+            const auto& text = labelScale < 1 ? compactLabels[order[end]]
+                                              : items[order[end]].label;
+            for (const auto& word : labelWords(text))
               words += std::any_of(
                   word.begin(), word.end(),
                   [](unsigned char c) { return c >= 128 || std::isalpha(c); });
