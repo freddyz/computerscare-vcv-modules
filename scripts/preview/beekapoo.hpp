@@ -1324,10 +1324,24 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   APP->scene->box.size=Vec(1100,740);APP->scene->rackScroll->box=Rect(Vec(0,30),Vec(1100,710));
   group->focusEditedMembers();
   auto* realSession=static_cast<beekapoo::RackEditSession*>(group->editSession.get());
-  widget::Widget::HoverKeyEvent exposeKey;exposeKey.context=&kbdExposeContext;exposeKey.action=GLFW_PRESS;exposeKey.key=GLFW_KEY_X;exposeKey.mods=0;realSession->onHoverKey(exposeKey);
-  require(realSession->exposeMode&&exposeKey.isConsumed(),"X must enter Expose mode");
+  widget::Widget::HoverKeyEvent exposeKey;exposeKey.context=&kbdExposeContext;exposeKey.action=GLFW_PRESS;exposeKey.key=GLFW_KEY_E;exposeKey.mods=0;realSession->onHoverKey(exposeKey);
+  require(realSession->exposeMode&&exposeKey.isConsumed(),"E must enter Expose mode");
   widget::Widget::HoverKeyEvent adjustKey;adjustKey.context=&adjustContext;adjustKey.action=GLFW_PRESS;adjustKey.key=GLFW_KEY_X;adjustKey.mods=0;realSession->onHoverKey(adjustKey);require(!realSession->exposeMode,"X again must return to Adjust mode");
 
+  {
+    widget::EventContext context;widget::Widget::HoverKeyEvent key;
+    key.context=&context;key.action=GLFW_PRESS;key.key=GLFW_KEY_E;key.mods=0;
+    group->onHoverKey(key);
+    require(realSession->exposeMode&&key.isConsumed(),"E over the owner panel must toggle Expose during editing");
+    key.action=GLFW_REPEAT;realSession->onHoverKey(key);
+    require(realSession->exposeMode,"Holding E must not repeatedly toggle Expose");
+    key.action=GLFW_PRESS;realSession->onHoverKey(key);
+    require(!realSession->exposeMode,"E again must return to Adjust mode");
+    ui::TextField field;APP->event->setSelectedWidget(&field);
+    realSession->onHoverKey(key);
+    require(!realSession->exposeMode,"Typing E in a text field must not toggle Expose");
+    APP->event->setSelectedWidget(nullptr);
+  }
   group->moveEditedMembers(true,false);
   require(group->controls->visible && !group->parameters.empty(),"Near editing must retain the owner's mapped control layer");
   for(auto& p:group->parameters)require(p.knob->visible,"Mapped parameters must remain drawn on Beekapoo itself in Near edit mode");

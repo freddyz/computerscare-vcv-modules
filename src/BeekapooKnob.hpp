@@ -72,10 +72,12 @@ inline ControlStyle controlStyle(const std::string& parameter,
   unsigned roll = mixIdentity(maker ^ family, module) % 100;
   unsigned unusual = mixIdentity(module, family ^ 0x7368617065ull) % 100;
   int shape = roll < circleWeight ? 6
-              : unusual < 52      ? 0
-              : unusual < 76      ? 3
-              : unusual < 88      ? 5
-              : unusual < 96      ? 1
+              : unusual < 22      ? 0
+              : unusual < 38      ? 3
+              : unusual < 48      ? 5
+              : unusual < 78      ? 1
+              : unusual < 90      ? 7
+              : unusual < 98      ? 8
               : unusual < 99      ? 2
                                   : 4;
   bool circle = shape == 6;
@@ -179,60 +181,89 @@ struct ParametricKnob : app::Knob {
         mixIdentity(controlHash(paramFamily(parameter)) ^ controlHash(source),
                     mixIdentity(patch.wiring, patch.manufacturers));
     bool circle = style.shape == 6;
+    bool straight = style.shape == 1 || style.shape == 7 || style.shape == 8;
     float blend =
         circle ? 0.f : .08f + float((blendHash >> 8) & 255u) / 255.f * .2f;
     float phase = float((blendHash >> 24) & 255u) / 255.f * 2.f * M_PI;
     float dent =
         circle ? 0.f : .015f + float((blendHash >> 40) & 255u) / 255.f * .07f;
-    for (size_t i = 0; i < profile.size(); ++i) {
-      float angle = float(i) * 2.f * M_PI / profile.size();
-      float c = std::cos(angle), s = std::sin(angle);
-      float x = c, y = s;
-      float radius = 1;
-      if (style.shape == 0 || style.shape == 3) {
-        x = std::copysign(std::pow(std::abs(c), 2.f / style.exponent), c);
-        y = std::copysign(std::pow(std::abs(s), 2.f / style.exponent), s);
-        if (style.shape == 3) {
-          float skew = (float((blendHash >> 48) & 255u) / 255.f - .5f) * .55f;
-          x += skew * y;
-          y *= 1.f + .1f * c;
+    // Sample along edges rather than around a radius: every corner must land
+    // on the outline, and blending must not bow the straight sections.
+    if (straight) {
+      std::vector<Vec> corners;
+      if (style.shape == 1) {
+        int sides = 3 + style.lobes % 3;
+        for (int i = 0; i < sides; ++i) {
+          float angle =
+              -M_PI / 2 + (sides == 4 ? M_PI / 4 : 0) + 2.f * M_PI * i / sides;
+          corners.emplace_back(std::cos(angle), std::sin(angle));
         }
-      } else if (style.shape == 1) {
-        int sides = 3 + style.lobes % 5;
-        float sector = 2.f * M_PI / sides;
-        radius =
-            std::cos(M_PI / sides) /
-            std::cos(std::fmod(angle + M_PI / sides, sector) - M_PI / sides);
-      } else if (style.shape == 2) {
-        radius = 1 + style.ripple * std::cos(style.lobes * angle);
-      } else if (style.shape == 4) {
-        radius = i % 4 < 2 ? 1.f : .88f + style.ripple * .4f;
-      } else if (!circle) {
-        radius = 1 + .19f * std::cos(angle) + .11f * std::sin(3 * angle);
-      }
-      Vec secondary;
-      if (blendHash % 3 == 0) {
-        float exponent = 2.5f + float((blendHash >> 16) & 255u) / 255.f * 3.f;
-        secondary =
-            Vec(std::copysign(std::pow(std::abs(c), 2.f / exponent), c),
-                std::copysign(std::pow(std::abs(s), 2.f / exponent), s));
+      } else if (style.shape == 7) {
+        // Three square edges and one bowed side.
+        corners = {Vec(-.84f, -.84f), Vec(.72f, -.84f), Vec(.72f, .84f),
+                   Vec(-.84f, .84f)};
       } else {
-        int lobes = blendHash % 3 == 1 ? 2 : 3 + int((blendHash >> 32) % 3);
-        float r = 1.f + .22f * std::cos(lobes * angle + phase);
-        secondary = Vec(c, s) * r;
+        // Triangle on the left, half a hexagon on the right.
+        corners = {Vec(0, -.866f),  Vec(.5f, -.866f), Vec(1, 0),
+                   Vec(.5f, .866f), Vec(0, .866f),    Vec(-1, 0)};
       }
-      Vec combined = Vec(x, y) * radius * (1 - blend) + secondary * blend;
-      float damping =
-          1.f - dent * std::pow(std::max(0.f, std::cos(angle - phase)), 8.f);
-      x = combined.x * damping;
-      y = combined.y * damping;
-      radius = 1;
-      profile[i] =
+      for (size_t edge = 0; edge < corners.size(); ++edge) {
+        size_t start = edge * profile.size() / corners.size();
+        size_t end = (edge + 1) * profile.size() / corners.size();
+        Vec a = corners[edge], b = corners[(edge + 1) % corners.size()];
+        for (size_t i = start; i < end; ++i) {
+          float t = float(i - start) / float(end - start);
+          profile[i] = style.shape == 7 && edge == 1
+                           ? a * ((1 - t) * (1 - t)) +
+                                 Vec(1.6f, 0) * (2 * t * (1 - t)) + b * (t * t)
+                           : a * (1 - t) + b * t;
+        }
+      }
+    } else
+      for (size_t i = 0; i < profile.size(); ++i) {
+        float angle = float(i) * 2.f * M_PI / profile.size();
+        float c = std::cos(angle), s = std::sin(angle);
+        float x = c, y = s;
+        float radius = 1;
+        if (style.shape == 0 || style.shape == 3) {
+          x = std::copysign(std::pow(std::abs(c), 2.f / style.exponent), c);
+          y = std::copysign(std::pow(std::abs(s), 2.f / style.exponent), s);
+          if (style.shape == 3) {
+            float skew = (float((blendHash >> 48) & 255u) / 255.f - .5f) * .55f;
+            x += skew * y;
+            y *= 1.f + .1f * c;
+          }
+        } else if (style.shape == 2) {
+          radius = 1 + style.ripple * std::cos(style.lobes * angle);
+        } else if (style.shape == 4) {
+          radius = i % 4 < 2 ? 1.f : .88f + style.ripple * .4f;
+        } else if (!circle) {
+          radius = 1 + .19f * std::cos(angle) + .11f * std::sin(3 * angle);
+        }
+        Vec secondary;
+        if (blendHash % 3 == 0) {
+          float exponent = 2.5f + float((blendHash >> 16) & 255u) / 255.f * 3.f;
+          secondary =
+              Vec(std::copysign(std::pow(std::abs(c), 2.f / exponent), c),
+                  std::copysign(std::pow(std::abs(s), 2.f / exponent), s));
+        } else {
+          int lobes = blendHash % 3 == 1 ? 2 : 3 + int((blendHash >> 32) % 3);
+          float r = 1.f + .22f * std::cos(lobes * angle + phase);
+          secondary = Vec(c, s) * r;
+        }
+        Vec combined = Vec(x, y) * radius * (1 - blend) + secondary * blend;
+        float damping =
+            1.f - dent * std::pow(std::max(0.f, std::cos(angle - phase)), 8.f);
+        profile[i] = combined * damping;
+      }
+    for (auto& point : profile) {
+      float x = point.x, y = point.y;
+      point =
           Vec((x * std::cos(style.rotation) - y * std::sin(style.rotation)) *
                   style.aspectX,
               (x * std::sin(style.rotation) + y * std::cos(style.rotation)) *
                   style.aspectY) *
-          (7.8f * radius);
+          7.8f;
     }
     float maximumX = 0, maximumY = 0, maximumRadius = 0;
     for (const auto& point : profile) {

@@ -3568,7 +3568,10 @@ struct Beekapoo : app::ModuleWidget {
     if (module && e.action == GLFW_PRESS && !(e.mods & RACK_MOD_MASK) &&
         e.key == GLFW_KEY_E && !APP->scene->browser->visible &&
         !dynamic_cast<ui::TextField*>(APP->event->getSelectedWidget())) {
-      if (!editSession) editSubpatch();
+      if (editSession)
+        editSession->onHoverKey(e);
+      else
+        editSubpatch();
       e.consume(this);
       return;
     }

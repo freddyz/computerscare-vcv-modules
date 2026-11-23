@@ -1,5 +1,71 @@
 #pragma once
+inline void renderBeekKnobSamples(const std::string& output,float scale) {
+  const std::vector<std::string> names={"Frequency","Cutoff frequency","Resonance","Pulse width","Gain","Frequency modulation","Channel 1 CV","Channel 2 CV","Attack","Decay","Time","Spread","Steps","Octave","Fine"};
+  const std::vector<std::string> sources={"Fundamental/VCO","Fundamental/VCF","Fundamental/VCF","Fundamental/VCO","Fundamental/VCA-1","Fundamental/LFO","Fundamental/8vert","Fundamental/8vert","Fundamental/ADSR","Fundamental/ADSR","Fundamental/Delay","computerscare/VolyPector","Fundamental/SEQ3","AudibleInstruments/Plaits","Fundamental/VCO"};
+  const std::vector<std::vector<std::string>> patches={
+    {"Fundamental/VCO","Fundamental/LFO","Fundamental/VCF"},
+    {"Fundamental/VCO","Fundamental/VCO","Fundamental/VCA-1","Fundamental/Delay"},
+    {"Fundamental/8vert","Fundamental/ADSR","computerscare/SlolyPit"},
+    {"Fundamental/ADSR","Fundamental/Delay","computerscare/VolyPector"},
+    {"AudibleInstruments/Plaits","Fundamental/SEQ3","Fundamental/VCO"}
+  };
+  // Curate the spectrum using real module collections, never forced artwork.
+  const int shapes[]={1,6,7,6,1,6,0,3,8,6,6,6,1,6,5};
+  const int sides[]={3,0,0,0,4,0,0,0,0,0,0,0,5,0,0};
+  const std::vector<std::string> pool={"Fundamental/VCO","Fundamental/LFO","Fundamental/VCF","Fundamental/VCA-1","Fundamental/ADSR","Fundamental/Delay","Fundamental/8vert","Fundamental/SEQ3","computerscare/SlolyPit","AudibleInstruments/Plaits"};
+  engine::Module module;module.config(15,0,0,0);
+  struct Sheet : widget::Widget {
+    std::vector<std::string> names,sources;
+    void draw(const DrawArgs& args) override {
+      auto font=computerscare::type::font();
+      for(int i=0;i<15;++i) {
+        float x=(i%5)*150,y=(i/5)*145;bool dark=i%2;
+        nvgBeginPath(args.vg);nvgRect(args.vg,x,y,150,145);
+        nvgFillColor(args.vg,dark?nvgRGB(37,37,37):nvgRGB(214,214,214));nvgFill(args.vg);
+        if(!font)continue;
+        nvgFontFaceId(args.vg,font->handle);nvgFontSize(args.vg,13);
+        nvgTextAlign(args.vg,NVG_ALIGN_CENTER|NVG_ALIGN_TOP);
+        nvgFillColor(args.vg,dark?nvgRGB(235,235,235):nvgRGB(28,28,28));
+        nvgTextBox(args.vg,x+7,y+97,136,names[i].c_str(),nullptr);
+        nvgFontSize(args.vg,8);nvgFillColor(args.vg,dark?nvgRGB(164,164,164):nvgRGB(94,94,94));
+        nvgText(args.vg,x+75,y+131,sources[i].c_str(),nullptr);
+      }
+      widget::Widget::draw(args);
+    }
+  } sheet;
+  sheet.names=names;sheet.sources=sources;sheet.box.size=Vec(750,435);
+  for(int i=0;i<15;++i) {
+    bool discrete=i==12||i==13;float maximum=discrete?8.f:1.f;
+    auto* q=module.configParam(i,0,maximum,0,names[i]);q->snapEnabled=discrete;
+    float value=maximum*float((i*7+3)%19)/18.f;
+    module.params[i].setValue(discrete?std::round(value):value);
+    auto* knob=new beekapoo::ParametricKnob;
+    knob->module=&module;knob->paramId=i;knob->initParamQuantity();knob->snap=discrete;
+    int group=i/3;
+    auto identity=beekapoo::patchIdentity(patches[group],{{0,group%3,1,0},{1,1,2,group%4}});
+    for(unsigned sample=0;;++sample) {
+      auto style=beekapoo::controlStyle(names[i],sources[i],identity);
+      if(style.shape==shapes[i]&&(!sides[i]||3+style.lobes%3==sides[i]))break;
+      if(sample>=4096)throw std::runtime_error("Unable to find knob spectrum family");
+      std::vector<std::string> collection={sources[i]};
+      uint64_t hash=beekapoo::mixIdentity(sample,i/3);
+      for(unsigned m=0;m<2+sample%8;++m) {
+        hash=beekapoo::mixIdentity(hash,m+1);
+        collection.push_back(pool[hash%pool.size()]);
+      }
+      identity=beekapoo::patchIdentity(collection,{{0,group%3,1,0},{1,1,2,group%4}});
+    }
+    knob->setIdentity(names[i],sources[i],identity);knob->setDark(i%2);knob->step();
+    float size=68+float((i*3)%5)*3;
+    auto* transform=new widget::TransformWidget;
+    transform->box=Rect(Vec((i%5)*150+75-size/2,(i/5)*145+48-size/2),Vec(size,size));
+    transform->scale(Vec(size/24,size/24));transform->addChild(knob);sheet.addChild(transform);
+  }
+  capture(&sheet,output+"/knobs-15.png",scale,false);
+}
 inline void renderBeekKnobSpectrum(const std::string& output, float scale) {
+  const char* mode=std::getenv("BEEKAPOO_KNOBS_ONLY");
+  if(mode&&std::string(mode)=="15") {renderBeekKnobSamples(output,scale);return;}
   engine::Module module;
   module.config(96,0,0,0);
   struct Sheet : widget::Widget {
@@ -17,7 +83,7 @@ inline void renderBeekKnobSpectrum(const std::string& output, float scale) {
     {"computerscare/VolyPector","Fundamental/VCO","Fundamental/VCO","AudibleInstruments/Plaits"},
     {"Fundamental/SEQ3","computerscare/SlolyPit","Fundamental/8vert"}
   };
-  std::array<int,7> families{};
+  std::array<int,9> families{};
   for(int i=0;i<96;++i) {
     int row=i/12,col=i%12;
     bool discrete=row>=6;
@@ -43,13 +109,14 @@ inline void renderBeekKnobSpectrum(const std::string& output, float scale) {
     transform->scale(Vec(size/24,size/24));transform->addChild(knob);sheet.addChild(transform);
   }
   capture(&sheet,output+"/knobs-only.png",scale,false);
-  std::fprintf(stderr,"Knob spectrum: %d circles, %d squares, %d skew squares, %d lopsided, %d polygons, %d lobed, %d notched\n",families[6],families[0],families[3],families[5],families[1],families[2],families[4]);
+  std::fprintf(stderr,"Knob spectrum: %d circles, %d squares, %d skew squares, %d lopsided, %d polygons, %d lobed, %d notched, %d curved squares, %d split polygons\n",families[6],families[0],families[3],families[5],families[1],families[2],families[4],families[7],families[8]);
 }
 
 template<class Require>
 void testBeekKnobRendering(const std::string& output,float scale,Require require) {
   int round=0,elongated=0,total=0;
   std::array<int,4> borders{};
+  std::set<int> checkedEdges;
   for(int seed=0;seed<400;++seed) {
     auto patch=beekapoo::patchIdentity({"Maker/VCO","Maker/Filter "+std::to_string(seed)},{});
     for(const char* label:{"Frequency","Cutoff","Resonance","Gain","Attack","Decay","Level","Drive"}) {
@@ -57,12 +124,29 @@ void testBeekKnobRendering(const std::string& output,float scale,Require require
       auto related=beekapoo::controlStyle(label,"Maker/LFO",patch);
       ++total;round+=style.shape==6;elongated+=std::min(style.aspectX,style.aspectY)<.88f;
       ++borders[style.border];
+      if(style.shape==1||style.shape==7||style.shape==8) {
+        int sides=style.shape==1?3+style.lobes%3:style.shape;
+        if(checkedEdges.insert(sides).second) {
+          beekapoo::ParametricKnob knob;knob.setIdentity(label,"Maker/VCO",patch);
+          int corners=0;
+          for(size_t i=0;i<knob.profile.size();++i) {
+            auto a=knob.profile[i],b=knob.profile[(i+1)%knob.profile.size()],c=knob.profile[(i+2)%knob.profile.size()];
+            auto u=b-a,v=c-b;
+            corners+=std::abs(u.x*v.y-u.y*v.x)>.0001f;
+            require(a.norm()+style.bevel<=11.51f,"Straight and hybrid knobs must fit at every rotation");
+          }
+          if(style.shape==1)require(corners==sides,"Polygons must keep exactly their original straight edges and corners");
+          else if(style.shape==8)require(corners==6,"Triangle/hexagon hybrid must retain six straight edges");
+          else require(corners>6&&corners<20,"Curved square must retain three straight sides and only one curved side");
+        }
+      }
       require(style.border==related.border&&style.ridges==related.ridges&&style.borderWidth==related.borderWidth,"Related parameters must share edge treatments across source modules");
       if(style.shape==6)require(style.aspectX==1&&style.aspectY==1,"Normal circles must never be stretched");
     }
     auto a=beekapoo::controlStyle("Channel 1 level","Maker/VCO",patch),b=beekapoo::controlStyle("Channel 4 level","Maker/VCO",patch);
     require(a.shape==b.shape&&a.border==b.border&&a.ridges==b.ridges,"Numbered families must share their shape and rim");
   }
+  require(checkedEdges.size()==5,"All polygon and mixed-edge families must occur in the hash spectrum");
   require(round>total*.45&&round<total*.55,"Circles must account for about half the generated styles");
   require(elongated<total*.10,"Oblong controls must remain uncommon");
   for(int count:borders)require(count>total*.1,"All four edge treatments must remain available");

@@ -94,6 +94,10 @@ ignored preview directory; no production module code is changed.
 For Beekapoo review PDFs, use one page unless requested otherwise. Keep source
 module names below each panel; omit HP and parameter/input/output counts.
 
+`BEEKAPOO_KNOBS_ONLY=15 scripts/preview-module.sh beekapoo --no-build` renders
+15 labeled knobs across varied patch hashes, values and light/dark backgrounds.
+Use `BEEKAPOO_KNOBS_ONLY=1` for the wider 96-knob sheet.
+
 `BEEKAPOO_THEMES=1 scripts/preview-module.sh beekapoo --no-build` renders three
 panels in Light and Dark, plus both browser themes. It checks saved overrides,
 the shared default, live Rack preference changes, and unchanged parameter
