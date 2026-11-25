@@ -290,6 +290,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto* m=model->createModule();APP->engine->addModule(m);
     auto* w=model->createModuleWidget(m);w->box.pos=pos;rack->addModule(w);return w;
   };
+  if(std::getenv("BEEKAPOO_FILES")){testBeekPatchFiles(output,scale,add,require,gainModel);return;}
   testBeekGroupShutdown(add,require);
   testBeekCompact(output,scale,add,require);
   if(std::getenv("BEEKAPOO_COMPACT"))return;
@@ -649,6 +650,47 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     host->parameterAction(4,false);
     require(protectedQ->getValue()==1.f && protectedQ->randomCalls==customRandomBefore,"All Randomize must retain the module's exclusions");
     protectedQ->randomizeEnabled=true;
+    own->params[beekapoo::Module::RANDOM_PROBABILITY].setValue(0.f);own->params[beekapoo::Module::WIGGLE_PROBABILITY].setValue(0.f);
+    for(int action:{0,1,3,4}) {
+      auto beforeA=gainA->toJson();auto beforeB=gainB->toJson();int calls=gainA->randomCalls;
+      host->parameterAction(action,true);
+      auto afterA=gainA->toJson();auto afterB=gainB->toJson();
+      require(json_equal(beforeA,afterA)&&json_equal(beforeB,afterB)&&calls==gainA->randomCalls,"Zero probability must leave all parameter values and module callbacks alone");
+      json_decref(beforeA);json_decref(beforeB);json_decref(afterA);json_decref(afterB);
+    }
+    own->params[beekapoo::Module::RANDOM_PROBABILITY].setValue(1.f);own->params[beekapoo::Module::WIGGLE_PROBABILITY].setValue(1.f);
+    own->params[beekapoo::Module::RANDOM_RANGE].setValue(.25f);own->params[beekapoo::Module::WIGGLE_RANGE].setValue(.025f);
+    auto* probe=gainB->getParamQuantity(0);
+    for(int action:{0,1,3,4})for(int repeat=0;repeat<20;++repeat) {
+      probe->setImmediateValue(1.f);host->parameterAction(action,false);
+      if(action%3==0) require(std::abs(probe->getValue()-1.f)<=.05001f,"Random range must scale both exposed and all wiggle distances");
+      else require(probe->getValue()>=0.f&&probe->getValue()<=.50001f,"Random range must restrict exposed and native all randomizers");
+    }
+    own->params[beekapoo::Module::RANDOM_RANGE].setValue(0.f);own->params[beekapoo::Module::WIGGLE_RANGE].setValue(0.f);
+    for(int action:{1,4}){probe->setImmediateValue(1.f);host->parameterAction(action,false);require(probe->getValue()==0.f,"Zero random range must choose the allowed zero point");}
+    own->params[beekapoo::Module::RANDOM_RANGE].setValue(.25f);own->params[beekapoo::Module::WIGGLE_RANGE].setValue(.025f);
+    own->params[beekapoo::Module::RANDOM_PROBABILITY].setValue(.5f);own->params[beekapoo::Module::WIGGLE_PROBABILITY].setValue(.5f);
+    for(int action:{0,1,3,4}) {
+      int changed=0;
+      for(int repeat=0;repeat<80;++repeat){probe->setImmediateValue(1.f);host->parameterAction(action,false);changed+=probe->getValue()!=1.f;}
+      require(changed>0&&changed<80,"Intermediate probability must sometimes change and sometimes retain each control");
+    }
+    // The two action families must not read each other's settings.
+    own->params[beekapoo::Module::RANDOM_PROBABILITY].setValue(0.f);
+    own->params[beekapoo::Module::WIGGLE_PROBABILITY].setValue(1.f);
+    own->params[beekapoo::Module::WIGGLE_RANGE].setValue(.25f);
+    probe->setImmediateValue(1.f);host->parameterAction(1,false);require(probe->getValue()==1.f,"Randomize probability cannot disable wiggle or vice versa");
+    bool wiggled=false;for(int i=0;i<8;++i){host->parameterAction(0,false);wiggled|=probe->getValue()!=1.f;}require(wiggled,"Wiggle must remain enabled when randomize probability is zero");
+    own->params[beekapoo::Module::RANDOM_PROBABILITY].setValue(1.f);
+    own->params[beekapoo::Module::WIGGLE_PROBABILITY].setValue(0.f);
+    probe->setImmediateValue(1.f);host->parameterAction(3,false);require(probe->getValue()==1.f,"Wiggle probability must independently stop all wiggles");
+    host->parameterAction(4,false);require(probe->getValue()<=.50001f,"Randomize must remain enabled when wiggle probability is zero");
+    own->params[beekapoo::Module::RANDOM_PROBABILITY].setValue(.5f);
+    auto savedRandom=own->toJson();beekapoo::Module restoredRandom;restoredRandom.model=modelBeekapooPreview;restoredRandom.fromJson(savedRandom);json_decref(savedRandom);
+    require(restoredRandom.params[beekapoo::Module::RANDOM_RANGE].getValue()==.25f&&restoredRandom.params[beekapoo::Module::RANDOM_PROBABILITY].getValue()==.5f,"Random settings must persist as native parameters");
+    require(restoredRandom.params[beekapoo::Module::WIGGLE_RANGE].getValue()==.25f&&restoredRandom.params[beekapoo::Module::WIGGLE_PROBABILITY].getValue()==0.f,"Wiggle settings must persist independently");
+    own->params[beekapoo::Module::RANDOM_RANGE].setValue(1.f);own->params[beekapoo::Module::WIGGLE_RANGE].setValue(.1f);
+    own->params[beekapoo::Module::RANDOM_PROBABILITY].setValue(1.f);own->params[beekapoo::Module::WIGGLE_PROBABILITY].setValue(1.f);
     for(int i=0;i<24;++i){gainA->getParamQuantity(i)->setImmediateValue(savedA[i]);gainB->getParamQuantity(i)->setImmediateValue(savedB[i]);}
   }
   {
@@ -827,12 +869,13 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   host->arrangeByModule=false;
   for(float width:{75.f,90.f,105.f,120.f,150.f,180.f,300.f,450.f,900.f}) {
     host->requestedWidth=width;host->layoutControls();
-    for(int i=0;i<6;++i){require(host->getInput(i)&&!host->getInput(i)->visible,"Legacy single-action CV jacks must stay hidden");require(host->actionButtons[i]->visible==(i%3!=2),"Exactly four manual action buttons must be visible");}
-    require(host->growButton->visible&&host->regenerateButton->visible&&host->getInput(beekapoo::Module::ACTIONS_INPUT)->visible,"Generate and Grow buttons and shared poly CV must be visible");
-    require(host->getParam(beekapoo::Module::WIGGLE_AMOUNT)&&!host->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Wiggle quantity must remain available without occupying the panel");
+    for(int i=0;i<6;++i){require(host->getInput(i)&&!host->getInput(i)->visible,"Legacy single-action CV jacks must stay hidden");if(i%3==2)require(!host->actionButtons[i]->visible,"Initialize stays off the strip");}
+    require(host->growButton->visible&&host->managementButtons[2]->visible&&host->getInput(beekapoo::Module::ACTIONS_INPUT)->visible,"Header actions and shared poly CV must be visible");
+    require(host->getParam(beekapoo::Module::WIGGLE_RANGE)->visible==(beekapoo::Beekapoo::ownControlLayout(host->box.size.x).knobCount>=3),"Wiggle range appears only when space permits");
     std::vector<widget::Widget*> visibleControls;
     for(auto* w:host->actionButtons)visibleControls.push_back(w);
     for(auto* w:host->managementButtons)visibleControls.push_back(w);
+    for(int id:{beekapoo::Module::RANDOM_RANGE,beekapoo::Module::RANDOM_PROBABILITY,beekapoo::Module::WIGGLE_PROBABILITY})visibleControls.push_back(host->getParam(id));
     visibleControls.push_back(host->growButton);visibleControls.push_back(host->regenerateButton);
     visibleControls.push_back(host->getInput(beekapoo::Module::ACTIONS_INPUT));
     for(int i=0;i<6;++i)visibleControls.push_back(host->getInput(i));
@@ -842,7 +885,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     visibleControls.erase(std::remove_if(visibleControls.begin(),visibleControls.end(),[](widget::Widget* w){return !w->visible;}),visibleControls.end());
     require(host->ownFrame->box.size.x==host->box.size.x && host->titleFrame->box.size.x==host->box.size.x,"Header and module controls frames must fill the panel width");
     auto jack=host->getInput(beekapoo::Module::ACTIONS_INPUT)->box;
-    require(jack.getCenter().x>host->regenerateButton->box.getCenter().x&&std::abs(jack.getCenter().y-host->regenerateButton->box.getCenter().y)<.01f,"Shared action CV must follow New subpatch on the same row");
+    for(auto* button:host->actionButtons)if(button->visible)require(jack.pos.x>=button->box.getRight()&&std::abs(jack.getCenter().y-button->box.getCenter().y)<.01f,"Shared action CV must follow the visible buttons on the same row");
     require(host->growButton->box.getBottom()<host->ownFrame->box.pos.y,"Functions menu must stay in the header");
     require(host->actionButtons[3]->faceColor.r < host->actionButtons[0]->faceColor.r-.3f && host->actionButtons[4]->faceColor.r < host->actionButtons[1]->faceColor.r-.3f,"All and Exposed actions must remain visually distinct");
     for(size_t i=0;i<visibleControls.size();++i) {
@@ -1308,7 +1351,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   group->requestedWidth=45;group->layoutControls();
   require(group->jacksOnly && !group->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Minimum view must hide parameter knobs");
   for(auto* button:group->managementButtons)require(button->visible,"Edit and Eject must always stay visible");
-  for(int i=0;i<6;++i)require(group->actionButtons[i]->visible==(i%3!=2),"All layouts must retain the four manual Wiggle/Randomize actions");
+  require(group->actionButtons[0]->visible&&group->actionButtons[1]->visible,"All widths retain the default exposed Wiggle/Randomize actions");
   int visibleKnobs=0;for(auto& p:group->parameters)if(p.knob->visible)++visibleKnobs;
   for(auto& p:group->parameters)require(p.knob->visible,"Small layouts must retain every exposed parameter");
   require(group->titleFrame->visible && group->ownFrame->visible,"Minimum layout must keep the logo and its separate module-controls block");
@@ -1795,7 +1838,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   joint->layoutToolbar(520);
   require(joint->toolbarHeight>52,"Larger edit controls must wrap in narrow windows");
   joint->layoutToolbar(APP->scene->rackScroll->box.size.x);
-  require(jointHost->managementButtons.size()==2 && jointHost->managementButtons[1]->text=="Eject","Panel must have only Edit and Eject management buttons");
+  require(jointHost->managementButtons.size()==3 && jointHost->managementButtons[1]->text=="Eject","Panel must have Edit, Eject and Save management buttons");
   joint->newModulesButton->action();require(!jointHost->captureNewModules,"New module destination toggle must select Outside");
   auto* stayOutside=add(gainModel,Vec(1200,4*RACK_GRID_HEIGHT));joint->step();
   require(!jointHost->contains(stayOutside->module),"Modules added in Outside mode must remain in the main patch");

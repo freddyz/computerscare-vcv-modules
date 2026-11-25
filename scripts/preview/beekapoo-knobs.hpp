@@ -63,8 +63,36 @@ inline void renderBeekKnobSamples(const std::string& output,float scale) {
   }
   capture(&sheet,output+"/knobs-15.png",scale,false);
 }
+inline void renderBeekKnobNumbers(const std::string& output,float scale) {
+  engine::Module module;module.config(12,0,0,0);
+  struct Sheet : widget::Widget {
+    void draw(const DrawArgs& args) override {
+      for(int i=0;i<12;++i){nvgBeginPath(args.vg);nvgRect(args.vg,(i%3)*120,(i/3)*110,120,110);nvgFillColor(args.vg,i%2?nvgRGB(37,37,37):nvgRGB(214,214,214));nvgFill(args.vg);}
+      widget::Widget::draw(args);
+    }
+  } sheet;sheet.box.size=Vec(360,440);
+  for(int row=0;row<4;++row) {
+    beekapoo::PatchIdentity identity;
+    for(int candidate=0;;++candidate) {
+      identity=beekapoo::patchIdentity({"Maker "+std::to_string(candidate)+"/VCO"},{});
+      if(beekapoo::mixIdentity(identity.manufacturerTypes,0x6e756d626572ull)%4==unsigned(row))break;
+    }
+    for(int col=0;col<3;++col) {
+      int i=row*3+col;
+      std::string name=col==0?"Channel "+std::to_string(row+1)+" level":col==1?"Steps":"Channel 16 CV";
+      auto* q=module.configParam(i,0,16,0,name);q->snapEnabled=col==1;module.params[i].setValue(9+row);
+      auto* knob=new beekapoo::ParametricKnob;knob->module=&module;knob->paramId=i;knob->initParamQuantity();knob->snap=col==1;
+      knob->setGroupedNumber(true);
+      knob->setIdentity(name,col==1?"Sequencer":"VCA",identity);knob->setDark(i%2);knob->step();
+      auto* transform=new widget::TransformWidget;transform->box=Rect(Vec(col*120+24,row*110+19),Vec(72,72));
+      transform->scale(Vec(3,3));transform->addChild(knob);sheet.addChild(transform);
+    }
+  }
+  capture(&sheet,output+"/knob-numbers.png",scale,false);
+}
 inline void renderBeekKnobSpectrum(const std::string& output, float scale) {
   const char* mode=std::getenv("BEEKAPOO_KNOBS_ONLY");
+  if(mode&&std::string(mode)=="numbers") {renderBeekKnobNumbers(output,scale);return;}
   if(mode&&std::string(mode)=="15") {renderBeekKnobSamples(output,scale);return;}
   engine::Module module;
   module.config(96,0,0,0);
@@ -114,6 +142,19 @@ inline void renderBeekKnobSpectrum(const std::string& output, float scale) {
 
 template<class Require>
 void testBeekKnobRendering(const std::string& output,float scale,Require require) {
+  {
+    beekapoo::ParametricKnob a,b;
+    auto single=beekapoo::patchIdentity({"Maker/VCO"},{});
+    auto multiple=beekapoo::patchIdentity({"Maker/LFO","Maker/LFO","Maker/Filter"},{{0,1,2,3}});
+    a.setIdentity("Channel 1 level","Maker/VCO",single);b.setIdentity("Channel 8 CV","Maker/Filter",multiple);
+    require(a.numberCorner==b.numberCorner,"Number placement must depend only on the unique manufacturers, not counts, modules, cables or parameter names");
+    std::set<unsigned> positions;
+    for(int i=0;i<32;++i) {
+      a.setIdentity("Steps","Sequencer",beekapoo::patchIdentity({"Maker "+std::to_string(i)+"/VCO"},{}));positions.insert(a.numberCorner);
+      auto p=a.numberPosition();require(p.x>=3.5f&&p.x<=20.5f&&p.y>=3.5f&&p.y<=20.5f,"Number corner must fit in its existing layout cell");
+    }
+    require(positions.size()==4,"Different manufacturer sets must provide all four outside number positions");
+  }
   int round=0,elongated=0,total=0;
   std::array<int,4> borders{};
   std::set<int> checkedEdges;

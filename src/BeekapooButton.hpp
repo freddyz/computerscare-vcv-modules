@@ -39,4 +39,38 @@ inline ButtonStyle buttonStyle(const std::string& label,
   }
   return style;
 }
+struct ToggleWords {
+  std::string on, off;
+  ToggleWords(std::string on = "On", std::string off = "Off")
+      : on(std::move(on)), off(std::move(off)) {}
+};
+inline ToggleWords toggleWords(const PatchIdentity& patch) {
+  // A shared vocabulary per collection of module/manufacturer types, with
+  // casing selected by the full module set. Parameter values never affect it.
+  const ToggleWords choices[] = {{"on", "off"},
+                                 {"yep", "nope"},
+                                 {"yah", "nah"},
+                                 {"ya", "nah"},
+                                 {"yep", "nah"}};
+  auto words = choices[mixIdentity(patch.types, patch.manufacturerTypes) % 5];
+  unsigned casing = mixIdentity(patch.modules, 0x63617365ull) % 3;
+  for (auto* word : {&words.on, &words.off})
+    for (size_t i = 0; i < word->size(); ++i)
+      if (casing == 2 || (casing == 1 && i == 0))
+        (*word)[i] = char(std::toupper(static_cast<unsigned char>((*word)[i])));
+  return words;
+}
+// Momentaries use a taller, nearly square push cap, visibly distinct from
+// the flatter labelled switches. Only the source widget's declared type is
+// used; lights and module-specific state play no part in this presentation.
+inline ButtonStyle momentaryButtonStyle(const std::string& label,
+                                        const std::string& source,
+                                        const PatchIdentity& patch) {
+  auto style = buttonStyle(label, source, patch);
+  style.size = Vec(23, 23);
+  style.raised = 4.f + float(style.seed & 255u) / 255.f * .6f;
+  style.recessed = 1.6f;
+  for (auto& corner : style.corners) corner = corner * .45f;
+  return style;
+}
 }  // namespace beekapoo

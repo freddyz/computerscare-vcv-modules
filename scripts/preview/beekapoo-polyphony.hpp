@@ -3,7 +3,7 @@ template<class Add,class Require>
 void renderBeekPolyphony(const std::string& output,float scale,Add add,Require require) {
   using beekapoo::Module;
   Module state; state.model=modelBeekapooPreview;
-  static_assert(Module::INPUT_GAIN_BASE==2 && Module::PARAM_COUNT==514,"Removing Poly/Spread must preserve the input gain IDs");
+  static_assert(Module::INPUT_GAIN_BASE==2 && Module::RANDOM_RANGE==514,"Removing Poly/Spread must preserve the input gain IDs");
   state.enableInput(0,true);
   auto& input=state.inputs[Module::inputBase];auto& routed=state.outputs[0];
   for(int incoming:{0,1,2,3,7,16,1,0})for(float atten:{-1.f,0.f,.7f,1.f}) {

@@ -138,7 +138,20 @@ struct ParametricKnob : app::Knob {
   std::string identity;
   int channelNumber = 0;
   bool numberedLabel = false;
+  bool groupedNumber = false;
+  void setGroupedNumber(bool next) {
+    if (groupedNumber == next) return;
+    groupedNumber = next;
+    faceBuffer->setDirty();
+  }
   bool dark = false;
+  unsigned numberCorner = 0;
+  uint64_t numberSeed = 0;
+  Vec numberPosition() const {
+    const Vec corners[] = {Vec(3.5f, 3.5f), Vec(20.5f, 3.5f), Vec(20.5f, 20.5f),
+                           Vec(3.5f, 20.5f)};
+    return corners[numberCorner];
+  }
   computerscare::type::Text numberText;
   void setDark(bool next) {
     if (dark == next) return;
@@ -172,6 +185,8 @@ struct ParametricKnob : app::Knob {
         std::to_string(patch.manufacturerTypes);
     if (next == identity) return;
     identity = next;
+    numberSeed = patch.manufacturerTypes;
+    numberCorner = mixIdentity(numberSeed, 0x6e756d626572ull) % 4;
     channelNumber = paramNumber(parameter);
     numberedLabel =
         std::any_of(parameter.begin(), parameter.end(),
@@ -387,6 +402,18 @@ struct ParametricKnob : app::Knob {
     if (!std::isfinite(value)) value = 0;
     float angle = minAngle + (maxAngle - minAngle) * clamp(value, 0.f, 1.f);
     auto* vg = args.vg;
+    bool showNumber =
+        groupedNumber && ((snap && q && q->getRange() <= 32) || numberedLabel);
+    nvgSave(vg);
+    if (showNumber) {
+      // Reserve a corner inside the control's existing layout cell. The
+      // number is outside the entire rotating body and its scale marks.
+      Vec corner = numberPosition();
+      nvgTranslate(vg, 12 + (corner.x < 12 ? 1.2f : -1.2f),
+                   11.5f + (corner.y < 12 ? 1.2f : -1.2f));
+      nvgScale(vg, .8f, .8f);
+      nvgTranslate(vg, -12, -11.5f);
+    }
     if (snap && q && q->getRange() >= 1) {
       int ticks =
           std::max(2, std::min(17, int(std::min(16.f, q->getRange())) + 1));
@@ -459,17 +486,24 @@ struct ParametricKnob : app::Knob {
       }
     }
     nvgRestore(vg);
-    if ((snap && q && q->getRange() <= 32) || numberedLabel) {
-      auto font = computerscare::type::font();
+    nvgRestore(vg);
+    if (showNumber) {
+      auto font = computerscare::type::font(computerscare::type::Face::Display);
       if (font) {
-        const auto& number = numberText.get(std::to_string(
-            numberedLabel ? channelNumber : int(std::round(q->getValue()))));
+        const auto& number = numberText.get(
+            std::to_string(numberedLabel ? channelNumber
+                                         : int(std::round(q->getValue()))),
+            numberSeed);
         nvgFontFaceId(args.vg, font->handle);
-        nvgFontSize(args.vg, numberedLabel ? 5 : 6);
+        nvgFontSize(args.vg, 6);
+        float textWidth =
+            nvgTextBounds(args.vg, 0, 0, number.c_str(), nullptr, nullptr);
+        if (textWidth > 7) nvgFontSize(args.vg, 6 * 7 / textWidth);
         nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-        nvgFillColor(args.vg, ink);
-        nvgText(args.vg, 12, numberedLabel ? 14.5f : 12, number.c_str(),
-                nullptr);
+        nvgFillColor(args.vg,
+                     dark ? nvgRGB(230, 230, 230) : nvgRGB(40, 40, 40));
+        Vec position = numberPosition();
+        nvgText(args.vg, position.x, position.y, number.c_str(), nullptr);
       }
     }
   }

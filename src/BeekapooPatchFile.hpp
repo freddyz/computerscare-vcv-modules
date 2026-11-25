@@ -123,8 +123,11 @@ inline BeekImportDialog* makeBeekImportDialog(
       auto* group = json_object_get(
           json_object_get(file.modules.at(id), "data"), "group");
       auto count = json_array_size(json_object_get(group, "members"));
-      choices.emplace_back("Beek " + std::to_string(i + 1),
-                           std::to_string(count) + " contained modules", id);
+      choices.emplace_back(
+          "Beek " + std::to_string(i + 1),
+          std::to_string(count) +
+              (count == 1 ? " contained module" : " contained modules"),
+          id);
     }
     choices.emplace_back("Entire patch", "Combine all Beeks and other modules.",
                          beekEntirePatch);
@@ -354,6 +357,56 @@ bool Beekapoo::loadBeek(const std::string& path, int64_t sourceOwner,
       pending, system::join(file.temporary.path, "modules"), sourceOwner);
   if (loaded) status = "Loaded Beek: " + system::getFilename(path);
   return loaded;
+}
+
+// The filename follows topology, never a user-supplied panel title. Versions
+// are counted from the folder, so reloads and independent Beeks cannot reset
+// it.
+std::string Beekapoo::saveBeekVersion(const std::string& directory) {
+  if (members.empty()) throw Exception("There are no modules in this Beek");
+  refreshAppearance();
+  auto name = generated::topologyName(appearance.wiring);
+  std::string slug;
+  for (unsigned char c : name) {
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+      slug += char(c);
+    else if (c >= 'A' && c <= 'Z')
+      slug += char(c - 'A' + 'a');
+    else if (!slug.empty() && slug.back() != '-')
+      slug += '-';
+  }
+  while (!slug.empty() && slug.back() == '-') slug.pop_back();
+  if (slug.empty()) slug = "beek";
+  if (!system::isDirectory(directory) && !system::createDirectories(directory))
+    throw Exception("Could not create Beak_presets folder");
+  std::string prefix = slug + "-";
+  uint64_t next = 1;
+  for (const auto& entry : system::getEntries(directory)) {
+    auto filename = system::getFilename(entry);
+    if (filename.compare(0, prefix.size(), prefix) ||
+        system::getExtension(filename) != ".vcv")
+      continue;
+    auto digits =
+        filename.substr(prefix.size(), filename.size() - prefix.size() - 4);
+    if (digits.empty() || digits.size() > 18 ||
+        digits.find_first_not_of("0123456789") != std::string::npos)
+      continue;
+    next = std::max(next, uint64_t(std::stoull(digits)) + 1);
+  }
+  auto path = system::join(directory, prefix + std::to_string(next) + ".vcv");
+  while (system::exists(path))
+    path = system::join(directory, prefix + std::to_string(++next) + ".vcv");
+  saveBeek(path);
+  return path;
+}
+void Beekapoo::saveBeekVersionAction() {
+  if (!module) return;
+  try {
+    saveBeekVersion(asset::user("patches/Beak_presets"));
+    savedPresetUntil = system::getTime() + .5;
+  } catch (const std::exception& e) {
+    osdialog_message(OSDIALOG_WARNING, OSDIALOG_OK, e.what());
+  }
 }
 
 void Beekapoo::saveBeekDialog() {

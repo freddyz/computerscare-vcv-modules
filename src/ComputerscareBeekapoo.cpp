@@ -6,6 +6,7 @@
 #include <patch.hpp>
 #include <plugin.hpp>
 #include <tag.hpp>
+#include <typeinfo>
 
 #ifdef ARCH_MAC
 #include <dispatch/dispatch.h>
@@ -167,7 +168,11 @@ struct Module : engine::Module {
     WIGGLE_AMOUNT,
     SHOW_CABLE_OPACITY,
     INPUT_GAIN_BASE,
-    PARAM_COUNT = INPUT_GAIN_BASE + routeCapacity
+    RANDOM_RANGE = INPUT_GAIN_BASE + routeCapacity,
+    RANDOM_PROBABILITY,
+    WIGGLE_PROBABILITY,
+    PARAM_COUNT,
+    WIGGLE_RANGE = WIGGLE_AMOUNT
   };
   // Already saved by users: never insert actions before these route IDs.
   static constexpr int inputBase = 6;
@@ -212,8 +217,17 @@ struct Module : engine::Module {
       configOutput(i, "Exposed input connection");
       configBypass(inputBase + i, i);
     }
-    configParam(WIGGLE_AMOUNT, 0.f, 1.f, .1f, "Wiggle amount", "%", 0.f, 100.f);
+    configParam(WIGGLE_AMOUNT, 0.f, 1.f, .1f, "Wiggle range", "%", 0.f, 100.f);
     getParamQuantity(WIGGLE_AMOUNT)->randomizeEnabled = false;
+    configParam(RANDOM_RANGE, 0.f, 1.f, 1.f, "Randomize range", "%", 0.f,
+                100.f);
+    configParam(RANDOM_PROBABILITY, 0.f, 1.f, 1.f, "Randomize probability", "%",
+                0.f, 100.f);
+    configParam(WIGGLE_PROBABILITY, 0.f, 1.f, 1.f, "Wiggle probability", "%",
+                0.f, 100.f);
+    getParamQuantity(WIGGLE_PROBABILITY)->randomizeEnabled = false;
+    getParamQuantity(RANDOM_RANGE)->randomizeEnabled = false;
+    getParamQuantity(RANDOM_PROBABILITY)->randomizeEnabled = false;
     configParam(SHOW_CABLE_OPACITY, 0.f, 1.f, 1.f, "Cable opacity", "%", 0.f,
                 100.f);
     getParamQuantity(SHOW_CABLE_OPACITY)->randomizeEnabled = false;
@@ -305,6 +319,7 @@ struct Module : engine::Module {
     json_object_set_new(root, "panelTheme", json_integer(panelTheme.load()));
     json_object_set_new(root, "name", json_string(patchName.c_str()));
     json_object_set_new(root, "customName", json_boolean(customPatchName));
+    json_object_set_new(root, "separateRandomControls", json_true());
     json_object_set_new(root, "generationSet",
                         json_string(generationSet.c_str()));
     if (group) {
@@ -340,6 +355,14 @@ struct Module : engine::Module {
   void dataFromJson(json_t* root) override {
     std::lock_guard<std::mutex> lock(stateMutex);
     freshDefault = false;
+    // Older patches shared the probability and multiplied the wiggle amount
+    // by random range. Preserve their effective settings once on load.
+    if (!json_is_true(json_object_get(root, "separateRandomControls"))) {
+      params[WIGGLE_RANGE].setValue(params[WIGGLE_RANGE].getValue() *
+                                    params[RANDOM_RANGE].getValue());
+      params[WIGGLE_PROBABILITY].setValue(
+          params[RANDOM_PROBABILITY].getValue());
+    }
     auto* set = json_string_value(json_object_get(root, "generationSet"));
     generationSet = set && *set ? set : "fundamental";
     auto* theme = json_object_get(root, "panelTheme");
@@ -635,6 +658,28 @@ struct ActionButton : LetteredFace {
       nvgLineTo(args.vg, -5.5f, 6.5f);
       nvgClosePath(args.vg);
       nvgFill(args.vg);
+    } else if (icon == 12) {
+      // Small skewed disk, using the same line weight as the other actions.
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -6, -6);
+      nvgLineTo(args.vg, 4, -5.5f);
+      nvgLineTo(args.vg, 6, -3);
+      nvgLineTo(args.vg, 5.5f, 6);
+      nvgLineTo(args.vg, -6, 5.5f);
+      nvgClosePath(args.vg);
+      nvgStroke(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -3, -5.5f);
+      nvgLineTo(args.vg, -3, -1);
+      nvgLineTo(args.vg, 3, -.5f);
+      nvgLineTo(args.vg, 3, -5.5f);
+      nvgStroke(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -3.5f, 5.5f);
+      nvgLineTo(args.vg, -3, 2);
+      nvgLineTo(args.vg, 3, 2.5f);
+      nvgLineTo(args.vg, 3.5f, 6);
+      nvgStroke(args.vg);
     } else if (icon == 11) {
       for (float x : {-5.f, 0.f, 5.f}) {
         nvgBeginPath(args.vg);
@@ -801,6 +846,7 @@ struct SelectionLogo : ActionButton {
 };
 // Keep the source widget's switch semantics, including custom callbacks.
 struct ExposedSwitch : app::Switch {
+  ToggleWords words;
   ControlStyle skin = controlStyle("Parameter", "Module");
   WeakPtr<app::ParamWidget> source;
   struct Face : LetteredFace {
@@ -812,10 +858,71 @@ struct ExposedSwitch : app::Switch {
     std::string label() override {
       auto* q = control->getParamQuantity();
       if (!q) return "";
-      if (control->momentary) return "•";
-      if (q->getMaxValue() - q->getMinValue() <= 1.f)
-        return q->getValue() > q->getMinValue() ? "On" : "Off";
+      if (control->momentary) return q->getLabel();
+      auto display = q->getDisplayValueString();
+      bool binary = q->getMaxValue() - q->getMinValue() <= 1.f;
+      // Standard SwitchQuantity returns an empty string for unnamed states.
+      // Custom quantities own their display text, including numeric text.
+      // A plain ParamQuantity only supplies default number formatting.
+      if (!display.empty() &&
+          (!binary || typeid(*q) != typeid(engine::ParamQuantity)))
+        return display;
+      if (binary)
+        return q->getValue() > q->getMinValue() ? control->words.on
+                                                : control->words.off;
       return std::to_string(int(std::round(q->getValue())));
+    }
+    NVGcontext* labelContext = nullptr;
+    void draw(const DrawArgs& args) override {
+      labelContext = args.vg;
+      LetteredFace::draw(args);
+      labelContext = nullptr;
+    }
+    std::string momentarySource, momentaryText;
+    std::vector<std::string> momentaryAlternatives;
+    unsigned momentarySeed = 0;
+    float fittedWidth = -1, fittedHeight = -1, fittedScale = -1;
+    std::string displayLabel() override {
+      if (!control->momentary) return LetteredFace::displayLabel();
+      auto full = label();
+      if (full != momentarySource || shapeSeed != momentarySeed ||
+          momentaryAlternatives.empty()) {
+        momentarySource = full;
+        momentarySeed = shapeSeed;
+        momentaryAlternatives.clear();
+        for (const auto& candidate : labelAlternatives(full))
+          momentaryAlternatives.push_back(
+              computerscare::type::alternates(candidate, shapeSeed));
+        fittedWidth = -1;
+      }
+      auto* vg = labelContext ? labelContext : APP->window->vg;
+      // Choose one wording that fits both states, so pressing never changes
+      // the abbreviation. Measure in the renderer's actual zoom/context.
+      auto area = labelArea(geometry(false));
+      auto down = labelArea(geometry(true));
+      area.size.x = std::min(area.size.x, down.size.x);
+      area.size.y = std::min(area.size.y, down.size.y);
+      float transform[6];
+      nvgCurrentTransform(vg, transform);
+      float scale =
+          std::max(.1f, std::min(std::hypot(transform[0], transform[1]),
+                                 std::hypot(transform[2], transform[3])));
+      if (fittedWidth != area.size.x || fittedHeight != area.size.y ||
+          fittedScale != scale) {
+        fittedWidth = area.size.x;
+        fittedHeight = area.size.y;
+        fittedScale = scale;
+        momentaryText.clear();
+        nvgSave(vg);
+        for (const auto& candidate : momentaryAlternatives) {
+          momentaryText = candidate;
+          if (fitText(vg, candidate, area).size >=
+              std::min(7.f, area.size.y * .43f))
+            break;
+        }
+        nvgRestore(vg);
+      }
+      return momentaryText;
     }
     bool isPressed() override {
       auto* q = control->getParamQuantity();
@@ -839,10 +946,13 @@ struct ExposedSwitch : app::Switch {
   void setIdentity(const std::string& label, const std::string& source,
                    const PatchIdentity& patch, bool dark, NVGcolor background) {
     skin = controlStyle(label, source, patch);
-    auto style = buttonStyle(label, source, patch);
+    words = toggleWords(patch);
+    auto style = momentary ? momentaryButtonStyle(label, source, patch)
+                           : buttonStyle(label, source, patch);
     for (auto* child : children)
       if (auto* face = dynamic_cast<Face*>(child)) {
         face->setColors(skin, dark, background);
+        face->showLabel = true;
         face->shapeSeed = style.seed;
         face->screwup = .4f;
         face->upDepth = style.raised;
@@ -851,7 +961,7 @@ struct ExposedSwitch : app::Switch {
         face->cornerOffsets = style.corners;
         face->box.size = style.size;
         face->box.pos = (Vec(25, 24) - face->box.size) * .5f;
-        face->textSize = 12;
+        face->textSize = momentary ? 18 : 12;
       }
   }
   void onHover(const HoverEvent& e) override { e.consume(this); }
@@ -1253,28 +1363,7 @@ struct PortFace : widget::OpaqueWidget {
   void onLeave(const LeaveEvent& e) override { clearTip(); }
 };
 struct ActionJack : JackSmallPointingDown {
-  ActionJack() {
-    setSvg(monochromeJack("jack-small-pointing-down"));
-    box.size = Vec(11, 11);
-  }
-  void draw(const DrawArgs& args) override {
-    auto scaled = args;
-    scaled.clipBox.pos = scaled.clipBox.pos / (11.f / 16);
-    scaled.clipBox.size = scaled.clipBox.size / (11.f / 16);
-    nvgSave(args.vg);
-    nvgScale(args.vg, 11.f / 16, 11.f / 16);
-    JackSmallPointingDown::draw(scaled);
-    nvgRestore(args.vg);
-  }
-  void drawLayer(const DrawArgs& args, int layer) override {
-    auto scaled = args;
-    scaled.clipBox.pos = scaled.clipBox.pos / (11.f / 16);
-    scaled.clipBox.size = scaled.clipBox.size / (11.f / 16);
-    nvgSave(args.vg);
-    nvgScale(args.vg, 11.f / 16, 11.f / 16);
-    JackSmallPointingDown::drawLayer(scaled, layer);
-    nvgRestore(args.vg);
-  }
+  ActionJack() { setSvg(monochromeJack("jack-small-pointing-down")); }
 };
 struct Beekapoo : app::ModuleWidget {
   struct Member {
@@ -1443,7 +1532,10 @@ struct Beekapoo : app::ModuleWidget {
       for (auto* button : {sectionAddButtons[i], sectionRerollButtons[i],
                            sectionRemoveButtons[i]})
         buttonStyle(button, sections[i]->faceColor);
-    for (auto* own : {getParam(Module::WIGGLE_AMOUNT)})
+    for (auto* own :
+         {getParam(Module::WIGGLE_AMOUNT), getParam(Module::RANDOM_RANGE),
+          getParam(Module::RANDOM_PROBABILITY),
+          getParam(Module::WIGGLE_PROBABILITY)})
       if (auto* knob = dynamic_cast<ThemedSmallKnob*>(own)) knob->setDark(dark);
     for (auto* item : controls->children) {
       if (auto* knob = dynamic_cast<ThemedSmallKnob*>(item))
@@ -1567,6 +1659,7 @@ struct Beekapoo : app::ModuleWidget {
   std::vector<ActionButton*> actionButtons;
   std::vector<ActionButton*> managementButtons;
   SelectionLogo* addSelectionButton = nullptr;
+  double savedPresetUntil = 0;
   ActionButton* regenerateButton = nullptr;
   ActionButton* growButton = nullptr;
   std::array<ActionButton*, 3> sectionAddButtons{}, sectionRerollButtons{},
@@ -1620,6 +1713,8 @@ struct Beekapoo : app::ModuleWidget {
   bool loadBeek(const std::string& path, int64_t sourceOwner = -1,
                 bool convertAudio = false);
   void saveBeekDialog();
+  std::string saveBeekVersion(const std::string& directory);
+  void saveBeekVersionAction();
   void loadBeekDialog();
   bool generateDefaultPatch(int requestedCount = 0);
   bool regeneratePatch();
@@ -1776,6 +1871,15 @@ struct Beekapoo : app::ModuleWidget {
     eject->action = [this] { ejectAction(); };
     addChild(eject);
     managementButtons.push_back(eject);
+    auto* save = new ActionButton;
+    save->text = "Save";
+    save->configure(44, 18, 1.1f, .8f, .8f, 716);
+    save->icon = 12;
+    save->help = [] { return "Save next Beek preset"; };
+    save->action = [this] { saveBeekVersionAction(); };
+    save->pressed = [this] { return system::getTime() < savedPresetUntil; };
+    addChild(save);
+    managementButtons.push_back(save);
     addSelectionButton = new SelectionLogo;
     addSelectionButton->help = [] {
       return "Add selected modules to Beekapoo";
@@ -1843,6 +1947,9 @@ struct Beekapoo : app::ModuleWidget {
       }
     addParam(createParamCentered<ThemedSmallKnob>(Vec(328, 94), m,
                                                   Module::WIGGLE_AMOUNT));
+    for (int param : {Module::RANDOM_RANGE, Module::RANDOM_PROBABILITY,
+                      Module::WIGGLE_PROBABILITY})
+      addParam(createParam<ThemedSmallKnob>(Vec(), m, param));
     for (int i :
          {Module::GENERATE_INPUT, Module::GROW_INPUT, Module::ACTIONS_INPUT})
       addInput(createInput<ActionJack>(Vec(), m, i));
@@ -2235,7 +2342,7 @@ struct Beekapoo : app::ModuleWidget {
   }
   struct HeaderLayout {
     Rect artwork, logo;
-    std::array<Rect, 3> buttons{};
+    std::array<Rect, 4> buttons{};
     float height = 0;
     bool text = false;
   };
@@ -2249,9 +2356,11 @@ struct Beekapoo : app::ModuleWidget {
     float ejectWidth = result.text ? 47.f : (width < 75 ? 16.f : 18.f);
     float functionsWidth = width < 75 ? 16.f : 20.f;
     float buttonGap = width < 60 ? 1.f : 2.f;
-    float buttonWidth = editWidth + ejectWidth + functionsWidth + 2 * buttonGap;
+    float saveWidth = result.text ? 40.f : 16.f;
+    float buttonWidth =
+        editWidth + ejectWidth + saveWidth + functionsWidth + 3 * buttonGap;
     float right = width - 10;
-    bool beside = width >= 270;
+    bool beside = width >= 330;
     float titleHeight = width <= 90 ? 32.f : 27.f;
     float logoWidth = std::min(32.f, (width - 16) * .4f);
     result.logo = Rect(Vec(right - logoWidth, 5), Vec(logoWidth, titleHeight));
@@ -2262,8 +2371,11 @@ struct Beekapoo : app::ModuleWidget {
             titleHeight));
     float x = beside ? result.logo.pos.x - buttonWidth - 4 : 6;
     float y = beside ? 9 : titleHeight + 8;
-    for (int i = 0; i < 3; ++i) {
-      float w = i == 0 ? editWidth : i == 1 ? ejectWidth : functionsWidth;
+    for (int i = 0; i < 4; ++i) {
+      float w = i == 0   ? editWidth
+                : i == 1 ? ejectWidth
+                : i == 2 ? saveWidth
+                         : functionsWidth;
       if (x + w > (width < 60 ? width - 6 : right) && x > 6) {
         x = 6;
         y += 21;
@@ -2282,12 +2394,12 @@ struct Beekapoo : app::ModuleWidget {
     headerLogoArea = plan.logo;
     addSelectionButton->box = logoTarget();
     editShowsText = plan.text;
-    const int icons[] = {3, 7};
-    for (int i = 0; i < 2; ++i) {
+    const int icons[] = {3, 7, 12};
+    for (int i = 0; i < 3; ++i) {
       auto* button = managementButtons[i];
       button->visible = true;
       button->icon = icons[i];
-      button->iconAndText = i == 0 || (i == 1 && plan.text);
+      button->iconAndText = i == 0 || plan.text;
       button->textSize = plan.text ? 10 : 13;
       button->iconTextInset = plan.text ? 17 : 14;
       button->faceColor = nvgRGB(214, 214, 214);
@@ -2296,34 +2408,40 @@ struct Beekapoo : app::ModuleWidget {
       button->downDepth = .8f;
       button->box = plan.buttons[i];
     }
-    growButton->box = plan.buttons[2];
+    growButton->box = plan.buttons[3];
     growButton->visible = true;
     return plan.height;
   }
   struct OwnControlLayout {
     std::array<Vec, 6> positions{};
+    std::array<Vec, 4> knobs{};
+    int knobCount = 0;
     float height = 0;
     int columns = 0;
     float size = 18;
   };
   static OwnControlLayout ownControlLayout(float width) {
     OwnControlLayout result;
-    result.size = width < 60 ? 16 : 18;
-    float x = 6, y = 1, right = width - 6;
-    // Keep the action pairs together; the final cell is the shared CV jack.
-    for (int first : {0, 2, 4}) {
-      if (x + result.size * 2 + 1 > right && x > 6) {
-        x = 6;
-        y += result.size + 3;
-      }
-      for (int i = first; i < first + 2; ++i) {
-        result.positions[i] = Vec(x, y);
-        x += result.size + 1;
-      }
-      result.columns =
-          std::max(result.columns, int((x - 6) / (result.size + 1)));
+    // A single strip: highest-priority actions first, CV always last.
+    const float jackSize = 16;
+    float margin = width < 60 ? 5.f : 6.f;
+    float gap = width < 60 ? 1.f : 2.f;
+    float available = width - 2 * margin;
+    int count = clamp(int((available - jackSize) / 20), 2, 5);
+    result.size = std::min(18.f, (available - jackSize - gap * count) / count);
+    float rowHeight = std::max(jackSize, result.size);
+    float x = margin;
+    for (int i = 0; i < count; ++i) {
+      result.positions[i] = Vec(x, 3 + (rowHeight - result.size) * .5f);
+      x += result.size + gap;
     }
-    result.height = y + result.size + 4;
+    while (result.knobCount < 4 && x + 18 + 2 + jackSize <= width - margin) {
+      result.knobs[result.knobCount++] = Vec(x, 3);
+      x += 20;
+    }
+    result.positions[5] = Vec(x, 3 + (rowHeight - jackSize) * .5f);
+    result.columns = count;
+    result.height = rowHeight + 8;
     return result;
   }
   static float tinyOwnHeight(float width) {
@@ -2334,18 +2452,20 @@ struct Beekapoo : app::ModuleWidget {
     for (int i = 0; i < 6; ++i) getInput(i)->visible = false;
     getInput(Module::GENERATE_INPUT)->visible = false;
     getInput(Module::GROW_INPUT)->visible = false;
-    for (int i = 0; i < 6; ++i) actionButtons[i]->visible = i % 3 != 2;
+    for (auto* button : actionButtons) button->visible = false;
+    regenerateButton->visible = false;
     auto plan = ownControlLayout(width);
     const std::array<ActionButton*, 5> buttons = {
         actionButtons[0], actionButtons[1], actionButtons[3], actionButtons[4],
         regenerateButton};
     for (int i : {0, 1, 3, 4}) actionButtons[i]->icon = i % 3;
-    for (int i = 0; i < 5; ++i) {
-      auto* button = buttons[i];
+    for (int i = 0; i < plan.columns; ++i) {
+      int action = i;
+      auto* button = buttons[action];
       button->visible = true;
       button->iconAndText = false;
       button->textSize = 9;
-      bool all = i == 2 || i == 3;
+      bool all = action == 2 || action == 3;
       button->faceColor = all ? nvgRGB(92, 92, 92) : nvgRGB(214, 214, 214);
       button->textColor = all ? nvgRGB(242, 242, 242) : nvgRGB(45, 45, 45);
       button->upDepth = 1.1f;
@@ -2353,11 +2473,16 @@ struct Beekapoo : app::ModuleWidget {
       button->box =
           Rect(plan.positions[i] + Vec(0, top), Vec(plan.size, plan.size));
     }
+    const int knobIds[] = {Module::RANDOM_RANGE, Module::RANDOM_PROBABILITY,
+                           Module::WIGGLE_RANGE, Module::WIGGLE_PROBABILITY};
+    for (int i = 0; i < 4; ++i) {
+      auto* knob = getParam(knobIds[i]);
+      knob->visible = i < plan.knobCount;
+      if (knob->visible) knob->box.pos = plan.knobs[i] + Vec(0, top);
+    }
     auto* jack = getInput(Module::ACTIONS_INPUT);
     jack->visible = true;
-    jack->box.pos =
-        plan.positions[5] + Vec((plan.size - jack->box.size.x) * .5f,
-                                top + (plan.size - jack->box.size.y) * .5f);
+    jack->box.pos = plan.positions[5] + Vec(0, top);
     // Preserve old cable endpoints and IDs without drawing six extra jacks.
     for (int id :
          {0, 1, 2, 3, 4, 5, Module::GENERATE_INPUT, Module::GROW_INPUT})
@@ -2455,27 +2580,60 @@ struct Beekapoo : app::ModuleWidget {
       int count = 0;
     };
     std::map<std::string, Caption> captions;
+    auto captionKey = [&](const ParamCell& cell) {
+      if (cell.block >= 0)
+        return std::string("block:") + std::to_string(cell.block);
+      return (arrangeByModule
+                  ? std::to_string(metadata[cell.index].module) + ":"
+                  : "") +
+             paramFamily(metadata[cell.index].label);
+    };
+    std::map<std::string, int> captionCounts;
+    std::map<std::string, bool> captionNeeded, captionHasKnob;
+    std::map<std::string, float> buttonCaptionBottom;
+    for (const auto& cell : cells) {
+      auto key = captionKey(cell);
+      ++captionCounts[key];
+      auto* button = dynamic_cast<ExposedSwitch*>(active[cell.index]);
+      captionNeeded[key] = captionNeeded[key] || !button || !button->momentary;
+      captionHasKnob[key] = captionHasKnob[key] || !button;
+    }
     for (const auto& cell : cells) {
       auto* item = active[cell.index];
-      auto label = metadata[cell.index].label;
+      if (auto* knob = dynamic_cast<ParametricKnob*>(item))
+        knob->setGroupedNumber(captionCounts[captionKey(cell)] > 1);
       if (auto* visual = dynamic_cast<ParamVisual*>(item))
         visual->setVisualSize(cell.diameter);
       Vec center(10 + cell.x, top + 5 + cell.y);
       item->box.pos = center - item->box.size * .5f;
       item->visible = true;
-
-      if (cell.labelWidth <= 0) continue;
+      if (auto* button = dynamic_cast<ExposedSwitch*>(item)) {
+        float scale = cell.diameter / 25.f;
+        for (auto* child : button->children)
+          if (auto* face = dynamic_cast<ExposedSwitch::Face*>(child)) {
+            auto shape = face->geometry(false);
+            float edge = 0;
+            for (auto point : shape.back) edge = std::max(edge, point.y);
+            buttonCaptionBottom[captionKey(cell)] = std::max(
+                buttonCaptionBottom[captionKey(cell)],
+                item->box.pos.y + (face->box.pos.y + edge) * scale + 3.f);
+          }
+      }
+    }
+    for (const auto& cell : cells) {
+      auto key = captionKey(cell);
+      if (!captionNeeded[key] || cell.labelWidth <= 0) continue;
+      auto label = metadata[cell.index].label;
+      Vec center(10 + cell.x, top + 5 + cell.y);
+      bool buttonsOnly = !captionHasKnob[key];
       if (cell.block >= 0) {
         controlLabels.push_back(
-            {Vec(10 + cell.captionX, top + 5 + cell.captionY), cell.labelWidth,
-             cell.captionText, false, NVG_ALIGN_CENTER, 14 * cell.labelScale,
-             cell.labelHeight});
+            {Vec(10 + cell.captionX, buttonsOnly ? buttonCaptionBottom[key]
+                                                 : top + 5 + cell.captionY),
+             cell.labelWidth, cell.captionText, false, NVG_ALIGN_CENTER,
+             14 * cell.labelScale, cell.labelHeight});
         continue;
       }
-      std::string key =
-          (arrangeByModule ? std::to_string(metadata[cell.index].module) + ":"
-                           : "") +
-          paramFamily(label);
       auto& caption = captions[key];
       if (!caption.count)
         caption.text = label;
@@ -2506,7 +2664,8 @@ struct Beekapoo : app::ModuleWidget {
       caption.left = std::min(caption.left, center.x - half);
       caption.right = std::max(caption.right, center.x + half);
       caption.bottom =
-          std::max(caption.bottom, cell.fixedCaption
+          std::max(caption.bottom, buttonsOnly ? buttonCaptionBottom[key]
+                                   : cell.fixedCaption
                                        ? top + 5 + cell.captionY
                                        : center.y + cell.diameter * .5f + 5);
       caption.size =
@@ -3520,6 +3679,21 @@ struct Beekapoo : app::ModuleWidget {
     if (!module || members.empty() || index < 0 || index >= 6) return;
     const int operation = index % 3;
     const bool all = index >= 3;
+    float range = clamp(module
+                            ->params[operation == 0 ? Module::WIGGLE_RANGE
+                                                    : Module::RANDOM_RANGE]
+                            .getValue(),
+                        0.f, 1.f);
+    float probability =
+        clamp(module
+                  ->params[operation == 0 ? Module::WIGGLE_PROBABILITY
+                                          : Module::RANDOM_PROBABILITY]
+                  .getValue(),
+              0.f, 1.f);
+    actionPulse[index] = .12f;
+    if (operation != 2 &&
+        (probability <= 0.f || (operation == 0 && range <= 0.f)))
+      return;
     auto* batch =
         recordHistory || parent ? new history::ComplexAction : nullptr;
     if (batch)
@@ -3527,22 +3701,26 @@ struct Beekapoo : app::ModuleWidget {
                                 : operation == 1 ? "randomize "
                                                  : "initialize ") +
                     (all ? "all subpatch modules" : "exposed parameters");
-    actionPulse[index] = .12f;
     auto change = [&](engine::ParamQuantity* q, bool momentary) {
       if (!q || !q->isBounded()) return;
       if (operation != 2 && randomLocked(q->module->id, q->paramId)) return;
       if (operation == 2 ? !q->resetEnabled
                          : momentary || (all && !q->randomizeEnabled))
         return;
+      if (operation != 2 && probability < 1.f &&
+          random::uniform() >= probability)
+        return;
       float before = q->getValue();
       if (operation == 2)
         q->reset();
-      else if (operation == 1)
+      else if (operation == 1) {
         // Exposed controls use Rack's bounded distribution directly, rather
         // than a module/quantity's custom randomize policy.
         q->engine::ParamQuantity::randomize();
-      else {
-        float amount = module->params[Module::WIGGLE_AMOUNT].getValue();
+        if (range < 1.f)
+          q->setImmediateValue(randomRangeValue(q, q->getValue(), range));
+      } else {
+        float amount = range;
         q->setImmediateValue(q->fromScaled(clamp(
             q->getScaledValue() + (random::uniform() * 2.f - 1.f) * amount, 0.f,
             1.f)));
@@ -3566,10 +3744,17 @@ struct Beekapoo : app::ModuleWidget {
             for (const auto& lock : randomLocks)
               if (lock.first == member.id && lock.second >= 0)
                 locked.insert(lock.second);
-            if (locked.empty())
+            for (auto* q : w->module->paramQuantities) {
+              if (!q) continue;
+              auto* button =
+                  dynamic_cast<app::Switch*>(w->getParam(q->paramId));
+              if (!q->randomizeEnabled || (button && button->momentary))
+                locked.insert(q->paramId);
+            }
+            if (locked.empty() && range == 1.f && probability == 1.f)
               APP->engine->randomizeModule(w->module);
             else
-              randomizeWithLocks(w->module, locked);
+              randomizeWithLocks(w->module, locked, range, probability);
           } else
             APP->engine->resetModule(w->module);
           if (batch) {
@@ -4087,12 +4272,13 @@ struct Beekapoo : app::ModuleWidget {
 
     renameMenu(menu);
     themeMenu(menu);
-    auto* amount = new ui::Slider;
-    amount->quantity =
-        getModule<Module>()->getParamQuantity(Module::WIGGLE_AMOUNT);
-    amount->box.size = Vec(200, 24);
-    menu->addChild(amount);
-
+    for (int id : {Module::RANDOM_RANGE, Module::RANDOM_PROBABILITY,
+                   Module::WIGGLE_RANGE, Module::WIGGLE_PROBABILITY}) {
+      auto* control = new ui::Slider;
+      control->quantity = getModule<Module>()->getParamQuantity(id);
+      control->box.size = Vec(200, 24);
+      menu->addChild(control);
+    }
     menu->addChild(createMenuItem(
         "Save Beek…", "", [this] { saveBeekDialog(); }, members.empty()));
     menu->addChild(

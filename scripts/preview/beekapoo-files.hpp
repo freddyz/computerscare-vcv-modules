@@ -77,6 +77,26 @@ void testBeekPatchFiles(const std::string& output,float scale,Add add,Require re
     require(system::exists(system::join(saved.temporary.path,"modules",std::to_string(sampleId),"audio-index.txt")),"Export must bundle Phlooper patch storage");
     require(!json_object_get(saved.root,"path"),"Export must omit the current patch path");
   }
+  {
+    beekapoo::BeekTemporaryDirectory presets;
+    auto dir=system::join(presets.path,"Beak_presets");
+    auto first=owner->saveBeekVersion(dir);
+    require(system::getFilename(first).find("-1.vcv")!=std::string::npos,"One-click saves start at one");
+    auto original=owner->getModule<beekapoo::Module>()->getPatchName();
+    bool custom=owner->getModule<beekapoo::Module>()->hasCustomPatchName();
+    owner->getModule<beekapoo::Module>()->setPatchName("My custom / panel title",true);
+    audio->params[P::LENGTH].setValue(.5f);
+    auto second=owner->saveBeekVersion(dir);
+    auto prefix=first.substr(0,first.size()-5);
+    require(second==prefix+"2.vcv","Parameter changes and custom titles retain the topology filename");
+    require(APP->patch->path==patchPath&&APP->history->actionIndex==historyIndex,"One-click export must not replace the open patch or create an undo edit");
+    beekapoo::BeekPatchFile saved(first);
+    require(system::exists(system::join(saved.temporary.path,"modules",std::to_string(sampleId),"audio-index.txt")),"Quick saves retain patch assets");
+    owner->saveBeek(prefix+"9.vcv");
+    require(owner->saveBeekVersion(dir)==prefix+"10.vcv","Existing versions must be skipped without overwriting or reusing a gap");
+    require(system::exists(first),"Earlier versions remain present");
+    audio->params[P::LENGTH].setValue(.75f);owner->getModule<beekapoo::Module>()->restorePatchName(original,custom);
+  }
   auto* target=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(2600,0)));
   auto* previous=add(gainModel,Vec(3000,0));auto previousId=previous->module->id;
   rack->deselectAll();rack->select(previous,true);target->collapse();
@@ -158,20 +178,31 @@ void testBeekPatchFiles(const std::string& output,float scale,Add add,Require re
     auto whole=output+"/whole-patch.vcv";system::archiveDirectory(whole,file.temporary.path,1);
     auto oldChild=receiver->members.front().id;history=APP->history->actionIndex;
     require(receiver->loadBeek(whole,beekapoo::beekEntirePatch),"Entire patch must combine wrappers and loose modules");
+    int verification=0;
     auto verify=[&] {
+      ++verification;
       for(int tick=0;tick<3;++tick)rack->step();
       require(receiver->members.size()==4,"Entire patch must import every child and loose module exactly once");checkAudio(loadedAudio(receiver));
+      require(receiver->randomLocks.count({loadedAudio(receiver)->id,P::LENGTH}),"Whole-patch import must retain locks on exposed parameters");
       for(const auto& member:receiver->members)require(!dynamic_cast<beekapoo::Module*>(APP->engine->getModule(member.id)),"Whole patch must not create nested Beek wrappers");
       int routes=0;
       for(const auto& p:receiver->ports)if(p.route>=0) {
         ++routes;int incoming=0;
         for(auto* c:rack->getCompleteCables())if(c->cable->inputModule==receiver->module&&c->cable->inputId==beekapoo::Module::inputBase+p.route)++incoming;
         bool shared=p.shared.key>=0;
-        require(incoming==(shared?2:3),"Whole-patch import must preserve duplicate stacks, self-patches and connections between Beeks");
+        if(incoming!=(shared?2:3)) throw std::runtime_error("Whole-patch route count: phase="+std::to_string(verification)+" route="+std::to_string(p.route)+" shared="+std::to_string(shared)+" incoming="+std::to_string(incoming));
         require(std::abs(receiver->inputGain(p)-(shared?-.5f:.5f))<.0001f,"Merged legacy input routes must retain independent gains");
         require(!shared||p.shared.extra.size()==1,"Shared input fanout must survive the merge");
       }
       require(routes==2,"Equal route numbers in separate Beeks must become distinct routes");
+      auto* engine=receiver->getModule<beekapoo::Module>();
+      for(const auto& p:receiver->ports)if(p.route>=0) {
+        auto& in=engine->inputs[beekapoo::Module::inputBase+p.route];in.channels=4;
+        for(int ch=0;ch<4;++ch)in.setVoltage(float(ch+1),ch);
+      }
+      engine::Module::ProcessArgs args{48000.f,1.f/48000.f,0};engine->process(args);
+      for(const auto& p:receiver->ports)if(p.route>=0)for(int ch=0;ch<4;++ch)
+        require(std::abs(engine->outputs[p.route].getVoltage(ch)-(ch+1)*receiver->inputGain(p))<.0001f,"Merged input routes must preserve independent gains for every polyphonic voice");
       checkBeekCablePresentation(require);
     };
     verify();require(APP->history->actionIndex==history+1,"Entire patch replacement must be one Undo action");
@@ -180,6 +211,22 @@ void testBeekPatchFiles(const std::string& output,float scale,Add add,Require re
     auto roundtrip=output+"/whole-patch-roundtrip.vcv";receiver->saveBeek(roundtrip);require(receiver->loadBeek(roundtrip),"Combined patch must save and reload");verify();
     beekapoo::BeekPatchFile single(roundtrip);std::unique_ptr<beekapoo::BeekImportDialog> singleDialog(beekapoo::makeBeekImportDialog(single,roundtrip,[](int64_t,bool){}));
     require(singleDialog&&singleDialog->choices.size()==2&&singleDialog->choices.back().owner==beekapoo::beekEntirePatch,"Single-Beek files must also offer Entire patch");
+    beekapoo::BeekPatchFile withAudio(whole);
+    int64_t audioId=0;while(withAudio.modules.count(audioId))++audioId;
+    json_array_append_new(json_object_get(withAudio.root,"modules"),json_pack("{s:I,s:s,s:s}","id",json_int_t(audioId),"plugin","Core","model","AudioInterface2"));
+    auto* audioWires=json_object_get(withAudio.root,"cables");
+    json_array_append_new(audioWires,json_pack("{s:I,s:I,s:i,s:I,s:i}","id",json_int_t(990001),"outputModuleId",json_int_t(looseId),"outputId",0,"inputModuleId",json_int_t(audioId),"inputId",0));
+    json_array_append_new(audioWires,json_pack("{s:I,s:I,s:i,s:I,s:i}","id",json_int_t(990002),"outputModuleId",json_int_t(audioId),"outputId",0,"inputModuleId",json_int_t(looseId),"inputId",4));
+    json_dump_file(withAudio.root,system::join(withAudio.temporary.path,"patch.json").c_str(),JSON_INDENT(2));
+    auto audioPath=output+"/whole-patch-audio.vcv";system::archiveDirectory(audioPath,withAudio.temporary.path,1);
+    beekapoo::BeekPatchFile audioFile(audioPath);
+    std::unique_ptr<beekapoo::BeekImportDialog> audioDialog(beekapoo::makeBeekImportDialog(audioFile,audioPath,[](int64_t,bool){},true));
+    require(audioDialog&&audioDialog->choices.size()==2&&audioDialog->choices[0].owner==beekapoo::beekEntirePatch&&audioDialog->choices[0].convertAudio&&!audioDialog->choices[1].convertAudio,"Entire patch must retain both audio choices without falling back to a single Beek");
+    require(receiver->loadBeek(audioPath,beekapoo::beekEntirePatch,true)&&receiver->members.size()==4,"Whole-patch Audio conversion must retain all non-Audio modules");checkAudio(loadedAudio(receiver));
+    std::set<int> audioRoutes;bool capture=false;
+    for(const auto& p:receiver->ports)if(p.route>=0){require(audioRoutes.insert(p.route).second,"Converted Audio inputs must not reuse an existing merged route");capture|=p.shared.label.find("Audio 2")!=std::string::npos;}
+    require(audioRoutes.size()==3&&capture,"Audio capture remains exposed alongside the original shared inputs");
+    for(int tick=0;tick<3;++tick)rack->step();checkBeekCablePresentation(require);
   }
   rack->deselectAll();rack->select(second,true);
   auto selection=output+"/shared-beek.vcvs";rack->saveSelection(selection);

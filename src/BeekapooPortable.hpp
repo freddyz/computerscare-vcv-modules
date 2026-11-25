@@ -322,6 +322,25 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
                                                                   : -1);
       int in = json_integer_value(json_object_get(item, "inputId")),
           out = json_integer_value(json_object_get(item, "outputId"));
+      // Stage incoming wrapper routes at their new child destination. The
+      // old group is still alive here; attaching to its owner would let
+      // restore/endAbstraction rewire these new cables into the old children.
+      json_t* routedPort = nullptr;
+      if (input == module && in >= Module::inputBase) {
+        for (size_t j = 0; j < json_array_size(sharedPorts); ++j) {
+          auto* p = json_array_get(sharedPorts, j);
+          auto* route = json_object_get(p, "route");
+          if (json_is_true(json_object_get(p, "input")) &&
+              json_is_integer(route) &&
+              json_integer_value(route) == in - Module::inputBase) {
+            routedPort = p;
+            input = APP->engine->getModule(
+                json_integer_value(json_object_get(p, "module")));
+            in = json_integer_value(json_object_get(p, "port"));
+            break;
+          }
+        }
+      }
       if (!input || !output || in < 0 || out < 0 ||
           in >= int(input->inputs.size()) || out >= int(output->outputs.size()))
         continue;
@@ -340,8 +359,10 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
       homeRack->addCable(cw);
       wires.push_back(cw);
       cableIds[json_integer_value(json_object_get(item, "id"))] = cable->id;
-      if (json_is_true(json_object_get(item, "attenuated")))
+      if (routedPort || json_is_true(json_object_get(item, "attenuated")))
         importedAttenuated.insert(cable->id);
+      if (auto* key = json_object_get(routedPort, "shared"))
+        sharedIncoming[json_integer_value(key)].insert(cable->id);
       if (auto* key = json_object_get(item, "sharedInput"))
         sharedIncoming[json_integer_value(key)].insert(cable->id);
       auto* action = new history::CableAdd;
@@ -398,10 +419,10 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
       }
       for (const auto& member : members)
         if (!json_is_array(subset) || unwrapped.count(member.id))
-        if (auto* w = find(member.id))
-          for (auto* port : w->getPorts())
-            if (homeRack->getCompleteCablesOnPort(port).empty())
-              expose(w, port);
+          if (auto* w = find(member.id))
+            for (auto* port : w->getPorts())
+              if (homeRack->getCompleteCablesOnPort(port).empty())
+                expose(w, port);
       saveGroup();
     }
     json_decref(remapped);

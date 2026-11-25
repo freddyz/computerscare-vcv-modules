@@ -2,19 +2,32 @@
 #include "Computerscare.hpp"
 
 namespace beekapoo {
+inline float randomRangeValue(engine::ParamQuantity* q, float value,
+                              float range) {
+  float zero = clamp(0.f, q->getMinValue(), q->getMaxValue());
+  return zero + (value - zero) * range;
+}
 // Execute the native callback and restore protected values under the same
 // engine lock. A custom onRandomize() may ignore randomizeEnabled entirely.
 inline void randomizeWithLocks(engine::Module* source,
-                               const std::set<int>& protectedParams) {
+                               const std::set<int>& protectedParams,
+                               float range = 1.f, float probability = 1.f) {
   struct Callback : engine::Module {
     engine::Module* source;
     std::vector<std::pair<engine::ParamQuantity*, float>> saved;
-    Callback(engine::Module* source, const std::set<int>& ids)
-        : source(source) {
-      for (int id : ids)
-        if (id >= 0 && size_t(id) < source->paramQuantities.size())
-          if (auto* q = source->getParamQuantity(id))
-            saved.push_back({q, q->getValue()});
+    std::vector<engine::ParamQuantity*> selected;
+    float range;
+    Callback(engine::Module* source, const std::set<int>& ids, float range,
+             float probability)
+        : source(source), range(range) {
+      for (auto* q : source->paramQuantities) {
+        if (!q) continue;
+        if (ids.count(q->paramId) ||
+            (probability < 1.f && random::uniform() >= probability))
+          saved.push_back({q, q->getValue()});
+        else if (q->isBounded())
+          selected.push_back(q);
+      }
     }
     void onRandomize(const RandomizeEvent& event) override {
       struct Restore {
@@ -25,8 +38,11 @@ inline void randomizeWithLocks(engine::Module* source,
         }
       } restore{this};
       source->onRandomize(event);
+      if (range < 1.f)
+        for (auto* q : selected)
+          q->setImmediateValue(randomRangeValue(q, q->getValue(), range));
     }
-  } callback(source, protectedParams);
+  } callback(source, protectedParams, range, probability);
   APP->engine->randomizeModule(&callback);
 }
 
