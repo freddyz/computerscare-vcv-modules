@@ -161,3 +161,14 @@ overlapping input destinations, duplicate stacks, four-channel attenuation,
 self-patching, input-minus internalization, silence on unplug/bypass, destination
 removal, native and portable save/load, duplication, both merge paths, Eject and
 Undo/Redo. It renders a shared-input example and uses the real Fundamental 8vert for output sums and retained gains.
+
+`BEEKAPOO_SEQUENCE=1 scripts/preview-module.sh beekapoo --no-build` checks native
+live controls, momentaries and undo, initial Step 1/1, Store/New and immediate
+recall, Clock/Scan Off, poly transport, MIDI protection, snapshot persistence,
+duplicate isolation and two-row control geometry. It renders light/dark panels
+and optional read-only saved-value ghosts.
+
+`BEEKAPOO_KEYBOARD=1 scripts/preview-module.sh beekapoo --no-build` checks native
+momentary/toggle key actions, button-bank release, transport, repeat suppression,
+text/browser/menu guards and mapping identity. It renders the actual shortcut
+overlay on distinct light and dark panels.

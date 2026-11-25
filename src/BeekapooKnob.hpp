@@ -129,6 +129,7 @@ inline NVGcolor patchCableColor(const PatchIdentity& patch, size_t cable) {
 // Native Rack interaction and parameter identity, with a cached procedural
 // face. No SVG rotation, parameter proxy, new DSP work or per-frame geometry.
 struct ParametricKnob : app::Knob {
+  float lastDrawnValue = NAN;
   ControlStyle style = controlStyle("Parameter", "Module");
   std::array<Vec, 48> profile;
   std::array<float, 64> pointerRadii{};
@@ -334,6 +335,31 @@ struct ParametricKnob : app::Knob {
     }
     nvgClosePath(vg);
   }
+  // Optional saved-state outline. Reads a snapshot without changing the live
+  // quantity.
+  void drawGhost(const DrawArgs& args, engine::ParamQuantity* q, float saved) {
+    if (!q || !std::isfinite(saved)) return;
+    auto* vg = args.vg;
+    float angle =
+        minAngle + (maxAngle - minAngle) * clamp(q->toScaled(saved), 0.f, 1.f);
+    nvgSave(vg);
+    nvgTranslate(vg, 12, 11.5f);
+    nvgRotate(vg, angle);
+    nvgScale(vg, 1.12f, 1.12f);
+    for (int halo = 0; halo < 2; ++halo) {
+      nvgStrokeColor(
+          vg, halo == 0 ? nvgRGBA(0, 0, 0, 48) : nvgRGBA(245, 245, 245, 115));
+      nvgStrokeWidth(vg, halo == 0 ? 1.4f : .65f);
+      shape(vg, Vec());
+      nvgStroke(vg);
+      nvgBeginPath(vg);
+      nvgMoveTo(vg, 0, -2);
+      nvgLineTo(vg, 0, -8);
+      nvgLineCap(vg, NVG_ROUND);
+      nvgStroke(vg);
+    }
+    nvgRestore(vg);
+  }
   void drawFace(const DrawArgs& args) {
     auto* vg = args.vg;
     shape(vg, Vec(12, 11.5f + style.bevel));
@@ -383,6 +409,10 @@ struct ParametricKnob : app::Knob {
   }
   void step() override {
     auto* q = getParamQuantity();
+    if (q && q->getValue() != lastDrawnValue) {
+      lastDrawnValue = q->getValue();
+      faceBuffer->setDirty();
+    }
     float range = q ? q->getRange() : 0;
     if (range != lastRange) {
       lastRange = range;

@@ -28,6 +28,8 @@
 #include "BeekapooPreferences.hpp"
 #include "BeekapooRandomLocks.hpp"
 #include "BeekapooSection.hpp"
+#include "BeekapooSequence.hpp"
+#include "BeekapooShortcuts.hpp"
 #include "Blunch/BlunchRandomProgram.hpp"
 #include "Computerscare.hpp"
 #include "ComputerscareResizableHandle.hpp"
@@ -171,6 +173,7 @@ struct Module : engine::Module {
     RANDOM_RANGE = INPUT_GAIN_BASE + routeCapacity,
     RANDOM_PROBABILITY,
     WIGGLE_PROBABILITY,
+    SEQUENCE_SCAN,
     PARAM_COUNT,
     WIGGLE_RANGE = WIGGLE_AMOUNT
   };
@@ -179,6 +182,9 @@ struct Module : engine::Module {
   static constexpr int GENERATE_INPUT = inputBase + routeCapacity;
   static constexpr int GROW_INPUT = GENERATE_INPUT + 1;
   static constexpr int ACTIONS_INPUT = GROW_INPUT + 1;
+  static constexpr int CLOCK_CHANNEL = 6;
+  static constexpr int RESET_CHANNEL = 7;
+  static constexpr int SCAN_CHANNEL = 8;
   static int polyAction(int channel) {
     const int actions[] = {0, 1, 3, 4, 6, 7};
     return actions[channel];
@@ -204,6 +210,98 @@ struct Module : engine::Module {
   std::atomic<unsigned> pendingActions{0};
   std::atomic<unsigned> pendingHistory{0};
   std::atomic<int> pendingBypass{-1};
+  std::shared_ptr<const SequenceBank> sequenceBank =
+      std::make_shared<const SequenceBank>();
+  std::atomic<int> sequenceCount{0}, playingStep{-1}, requestedStep{-1};
+  std::atomic<bool> clockedScan{false}, scanEnabled{false}, clockEnabled{false};
+  std::atomic<unsigned> manualClocks{0}, manualResets{0};
+  dsp::SchmittTrigger sequenceClock, sequenceReset;
+  int lastScanStep = -2;
+  float lastScanKnob = 0;
+  bool pendingKnobScan = false;
+  void publishSequence(const SequenceBank& bank) {
+    std::atomic_store(&sequenceBank,
+                      std::make_shared<const SequenceBank>(bank));
+    sequenceCount.store(int(bank.steps.size()), std::memory_order_release);
+  }
+  void recallStep(int step) {
+    auto bank = std::atomic_load(&sequenceBank);
+    if (step < 0 || step >= int(bank->steps.size())) return;
+    // process() runs under Rack's engine lock. Resolve IDs at recall time,
+    // never retain child pointers across deletion, undo or a patch load.
+    for (const auto& entry : bank->steps[step]) {
+      auto* child = APP->engine->getModule_NoLock(entry.module);
+      if (!child || entry.param < 0 ||
+          entry.param >= int(child->params.size()) ||
+          APP->engine->getParamHandle_NoLock(entry.module, entry.param))
+        continue;
+      auto* q = child->getParamQuantity(entry.param);
+      if (!q || !q->isBounded() || !std::isfinite(entry.value)) continue;
+      APP->engine->setParamValue(
+          child, entry.param,
+          clamp(entry.value, q->getMinValue(), q->getMaxValue()));
+    }
+    playingStep.store(step, std::memory_order_release);
+  }
+  void processSequence() {
+    auto& actions = inputs[ACTIONS_INPUT];
+    auto voltage = [&](int channel) {
+      return channel < actions.getChannels() ? actions.getVoltage(channel)
+                                             : 0.f;
+    };
+    bool clockEdge = sequenceClock.process(voltage(CLOCK_CHANNEL));
+    bool enabled = clockEnabled.load(std::memory_order_relaxed);
+    bool clock = enabled && clockEdge;
+    bool reset = sequenceReset.process(voltage(RESET_CHANNEL));
+    unsigned clocks = manualClocks.exchange(0, std::memory_order_acq_rel);
+    unsigned resets = manualResets.exchange(0, std::memory_order_acq_rel);
+    int request = requestedStep.exchange(-1);
+    int count = sequenceCount.load(std::memory_order_acquire);
+    float knob = params[SEQUENCE_SCAN].getValue();
+    bool scanning = enabled && scanEnabled.load(std::memory_order_relaxed);
+    if (scanning && knob != lastScanKnob) {
+      pendingKnobScan = true;
+      lastScanKnob = knob;
+    }
+    if (!count) {
+      playingStep.store(-1);
+      return;
+    }
+    int scan = scanStep(voltage(SCAN_CHANNEL) + knob, count);
+    bool scanned = scanning && actions.getChannels() > SCAN_CHANNEL;
+    if (!scanning) {
+      pendingKnobScan = false;
+      lastScanKnob = 0;
+      lastScanStep = -2;
+    }
+    // A poly lane cannot report its upstream cable connection. This explicit
+    // choice also handles slow or stopped clocks without timeout guessing.
+    bool clocked = clockedScan.load(std::memory_order_relaxed);
+    if (reset || resets) {
+      recallStep(0);
+      lastScanStep = scan;
+      pendingKnobScan = false;
+    } else if (request >= 0 && request < count) {
+      recallStep(request);
+      lastScanStep = scan;
+      pendingKnobScan = false;
+    } else if (clock || clocks) {
+      int next =
+          scanned || pendingKnobScan
+              ? scan
+              : (std::max(-1, playingStep.load()) + int(clocks) + int(clock)) %
+                    count;
+      recallStep(next);
+      lastScanStep = scan;
+      pendingKnobScan = false;
+    } else if (!clocked &&
+               ((scanned && scan != lastScanStep) || pendingKnobScan)) {
+      recallStep(scan);
+      lastScanStep = scan;
+      pendingKnobScan = false;
+    }
+    if (!scanned && !pendingKnobScan) lastScanStep = -2;
+  }
   Module() {
     generationSet = moduleSets().defaultId;
     config(PARAM_COUNT, ACTIONS_INPUT + 1, routeCapacity, 0);
@@ -239,6 +337,10 @@ struct Module : engine::Module {
     configInput(GENERATE_INPUT, "Generate new subpatch");
     configInput(GROW_INPUT, "Grow subpatch");
     configInput(ACTIONS_INPUT, "Actions");
+    configParam(SEQUENCE_SCAN, 0.f, 10.f, 0.f, "Scan playback", " V");
+    getParamQuantity(SEQUENCE_SCAN)->description =
+        "Actions CV ch 9. Scan mode is set in the steps menu; Off by default.";
+    getParamQuantity(SEQUENCE_SCAN)->randomizeEnabled = false;
   }
   void processInputRoutes(bool bypass) {
     for (int block = 0; block < routeCapacity / 64; ++block) {
@@ -272,6 +374,7 @@ struct Module : engine::Module {
   void processBypass(const ProcessArgs&) override { processInputRoutes(true); }
   void process(const ProcessArgs&) override {
     processInputRoutes(false);
+    processSequence();
     for (int ch = 0; ch < 6; ++ch)
       if (polyActionTriggers[ch].process(
               ch < inputs[ACTIONS_INPUT].getChannels()
@@ -327,6 +430,9 @@ struct Module : engine::Module {
       // Knob drags/MIDI don't call saveGroup(); never export an old gain from
       // that cache into a patch, duplicate, or structural Undo snapshot.
       auto* snapshot = json_deep_copy(group);
+      if (auto* sequence = json_object_get(snapshot, "sequence"))
+        json_object_set_new(sequence, "playing",
+                            json_integer(playingStep.load()));
       auto* ports = json_object_get(snapshot, "ports");
       for (size_t i = 0; i < json_array_size(ports); ++i) {
         auto* port = json_array_get(ports, i);
@@ -355,6 +461,7 @@ struct Module : engine::Module {
   void dataFromJson(json_t* root) override {
     std::lock_guard<std::mutex> lock(stateMutex);
     freshDefault = false;
+    publishSequence(SequenceBank());
     // Older patches shared the probability and multiplied the wiggle amount
     // by random range. Preserve their effective settings once on load.
     if (!json_is_true(json_object_get(root, "separateRandomControls"))) {
@@ -658,6 +765,103 @@ struct ActionButton : LetteredFace {
       nvgLineTo(args.vg, -5.5f, 6.5f);
       nvgClosePath(args.vg);
       nvgFill(args.vg);
+    } else if (icon == 13) {
+      // Clock: an uneven dial and two deliberately off-axis hands.
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -5, -5);
+      nvgLineTo(args.vg, 2, -7);
+      nvgLineTo(args.vg, 7, -1);
+      nvgLineTo(args.vg, 5, 5);
+      nvgLineTo(args.vg, -2, 7);
+      nvgLineTo(args.vg, -7, 1);
+      nvgClosePath(args.vg);
+      nvgStroke(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -1, -4);
+      nvgLineTo(args.vg, 0, 1);
+      nvgLineTo(args.vg, 4, 2);
+      nvgStroke(args.vg);
+    } else if (icon == 14) {
+      // Reset: a skewed return-to-start marker.
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -6, -6);
+      nvgLineTo(args.vg, -7, 6);
+      nvgStroke(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, 5, -6);
+      nvgLineTo(args.vg, -3, 0);
+      nvgLineTo(args.vg, 6, 5);
+      nvgClosePath(args.vg);
+      nvgFill(args.vg);
+    } else if (icon == 15 || icon == 16) {
+      // Store into a tray; Store New adds a small raised plus.
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -7, 2);
+      nvgLineTo(args.vg, -6, 7);
+      nvgLineTo(args.vg, 6, 6);
+      nvgLineTo(args.vg, 7, 1);
+      nvgStroke(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -1, -7);
+      nvgLineTo(args.vg, 0, 3);
+      nvgMoveTo(args.vg, -4, 0);
+      nvgLineTo(args.vg, 0, 3);
+      nvgLineTo(args.vg, 3, -1);
+      nvgStroke(args.vg);
+      if (icon == 16) {
+        nvgBeginPath(args.vg);
+        nvgMoveTo(args.vg, 3, -5);
+        nvgLineTo(args.vg, 8, -6);
+        nvgMoveTo(args.vg, 5, -8);
+        nvgLineTo(args.vg, 6, -3);
+        nvgStroke(args.vg);
+      }
+    } else if (icon == 17) {
+      // Viewed-step chooser: a crooked stack with a selected row.
+      for (int row = 0; row < 3; ++row) {
+        float y = -5 + row * 5;
+        nvgBeginPath(args.vg);
+        nvgMoveTo(args.vg, -2, y);
+        nvgLineTo(args.vg, 7, y + (row == 1 ? -.6f : .6f));
+        nvgStroke(args.vg);
+      }
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -7, -2);
+      nvgLineTo(args.vg, -3, 0);
+      nvgLineTo(args.vg, -6, 3);
+      nvgClosePath(args.vg);
+      nvgFill(args.vg);
+    } else if (icon == 20) {
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -5, -6);
+      nvgLineTo(args.vg, 3, 0);
+      nvgLineTo(args.vg, -4, 6);
+      nvgClosePath(args.vg);
+      nvgFill(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, 6, -6);
+      nvgLineTo(args.vg, 5, 6);
+      nvgStroke(args.vg);
+    } else if (icon == 18) {
+      // Delete one step: a tilted bin with an interrupted lid.
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -5, -3);
+      nvgLineTo(args.vg, -4, 7);
+      nvgLineTo(args.vg, 5, 6);
+      nvgLineTo(args.vg, 6, -3);
+      nvgStroke(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -7, -5);
+      nvgLineTo(args.vg, 7, -4);
+      nvgMoveTo(args.vg, -2, -5);
+      nvgLineTo(args.vg, -1, -7);
+      nvgLineTo(args.vg, 3, -7);
+      nvgLineTo(args.vg, 4, -4);
+      nvgMoveTo(args.vg, -1, -1);
+      nvgLineTo(args.vg, 0, 4);
+      nvgMoveTo(args.vg, 3, -1);
+      nvgLineTo(args.vg, 2, 4);
+      nvgStroke(args.vg);
     } else if (icon == 12) {
       // Small skewed disk, using the same line weight as the other actions.
       nvgBeginPath(args.vg);
@@ -964,6 +1168,31 @@ struct ExposedSwitch : app::Switch {
         face->textSize = momentary ? 18 : 12;
       }
   }
+  void drawGhost(const DrawArgs& args, engine::ParamQuantity* q, float saved) {
+    if (!q) return;
+    for (auto* child : children)
+      if (auto* face = dynamic_cast<Face*>(child)) {
+        auto shape = face->geometry(saved > q->getMinValue());
+        nvgSave(args.vg);
+        nvgTranslate(args.vg, face->box.pos.x, face->box.pos.y - 2);
+        nvgBeginPath(args.vg);
+        for (size_t i = 0; i < shape.front.size(); ++i) {
+          auto point = shape.front[i];
+          if (i)
+            nvgLineTo(args.vg, point.x, point.y);
+          else
+            nvgMoveTo(args.vg, point.x, point.y);
+        }
+        nvgClosePath(args.vg);
+        nvgStrokeColor(args.vg, nvgRGBA(0, 0, 0, 70));
+        nvgStrokeWidth(args.vg, 1.2f);
+        nvgStroke(args.vg);
+        nvgStrokeColor(args.vg, nvgRGBA(235, 235, 235, 125));
+        nvgStrokeWidth(args.vg, .55f);
+        nvgStroke(args.vg);
+        nvgRestore(args.vg);
+      }
+  }
   void onHover(const HoverEvent& e) override { e.consume(this); }
   void onDragStart(const DragStartEvent& e) override {
     if (source)
@@ -997,6 +1226,7 @@ struct ParamVisual {
 };
 template <class Base>
 struct MappedParam : Base, ParamVisual {
+  std::function<bool(float&)> savedReference;
   Vec naturalSize;
   float visualScale = 1;
   MappedParam() : naturalSize(this->box.size) {}
@@ -1016,6 +1246,15 @@ struct MappedParam : Base, ParamVisual {
     nvgSave(args.vg);
     nvgScale(args.vg, visualScale, visualScale);
     Base::draw(scaled);
+    float saved = 0;
+    auto* live = this->getParamQuantity();
+    if (live && savedReference && savedReference(saved) &&
+        std::abs(saved - live->getValue()) > .00001f) {
+      if (auto* knob = dynamic_cast<ParametricKnob*>(this))
+        knob->drawGhost(scaled, live, saved);
+      if (auto* button = dynamic_cast<ExposedSwitch*>(this))
+        button->drawGhost(scaled, live, saved);
+    }
     nvgRestore(args.vg);
     this->box.size = displayed;
   }
@@ -1483,6 +1722,8 @@ struct Beekapoo : app::ModuleWidget {
     app::ParamWidget* knob;
   };
   std::vector<Parameter> parameters;
+#include "BeekapooKeyboard.hpp"
+#include "BeekapooSequenceUi.hpp"
   int layoutTier =
       0;  // derived responsive tier; retained only for old patch migration
   float requestedWidth = 180, lastLayoutWidth = -1;
@@ -1522,6 +1763,9 @@ struct Beekapoo : app::ModuleWidget {
     for (auto* button : managementButtons)
       buttonStyle(button, titleFrame->faceColor);
     addSelectionButton->setDark(dark);
+    for (auto* button : sequenceButtons)
+      buttonStyle(button, ownFrame->faceColor);
+    if (stepSelector) buttonStyle(stepSelector, ownFrame->faceColor);
     buttonStyle(regenerateButton, ownFrame->faceColor);
     buttonStyle(growButton, titleFrame->faceColor);
     for (size_t i = 0; i < actionButtons.size(); ++i)
@@ -1858,7 +2102,7 @@ struct Beekapoo : app::ModuleWidget {
     };
     show->configure(52, 24, 3, 2, .8f, 713);
     show->box.pos = Vec(15, 39);
-    show->help = [] { return "Edit subpatch in Rack [E]"; };
+    show->help = [] { return "Edit subpatch in Rack"; };
     show->action = [this] { editSubpatch(); };
     show->pressed = [this] { return bool(editSession); };
     addChild(show);
@@ -1893,9 +2137,10 @@ struct Beekapoo : app::ModuleWidget {
     regenerateButton->configure(14, 14, 1.1f, .8f, .8f, 718);
     regenerateButton->icon = 8;
     regenerateButton->help = [this] {
-      return generationError.empty()
-                 ? std::string("Generate new subpatch (replace contents)")
-                 : generationError;
+      return generationError.empty() ? std::string(
+                                           "Generate new subpatch (replace "
+                                           "contents)\nActions CV ch 5")
+                                     : generationError + "\nActions CV ch 5";
     };
     regenerateButton->action = [this] {
       if (!regeneratePatch() && !generationError.empty()) editModuleSets();
@@ -1904,7 +2149,9 @@ struct Beekapoo : app::ModuleWidget {
     growButton = new ActionButton;
     growButton->configure(18, 18, 1.1f, .8f, .8f, 719);
     growButton->icon = 11;
-    growButton->help = [] { return "Subpatch functions"; };
+    growButton->help = [] {
+      return "Subpatch functions\nGrow: Actions CV ch 6";
+    };
     growButton->action = [this] {
       if (!module) return;
       growButton->clearTooltip();
@@ -1930,6 +2177,8 @@ struct Beekapoo : app::ModuleWidget {
         std::string fullHelp =
             std::string(captions[col]) +
             (row == 0 ? " exposed parameters" : " all member modules");
+        if (col < 2)
+          fullHelp += "\nActions CV ch " + std::to_string(row * 2 + col + 1);
         button->help = [fullHelp] { return fullHelp; };
         button->textSize = 12;
         button->configure(56, 23, 3, 2, .9f, 730 + index);
@@ -1947,9 +2196,9 @@ struct Beekapoo : app::ModuleWidget {
       }
     addParam(createParamCentered<ThemedSmallKnob>(Vec(328, 94), m,
                                                   Module::WIGGLE_AMOUNT));
-    for (int param : {Module::RANDOM_RANGE, Module::RANDOM_PROBABILITY,
-                      Module::WIGGLE_PROBABILITY})
-      addParam(createParam<ThemedSmallKnob>(Vec(), m, param));
+    addParam(createParam<ThemedSmallKnob>(Vec(), m, Module::RANDOM_RANGE));
+    for (int param : {Module::RANDOM_PROBABILITY, Module::WIGGLE_PROBABILITY})
+      addParam(createParam<ScrambleKnob>(Vec(), m, param));
     for (int i :
          {Module::GENERATE_INPUT, Module::GROW_INPUT, Module::ACTIONS_INPUT})
       addInput(createInput<ActionJack>(Vec(), m, i));
@@ -1961,6 +2210,7 @@ struct Beekapoo : app::ModuleWidget {
           ensureInputEndpoints(json_integer_value(route));
       }
     }
+    createSequenceControls(m);
     controls = new widget::Widget;
     addChild(controls);
     for (int kind = 0; kind < 3; ++kind) {
@@ -2002,6 +2252,7 @@ struct Beekapoo : app::ModuleWidget {
     rightHandle->box.size.x = 5;
     addChild(rightHandle);
     layoutControls();
+    configureKeyboardHints();
     installRackHooks();
     if (!m) initializeBrowserPreview();
     if (m)
@@ -2010,6 +2261,8 @@ struct Beekapoo : app::ModuleWidget {
       };
   }
   ~Beekapoo() override {
+    releaseButtonKeys();
+    shortcutPaint.reset();
     if (!module && controls) controls->clearChildren();
     if (auto* m = getModule<Module>()) {
       std::lock_guard<std::mutex> lock(m->stateMutex);
@@ -2123,11 +2376,13 @@ struct Beekapoo : app::ModuleWidget {
     auto* m = getModule<Module>();
     if (!m) return;
     if (members.empty() && !editSession) {
+      m->publishSequence(SequenceBank());
       m->saveGroup(nullptr);
       return;
     }
     auto* root = json_object();
-
+    publishSequence();
+    json_object_set_new(root, "sequence", sequenceJson());
     json_object_set_new(root, "owner", json_integer(m->id));
     if (auto* editing = editSessionState())
       json_object_set_new(root, "editing", editing);
@@ -2416,33 +2671,62 @@ struct Beekapoo : app::ModuleWidget {
     std::array<Vec, 6> positions{};
     std::array<Vec, 4> knobs{};
     int knobCount = 0;
+    std::array<Vec, 5> sequence{};
+    int sequenceCount = 0;
+    Vec scan;
+    Rect selector;
+    bool showScan = false, twoRows = false;
     float height = 0;
     int columns = 0;
     float size = 18;
   };
   static OwnControlLayout ownControlLayout(float width) {
-    OwnControlLayout result;
-    // A single strip: highest-priority actions first, CV always last.
+    OwnControlLayout r;
     const float jackSize = 16;
     float margin = width < 60 ? 5.f : 6.f;
     float gap = width < 60 ? 1.f : 2.f;
+    if (width >= 255) {
+      r.twoRows = true;
+      r.columns = 5;
+      r.knobCount = 4;
+      r.sequenceCount = 5;
+      // Pair the exposed/all buttons by action, with range and probability
+      // below.
+      r.positions[0] = Vec(6, 4);
+      r.positions[2] = Vec(26, 4);
+      r.positions[1] = Vec(50, 4);
+      r.positions[3] = Vec(70, 4);
+      r.positions[4] = Vec(94, 4);
+      r.knobs[2] = Vec(6, 27);
+      r.knobs[3] = Vec(26, 27);
+      r.knobs[0] = Vec(50, 27);
+      r.knobs[1] = Vec(70, 27);
+      for (int i = 0; i < 5; ++i) r.sequence[i] = Vec(120 + i * 20, 4);
+      r.selector = Rect(Vec(120, 27), Vec(96, 18));
+      r.positions[5] = Vec(width - margin - jackSize, 5);
+      r.showScan = width >= 285;
+      r.scan = Vec(226, 27);
+      r.height = 50;
+      return r;
+    }
     float available = width - 2 * margin;
     int count = clamp(int((available - jackSize) / 20), 2, 5);
-    result.size = std::min(18.f, (available - jackSize - gap * count) / count);
-    float rowHeight = std::max(jackSize, result.size);
-    float x = margin;
+    r.size = std::min(18.f, (available - jackSize - gap * count) / count);
+    float rowHeight = std::max(jackSize, r.size), x = margin;
     for (int i = 0; i < count; ++i) {
-      result.positions[i] = Vec(x, 3 + (rowHeight - result.size) * .5f);
-      x += result.size + gap;
+      r.positions[i] = Vec(x, 3 + (rowHeight - r.size) * .5f);
+      x += r.size + gap;
     }
-    while (result.knobCount < 4 && x + 18 + 2 + jackSize <= width - margin) {
-      result.knobs[result.knobCount++] = Vec(x, 3);
+    while (r.sequenceCount < 5 && x + 20 + jackSize <= width - margin) {
+      r.sequence[r.sequenceCount++] = Vec(x, 3);
       x += 20;
     }
-    result.positions[5] = Vec(x, 3 + (rowHeight - jackSize) * .5f);
-    result.columns = count;
-    result.height = rowHeight + 8;
-    return result;
+    r.positions[5] = Vec(x, 3 + (rowHeight - jackSize) * .5f);
+    r.columns = count;
+    r.height = rowHeight + 22;
+    r.selector =
+        Rect(Vec(margin, rowHeight + 6), Vec(std::min(110.f, available), 12));
+    return r;
   }
   static float tinyOwnHeight(float width) {
     return ownControlLayout(width).height;
@@ -2487,11 +2771,26 @@ struct Beekapoo : app::ModuleWidget {
     for (int id :
          {0, 1, 2, 3, 4, 5, Module::GENERATE_INPUT, Module::GROW_INPUT})
       getInput(id)->box.pos = jack->box.pos;
+    twoRowControls = plan.twoRows;
+    for (int i = 0; i < 5; ++i) {
+      sequenceButtons[i]->visible = i < plan.sequenceCount;
+      auto* button = sequenceButtons[i];
+      button->box = Rect(plan.sequence[i] + Vec(0, top), Vec(18, 18));
+      button->iconAndText = false;
+    }
+    auto* scan = getParam(Module::SEQUENCE_SCAN);
+    scan->visible = plan.showScan;
+    scan->box.pos = plan.scan + Vec(0, top);
+    stepSelector->box =
+        Rect(plan.selector.pos + Vec(0, top), plan.selector.size);
+    stepSelector->textSize = plan.twoRows ? 10 : (width < 90 ? 7 : 9);
+    sequenceStatusY = top + plan.height - 4;
+    float height = plan.height;
     ownFrame->visible = true;
-    ownFrame->box = Rect(Vec(6, top), Vec(width - 12, plan.height));
+    ownFrame->box = Rect(Vec(6, top), Vec(width - 12, height));
     responsive.ownColumns = plan.columns;
-    responsive.ownHeight = plan.height;
-    return plan.height;
+    responsive.ownHeight = height;
+    return height;
   }
   static float minimumJackWidth(int inputs, int outputs, int parameterCount = 0,
                                 int memberCount = 9) {
@@ -2925,15 +3224,25 @@ struct Beekapoo : app::ModuleWidget {
     auto caption = [this, id, index] {
       auto* w = find(id);
       auto* q = w ? w->module->getParamQuantity(index) : nullptr;
-      return memberName(id) + "\n" +
-             (q ? q->getLabel() + ": " + q->getDisplayValueString() +
-                      q->getUnit()
-                : "");
+      std::string text =
+          memberName(id) + "\n" +
+          (q ? q->getLabel() + ": " + q->getDisplayValueString() + q->getUnit()
+             : "");
+      if (APP->engine->getParamHandle(id, index))
+        text += "\nMIDI mapped: step recall skipped";
+      return text;
     };
-    if (auto* mapped = dynamic_cast<MappedParam<ExposedSwitch>*>(knob))
+    auto reference = [this, id, index](float& value) {
+      return savedSequenceValue(id, index, value);
+    };
+    if (auto* mapped = dynamic_cast<MappedParam<ExposedSwitch>*>(knob)) {
       mapped->caption = caption;
-    if (auto* mapped = dynamic_cast<MappedParam<ParametricKnob>*>(knob))
+      mapped->savedReference = reference;
+    }
+    if (auto* mapped = dynamic_cast<MappedParam<ParametricKnob>*>(knob)) {
       mapped->caption = caption;
+      mapped->savedReference = reference;
+    }
     controls->addChild(knob);
     parameters.push_back({id, index, knob});
     layoutControls();
@@ -2974,6 +3283,7 @@ struct Beekapoo : app::ModuleWidget {
       return;
     }
     endAbstraction();
+    sequence.steps.clear();
     arrangeByModule = json_is_true(json_object_get(root, "arrangeByModule"));
     auto* locks = json_object_get(root, "randomLocks");
     for (size_t i = 0; i < json_array_size(locks); ++i) {
@@ -3097,6 +3407,7 @@ struct Beekapoo : app::ModuleWidget {
     } else if (auto* legacy = json_object_get(root, "parameter")) {
       restoreParam(legacy);
     }
+    loadSequence(json_object_get(root, "sequence"));
     repairSeparatedRows();
     pack();
     if (json_is_true(json_object_get(root, "expanded"))) revealMembers(false);
@@ -3703,6 +4014,9 @@ struct Beekapoo : app::ModuleWidget {
                     (all ? "all subpatch modules" : "exposed parameters");
     auto change = [&](engine::ParamQuantity* q, bool momentary) {
       if (!q || !q->isBounded()) return;
+      if (operation != 2 &&
+          APP->engine->getParamHandle(q->module->id, q->paramId))
+        return;
       if (operation != 2 && randomLocked(q->module->id, q->paramId)) return;
       if (operation == 2 ? !q->resetEnabled
                          : momentary || (all && !q->randomizeEnabled))
@@ -3748,7 +4062,8 @@ struct Beekapoo : app::ModuleWidget {
               if (!q) continue;
               auto* button =
                   dynamic_cast<app::Switch*>(w->getParam(q->paramId));
-              if (!q->randomizeEnabled || (button && button->momentary))
+              if (!q->randomizeEnabled || (button && button->momentary) ||
+                  APP->engine->getParamHandle(member.id, q->paramId))
                 locked.insert(q->paramId);
             }
             if (locked.empty() && range == 1.f && probability == 1.f)
@@ -3792,16 +4107,12 @@ struct Beekapoo : app::ModuleWidget {
     }
   }
   void onHoverKey(const HoverKeyEvent& e) override {
-    if (module && e.action == GLFW_PRESS && !(e.mods & RACK_MOD_MASK) &&
-        e.key == GLFW_KEY_E && !APP->scene->browser->visible &&
-        !dynamic_cast<ui::TextField*>(APP->event->getSelectedWidget())) {
-      if (editSession)
-        editSession->onHoverKey(e);
-      else
-        editSubpatch();
-      e.consume(this);
+    WeakPtr<Beekapoo> safe = this;
+    if (handleKeyboard(e)) {
+      e.consume(safe.get());
       return;
     }
+    if (!module || keyboardBlocked()) return;
     if (e.action == GLFW_PRESS && e.key == GLFW_KEY_U &&
         (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL) {
       if (homeRack->isSelected(this))
@@ -3913,6 +4224,7 @@ struct Beekapoo : app::ModuleWidget {
       return;
     }
 
+    stepKeyboard();
     updateSectionAddButtons(homeRack->getMousePos() -
                             getRelativeOffset(Vec(), homeRack));
     generateOnBrowserAdd();
@@ -4239,6 +4551,10 @@ struct Beekapoo : app::ModuleWidget {
     nvgRestore(args.vg);
   }
   void appendContextMenu(ui::Menu* menu) override {
+    if (module)
+      menu->addChild(createSubmenuItem(
+          "Parameter steps", "",
+          [this](ui::Menu* child) { appendSequenceMenu(child); }));
     if (!module) return;
     std::vector<widget::Widget*> nativeDuplicates;
     for (auto* child : menu->children)

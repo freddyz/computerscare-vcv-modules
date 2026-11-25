@@ -293,6 +293,7 @@ bool Beekapoo::importContents(json_t* root, const std::string& storageRoot,
         json_object_set_new(entry, field, json_integer(ids.at(old)));
       }
     }
+    remapSequence(json_object_get(remapped, "sequence"), ids);
     auto* sharedPorts = json_object_get(remapped, "ports");
     for (size_t i = 0; i < json_array_size(sharedPorts); ++i) {
       auto* p = json_array_get(sharedPorts, i);

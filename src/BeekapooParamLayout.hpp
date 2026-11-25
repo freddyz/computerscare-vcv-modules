@@ -126,7 +126,9 @@ inline std::vector<ParamCell> compactParams(
   // If full captions could not fit, retain small captions wherever possible
   // instead of making the entire dense grid anonymous. Never trade a usable
   // control for a label: very dense grids still fall back to controls alone.
-  for (float caption : {24.f, 12.f, 10.f, 8.f, 0.f}) {
+  // Eight-pixel text needs about ten pixels of line height in our font.
+  // Reserve that actual height rather than allocating an unusable 8px slot.
+  for (float caption : {24.f, 12.f, 10.f, 0.f}) {
     float separation = caption > 0 && caption <= 10 ? 2.f : 6.f;
     int bestColumns = 1;
     float bestSize = 0;
@@ -147,7 +149,7 @@ inline std::vector<ParamCell> compactParams(
     }
     float minimum = caption >= 24   ? 30.f
                     : caption >= 12 ? 24.f
-                    : caption >= 10 ? 20.f
+                    : caption >= 10 ? 16.f
                                     : 16.f;
     if (caption == 0 || bestSize >= minimum) {
       size = bestSize;

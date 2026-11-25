@@ -87,6 +87,8 @@ inline engine::ParamQuantity* legacyBeekGain(beekapoo::Beekapoo* owner, beekapoo
 #include "beekapoo-context.hpp"
 #include "beekapoo-menus.hpp"
 #include "beekapoo-compact.hpp"
+#include "beekapoo-sequence.hpp"
+#include "beekapoo-keyboard.hpp"
 void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,float scale) {
   auto require=[](bool pass,const char* why){if(!pass)throw std::runtime_error(why);};
   testBeekMenuStartup(require);
@@ -291,6 +293,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto* w=model->createModuleWidget(m);w->box.pos=pos;rack->addModule(w);return w;
   };
   if(std::getenv("BEEKAPOO_FILES")){testBeekPatchFiles(output,scale,add,require,gainModel);return;}
+  if(std::getenv("BEEKAPOO_KEYBOARD")){testBeekKeyboard(output,scale,add,require,gainModel);return;}
+  if(std::getenv("BEEKAPOO_SEQUENCE")){testBeekSequence(output,scale,add,require,gainModel);return;}
   testBeekGroupShutdown(add,require);
   testBeekCompact(output,scale,add,require);
   if(std::getenv("BEEKAPOO_COMPACT"))return;
@@ -874,6 +878,9 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     require(host->getParam(beekapoo::Module::WIGGLE_RANGE)->visible==(beekapoo::Beekapoo::ownControlLayout(host->box.size.x).knobCount>=3),"Wiggle range appears only when space permits");
     std::vector<widget::Widget*> visibleControls;
     for(auto* w:host->actionButtons)visibleControls.push_back(w);
+    for(auto* w:host->sequenceButtons)visibleControls.push_back(w);
+    visibleControls.push_back(host->stepSelector);
+    visibleControls.push_back(host->getParam(beekapoo::Module::SEQUENCE_SCAN));
     for(auto* w:host->managementButtons)visibleControls.push_back(w);
     for(int id:{beekapoo::Module::RANDOM_RANGE,beekapoo::Module::RANDOM_PROBABILITY,beekapoo::Module::WIGGLE_PROBABILITY})visibleControls.push_back(host->getParam(id));
     visibleControls.push_back(host->growButton);visibleControls.push_back(host->regenerateButton);
@@ -1544,8 +1551,8 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     wrapper->requestedWidth=hp*15;wrapper->layoutControls();wrapper->step();
     require(wrapper->addSelectionButton->visible,"Add button must appear for an eligible outside selection");
     require(wrapper->box.size.x==hp*15,"Narrow 8-param layout must preserve requested width");
-    // Two wrapped rows, each including its own 18 px button and 11 px CV jack.
-    require(wrapper->ownFrame->box.size.y<=beekapoo::Beekapoo::ownControlLayout(wrapper->box.size.x).height+14,"Top controls must fit their compact action layout");
+    // The action strip and transport rows share a compact frame.
+    require(wrapper->ownFrame->box.size.y<=beekapoo::Beekapoo::tinyOwnHeight(wrapper->box.size.x)+14,"Top controls must fit their compact action layout");
     for(auto* action:wrapper->actionButtons)if(action->visible)require(!action->iconAndText&&action->box.size.x==18&&action->box.size.y==18&&action->faceColor.r==action->faceColor.g&&action->faceColor.g==action->faceColor.b,"Random actions must be small neutral icon buttons");
     int visible=0;for(auto& param:wrapper->parameters)visible+=param.knob->visible;
     require(visible==8&&wrapper->parameters.size()==8,"Narrow layout must retain all eight mappings, with readable controls shown as space permits");

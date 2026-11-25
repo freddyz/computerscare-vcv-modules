@@ -80,7 +80,7 @@ struct RackEditSession : widget::Widget {
   std::map<int64_t, MemberTag> memberTags;
   ActionButton *done, *exposeButton, *panelButton, *removeButton,
       *newModulesButton, *nearButton, *farButton, *membersButton,
-      *randomLockButton, *optionsButton, *setsButton;
+      *randomLockButton, *optionsButton, *setsButton, *sequenceButton;
   RackEditPreview* preview;
   std::vector<WeakPtr<RackEditHighlight>> highlights;
   explicit RackEditSession(Beekapoo* group) : owner(group) {
@@ -185,6 +185,18 @@ struct RackEditSession : widget::Widget {
     });
     removeButton->help = [] { return "Remove selected modules from Beekapoo"; };
     removeButton->visible = false;
+    sequenceButton = addButton("Originals LIVE", 1020, 290, [this] {
+      if (owner) owner->showSequenceMenu();
+    });
+    sequenceButton->textSize = 16;
+    sequenceButton->caption = [this] {
+      return std::string("Originals LIVE | ") +
+             (owner ? owner->sequenceStatus() : "");
+    };
+    sequenceButton->help = [] {
+      return "Original modules and the main panel stay live. Step selection "
+             "recalls their saved values.";
+    };
     preview = new RackEditPreview;
     preview->owner = group;
     addChild(preview);
@@ -192,9 +204,10 @@ struct RackEditSession : widget::Widget {
   }
   void layoutToolbar(float width) {
     float x = 10, y = 7;
-    for (auto* button : {done, exposeButton, randomLockButton, panelButton,
-                         newModulesButton, nearButton, farButton, membersButton,
-                         removeButton, setsButton, optionsButton}) {
+    for (auto* button :
+         {done, exposeButton, randomLockButton, panelButton, newModulesButton,
+          nearButton, farButton, membersButton, removeButton, setsButton,
+          optionsButton, sequenceButton}) {
       if (!button->visible) continue;
       if (x > 10 && x + button->box.size.x + 10 > width) {
         x = 10;

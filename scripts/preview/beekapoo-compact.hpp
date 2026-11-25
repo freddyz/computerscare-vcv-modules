@@ -35,7 +35,7 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
   auto* rack=APP->scene->rack;
   auto* model=plugin::getModel("computerscare","demo-gain");
   struct Case {int params,ins,outs,width;};
-  const Case cases[]={{0,1,1,45},{3,1,1,45},{5,3,1,45},{8,2,2,75},{10,5,4,150},{6,3,2,240}};
+  const Case cases[]={{0,1,1,45},{3,1,1,45},{5,3,1,45},{8,2,2,75},{10,5,4,150},{6,3,2,360}};
   widget::Widget sheet;float left=0;
   std::vector<std::pair<beekapoo::Beekapoo*,Vec>> parked;
   for(int n=0;n<6;++n) {
@@ -74,6 +74,9 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
       auto* knob=owner->getParam(id);if(knob->visible)occupied.push_back(knob);
     }
     occupied.push_back(owner->getInput(beekapoo::Module::ACTIONS_INPUT));
+    occupied.push_back(owner->stepSelector);
+    for(auto* b:owner->sequenceButtons)if(b->visible)occupied.push_back(b);
+    if(owner->getParam(beekapoo::Module::SEQUENCE_SCAN)->visible)occupied.push_back(owner->getParam(beekapoo::Module::SEQUENCE_SCAN));
     for(size_t i=0;i<occupied.size();++i) {
       auto b=occupied[i]->box;
       require(b.pos.x>=0&&b.pos.y>=0&&b.getRight()<=owner->box.size.x&&b.getBottom()<=380,"Compact controls must stay on the panel");
