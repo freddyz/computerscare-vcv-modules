@@ -1,7 +1,7 @@
 // Included inside Beekapoo. Native live controls and immutable playback
 // snapshots.
 struct SequenceEditHistory : history::Action {
-  int64_t owner;
+  int64_t owner = -1;
   json_t *before = nullptr, *after = nullptr;
   ~SequenceEditHistory() {
     json_decref(before);
