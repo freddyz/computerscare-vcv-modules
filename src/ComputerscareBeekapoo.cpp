@@ -224,53 +224,8 @@ struct Module : engine::Module {
                       std::make_shared<const SequenceBank>(bank));
     sequenceCount.store(int(bank.steps.size()), std::memory_order_release);
   }
-  unsigned sequenceCaptureDivider = 0;
-  std::atomic<bool> sequenceCaptureEnabled{true};
   std::atomic<uint64_t> sequenceRecallEpoch{0};
-  void captureSequenceEdits(bool audio = false) {
-    if (!sequenceCaptureEnabled.load()) return;
-    uint64_t epoch = sequenceRecallEpoch.load();
-    if (epoch & 1) return;
-    auto bank = std::atomic_load(&sequenceBank);
-    int active = playingStep.load();
-    if (active < 0 || active >= int(bank->steps.size())) return;
-    const auto& entries = bank->steps[active];
-    struct Observation {
-      const StepValue* entry;
-      float value;
-      uint64_t token;
-    };
-    std::vector<Observation> observed;
-    if (!audio) observed.reserve(entries.size());
-    for (const auto& entry : entries) {
-      auto* child = APP->engine->getModule_NoLock(entry.module);
-      if (!child || entry.param < 0 || entry.param >= int(child->params.size()))
-        continue;
-      uint64_t token = entry.token();
-      float value = child->params[entry.param].getValue();
-      if (audio)
-        entry.edit(value);
-      else
-        observed.push_back({&entry, value, token});
-    }
-    // A UI snapshot straddling a recall must not save one step into another.
-    if (!audio && epoch == sequenceRecallEpoch.load() &&
-        active == playingStep.load())
-      for (const auto& value : observed)
-        value.entry->editIfUnchanged(value.value, value.token);
-  }
-  void primeSequenceObservations() {
-    auto bank = std::atomic_load(&sequenceBank);
-    int active = playingStep.load();
-    if (active < 0 || active >= int(bank->steps.size())) return;
-    for (const auto& entry : bank->steps[active]) {
-      auto* child = APP->engine->getModule_NoLock(entry.module);
-      if (child && entry.param >= 0 && entry.param < int(child->params.size()))
-        entry.observe(child->params[entry.param].getValue());
-    }
-  }
   void recallStep(int step) {
-    captureSequenceEdits(true);
     auto bank = std::atomic_load(&sequenceBank);
     if (step < 0 || step >= int(bank->steps.size())) return;
     sequenceRecallEpoch.fetch_add(1);
@@ -288,15 +243,11 @@ struct Module : engine::Module {
         APP->engine->setParamValue(
             child, entry.param,
             clamp(value, q->getMinValue(), q->getMaxValue()));
-      // Held values are the baseline, not edits to this newly entered step.
-      entry.observe(child->params[entry.param].getValue());
     }
     playingStep.store(step, std::memory_order_release);
-    sequenceCaptureEnabled.store(true);
     sequenceRecallEpoch.fetch_add(1);
   }
   void processSequence() {
-    if ((sequenceCaptureDivider++ & 1023u) == 0) captureSequenceEdits(true);
     auto& actions = inputs[ACTIONS_INPUT];
     auto voltage = [&](int channel) {
       return channel < actions.getChannels() ? actions.getVoltage(channel)
@@ -484,7 +435,6 @@ struct Module : engine::Module {
       // that cache into a patch, duplicate, or structural Undo snapshot.
       auto* snapshot = json_deep_copy(group);
       if (auto* sequence = json_object_get(snapshot, "sequence")) {
-        captureSequenceEdits();
         auto bank = std::atomic_load(&sequenceBank);
         auto* steps = json_array();
         for (const auto& values : bank->steps)
@@ -891,6 +841,18 @@ struct ActionButton : LetteredFace {
       nvgLineTo(args.vg, -6, 3);
       nvgClosePath(args.vg);
       nvgFill(args.vg);
+    } else if (icon == 21) {
+      // Recall: an uneven return arrow, separate from reset-to-first.
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -6, -3);
+      nvgBezierTo(args.vg, 4, -10, 10, 2, 3, 6);
+      nvgLineTo(args.vg, -2, 5);
+      nvgStroke(args.vg);
+      nvgBeginPath(args.vg);
+      nvgMoveTo(args.vg, -6, -7);
+      nvgLineTo(args.vg, -7, -2);
+      nvgLineTo(args.vg, -2, -1);
+      nvgStroke(args.vg);
     } else if (icon == 20) {
       nvgBeginPath(args.vg);
       nvgMoveTo(args.vg, -5, -6);
@@ -1228,31 +1190,6 @@ struct ExposedSwitch : app::Switch {
         face->textSize = momentary ? 18 : 12;
       }
   }
-  void drawGhost(const DrawArgs& args, engine::ParamQuantity* q, float saved) {
-    if (!q) return;
-    for (auto* child : children)
-      if (auto* face = dynamic_cast<Face*>(child)) {
-        auto shape = face->geometry(saved > q->getMinValue());
-        nvgSave(args.vg);
-        nvgTranslate(args.vg, face->box.pos.x, face->box.pos.y - 2);
-        nvgBeginPath(args.vg);
-        for (size_t i = 0; i < shape.front.size(); ++i) {
-          auto point = shape.front[i];
-          if (i)
-            nvgLineTo(args.vg, point.x, point.y);
-          else
-            nvgMoveTo(args.vg, point.x, point.y);
-        }
-        nvgClosePath(args.vg);
-        nvgStrokeColor(args.vg, nvgRGBA(0, 0, 0, 70));
-        nvgStrokeWidth(args.vg, 1.2f);
-        nvgStroke(args.vg);
-        nvgStrokeColor(args.vg, nvgRGBA(235, 235, 235, 125));
-        nvgStrokeWidth(args.vg, .55f);
-        nvgStroke(args.vg);
-        nvgRestore(args.vg);
-      }
-  }
   void onHover(const HoverEvent& e) override { e.consume(this); }
   void onDragStart(const DragStartEvent& e) override {
     if (source)
@@ -1286,7 +1223,6 @@ struct ParamVisual {
 };
 template <class Base>
 struct MappedParam : Base, ParamVisual {
-  std::function<bool(float&)> savedReference;
   Vec naturalSize;
   float visualScale = 1;
   MappedParam() : naturalSize(this->box.size) {}
@@ -1306,15 +1242,6 @@ struct MappedParam : Base, ParamVisual {
     nvgSave(args.vg);
     nvgScale(args.vg, visualScale, visualScale);
     Base::draw(scaled);
-    float saved = 0;
-    auto* live = this->getParamQuantity();
-    if (live && savedReference && savedReference(saved) &&
-        std::abs(saved - live->getValue()) > .00001f) {
-      if (auto* knob = dynamic_cast<ParametricKnob*>(this))
-        knob->drawGhost(scaled, live, saved);
-      if (auto* button = dynamic_cast<ExposedSwitch*>(this))
-        button->drawGhost(scaled, live, saved);
-    }
     nvgRestore(args.vg);
     this->box.size = displayed;
   }
@@ -2686,7 +2613,7 @@ struct Beekapoo : app::ModuleWidget {
     float buttonWidth =
         editWidth + ejectWidth + saveWidth + functionsWidth + 3 * buttonGap;
     float selectorWidth =
-        std::max(34.f, 18.f + 12.f * std::to_string(std::max(1, steps)).size());
+        std::max(42.f, 26.f + 12.f * std::to_string(std::max(1, steps)).size());
     result.showSelector = buttonWidth + selectorWidth + buttonGap <= width - 16;
     if (result.showSelector) buttonWidth += selectorWidth + buttonGap;
     float right = width - 10;
@@ -2754,7 +2681,7 @@ struct Beekapoo : app::ModuleWidget {
     std::array<Vec, 6> positions{};
     std::array<Vec, 4> knobs{};
     int knobCount = 0;
-    std::array<Vec, 5> sequence{};
+    std::array<Vec, 7> sequence{};
     int sequenceCount = 0;
     Vec scan;
     bool showScan = false, twoRows = false;
@@ -2771,7 +2698,7 @@ struct Beekapoo : app::ModuleWidget {
       r.twoRows = true;
       r.columns = 5;
       r.knobCount = 4;
-      r.sequenceCount = 5;
+      r.sequenceCount = 7;
       // Pair the exposed/all buttons by action, with range and probability
       // below.
       r.positions[0] = Vec(6, 4);
@@ -2783,10 +2710,12 @@ struct Beekapoo : app::ModuleWidget {
       r.knobs[3] = Vec(26, 27);
       r.knobs[0] = Vec(50, 27);
       r.knobs[1] = Vec(70, 27);
-      for (int i = 0; i < 5; ++i) r.sequence[i] = Vec(120 + i * 20, 4);
+      // Transport on the first row, snapshot operations directly below.
+      for (int i = 0; i < 3; ++i) r.sequence[i] = Vec(120 + i * 20, 4);
+      for (int i = 3; i < 7; ++i) r.sequence[i] = Vec(120 + (i - 3) * 20, 27);
       r.positions[5] = Vec(width - margin - jackSize, 5);
       r.showScan = width >= 285;
-      r.scan = Vec(120, 27);
+      r.scan = Vec(204, 27);
       r.height = 50;
       return r;
     }
@@ -2798,7 +2727,7 @@ struct Beekapoo : app::ModuleWidget {
       r.positions[i] = Vec(x, 3 + (rowHeight - r.size) * .5f);
       x += r.size + gap;
     }
-    while (r.sequenceCount < 5 && x + 20 + jackSize <= width - margin) {
+    while (r.sequenceCount < 7 && x + 20 + jackSize <= width - margin) {
       r.sequence[r.sequenceCount++] = Vec(x, 3);
       x += 20;
     }
@@ -2851,7 +2780,7 @@ struct Beekapoo : app::ModuleWidget {
          {0, 1, 2, 3, 4, 5, Module::GENERATE_INPUT, Module::GROW_INPUT})
       getInput(id)->box.pos = jack->box.pos;
     twoRowControls = plan.twoRows;
-    for (int i = 0; i < 5; ++i) {
+    for (int i = 0; i < 7; ++i) {
       sequenceButtons[i]->visible = i < plan.sequenceCount;
       auto* button = sequenceButtons[i];
       button->box = Rect(plan.sequence[i] + Vec(0, top), Vec(18, 18));
@@ -3307,17 +3236,10 @@ struct Beekapoo : app::ModuleWidget {
         text += "\nMIDI mapped: step recall skipped";
       return text;
     };
-    auto reference = [this, id, index](float& value) {
-      return savedSequenceValue(id, index, value);
-    };
-    if (auto* mapped = dynamic_cast<MappedParam<ExposedSwitch>*>(knob)) {
+    if (auto* mapped = dynamic_cast<MappedParam<ExposedSwitch>*>(knob))
       mapped->caption = caption;
-      mapped->savedReference = reference;
-    }
-    if (auto* mapped = dynamic_cast<MappedParam<ParametricKnob>*>(knob)) {
+    if (auto* mapped = dynamic_cast<MappedParam<ParametricKnob>*>(knob))
       mapped->caption = caption;
-      mapped->savedReference = reference;
-    }
     controls->addChild(knob);
     parameters.push_back({id, index, knob});
     layoutControls();
@@ -4305,6 +4227,7 @@ struct Beekapoo : app::ModuleWidget {
     }
 
     stepKeyboard();
+    if ((sequenceStatusFrames++ & 7u) == 0) refreshSequenceModified();
     updateSectionAddButtons(homeRack->getMousePos() -
                             getRelativeOffset(Vec(), homeRack));
     generateOnBrowserAdd();

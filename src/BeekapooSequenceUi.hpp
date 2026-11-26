@@ -35,7 +35,8 @@ void finishSequenceEdit(SequenceEditHistory* action) {
 SequenceBank sequence;
 std::vector<ActionButton*> sequenceButtons;
 ActionButton* stepSelector = nullptr;
-bool showSavedValues = false;
+bool sequenceModified = false;
+unsigned sequenceStatusFrames = 0;
 bool twoRowControls = false;
 
 bool sequenceEligible(int64_t id, int param) {
@@ -58,7 +59,6 @@ StepValues captureSequenceValues() {
   return values;
 }
 json_t* sequenceJson() {
-  if (auto* m = getModule<Module>()) m->captureSequenceEdits();
   auto* root = json_object();
   auto* steps = json_array();
   for (const auto& values : sequence.steps)
@@ -71,7 +71,6 @@ json_t* sequenceJson() {
                       json_boolean(m && m->scanEnabled.load()));
   json_object_set_new(root, "clockedScan",
                       json_boolean(m && m->clockedScan.load()));
-  json_object_set_new(root, "showSavedValues", json_boolean(showSavedValues));
   json_object_set_new(root, "playing",
                       json_integer(m ? m->playingStep.load() : 0));
   return root;
@@ -95,7 +94,6 @@ void loadSequence(json_t* root) {
   auto* steps = json_object_get(root, "steps");
   for (size_t i = 0; i < json_array_size(steps); ++i)
     sequence.steps.push_back(stepValuesFromJson(json_array_get(steps, i)));
-  showSavedValues = json_is_true(json_object_get(root, "showSavedValues"));
   if (auto* m = getModule<Module>()) {
     m->clockEnabled.store(json_is_true(json_object_get(root, "clockEnabled")));
     m->scanEnabled.store(json_is_true(json_object_get(root, "scanEnabled")));
@@ -107,10 +105,7 @@ void loadSequence(json_t* root) {
   }
   // Old silent drafts are intentionally not restored or applied.
   publishSequence();
-  if (auto* m = getModule<Module>()) {
-    m->sequenceCaptureEnabled.store(true);
-    m->primeSequenceObservations();
-  }
+  refreshSequenceModified();
 }
 void selectSequenceStep(int index) {
   if (index < 0 || index >= int(sequence.steps.size())) return;
@@ -119,15 +114,28 @@ void selectSequenceStep(int index) {
 void appendSequenceStep() {
   auto* m = getModule<Module>();
   if (!m || members.empty()) return;
-  auto* action = beginSequenceEdit("save new parameter step");
+  auto* action = beginSequenceEdit("capture new parameter step");
   sequence.steps.push_back(captureSequenceValues());
+  sequenceModified = false;
   // These values are already sounding; select without recalling anything.
   m->playingStep.store(int(sequence.steps.size()) - 1);
   m->requestedStep.store(-1);
-  m->sequenceCaptureEnabled.store(true);
   saveGroup();
   layoutControls();
   finishSequenceEdit(action);
+}
+void updateSequenceStep() {
+  auto* m = getModule<Module>();
+  int step = m ? m->playingStep.load() : -1;
+  if (step < 0 || step >= int(sequence.steps.size())) return;
+  auto* action = beginSequenceEdit("update parameter step");
+  sequence.steps[step] = captureSequenceValues();
+  sequenceModified = false;
+  saveGroup();
+  finishSequenceEdit(action);
+}
+void recallSequenceStep() {
+  if (auto* m = getModule<Module>()) selectSequenceStep(m->playingStep.load());
 }
 void deleteSequenceStep(int index = -1) {
   auto* m = getModule<Module>();
@@ -135,7 +143,6 @@ void deleteSequenceStep(int index = -1) {
   if (index < 0) index = m->playingStep.load();
   if (index < 0 || index >= int(sequence.steps.size())) return;
   auto* action = beginSequenceEdit("delete parameter step");
-  m->sequenceCaptureEnabled.store(false);
   sequence.steps.erase(sequence.steps.begin() + index);
   int playing = m->playingStep.load();
   bool removedPlaying = playing == index;
@@ -143,7 +150,6 @@ void deleteSequenceStep(int index = -1) {
   playing = clamp(playing, 0, int(sequence.steps.size()) - 1);
   m->playingStep.store(playing);
   m->requestedStep.store(removedPlaying ? playing : -1);
-  if (!removedPlaying) m->sequenceCaptureEnabled.store(true);
   saveGroup();
   layoutControls();
   finishSequenceEdit(action);
@@ -162,24 +168,39 @@ void clearSequenceSteps() {
   layoutControls();
   finishSequenceEdit(action);
 }
-// Read-only reference for ghosts; never substitutes a parameter quantity.
-bool savedSequenceValue(int64_t id, int param, float& value) {
-  if (!showSavedValues) return false;
+// Compare on the UI thread only. Stored values are immutable during playback.
+// Protected controls deliberately stay independent of the selected snapshot.
+void refreshSequenceModified() {
   auto* m = getModule<Module>();
-  int step = m ? m->playingStep.load() : -1;
-  if (step < 0 || step >= int(sequence.steps.size())) return false;
-  for (const auto& entry : sequence.steps[step])
-    if (entry.module == id && entry.param == param) {
-      value = entry.getValue();
-      return true;
+  if (!m) {
+    sequenceModified = false;
+    return;
+  }
+  auto epoch = m->sequenceRecallEpoch.load();
+  if (epoch & 1u) return;
+  int step = m->playingStep.load();
+  bool modified = false;
+  if (step >= 0 && step < int(sequence.steps.size()))
+    for (const auto& entry : sequence.steps[step]) {
+      if (randomLocked(entry.module, entry.param) ||
+          APP->engine->getParamHandle(entry.module, entry.param))
+        continue;
+      auto* w = find(entry.module);
+      auto* q = w ? w->module->getParamQuantity(entry.param) : nullptr;
+      if (q && std::abs(q->getValue() - entry.getValue()) > .00001f) {
+        modified = true;
+        break;
+      }
     }
-  return false;
+  if (epoch == m->sequenceRecallEpoch.load() && step == m->playingStep.load())
+    sequenceModified = modified;
 }
 std::string sequenceStatus() {
   auto* m = getModule<Module>();
   int play = m ? m->playingStep.load() : 0;
   return std::to_string(std::max(0, play) + 1) + "/" +
-         std::to_string(std::max(1, int(sequence.steps.size())));
+         std::to_string(std::max(1, int(sequence.steps.size()))) +
+         (sequenceModified ? " •" : "");
 }
 void showStepSelector() {
   if (sequence.steps.size() <= 1) return;
@@ -229,14 +250,6 @@ void appendSequenceMenu(ui::Menu* menu) {
           live->saveGroup();
         }
       }));
-  menu->addChild(createCheckMenuItem(
-      "Show saved values", "", [live] { return live && live->showSavedValues; },
-      [live] {
-        if (live) {
-          live->showSavedValues = !live->showSavedValues;
-          live->saveGroup();
-        }
-      }));
   menu->addChild(createMenuItem("Choose step", "", [live] {
     if (live) live->showStepSelector();
   }));
@@ -257,8 +270,14 @@ void appendSequenceMenu(ui::Menu* menu) {
   menu->addChild(createMenuItem("Reset", "Actions CV ch 8", [live] {
     if (live) live->getModule<Module>()->manualResets.fetch_add(1);
   }));
-  menu->addChild(createMenuItem("Save as New", "", [live] {
+  menu->addChild(createMenuItem("Capture New", "", [live] {
     if (live) live->appendSequenceStep();
+  }));
+  menu->addChild(createMenuItem("Update current step", "", [live] {
+    if (live) live->updateSequenceStep();
+  }));
+  menu->addChild(createMenuItem("Recall current step", "", [live] {
+    if (live) live->recallSequenceStep();
   }));
 }
 void showSequenceMenu() {
@@ -267,11 +286,15 @@ void showSequenceMenu() {
 }
 void createSequenceControls(Module* m) {
   addParam(createParam<ThemedSmallKnob>(Vec(), m, Module::SEQUENCE_SCAN));
-  const int icons[] = {13, 20, 14, 16, 18};
-  const char* help[] = {"Clock on/off", "Advance playback\nActions CV ch 7",
-                        "Reset playback\nActions CV ch 8", "Save as New",
+  const int icons[] = {13, 20, 14, 16, 15, 21, 18};
+  const char* help[] = {"Clock on/off",
+                        "Advance playback\nActions CV ch 7",
+                        "Reset playback\nActions CV ch 8",
+                        "Capture New",
+                        "Update current step",
+                        "Recall current step",
                         "Delete current step"};
-  for (int i = 0; i < 5; ++i) {
+  for (int i = 0; i < 7; ++i) {
     auto* b = new ActionButton;
     b->icon = icons[i];
     std::string hint = help[i];
@@ -300,6 +323,10 @@ void createSequenceControls(Module* m) {
         m->manualResets.fetch_add(1);
       else if (i == 3)
         appendSequenceStep();
+      else if (i == 4)
+        updateSequenceStep();
+      else if (i == 5)
+        recallSequenceStep();
       else
         deleteSequenceStep();
     };
@@ -310,7 +337,11 @@ void createSequenceControls(Module* m) {
   stepSelector->configure(64, 14, 1.f, .6f, .3f, 1950);
   stepSelector->textSize = 9;
   stepSelector->caption = [this] { return sequenceStatus(); };
-  stepSelector->help = [] { return "Choose and recall step"; };
+  stepSelector->help = [this] {
+    return sequenceModified ? "Choose and recall step\nModified: Capture New "
+                              "or Update to keep changes"
+                            : "Choose and recall step";
+  };
   stepSelector->action = [this] {
     if (module) showStepSelector();
   };

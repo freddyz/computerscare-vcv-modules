@@ -36,11 +36,12 @@ The visual look is completely determined by the manufacturers, modules, and inte
 ## Parameter steps
 
 - Controls always change the live inner parameters. Start at Step 1/1.
-- Edits automatically save to the active step. Save as New captures the current sound and selects the new step. Delete removes the active step; one step always remains. Selecting a step recalls it immediately.
+- Capture New saves the sound as another step. Update replaces the current snapshot. Recall restores it. Knob edits stay live without overwriting snapshots.
+- Selecting or clocking a step recalls its saved values, replacing unsaved tweaks. Delete removes the active step; one always remains.
+- A dot beside `1/2` means the live sound has unsaved changes. Saving the Rack patch keeps both live tweaks and saved steps.
 - Clock on/off enables incoming clock and scan. Manual Advance and Reset still work when it is off.
 - Actions CV: 1–6 randomization; 7 Clock, 8 Reset, 9 Scan. Channels 10–16 are unused.
 - Clock and Scan default to Off. Scan offers Continuous or Clocked; 0–10 V selects across the saved steps.
-- Optional “Show saved values” draws faint snapshot references behind live controls. It never changes what a control edits.
 - The header shows `1/2` when there is room, including `1/1`. The three-dot menu can remove all steps, keeping the current sound.
 - **Lock** in Edit protects parameters or whole modules from randomize, wiggle and sequence recall. Manual edits remain possible.
 - Snapshots include all inner parameters except momentary buttons. MIDI-mapped parameters are protected from recall, randomize, and wiggle.
@@ -57,8 +58,8 @@ The visual look is completely determined by the manufacturers, modules, and inte
 Hold **~** over Beek to show keys on the buttons and the full shortcut guide.
 
 - **Q / W**: wiggle all / exposed. **T / R**: randomize all / exposed.
-- **Space**: clock on/off. **← / →**: previous / next step. **Home**: reset. **Enter**: choose step.
-- **D / N**: Delete step / Save as New.
+- **Space**: clock on/off. **← / →**: previous / next step. **Home**: reset.
+- **N**: Capture New. **U**: Update. **Backspace**: Recall. **D**: Delete step.
 - **E**: Edit; **E / X** in Edit: Expose; **Esc**: Done.
 - **1–9, 0**: exposed buttons. **[ / ]**: switch banks of ten. Hold for momentaries.
 - Shortcuts stay inactive while typing or using a menu.

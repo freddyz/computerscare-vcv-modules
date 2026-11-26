@@ -5,7 +5,8 @@ enum class KeyAction {
   Next,
   Previous,
   Reset,
-  Steps,
+  Update,
+  Recall,
   DeleteStep,
   New,
   WiggleAll,
@@ -15,14 +16,7 @@ enum class KeyAction {
   Generate,
   Edit,
   Eject,
-  Save,
-  Add,
-  Functions,
-  Grow,
-  Compact,
-  ExposeMore,
-  ExposeLess,
-  Reroll
+  Save
 };
 struct KeyBinding {
   int key, mods;
@@ -35,9 +29,10 @@ inline const std::vector<KeyBinding>& keyBindings() {
       {GLFW_KEY_RIGHT, 0, "→", "Next step", KeyAction::Next},
       {GLFW_KEY_LEFT, 0, "←", "Previous step", KeyAction::Previous},
       {GLFW_KEY_HOME, 0, "↖", "Reset to step 1 (Home)", KeyAction::Reset},
-      {GLFW_KEY_ENTER, 0, "Enter", "Choose step", KeyAction::Steps},
       {GLFW_KEY_D, 0, "D", "Delete current step", KeyAction::DeleteStep},
-      {GLFW_KEY_N, 0, "N", "Save as New", KeyAction::New},
+      {GLFW_KEY_N, 0, "N", "Capture New", KeyAction::New},
+      {GLFW_KEY_U, 0, "U", "Update current step", KeyAction::Update},
+      {GLFW_KEY_BACKSPACE, 0, "⌫", "Recall saved step", KeyAction::Recall},
       {GLFW_KEY_Q, 0, "Q", "Wiggle all", KeyAction::WiggleAll},
       {GLFW_KEY_W, 0, "W", "Wiggle exposed", KeyAction::WiggleExposed},
       {GLFW_KEY_R, 0, "R", "Randomize exposed", KeyAction::RandomExposed},
@@ -47,15 +42,7 @@ inline const std::vector<KeyBinding>& keyBindings() {
       {GLFW_KEY_E, 0, "E", "Edit subpatch", KeyAction::Edit},
       {GLFW_KEY_E, GLFW_MOD_SHIFT, "⇧E", "Eject", KeyAction::Eject},
       {GLFW_KEY_S, GLFW_MOD_SHIFT, "⇧S", "Save Beek preset", KeyAction::Save},
-      {GLFW_KEY_A, 0, "A", "Chomp selected modules", KeyAction::Add},
-      {GLFW_KEY_F, 0, "F", "Functions menu", KeyAction::Functions},
-      {GLFW_KEY_G, 0, "G", "Grow", KeyAction::Grow},
-      {GLFW_KEY_G, GLFW_MOD_SHIFT, "⇧G", "Compact subpatch",
-       KeyAction::Compact},
-      {GLFW_KEY_EQUAL, 0, "+", "Expose another", KeyAction::ExposeMore},
-      {GLFW_KEY_MINUS, 0, "−", "Remove one exposed", KeyAction::ExposeLess},
-      {GLFW_KEY_R, GLFW_MOD_ALT, "⌥R", "Re-roll hovered section",
-       KeyAction::Reroll}};
+  };
   return bindings;
 }
 // Layer 3 follows Rack's cables. Lifetime is owned by the module's callback.

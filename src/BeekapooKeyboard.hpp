@@ -77,10 +77,12 @@ ActionButton* shortcutButton(KeyAction action) {
       return sequenceButtons[2];
     case KeyAction::New:
       return sequenceButtons[3];
-    case KeyAction::DeleteStep:
+    case KeyAction::Update:
       return sequenceButtons[4];
-    case KeyAction::Steps:
-      return stepSelector;
+    case KeyAction::Recall:
+      return sequenceButtons[5];
+    case KeyAction::DeleteStep:
+      return sequenceButtons[6];
     case KeyAction::WiggleAll:
       return actionButtons[3];
     case KeyAction::WiggleExposed:
@@ -97,18 +99,6 @@ ActionButton* shortcutButton(KeyAction action) {
       return managementButtons[1];
     case KeyAction::Save:
       return managementButtons[2];
-    case KeyAction::Add:
-      return addSelectionButton;
-    case KeyAction::Functions:
-      return growButton;
-    case KeyAction::ExposeMore:
-      return hoveredSection >= 0 ? sectionAddButtons[hoveredSection] : nullptr;
-    case KeyAction::ExposeLess:
-      return hoveredSection >= 0 ? sectionRemoveButtons[hoveredSection]
-                                 : nullptr;
-    case KeyAction::Reroll:
-      return hoveredSection >= 0 ? sectionRerollButtons[hoveredSection]
-                                 : nullptr;
     default:
       return nullptr;
   }
@@ -122,19 +112,6 @@ void configureKeyboardHints() {
     b->help = [previous, key] {
       return (previous ? previous() : std::string()) + " [" + key + "]";
     };
-  }
-  for (int i = 0; i < 3; ++i) {
-    std::array<ActionButton*, 3> buttons{{sectionAddButtons[i],
-                                          sectionRemoveButtons[i],
-                                          sectionRerollButtons[i]}};
-    const char* keys[] = {"+", "−", "Alt+R"};
-    for (int j = 0; j < 3; ++j) {
-      auto previous = buttons[j]->help;
-      std::string key = keys[j];
-      buttons[j]->help = [previous, key] {
-        return previous() + " [" + key + "]";
-      };
-    }
   }
 }
 bool handleKeyboard(const HoverKeyEvent& e) {
@@ -161,13 +138,7 @@ bool handleKeyboard(const HoverKeyEvent& e) {
     return true;
   }
   for (const auto& binding : keyBindings()) {
-    bool plus = binding.action == KeyAction::ExposeMore &&
-                ((e.key == GLFW_KEY_EQUAL && mods == GLFW_MOD_SHIFT) ||
-                 (e.key == GLFW_KEY_KP_ADD && !mods));
-    bool minus = binding.action == KeyAction::ExposeLess &&
-                 e.key == GLFW_KEY_KP_SUBTRACT && !mods;
-    if (!plus && !minus && (e.key != binding.key || mods != binding.mods))
-      continue;
+    if (e.key != binding.key || mods != binding.mods) continue;
     if (e.action != GLFW_PRESS) return true;
     if (binding.action == KeyAction::Previous) {
       auto* m = getModule<Module>();
@@ -175,11 +146,7 @@ bool handleKeyboard(const HoverKeyEvent& e) {
       if (count)
         selectSequenceStep((std::max(0, m->playingStep.load()) + count - 1) %
                            count);
-    } else if (binding.action == KeyAction::Grow)
-      growPatch();
-    else if (binding.action == KeyAction::Compact)
-      compactSubpatch();
-    else if (binding.action == KeyAction::Edit && editSession)
+    } else if (binding.action == KeyAction::Edit && editSession)
       editSession->onHoverKey(e);
     else if (auto* b = shortcutButton(binding.action)) {
       // A callback may remove the module (Eject); do not access members after
@@ -256,7 +223,6 @@ void paintKeyboard(const DrawArgs& args, bool fitViewport) {
     nvgText(vg, center.x, center.y, key.c_str(), nullptr);
   };
   for (const auto& binding : keyBindings()) {
-    if (binding.action == KeyAction::Add && !canAddSelection()) continue;
     badge(shortcutButton(binding.action), binding.badge);
   }
   auto buttons = keyboardButtons();
@@ -264,7 +230,7 @@ void paintKeyboard(const DrawArgs& args, bool fitViewport) {
   int bank = clamp(buttonKeyBank, 0, banks - 1);
   for (int i = 0; i < 10 && bank * 10 + i < int(buttons.size()); ++i)
     badge(buttons[bank * 10 + i], std::to_string((i + 1) % 10));
-  float width = 218, height = 370;
+  float width = 218, height = 100 + keyBindings().size() * 11.5f;
   Vec guide(box.size.x + 9, 5);
   if (fitViewport) {
     float zoom = std::max(.1f, getAbsoluteZoom());
@@ -288,13 +254,6 @@ void paintKeyboard(const DrawArgs& args, bool fitViewport) {
           "Hold ~   ·   shortcuts act on this Beek", nullptr);
   float y = guide.y + 45;
   for (const auto& binding : keyBindings()) {
-    if (binding.action == KeyAction::ExposeMore) {
-      y += 5;
-      nvgFillColor(vg, nvgRGB(163, 179, 175));
-      nvgText(vg, guide.x + 10, y, "Hovered section: params / inputs / outputs",
-              nullptr);
-      y += 14;
-    }
     nvgFillColor(vg, nvgRGB(236, 223, 139));
     nvgText(vg, guide.x + 10, y, binding.badge, nullptr);
     nvgFillColor(vg, nvgRGB(235, 238, 237));

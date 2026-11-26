@@ -45,13 +45,22 @@ void testBeekKeyboard(const std::string& output, float scale, Add add, Require r
   }
   auto before = owner->sequence.steps.size();
   key(GLFW_KEY_N);key(GLFW_KEY_N, GLFW_REPEAT);key(GLFW_KEY_N, GLFW_RELEASE);
-  require(owner->sequence.steps.size()==before+1, "Save New fires once per key press");
+  require(owner->sequence.steps.size()==before+1, "Capture New fires once per key press");
   key(GLFW_KEY_SPACE);require(m->clockEnabled.load(), "Space enables clock");
   key(GLFW_KEY_SPACE,GLFW_REPEAT);require(m->clockEnabled.load(), "Space repeat does not toggle");
   key(GLFW_KEY_SPACE);require(!m->clockEnabled.load(), "Space disables clock");
   key(GLFW_KEY_HOME);m->process({});require(m->playingStep==0, "Home resets");
   key(GLFW_KEY_RIGHT);m->process({});require(m->playingStep==1, "Right advances");
   key(GLFW_KEY_LEFT);m->process({});require(m->playingStep==0, "Left recalls previous step");
+  // Menu-only shortcuts were removed; snapshot shortcuts perform direct actions.
+  for(int code:{GLFW_KEY_ENTER,GLFW_KEY_F,GLFW_KEY_A,GLFW_KEY_G,GLFW_KEY_EQUAL,GLFW_KEY_MINUS}) {
+    widget::Widget::HoverKeyEvent event;event.key=code;event.action=GLFW_PRESS;event.mods=0;
+    require(!owner->handleKeyboard(event),"Menus and exposure/structure actions no longer consume keys");
+  }
+  auto* liveParam=voices[0]->module->getParamQuantity(0);
+  liveParam->setImmediateValue(.42f);key(GLFW_KEY_U);liveParam->setImmediateValue(.8f);
+  key(GLFW_KEY_BACKSPACE);m->process({});
+  require(liveParam->getValue()==.42f&&rack->getModule(m->id)==owner,"Update/Recall act directly and Backspace does not delete Beek");
   auto stepCount=owner->sequence.steps.size();
   key(GLFW_KEY_D);key(GLFW_KEY_D,GLFW_REPEAT);m->process({});
   require(owner->sequence.steps.size()==stepCount-1&&rack->getModule(m->id)==owner,"D deletes one step, not the Beek module");
@@ -80,13 +89,6 @@ void testBeekKeyboard(const std::string& output, float scale, Add add, Require r
   for(auto* v:voices){rack->getModule(v->module->id)->step();rack->getModule(v->module->id)->step();}
   require(buttons[momentary]->getParamQuantity()->getValue()==0,"Focus loss cleanup releases momentaries");
   for(const auto& p:owner->parameters)require(p.knob->getParamQuantity()==APP->engine->getModule(p.id)->getParamQuantity(p.paramId),"Keyboard preserves native mapping targets");
-  owner->updateSectionAddButtons(owner->frame->box.getCenter());
-  auto exposed=owner->parameters.size();key(GLFW_KEY_EQUAL);
-  require(owner->parameters.size()==exposed+1,"Plus exposes a control in the hovered section");
-  owner->updateSectionAddButtons(owner->frame->box.getCenter());key(GLFW_KEY_MINUS);
-  require(owner->parameters.size()==exposed,"Minus removes one from the hovered section");
-  owner->updateSectionAddButtons(owner->frame->box.getCenter());key(GLFW_KEY_R,GLFW_PRESS,GLFW_MOD_ALT);
-  require(owner->parameters.size()==exposed,"Alt R rerolls the hovered section, preserving count");
   auto render=[&](const char* filename) {
     auto position=owner->box.pos;auto* parent=owner->parent;parent->removeChild(owner);
     auto* preview=new BeekKeyboardCapture;preview->owner=owner;owner->box.pos=Vec(8,8);preview->box.size=Vec(owner->box.size.x+244,396);preview->addChild(owner);

@@ -2,12 +2,9 @@
 #include <jansson.h>
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <cstdint>
-#include <cstring>
 #include <map>
-#include <memory>
 #include <set>
 #include <vector>
 
@@ -15,46 +12,9 @@ namespace beekapoo {
 struct StepValue {
   int64_t module;
   int param;
-  struct Cell {
-    std::atomic<uint64_t> state;
-    static uint32_t bits(float v) {
-      uint32_t b;
-      std::memcpy(&b, &v, sizeof(b));
-      return b;
-    }
-    static float number(uint32_t b) {
-      float v;
-      std::memcpy(&v, &b, sizeof(v));
-      return v;
-    }
-    static uint64_t pack(float value, float observed) {
-      return uint64_t(bits(value)) | (uint64_t(bits(observed)) << 32);
-    }
-    explicit Cell(float v) : state(pack(v, v)) {}
-  };
-  // Copies share only scalar state. Structure is immutable during playback.
-  // A single CAS keeps saved/observed values together across UI/audio updates.
-  std::shared_ptr<Cell> cell;
-  StepValue(int64_t m, int p, float v)
-      : module(m), param(p), cell(std::make_shared<Cell>(v)) {}
-  float getValue() const { return Cell::number(uint32_t(cell->state.load())); }
-  uint64_t token() const { return cell->state.load(); }
-  void observe(float v) const {
-    auto state = token();
-    while (!cell->state.compare_exchange_weak(
-        state, uint64_t(uint32_t(state)) | (uint64_t(Cell::bits(v)) << 32))) {
-    }
-  }
-  void edit(float v) const {
-    if (!std::isfinite(v)) return;
-    auto state = token();
-    while (Cell::number(uint32_t(state >> 32)) != v)
-      if (cell->state.compare_exchange_weak(state, Cell::pack(v, v))) return;
-  }
-  void editIfUnchanged(float v, uint64_t state) const {
-    if (std::isfinite(v) && Cell::number(uint32_t(state >> 32)) != v)
-      cell->state.compare_exchange_strong(state, Cell::pack(v, v));
-  }
+  float value;
+  StepValue(int64_t m, int p, float v) : module(m), param(p), value(v) {}
+  float getValue() const { return value; }
 };
 using StepValues = std::vector<StepValue>;
 struct SequenceBank {
