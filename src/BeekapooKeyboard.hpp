@@ -120,6 +120,10 @@ bool handleKeyboard(const HoverKeyEvent& e) {
     return true;
   }
   if (!module || keyboardBlocked()) return false;
+  if (editSession) {
+    editSession->onHoverKey(e);
+    if (e.isConsumed()) return true;
+  }
   int mods = e.mods & RACK_MOD_MASK;
   if (e.key == GLFW_KEY_GRAVE_ACCENT && (mods == 0 || mods == GLFW_MOD_SHIFT))
     return true;

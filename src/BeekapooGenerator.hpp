@@ -13,8 +13,8 @@ inline float moduleWidth(plugin::Model* model) {
   return cache[key] = preview->box.size.x;
 }
 // Build a portable group without touching the rack. Each processor gets its
-// signal input; envelopes get a running gate. Spare inputs stay available on
-// the front, rather than breaking a required connection to expose a jack.
+// required inputs, without assigning signal types. Spare inputs stay available
+// on the front, rather than breaking a required connection to expose a jack.
 inline json_t* plan(int requestedCount = 0,
                     const beekapoo_patch::ExposureCounts* exact = nullptr,
                     const std::string& setId = moduleSets().defaultId,

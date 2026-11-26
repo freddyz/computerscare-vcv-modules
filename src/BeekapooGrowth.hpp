@@ -10,7 +10,7 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
   };
   std::vector<Destination> free;
   std::vector<app::CableWidget*> insertions;
-  std::vector<app::PortWidget*> sources, gates;
+  std::vector<app::PortWidget*> sources;
 
   for (const auto& member : members) {
     if (randomLocked(member.id, -1)) continue;
@@ -30,7 +30,7 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
       for (const auto& in : spec.modulationInputs) {
         auto* port = w->getInput(in.id);
         if (!port || exposed(port) || inputConnected(in.id)) continue;
-        if (beekapoo_patch::controlUseful(in, inputConnected, outputUsed))
+        if (beekapoo_patch::portUseful(spec, in, inputConnected, outputUsed))
           free.push_back({w, in.id});
       }
       for (const auto& out : spec.outputs) {
@@ -50,7 +50,6 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
         }
         if (ready) {
           sources.push_back(port);
-          if (out.signal == beekapoo_patch::Signal::gate) gates.push_back(port);
         }
       }
     }
@@ -69,20 +68,24 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
   struct Addition {
     int type;
     beekapoo_patch::Output output;
+    std::vector<int> inputs;
   };
   std::vector<Addition> processors, generators;
   for (int i = 0; i < int(catalog.specs.size()); ++i) {
     const auto& spec = catalog.specs[i];
+    int priority = 0;
+    for (const auto& out : spec.outputs)
+      priority = std::max(priority, out.priority);
     for (const auto& out : spec.outputs) {
-      bool needsSound = false, ready = true;
-      for (const auto& r : out.requirements) {
-        needsSound |= r.signal != beekapoo_patch::Signal::gate;
-        ready &= !r.anyOf.empty() &&
-                 (r.signal != beekapoo_patch::Signal::gate || !gates.empty());
-      }
-      if (ready && needsSound && !insertions.empty())
-        processors.push_back({i, out});
-      if (ready && !needsSound && !free.empty()) generators.push_back({i, out});
+      if (out.priority < priority) continue;
+      std::vector<int> needed;
+      bool ready = beekapoo_patch::requiredInputs(
+          spec, out, [](int n) { return int(random::u32() % unsigned(n)); },
+          needed);
+      if (ready && !needed.empty() && !insertions.empty())
+        processors.push_back({i, out, needed});
+      if (ready && (needed.empty() || !sources.empty()) && !free.empty())
+        generators.push_back({i, out, needed});
     }
   }
   bool canAdd = !processors.empty() || !generators.empty();
@@ -165,26 +168,13 @@ bool Beekapoo::growPatch(history::ComplexAction* parent) {
       batch->push(remove);
       homeRack->removeCable(old);
       delete old;
-      std::set<int> connected;
-      for (const auto& r : addition.output.requirements) {
-        int input = r.anyOf[random::u32() % r.anyOf.size()];
-        if (connected.insert(input).second) {
-          auto* source = r.signal == beekapoo_patch::Signal::gate
-                             ? gates[random::u32() % gates.size()]
-                             : from;
-          wire(source, w->getInput(input));
-        }
-      }
+      for (int input : addition.inputs) wire(from, w->getInput(input));
       wire(w->getOutput(addition.output.port), to);
       if (vca && !sources.empty())
         wire(sources[random::u32() % sources.size()], w->getInput(0));
     } else {
-      std::set<int> connected;
-      for (const auto& r : addition.output.requirements) {
-        int input = r.anyOf[random::u32() % r.anyOf.size()];
-        if (connected.insert(input).second)
-          wire(gates[random::u32() % gates.size()], w->getInput(input));
-      }
+      for (int input : addition.inputs)
+        wire(sources[random::u32() % sources.size()], w->getInput(input));
       const auto& to = free[random::u32() % free.size()];
       wire(w->getOutput(addition.output.port), to.module->getInput(to.input));
     }

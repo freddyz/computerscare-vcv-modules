@@ -111,12 +111,12 @@ void testBeekModuleSets(const std::string& output, float scale, Add add, Require
   auto* envelopeOwner=static_cast<Beekapoo*>(add(modelBeekapooPreview,Vec(300,0)));
   rack->select(lfo,true);envelopeOwner->collapse();
   envelopeOwner->getModule<beekapoo::Module>()->setGenerationSet(envelope);
-  require(envelopeOwner->growPatch()&&envelopeOwner->members.size()==2,"Grow must support selected envelopes when a gate source is available");
+  require(envelopeOwner->growPatch()&&envelopeOwner->members.size()==2,"Grow must connect required inputs when adding a module without an existing insertion cable");
   for(const auto& member:envelopeOwner->members)if(member.id!=lfo->module->id) {
     auto* w=envelopeOwner->find(member.id);
     require(w->model->slug=="ADSR","Envelope-only pool must add an envelope");
     auto wires=rack->getCompleteCablesOnPort(w->getInput(4));
-    require(wires.size()==1&&wires.front()->cable->outputModule==lfo->module&&wires.front()->cable->outputId==3,"Added envelope must receive LFO square at its gate");
+    require(wires.size()==1&&wires.front()->cable->outputModule==lfo->module,"Added envelope must receive an existing output at its required input, without signal typing");
   }
   rack->clear();APP->history->clear();
   std::puts("Module sets: disk persistence, defaults, per-module selection, generation, inference, growth, undo and editor interactions passed");

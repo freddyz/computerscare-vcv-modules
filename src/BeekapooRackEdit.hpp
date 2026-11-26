@@ -56,7 +56,7 @@ struct RackEditSession : widget::Widget {
   RackLayoutSnapshot previousSelection;
   std::set<int64_t> known, admitted;
   bool exposeMode = false, randomLockMode = false, showPanel = true,
-       showMembers = true, finished = false;
+       showMembers = true, finished = false, showKeyboard = false;
   float toolbarHeight = 52;
   Vec descriptionPosition;
   widget::SvgWidget memberLogo;
@@ -85,6 +85,8 @@ struct RackEditSession : widget::Widget {
   std::vector<WeakPtr<RackEditHighlight>> highlights;
   explicit RackEditSession(Beekapoo* group) : owner(group) {
     showMembers = group->markMembers;
+    if (auto* m = group->getModule<Module>())
+      showPanel = m->showEditPanel.load();
     memberLogo.setSvg(APP->window->loadSvg(
         asset::plugin(pluginInstance, "res/Beekapoo/computerscare-logo.svg")));
     auto* scroll = APP->scene->rackScroll;
@@ -121,7 +123,7 @@ struct RackEditSession : widget::Widget {
     randomLockButton->pressed = [this] { return randomLockMode; };
     randomLockButton->help = [] {
       return "Click modules or parameters to lock randomization, wiggle and "
-             "sequencing";
+             "sequencing [L]";
     };
     setsButton = addButton("Module sets", 870, 144, [this] {
       if (owner) owner->editModuleSets();
@@ -143,12 +145,13 @@ struct RackEditSession : widget::Widget {
     panelButton = addButton("Panel", 206, 80, [this] {
       showPanel = !showPanel;
       if (owner) {
+        owner->getModule<Module>()->showEditPanel.store(showPanel);
         owner->layoutControls();
         owner->saveGroup();
       }
     });
     panelButton->pressed = [this] { return showPanel; };
-    panelButton->help = [] { return "Show Beekapoo panel"; };
+    panelButton->help = [] { return "Show Beekapoo panel [P]"; };
     newModulesButton = addButton("New: Inside", 298, 146, [this] {
       if (owner) {
         owner->captureNewModules = !owner->captureNewModules;
@@ -162,7 +165,7 @@ struct RackEditSession : widget::Widget {
       return owner && owner->captureNewModules;
     };
     newModulesButton->help = [] {
-      return "Choose whether new modules join this subpatch";
+      return "Choose whether new modules join this subpatch [N]";
     };
     nearButton = addButton("Near", 456, 66, [this] {
       if (owner) owner->moveEditedMembers(true);
@@ -170,8 +173,10 @@ struct RackEditSession : widget::Widget {
     farButton = addButton("Far", 534, 60, [this] {
       if (owner) owner->moveEditedMembers(false);
     });
-    nearButton->help = [] { return "Move this subpatch near Beekapoo"; };
-    farButton->help = [] { return "Move the subpatch somewhere quiet"; };
+    nearButton->help = [] {
+      return "Move this subpatch near Beekapoo [Shift+F]";
+    };
+    farButton->help = [] { return "Move the subpatch somewhere quiet [F]"; };
     membersButton = addButton("Members", 606, 100, [this] {
       showMembers = !showMembers;
       if (owner) {
@@ -316,19 +321,46 @@ struct RackEditSession : widget::Widget {
       }
   }
   void onHoverKey(const HoverKeyEvent& e) override {
-    if (e.action == GLFW_PRESS && !(e.mods & RACK_MOD_MASK) &&
-        (e.key == GLFW_KEY_E || e.key == GLFW_KEY_X) &&
-        !APP->scene->browser->visible &&
-        !dynamic_cast<ui::TextField*>(APP->event->getSelectedWidget())) {
-      exposeMode = !exposeMode;
-      randomLockMode = false;
-      if (owner) owner->saveGroup();
-      e.consume(this);
+    bool blocked = !owner || owner->keyboardBlocked();
+    int mods = e.mods & RACK_MOD_MASK;
+    if (e.key == GLFW_KEY_GRAVE_ACCENT &&
+        (mods == 0 || mods == GLFW_MOD_SHIFT)) {
+      showKeyboard = !blocked && e.action != GLFW_RELEASE;
+      if (!blocked) e.consume(this);
       return;
+    }
+    if (!blocked) {
+      ActionButton* button = nullptr;
+      if (!mods) {
+        switch (e.key) {
+          case GLFW_KEY_E:
+          case GLFW_KEY_X:
+            button = exposeButton;
+            break;
+          case GLFW_KEY_L:
+            button = randomLockButton;
+            break;
+          case GLFW_KEY_P:
+            button = panelButton;
+            break;
+          case GLFW_KEY_N:
+            button = newModulesButton;
+            break;
+          case GLFW_KEY_F:
+            button = farButton;
+            break;
+        }
+      } else if (mods == GLFW_MOD_SHIFT && e.key == GLFW_KEY_F)
+        button = nearButton;
+      if (button) {
+        if (e.action == GLFW_PRESS) button->action();
+        e.consume(this);
+        return;
+      }
     }
     if ((e.action == GLFW_PRESS || e.action == GLFW_REPEAT) &&
         e.key == GLFW_KEY_A && (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL &&
-        !APP->scene->browser->visible && owner) {
+        !blocked) {
       owner->homeRack->deselectAll();
       for (const auto& member : owner->members)
         if (auto* w = member.widget.get())
@@ -476,6 +508,39 @@ struct RackEditSession : widget::Widget {
     nvgTranslate(args.vg, -logo.box.size.x * .5f, -logo.box.size.y * .5f);
     logo.draw(args);
   }
+  void paintKeyboard(const DrawArgs& args) {
+    auto font =
+        APP->window->loadFont(asset::system("res/fonts/DejaVuSans.ttf"));
+    if (!font) return;
+    auto* vg = args.vg;
+    nvgSave(vg);
+    nvgFontFaceId(vg, font->handle);
+    nvgFontSize(vg, 10.5f);
+    nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+    const std::pair<ActionButton*, const char*> hints[] = {
+        {done, "Esc"},      {exposeButton, "E / X"}, {randomLockButton, "L"},
+        {panelButton, "P"}, {newModulesButton, "N"}, {nearButton, "Shift+F"},
+        {farButton, "F"}};
+    for (const auto& hint : hints) {
+      const auto& r = hint.first->box;
+      float width = nvgTextBounds(vg, 0, 0, hint.second, nullptr, nullptr) + 8;
+      float x = r.getRight() - width, y = r.pos.y - 6;
+      nvgBeginPath(vg);
+      nvgMoveTo(vg, x, y + 1);
+      nvgLineTo(vg, x + width - 1, y);
+      nvgLineTo(vg, x + width, y + 12);
+      nvgLineTo(vg, x + 1, y + 13);
+      nvgClosePath(vg);
+      nvgFillColor(vg, nvgRGB(236, 223, 139));
+      nvgFill(vg);
+      nvgStrokeColor(vg, nvgRGB(24, 26, 25));
+      nvgStrokeWidth(vg, .7f);
+      nvgStroke(vg);
+      nvgFillColor(vg, nvgRGB(24, 26, 25));
+      nvgText(vg, x + width / 2, y + 6.5f, hint.second, nullptr);
+    }
+    nvgRestore(vg);
+  }
   void draw(const DrawArgs& args) override {
     if (owner && !finished) {
       nvgSave(args.vg);
@@ -558,6 +623,7 @@ struct RackEditSession : widget::Widget {
       mark(owner.get(), COLOR_COMPUTERSCARE_GREEN);
     }
     widget::Widget::draw(args);
+    if (showKeyboard && owner && !owner->keyboardBlocked()) paintKeyboard(args);
   }
 };
 void RackEditHighlight::draw(const DrawArgs& args) {
@@ -836,7 +902,9 @@ void Beekapoo::resumeEditSession(json_t* saved) {
   if (offset.isFinite()) session->previousOffset = offset;
   if (std::isfinite(zoom) && zoom > 0)
     session->previousZoom = clamp(float(zoom), .1f, 4.f);
-  session->showPanel = json_is_true(json_object_get(saved, "panel"));
+  if (auto* panel = json_object_get(saved, "panel"))
+    session->showPanel = !json_is_false(panel);
+  getModule<Module>()->showEditPanel.store(session->showPanel);
   session->exposeMode = json_is_true(json_object_get(saved, "expose"));
   session->randomLockMode = json_is_true(json_object_get(saved, "randomLock"));
   session->randomLockMode |=

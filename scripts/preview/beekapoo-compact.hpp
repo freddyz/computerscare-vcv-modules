@@ -2,6 +2,23 @@
 template<class Add,class Require>
 void testBeekCompact(const std::string& output,float scale,Add add,Require require) {
   {
+    bool sawEjectOnly=false;
+    for(int count:{1,10,100,1000})for(int width=45;width<=900;width+=15) {
+      auto h=beekapoo::Beekapoo::headerLayout(width,count,12);
+      require(h.visible[0]&&h.visible[3],"Edit and menu always remain in header");
+      require(!h.visible[2]||h.visible[1],"Save hides before Eject");
+      if(h.visible[1]&&!h.visible[2])sawEjectOnly=true;
+      for(int i=0;i<4;++i)if(h.visible[i]) {
+        require(h.buttons[i].pos.y==h.buttons[0].pos.y,"Header buttons never wrap");
+        require(h.buttons[i].pos.x>=5&&h.buttons[i].getRight()<=width-5,"Header buttons stay within bounds");
+        for(int j=0;j<i;++j)if(h.visible[j])require(!h.buttons[i].intersects(h.buttons[j]),"Header buttons do not overlap");
+      }
+    }
+    require(sawEjectOnly,"Intermediate header sizes retain Eject after hiding Save");
+    auto minimum=beekapoo::Beekapoo::headerLayout(45,10);
+    require(!minimum.visible[1]&&!minimum.visible[2],"Smallest header shows only Edit and menu");
+  }
+  {
     beekapoo::Module m;engine::Module::ProcessArgs args{};
     auto& cv=m.inputs[beekapoo::Module::ACTIONS_INPUT];cv.channels=16;
     m.process(args);
@@ -68,7 +85,7 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
     std::vector<widget::Widget*> occupied;
     for(auto& p:owner->parameters){require(p.knob->visible,"Narrow sizing must retain every exposed parameter");occupied.push_back(p.knob);}
     for(auto& p:owner->ports){require(p.face->visible,"Narrow sizing must retain every exposed port");occupied.push_back(p.face);}
-    for(auto* b:owner->managementButtons)occupied.push_back(b);
+    for(auto* b:owner->managementButtons)if(b->visible)occupied.push_back(b);
     for(auto* b:{owner->actionButtons[0],owner->actionButtons[1],owner->actionButtons[3],owner->actionButtons[4],owner->regenerateButton,owner->growButton})if(b->visible)occupied.push_back(b);
     for(int id:{beekapoo::Module::RANDOM_RANGE,beekapoo::Module::RANDOM_PROBABILITY,beekapoo::Module::WIGGLE_RANGE,beekapoo::Module::WIGGLE_PROBABILITY}) {
       auto* knob=owner->getParam(id);if(knob->visible)occupied.push_back(knob);
@@ -93,6 +110,7 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
     auto plan=beekapoo::Beekapoo::ownControlLayout(owner->box.size.x);
     require(owner->getInput(beekapoo::Module::ACTIONS_INPUT)->visible,"CV jack is never hidden");
     require(owner->actionButtons[0]->visible&&owner->actionButtons[1]->visible,"Default narrow strip retains both exposed actions");
+    require(owner->actionButtons[0]->box.size.x==18&&owner->actionButtons[1]->box.size.x==18,"Wiggle and random buttons keep their normal size even at minimum width");
     int visible=owner->regenerateButton->visible;
     for(auto* b:owner->actionButtons)visible+=b->visible;
     require(visible==plan.columns,"Only the highest priority buttons that fit should render");
@@ -104,9 +122,14 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
       auto* overlay=dynamic_cast<ui::MenuOverlay*>(APP->scene->children.back());
       require(overlay,"Functions button must open a native menu");
       auto* menu=dynamic_cast<ui::Menu*>(overlay->children.front());
-      require(menu&&menu->children.size()==3,"Functions menu must contain Grow, Compact and sequence clear");
+      require(menu&&menu->children.size()==6,"Functions menu must include Save and Eject alongside patch functions");
       auto it=menu->children.begin();
       require(dynamic_cast<ui::MenuItem*>(*it++)->text=="Grow"&&dynamic_cast<ui::MenuItem*>(*it)->text=="Compact subpatch","Grow must be the first function");
+      bool save=false,eject=false;
+      for(auto* child:menu->children)if(auto* item=dynamic_cast<ui::MenuItem*>(child)) {
+        save|=item->text=="Save Beek";eject|=item->text=="Eject";
+      }
+      require(save&&eject,"Hidden header actions stay accessible from the menu");
       require(owner->ports.size()==count,"Opening the menu must not edit the patch");
       menu->step();overlay->removeChild(menu);menu->box.pos=Vec();
       capture(menu,output+"/functions-menu.png",scale,false);
@@ -119,6 +142,48 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
   }
   sheet.box.size=Vec(left-15,380);capture(&sheet,output+"/compact-sizing-six.png",scale,false);
   for(auto& p:parked){sheet.removeChild(p.first);p.first->box.pos=p.second;rack->getModuleContainer()->addChild(p.first);}
+  rack->clear();APP->history->clear();
+  {
+    std::vector<app::ModuleWidget*> voices;
+    for(int i=0;i<10;++i) voices.push_back(add(model,Vec(i*200,0)));
+    auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(2400,0)));
+    rack->deselectAll();for(auto* voice:voices)rack->select(voice,true);owner->collapse();
+    owner->getModule<beekapoo::Module>()->setPatchName("Rasp Hazel",true);
+    owner->getModule<beekapoo::Module>()->panelTheme.store(1);
+    auto* voice=voices.front();
+    for(int i=0;i<6;++i)owner->exposeParameter(voice->module->id,i);
+    const char* names[]={"Pitch","Clock","FM"};
+    for(int i=0;i<3;++i){voice->module->getInputInfo(i)->name=names[i];owner->expose(voice,voice->getInput(i));}
+    for(int i=0;i<2;++i){voice->module->getOutputInfo(i)->name=i?"Channel":"Saw";owner->expose(voice,voice->getOutput(i));}
+    for(float width:{60.f,90.f,180.f}) {
+      owner->requestedWidth=width;owner->layoutControls();
+      require(owner->managementButtons[0]->box.pos.y==owner->growButton->box.pos.y,"Reference layout keeps Edit and menu beside each other");
+      if(width==60) {
+        require(!owner->managementButtons[1]->visible&&!owner->managementButtons[2]->visible,"Reference narrow header hides Save then Eject");
+        require(owner->inputFrame->box.size.y<85,"Three inputs do not consume excess height");
+        require(owner->frame->box.size.y>owner->inputFrame->box.size.y,"Parameters get more space than inputs");
+      }
+      auto* container=owner->parent;auto pos=owner->box.pos;container->removeChild(owner);owner->box.pos=Vec();
+      capture(owner,output+"/rasp-hazel-"+std::to_string(int(width))+".png",scale,false);
+      owner->box.pos=pos;container->addChild(owner);
+    }
+    const char* titles[]={"Honeydip","Rasp Hazel","Low Moss","Crankshaft","Tin Hinge","Windmill"};
+    const float widths[]={45,60,90,75,120,180};
+    for(int i=0;i<6;++i) {
+      owner->getModule<beekapoo::Module>()->setPatchName(titles[i],true);
+      owner->getModule<beekapoo::Module>()->panelTheme.store(i%2?2:1);
+      owner->requestedWidth=widths[i];owner->layoutControls();
+      auto title=owner->headerArtworkArea,logo=owner->headerLogoArea;
+      require(!title.intersects(logo),"Adaptive header title and logo never overlap");
+      require(title.getBottom()<owner->managementButtons[0]->box.pos.y,"Adaptive artwork stays above header controls");
+      if(i==0)require(title.pos.y>logo.getBottom(),"Narrow single word title sits below logo");
+      if(i==2)require(title.getRight()<logo.pos.x,"Short wrapped title fits beside logo");
+      auto* container=owner->parent;auto pos=owner->box.pos;container->removeChild(owner);owner->box.pos=Vec();
+      capture(owner,output+"/adaptive-header-"+std::to_string(i+1)+".png",scale,false);
+      owner->box.pos=pos;container->addChild(owner);
+    }
+
+  }
   rack->clear();APP->history->clear();
   std::puts("Compact Beek: physical minimum, labels, all exposed controls, non-overlap, dark action contrast and source-state preservation passed");
 }

@@ -61,14 +61,19 @@ class Planner {
           return false;
         });
   }
-  int chooseOutput(const Spec& spec) {
-    int priority = spec.outputs.front().priority;
-    for (const auto& out : spec.outputs)
-      priority = std::max(priority, out.priority);
+  int chooseOutput(const Spec& spec, bool needsInput) {
+    int priority = -1;
     std::vector<int> choices;
-    for (int i = 0; i < int(spec.outputs.size()); ++i)
-      if (spec.outputs[i].priority == priority) choices.push_back(i);
-    return choices[pick(int(choices.size()))];
+    for (int i = 0; i < int(spec.outputs.size()); ++i) {
+      const auto& out = spec.outputs[i];
+      if (!out.requirements.empty() != needsInput) continue;
+      if (out.priority > priority) {
+        priority = out.priority;
+        choices.clear();
+      }
+      if (out.priority == priority) choices.push_back(i);
+    }
+    return choices.empty() ? -1 : choices[pick(int(choices.size()))];
   }
 
  public:
@@ -84,22 +89,15 @@ class Planner {
           count, std::max((exact->parameters + 3) / 4,
                           std::max((exact->inputs + 1) / 2, exact->outputs)));
     }
-    std::vector<int> sources, processors, envelopes;
+    std::vector<int> sources, processors;
     for (int i = 0; i < int(specs.size()); ++i) {
-      bool free = false, sound = false, gate = false;
+      bool free = false, required = false;
       for (const auto& out : specs[i].outputs) {
         free |= out.requirements.empty();
-        for (const auto& req : out.requirements) {
-          sound |= req.signal == Signal::sound;
-          gate |= req.signal == Signal::gate;
-        }
+        required |= !out.requirements.empty();
       }
-      if (free)
-        sources.push_back(i);
-      else if (gate && !sound)
-        envelopes.push_back(i);
-      else if (sound && !gate)
-        processors.push_back(i);
+      if (free) sources.push_back(i);
+      if (required) processors.push_back(i);
     }
     if (sources.empty()) return {};
     for (int attempt = 0; attempt < 256; ++attempt) {
@@ -116,18 +114,17 @@ class Planner {
       p.modules.push_back(sources[pick(int(sources.size()))]);
       auto chooseOutput = [&](int node) {
         const auto& spec = specs[p.modules[node]];
-        return Endpoint{node, spec.outputs[this->chooseOutput(spec)].port};
+        int index = this->chooseOutput(spec, false);
+        return Endpoint{node, index < 0 ? -1 : spec.outputs[index].port};
       };
       Endpoint main = chooseOutput(0);
       p.outputs = {main};
       for (int i = 1; i < count; ++i) {
-        std::vector<Endpoint> targets, gates;
+        std::vector<Endpoint> targets;
         for (int j = 0; j < i; ++j) {
           for (const auto& in : specs[p.modules[j]].modulationInputs)
             if (!occupied.count({j, in.id}) && useful(p, j, in))
               targets.push_back({j, in.id});
-          for (const auto& out : specs[p.modules[j]].outputs)
-            if (out.signal == Signal::gate) gates.push_back({j, out.port});
         }
         // Extra generators modulate a live path. Otherwise extend that path
         // through a processor. No node is added as unused decoration.
@@ -136,24 +133,22 @@ class Planner {
         if (!modulator && processors.empty()) break;
         if (modulator) {
           auto choices = sources;
-          if (!gates.empty())
-            choices.insert(choices.end(), envelopes.begin(), envelopes.end());
           int type = choices[pick(int(choices.size()))];
           p.modules.push_back(type);
           Endpoint output = chooseOutput(i);
-          for (const auto& out : specs[type].outputs)
-            if (out.port == output.port)
-              for (const auto& req : out.requirements)
-                wire(gates[pick(int(gates.size()))],
-                     {i, req.anyOf[pick(int(req.anyOf.size()))]});
           wire(output, targets[pick(int(targets.size()))]);
         } else {
           int type = processors[pick(int(processors.size()))];
           p.modules.push_back(type);
-          const auto& chosen =
-              specs[type].outputs[this->chooseOutput(specs[type])];
-          for (const auto& req : chosen.requirements)
-            wire(main, {i, req.anyOf[pick(int(req.anyOf.size()))]});
+          int outputIndex = this->chooseOutput(specs[type], true);
+          if (outputIndex < 0) break;
+          const auto& chosen = specs[type].outputs[outputIndex];
+          std::vector<int> needed;
+          if (!requiredInputs(
+                  specs[type], chosen, [this](int n) { return pick(n); },
+                  needed))
+            break;
+          for (int input : needed) wire(main, {i, input});
           main = {i, chosen.port};
           p.outputs = {main};
         }
@@ -228,6 +223,12 @@ class Planner {
     for (const auto& c : p.cables) {
       if (!output(c.from) || !validNode(c.to) || c.from.node == c.to.node)
         return "Invalid cable";
+      const auto& inputs = specs[p.modules[c.to.node]].inputRules;
+      if (!inputs.empty() &&
+          std::none_of(inputs.begin(), inputs.end(), [&](const Control& rule) {
+            return rule.id == c.to.port;
+          }))
+        return "Unknown input";
       if (!occupied.insert({c.to.node, c.to.port}).second)
         return "Stacked input";
     }
@@ -235,7 +236,7 @@ class Planner {
       if (!validNode(e) || occupied.count({e.node, e.port}))
         return "Invalid exposed input";
     for (const auto& c : p.cables)
-      for (const auto& rule : specs[p.modules[c.to.node]].modulationInputs)
+      for (const auto& rule : specs[p.modules[c.to.node]].inputRules)
         if (rule.id == c.to.port && !useful(p, c.to.node, rule))
           return "Unused control input";
     for (auto e : p.inputs) {
@@ -263,9 +264,7 @@ class Planner {
         for (const auto& c : p.cables)
           if (c.to.node == e.node && std::find(r.anyOf.begin(), r.anyOf.end(),
                                                c.to.port) != r.anyOf.end()) {
-            const auto* source = output(c.from);
-            found |= source && (r.signal != Signal::gate ||
-                                source->signal == Signal::gate);
+            found |= output(c.from) != nullptr;
           }
         if (!found) return "Missing required input";
       }

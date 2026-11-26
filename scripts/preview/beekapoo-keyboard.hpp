@@ -49,22 +49,22 @@ void testBeekKeyboard(const std::string& output, float scale, Add add, Require r
   key(GLFW_KEY_SPACE);require(m->clockEnabled.load(), "Space enables clock");
   key(GLFW_KEY_SPACE,GLFW_REPEAT);require(m->clockEnabled.load(), "Space repeat does not toggle");
   key(GLFW_KEY_SPACE);require(!m->clockEnabled.load(), "Space disables clock");
-  key(GLFW_KEY_HOME);m->process({});require(m->playingStep==0, "Home resets");
-  key(GLFW_KEY_RIGHT);m->process({});require(m->playingStep==1, "Right advances");
-  key(GLFW_KEY_LEFT);m->process({});require(m->playingStep==0, "Left recalls previous step");
+  key(GLFW_KEY_B);m->process({});require(m->playingStep==0, "B resets");
+  key(GLFW_KEY_X);m->process({});require(m->playingStep==1, "X advances");
+  key(GLFW_KEY_Z);m->process({});require(m->playingStep==0, "Z recalls previous step");
   // Menu-only shortcuts were removed; snapshot shortcuts perform direct actions.
-  for(int code:{GLFW_KEY_ENTER,GLFW_KEY_F,GLFW_KEY_A,GLFW_KEY_G,GLFW_KEY_EQUAL,GLFW_KEY_MINUS}) {
+  for(int code:{GLFW_KEY_ENTER,GLFW_KEY_F,GLFW_KEY_A,GLFW_KEY_G,GLFW_KEY_EQUAL,GLFW_KEY_MINUS,GLFW_KEY_D,GLFW_KEY_U,GLFW_KEY_HOME,GLFW_KEY_LEFT,GLFW_KEY_RIGHT,GLFW_KEY_BACKSPACE}) {
     widget::Widget::HoverKeyEvent event;event.key=code;event.action=GLFW_PRESS;event.mods=0;
-    require(!owner->handleKeyboard(event),"Menus and exposure/structure actions no longer consume keys");
+    require(!owner->handleKeyboard(event),"Removed shortcuts, including unmodified D, are not consumed");
   }
   auto* liveParam=voices[0]->module->getParamQuantity(0);
-  liveParam->setImmediateValue(.42f);key(GLFW_KEY_U);liveParam->setImmediateValue(.8f);
-  key(GLFW_KEY_BACKSPACE);m->process({});
-  require(liveParam->getValue()==.42f&&rack->getModule(m->id)==owner,"Update/Recall act directly and Backspace does not delete Beek");
+  liveParam->setImmediateValue(.42f);key(GLFW_KEY_S);liveParam->setImmediateValue(.8f);
+  key(GLFW_KEY_V);m->process({});
+  require(liveParam->getValue()==.42f&&rack->getModule(m->id)==owner,"S saves and V recalls the current step");
   auto stepCount=owner->sequence.steps.size();
-  key(GLFW_KEY_D);key(GLFW_KEY_D,GLFW_REPEAT);m->process({});
-  require(owner->sequence.steps.size()==stepCount-1&&rack->getModule(m->id)==owner,"D deletes one step, not the Beek module");
-  key(GLFW_KEY_D);require(owner->sequence.steps.size()==1,"D keeps the final step");key(GLFW_KEY_N);
+  key(GLFW_KEY_D,GLFW_PRESS,GLFW_MOD_SHIFT);key(GLFW_KEY_D,GLFW_REPEAT,GLFW_MOD_SHIFT);m->process({});
+  require(owner->sequence.steps.size()==stepCount-1&&rack->getModule(m->id)==owner,"Shift D deletes one step, not the Beek module");
+  key(GLFW_KEY_D,GLFW_PRESS,GLFW_MOD_SHIFT);require(owner->sequence.steps.size()==1,"Shift D keeps the final step");key(GLFW_KEY_N);
   auto* text = new ui::TextField;rack->addChild(text);APP->event->setSelectedWidget(text);
   before = owner->sequence.steps.size();key(GLFW_KEY_N);key(GLFW_KEY_SPACE);
   require(owner->sequence.steps.size()==before&&!m->clockEnabled.load(), "Text entry does not trigger shortcuts");

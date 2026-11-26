@@ -10,8 +10,7 @@ const Beekapoo::Port* Beekapoo::inputRoute(const engine::Cable* cable) const {
 }
 bool Beekapoo::panelEndpoint(int64_t id, int port, bool input) const {
   for (const auto& p : ports)
-    if (p.id == id && p.portId == port && p.input == input)
-      return controlVisible(id, input ? 1 : 2);
+    if (p.id == id && p.portId == port && p.input == input) return true;
   return false;
 }
 Beekapoo::CableRole Beekapoo::cableRole(const engine::Cable* cable) const {

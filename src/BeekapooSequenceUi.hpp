@@ -204,12 +204,34 @@ std::string sequenceStatus() {
 }
 void showStepSelector() {
   if (sequence.steps.size() <= 1) return;
+  refreshSequenceModified();
+  struct StepItem : ui::MenuItem {
+    WeakPtr<Beekapoo> owner;
+    int index = 0;
+    void step() override {
+      bool active = owner && owner->module &&
+                    owner->getModule<Module>()->playingStep.load() == index;
+      text = std::to_string(index + 1) +
+             (active && owner->sequenceModified ? " •" : "");
+      ui::MenuItem::step();
+    }
+  };
   auto* menu = createMenu();
   WeakPtr<Beekapoo> live = this;
-  for (int i = 0; i < int(sequence.steps.size()); ++i)
-    menu->addChild(createMenuItem(std::to_string(i + 1), "", [live, i] {
-      if (live) live->selectSequenceStep(i);
-    }));
+  for (int i = 0; i < int(sequence.steps.size()); ++i) {
+    auto* item = static_cast<StepItem*>(createCheckMenuItem<StepItem>(
+        std::to_string(i + 1), "",
+        [live, i] {
+          return live && live->module &&
+                 live->getModule<Module>()->playingStep.load() == i;
+        },
+        [live, i] {
+          if (live) live->selectSequenceStep(i);
+        }));
+    item->owner = this;
+    item->index = i;
+    menu->addChild(item);
+  }
 }
 void appendSequenceMenu(ui::Menu* menu) {
   WeakPtr<Beekapoo> live = this;
@@ -297,6 +319,7 @@ void createSequenceControls(Module* m) {
   for (int i = 0; i < 7; ++i) {
     auto* b = new ActionButton;
     b->icon = icons[i];
+    if (i == 3 || i == 4) b->modified = [this] { return sequenceModified; };
     std::string hint = help[i];
     b->help = [this, i, hint] {
       if (i == 0)

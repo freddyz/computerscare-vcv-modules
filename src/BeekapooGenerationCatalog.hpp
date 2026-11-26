@@ -26,7 +26,8 @@ inline bool knownRules(plugin::Model* model) {
   if (model && model->plugin->slug == "Fundamental")
     for (const auto& spec : beekapoo_patch::library())
       if (spec.slug == model->slug) return true;
-  return false;
+  return model && beekapoo_patch::portLibrary().count(
+                      {model->plugin->slug, model->slug});
 }
 inline bool containsAny(const std::string& text,
                         std::initializer_list<const char*> words) {
@@ -37,7 +38,7 @@ inline bool containsAny(const std::string& text,
 inline const beekapoo_patch::Spec& specFor(plugin::Model* model,
                                            engine::Module* existing = nullptr) {
   using namespace beekapoo_patch;
-  if (knownRules(model))
+  if (model->plugin->slug == "Fundamental")
     for (const auto& spec : library())
       if (spec.slug == model->slug) return spec;
   static std::map<ModuleKey, Spec> cache;
@@ -58,7 +59,6 @@ inline const beekapoo_patch::Spec& specFor(plugin::Model* model,
                 hasTag(model, "Random") || hasTag(model, "Clock generator") ||
                 hasTag(model, "Synth voice");
   bool envelope = hasTag(model, "Envelope generator");
-  bool gateSource = hasTag(model, "Clock generator");
   int signalInput = -1, gateInput = -1;
   for (int i = 0; i < int(m->inputs.size()); ++i) {
     auto* info = m->getInputInfo(i);
@@ -73,21 +73,18 @@ inline const beekapoo_patch::Spec& specFor(plugin::Model* model,
   }
   std::vector<Requirement> requirements;
   if (envelope && gateInput >= 0)
-    requirements.push_back({{gateInput}, Signal::gate});
+    requirements.push_back({{gateInput}});
   else if (!source && !m->inputs.empty()) {
     if (signalInput < 0) signalInput = 0;
-    requirements.push_back({{signalInput}, Signal::sound});
+    requirements.push_back({{signalInput}});
   }
   for (int i = 0; i < int(m->outputs.size()); ++i) {
     auto* info = m->getOutputInfo(i);
     auto name = info ? string::lowercase(info->name) : "";
-    bool gate = gateSource || containsAny(name, {"gate", "trigger", "clock",
-                                                 "pulse", "square"});
     int priority =
         name == "mix" || name == "sum" || name == "out" || name == "output" ? 1
                                                                             : 0;
-    spec.outputs.push_back(
-        {i, gate ? Signal::gate : Signal::sound, requirements, priority});
+    spec.outputs.push_back({i, requirements, priority});
   }
   for (int i = 0; i < int(m->inputs.size()); ++i) {
     bool required = false;
@@ -103,6 +100,16 @@ inline const beekapoo_patch::Spec& specFor(plugin::Model* model,
               name, {"trigger", "reset", "randomize", "initialize", "clear"}))
         spec.parameters.push_back({i, requirements, {}});
     }
+  spec.inputRules = spec.modulationInputs;
+  // The inferred main input itself has no prerequisites.
+  for (const auto& r : requirements)
+    for (int id : r.anyOf) spec.inputRules.push_back({id});
+  auto rules = portLibrary().find({model->plugin->slug, model->slug});
+  if (rules != portLibrary().end()) {
+    spec.outputs = rules->second.outputs;
+    spec.modulationInputs = rules->second.modulationInputs;
+    spec.inputRules = rules->second.inputRules;
+  }
   // Keep unfamiliar modules at their own defaults. Guessing arbitrary ranges
   // here can mute a voice or turn a switch into an unrelated operating mode.
   return cache.emplace(std::move(key), std::move(spec)).first->second;

@@ -1,28 +1,24 @@
 #pragma once
+#include <algorithm>
+#include <functional>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
-// Declarative Fundamental generation rules. These IDs match Fundamental's
-// public parameter/port IDs; comments name them so the rules can be edited
-// without digging through the planner. No Rack, engine, or UI dependencies.
+// Rack-independent generation data. Port dependencies come from the
+// per-manufacturer JSON tables; parameter policy remains separate.
 namespace beekapoo_patch {
-enum class Signal { sound, modulation, gate };
 struct Requirement {
   // All groups must be satisfied. Within a group, any one input is enough.
   std::vector<int> anyOf;
-  Signal signal;
 };
 struct Output {
   int port;
-  Signal signal;
   std::vector<Requirement> requirements;
   int priority;
-  Output(int port, Signal signal, std::vector<Requirement> requirements,
-         int priority = 0)
-      : port(port),
-        signal(signal),
-        requirements(requirements),
-        priority(priority) {}
+  Output(int port, std::vector<Requirement> requirements, int priority = 0)
+      : port(port), requirements(requirements), priority(priority) {}
 };
 struct Range {
   int param;
@@ -42,13 +38,13 @@ struct Range {
 struct Control {
   int id;
   std::vector<Requirement> prerequisites;
-  std::vector<int> affectedOutputs;
+  std::vector<Requirement> affectedOutputs;
   Control(int id, std::vector<Requirement> prerequisites = {},
-          std::vector<int> outputs = {})
+          std::vector<Requirement> outputs = {})
       : id(id), prerequisites(prerequisites), affectedOutputs(outputs) {}
 };
 // Required input groups are ANDed; each group's input choices are ORed.
-// affectedOutputs means any listed output must be connected or exposed.
+// affectedOutputs uses the same AND-of-OR groups for used outputs.
 // Empty lists impose no restriction. Control IDs refer to the enclosing
 // modulationInputs or parameters field, not to Rack objects.
 template <class InputConnected, class OutputUsed>
@@ -59,10 +55,12 @@ inline bool controlUseful(const Control& control, InputConnected inputConnected,
     for (int input : requirement.anyOf) met |= inputConnected(input);
     if (!met) return false;
   }
-  if (control.affectedOutputs.empty()) return true;
-  for (int output : control.affectedOutputs)
-    if (outputUsed(output)) return true;
-  return false;
+  for (const auto& group : control.affectedOutputs) {
+    bool met = false;
+    for (int output : group.anyOf) met |= outputUsed(output);
+    if (!met) return false;
+  }
+  return true;
 }
 struct Spec {
   std::string slug;
@@ -70,112 +68,160 @@ struct Spec {
   std::vector<Output> outputs;
   std::vector<Control> parameters;
   std::vector<Range> initial;
+  std::vector<Control> inputRules;
 };
+
+// Input rules inherit the requirements of the outputs they affect. This is
+// why Delay CV does not need to repeat OUT's dependency on IN in the JSON.
+template <class InputConnected, class OutputUsed>
+inline bool portUseful(const Spec& spec, const Control& control,
+                       InputConnected inputConnected, OutputUsed outputUsed) {
+  std::set<int> active;
+  std::function<bool(int)> readyInput = [&](int id) {
+    if (!inputConnected(id) || !active.insert(id).second) return false;
+    bool ready = true;
+    for (const auto& input : spec.inputRules)
+      if (input.id == id) ready &= controlUseful(input, readyInput, outputUsed);
+    active.erase(id);
+    return ready;
+  };
+  bool anyOutputUsed = false;
+  for (const auto& output : spec.outputs)
+    anyOutputUsed |= outputUsed(output.port);
+  auto readyOutput = [&](int id) {
+    // An unpatched captured module may still be grown or have controls exposed.
+    // Explicit output dependencies (such as PWM -> Square) remain mandatory.
+    if (!outputUsed(id) && (anyOutputUsed || !control.affectedOutputs.empty()))
+      return false;
+    for (const auto& output : spec.outputs)
+      if (output.port == id) {
+        for (const auto& group : output.requirements) {
+          bool met = false;
+          for (int input : group.anyOf) met |= readyInput(input);
+          if (!met) return false;
+        }
+        return true;
+      }
+    return false;
+  };
+  if (!controlUseful(control, readyInput, readyOutput)) return false;
+  for (const auto& output : spec.outputs)
+    if (readyOutput(output.port)) return true;
+  return false;
+}
+// Plan prerequisites before connecting a processor. No voltage/signal types.
+// All groups must hold; choose one usable alternative from each group.
+template <class Pick>
+inline bool requiredInputs(const Spec& spec, const Output& output, Pick pick,
+                           std::vector<int>& result) {
+  std::set<int> active, connected;
+  std::function<bool(int)> add;
+  std::function<bool(const std::vector<Requirement>&)> satisfy;
+  satisfy = [&](const std::vector<Requirement>& groups) {
+    for (const auto& group : groups) {
+      if (group.anyOf.empty()) return false;
+      bool met = false;
+      for (int port : group.anyOf) met |= connected.count(port) != 0;
+      if (met) continue;
+      size_t start = size_t(pick(int(group.anyOf.size())));
+      for (size_t i = 0; i < group.anyOf.size() && !met; ++i) {
+        auto before = connected;
+        auto size = result.size();
+        met = add(group.anyOf[(start + i) % group.anyOf.size()]);
+        if (!met) {
+          connected = before;
+          result.resize(size);
+        }
+      }
+      if (!met) return false;
+    }
+    return true;
+  };
+  add = [&](int port) {
+    if (connected.count(port)) return true;
+    if (!active.insert(port).second) return false;
+    bool valid = true;
+    for (const auto& rule : spec.inputRules)
+      if (rule.id == port) {
+        for (const auto& group : rule.affectedOutputs)
+          valid &= std::find(group.anyOf.begin(), group.anyOf.end(),
+                             output.port) != group.anyOf.end();
+        if (valid) valid = satisfy(rule.prerequisites);
+      }
+    active.erase(port);
+    if (valid) {
+      connected.insert(port);
+      result.push_back(port);
+    }
+    return valid;
+  };
+  return satisfy(output.requirements);
+}
+#include "BeekapooPortRules.inc"
+// Parameter choices and initialization are generation policy, not port rules.
+// Keep their established ranges and candidate inputs when migrating topology.
 inline const std::vector<Spec>& library() {
-  static const std::vector<Spec> specs = {
-      // VCO inputs: pitch 0, FM 1, sync 2, PWM 3. Outputs: sin/tri/saw/square
-      // 0..3.
-      // Params: frequency 2, FM depth 4, pulse width 5, PWM depth 6.
-      // Pulse width only affects the square output, including its CV input.
-      {"VCO",
-       {0, 1, {3, {}, {3}}},
-       {{0, Signal::sound, {}},
-        {1, Signal::sound, {}},
-        {2, Signal::sound, {}},
-        {3, Signal::sound, {}}},
-       {2, {5, {}, {3}}},
-       {{2, -24, 12},
-        Range::modulation(4),
-        {5, .25f, .75f},
-        Range::modulation(6)}},
-      // LFO inputs: FM 0, reset 2, PWM 3, clock 4. Outputs: sin/tri/saw/square
-      // 0..3.
-      // Params: frequency 2, FM depth 3, pulse width 5, PWM depth 6.
-      {"LFO",
-       {0, 2, {3, {}, {3}}, 4},
-       {{0, Signal::modulation, {}},
-        {1, Signal::modulation, {}},
-        {2, Signal::modulation, {}},
-        {3, Signal::gate, {}}},
-       {2, {5, {}, {3}}},
-       {{2, -3, 2}, Range::modulation(3), {5, .3f, .7f}, Range::modulation(6)}},
-      // Noise: white/pink/red outputs 0..2; no parameters or inputs.
-      {"Noise",
-       {},
-       {{0, Signal::sound, {}}, {1, Signal::sound, {}}, {2, Signal::sound, {}}},
-       {},
-       {}},
-      // VCF: cutoff/resonance CV 0/1 require audio 3; LP/HP outputs 0/1.
-      // Params: cutoff 0, resonance 2, cutoff/resonance/drive CV depths 3/5/6.
-      {"VCF",
-       {{0, {{{3}, Signal::sound}}}, {1, {{{3}, Signal::sound}}}},
-       {{0, Signal::sound, {{{3}, Signal::sound}}},
-        {1, Signal::sound, {{{3}, Signal::sound}}}},
-       {0, 2},
-       {{0, .45f, .8f},
-        {2, .05f, .4f},
-        Range::modulation(3),
-        Range::modulation(5),
-        Range::modulation(6)}},
-      // VCA: CV 0 requires signal 1; output 0; level parameter 0.
-      {"VCA-1",
-       {{0, {{{1}, Signal::sound}}}},
-       {{0, Signal::sound, {{{1}, Signal::sound}}}},
-       {0},
-       {{0, .5f, .85f}}},
-      // Delay: time/tone CV 0/2 require audio 4; Mix output 0.
-      // Params: time 0, feedback 1, mix 3, time/feedback/tone/mix CV
-      // depths 4..7.
-      {"Delay",
-       {{0, {{{4}, Signal::sound}}}, {2, {{{4}, Signal::sound}}}},
-       {{0, Signal::sound, {{{4}, Signal::sound}}}},
-       {0, 1, 3},
-       {{0, .45f, .75f},
-        {1, .1f, .45f},
-        {3, .2f, .55f},
-        Range::modulation(4),
-        Range::modulation(5),
-        Range::modulation(6),
-        Range::modulation(7)}},
-      // ADSR: A/D/S/R CV 0..3 require gate 4; envelope output 0.
-      // Params: A/D/S/R 0..3, corresponding CV depths 4..7.
-      {"ADSR",
-       {{0, {{{4}, Signal::gate}}},
-        {1, {{{4}, Signal::gate}}},
-        {2, {{{4}, Signal::gate}}},
-        {3, {{{4}, Signal::gate}}}},
-       {{0, Signal::modulation, {{{4}, Signal::gate}}}},
-       {0, 1, 2, 3},
-       {{0, .15f, .45f},
-        {1, .2f, .5f},
-        {2, .3f, .8f},
-        {3, .2f, .6f},
-        Range::modulation(4),
-        Range::modulation(5),
-        Range::modulation(6),
-        Range::modulation(7)}},
-      // VCA Mix: Mix CV 0, channel signals 1..4, channel CVs 5..8;
-      // Mix output/level 0, channel outputs/levels 1..4.
-      // Priority 1 makes Mix the first output used. Direct outputs remain
-      // available for later growth once Mix is connected. Only connected
-      // channels offer their CV and level; the output must also be in use.
-      {"VCMixer",
-       {{0, {}, {0}},
-        {5, {{{1}, Signal::sound}}, {0, 1}},
-        {6, {{{2}, Signal::sound}}, {0, 2}},
-        {7, {{{3}, Signal::sound}}, {0, 3}},
-        {8, {{{4}, Signal::sound}}, {0, 4}}},
-       {{0, Signal::sound, {{{1, 2, 3, 4}, Signal::sound}}, 1},
-        {1, Signal::sound, {{{1}, Signal::sound}}},
-        {2, Signal::sound, {{{2}, Signal::sound}}},
-        {3, Signal::sound, {{{3}, Signal::sound}}},
-        {4, Signal::sound, {{{4}, Signal::sound}}}},
-       {{0, {}, {0}},
-        {1, {{{1}, Signal::sound}}, {0, 1}},
-        {2, {{{2}, Signal::sound}}, {0, 2}},
-        {3, {{{3}, Signal::sound}}, {0, 3}},
-        {4, {{{4}, Signal::sound}}, {0, 4}}},
-       {{0, .6f, 1}, {1, .7f, 1}, {2, .7f, 1}, {3, .7f, 1}, {4, .7f, 1}}}};
+  static const std::vector<Spec> specs = [] {
+    std::vector<Spec> result;
+    auto add = [&](const char* slug, std::vector<int> inputs,
+                   std::vector<Control> parameters,
+                   std::vector<Range> initial) {
+      Spec s = portLibrary().at({"Fundamental", slug});
+      s.modulationInputs.erase(
+          std::remove_if(s.modulationInputs.begin(), s.modulationInputs.end(),
+                         [&](const Control& c) {
+                           return std::find(inputs.begin(), inputs.end(),
+                                            c.id) == inputs.end();
+                         }),
+          s.modulationInputs.end());
+      s.parameters = std::move(parameters);
+      s.initial = std::move(initial);
+      result.push_back(std::move(s));
+    };
+    add("VCO", {0, 1, 3}, {2, {5, {}, {{{3}}}}},
+        {{2, -24, 12},
+         Range::modulation(4),
+         {5, .25f, .75f},
+         Range::modulation(6)});
+    add("LFO", {0, 2, 3, 4}, {2, {5, {}, {{{3}}}}},
+        {{2, -3, 2},
+         Range::modulation(3),
+         {5, .3f, .7f},
+         Range::modulation(6)});
+    add("Noise", {}, {}, {});
+    add("VCF", {0, 1}, {0, 2},
+        {{0, .45f, .8f},
+         {2, .05f, .4f},
+         Range::modulation(3),
+         Range::modulation(5),
+         Range::modulation(6)});
+    add("VCA-1", {0}, {0}, {{0, .5f, .85f}});
+    add("Delay", {0, 2}, {0, 1, 3},
+        {{0, .45f, .75f},
+         {1, .1f, .45f},
+         {3, .2f, .55f},
+         Range::modulation(4),
+         Range::modulation(5),
+         Range::modulation(6),
+         Range::modulation(7)});
+    add("ADSR", {0, 1, 2, 3}, {0, 1, 2, 3},
+        {{0, .15f, .45f},
+         {1, .2f, .5f},
+         {2, .3f, .8f},
+         {3, .2f, .6f},
+         Range::modulation(4),
+         Range::modulation(5),
+         Range::modulation(6),
+         Range::modulation(7)});
+    add("VCMixer", {0, 5, 6, 7, 8},
+        {{0, {}, {{{0}}}},
+         {1, {{{1}}}, {{{0, 1}}}},
+         {2, {{{2}}}, {{{0, 2}}}},
+         {3, {{{3}}}, {{{0, 3}}}},
+         {4, {{{4}}}, {{{0, 4}}}}},
+        {{0, .6f, 1}, {1, .7f, 1}, {2, .7f, 1}, {3, .7f, 1}, {4, .7f, 1}});
+    return result;
+  }();
   return specs;
 }
 }  // namespace beekapoo_patch

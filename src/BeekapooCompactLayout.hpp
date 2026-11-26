@@ -46,7 +46,8 @@ inline CompactPanelLayout compactPanelLayout(float width, float height,
       p.outputColumns = std::max(1, std::min(outputs, columns));
     }
   }
-  float preferred = width >= 120 && inputs + outputs <= 4 ? 50.f : 40.f;
+  // Reserve readable jack/caption rows, then give spare height to parameters.
+  float preferred = parameters ? (width < 150 ? 32.f : 40.f) : 50.f;
   for (float row : {50.f, 40.f, 32.f, 28.f, 20.f}) {
     if (row > preferred) continue;
     p.inputHeight = inputs ? 12 + rows(inputs, p.inputColumns) * row : 0;

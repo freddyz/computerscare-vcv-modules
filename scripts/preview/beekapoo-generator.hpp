@@ -101,6 +101,7 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     plugin::Plugin* plugin;void* library;
     ~Cleanup(){APP->scene->rack->clear();APP->history->clear();plugin::plugins.erase(std::find(plugin::plugins.begin(),plugin::plugins.end(),plugin));delete plugin;dlclose(library);}
   } cleanup{fundamental,library};
+  if(std::getenv("BEEKAPOO_SEQUENCE_PATCH")){testBeekSavedSequence(output,scale,require);return;}
   if(std::getenv("BEEKAPOO_LABELS")){renderBeekLabels(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_EXPOSURE_PATCH")){testBeekSavedExposure(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_EXPOSURE_STATE")){testBeekExposureState(output,scale,add,require);return;}
@@ -247,7 +248,10 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     int inputs=0,outputs=0;auto* ports=json_object_get(plan,"ports");
     for(size_t i=0;i<json_array_size(ports);++i){auto* p=json_array_get(ports,i);bool input=json_is_true(json_object_get(p,"input"));if(input){++inputs;require(!occupied.count({int(json_integer_value(json_object_get(p,"module"))),int(json_integer_value(json_object_get(p,"port")))}),"Exposed input must be free of internal wiring");}else ++outputs;}
     require(inputs==3&&outputs==1,"Generator must expose three inputs and one output");
-    require(json_array_size(json_object_get(plan,"parameters"))>=2,"Generator must expose some parameters");
+    // Noise has no parameters; several Noise nodes can leave only one
+    // controllable node. The planner exposes at most one control per node.
+    auto parameterCount=json_array_size(json_object_get(plan,"parameters"));
+    require(parameterCount>=1&&parameterCount<=4,"Generator must expose available parameters, up to four");
     json_decref(plan);
   }
   require(cvDepths.size()==15&&positiveDepths>0&&negativeDepths>0,"Generation must cover oscillator, filter, delay and envelope CV depths with both polarities");

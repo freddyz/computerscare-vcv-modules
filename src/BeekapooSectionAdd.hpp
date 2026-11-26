@@ -90,8 +90,8 @@ Beekapoo::SectionCandidates Beekapoo::sectionCandidates(bool allParameters) {
         if (spec)
           for (const auto& control : spec->modulationInputs)
             if (control.id == p->portId)
-              useful = beekapoo_patch::controlUseful(control, inputConnected,
-                                                     outputUsed);
+              useful = beekapoo_patch::portUseful(*spec, control,
+                                                  inputConnected, outputUsed);
         if (useful) choices.inputs.push_back(p);
       }
     for (auto* p : w->getOutputs())

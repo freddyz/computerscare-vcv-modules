@@ -17,12 +17,24 @@ void testBeekNameEditor(const std::string& output,float scale,Add add,Require re
   auto generatedName=m->getPatchName();
   auto members=owner->members;
   std::string exact="MOSS / ReED 7";
-  auto open=[&] {
+  {
+    std::set<widget::Widget*> before(APP->scene->children.begin(),APP->scene->children.end());
     widget::EventContext context;widget::Widget::ButtonEvent e;
     e.context=&context;e.action=GLFW_PRESS;e.button=GLFW_MOUSE_BUTTON_RIGHT;
     e.pos=owner->headerArtworkArea.getCenter();owner->onButton(e);
+    require(!owner->nameEditor,"Title right-click must not open a rename editor");
+    ui::MenuOverlay* overlay=nullptr;ui::Menu* menu=nullptr;
+    for(auto* w:APP->scene->children)if(!before.count(w))if(auto* found=dynamic_cast<ui::MenuOverlay*>(w))overlay=found;
+    if(overlay)for(auto* w:overlay->children)if(auto* found=dynamic_cast<ui::Menu*>(w))menu=found;
+    require(menu,"Title right-click opens the standard module menu");menu->step();
+    overlay->removeChild(menu);auto pos=menu->box.pos;menu->box.pos=Vec();
+    capture(menu,output+"/title-context-menu.png",scale,false);menu->box.pos=pos;overlay->addChild(menu);
+    APP->scene->removeChild(overlay);delete overlay;
+  }
+  auto open=[&] {
+    owner->editName();
     auto* editor=dynamic_cast<beekapoo::BeekNameEditor*>(owner->nameEditor.get());
-    require(editor&&e.isConsumed(),"Right-clicking the title must open the name field directly");
+    require(editor,"Explicit Rename action opens the name field");
     require(APP->event->getSelectedWidget()==editor->field,"Name editor must focus immediately");
     require(editor->field->getSelectedText()==m->displayPatchName(owner->appearance.modules),"Existing displayed title must be selected for immediate replacement");
     return editor;
@@ -77,5 +89,5 @@ void testBeekNameEditor(const std::string& output,float scale,Add add,Require re
   auto* parent=owner->parent;auto pos=owner->box.pos;parent->removeChild(owner);owner->box.pos=Vec();
   capture(owner,output+"/renamed-panel.png",scale,false);owner->box.pos=pos;parent->addChild(owner);
   rack->clear();APP->history->clear();
-  std::puts("Beekapoo rename: direct title click, native field focus, save/cancel, exact casing, undo, randomization and import persistence passed");
+  std::puts("Beekapoo rename: ordinary title context menu, explicit rename, native field focus, save/cancel, exact casing, undo, randomization and import persistence passed");
 }

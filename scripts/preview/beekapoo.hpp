@@ -52,6 +52,8 @@ struct Mapper : Gain {
   }
 };
 struct Face : app::ModuleWidget {
+  std::function<void()> beforeStep;
+  void step() override { if(beforeStep)beforeStep();app::ModuleWidget::step(); }
   Face(Gain* m) {
     setModule(m); box.size = Vec(90,380);
     for(int i=0;i<24;++i) {
@@ -89,6 +91,7 @@ inline engine::ParamQuantity* legacyBeekGain(beekapoo::Beekapoo* owner, beekapoo
 #include "beekapoo-compact.hpp"
 #include "beekapoo-sequence.hpp"
 #include "beekapoo-keyboard.hpp"
+#include "beekapoo-actions-tooltip.hpp"
 void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,float scale) {
   auto require=[](bool pass,const char* why){if(!pass)throw std::runtime_error(why);};
   testBeekMenuStartup(require);
@@ -293,6 +296,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto* w=model->createModuleWidget(m);w->box.pos=pos;rack->addModule(w);return w;
   };
   if(std::getenv("BEEKAPOO_FILES")){testBeekPatchFiles(output,scale,add,require,gainModel);return;}
+  if(std::getenv("BEEKAPOO_ACTIONS_TOOLTIP")){testBeekActionsTooltip(output,scale,add,require,gainModel);return;}
   if(std::getenv("BEEKAPOO_KEYBOARD")){testBeekKeyboard(output,scale,add,require,gainModel);return;}
   if(std::getenv("BEEKAPOO_SEQUENCE")){testBeekSequence(output,scale,add,require,gainModel);return;}
   testBeekGroupShutdown(add,require);
@@ -300,7 +304,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   if(std::getenv("BEEKAPOO_COMPACT"))return;
   if(std::getenv("BEEKAPOO_CONTEXT_CHECKS"))return;
   if(std::getenv("BEEKAPOO_LABELS")){testBeekGenerator(output,scale,add,require);return;}
-  if(std::getenv("BEEKAPOO_EXPOSURE_PATCH")||std::getenv("BEEKAPOO_EXPOSURE_STATE")||std::getenv("BEEKAPOO_SHARED_INPUTS")||std::getenv("BEEKAPOO_CABLE_STATE")||std::getenv("BEEKAPOO_MODULE_SETS")||std::getenv("BEEKAPOO_COPY_CABLES")||std::getenv("BEEKAPOO_SECTION_CONTROLS")||std::getenv("BEEKAPOO_INPUT_GAINS")||std::getenv("BEEKAPOO_REGENERATE")||std::getenv("BEEKAPOO_POLYPHONY")||std::getenv("BEEKAPOO_CHOMP")||std::getenv("BEEKAPOO_NAME_EDITOR")||std::getenv("BEEKAPOO_THEMES")||std::getenv("BEEKAPOO_TITLE_CASES")||std::getenv("BEEKAPOO_PARAM_BLOCKS")||std::getenv("BEEKAPOO_CONTROL_SPECTRUM")||std::getenv("BEEKAPOO_GENERATED_SPECTRUM")||std::getenv("BEEKAPOO_THREE_EXAMPLES")||std::getenv("BEEKAPOO_RECOVER_PATCH")){testBeekGenerator(output,scale,add,require);return;}
+  if(std::getenv("BEEKAPOO_SEQUENCE_PATCH")||std::getenv("BEEKAPOO_EXPOSURE_PATCH")||std::getenv("BEEKAPOO_EXPOSURE_STATE")||std::getenv("BEEKAPOO_SHARED_INPUTS")||std::getenv("BEEKAPOO_CABLE_STATE")||std::getenv("BEEKAPOO_MODULE_SETS")||std::getenv("BEEKAPOO_COPY_CABLES")||std::getenv("BEEKAPOO_SECTION_CONTROLS")||std::getenv("BEEKAPOO_INPUT_GAINS")||std::getenv("BEEKAPOO_REGENERATE")||std::getenv("BEEKAPOO_POLYPHONY")||std::getenv("BEEKAPOO_CHOMP")||std::getenv("BEEKAPOO_NAME_EDITOR")||std::getenv("BEEKAPOO_THEMES")||std::getenv("BEEKAPOO_TITLE_CASES")||std::getenv("BEEKAPOO_PARAM_BLOCKS")||std::getenv("BEEKAPOO_CONTROL_SPECTRUM")||std::getenv("BEEKAPOO_GENERATED_SPECTRUM")||std::getenv("BEEKAPOO_THREE_EXAMPLES")||std::getenv("BEEKAPOO_RECOVER_PATCH")){testBeekGenerator(output,scale,add,require);return;}
   if(std::getenv("BEEKAPOO_PRINT_SPECTRUM")) {
     renderBeekapooPrintSpectrum(gainModel,output,scale);
     return;
@@ -874,7 +878,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   for(float width:{75.f,90.f,105.f,120.f,150.f,180.f,300.f,450.f,900.f}) {
     host->requestedWidth=width;host->layoutControls();
     for(int i=0;i<6;++i){require(host->getInput(i)&&!host->getInput(i)->visible,"Legacy single-action CV jacks must stay hidden");if(i%3==2)require(!host->actionButtons[i]->visible,"Initialize stays off the strip");}
-    require(host->growButton->visible&&host->managementButtons[2]->visible&&host->getInput(beekapoo::Module::ACTIONS_INPUT)->visible,"Header actions and shared poly CV must be visible");
+    require(host->growButton->visible&&host->managementButtons[0]->visible&&host->getInput(beekapoo::Module::ACTIONS_INPUT)->visible,"Header actions and shared poly CV must be visible");
     require(host->getParam(beekapoo::Module::WIGGLE_RANGE)->visible==(beekapoo::Beekapoo::ownControlLayout(host->box.size.x).knobCount>=3),"Wiggle range appears only when space permits");
     std::vector<widget::Widget*> visibleControls;
     for(auto* w:host->actionButtons)visibleControls.push_back(w);
@@ -1345,19 +1349,23 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   group->closeView();
   group->arrangeByModule=true;group->requestedWidth=540;group->layoutControls();group->saveGroup();
   require(group->frame->visible && group->inputFrame->visible && group->outputFrame->visible && group->outputFrame->box.getBottom()>=367,"I/O must remain at the bottom in module-first arrangement");
-  group->hiddenKinds=2;group->layoutControls();
-  for(auto& port:group->ports)if(port.input)require(!port.face->visible,"Input visibility filter must hide all input faces without removing mappings");
-  group->hiddenKinds=0;
-  group->hiddenModuleKinds[voly->module->id]=7;group->layoutControls();
-  for(auto& param:group->parameters)if(param.id==voly->module->id)require(!param.knob->visible,"Module visibility filter must hide that module's controls");
-  group->hiddenModuleKinds.clear();group->layoutControls();group->saveGroup();
+  auto paramCount=group->parameters.size(),portCount=group->ports.size();
+  auto* oldVisibility=group->module->dataToJson();auto* oldGroup=json_object_get(oldVisibility,"group");
+  json_object_set_new(oldGroup,"hiddenKinds",json_integer(7));
+  json_object_set_new(oldGroup,"hiddenModules",json_pack("[{s:I,s:i}]","module",json_int_t(voly->module->id),"kinds",7));
+  group->module->dataFromJson(oldVisibility);group->step();json_decref(oldVisibility);
+  require(group->parameters.size()==paramCount&&group->ports.size()==portCount,"Legacy hiding must not remove exposures");
+  for(auto& param:group->parameters)require(param.knob->visible,"Legacy visibility filters must not hide exposed parameters");
+  for(auto& port:group->ports)require(port.face->visible,"Legacy visibility filters must not hide exposed ports");
+  group->saveGroup();auto* visibleState=group->module->dataToJson();auto* visibleGroup=json_object_get(visibleState,"group");
+  require(!json_object_get(visibleGroup,"hiddenKinds")&&!json_object_get(visibleGroup,"hiddenModules"),"New saves omit retired visibility flags");json_decref(visibleState);
   APP->scene->rack->getModuleContainer()->removeChild(group);
   auto groupedShotPosition=group->box.pos;group->box.pos=Vec();
   capture(group,output+"/19-by-module.png",scale,false);group->box.pos=groupedShotPosition;
   APP->scene->rack->getModuleContainer()->addChild(group);
   group->requestedWidth=45;group->layoutControls();
   require(group->jacksOnly && !group->getParam(beekapoo::Module::WIGGLE_AMOUNT)->visible,"Minimum view must hide parameter knobs");
-  for(auto* button:group->managementButtons)require(button->visible,"Edit and Eject must always stay visible");
+  require(group->managementButtons[0]->visible&&group->growButton->visible,"Edit and menu must always stay visible");
   require(group->actionButtons[0]->visible&&group->actionButtons[1]->visible,"All widths retain the default exposed Wiggle/Randomize actions");
   int visibleKnobs=0;for(auto& p:group->parameters)if(p.knob->visible)++visibleKnobs;
   for(auto& p:group->parameters)require(p.knob->visible,"Small layouts must retain every exposed parameter");
@@ -1369,7 +1377,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   tinyParent->removeChild(group);group->box.pos=Vec();capture(group,output+"/21-panel-patching.png",scale,false);group->box.pos=tinyPosition;tinyParent->addChild(group);
   APP->event->setDraggedWidget(nullptr,GLFW_MOUSE_BUTTON_LEFT);
   group->requestedWidth=540;group->layoutControls();
-  require(group->managementButtons[0]->icon==3 && group->managementButtons[1]->icon==7 && group->editShowsText==(group->box.size.x>=150),"Header management controls must retain icons and add text when there is room");
+  require(group->managementButtons[0]->icon==3 && group->managementButtons[1]->icon==7 && group->editShowsText==(group->box.size.x>=210),"Header management controls must retain icons and add text when there is room");
   {
     auto* parent=group->parent;auto position=group->box.pos;parent->removeChild(group);group->box.pos=Vec();
     capture(group,output+"/25-edit-eject-panel.png",scale,false);
@@ -1417,6 +1425,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   auto editOutsidePosition=outside->box.pos;
   outside->box.pos=Vec(mely->box.getRight()+15,mely->box.pos.y);
   capture(APP->scene,output+"/17-real-rack-edit.png",scale,false);
+  realSession->showKeyboard=true;capture(APP->scene,output+"/edit-keyboard.png",scale,false);realSession->showKeyboard=false;
   outside->box.pos=editOutsidePosition;
   {
     rack->deselectAll();rack->select(outside,true);rack->select(group,true);
@@ -1455,11 +1464,17 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     auto* overlay=new ui::MenuOverlay;auto* menu=new ui::Menu;
     overlay->addChild(menu);APP->scene->addChild(overlay);
     group->appendContextMenu(menu);menu->step();
+    for(auto* child:menu->children)if(auto* item=dynamic_cast<ui::MenuItem*>(child))require(item->text!="Show controls","Context menu has no separate visibility controls");
     overlay->removeChild(menu);menu->box.pos=Vec();
     capture(menu,output+"/30-edit-fade-menu.png",scale,false);
     delete menu;APP->scene->removeChild(overlay);delete overlay;
   }
-  realSession->exposeMode=true;realSession->showPanel=false;realSession->preview->visible=false;
+  if(realSession->showPanel)realSession->panelButton->action();
+  realSession->finish(true);group->editSubpatch();
+  realSession=static_cast<beekapoo::RackEditSession*>(group->editSession.get());realSession->step();
+  require(!realSession->showPanel&&!realSession->preview->visible,"Real subpatch reopens with Panel still off");
+  capture(APP->scene,output+"/edit-panel-off-reopened.png",scale,false);
+  realSession->exposeMode=true;
   require(!realSession->highlights.empty(),"Expose must install native-module background highlight layers");
   for(auto& layer:realSession->highlights)if(layer)require(layer->parent==layer->sourceModule.get(),"Expose highlights must live behind the source module's controls");
   APP->event->setHoveredWidget(voly->getParam(0));
@@ -1837,12 +1852,31 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     require((screenCenter-expected).norm()<1.f,"Edit and Near/Far must center the complete subpatch below the toolbar");
   };
   requireCentered();
+  auto dispatchEditKey=[&](int key,int mods=0,int action=GLFW_PRESS) {
+    widget::EventContext context;widget::Widget::HoverKeyEvent event;event.context=&context;event.key=key;event.mods=mods;event.action=action;
+    joint->onHoverKey(event);
+  };
+  dispatchEditKey(GLFW_KEY_L);require(joint->randomLockMode&&!joint->exposeMode,"L enables Lock");
+  dispatchEditKey(GLFW_KEY_L,0,GLFW_REPEAT);require(joint->randomLockMode,"Repeat does not toggle Lock");
+  dispatchEditKey(GLFW_KEY_E);require(joint->exposeMode&&!joint->randomLockMode,"Expose excludes Lock");
+  dispatchEditKey(GLFW_KEY_L);dispatchEditKey(GLFW_KEY_L);require(!joint->randomLockMode&&!joint->exposeMode,"L returns to Adjust");
+  bool oldPanel=joint->showPanel;dispatchEditKey(GLFW_KEY_P);require(joint->showPanel!=oldPanel,"P toggles Panel");dispatchEditKey(GLFW_KEY_P);
+  bool oldInside=jointHost->captureNewModules;dispatchEditKey(GLFW_KEY_N);require(jointHost->captureNewModules!=oldInside,"N toggles new-module destination");dispatchEditKey(GLFW_KEY_N);
+  for(auto binding:{std::make_pair(GLFW_KEY_F,0),std::make_pair(GLFW_KEY_F,GLFW_MOD_SHIFT)}) {
+    auto* button=binding.second?joint->nearButton:joint->farButton;auto original=button->action;int calls=0;
+    button->action=[&]{++calls;};dispatchEditKey(binding.first,binding.second);require(calls==1,"F/Shift+F dispatch Far/Near");button->action=original;
+  }
+  auto* field=new ui::TextField;APP->scene->addChild(field);APP->event->setSelectedWidget(field);
+  dispatchEditKey(GLFW_KEY_L);require(!joint->randomLockMode,"Edit shortcuts do not steal text entry");
+  APP->event->setSelectedWidget(nullptr);APP->scene->removeChild(field);delete field;
+  dispatchEditKey(GLFW_KEY_GRAVE_ACCENT,GLFW_MOD_SHIFT);require(joint->showKeyboard,"Tilde shows edit shortcuts");
+  dispatchEditKey(GLFW_KEY_GRAVE_ACCENT,0,GLFW_RELEASE);require(!joint->showKeyboard,"Release hides shortcuts");
   require(joint->showMembers && joint->membersButton->pressed(),"Subpatch member logos must be enabled by default");
   joint->membersButton->action();
   auto* markerState=jointHost->editSessionState();
   require(!joint->showMembers && json_is_false(json_object_get(markerState,"members")),"Member logo toggle must be saved with the edit session");
   json_decref(markerState);joint->membersButton->action();
-  require(joint->panelButton->help()=="Show Beekapoo panel" && joint->done->help().find("[esc]")!=std::string::npos,"Edit toolbar tooltips must explain Panel and Done's shortcut");
+  require(joint->panelButton->help()=="Show Beekapoo panel [P]" && joint->done->help().find("[esc]")!=std::string::npos,"Edit toolbar tooltips must explain Panel and Done's shortcut");
   joint->layoutToolbar(520);
   require(joint->toolbarHeight>52,"Larger edit controls must wrap in narrow windows");
   joint->layoutToolbar(APP->scene->rackScroll->box.size.x);
@@ -1883,6 +1917,24 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   joint=static_cast<beekapoo::RackEditSession*>(jointHost->editSession.get());
   for(auto& member:jointHost->members)require(member.widget->box.pos==kept.at(member.id),"Reopening must retain the native subpatch layout");
   require(!jointHost->captureNewModules,"New-module destination must persist across editing sessions");
+  require(joint->showPanel,"New modules show the floating Panel by default");
+  for(bool visible:{false,true}) {
+    if(joint->showPanel!=visible)joint->panelButton->action();
+    joint->done->action();jointHost->editSubpatch();
+    joint=static_cast<beekapoo::RackEditSession*>(jointHost->editSession.get());joint->step();
+    require(joint->showPanel==visible&&joint->preview->visible==visible&&joint->panelButton->pressed()==visible,"Panel preference survives Done and reopening Edit");
+    joint->done->action();
+    auto* m=jointHost->getModule<beekapoo::Module>();auto* saved=m->dataToJson();
+    require(json_is_true(json_object_get(saved,"showEditPanel"))==visible,"Panel preference is saved even outside Edit");
+    m->showEditPanel=!visible;m->dataFromJson(saved);json_decref(saved);jointHost->step();jointHost->editSubpatch();
+    joint=static_cast<beekapoo::RackEditSession*>(jointHost->editSession.get());joint->step();
+    require(joint->showPanel==visible&&joint->preview->visible==visible,"Panel preference survives patch state reload");
+  }
+  {
+    beekapoo::Module fresh;require(fresh.showEditPanel,"Panel preference is per Beek and defaults on");
+    auto* legacy=json_pack("{s:{s:{s:b}}}","group","editing","panel",0);
+    fresh.dataFromJson(legacy);require(!fresh.showEditPanel,"Legacy active edit session preserves hidden Panel preference");json_decref(legacy);
+  }
   size_t beforeEject=APP->engine->getModuleIds().size();
   WeakPtr<beekapoo::Beekapoo> ejected=jointHost;
   widget::EventContext ejectContext;widget::Widget::ButtonEvent ejectClick;

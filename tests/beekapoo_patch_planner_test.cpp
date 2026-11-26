@@ -11,6 +11,49 @@
 using namespace beekapoo_patch;
 int main() {
   {
+    // Required groups are AND; alternatives are OR. Resolve input-to-input
+    // dependencies, without requiring a special signal type at the source.
+    Spec source{"source", {}, {{0, {}}}, {}, {}, {}};
+    Spec processor{"processor", {}, {{0, {{{0}}, {{1,2}}}}}, {}, {},
+                   {{0}, {1, {{{3}}}}, {2, {{{3}}}}, {3}}};
+    std::vector<int> needed;
+    assert(requiredInputs(processor, processor.outputs[0], [](int){return 0;}, needed));
+    assert((needed==std::vector<int>{0,3,1}));
+    std::vector<Spec> specs{source,processor};
+    Planner test(1,specs);
+    Plan graph;graph.modules={0,1};graph.outputs={{1,0}};
+    graph.cables={{{0,0},{1,0}},{{0,0},{1,1}},{{0,0},{1,3}}};
+    assert(test.validate(graph).empty());
+    graph.cables.pop_back();assert(!test.validate(graph).empty());
+    graph.cables={{{0,0},{1,0}},{{0,0},{1,2}},{{0,0},{1,3}}};
+    assert(test.validate(graph).empty());
+    graph.cables.erase(graph.cables.begin());assert(!test.validate(graph).empty());
+    // Any ordinary oscillator output is now allowed to drive an envelope.
+    std::vector<Spec> untyped{library()[0],library()[6]};
+    Plan envelope;envelope.modules={0,1};envelope.outputs={{1,0}};
+    envelope.cables={{{0,0},{1,4}}};
+    assert(Planner(1,untyped).validate(envelope).empty());
+    // Omitted Delay CV prerequisites inherit the selected output's input rule.
+    const auto& delay=library()[5];
+    assert(!portUseful(delay,delay.modulationInputs[0],[](int){return false;},[](int i){return i==0;}));
+    assert(portUseful(delay,delay.modulationInputs[0],[](int i){return i==4;},[](int i){return i==0;}));
+    // Separate AND groups for used outputs also work for controls.
+    Control control{0, {}, {{{0,1}},{{2,3}}}};
+    assert(!controlUseful(control,[](int){return true;},[](int i){return i==0;}));
+    assert(controlUseful(control,[](int){return true;},[](int i){return i==0||i==3;}));
+    // Equal preference allows either main output; never the lower-priority tap.
+    Spec preferred{"preferred", {}, {{0, {},1},{1,{},1},{2,{}}}, {}, {}, {}};
+    std::vector<Spec> choices{preferred, library()[3]};
+    std::set<int> selected;
+    for(unsigned seed=0;seed<100;++seed) {
+      auto plan=Planner(seed,choices).make(3);
+      for(auto cable:plan.cables)if(plan.modules[cable.from.node]==0) {
+        assert(cable.from.port!=2);selected.insert(cable.from.port);
+      }
+    }
+    assert(selected.size()==2);
+  }
+  {
     // At 4 HP, three inputs and one output no longer reserve three rows of
     // removed attenuverters. Compression sacrifices captions before jacks.
     auto small=beekapoo::compactPanelLayout(60,200,5,3,1);

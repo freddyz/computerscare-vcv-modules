@@ -52,3 +52,9 @@ include $(RACK_DIR)/plugin.mk
 ifdef ARCH_WIN
 LDFLAGS += -lopengl32
 endif
+
+# JSON is the source of truth; keep the standalone table current for every build.
+src/BeekapooPortRules.inc: scripts/generate-beekapoo-port-rules.py $(wildcard res/Beekapoo/patch-rules/*.json)
+	python3 scripts/generate-beekapoo-port-rules.py
+
+build/src/ComputerscareBeekapoo.cpp.o: src/BeekapooPortRules.inc

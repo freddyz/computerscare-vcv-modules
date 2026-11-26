@@ -1,0 +1,243 @@
+{
+  "version": 1,
+  "manufacturer": "Fundamental",
+  "modules": {
+    "VCO": {
+      "inputs": {
+        "0": {
+          "label": "Pitch"
+        },
+        "1": {
+          "label": "FM"
+        },
+        "2": {
+          "label": "Sync"
+        },
+        "3": {
+          "label": "PWM",
+          "requiresOutputs": [[3]]
+        }
+      },
+      "outputs": {
+        "0": {
+          "label": "Sine"
+        },
+        "1": {
+          "label": "Triangle"
+        },
+        "2": {
+          "label": "Saw"
+        },
+        "3": {
+          "label": "Square"
+        }
+      }
+    },
+    "LFO": {
+      "inputs": {
+        "0": {
+          "label": "FM"
+        },
+        "2": {
+          "label": "Reset"
+        },
+        "3": {
+          "label": "PWM",
+          "requiresOutputs": [[3]]
+        },
+        "4": {
+          "label": "Clock"
+        }
+      },
+      "outputs": {
+        "0": {
+          "label": "Sine"
+        },
+        "1": {
+          "label": "Triangle"
+        },
+        "2": {
+          "label": "Saw"
+        },
+        "3": {
+          "label": "Square"
+        }
+      }
+    },
+    "Noise": {
+      "inputs": {},
+      "outputs": {
+        "0": {
+          "label": "White"
+        },
+        "1": {
+          "label": "Pink"
+        },
+        "2": {
+          "label": "Red"
+        }
+      }
+    },
+    "VCF": {
+      "inputs": {
+        "0": {
+          "label": "Cutoff CV"
+        },
+        "1": {
+          "label": "Resonance CV"
+        },
+        "2": {
+          "label": "Drive CV"
+        },
+        "3": {
+          "label": "IN"
+        }
+      },
+      "outputs": {
+        "0": {
+          "label": "Low pass",
+          "requiresInputs": [[3]]
+        },
+        "1": {
+          "label": "High pass",
+          "requiresInputs": [[3]]
+        }
+      }
+    },
+    "VCA-1": {
+      "inputs": {
+        "0": {
+          "label": "CV"
+        },
+        "1": {
+          "label": "IN"
+        }
+      },
+      "outputs": {
+        "0": {
+          "label": "OUT",
+          "requiresInputs": [[1]]
+        }
+      }
+    },
+    "Delay": {
+      "inputs": {
+        "0": {
+          "label": "Time CV"
+        },
+        "1": {
+          "label": "Feedback CV"
+        },
+        "2": {
+          "label": "Tone CV"
+        },
+        "3": {
+          "label": "Mix CV"
+        },
+        "4": {
+          "label": "IN"
+        },
+        "5": {
+          "label": "Clock"
+        }
+      },
+      "outputs": {
+        "0": {
+          "label": "MIX",
+          "requiresInputs": [[4]]
+        }
+      }
+    },
+    "ADSR": {
+      "inputs": {
+        "0": {
+          "label": "Attack CV"
+        },
+        "1": {
+          "label": "Decay CV"
+        },
+        "2": {
+          "label": "Sustain CV"
+        },
+        "3": {
+          "label": "Release CV"
+        },
+        "4": {
+          "label": "Gate"
+        },
+        "5": {
+          "label": "Retrigger"
+        }
+      },
+      "outputs": {
+        "0": {
+          "label": "Envelope",
+          "requiresInputs": [[4]]
+        }
+      }
+    },
+    "VCMixer": {
+      "inputs": {
+        "0": {
+          "label": "Mix CV",
+          "requiresOutputs": [[0]]
+        },
+        "1": {
+          "label": "IN 1"
+        },
+        "2": {
+          "label": "IN 2"
+        },
+        "3": {
+          "label": "IN 3"
+        },
+        "4": {
+          "label": "IN 4"
+        },
+        "5": {
+          "label": "CV 1",
+          "requiresInputs": [[1]],
+          "requiresOutputs": [[0, 1]]
+        },
+        "6": {
+          "label": "CV 2",
+          "requiresInputs": [[2]],
+          "requiresOutputs": [[0, 2]]
+        },
+        "7": {
+          "label": "CV 3",
+          "requiresInputs": [[3]],
+          "requiresOutputs": [[0, 3]]
+        },
+        "8": {
+          "label": "CV 4",
+          "requiresInputs": [[4]],
+          "requiresOutputs": [[0, 4]]
+        }
+      },
+      "outputs": {
+        "0": {
+          "label": "MIX",
+          "requiresInputs": [[1, 2, 3, 4]]
+        },
+        "1": {
+          "label": "OUT 1",
+          "requiresInputs": [[1]]
+        },
+        "2": {
+          "label": "OUT 2",
+          "requiresInputs": [[2]]
+        },
+        "3": {
+          "label": "OUT 3",
+          "requiresInputs": [[3]]
+        },
+        "4": {
+          "label": "OUT 4",
+          "requiresInputs": [[4]]
+        }
+      },
+      "preferredOutputs": [0]
+    }
+  }
+}
