@@ -213,10 +213,11 @@ void paintKeyboard(const DrawArgs& args, bool fitViewport) {
   };
   auto badge = [&](widget::Widget* control, const std::string& key) {
     if (!control || !control->visible) return;
-    nvgFontSize(vg, 8.5f);
-    float width = nvgTextBounds(vg, 0, 0, key.c_str(), nullptr, nullptr) + 5;
-    Vec center = control->getRelativeOffset(control->box.size * .5f, this);
-    Rect rect(center - Vec(width * .5f, 6), Vec(width, 12));
+    nvgFontSize(vg, 7.5f);
+    float width = nvgTextBounds(vg, 0, 0, key.c_str(), nullptr, nullptr) + 4;
+    Vec corner = control->getRelativeOffset(Vec(control->box.size.x, 0), this);
+    Rect rect(corner + Vec(1 - width, -7), Vec(width, 10));
+    Vec center = rect.getCenter();
     plaque(rect, true);
     nvgFillColor(vg, nvgRGB(24, 26, 25));
     nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
