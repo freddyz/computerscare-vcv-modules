@@ -163,10 +163,10 @@ removal, native and portable save/load, duplication, both merge paths, Eject and
 Undo/Redo. It renders a shared-input example and uses the real Fundamental 8vert for output sums and retained gains.
 
 `BEEKAPOO_SEQUENCE=1 scripts/preview-module.sh beekapoo --no-build` checks native
-live controls, momentaries and undo, initial Step 1/1, Store/New and immediate
-recall, Clock/Scan Off, poly transport, MIDI protection, snapshot persistence,
-duplicate isolation and two-row control geometry. It renders light/dark panels
-and optional read-only saved-value ghosts.
+live controls, initial Step 1/1, automatic step saving across clock/scan/manual
+recall, atomic stale-snapshot rejection, unified locks and legacy migration, MIDI
+protection, paused patch saving, delete/undo, duplicate isolation, clear-to-current,
+header step selection and control geometry. It renders light/dark panels.
 
 `BEEKAPOO_KEYBOARD=1 scripts/preview-module.sh beekapoo --no-build` checks native
 momentary/toggle key actions, button-bank release, transport, repeat suppression,

@@ -23,13 +23,71 @@ namespace {
 struct WatcherButton : ui::Button {
   std::function<void()> action;
   bool enabled = true;
+  int icon = 0;
+  WeakPtr<ui::Tooltip> tip;
+  ~WatcherButton() override { clearTip(); }
+  void clearTip() {
+    if (tip) tip->requestDelete();
+    tip = nullptr;
+  }
+  void onEnter(const EnterEvent& e) override {
+    ui::Button::onEnter(e);
+    if (!icon) return;
+    auto* t = new ui::Tooltip;
+    t->text = text;
+    tip = t;
+    APP->scene->addChild(t);
+  }
+  void onLeave(const LeaveEvent& e) override {
+    clearTip();
+    ui::Button::onLeave(e);
+  }
   void onAction(const ActionEvent&) override {
     if (enabled) action();
   }
   void draw(const DrawArgs& args) override {
     nvgSave(args.vg);
     if (!enabled) nvgGlobalAlpha(args.vg, .4f);
+    std::string label = text;
+    if (icon) text.clear();
     ui::Button::draw(args);
+    text = label;
+    if (icon) {
+      auto* vg = args.vg;
+      nvgTranslate(vg, box.size.x * .5f, box.size.y * .5f);
+      nvgStrokeColor(vg, nvgRGB(222, 227, 225));
+      nvgFillColor(vg, nvgRGB(222, 227, 225));
+      nvgStrokeWidth(vg, 1.3f);
+      nvgBeginPath(vg);
+      if (icon == 1) {
+        nvgRect(vg, -4, -5, 2.5f, 10);
+        nvgRect(vg, 1.5f, -5, 2.5f, 10);
+        nvgFill(vg);
+      } else if (icon == 2) {
+        nvgMoveTo(vg, -3, -5);
+        nvgLineTo(vg, 5, 0);
+        nvgLineTo(vg, -3, 5);
+        nvgClosePath(vg);
+        nvgFill(vg);
+      } else if (icon == 3) {
+        nvgMoveTo(vg, -5, -5);
+        nvgLineTo(vg, 3, -5);
+        nvgLineTo(vg, 5, -3);
+        nvgLineTo(vg, 5, 5);
+        nvgLineTo(vg, -5, 5);
+        nvgClosePath(vg);
+        nvgRect(vg, -2, -5, 4, 4);
+        nvgRect(vg, -3, 1, 6, 4);
+        nvgStroke(vg);
+      } else if (icon == 4) {
+        nvgMoveTo(vg, -5, 0);
+        nvgLineTo(vg, 5, 0);
+        nvgStroke(vg);
+      } else {
+        nvgRect(vg, -5, -5, 10, 10);
+        nvgStroke(vg);
+      }
+    }
     nvgRestore(args.vg);
   }
 };
@@ -40,7 +98,8 @@ struct WatcherToolbar : widget::OpaqueWidget {
   WatcherButton* rebuild = nullptr;
   WatcherButton* saveNext = nullptr;
   WatcherButton* saveBranch = nullptr;
-  bool folderMode = true;
+  WatcherButton *options = nullptr, *sizeToggle = nullptr;
+  bool folderMode = true, minimal = false;
   static const char* folderMarker() {
     return ".computerscare-patch-folder.json";
   }
@@ -105,6 +164,8 @@ struct WatcherToolbar : widget::OpaqueWidget {
             json_t* settings = json_object();
             json_object_set_new(settings, "folderMode",
                                 json_boolean(!folderMode));
+            json_object_set_new(settings, "minimalToolbar",
+                                json_boolean(minimal));
             writeJson(settingsPath(), settings);
             folderMode = !folderMode;
           } catch (const std::exception& error) {
@@ -176,6 +237,7 @@ struct WatcherToolbar : widget::OpaqueWidget {
     json_t* settings = json_load_file(settingsPath().c_str(), 0, &error);
     json_t* mode = settings ? json_object_get(settings, "folderMode") : nullptr;
     if (json_is_boolean(mode)) folderMode = json_boolean_value(mode);
+    minimal = json_is_true(json_object_get(settings, "minimalToolbar"));
     if (settings) json_decref(settings);
     box.size = Vec(635, 28);
     pause = new WatcherButton;
@@ -199,11 +261,45 @@ struct WatcherToolbar : widget::OpaqueWidget {
     saveBranch->box = Rect(Vec(468, 4), Vec(92, 20));
     saveBranch->action = [this]() { savePatch(true); };
     addChild(saveBranch);
-    auto* options = new WatcherButton;
+    options = new WatcherButton;
     options->text = "Options";
     options->box = Rect(Vec(565, 4), Vec(62, 20));
     options->action = [this]() { openOptions(); };
     addChild(options);
+    sizeToggle = new WatcherButton;
+    sizeToggle->action = [this] {
+      minimal = !minimal;
+      layout();
+      try {
+        auto* settings = json_object();
+        json_object_set_new(settings, "folderMode", json_boolean(folderMode));
+        json_object_set_new(settings, "minimalToolbar", json_boolean(minimal));
+        writeJson(settingsPath(), settings);
+      } catch (const std::exception& error) {
+        showError(error.what());
+      }
+    };
+    addChild(sizeToggle);
+    layout();
+  }
+  void layout() {
+    box.size = Vec(minimal ? 94 : 663, 28);
+    pause->box = Rect(Vec(minimal ? 22 : 205, 4), Vec(minimal ? 20 : 75, 20));
+    saveNext->box =
+        Rect(Vec(minimal ? 46 : 368, 4), Vec(minimal ? 20 : 95, 20));
+    sizeToggle->box = Rect(Vec(minimal ? 70 : 635, 4), Vec(20, 20));
+    sizeToggle->icon = minimal ? 5 : 4;
+    sizeToggle->text = minimal ? "Expand toolbar" : "Minimize toolbar";
+    sizeToggle->clearTip();
+    for (auto* b : {rebuild, saveBranch, options}) {
+      b->visible = !minimal;
+      b->clearTip();
+    }
+    pause->icon =
+        minimal ? (state == "paused" || state == "queued" ? 2 : 1) : 0;
+    saveNext->icon = minimal ? 3 : 0;
+    if (parent)
+      box.pos.x = std::max(4.f, parent->box.size.x - box.size.x - 10.f);
   }
   void onButton(const ButtonEvent& e) override {
     if (e.button == GLFW_MOUSE_BUTTON_RIGHT && e.action == GLFW_PRESS) {
@@ -239,6 +335,8 @@ struct WatcherToolbar : widget::OpaqueWidget {
                   ? current
                   : "offline";
       pause->text = state == "paused" || state == "queued" ? "Resume" : "Pause";
+      pause->icon =
+          minimal ? (state == "paused" || state == "queued" ? 2 : 1) : 0;
       pause->enabled = rebuild->enabled =
           state != "offline" && state != "stopped" && state != "building";
     }
@@ -268,7 +366,7 @@ struct WatcherToolbar : widget::OpaqueWidget {
     nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
     nvgFillColor(args.vg, nvgRGB(230, 233, 232));
     std::string caption = std::string("vcvmon  ") + label;
-    nvgText(args.vg, 22, 14, caption.c_str(), nullptr);
+    if (!minimal) nvgText(args.vg, 22, 14, caption.c_str(), nullptr);
     widget::OpaqueWidget::draw(args);
   }
 };

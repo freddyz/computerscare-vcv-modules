@@ -77,7 +77,7 @@ ActionButton* shortcutButton(KeyAction action) {
       return sequenceButtons[2];
     case KeyAction::New:
       return sequenceButtons[3];
-    case KeyAction::Store:
+    case KeyAction::DeleteStep:
       return sequenceButtons[4];
     case KeyAction::Steps:
       return stepSelector;

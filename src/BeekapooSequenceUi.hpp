@@ -15,6 +15,7 @@ struct SequenceEditHistory : history::Action {
       m->playingStep.store(
           clamp(playing, 0, std::max(0, int(w->sequence.steps.size()) - 1)));
       w->saveGroup();
+      w->layoutControls();
     }
   }
   void undo() override { apply(before); }
@@ -36,7 +37,6 @@ std::vector<ActionButton*> sequenceButtons;
 ActionButton* stepSelector = nullptr;
 bool showSavedValues = false;
 bool twoRowControls = false;
-float sequenceStatusY = 0;
 
 bool sequenceEligible(int64_t id, int param) {
   auto* w = find(id);
@@ -58,6 +58,7 @@ StepValues captureSequenceValues() {
   return values;
 }
 json_t* sequenceJson() {
+  if (auto* m = getModule<Module>()) m->captureSequenceEdits();
   auto* root = json_object();
   auto* steps = json_array();
   for (const auto& values : sequence.steps)
@@ -86,6 +87,7 @@ void publishSequence() {
                                   return !sequenceEligible(v.module, v.param);
                                 }),
                  values.end());
+  sequence.locks = randomLocks;
   if (auto* m = getModule<Module>()) m->publishSequence(sequence);
 }
 void loadSequence(json_t* root) {
@@ -105,27 +107,26 @@ void loadSequence(json_t* root) {
   }
   // Old silent drafts are intentionally not restored or applied.
   publishSequence();
+  if (auto* m = getModule<Module>()) {
+    m->sequenceCaptureEnabled.store(true);
+    m->primeSequenceObservations();
+  }
 }
 void selectSequenceStep(int index) {
   if (index < 0 || index >= int(sequence.steps.size())) return;
   if (auto* m = getModule<Module>()) m->requestedStep.store(index);
 }
-void storeSequence(bool append) {
+void appendSequenceStep() {
   auto* m = getModule<Module>();
   if (!m || members.empty()) return;
-  int target = m->playingStep.load();
-  if (!append && (target < 0 || target >= int(sequence.steps.size()))) return;
-  auto* action = beginSequenceEdit(append ? "save new parameter step"
-                                          : "store parameter step");
-  auto values = captureSequenceValues();
-  if (append) {
-    sequence.steps.push_back(values);
-    // Already sounding these values: only change the active snapshot index.
-    m->playingStep.store(int(sequence.steps.size()) - 1);
-    m->requestedStep.store(-1);
-  } else
-    sequence.steps[target] = values;
+  auto* action = beginSequenceEdit("save new parameter step");
+  sequence.steps.push_back(captureSequenceValues());
+  // These values are already sounding; select without recalling anything.
+  m->playingStep.store(int(sequence.steps.size()) - 1);
+  m->requestedStep.store(-1);
+  m->sequenceCaptureEnabled.store(true);
   saveGroup();
+  layoutControls();
   finishSequenceEdit(action);
 }
 void deleteSequenceStep(int index = -1) {
@@ -134,6 +135,7 @@ void deleteSequenceStep(int index = -1) {
   if (index < 0) index = m->playingStep.load();
   if (index < 0 || index >= int(sequence.steps.size())) return;
   auto* action = beginSequenceEdit("delete parameter step");
+  m->sequenceCaptureEnabled.store(false);
   sequence.steps.erase(sequence.steps.begin() + index);
   int playing = m->playingStep.load();
   bool removedPlaying = playing == index;
@@ -141,7 +143,23 @@ void deleteSequenceStep(int index = -1) {
   playing = clamp(playing, 0, int(sequence.steps.size()) - 1);
   m->playingStep.store(playing);
   m->requestedStep.store(removedPlaying ? playing : -1);
+  if (!removedPlaying) m->sequenceCaptureEnabled.store(true);
   saveGroup();
+  layoutControls();
+  finishSequenceEdit(action);
+}
+void clearSequenceSteps() {
+  auto* m = getModule<Module>();
+  if (!m || sequence.steps.size() <= 1) return;
+  auto* action = beginSequenceEdit("remove all sequence steps");
+  // Keep the sound actually playing, including manual edits and held locks.
+  sequence.steps.assign(1, captureSequenceValues());
+  m->playingStep.store(0);
+  m->requestedStep.store(-1);
+  m->manualClocks.store(0);
+  m->manualResets.store(0);
+  saveGroup();
+  layoutControls();
   finishSequenceEdit(action);
 }
 // Read-only reference for ghosts; never substitutes a parameter quantity.
@@ -152,19 +170,19 @@ bool savedSequenceValue(int64_t id, int param, float& value) {
   if (step < 0 || step >= int(sequence.steps.size())) return false;
   for (const auto& entry : sequence.steps[step])
     if (entry.module == id && entry.param == param) {
-      value = entry.value;
+      value = entry.getValue();
       return true;
     }
   return false;
 }
-std::string sequenceStatus(bool compact = false) {
+std::string sequenceStatus() {
   auto* m = getModule<Module>();
   int play = m ? m->playingStep.load() : 0;
-  return std::string(compact ? "" : "Step ") +
-         std::to_string(std::max(0, play) + 1) + "/" +
+  return std::to_string(std::max(0, play) + 1) + "/" +
          std::to_string(std::max(1, int(sequence.steps.size())));
 }
 void showStepSelector() {
+  if (sequence.steps.size() <= 1) return;
   auto* menu = createMenu();
   WeakPtr<Beekapoo> live = this;
   for (int i = 0; i < int(sequence.steps.size()); ++i)
@@ -239,14 +257,8 @@ void appendSequenceMenu(ui::Menu* menu) {
   menu->addChild(createMenuItem("Reset", "Actions CV ch 8", [live] {
     if (live) live->getModule<Module>()->manualResets.fetch_add(1);
   }));
-  menu->addChild(createMenuItem(
-      "Store", "",
-      [live] {
-        if (live) live->storeSequence(false);
-      },
-      sequence.steps.empty()));
   menu->addChild(createMenuItem("Save as New", "", [live] {
-    if (live) live->storeSequence(true);
+    if (live) live->appendSequenceStep();
   }));
 }
 void showSequenceMenu() {
@@ -255,10 +267,10 @@ void showSequenceMenu() {
 }
 void createSequenceControls(Module* m) {
   addParam(createParam<ThemedSmallKnob>(Vec(), m, Module::SEQUENCE_SCAN));
-  const int icons[] = {13, 20, 14, 16, 15};
+  const int icons[] = {13, 20, 14, 16, 18};
   const char* help[] = {"Clock on/off", "Advance playback\nActions CV ch 7",
                         "Reset playback\nActions CV ch 8", "Save as New",
-                        "Store step"};
+                        "Delete current step"};
   for (int i = 0; i < 5; ++i) {
     auto* b = new ActionButton;
     b->icon = icons[i];
@@ -286,8 +298,10 @@ void createSequenceControls(Module* m) {
         m->manualClocks.fetch_add(1);
       else if (i == 2)
         m->manualResets.fetch_add(1);
+      else if (i == 3)
+        appendSequenceStep();
       else
-        storeSequence(i == 3);
+        deleteSequenceStep();
     };
     sequenceButtons.push_back(b);
     addChild(b);
@@ -295,7 +309,7 @@ void createSequenceControls(Module* m) {
   stepSelector = new ActionButton;
   stepSelector->configure(64, 14, 1.f, .6f, .3f, 1950);
   stepSelector->textSize = 9;
-  stepSelector->caption = [this] { return sequenceStatus(box.size.x < 150); };
+  stepSelector->caption = [this] { return sequenceStatus(); };
   stepSelector->help = [] { return "Choose and recall step"; };
   stepSelector->action = [this] {
     if (module) showStepSelector();

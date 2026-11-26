@@ -224,26 +224,79 @@ struct Module : engine::Module {
                       std::make_shared<const SequenceBank>(bank));
     sequenceCount.store(int(bank.steps.size()), std::memory_order_release);
   }
+  unsigned sequenceCaptureDivider = 0;
+  std::atomic<bool> sequenceCaptureEnabled{true};
+  std::atomic<uint64_t> sequenceRecallEpoch{0};
+  void captureSequenceEdits(bool audio = false) {
+    if (!sequenceCaptureEnabled.load()) return;
+    uint64_t epoch = sequenceRecallEpoch.load();
+    if (epoch & 1) return;
+    auto bank = std::atomic_load(&sequenceBank);
+    int active = playingStep.load();
+    if (active < 0 || active >= int(bank->steps.size())) return;
+    const auto& entries = bank->steps[active];
+    struct Observation {
+      const StepValue* entry;
+      float value;
+      uint64_t token;
+    };
+    std::vector<Observation> observed;
+    if (!audio) observed.reserve(entries.size());
+    for (const auto& entry : entries) {
+      auto* child = APP->engine->getModule_NoLock(entry.module);
+      if (!child || entry.param < 0 || entry.param >= int(child->params.size()))
+        continue;
+      uint64_t token = entry.token();
+      float value = child->params[entry.param].getValue();
+      if (audio)
+        entry.edit(value);
+      else
+        observed.push_back({&entry, value, token});
+    }
+    // A UI snapshot straddling a recall must not save one step into another.
+    if (!audio && epoch == sequenceRecallEpoch.load() &&
+        active == playingStep.load())
+      for (const auto& value : observed)
+        value.entry->editIfUnchanged(value.value, value.token);
+  }
+  void primeSequenceObservations() {
+    auto bank = std::atomic_load(&sequenceBank);
+    int active = playingStep.load();
+    if (active < 0 || active >= int(bank->steps.size())) return;
+    for (const auto& entry : bank->steps[active]) {
+      auto* child = APP->engine->getModule_NoLock(entry.module);
+      if (child && entry.param >= 0 && entry.param < int(child->params.size()))
+        entry.observe(child->params[entry.param].getValue());
+    }
+  }
   void recallStep(int step) {
+    captureSequenceEdits(true);
     auto bank = std::atomic_load(&sequenceBank);
     if (step < 0 || step >= int(bank->steps.size())) return;
+    sequenceRecallEpoch.fetch_add(1);
     // process() runs under Rack's engine lock. Resolve IDs at recall time,
     // never retain child pointers across deletion, undo or a patch load.
     for (const auto& entry : bank->steps[step]) {
       auto* child = APP->engine->getModule_NoLock(entry.module);
-      if (!child || entry.param < 0 ||
-          entry.param >= int(child->params.size()) ||
-          APP->engine->getParamHandle_NoLock(entry.module, entry.param))
+      if (!child || entry.param < 0 || entry.param >= int(child->params.size()))
         continue;
       auto* q = child->getParamQuantity(entry.param);
-      if (!q || !q->isBounded() || !std::isfinite(entry.value)) continue;
-      APP->engine->setParamValue(
-          child, entry.param,
-          clamp(entry.value, q->getMinValue(), q->getMaxValue()));
+      float value = entry.getValue();
+      if (!q || !q->isBounded() || !std::isfinite(value)) continue;
+      if (!bank->locked(entry.module, entry.param) &&
+          !APP->engine->getParamHandle_NoLock(entry.module, entry.param))
+        APP->engine->setParamValue(
+            child, entry.param,
+            clamp(value, q->getMinValue(), q->getMaxValue()));
+      // Held values are the baseline, not edits to this newly entered step.
+      entry.observe(child->params[entry.param].getValue());
     }
     playingStep.store(step, std::memory_order_release);
+    sequenceCaptureEnabled.store(true);
+    sequenceRecallEpoch.fetch_add(1);
   }
   void processSequence() {
+    if ((sequenceCaptureDivider++ & 1023u) == 0) captureSequenceEdits(true);
     auto& actions = inputs[ACTIONS_INPUT];
     auto voltage = [&](int channel) {
       return channel < actions.getChannels() ? actions.getVoltage(channel)
@@ -430,9 +483,16 @@ struct Module : engine::Module {
       // Knob drags/MIDI don't call saveGroup(); never export an old gain from
       // that cache into a patch, duplicate, or structural Undo snapshot.
       auto* snapshot = json_deep_copy(group);
-      if (auto* sequence = json_object_get(snapshot, "sequence"))
+      if (auto* sequence = json_object_get(snapshot, "sequence")) {
+        captureSequenceEdits();
+        auto bank = std::atomic_load(&sequenceBank);
+        auto* steps = json_array();
+        for (const auto& values : bank->steps)
+          json_array_append_new(steps, stepValuesToJson(values));
+        json_object_set_new(sequence, "steps", steps);
         json_object_set_new(sequence, "playing",
                             json_integer(playingStep.load()));
+      }
       auto* ports = json_object_get(snapshot, "ports");
       for (size_t i = 0; i < json_array_size(ports); ++i) {
         auto* port = json_array_get(ports, i);
@@ -1682,7 +1742,7 @@ struct Beekapoo : app::ModuleWidget {
     return randomLocks.count({id, -1}) || randomLocks.count({id, param});
   }
   void toggleRandomLock(int64_t id, int param) {
-    auto* action = beginAction("toggle subpatch randomization lock");
+    auto* action = beginAction("toggle subpatch lock");
     auto key = std::make_pair(id, param);
     if (!randomLocks.erase(key)) randomLocks.insert(key);
     saveGroup();
@@ -1690,7 +1750,7 @@ struct Beekapoo : app::ModuleWidget {
   }
   void unlockRandomization() {
     if (randomLocks.empty()) return;
-    auto* action = beginAction("unlock subpatch randomization");
+    auto* action = beginAction("unlock subpatch");
     randomLocks.clear();
     saveGroup();
     finishAction(action);
@@ -1765,7 +1825,7 @@ struct Beekapoo : app::ModuleWidget {
     addSelectionButton->setDark(dark);
     for (auto* button : sequenceButtons)
       buttonStyle(button, ownFrame->faceColor);
-    if (stepSelector) buttonStyle(stepSelector, ownFrame->faceColor);
+    if (stepSelector) buttonStyle(stepSelector, titleFrame->faceColor);
     buttonStyle(regenerateButton, ownFrame->faceColor);
     buttonStyle(growButton, titleFrame->faceColor);
     for (size_t i = 0; i < actionButtons.size(); ++i)
@@ -2165,6 +2225,12 @@ struct Beekapoo : app::ModuleWidget {
       menu->addChild(createMenuItem("Compact subpatch", "", [live] {
         if (live) live->compactSubpatch();
       }));
+      menu->addChild(createMenuItem(
+          "Remove all sequence steps", "",
+          [live] {
+            if (live) live->clearSequenceSteps();
+          },
+          sequence.steps.size() <= 1));
     };
     addChild(growButton);
     const char* captions[] = {"Wiggle", "Randomize", "Initialize"};
@@ -2381,8 +2447,6 @@ struct Beekapoo : app::ModuleWidget {
       return;
     }
     auto* root = json_object();
-    publishSequence();
-    json_object_set_new(root, "sequence", sequenceJson());
     json_object_set_new(root, "owner", json_integer(m->id));
     if (auto* editing = editSessionState())
       json_object_set_new(root, "editing", editing);
@@ -2392,20 +2456,27 @@ struct Beekapoo : app::ModuleWidget {
     json_object_set_new(root, "hasEditPlacement",
                         json_boolean(hasEditPlacement));
     json_object_set_new(root, "markMembers", json_boolean(markMembers));
-    auto* locks = json_array();
-    for (auto it = randomLocks.begin(); it != randomLocks.end();) {
-      bool present = false;
-      for (const auto& member : members) present |= member.id == it->first;
-      if (!present) {
-        it = randomLocks.erase(it);
-        continue;
+    {
+      // Keep the old storage key; both legacy lock lists load into this set.
+      auto& source = randomLocks;
+      auto* locks = json_array();
+      for (auto it = source.begin(); it != source.end();) {
+        auto* child = find(it->first);
+        if (!child || !contains(child->module) ||
+            (it->second >= 0 &&
+             it->second >= int(child->module->params.size()))) {
+          it = source.erase(it);
+          continue;
+        }
+        json_array_append_new(
+            locks, json_pack("{s:I,s:i}", "module", (json_int_t)it->first,
+                             "param", it->second));
+        ++it;
       }
-      json_array_append_new(
-          locks, json_pack("{s:I,s:i}", "module", (json_int_t)it->first,
-                           "param", it->second));
-      ++it;
+      json_object_set_new(root, "randomLocks", locks);
     }
-    json_object_set_new(root, "randomLocks", locks);
+    publishSequence();
+    json_object_set_new(root, "sequence", sequenceJson());
     json_object_set_new(root, "arrangeByModule", json_boolean(arrangeByModule));
     json_object_set_new(root, "hiddenKinds", json_integer(hiddenKinds));
     auto* hidden = json_array();
@@ -2596,12 +2667,12 @@ struct Beekapoo : app::ModuleWidget {
     applyTheme(true);
   }
   struct HeaderLayout {
-    Rect artwork, logo;
+    Rect artwork, logo, selector;
     std::array<Rect, 4> buttons{};
     float height = 0;
-    bool text = false;
+    bool text = false, showSelector = false;
   };
-  static HeaderLayout headerLayout(float width, int members) {
+  static HeaderLayout headerLayout(float width, int members, int steps = 1) {
     HeaderLayout result;
     result.text = width >= 150;
     float editWidth =
@@ -2614,8 +2685,12 @@ struct Beekapoo : app::ModuleWidget {
     float saveWidth = result.text ? 40.f : 16.f;
     float buttonWidth =
         editWidth + ejectWidth + saveWidth + functionsWidth + 3 * buttonGap;
+    float selectorWidth =
+        std::max(34.f, 18.f + 12.f * std::to_string(std::max(1, steps)).size());
+    result.showSelector = buttonWidth + selectorWidth + buttonGap <= width - 16;
+    if (result.showSelector) buttonWidth += selectorWidth + buttonGap;
     float right = width - 10;
-    bool beside = width >= 330;
+    bool beside = width >= (result.showSelector ? 390 : 330);
     float titleHeight = width <= 90 ? 32.f : 27.f;
     float logoWidth = std::min(32.f, (width - 16) * .4f);
     result.logo = Rect(Vec(right - logoWidth, 5), Vec(logoWidth, titleHeight));
@@ -2627,6 +2702,10 @@ struct Beekapoo : app::ModuleWidget {
     float x = beside ? result.logo.pos.x - buttonWidth - 4 : 6;
     float y = beside ? 9 : titleHeight + 8;
     for (int i = 0; i < 4; ++i) {
+      if (i == 3 && result.showSelector) {
+        result.selector = Rect(Vec(x, y), Vec(selectorWidth, 18));
+        x += selectorWidth + buttonGap;
+      }
       float w = i == 0   ? editWidth
                 : i == 1 ? ejectWidth
                 : i == 2 ? saveWidth
@@ -2644,7 +2723,8 @@ struct Beekapoo : app::ModuleWidget {
   float layoutHeaderControls(float width) {
     addSelectionButton->setAvailable(canAddSelection());
     auto plan =
-        headerLayout(width, module ? members.size() : browserMemberCount);
+        headerLayout(width, module ? members.size() : browserMemberCount,
+                     int(sequence.steps.size()));
     headerArtworkArea = plan.artwork;
     headerLogoArea = plan.logo;
     addSelectionButton->box = logoTarget();
@@ -2663,6 +2743,9 @@ struct Beekapoo : app::ModuleWidget {
       button->downDepth = .8f;
       button->box = plan.buttons[i];
     }
+    stepSelector->visible = plan.showSelector;
+    stepSelector->box = plan.selector;
+    stepSelector->textSize = 10;
     growButton->box = plan.buttons[3];
     growButton->visible = true;
     return plan.height;
@@ -2674,7 +2757,6 @@ struct Beekapoo : app::ModuleWidget {
     std::array<Vec, 5> sequence{};
     int sequenceCount = 0;
     Vec scan;
-    Rect selector;
     bool showScan = false, twoRows = false;
     float height = 0;
     int columns = 0;
@@ -2702,10 +2784,9 @@ struct Beekapoo : app::ModuleWidget {
       r.knobs[0] = Vec(50, 27);
       r.knobs[1] = Vec(70, 27);
       for (int i = 0; i < 5; ++i) r.sequence[i] = Vec(120 + i * 20, 4);
-      r.selector = Rect(Vec(120, 27), Vec(96, 18));
       r.positions[5] = Vec(width - margin - jackSize, 5);
       r.showScan = width >= 285;
-      r.scan = Vec(226, 27);
+      r.scan = Vec(120, 27);
       r.height = 50;
       return r;
     }
@@ -2723,9 +2804,7 @@ struct Beekapoo : app::ModuleWidget {
     }
     r.positions[5] = Vec(x, 3 + (rowHeight - jackSize) * .5f);
     r.columns = count;
-    r.height = rowHeight + 22;
-    r.selector =
-        Rect(Vec(margin, rowHeight + 6), Vec(std::min(110.f, available), 12));
+    r.height = rowHeight + 8;
     return r;
   }
   static float tinyOwnHeight(float width) {
@@ -2781,10 +2860,6 @@ struct Beekapoo : app::ModuleWidget {
     auto* scan = getParam(Module::SEQUENCE_SCAN);
     scan->visible = plan.showScan;
     scan->box.pos = plan.scan + Vec(0, top);
-    stepSelector->box =
-        Rect(plan.selector.pos + Vec(0, top), plan.selector.size);
-    stepSelector->textSize = plan.twoRows ? 10 : (width < 90 ? 7 : 9);
-    sequenceStatusY = top + plan.height - 4;
     float height = plan.height;
     ownFrame->visible = true;
     ownFrame->box = Rect(Vec(6, top), Vec(width - 12, height));
@@ -3285,15 +3360,20 @@ struct Beekapoo : app::ModuleWidget {
     endAbstraction();
     sequence.steps.clear();
     arrangeByModule = json_is_true(json_object_get(root, "arrangeByModule"));
-    auto* locks = json_object_get(root, "randomLocks");
-    for (size_t i = 0; i < json_array_size(locks); ++i) {
-      auto* lock = json_array_get(locks, i);
-      auto* id = json_object_get(lock, "module");
-      auto* param = json_object_get(lock, "param");
-      if (json_is_integer(id) && json_is_integer(param) &&
-          json_integer_value(param) >= -1)
-        randomLocks.insert(
-            {json_integer_value(id), int(json_integer_value(param))});
+    for (auto kind : {0, 1}) {
+      auto& target = randomLocks;
+      auto* locks =
+          json_object_get(root, kind ? "sequenceLocks" : "randomLocks");
+      for (size_t i = 0; i < json_array_size(locks); ++i) {
+        auto* lock = json_array_get(locks, i);
+        auto* id = json_object_get(lock, "module");
+        auto* param = json_object_get(lock, "param");
+        if (json_is_integer(id) && json_is_integer(param) &&
+            json_integer_value(param) >= -1 &&
+            json_integer_value(param) <= INT_MAX)
+          target.insert(
+              {json_integer_value(id), int(json_integer_value(param))});
+      }
     }
     hiddenKinds =
         unsigned(json_integer_value(json_object_get(root, "hiddenKinds"))) & 7;

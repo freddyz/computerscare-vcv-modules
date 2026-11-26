@@ -349,6 +349,19 @@ void renderBlunchControls(plugin::Plugin& plugin, const std::string& output,
     pollState("failed"); click("Rebuild", "rebuild");
     pollState("watching");
     checkPatchSaves(toolbar,[&](widget::Widget* widget,const char* name){if(widget==toolbar)renderToolbar(name);else capture(widget,output+"/"+name,scale,false);});
+    click("Minimize toolbar", "");
+    require(toolbar->box.size.x<=100,"Minimal toolbar must be tiny");
+    int visible=0;for(auto* child:toolbar->children)if(child->visible){++visible;require(child->box.getRight()<=toolbar->box.size.x,"Mini controls fit");}
+    require(visible==3,"Mini toolbar has only pause, save version and expand");
+    pollState("watching");renderToolbar("06-toolbar-mini-watching.png");click("Pause","pause");
+    pollState("queued");renderToolbar("07-toolbar-mini-paused.png");click("Resume","resume");
+    std::string previousPath=APP->patch->path;APP->patch->path=asset::user("mini.vcv");
+    click("Save version", "");require(APP->patch->path!=asset::user("mini.vcv")&&system::exists(APP->patch->path),"Mini save icon writes a new version");APP->patch->path=previousPath;
+    APP->scene->removeChild(toolbar);delete toolbar;toolbar=nullptr;installDevWatcherToolbar();
+    for(auto* child:APP->scene->children)for(auto* nested:child->children)if(auto* b=dynamic_cast<ui::Button*>(nested))if(b->text=="Save version")toolbar=child;
+    require(toolbar&&toolbar->box.size.x<=100,"Minimal preference survives toolbar recreation");
+    click("Expand toolbar", "");require(toolbar->box.size.x>600,"Expand restores full toolbar");
+    pollState("watching");renderToolbar("08-toolbar-expanded.png");
     std::puts("Watcher toolbar state and command checks passed");
   }
   // The preview scene can retain Rack's startup menus; dismiss them before

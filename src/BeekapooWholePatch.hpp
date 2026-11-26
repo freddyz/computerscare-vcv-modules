@@ -13,8 +13,9 @@ inline int64_t combineBeekPatch(BeekPatchFile& file, json_t* snapshot,
   json_object_set_new(data, "group", group);
   json_object_del(data, "contents");
   json_object_set_new(group, "owner", json_integer(owner));
-  for (const char* key : {"members", "ports", "parameters", "randomLocks",
-                          "panelCables", "internalCables", "attenuatedCables"})
+  for (const char* key :
+       {"members", "ports", "parameters", "randomLocks", "sequenceLocks",
+        "panelCables", "internalCables", "attenuatedCables"})
     json_object_set_new(group, key, json_array());
   std::set<int64_t> wrappers(file.beeks.begin(), file.beeks.end()), children;
   std::map<std::pair<int64_t, int>, int> routes;
@@ -31,8 +32,9 @@ inline int64_t combineBeekPatch(BeekPatchFile& file, json_t* snapshot,
           !children.insert(member).second)
         throw Exception("Invalid or overlapping Beek membership");
     }
-    for (const char* key : {"ports", "parameters", "randomLocks", "panelCables",
-                            "internalCables", "attenuatedCables"}) {
+    for (const char* key :
+         {"ports", "parameters", "randomLocks", "sequenceLocks", "panelCables",
+          "internalCables", "attenuatedCables"}) {
       auto* entries = json_object_get(saved, key);
       for (size_t i = 0; i < json_array_size(entries); ++i) {
         auto* entry = json_deep_copy(json_array_get(entries, i));
@@ -98,7 +100,8 @@ inline int64_t combineBeekPatch(BeekPatchFile& file, json_t* snapshot,
   for (auto id : wrappers) file.modules.erase(id);
   if (convertAudio) {
     std::set<int64_t> audio(file.audio.begin(), file.audio.end());
-    for (const char* key : {"ports", "parameters", "randomLocks"}) {
+    for (const char* key :
+         {"ports", "parameters", "randomLocks", "sequenceLocks"}) {
       auto* entries = json_object_get(group, key);
       for (size_t i = json_array_size(entries); i-- > 0;)
         if (audio.count(json_integer_value(

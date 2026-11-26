@@ -1437,16 +1437,17 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     rack->deselectAll();realSession->step();
     APP->event->setHoveredWidget(nullptr);
     capture(APP->scene,output+"/34-randomization-locks.png",scale,false);
+    capture(APP->scene,output+"/unified-lock-edit.png",scale,false);
     APP->event->setHoveredWidget(nullptr);
     realSession->optionsButton->action();
     ui::MenuOverlay* lockMenuOverlay=nullptr;ui::MenuItem* unlockItem=nullptr;
     for(auto* child:APP->scene->children)if(auto* overlay=dynamic_cast<ui::MenuOverlay*>(child))
       for(auto* nested:overlay->children)if(auto* menu=dynamic_cast<ui::Menu*>(nested))
         for(auto* item:menu->children)if(auto* choice=dynamic_cast<ui::MenuItem*>(item))
-          if(choice->text=="Unlock all"){unlockItem=choice;lockMenuOverlay=overlay;}
+          {if(choice->text=="Unlock all"){unlockItem=choice;lockMenuOverlay=overlay;}}
     require(unlockItem && !unlockItem->disabled,"Edit options must offer Unlock all while locks exist");
     widget::Widget::ActionEvent unlock;unlockItem->onAction(unlock);
-    require(group->randomLocks.empty(),"Unlock all in the toolbar menu must remove both lock kinds");
+    require(group->randomLocks.empty(),"Unlock all clears parameter and module locks");
     APP->scene->removeChild(lockMenuOverlay);delete lockMenuOverlay;
     realSession->randomLockMode=false;
   }

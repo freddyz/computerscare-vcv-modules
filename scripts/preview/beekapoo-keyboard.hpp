@@ -52,6 +52,10 @@ void testBeekKeyboard(const std::string& output, float scale, Add add, Require r
   key(GLFW_KEY_HOME);m->process({});require(m->playingStep==0, "Home resets");
   key(GLFW_KEY_RIGHT);m->process({});require(m->playingStep==1, "Right advances");
   key(GLFW_KEY_LEFT);m->process({});require(m->playingStep==0, "Left recalls previous step");
+  auto stepCount=owner->sequence.steps.size();
+  key(GLFW_KEY_D);key(GLFW_KEY_D,GLFW_REPEAT);m->process({});
+  require(owner->sequence.steps.size()==stepCount-1&&rack->getModule(m->id)==owner,"D deletes one step, not the Beek module");
+  key(GLFW_KEY_D);require(owner->sequence.steps.size()==1,"D keeps the final step");key(GLFW_KEY_N);
   auto* text = new ui::TextField;rack->addChild(text);APP->event->setSelectedWidget(text);
   before = owner->sequence.steps.size();key(GLFW_KEY_N);key(GLFW_KEY_SPACE);
   require(owner->sequence.steps.size()==before&&!m->clockEnabled.load(), "Text entry does not trigger shortcuts");

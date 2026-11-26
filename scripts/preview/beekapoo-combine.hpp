@@ -18,6 +18,9 @@ void testBeekCombine(Add add, Require require, plugin::Model* gainModel) {
     };
     auto* first=make(0); auto firstId=first->module->id;
     auto* second=variant ? make(1200) : nullptr; auto secondId=second?second->module->id:-1;
+    first->toggleRandomLock(first->members.front().id,0);
+    if(second)second->toggleRandomLock(second->members.front().id,-1);
+    auto expectedLocks=first->randomLocks;if(second)expectedLocks.insert(second->randomLocks.begin(),second->randomLocks.end());
     auto* ordinary=add(gainModel,Vec(2500,0)); auto ordinaryId=ordinary->module->id;
     auto* outside=add(gainModel,Vec(3000,0)); auto outsideId=outside->module->id;
     auto endpoint=[](beekapoo::Beekapoo* owner,bool input) {
@@ -71,6 +74,7 @@ void testBeekCombine(Add add, Require require, plugin::Model* gainModel) {
       float left=INFINITY,right=-INFINITY,width=0,y=combined->members.front().position.y;
       for(const auto& m:combined->members){left=std::min(left,m.position.x);right=std::max(right,m.position.x+m.widget->box.size.x);width+=m.widget->box.size.x;require(m.position.y==y,"Small combined subpatches must occupy one row");}
       require(std::abs(right-left-width)<.01f,"Combining distant groups must close gaps into a solid rectangular row");
+      require(combined->randomLocks==expectedLocks,"Merges preserve sequence locks through Undo/Redo");
       require(actual==expected&&graph()==before,"Combine must preserve module IDs, stacked cables, cross-Beek cables, loopbacks and exterior wires");
       require(rack->getModule(outsideId)&&!combined->contains(outside->module),"Unselected modules must remain outside");
       int gains=0;for(const auto& p:combined->ports)if(p.input&&std::abs(combined->module->params[beekapoo::Module::INPUT_GAIN_BASE+p.route].getValue()-.37f)<.001f)++gains;

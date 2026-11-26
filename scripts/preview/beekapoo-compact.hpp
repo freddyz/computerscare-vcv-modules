@@ -74,7 +74,7 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
       auto* knob=owner->getParam(id);if(knob->visible)occupied.push_back(knob);
     }
     occupied.push_back(owner->getInput(beekapoo::Module::ACTIONS_INPUT));
-    occupied.push_back(owner->stepSelector);
+    if(owner->stepSelector->visible)occupied.push_back(owner->stepSelector);
     for(auto* b:owner->sequenceButtons)if(b->visible)occupied.push_back(b);
     if(owner->getParam(beekapoo::Module::SEQUENCE_SCAN)->visible)occupied.push_back(owner->getParam(beekapoo::Module::SEQUENCE_SCAN));
     for(size_t i=0;i<occupied.size();++i) {
@@ -104,7 +104,7 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
       auto* overlay=dynamic_cast<ui::MenuOverlay*>(APP->scene->children.back());
       require(overlay,"Functions button must open a native menu");
       auto* menu=dynamic_cast<ui::Menu*>(overlay->children.front());
-      require(menu&&menu->children.size()==2,"Functions menu must contain Grow and Compact");
+      require(menu&&menu->children.size()==3,"Functions menu must contain Grow, Compact and sequence clear");
       auto it=menu->children.begin();
       require(dynamic_cast<ui::MenuItem*>(*it++)->text=="Grow"&&dynamic_cast<ui::MenuItem*>(*it)->text=="Compact subpatch","Grow must be the first function");
       require(owner->ports.size()==count,"Opening the menu must not edit the patch");

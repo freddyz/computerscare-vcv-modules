@@ -113,14 +113,15 @@ struct RackEditSession : widget::Widget {
     });
     exposeButton->pressed = [this] { return exposeMode; };
     exposeButton->help = [] { return "Switch Adjust / Expose [E / X]"; };
-    randomLockButton = addButton("Rnd Lock", 196, 112, [this] {
+    randomLockButton = addButton("Lock", 196, 112, [this] {
       randomLockMode = !randomLockMode;
       exposeMode = false;
       if (owner) owner->saveGroup();
     });
     randomLockButton->pressed = [this] { return randomLockMode; };
     randomLockButton->help = [] {
-      return "Click modules or parameters to lock randomization and wiggle";
+      return "Click modules or parameters to lock randomization, wiggle and "
+             "sequencing";
     };
     setsButton = addButton("Module sets", 870, 144, [this] {
       if (owner) owner->editModuleSets();
@@ -838,6 +839,8 @@ void Beekapoo::resumeEditSession(json_t* saved) {
   session->showPanel = json_is_true(json_object_get(saved, "panel"));
   session->exposeMode = json_is_true(json_object_get(saved, "expose"));
   session->randomLockMode = json_is_true(json_object_get(saved, "randomLock"));
+  session->randomLockMode |=
+      json_is_true(json_object_get(saved, "sequenceLock"));
   if (session->randomLockMode) session->exposeMode = false;
   session->showMembers = !json_is_false(json_object_get(saved, "members"));
   session->previousSelection.selected.clear();
