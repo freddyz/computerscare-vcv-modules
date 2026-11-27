@@ -2870,7 +2870,6 @@ struct Beekapoo : app::ModuleWidget {
       x += 20;
     }
     if (x + jackSize > width - margin) {
-      x = margin;
       y += 21;
     }
     r.positions[5] = Vec(width - margin - jackSize, y + 1);

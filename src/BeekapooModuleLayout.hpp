@@ -16,7 +16,8 @@ inline std::vector<ModuleGroupRect> moduleGroupLayout(
     const std::vector<ModuleGroupCount>& groups, float width, float height) {
   if (groups.empty() || width < 24 || height < 24) return {};
   const float gap = 3;
-  for (float unit = 60; unit >= 16; unit -= 2) {
+  for (int unitPixels = 60; unitPixels >= 16; unitPixels -= 2) {
+    const float unit = unitPixels;
     int bestColumns = 0;
     float bestRequired = INFINITY;
     std::vector<float> bestRows;
