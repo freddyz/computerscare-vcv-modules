@@ -36,12 +36,17 @@ void testBeekSequence(const std::string& output,float scale,Add add,Require requ
   require(m->playingStep==1&&saved(0,0)==.75f&&child->params[0].getValue()==.5f,"CV clock recalls without saving outgoing tweaks");
   m->clockEnabled=false;child->params[0].setValue(.9f);pulse(Module::CLOCK_CHANNEL);
   require(m->playingStep==1&&child->params[0].getValue()==.9f,"Clock Off ignores incoming pulses while exploring");
+  m->params[Module::SEQUENCE_SCAN].setValue(10.f); // Old saved knob values must have no effect.
   m->clockEnabled=true;m->scanEnabled=true;m->clockedScan=false;m->inputs[Module::ACTIONS_INPUT].setVoltage(0,Module::SCAN_CHANNEL);m->process({});
   require(m->playingStep==0,"Continuous Scan recalls");
   child->params[0].setValue(.8f);m->inputs[Module::ACTIONS_INPUT].setVoltage(10,Module::SCAN_CHANNEL);m->process({});
   require(m->playingStep==1&&saved(0,0)==.75f,"Scan preserves departing snapshot");
   m->clockedScan=true;m->inputs[Module::ACTIONS_INPUT].setVoltage(0,Module::SCAN_CHANNEL);m->process({});
   require(m->playingStep==1,"Clocked Scan waits");pulse(Module::CLOCK_CHANNEL);require(m->playingStep==0,"Clocked Scan recalls on pulse");
+  m->clockedScan=false;m->inputs[Module::ACTIONS_INPUT].channels=8;
+  m->params[Module::SEQUENCE_SCAN].setValue(0.f);m->process({});
+  m->params[Module::SEQUENCE_SCAN].setValue(10.f);m->process({});
+  require(m->playingStep==0,"Legacy Scan values cannot recall steps without channel 9");
   m->clockEnabled=false;m->scanEnabled=false;m->inputs[Module::ACTIONS_INPUT].channels=0;
   owner->toggleRandomLock(child->id,0);child->params[0].setValue(.9f);select(1);
   require(child->params[0].getValue()==.9f&&saved(1,0)==.5f,"Lock holds live value without changing stored step");
@@ -117,7 +122,7 @@ void testBeekSequence(const std::string& output,float scale,Add add,Require requ
     owner->requestedWidth=width;owner->layoutControls();owner->step();std::vector<widget::Widget*> occupied{owner->getInput(Module::ACTIONS_INPUT)};
     if(owner->stepSelector->visible){occupied.push_back(owner->stepSelector);require(owner->stepSelector->box.getRight()<owner->growButton->box.pos.x&&owner->stepSelector->box.getBottom()<=owner->titleFrame->box.getBottom(),"Selector stays in header before functions");}
     for(auto* b:owner->sequenceButtons)if(b->visible)occupied.push_back(b);for(auto* b:owner->actionButtons)if(b->visible)occupied.push_back(b);if(owner->regenerateButton->visible)occupied.push_back(owner->regenerateButton);
-    for(int p:{Module::RANDOM_RANGE,Module::RANDOM_PROBABILITY,Module::WIGGLE_RANGE,Module::WIGGLE_PROBABILITY,Module::SEQUENCE_SCAN})if(owner->getParam(p)->visible)occupied.push_back(owner->getParam(p));
+    for(int p:{Module::RANDOM_RANGE,Module::RANDOM_PROBABILITY,Module::WIGGLE_RANGE,Module::WIGGLE_PROBABILITY})if(owner->getParam(p)->visible)occupied.push_back(owner->getParam(p));
     for(size_t i=0;i<occupied.size();++i)for(size_t j=0;j<i;++j)require(!occupied[i]->box.intersects(occupied[j]->box),"Controls do not overlap");
   }
   owner->requestedWidth=330;m->panelTheme=1;owner->layoutControls();owner->step();

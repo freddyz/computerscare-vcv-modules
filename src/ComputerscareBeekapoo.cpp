@@ -21,6 +21,7 @@
 #include "BeekapooLabels.hpp"
 #include "BeekapooLayout.hpp"
 #include "BeekapooMemberLayout.hpp"
+#include "BeekapooModuleLayout.hpp"
 #include "BeekapooModuleSets.hpp"
 #include "BeekapooParamLayout.hpp"
 #include "BeekapooPatchPlanner.hpp"
@@ -47,7 +48,8 @@ struct PackedPanelBlock : phlooper::WarpedBlock {
   std::array<Vec, 4> cachedCorners{};
   uint64_t cachedSkin = ~uint64_t(0);
   unsigned cachedProfile = ~0u;
-  std::vector<std::vector<Vec>> polygons;
+  std::vector<SectionGeometry> sectionGeometry;
+  float cachedDepth = -1, cachedRounding = -1;
   void draw(const DrawArgs& args) override {
     if (box.size.x <= 0 || box.size.y <= 0) return;
     Vec first(-2.f, -2.f), last = box.size + Vec(2.f, 2.f);
@@ -90,19 +92,25 @@ struct PackedPanelBlock : phlooper::WarpedBlock {
              (last.y - first.y) / (maximum.y - minimum.y));
     nvgTranslate(args.vg, -minimum.x, -minimum.y);
     std::array<Vec, 4> corners;
-    bool changed = cachedSkin != skin.seed || cachedProfile != skin.profile;
+    bool changed = cachedSkin != skin.seed || cachedProfile != skin.profile ||
+                   cachedDepth != d || cachedRounding != skin.rounding;
     for (int i = 0; i < 4; ++i) {
       corners[i] =
           face[i] + Vec(jitter(i * 2), jitter(i * 2 + 1)) + cornerOffsets[i];
       changed |= !corners[i].equals(cachedCorners[i]);
     }
     if (changed) {
-      polygons = sectionPolygons(corners, skin);
+      sectionGeometry.clear();
+      for (const auto& contour : sectionPolygons(corners, skin))
+        sectionGeometry.emplace_back(contour, Vec(d, d * .65f), skin.rounding);
+      cachedDepth = d;
+      cachedRounding = skin.rounding;
       cachedCorners = corners;
       cachedSkin = skin.seed;
       cachedProfile = skin.profile;
     }
-    drawSection(args.vg, polygons, faceColor, d, skin.rounding);
+    for (const auto& section : sectionGeometry)
+      section.draw(args.vg, faceColor);
     nvgRestore(args.vg);
   }
 };
@@ -174,7 +182,7 @@ struct Module : engine::Module {
     RANDOM_RANGE = INPUT_GAIN_BASE + routeCapacity,
     RANDOM_PROBABILITY,
     WIGGLE_PROBABILITY,
-    SEQUENCE_SCAN,
+    SEQUENCE_SCAN,  // Reserved legacy manual Scan slot; never reuse its ID.
     PARAM_COUNT,
     WIGGLE_RANGE = WIGGLE_AMOUNT
   };
@@ -219,8 +227,6 @@ struct Module : engine::Module {
   std::atomic<unsigned> manualClocks{0}, manualResets{0};
   dsp::SchmittTrigger sequenceClock, sequenceReset;
   int lastScanStep = -2;
-  float lastScanKnob = 0;
-  bool pendingKnobScan = false;
   void publishSequence(const SequenceBank& bank) {
     std::atomic_store(&sequenceBank,
                       std::make_shared<const SequenceBank>(bank));
@@ -263,21 +269,14 @@ struct Module : engine::Module {
     unsigned resets = manualResets.exchange(0, std::memory_order_acq_rel);
     int request = requestedStep.exchange(-1);
     int count = sequenceCount.load(std::memory_order_acquire);
-    float knob = params[SEQUENCE_SCAN].getValue();
     bool scanning = enabled && scanEnabled.load(std::memory_order_relaxed);
-    if (scanning && knob != lastScanKnob) {
-      pendingKnobScan = true;
-      lastScanKnob = knob;
-    }
     if (!count) {
       playingStep.store(-1);
       return;
     }
-    int scan = scanStep(voltage(SCAN_CHANNEL) + knob, count);
+    int scan = scanStep(voltage(SCAN_CHANNEL), count);
     bool scanned = scanning && actions.getChannels() > SCAN_CHANNEL;
     if (!scanning) {
-      pendingKnobScan = false;
-      lastScanKnob = 0;
       lastScanStep = -2;
     }
     // A poly lane cannot report its upstream cable connection. This explicit
@@ -286,27 +285,22 @@ struct Module : engine::Module {
     if (reset || resets) {
       recallStep(0);
       lastScanStep = scan;
-      pendingKnobScan = false;
     } else if (request >= 0 && request < count) {
       recallStep(request);
       lastScanStep = scan;
-      pendingKnobScan = false;
     } else if (clock || clocks) {
       int next =
-          scanned || pendingKnobScan
+          scanned
               ? scan
               : (std::max(-1, playingStep.load()) + int(clocks) + int(clock)) %
                     count;
       recallStep(next);
       lastScanStep = scan;
-      pendingKnobScan = false;
-    } else if (!clocked &&
-               ((scanned && scan != lastScanStep) || pendingKnobScan)) {
+    } else if (!clocked && (scanned && scan != lastScanStep)) {
       recallStep(scan);
       lastScanStep = scan;
-      pendingKnobScan = false;
     }
-    if (!scanned && !pendingKnobScan) lastScanStep = -2;
+    if (!scanned) lastScanStep = -2;
   }
   Module() {
     generationSet = moduleSets().defaultId;
@@ -343,9 +337,7 @@ struct Module : engine::Module {
     configInput(GENERATE_INPUT, "Generate new subpatch");
     configInput(GROW_INPUT, "Grow subpatch");
     configInput(ACTIONS_INPUT, "Actions");
-    configParam(SEQUENCE_SCAN, 0.f, 10.f, 0.f, "Scan playback", " V");
-    getParamQuantity(SEQUENCE_SCAN)->description =
-        "Actions CV ch 9. Scan mode is set in the steps menu; Off by default.";
+    configParam(SEQUENCE_SCAN, 0.f, 10.f, 0.f, "Unused legacy Scan");
     getParamQuantity(SEQUENCE_SCAN)->randomizeEnabled = false;
   }
   void processInputRoutes(bool bypass) {
@@ -389,8 +381,6 @@ struct Module : engine::Module {
       for (auto& trigger : actionTriggers) trigger.reset();
       for (auto& trigger : polyActionTriggers) trigger.reset();
       lastScanStep = -2;
-      lastScanKnob = params[SEQUENCE_SCAN].getValue();
-      pendingKnobScan = false;
     }
     processSequence();
     for (int ch = 0; ch < 6; ++ch)
@@ -1730,7 +1720,7 @@ struct Beekapoo : app::ModuleWidget {
     saveGroup();
     finishAction(action);
   }
-  bool arrangeByModule = false;
+  bool arrangeByModule = false, groupPortsByModule = false;
   bool jacksOnly = false;
   bool editShowsText = false;
   std::set<int64_t> panelCableIds, knownCableIds, internalCableIds;
@@ -1750,6 +1740,7 @@ struct Beekapoo : app::ModuleWidget {
     app::ParamWidget* knob;
   };
   std::vector<Parameter> parameters;
+#include "BeekapooFrontLocks.hpp"
 #include "BeekapooKeyboard.hpp"
 #include "BeekapooSequenceUi.hpp"
   int layoutTier =
@@ -1768,6 +1759,7 @@ struct Beekapoo : app::ModuleWidget {
     titleFrame->faceColor = dark ? nvgRGB(44, 44, 44) : nvgRGB(200, 200, 200);
     ownFrame->faceColor = dark ? nvgRGB(40, 40, 40) : nvgRGB(214, 214, 214);
     frame->faceColor = dark ? nvgRGB(46, 46, 46) : nvgRGB(204, 204, 204);
+    for (auto* block : memberFrames) block->faceColor = frame->faceColor;
     inputFrame->faceColor = dark ? nvgRGB(55, 55, 55) : nvgRGB(204, 204, 204);
     outputFrame->faceColor = dark ? nvgRGB(25, 25, 25) : nvgRGB(116, 116, 116);
     for (auto* svg : {&titleArtwork, &logoArtwork}) {
@@ -2009,6 +2001,12 @@ struct Beekapoo : app::ModuleWidget {
     APP->history->push(action);
   }
   void onHover(const HoverEvent& e) override {
+    frontLockHover = {-1, -1};
+    if (auto* p = frontLockParameter(e.pos)) {
+      frontLockHover = {p->id, p->paramId};
+      e.consume(this);
+      return;
+    }
     if (module && addSelectionButton->visible &&
         addSelectionButton->box.contains(e.pos)) {
       e.consume(addSelectionButton);
@@ -2016,7 +2014,27 @@ struct Beekapoo : app::ModuleWidget {
     }
     ModuleWidget::onHover(e);
   }
+  void onLeave(const LeaveEvent& e) override {
+    frontLockHover = {-1, -1};
+    ModuleWidget::onLeave(e);
+  }
+  void onHoverScroll(const HoverScrollEvent& e) override {
+    if (frontLockParameter(e.pos)) {
+      e.consume(this);
+      return;
+    }
+    ModuleWidget::onHoverScroll(e);
+  }
   void onButton(const ButtonEvent& e) override {
+    if (auto* p = frontLockParameter(e.pos)) {
+      if (e.button == GLFW_MOUSE_BUTTON_LEFT) {
+        if (e.action == GLFW_PRESS) toggleFrontLock(p->id, p->paramId);
+        // A ModuleWidget target starts Rack's module drag, using a stale
+        // drag offset because this click bypasses ModuleWidget::onButton.
+        e.consume(nullptr);
+        return;
+      }
+    }
     // Rack intercepts all clicks on selected modules before dispatching to
     // children. This action must also work with Beekapoo in the selection.
     if (module && addSelectionButton->visible &&
@@ -2187,6 +2205,12 @@ struct Beekapoo : app::ModuleWidget {
       menu->addChild(createMenuItem("Compact subpatch", "", [live] {
         if (live) live->compactSubpatch();
       }));
+      menu->addChild(createMenuItem(
+          "Unlock all", "",
+          [live] {
+            if (live) live->unlockRandomization();
+          },
+          randomLocks.empty()));
       menu->addChild(new ui::MenuSeparator);
       menu->addChild(createMenuItem("Save Beek", "", [live] {
         if (live) live->managementButtons[2]->action();
@@ -2447,6 +2471,8 @@ struct Beekapoo : app::ModuleWidget {
     publishSequence();
     json_object_set_new(root, "sequence", sequenceJson());
     json_object_set_new(root, "arrangeByModule", json_boolean(arrangeByModule));
+    json_object_set_new(root, "groupPortsByModule",
+                        json_boolean(groupPortsByModule));
     auto* list = json_array();
     for (const auto& member : members)
       json_array_append_new(
@@ -2663,12 +2689,12 @@ struct Beekapoo : app::ModuleWidget {
     if (result.showSelector) buttonWidth += selectorWidth + gap;
     bool beside = width >= buttonWidth + 150;
     float titleHeight = width <= 90 ? 40.f : 34.f;
-    float logoWidth = std::min(42.f, available * .46f);
+    float logoWidth = std::min(38.f, available * .42f);
     result.logo =
-        Rect(Vec(width - 10 - logoWidth, 5), Vec(logoWidth, titleHeight));
+        Rect(Vec(width - 8 - logoWidth, 5), Vec(logoWidth, titleHeight));
     result.artwork =
-        Rect(Vec(6, 5), Vec(std::max(1.f, result.logo.pos.x - 10 -
-                                              (beside ? buttonWidth + 6 : 0)),
+        Rect(Vec(6, 5), Vec(std::max(1.f, result.logo.pos.x - 8 -
+                                              (beside ? buttonWidth + 5 : 0)),
                             titleHeight));
     float x = beside ? result.logo.pos.x - buttonWidth - 3 : 6;
     float y = beside ? 13 : titleHeight + 9;
@@ -2682,7 +2708,8 @@ struct Beekapoo : app::ModuleWidget {
                 : i == 1 ? ejectWidth
                 : i == 2 ? saveWidth
                          : menuWidth;
-      result.buttons[i] = Rect(Vec(x, y), Vec(w, 18));
+      result.buttons[i] =
+          Rect(Vec(i == 3 && !beside ? width - 6 - w : x, y), Vec(w, 18));
       x += w + gap;
     }
     result.height = std::max(result.artwork.getBottom(), y + 18) + 8;
@@ -2717,13 +2744,12 @@ struct Beekapoo : app::ModuleWidget {
     if (width > 180 || !APP->window) return;
     std::string name =
         module ? getModule<Module>()->displayPatchName(appearance.modules)
-               : titleCase(browserName, appearance.modules);
+               : browserName;
     if (name.empty()) return;
     name = titleText.get(name, appearance.modules);
-    Rect stackedTitle(Vec(6, 30), Vec(width - 16, 15));
-    float logoWidth = std::min(48.f, width - 16);
-    Rect stackedLogo(Vec(6 + (width - 16 - logoWidth) * .5f, 4),
-                     Vec(logoWidth, 25));
+    Rect stackedTitle(Vec(6, 30), Vec(width - 11, 15));
+    float logoWidth = std::min(43.f, width - 20);
+    Rect stackedLogo(Vec((width - logoWidth) * .5f, 4), Vec(logoWidth, 25));
     if (width > 90) {
       stackedTitle.pos.y = 25;
       stackedTitle.size.y = 14;
@@ -2794,8 +2820,7 @@ struct Beekapoo : app::ModuleWidget {
     int knobCount = 0;
     std::array<Vec, 7> sequence{};
     int sequenceCount = 0;
-    Vec scan;
-    bool showScan = false, twoRows = false;
+    bool twoRows = false;
     float height = 0;
     int columns = 0;
     float size = 18;
@@ -2825,8 +2850,6 @@ struct Beekapoo : app::ModuleWidget {
       for (int i = 0; i < 3; ++i) r.sequence[i] = Vec(120 + i * 20, 4);
       for (int i = 3; i < 7; ++i) r.sequence[i] = Vec(120 + (i - 3) * 20, 27);
       r.positions[5] = Vec(width - margin - jackSize, 5);
-      r.showScan = width >= 285;
-      r.scan = Vec(204, 27);
       r.height = 50;
       return r;
     }
@@ -2850,7 +2873,7 @@ struct Beekapoo : app::ModuleWidget {
       x = margin;
       y += 21;
     }
-    r.positions[5] = Vec(x, y + 1);
+    r.positions[5] = Vec(width - margin - jackSize, y + 1);
     r.columns = count;
     r.height = y + 23;
     return r;
@@ -2905,9 +2928,6 @@ struct Beekapoo : app::ModuleWidget {
       button->box = Rect(plan.sequence[i] + Vec(0, top), Vec(18, 18));
       button->iconAndText = false;
     }
-    auto* scan = getParam(Module::SEQUENCE_SCAN);
-    scan->visible = plan.showScan;
-    scan->box.pos = plan.scan + Vec(0, top);
     float height = plan.height;
     ownFrame->visible = true;
     ownFrame->box = Rect(Vec(6, top), Vec(width - 12, height));
@@ -2932,7 +2952,8 @@ struct Beekapoo : app::ModuleWidget {
       const std::vector<widget::Widget*>& knobs,
       const std::map<widget::Widget*, std::pair<std::string, std::string>>&
           names,
-      float top, float bottom) {
+      float top, float bottom, const Rect* region = nullptr) {
+    float contentWidth = region ? region->size.x : box.size.x;
     std::vector<widget::Widget*> active;
     std::vector<ParamLayoutItem> metadata;
     std::map<engine::Module*, int> moduleOrder;
@@ -2978,7 +2999,7 @@ struct Beekapoo : app::ModuleWidget {
           return nvgTextBounds(vg, 0, 0, text.c_str(), nullptr, nullptr);
         };
         for (const auto& word : labelWords(full))
-          if (measure(word) > box.size.x - (box.size.x < 210 ? 18 : 30)) {
+          if (measure(word) > contentWidth - (contentWidth < 210 ? 18 : 30)) {
             item.label = abbreviatedLabel(full);
             break;
           }
@@ -2987,16 +3008,19 @@ struct Beekapoo : app::ModuleWidget {
       }
       nvgRestore(vg);
     }
-    float inset = box.size.x < 210 ? 6.f : 10.f;
-    float layoutWidth = box.size.x - (box.size.x < 210 ? 14.f : 25.f);
+    float inset =
+        region ? region->pos.x + 2 : (contentWidth < 210 ? 6.f : 10.f);
+    float layoutWidth =
+        contentWidth - (region ? 4.f : (contentWidth < 210 ? 14.f : 25.f));
     float available = std::max(0.f, bottom - top - 10);
     auto cells =
         layoutParams(metadata, layoutWidth, available, arrangeByModule);
-    frame->box =
-        Rect(Vec(6, top), Vec(box.size.x - 12, std::max(0.f, bottom - top)));
+    if (!region)
+      frame->box = Rect(Vec(6, top),
+                        Vec(contentWidth - 12, std::max(0.f, bottom - top)));
     // The empty parameter area is still its own section. It must not make
     // the action strip grow to occupy the whole panel when nothing is mapped.
-    frame->visible = available > 0 && (!expanded || editPreview);
+    if (!region) frame->visible = available > 0 && (!expanded || editPreview);
     struct Caption {
       std::string text;
       float left = INFINITY, right = -INFINITY, bottom = 0, size = 0, row = -1,
@@ -3193,7 +3217,10 @@ struct Beekapoo : app::ModuleWidget {
     if (changed && !ejecting && parent == homeRack->getModuleContainer())
       homeRack->setModulePosForce(this, box.pos);
   }
+#include "BeekapooPanelGroups.hpp"
   void layoutControls() {
+    for (auto* block : memberFrames) block->visible = false;
+    for (auto& regions : groupedSections) regions.clear();
     refreshAppearance();
     // Editing reveals the originals without blanking the owner's live panel.
     // The optional floating preview is independent of this Rack presentation.
@@ -3241,6 +3268,12 @@ struct Beekapoo : app::ModuleWidget {
                               : p->shared.label,
                           memberName(p->id)};
       }
+    }
+    if (arrangeByModule &&
+        (!items[0].empty() ||
+         (groupPortsByModule && (!items[1].empty() || !items[2].empty())))) {
+      layoutGroupedControls(items[0], items[1], items[2], names);
+      return;
     }
     if (requestedWidth < 210 ||
         minimumLayoutWidth(items[0].size(), items[1].size(), items[2].size()) >
@@ -3405,6 +3438,8 @@ struct Beekapoo : app::ModuleWidget {
     endAbstraction();
     sequence.steps.clear();
     arrangeByModule = json_is_true(json_object_get(root, "arrangeByModule"));
+    groupPortsByModule = arrangeByModule && json_is_true(json_object_get(
+                                                root, "groupPortsByModule"));
     for (auto kind : {0, 1}) {
       auto& target = randomLocks;
       auto* locks =
@@ -4437,7 +4472,7 @@ struct Beekapoo : app::ModuleWidget {
     bool unnamed = module ? getModule<Module>()->getPatchName().empty()
                           : browserName.empty();
     return box.size.x <= 90 && unnamed
-               ? Rect(Vec(8, 5), Vec(box.size.x - 20, headerArtworkArea.size.y))
+               ? Rect(Vec(6, 5), Vec(box.size.x - 14, headerArtworkArea.size.y))
                : headerLogoArea;
   }
   void draw(const DrawArgs& args) override {
@@ -4447,7 +4482,7 @@ struct Beekapoo : app::ModuleWidget {
       Rect area = headerArtworkArea;
       std::string name =
           module ? getModule<Module>()->displayPatchName(appearance.modules)
-                 : titleCase(browserName, appearance.modules);
+                 : browserName;
       bool logoOnly = box.size.x <= 90 && name.empty();
       if (name.empty() && !logoOnly) name = "Beekapoo";
       name = titleText.get(name, appearance.modules);
@@ -4455,10 +4490,9 @@ struct Beekapoo : app::ModuleWidget {
       auto drawHeaderArt = [&](widget::SvgWidget& svg, Rect target) {
         if (!svg.svg || target.size.x <= 0 || target.size.y <= 0) return;
         Rect ink = &svg == &titleArtwork ? titleInk : Rect(Vec(), svg.box.size);
-        // Stacked logos fill their allotted space with the visible artwork,
-        // rather than retaining the SVG's transparent margins.
-        if (&svg != &titleArtwork && area.pos.y > logoArea.getBottom() &&
-            svg.svg->handle->shapes) {
+        // Size every logo from its visible artwork, not transparent SVG
+        // margins.
+        if (&svg != &titleArtwork && svg.svg->handle->shapes) {
           Vec minimum(INFINITY, INFINITY), maximum(-INFINITY, -INFINITY);
           for (auto* shape = svg.svg->handle->shapes; shape;
                shape = shape->next) {
@@ -4480,10 +4514,27 @@ struct Beekapoo : app::ModuleWidget {
           uint64_t seed = appearance.types ^ appearance.manufacturers;
           float tilt = (int(seed & 31) - 15) * .002f;
           float shear = (int((seed >> 5) & 31) - 15) * .003f;
-          float sx = scale * .89f;
-          float sy = std::min(target.size.y / ink.size.y * .9f,
+          float sx = scale * .82f;
+          float sy = std::min(target.size.y / ink.size.y * .83f,
                               sx * (1.12f + ((seed >> 10) & 15) * .01f));
-          nvgTranslate(args.vg, target.getCenter().x, target.getCenter().y);
+          // Center stacked artwork; otherwise right-align the visible ink.
+          // Include the hash distortion when fitting it inside the margin.
+          float hx = ink.size.x * sx * .5f, hy = ink.size.y * sy * .5f;
+          float extentX =
+              std::abs(std::cos(tilt)) * hx +
+              std::abs(std::cos(tilt) * shear - std::sin(tilt)) * hy;
+          float extentY =
+              std::abs(std::sin(tilt)) * hx +
+              std::abs(std::sin(tilt) * shear + std::cos(tilt)) * hy;
+          float fit = std::min(1.f, std::min(target.size.x / (2 * extentX),
+                                             target.size.y / (2 * extentY)));
+          sx *= fit;
+          sy *= fit;
+          bool stacked = area.pos.y > target.getBottom();
+          nvgTranslate(args.vg,
+                       stacked ? target.getCenter().x
+                               : target.getRight() - extentX * fit,
+                       target.getCenter().y);
           nvgRotate(args.vg, tilt);
           nvgTransform(args.vg, 1, 0, shear, 1, 0, 0);
           nvgScale(args.vg, sx, sy);
@@ -4549,12 +4600,15 @@ struct Beekapoo : app::ModuleWidget {
              labelAlternatives(label.text, label.required)) {
           auto text = computerscare::type::alternates(
               labelCase(original, appearance.modules), appearance.modules);
-          int minimum = original == label.text &&
+          // Port names get the same readable size range before and after
+          // abbreviation. Never skip a full name because its minimum font
+          // would exceed the cell's preferred size.
+          int minimum = label.required ? 13
+                        : original == label.text &&
                                 abbreviatedLabel(label.text) != label.text
                             ? std::max(20, preferred - 6)
-                            : (label.required                   ? 13
-                               : height < 12 && box.size.x < 90 ? 12
-                                                                : 16);
+                            : (height < 12 && box.size.x < 90 ? 12 : 16);
+          minimum = std::min(minimum, preferred);
           for (int halfPoints = preferred; halfPoints >= minimum;
                --halfPoints) {
             label.preparedSize = halfPoints * .5f;
@@ -4636,6 +4690,10 @@ struct Beekapoo : app::ModuleWidget {
       nvgRestore(args.vg);
     }
     if (module && settings::cpuMeter) drawSubpatchCpu(args, font->handle);
+  }
+  void drawLayer(const DrawArgs& args, int layer) override {
+    ModuleWidget::drawLayer(args, layer);
+    if (layer == 1) paintFrontLocks(args);
   }
   float subpatchCpuPercent() const {
     double seconds = 0;
@@ -4730,14 +4788,22 @@ struct Beekapoo : app::ModuleWidget {
     menu->addChild(new OutsideFadeSlider);
     menu->addChild(
         createSubmenuItem("Panel arrangement", "", [this](ui::Menu* sub) {
-          for (bool grouped : {false, true})
+          const char* labels[] = {"By control type", "Parameters by module",
+                                  "All controls by module"};
+          for (int mode = 0; mode < 3; ++mode)
             sub->addChild(createCheckMenuItem(
-                grouped ? "By module" : "By control type", "",
-                [this, grouped] { return arrangeByModule == grouped; },
-                [this, grouped] {
-                  arrangeByModule = grouped;
+                labels[mode], "",
+                [this, mode] {
+                  return (arrangeByModule ? (groupPortsByModule ? 2 : 1) : 0) ==
+                         mode;
+                },
+                [this, mode] {
+                  auto* action = beginAction("arrange Beek panel");
+                  arrangeByModule = mode != 0;
+                  groupPortsByModule = mode == 2;
                   layoutControls();
                   saveGroup();
+                  finishAction(action);
                 }));
         }));
     if (members.empty())

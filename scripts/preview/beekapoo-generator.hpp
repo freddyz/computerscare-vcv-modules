@@ -495,5 +495,28 @@ void testBeekGenerator(const std::string& output,float scale,Add add,Require req
     result->step();result->updateSectionAddButtons(result->frame->box.getCenter());
     auto* parent=result->parent;auto position=result->box.pos;parent->removeChild(result);result->box.pos=Vec();capture(result,output+"/section-plus-generated.png",scale,false);result->box.pos=position;parent->addChild(result);
   }
+  rack->clear();APP->history->clear();
+  {
+    const char* slugs[]={"VCO","VCF","Delay"};
+    std::vector<app::ModuleWidget*> sources;
+    for(int i=0;i<3;++i)sources.push_back(add(plugin::getModel("Fundamental",slugs[i]),Vec(i*180,0)));
+    auto* panel=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(700,0)));
+    rack->deselectAll();for(auto* w:sources)rack->select(w,true);panel->collapse();
+    while(!panel->parameters.empty()){auto p=panel->parameters.back();panel->controls->removeChild(p.knob);delete p.knob;panel->parameters.pop_back();}
+    while(!panel->ports.empty()){auto& p=panel->ports.back();panel->detachInput(p);panel->controls->removeChild(p.face);delete p.face;panel->ports.pop_back();}
+    const int params[][2]={{2,5},{0,2},{0,3}};
+    for(int i=0;i<3;++i){for(int id:params[i])panel->exposeParameter(sources[i]->module->id,id);panel->expose(sources[i],sources[i]->getInput(0));panel->expose(sources[i],sources[i]->getOutput(0));}
+    auto* state=panel->getModule<beekapoo::Module>();state->setPatchName("Bramble spool",true);
+    panel->arrangeByModule=true;
+    panel->requestedWidth=240;
+    for(int mode=1;mode<=2;++mode){
+      panel->groupPortsByModule=mode==2;state->panelTheme.store(mode);panel->layoutControls();
+      panel->setFrontLockMode(mode==2);
+      if(mode==2){panel->toggleFrontLock(sources[0]->module->id,2);panel->toggleFrontLock(sources[2]->module->id,3);}
+      auto* parent=panel->parent;auto pos=panel->box.pos;parent->removeChild(panel);panel->box.pos=Vec();
+      capture(panel,output+"/fundamental-module-groups-"+std::to_string(mode)+".png",scale,false);
+      panel->box.pos=pos;parent->addChild(panel);
+    }
+  }
   std::puts("Generated Beek: real Fundamental 3-11 modules, required inputs, connected graph, exposure, six HP, browser add, Undo/Redo, rename and export/import passed");
 }

@@ -9,15 +9,36 @@ void Beekapoo::updateSectionAddButtons(Vec mouse) {
   std::array<phlooper::WarpedBlock*, 3> blocks{
       {frame, inputFrame, outputFrame}};
   std::array<Rect, 3> bars;
+  std::array<Rect, 3> areas{{frame->box, inputFrame->box, outputFrame->box}};
+  bool grouped = arrangeByModule && groupPortsByModule;
+  int groupedHover = -1;
+  if (grouped && !resizing && !onHandle && !frontLockMode) {
+    // Preserve the overhanging action strip while crossing onto its buttons.
+    if (hoveredSection >= 0) {
+      auto* first = sectionRemoveButtons[hoveredSection];
+      Rect bar(first->box.pos,
+               Vec(first->box.size.x * 3 + 2, first->box.size.y));
+      if (bar.contains(mouse)) {
+        groupedHover = hoveredSection;
+        areas[groupedHover] = hoveredGroupRegion;
+      }
+    }
+    if (groupedHover < 0)
+      for (int kind = 0; kind < 3; ++kind)
+        for (auto r : groupedSections[kind])
+          if (r.contains(mouse)) {
+            groupedHover = kind;
+            areas[kind] = r;
+            hoveredGroupRegion = r;
+          }
+  }
   for (int kind = 0; kind < 3; ++kind) {
-    auto* block = blocks[kind];
+    Rect area = areas[kind];
     float size = std::min(16.f, (box.size.x - 12.f) / 3.f);
     // Hang the whole strip over the corner, keeping its hit area inside the
     // panel. Narrow sections can borrow room to their left while hovered.
-    float right =
-        std::min(box.size.x - 5.f, block->box.getRight() + size * .3f);
-    Vec origin(std::max(5.f, right - size * 3 - 2),
-               block->box.pos.y - size * .4f);
+    float right = std::min(box.size.x - 5.f, area.getRight() + size * .3f);
+    Vec origin(std::max(5.f, right - size * 3 - 2), area.pos.y - size * .4f);
     bars[kind] = Rect(origin, Vec(size * 3 + 2, size));
     std::array<ActionButton*, 3> buttons{{sectionRemoveButtons[kind],
                                           sectionRerollButtons[kind],
@@ -30,7 +51,9 @@ void Beekapoo::updateSectionAddButtons(Vec mouse) {
   // Only section hover opens a strip. Its overhanging buttons remain
   // reachable, but hovering or dragging a resize handle always hides it.
   int active = -1;
-  if (!resizing && !onHandle) {
+  if (grouped)
+    active = groupedHover;
+  else if (!resizing && !onHandle && !frontLockMode) {
     if (hoveredSection >= 0 && blocks[hoveredSection]->visible &&
         bars[hoveredSection].contains(mouse))
       active = hoveredSection;
@@ -45,8 +68,8 @@ void Beekapoo::updateSectionAddButtons(Vec mouse) {
   for (int kind = 0; kind < 3; ++kind)
     for (auto* button : {sectionAddButtons[kind], sectionRerollButtons[kind],
                          sectionRemoveButtons[kind]}) {
-      button->visible = module && controls->visible && blocks[kind]->visible &&
-                        kind == active;
+      button->visible = module && controls->visible &&
+                        (grouped || blocks[kind]->visible) && kind == active;
       if (!button->visible) button->clearTooltip();
     }
 }

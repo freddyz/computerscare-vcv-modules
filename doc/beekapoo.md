@@ -19,7 +19,7 @@ Turn a patch into a module.
 
 The visual look is completely determined by the manufacturers, modules, and internal cables of the subpatch.
 
-- Resize and arrange controls
+- Resize and arrange controls: by control type, parameters by module, or all controls by module.
 - Rename
 - Light and dark themes
 - Patching, polyphony, and MIDI mapping
@@ -29,8 +29,8 @@ The visual look is completely determined by the manufacturers, modules, and inte
 - Wiggle and Randomize: exposed versus all
 - Generate new subpatch
 - Grow subpatch
-- Module sets
-- Lock parameters or whole modules
+- **Module sets** in Edit: choose a set, then click a module preview on either side to include or remove it. The selected modules fit automatically on the right. Undo/Redo works with the buttons or Mod+Z / Mod+Shift+Z; Done or Esc closes the editor. Sets save automatically and are shared across Beeks. **Use this set** selects it for this Beek; **Default for new Beeks** applies to new instances. The built-in **Default** set is read-only; duplicate it to customize the standard selection.
+- Lock parameters or whole modules. Hover the front panel and press **L**, then click exposed parameters to lock or unlock them. **L** or **Esc** leaves Lock mode.
 
 ## Parameter steps
 
@@ -74,5 +74,5 @@ Hold **~** for keyboard shortcuts.
 - **Space**: clock on/off. **Z / X**: previous / next step. **B**: reset.
 - **N**: Capture New. **S**: save current step. **V**: Recall. **Shift+D**: Delete step.
 - **E**: Edit; **E / X** in Edit: Expose; **Esc**: Done.
-- In Edit: **L** Lock, **P** Panel, **N** New Inside/Outside, **F** Far, **Shift+F** Near.
+- **L**: toggle front-panel Lock mode. In Edit: **L** Lock, **P** Panel, **N** New Inside/Outside, **F** Far, **Shift+F** Near.
 - **1–9, 0**: exposed buttons. **[ / ]**: switch banks of ten. Hold for momentaries.

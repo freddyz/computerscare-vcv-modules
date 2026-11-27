@@ -53,6 +53,10 @@ bool playButtonKey(int key) {
   if (heldButtonKeys.count(key)) return true;
   auto* b = buttons[index];
   WeakPtr<app::ParamWidget> target = b->source ? b->source.get() : b;
+  if (frontLockMode) {
+    toggleFrontLock(b->module->id, b->paramId);
+    return true;
+  }
   bool momentary = b->momentary;
   widget::Widget::DragStartEvent start;
   start.button = GLFW_MOUSE_BUTTON_LEFT;
@@ -125,6 +129,10 @@ bool handleKeyboard(const HoverKeyEvent& e) {
     if (e.isConsumed()) return true;
   }
   int mods = e.mods & RACK_MOD_MASK;
+  if (!mods && e.key == GLFW_KEY_ESCAPE && frontLockMode) {
+    if (e.action == GLFW_PRESS) setFrontLockMode(false);
+    return true;
+  }
   if (e.key == GLFW_KEY_GRAVE_ACCENT && (mods == 0 || mods == GLFW_MOD_SHIFT))
     return true;
   if (!mods && e.key >= GLFW_KEY_0 && e.key <= GLFW_KEY_9) {
@@ -144,7 +152,9 @@ bool handleKeyboard(const HoverKeyEvent& e) {
   for (const auto& binding : keyBindings()) {
     if (e.key != binding.key || mods != binding.mods) continue;
     if (e.action != GLFW_PRESS) return true;
-    if (binding.action == KeyAction::Previous) {
+    if (binding.action == KeyAction::Lock) {
+      setFrontLockMode(!frontLockMode);
+    } else if (binding.action == KeyAction::Previous) {
       auto* m = getModule<Module>();
       int count = int(sequence.steps.size());
       if (count)

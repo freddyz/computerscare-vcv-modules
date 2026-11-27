@@ -143,7 +143,8 @@ window-before-scene shutdown with collapsed, expanded and editing subpatches.
 
 `BEEKAPOO_MODULE_SETS=1 scripts/preview-module.sh beekapoo --no-build` checks
 module-set persistence, per-Beek selection, defaults, restricted generation and
-growth, Undo/Redo, and browser interactions. It renders `module-sets.png` and
+growth, preview-only isolation, duplicate handling, missing models, click toggles, automatic
+fitting, visible browser ports, local Undo/Redo, and picker interactions. It renders `module-sets.png` and
 writes preferences only in the isolated runner's scratch directory.
 
 `BEEKAPOO_CABLE_STATE=1 scripts/preview-module.sh beekapoo --no-build` checks

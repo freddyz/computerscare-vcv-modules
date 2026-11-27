@@ -180,7 +180,7 @@ bool Beekapoo::regeneratePatch() {
   return true;
 }
 void Beekapoo::initializeBrowserPreview() {
-  requestedWidth = 90;
+  requestedWidth = 120;
   auto* root = generated::plan();
   std::vector<std::string> types;
   std::vector<StyleCable> wires;
@@ -225,7 +225,7 @@ void Beekapoo::initializeBrowserPreview() {
   }
   browserMemberCount = std::max(size_t(3), browserModules.size());
   appearance = patchIdentity(types, wires);
-  browserName = generated::topologyName(appearance.wiring);
+  browserName = "Beekapoo";
   std::vector<widget::Widget*> knobs, ins, outs;
   std::map<widget::Widget*, std::pair<std::string, std::string>> names;
   auto addKnob = [&](engine::Module* m, int param) {

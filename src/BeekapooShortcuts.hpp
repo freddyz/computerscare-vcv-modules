@@ -16,7 +16,8 @@ enum class KeyAction {
   Generate,
   Edit,
   Eject,
-  Save
+  Save,
+  Lock
 };
 struct KeyBinding {
   int key, mods;
@@ -40,6 +41,7 @@ inline const std::vector<KeyBinding>& keyBindings() {
       {GLFW_KEY_T, 0, "T", "Randomize all", KeyAction::RandomAll},
       {GLFW_KEY_N, GLFW_MOD_SHIFT, "⇧N", "Generate new subpatch",
        KeyAction::Generate},
+      {GLFW_KEY_L, 0, "L", "Lock exposed parameters", KeyAction::Lock},
       {GLFW_KEY_E, 0, "E", "Edit subpatch", KeyAction::Edit},
       {GLFW_KEY_E, GLFW_MOD_SHIFT, "⇧E", "Eject", KeyAction::Eject},
       {GLFW_KEY_S, GLFW_MOD_SHIFT, "⇧S", "Save Beek preset", KeyAction::Save},

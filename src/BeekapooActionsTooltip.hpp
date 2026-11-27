@@ -23,10 +23,15 @@ struct ActionsTooltip : ui::Tooltip {
     auto description = info->getDescription();
     if (!description.empty()) heading += "\n" + description;
     int channels = port->getPort()->getChannels();
-    if (channels > 0 && text.compare(0, heading.size(), heading) == 0) {
+    if (text.compare(0, heading.size(), heading) == 0) {
       std::string labeled = heading;
       size_t cursor = heading.size();
-      for (int i = 0; i < channels; ++i) {
+      for (int i = 0; i < 16; ++i) {
+        if (i >= channels) {
+          labeled += "\n" + std::to_string(i + 1) + " [" + channelLabel(i) +
+                     "]: no connection";
+          continue;
+        }
         if (cursor >= text.size() || text[cursor] != '\n') break;
         size_t end = text.find('\n', cursor + 1);
         if (end == std::string::npos) end = text.size();

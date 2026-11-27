@@ -14,13 +14,13 @@ void testBeekActionsTooltip(const std::string& output,float scale,Add add,Requir
   require(jack,"Actions input uses decorated native jack");
   settings::tooltips=true;APP->event->setHoveredWidget(jack);
   require(jack->tip&&jack->tip->native,"Native tooltip is retained");jack->tip->step();
-  require(jack->tip->text.find('[')==std::string::npos,"Unpatched jack has no channel list");
+  for(int i=0;i<16;++i)require(jack->tip->text.find(std::to_string(i+1)+" ["+beekapoo::ActionsTooltip::channelLabel(i)+"]: no connection")!=std::string::npos,"Unpatched jack must list every possible channel as disconnected");
   auto* cable=new engine::Cable;cable->outputModule=source->module;cable->outputId=0;cable->inputModule=m;cable->inputId=Module::ACTIONS_INPUT;APP->engine->addCable(cable);
   auto* cw=new app::CableWidget;cw->setCable(cable);rack->addCable(cw);
   auto& input=m->inputs[Module::ACTIONS_INPUT];
   input.channels=1;input.setVoltage(3.125f);jack->tip->step();
   require(jack->tip->text.find("1 [wig exp]:  3.125V")!=std::string::npos,"Mono shows numbered function and native voltage precision");
-  require(jack->tip->text.find("2 [")==std::string::npos,"Mono does not invent missing lanes");
+  require(jack->tip->text.find("2 [rnd exp]: no connection")!=std::string::npos&&jack->tip->text.find("16 [unused]: no connection")!=std::string::npos,"Mono must explicitly mark missing lanes without inventing voltages");
   require(jack->tip->text.find(source->module->model->getFullName())!=std::string::npos,"Native source module details are retained");
   auto render=[&](const char* name){
     auto* tip=jack->tip.get();auto* parent=owner->parent;Vec pos=owner->box.pos,tipPos=tip->box.pos;
@@ -30,11 +30,12 @@ void testBeekActionsTooltip(const std::string& output,float scale,Add add,Requir
     capture(&shot,output+name,scale,false);
     shot.removeChild(tip);shot.removeChild(owner);owner->box.pos=pos;tip->box.pos=tipPos;parent->addChild(owner);APP->scene->addChild(tip);
   };
+  require(!owner->getParam(Module::SEQUENCE_SCAN),"Manual Scan widget must not exist");
   m->panelTheme=1;owner->applyTheme();render("/actions-mono-light.png");
   input.channels=16;for(int i=0;i<16;++i)input.setVoltage(i%2?0.f:5.f,i);input.setVoltage(-2.25f,8);jack->tip->step();
   for(int i=0;i<16;++i)require(jack->tip->text.find(std::to_string(i+1)+" ["+beekapoo::ActionsTooltip::channelLabel(i)+"]:")!=std::string::npos,"Every present lane has its function, including unused lanes");
   require(jack->tip->text.find("9 [scan]: -2.250V")!=std::string::npos,"Signed voltages retained");
-  input.channels=9;jack->tip->step();require(jack->tip->text.find("10 [")==std::string::npos,"Reduced polyphony removes stale channel labels");
+  input.channels=9;jack->tip->step();require(jack->tip->text.find("10 [unused]: no connection")!=std::string::npos,"Reduced polyphony replaces stale voltages with no connection");
   m->panelTheme=2;owner->exposeParameter(voice->module->id,5);owner->layoutControls();owner->step();jack->tip->step();render("/actions-poly-dark.png");
   input.setVoltage(1.25f,0);jack->tip->step();require(jack->tip->text.find("1.250V")!=std::string::npos,"Live values refresh");
   APP->event->setHoveredWidget(nullptr);require(!jack->tip,"Tooltip closes on leave");

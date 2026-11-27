@@ -718,6 +718,7 @@ void Beekapoo::closeEditSession() {
     session->finish(false);
 }
 void Beekapoo::editSubpatch() {
+  setFrontLockMode(false);
   if (editSession) {
     static_cast<RackEditSession*>(editSession.get())->finish(true);
     return;

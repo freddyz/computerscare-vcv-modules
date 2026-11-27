@@ -2,9 +2,45 @@
 template<class Add,class Require>
 void testBeekCompact(const std::string& output,float scale,Add add,Require require) {
   {
+    struct Frames : widget::Widget {
+      void draw(const DrawArgs& args) override {
+        for(int theme=0;theme<2;++theme)for(unsigned profile=0;profile<5;++profile) {
+          beekapoo::SectionSkin skin;skin.profile=profile;skin.seed=12345;
+          skin.rounding=profile==1?5.f:0.f;
+          std::array<Vec,4> corners{{Vec(4,3),Vec(85,5),Vec(87,65),Vec(3,64)}};
+          nvgSave(args.vg);nvgTranslate(args.vg,profile*100+3,theme*82+3);
+          for(const auto& points:beekapoo::sectionPolygons(corners,skin))
+            beekapoo::SectionGeometry(points,Vec(6,3.9f),skin.rounding).draw(args.vg,theme?nvgRGB(48,48,48):nvgRGB(205,205,205));
+          nvgRestore(args.vg);
+        }
+      }
+    } frames;
+    for(float depth:{0.f,1.f,4.f,8.f})for(unsigned profile=0;profile<5;++profile) {
+      beekapoo::SectionSkin skin;skin.profile=profile;skin.seed=12345;skin.rounding=profile==1?5.f:0.f;
+      std::array<Vec,4> corners{{Vec(4,3),Vec(85,5),Vec(87,65),Vec(3,64)}};
+      for(const auto& points:beekapoo::sectionPolygons(corners,skin)) {
+        beekapoo::SectionGeometry shape(points,Vec(depth,depth*.65f),skin.rounding);
+        require(shape.front.size()>=4&&shape.silhouette.size()>=4,"Perspective frame has closed front and outer contours");
+        if(skin.rounding>0)require(shape.front.size()>points.size()&&shape.creases.empty(),"Rounded sides use the rounded front contour without square-corner seams");
+        if(depth==0)require(shape.sides.empty()&&shape.creases.empty(),"Flat frames have no extruded edges");
+        for(const auto& side:shape.sides) {
+          require(beekapoo::SectionGeometry::cross(side.points[1]-side.points[0],Vec(depth,depth*.65f))<0,"Only visible walls are generated");
+          for(Vec p:side.points)for(size_t i=0;i<shape.silhouette.size();++i) {
+            Vec a=shape.silhouette[i],b=shape.silhouette[(i+1)%shape.silhouette.size()];
+            require(beekapoo::SectionGeometry::cross(b-a,p-a)>=-.01f,"Every wall lies within the one outer silhouette");
+          }
+        }
+      }
+    }
+    frames.box.size=Vec(500,164);capture(&frames,output+"/section-perspective.png",scale,false);
+  }
+  {
     bool sawEjectOnly=false;
     for(int count:{1,10,100,1000})for(int width=45;width<=900;width+=15) {
       auto h=beekapoo::Beekapoo::headerLayout(width,count,12);
+      require(std::abs(h.logo.getRight()-(width-8))<.01f,"Header logo stays on the right");
+      if(h.buttons[3].pos.y<h.logo.getBottom())require(h.buttons[3].getRight()<h.logo.pos.x,"Inline menu stays inside the logo");
+      require(!h.buttons[3].intersects(h.logo),"Menu must not overlap the right-aligned logo");
       require(h.visible[0]&&h.visible[3],"Edit and menu always remain in header");
       require(!h.visible[2]||h.visible[1],"Save hides before Eject");
       if(h.visible[1]&&!h.visible[2])sawEjectOnly=true;
@@ -48,6 +84,12 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
     require(std::abs(restored.params[beekapoo::Module::WIGGLE_RANGE].getValue()-.1f)<.00001f&&restored.params[beekapoo::Module::WIGGLE_PROBABILITY].getValue()==.3f,"Old shared controls must migrate to the same effective wiggle range and chance");
     saved=restored.toJson();restored.fromJson(saved);json_decref(saved);
     require(std::abs(restored.params[beekapoo::Module::WIGGLE_RANGE].getValue()-.1f)<.00001f,"Separate controls must not be migrated twice");
+  }
+  {
+    beekapoo::Beekapoo browser(nullptr);
+    browser.step();
+    require(browser.browserName=="Beekapoo"&&browser.box.size.x==120,"Browser preview title must identify the module, not use a generated patch name");
+    capture(&browser,output+"/browser-title.png",scale,false);
   }
   auto* rack=APP->scene->rack;
   auto* model=plugin::getModel("computerscare","demo-gain");
@@ -93,7 +135,7 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
     occupied.push_back(owner->getInput(beekapoo::Module::ACTIONS_INPUT));
     if(owner->stepSelector->visible)occupied.push_back(owner->stepSelector);
     for(auto* b:owner->sequenceButtons)if(b->visible)occupied.push_back(b);
-    if(owner->getParam(beekapoo::Module::SEQUENCE_SCAN)->visible)occupied.push_back(owner->getParam(beekapoo::Module::SEQUENCE_SCAN));
+    require(!owner->getParam(beekapoo::Module::SEQUENCE_SCAN),"Manual Scan knob is absent at every width");
     for(size_t i=0;i<occupied.size();++i) {
       auto b=occupied[i]->box;
       require(b.pos.x>=0&&b.pos.y>=0&&b.getRight()<=owner->box.size.x&&b.getBottom()<=380,"Compact controls must stay on the panel");
@@ -108,6 +150,7 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
       require(owner->actionButtons[3]->faceColor.r<owner->actionButtons[0]->faceColor.r,"All actions retain their darker face in dark mode");
     }
     auto plan=beekapoo::Beekapoo::ownControlLayout(owner->box.size.x);
+    require(std::abs(plan.positions[5].x+16-(owner->box.size.x-(owner->box.size.x<60?5:6)))<.01f,"Actions CV stays right-aligned even when its row wraps");
     require(owner->getInput(beekapoo::Module::ACTIONS_INPUT)->visible,"CV jack is never hidden");
     require(owner->actionButtons[0]->visible&&owner->actionButtons[1]->visible,"Default narrow strip retains both exposed actions");
     require(owner->actionButtons[0]->box.size.x==18&&owner->actionButtons[1]->box.size.x==18,"Wiggle and random buttons keep their normal size even at minimum width");
@@ -122,14 +165,15 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
       auto* overlay=dynamic_cast<ui::MenuOverlay*>(APP->scene->children.back());
       require(overlay,"Functions button must open a native menu");
       auto* menu=dynamic_cast<ui::Menu*>(overlay->children.front());
-      require(menu&&menu->children.size()==6,"Functions menu must include Save and Eject alongside patch functions");
+      require(menu&&menu->children.size()==7,"Functions menu must include Save and Eject alongside patch functions");
       auto it=menu->children.begin();
       require(dynamic_cast<ui::MenuItem*>(*it++)->text=="Grow"&&dynamic_cast<ui::MenuItem*>(*it)->text=="Compact subpatch","Grow must be the first function");
-      bool save=false,eject=false;
+      bool save=false,eject=false,unlock=false;
       for(auto* child:menu->children)if(auto* item=dynamic_cast<ui::MenuItem*>(child)) {
+        unlock|=item->text=="Unlock all";
         save|=item->text=="Save Beek";eject|=item->text=="Eject";
       }
-      require(save&&eject,"Hidden header actions stay accessible from the menu");
+      require(save&&eject&&unlock,"Hidden header actions stay accessible from the menu");
       require(owner->ports.size()==count,"Opening the menu must not edit the patch");
       menu->step();overlay->removeChild(menu);menu->box.pos=Vec();
       capture(menu,output+"/functions-menu.png",scale,false);
@@ -142,6 +186,31 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
   }
   sheet.box.size=Vec(left-15,380);capture(&sheet,output+"/compact-sizing-six.png",scale,false);
   for(auto& p:parked){sheet.removeChild(p.first);p.first->box.pos=p.second;rack->getModuleContainer()->addChild(p.first);}
+  rack->clear();APP->history->clear();
+  {
+    auto* voice=add(model,Vec(0,0));
+    auto* owner=static_cast<beekapoo::Beekapoo*>(add(modelBeekapooPreview,Vec(240,0)));
+    rack->deselectAll();rack->select(voice,true);owner->collapse();
+    owner->getModule<beekapoo::Module>()->setPatchName("Munkle Poors",true);
+    for(int i=0;i<7;++i)owner->exposeParameter(voice->module->id,i);
+    const char* inputs[]={"Mult","Clock","Gate","Gate"};
+    for(int i=0;i<4;++i){voice->module->getInputInfo(i)->name=inputs[i];owner->expose(voice,voice->getInput(i));}
+    for(int i=0;i<2;++i){voice->module->getOutputInfo(i)->name=i?"Right":"Left";owner->expose(voice,voice->getOutput(i));}
+    for(float width:{90.f,120.f}) {
+      owner->getModule<beekapoo::Module>()->panelTheme.store(width==90?1:2);
+      owner->requestedWidth=width;owner->layoutControls();
+      auto* container=owner->parent;auto pos=owner->box.pos;container->removeChild(owner);owner->box.pos=Vec();
+      capture(owner,output+"/stereo-labels-"+std::to_string(int(width))+".png",scale,false);
+      int checked=0;
+      for(const auto& label:owner->controlLabels)if(label.output&&(label.text=="Left"||label.text=="Right")) {
+        auto full=computerscare::type::alternates(beekapoo::labelCase(label.text,owner->appearance.modules),owner->appearance.modules);
+        require(label.readable&&label.lines==std::vector<std::string>{full},"Stereo outputs keep full Left/Right labels when they fit");
+        ++checked;
+      }
+      require(checked==2,"Stereo fixture checks both output labels");
+      owner->box.pos=pos;container->addChild(owner);
+    }
+  }
   rack->clear();APP->history->clear();
   {
     std::vector<app::ModuleWidget*> voices;
@@ -177,6 +246,7 @@ void testBeekCompact(const std::string& output,float scale,Add add,Require requi
       require(!title.intersects(logo),"Adaptive header title and logo never overlap");
       require(title.getBottom()<owner->managementButtons[0]->box.pos.y,"Adaptive artwork stays above header controls");
       if(i==0)require(title.pos.y>logo.getBottom(),"Narrow single word title sits below logo");
+      if(title.pos.y>logo.getBottom())require(std::abs(logo.getCenter().x-owner->box.size.x*.5f)<.01f,"Logo is centered when the title sits below it");
       if(i==2)require(title.getRight()<logo.pos.x,"Short wrapped title fits beside logo");
       auto* container=owner->parent;auto pos=owner->box.pos;container->removeChild(owner);owner->box.pos=Vec();
       capture(owner,output+"/adaptive-header-"+std::to_string(i+1)+".png",scale,false);

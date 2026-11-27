@@ -307,7 +307,6 @@ void showSequenceMenu() {
   appendSequenceMenu(menu);
 }
 void createSequenceControls(Module* m) {
-  addParam(createParam<ThemedSmallKnob>(Vec(), m, Module::SEQUENCE_SCAN));
   const int icons[] = {13, 20, 14, 16, 15, 21, 18};
   const char* help[] = {"Clock on/off",
                         "Advance playback\nActions CV ch 7",

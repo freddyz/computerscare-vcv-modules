@@ -89,6 +89,7 @@ inline engine::ParamQuantity* legacyBeekGain(beekapoo::Beekapoo* owner, beekapoo
 #include "beekapoo-context.hpp"
 #include "beekapoo-menus.hpp"
 #include "beekapoo-compact.hpp"
+#include "beekapoo-panel-groups.hpp"
 #include "beekapoo-sequence.hpp"
 #include "beekapoo-keyboard.hpp"
 #include "beekapoo-actions-tooltip.hpp"
@@ -301,6 +302,7 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
   if(std::getenv("BEEKAPOO_SEQUENCE")){testBeekSequence(output,scale,add,require,gainModel);return;}
   testBeekGroupShutdown(add,require);
   testBeekCompact(output,scale,add,require);
+  testBeekPanelGroups(output,scale,add,require,gainModel);
   if(std::getenv("BEEKAPOO_COMPACT"))return;
   if(std::getenv("BEEKAPOO_CONTEXT_CHECKS"))return;
   if(std::getenv("BEEKAPOO_LABELS")){testBeekGenerator(output,scale,add,require);return;}
@@ -884,7 +886,6 @@ void renderBeekapooPreview(plugin::Plugin& plugin,const std::string& output,floa
     for(auto* w:host->actionButtons)visibleControls.push_back(w);
     for(auto* w:host->sequenceButtons)visibleControls.push_back(w);
     visibleControls.push_back(host->stepSelector);
-    visibleControls.push_back(host->getParam(beekapoo::Module::SEQUENCE_SCAN));
     for(auto* w:host->managementButtons)visibleControls.push_back(w);
     for(int id:{beekapoo::Module::RANDOM_RANGE,beekapoo::Module::RANDOM_PROBABILITY,beekapoo::Module::WIGGLE_PROBABILITY})visibleControls.push_back(host->getParam(id));
     visibleControls.push_back(host->growButton);visibleControls.push_back(host->regenerateButton);
